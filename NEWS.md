@@ -1,3 +1,28 @@
+# MOSAIC 0.68.0
+
+## `LASER` is gone from the names too
+
+The engine has been pure R since v0.66.0 and the `laser-cholera` dependency went in v0.67.0. `LASER` named the Python package MOSAIC used to shell out to, so every `LASER` in the API was pointing at something that no longer exists. This release renames them and clears out what the migration left behind.
+
+### Breaking changes
+
+* **`run_LASER()` is now `run_simulation()`**, **`make_LASER_config()` is now `make_simulation_config()`**, and **`get_default_LASER_config()` is gone** in favour of the identical `get_default_config()` (the two were byte-for-byte duplicates and neither had a caller). The old names are kept as stubs that raise an error naming the new one -- not as silent aliases, which is how a dead name survives for years. Arguments and behaviour are unchanged. The lowercase alias `run_laser()` is likewise a stub.
+* **The engine's internals are `sim_*`, not `laser_*`.** `laser_params()` -> `sim_params()`, `laser_results()` -> `sim_results()`, `LASER_CHANNELS` -> `SIM_CHANNELS`, `LASER_PIPELINE` -> `SIM_PIPELINE`, and so on for every engine symbol; the files follow (`R/laser_engine.R` -> `R/sim_engine.R`). The two attributes on a `run_simulation()` return are now `sim_provenance` and `sim_coverage`.
+* **`check_coiled_workspace()` and `mosaic_dask_presets()` are deleted.** v0.65.0 replaced them with `stop()` stubs "for one minor version after the engine cutover"; the cutover was v0.66.0, so this is when that expires.
+* **The `Running LASER` vignette is now `Running simulations`** (`vignettes/Running-simulations.Rmd`).
+
+### Removed
+
+* **The Docker worker image and its CI.** `.github/workflows/docker-image-update.yaml` built and published `mosaic-worker:latest` and refreshed the Coiled software environment; `.github/workflows/smoke-test.yml` pulled that image on every push. Both existed to serve the Dask/Coiled backend, which went in v0.65.0. The `azure/` tree (the Dask/Coiled scripts, Dockerfile and runbooks) goes with them. The ACR image and the Coiled environment themselves are external and still need deleting by hand.
+* **Dead local helpers,** each defined and never called: `draw_loc_or_default()` in `est_initial_E_I()`, `.get_ci()` in `plot_model_ppc()`, `.lookup_prior_family()` in `calc_model_posterior_quantiles()`, `get_column_names()` in `get_WHO_vaccine_data()`, `log_sum_exp()` in `calc_model_ess_parameter()`, and a 62-line `calc_kl_analytical()` in `plot_model_distributions()` that duplicated the exported `calc_kl_divergence()`.
+* `.Rbuildignore` entries for `deprecated/` and `src/`, neither of which exists.
+
+### Changed
+
+* **CI no longer installs a conda environment on the PR path.** The Miniforge setup plus a ~2-3 GB TensorFlow solve ran on every push to check an environment that only the suitability model uses; it now runs on the nightly schedule and on manual dispatch, where "does `environment.yml` still solve" is the actual question. The `Install MOSAIC from GitHub` step is gone -- it reinstalled the *default branch* over the tarball just built from the PR, after the tests had already run. The macOS Homebrew Python step is gone too: macOS never installed the r-mosaic environment, so it only ever handed reticulate an interpreter with none of MOSAIC's Python packages in it.
+* `install_dependencies()` no longer claims to install "the LASER disease transmission model simulation tool"; its documentation now says what the environment is actually for.
+* The startup banner no longer advertises LASER.
+
 # MOSAIC 0.67.0
 
 ## The `laser-cholera` dependency is gone

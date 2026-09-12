@@ -195,17 +195,6 @@ calc_model_ess_parameter <- function(
     }
     
     # ==========================================================================
-    # Helper function for log-sum-exp
-    # ==========================================================================
-    
-    log_sum_exp <- function(x) {
-        if (length(x) == 0) return(-Inf)
-        max_x <- max(x)
-        if (is.infinite(max_x)) return(max_x)
-        return(max_x + log(sum(exp(x - max_x))))
-    }
-    
-    # ==========================================================================
     # Helper function for bandwidth selection
     # ==========================================================================
 

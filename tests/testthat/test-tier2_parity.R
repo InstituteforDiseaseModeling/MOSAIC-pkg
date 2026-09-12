@@ -22,9 +22,8 @@
 #    bit-identical at tolerance = 0 after the v0.36.9 (R-7) presort-memory refactor.
 #  * Cross-platform tolerance (v0.36.13): the #1+#2b and #2b fixture comparisons
 #    use testthat::testthat_tolerance() (~1.5e-8), not tolerance = 0. The
-#    fixture was baked on the author's local machine; the docker CI image
-#    (idmmosaicacr.azurecr.io/mosaic-worker:latest, Linux x86_64 + OpenBLAS)
-#    diverges by O(10^3) ULPs (~1e-13) — a length-N float-reduction noise floor
+#    fixture was baked on the author's local machine; a Linux x86_64 + OpenBLAS
+#    CI runner (measured on the since-retired docker worker image) diverges by O(10^3) ULPs (~1e-13) — a length-N float-reduction noise floor
 #    that depends on SIMD lane width and BLAS reduction order, not on code
 #    correctness. The bit-identical guarantee is preserved by the INDEPENDENT
 #    oracles (#2a and #1, which recompute the math from scratch with no fixture

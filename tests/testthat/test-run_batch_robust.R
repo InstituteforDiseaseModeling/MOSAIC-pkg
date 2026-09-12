@@ -1,5 +1,5 @@
 # Regression tests for .mosaic_run_batch()'s parallel branch -- the calibration
-# (run_MOSAIC) parallel-LASER gather. This is the highest-exposure parallel gather
+# (run_MOSAIC) parallel-simulation gather. This is the highest-exposure parallel gather
 # in the package (10,000s of sims/country), and it shared the SAME blocking-
 # unserialize() worker-death hang that froze the ensemble on the production VM.
 #

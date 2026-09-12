@@ -47,7 +47,7 @@
 #' \eqn{\zeta_{1,i} = c_i \times V_i} with lower and upper bounds taken from
 #' the spread of the concentration and volume anchors for that severity class.
 #' Time-averaged stool volumes are used (`V_sev` = 8, `V_mod` = 4,
-#' `V_mild` = 0.5 L/day) because the LASER Poisson update multiplies the rate
+#' `V_mild` = 0.5 L/day) because the engine's Poisson update multiplies the rate
 #' by the current `I_sym` compartment, which already integrates the shedding
 #' course via \eqn{\gamma_1}. Peak purging rates (~1 L/h, ~14-24 L/day) are
 #' treated as upper-bound sensitivity rows, not the central anchor.

@@ -1,6 +1,6 @@
 #' Build the full spatial-correlation matrix across all locations
 #'
-#' Given LASER simulation outputs, this function constructs the
+#' Given simulation outputs, this function constructs the
 #' \eqn{J \times J} matrix
 #' \eqn{\mathbf C = [\mathcal{C}_{ij}]} of Pearson
 #' spatial-correlation coefficients (Keeling & Rohani 2002) for every pair of

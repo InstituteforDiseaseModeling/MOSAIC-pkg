@@ -2,7 +2,7 @@
 % Please edit documentation in R/run_fit_sandbox.R
 \name{run_fit_sandbox}
 \alias{run_fit_sandbox}
-\title{Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter Overrides}
+\title{Deterministic Fit-Diagnostic Sandbox: One Simulation with Parameter Overrides}
 \usage{
 run_fit_sandbox(
   config,
@@ -13,7 +13,7 @@ run_fit_sandbox(
   outdir = NULL,
   run_label = "fit_sandbox",
   quiet = TRUE,
-  .laser_runner = run_LASER
+  .sim_runner = run_simulation
 )
 }
 \arguments{
@@ -23,7 +23,7 @@ run_fit_sandbox(
 \item{params}{Named list of point-value parameter overrides applied to the config
 before the run (unknown names are skipped with a warning). Default \code{list()}.}
 
-\item{seed}{Integer RNG seed for the LASER run. Default \code{42L}.}
+\item{seed}{Integer RNG seed for the simulation run. Default \code{42L}.}
 
 \item{locations}{Integer indices of location rows to aggregate. Default \code{NULL}
 (all locations).}
@@ -39,9 +39,9 @@ R\eqn{^2}/bias/CFR.}
 \item{run_label}{Character label for the run (used for the output subdirectory and
 recorded in metrics). Default \code{"fit_sandbox"}.}
 
-\item{quiet}{Logical passed to \code{\link[=run_LASER]{run_LASER()}}. Default \code{TRUE}.}
+\item{quiet}{Logical passed to \code{\link[=run_simulation]{run_simulation()}}. Default \code{TRUE}.}
 
-\item{.laser_runner}{Function used to run the model; defaults to \code{\link[=run_LASER]{run_LASER()}}.
+\item{.sim_runner}{Function used to run the model; defaults to \code{\link[=run_simulation]{run_simulation()}}.
 Exposed as a seam for testing with a stubbed engine.}
 }
 \value{
@@ -51,7 +51,7 @@ ensemble format), \code{metrics} (top-line metrics plus, when
 \code{params_applied} (data.frame of old/new values), and \code{run_label}.
 }
 \description{
-Runs a \strong{single deterministic} LASER simulation from a calibration config
+Runs a \strong{single deterministic} simulation from a calibration config
 (typically a run's medoid config) with optional point-value parameter overrides,
 then scores the result against the observed series carried in the config. This is
 the experiment unit behind the active fit-diagnostic workflow (the \code{diagnose-fit}
@@ -70,5 +70,5 @@ diagnostic use case; pass a single index in \code{locations} for a per-patch vie
 Full metrics are delegated to \code{\link[=calc_fit_diagnostics]{calc_fit_diagnostics()}}.
 }
 \seealso{
-\code{\link[=calc_fit_diagnostics]{calc_fit_diagnostics()}}, \code{\link[=run_LASER]{run_LASER()}}
+\code{\link[=calc_fit_diagnostics]{calc_fit_diagnostics()}}, \code{\link[=run_simulation]{run_simulation()}}
 }

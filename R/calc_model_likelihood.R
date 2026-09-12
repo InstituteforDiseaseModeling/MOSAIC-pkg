@@ -38,7 +38,7 @@
 #'   exact unweighted code path is used, byte-identical to prior behavior). A row
 #'   that is all-1 on finite-obs cells is also routed through the exact unweighted
 #'   path. Only the NB cases/deaths terms are weighted; shape terms are not (v1).
-#' @param config Optional LASER config list (location_name, date_start, date_stop).
+#' @param config Optional simulation config list (location_name, date_start, date_stop).
 #' @param nb_k_min_cases Minimum NB dispersion floor for cases. Default \code{3}.
 #' @param nb_k_min_deaths Minimum NB dispersion floor for deaths. Default \code{3}.
 #' @param verbose If \code{TRUE}, prints component summaries per location.

@@ -207,68 +207,6 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # HELPER FUNCTIONS
   # =========================================================================
 
-  # Helper function to calculate KL divergence analytically for known distributions
-  calc_kl_analytical <- function(dist1_type, dist1_params, dist2_type, dist2_params) {
-    if (dist1_type != dist2_type) return(NA)  # Different types, would need numerical
-
-    kl <- NA
-    tryCatch({
-      if (dist1_type == "beta") {
-        a1 <- as.numeric(dist1_params$shape1)
-        b1 <- as.numeric(dist1_params$shape2)
-        a2 <- as.numeric(dist2_params$shape1)
-        b2 <- as.numeric(dist2_params$shape2)
-        kl <- lgamma(a1 + b1) - lgamma(a1) - lgamma(b1) -
-              lgamma(a2 + b2) + lgamma(a2) + lgamma(b2) +
-              (a1 - a2) * (digamma(a1) - digamma(a1 + b1)) +
-              (b1 - b2) * (digamma(b1) - digamma(a1 + b1))
-      } else if (dist1_type == "normal") {
-        mu1 <- as.numeric(dist1_params$mean)
-        sigma1 <- as.numeric(dist1_params$sd)
-        mu2 <- as.numeric(dist2_params$mean)
-        sigma2 <- as.numeric(dist2_params$sd)
-        kl <- log(sigma2/sigma1) + (sigma1^2 + (mu1 - mu2)^2) / (2 * sigma2^2) - 0.5
-      } else if (dist1_type == "gamma") {
-        k1 <- as.numeric(dist1_params$shape)
-        theta1 <- 1/as.numeric(dist1_params$rate)
-        k2 <- as.numeric(dist2_params$shape)
-        theta2 <- 1/as.numeric(dist2_params$rate)
-        kl <- (k1 - k2) * digamma(k1) - lgamma(k1) + lgamma(k2) +
-              k2 * (log(theta2) - log(theta1)) + k1 * (theta1 - theta2) / theta2
-      } else if (dist1_type == "uniform") {
-        a1 <- as.numeric(dist1_params$min)
-        b1 <- as.numeric(dist1_params$max)
-        a2 <- as.numeric(dist2_params$min)
-        b2 <- as.numeric(dist2_params$max)
-
-        # Calculate KL using numerical integration approach
-        # Create a grid over the prior's support
-        n_points <- 1000
-        x <- seq(a1, b1, length.out = n_points)
-        dx <- (b1 - a1) / n_points
-
-        # Prior density (uniform)
-        p_prior <- rep(1 / (b1 - a1), n_points)
-
-        # Posterior density (0 outside [a2, b2])
-        p_post <- ifelse(x >= a2 & x <= b2, 1 / (b2 - a2), 1e-10)
-
-        # Calculate KL divergence using numerical integration
-        kl <- sum(p_prior * log(p_prior / p_post) * dx)
-
-        # Cap at a reasonable maximum to avoid numerical issues
-        if (kl > 20) kl <- 20
-      } else if (dist1_type == "lognormal") {
-        mu1 <- as.numeric(dist1_params$meanlog)
-        sigma1 <- as.numeric(dist1_params$sdlog)
-        mu2 <- as.numeric(dist2_params$meanlog)
-        sigma2 <- as.numeric(dist2_params$sdlog)
-        kl <- log(sigma2/sigma1) + (sigma1^2 + (mu1 - mu2)^2) / (2 * sigma2^2) - 0.5
-      }
-    }, error = function(e) { kl <- NA })
-    return(kl)
-  }
-
   # Parameters whose x-axis spans multiple orders of magnitude and read
   # much better on a log10 scale (matches the kappa_prior.png reference
   # styling with annotation_logticks). Density grids for these params are

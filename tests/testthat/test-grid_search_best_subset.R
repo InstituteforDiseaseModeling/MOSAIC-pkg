@@ -5,8 +5,8 @@
 # Cross-platform tolerance (v0.36.13): $metrics is compared at
 # testthat::testthat_tolerance() (~1.5e-8) rather than tolerance = 0. The
 # fixture (fixtures/parity_grid_search.rds) was baked on the author's local
-# machine; the docker CI image (idmmosaicacr.azurecr.io/mosaic-worker:latest,
-# Linux x86_64 + OpenBLAS) re-derives ESS via sum(w^2) over hundreds of weights,
+# machine; a Linux x86_64 + OpenBLAS CI runner (measured on the since-retired
+# docker worker image) re-derives ESS via sum(w^2) over hundreds of weights,
 # and that accumulation's bit-result is build-dependent (SIMD lane width, BLAS
 # reduction strategy). Measured drift in CI: ESS up to ~768 ULP (~1.7e-13);
 # A and CVw <= 1 ULP. Everything that does NOT depend on a length-N float

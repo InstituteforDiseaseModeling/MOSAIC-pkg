@@ -22,7 +22,7 @@ Overrides predictions_dir if provided.}
 
 \item{locations}{Character vector of specific locations to plot. NULL (default) uses all locations.}
 
-\item{model}{Legacy: a model object as returned by \code{run_LASER()}
+\item{model}{Legacy: a model object as returned by \code{run_simulation()}
 (any list carrying \code{$results}). Not recommended - use CSV-based
 inputs instead.}
 

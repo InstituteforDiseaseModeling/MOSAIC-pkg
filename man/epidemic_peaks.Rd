@@ -33,7 +33,7 @@ smoothing and prominence-based peak detection algorithms.
 surveillance time series (2010+) and is \strong{not} pre-trimmed to any
 particular simulation window. Consumers that score peaks against a
 specific config window (e.g. \code{calc_model_likelihood()}, the Python
-likelihood port, the LASER config builders) must filter against
+likelihood port, the simulation config builders) must filter against
 \verb{[date_start, date_stop]} first -- otherwise \code{which.min(abs(date_seq - peak_date))} silently snaps out-of-window peaks to t=1 or t=N and
 biases the peak-shape likelihood terms. The internal helper
 \code{MOSAIC:::.filter_epidemic_peaks()} is the canonical filter and is

@@ -391,9 +391,9 @@ calc_Reff <- function(ensemble,
 #' \strong{Faithfulness.} Each member's config is rebuilt with the same recipe
 #' \code{calc_model_ensemble()} uses for its local worker: \code{sample_parameters(
 #' PATHS, priors, config = base, seed = parameter_seeds[p], sample_args)} then
-#' \code{.mosaic_clamp_transmission_params()}; the per-(param, stoch) LASER seed
+#' \code{.mosaic_clamp_transmission_params()}; the per-(param, stoch) simulation seed
 #' is the same deterministic \code{param_idx * 1000L + stoch_idx} the worker sets;
-#' the engine is invoked through \code{run_LASER(quiet = TRUE)}, the same
+#' the engine is invoked through \code{run_simulation(quiet = TRUE)}, the same
 #' entry point the worker uses. The captured \code{reported_cases} per
 #' (param, stoch) are compared against the saved \code{cases_array} from the
 #' ensemble object (the FAITHFULNESS GATE): if they do not match, the re-sim is
@@ -449,7 +449,7 @@ calc_Reff <- function(ensemble,
 #'   \code{reported_cases} and the saved \code{cases_array}, applied to BOTH the
 #'   \code{gate_frac}-percentile per-member error AND the ensemble-weighted
 #'   aggregate error. Default \code{0.05} (5\%). A bitwise (exact) gate is NOT
-#'   used because the LASER engine is bitwise-deterministic only WITHIN a process;
+#'   used because the simulation engine is bitwise-deterministic only WITHIN a process;
 #'   the same seed + config re-run in a fresh process yields a
 #'   statistically-equivalent (not identical) stochastic realization (numba RNG
 #'   cross-process non-determinism).
@@ -498,12 +498,11 @@ calc_Reff <- function(ensemble,
     if (is.null(ensemble[[nm]]))
       stop(".mosaic_reff_resim_ci: ensemble is missing `", nm, "`.")
 
-  # Pin BLAS/Numba threads to 1. This path drives LASER directly (outside
-  # run_MOSAIC(), which is otherwise the only place threads are pinned), so
-  # without this many concurrent re-sims (e.g. a multi-model batch on a
-  # many-core host) would each spawn full thread pools and thrash the machine.
-  # Must run before the laser/numba import below (numba reads its thread count
-  # at import time).
+  # Pin BLAS threads to 1. This path drives the simulation engine directly
+  # (outside run_MOSAIC(), which is otherwise the only place threads are
+  # pinned), so without this many concurrent re-sims (e.g. a multi-model batch
+  # on a many-core host) would each spawn full thread pools and thrash the
+  # machine.
   .mosaic_set_blas_threads(1L)
   Sys.setenv(OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
              OPENBLAS_NUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1",
@@ -542,7 +541,7 @@ calc_Reff <- function(ensemble,
   member_w <- numeric(n_members)
   # Statistical-equivalence gate (see rationale below). The R engine IS
   # bitwise-reproducible across cold processes -- that is pinned by
-  # test-laser_rng_contract.R -- so with an identical seed and config this
+  # test-sim_rng_contract.R -- so with an identical seed and config this
   # re-sim should now reproduce the saved cases_array exactly, where the Python
   # engine could only be trusted to match statistically (its numba RNG state
   # differed across processes). The gate is kept as a robust statistical one
@@ -575,7 +574,7 @@ calc_Reff <- function(ensemble,
       member_w[m] <- pw[p] / nS
       run_cfg <- cfg
       run_cfg$seed <- (p * 1000L) + s
-      model <- run_LASER(config = run_cfg, seed = run_cfg$seed, quiet = TRUE)
+      model <- run_simulation(config = run_cfg, seed = run_cfg$seed, quiet = TRUE)
       inc <- model$results$incidence       # [nL, T]
       rc  <- model$results$reported_cases
       inc_m <- .mosaic_reff_to_mat(inc, nL, Tn)

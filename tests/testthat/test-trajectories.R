@@ -1,4 +1,4 @@
-# Trajectory capture/reduce + plotter tests. All LASER-FREE (CI-safe per PLAN
+# Trajectory capture/reduce + plotter tests. All ENGINE-FREE (CI-safe per PLAN
 # 14.D): capture-and-reduce is exercised by mocking calc_model_ensemble()'s
 # per-task worker (see helper-ensemble-mock.R), and the plotter via a synthetic
 # mosaic_trajectories fixture. Before v0.65.0 the engine was bypassed with
@@ -8,7 +8,7 @@
 
 # ---- helpers ---------------------------------------------------------------
 
-# A minimal single-location config (no LASER needed: the worker is mocked).
+# A minimal single-location config (no engine needed: the worker is mocked).
 .make_cfg <- function(n_time = 20L, n_loc = 1L) {
   mk <- function(scale) if (n_loc == 1L) as.numeric(scale * (1 + sin(seq_len(n_time)))) else
     matrix(scale * (1 + sin(seq_len(n_time * n_loc))), nrow = n_loc)
@@ -201,7 +201,7 @@ test_that("capability check: capture on but no channels returned -> warn + NULL"
   expect_null(ens$trajectories)
 })
 
-# ---- plotter (synthetic fixture; no LASER) ---------------------------------
+# ---- plotter (synthetic fixture; no engine) --------------------------------
 
 .make_fixture <- function(n_loc = 1L, n_time = 30L) {
   locs <- if (n_loc == 1L) "AAA" else paste0("L", seq_len(n_loc))

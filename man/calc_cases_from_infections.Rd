@@ -44,7 +44,7 @@ A named list with two numeric vectors, each length \eqn{n}:
 }
 }
 \description{
-Given a vector of incident \emph{symptomatic infections} \eqn{I_{\text{sym}}(t)} (e.g., from LASER model)
+Given a vector of incident \emph{symptomatic infections} \eqn{I_{\text{sym}}(t)} (e.g., from transmission model)
 and constant \eqn{\rho} (reporting probability among symptomatic),
 this function returns vectors of expected \strong{suspected} and \strong{true/confirmed} cases aligned
 on report day using a simple time shift \eqn{\Delta} (days).

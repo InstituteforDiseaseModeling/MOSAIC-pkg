@@ -2,12 +2,12 @@
 name: swe
 description: >
   Use for MOSAIC software engineering: the run_MOSAIC() orchestration loop and its
-  helpers/infrastructure, the pure-R transmission engine (laser_engine.R and its
-  laser_params/state/results siblings), PSOCK parallel execution, config plumbing
-  (make_LASER_config.R), packaging,
+  helpers/infrastructure, the pure-R transmission engine (sim_engine.R and its
+  sim_params/state/results siblings), PSOCK parallel execution, config plumbing
+  (make_simulation_config.R), packaging,
   R CMD check, performance/RAM profiling, test infrastructure, and rendering of the
   plot_* functions. Use PROACTIVELY for refactors, parallel-worker bugs, thread-safety
-  issues, and any change to run_MOSAIC*/run_LASER/engine paths.
+  issues, and any change to run_MOSAIC*/run_simulation/engine paths.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 model: opus
 memory: project
@@ -38,7 +38,7 @@ eyes and the janitor of the shared infra, not a gate you hand authoring to.
 
 ## What you own
 - **Orchestration:** `run_MOSAIC.R`, `run_MOSAIC_helpers.R`, `run_MOSAIC_infrastructure.R`
-- **Engine bridge:** `run_LASER.R`, `make_LASER_config.R`, reticulate/env files
+- **Engine bridge:** `sim_engine.R`, `make_simulation_config.R`, reticulate/env files
   (`attach_mosaic_env.R`, `check_python_env.R`, `install_dependencies.R`,
   `remove_python_env.R`, `use_mosaic_env.R`)
 - **Parallel/cluster:** `make_mosaic_cluster.R` (local PSOCK),
@@ -70,7 +70,7 @@ eyes and the janitor of the shared infra, not a gate you hand authoring to.
 - **There is one execution path: local PSOCK/sequential.** The Dask/Coiled backend was removed;
   `dask_spec`, `check_coiled_workspace()` and `mosaic_dask_presets()` now hard-error rather than being
   ignored.
-- **There is one transmission engine: `run_LASER()`, in R.** The Python `laser-cholera` engine and
+- **There is one transmission engine: `run_simulation()`, in R.** The Python `laser-cholera` engine and
   the reticulate bridge to it were removed in v0.66.0, and the dependency itself in v0.67.0 — see
   `migrate-laser-r.md`. Nothing on the simulation or calibration path touches Python; `reticulate`
   survives only for the keras3 suitability model. A worker that imports Python is a bug.
@@ -78,8 +78,8 @@ eyes and the janitor of the shared infra, not a gate you hand authoring to.
   ees-cholera-mapping/, jhu_cholera_data/) or `MOSAIC-data/raw/`.
 
 ## Authoritative references (verify external API surface; engine contract is LOCAL)
-The engine contract is LOCAL and in this repo: `R/laser_params.R` is the authoritative parameter
-contract, and `R/laser_results.R` the 28-channel result contract. The read-only
+The engine contract is LOCAL and in this repo: `R/sim_params.R` is the authoritative parameter
+contract, and `R/sim_results.R` the 28-channel result contract. The read-only
 `laser-cholera/src/laser/cholera/metapop/params.py` remains the **historical** source the port was
 derived from — consult it to settle a question about *why* the engine behaves as it does, never as a
 statement of what the code now runs. You have `WebFetch`/`WebSearch` for the external libraries you

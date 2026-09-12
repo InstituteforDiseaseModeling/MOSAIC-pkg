@@ -6,7 +6,7 @@ library(MOSAIC)
 # seasonality, delta_jt, dose allocation, pi_ij, spatial hazard, coupling and
 # population channels against the analytic helpers in this package. That is an
 # independent cross-check of the engine arithmetic -- the replay fixtures in
-# test-laser_engine_replay.R pin the port against the Python oracle, these pin
+# test-sim_engine_replay.R pin the port against the Python oracle, these pin
 # the arithmetic against the formulas the model is specified by.
 #
 # Until the R engine this needed Python and took ~16 s, so it was gated to the
@@ -31,7 +31,7 @@ filename <- system.file("extdata", "config_default.json", package = "MOSAIC")
 skip_if_not(nzchar(filename) && file.exists(filename),
             message = "config_default.json not found in the installed package")
 
-model    <- MOSAIC::run_LASER(config = filename, quiet = TRUE)
+model    <- MOSAIC::run_simulation(config = filename, quiet = TRUE)
 baseline <- jsonlite::fromJSON(filename)
 
 # Check human-human seasonality computation
@@ -724,6 +724,6 @@ testthat::test_that("UN population trends", {
 #   - calc_Reff() / .cori_reff() / .mosaic_generation_time_pmf()
 #   - tests/testthat/test-reproductive_numbers.R
 # (Phase 1 of claude/plan_r0_rt/PLAN.md). They are covered there rather than in
-# this file, whose laser/ggExtra file-level skip gates would render them inert.
+# this file, whose engine/ggExtra file-level skip gates would render them inert.
 
 

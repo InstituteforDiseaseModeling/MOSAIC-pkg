@@ -25,7 +25,7 @@ A J x J symmetric numeric matrix whose \((i,j)\) entry is
 Pairs that cannot be computed (all \code{NA}, zero variance, etc.) are \code{NA_real_}.
 }
 \description{
-Given LASER simulation outputs, this function constructs the
+Given simulation outputs, this function constructs the
 \eqn{J \times J} matrix
 \eqn{\mathbf C = [\mathcal{C}_{ij}]} of Pearson
 spatial-correlation coefficients (Keeling & Rohani 2002) for every pair of

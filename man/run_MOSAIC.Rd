@@ -26,7 +26,7 @@ run_mosaic(
 )
 }
 \arguments{
-\item{config}{Named list of LASER model configuration (REQUIRED). Contains location_name,
+\item{config}{Named list of simulation configuration (REQUIRED). Contains location_name,
 reported_cases, reported_deaths, and all model parameters. Create with custom data
 or obtain via \code{get_location_config()}.}
 
@@ -41,7 +41,7 @@ Controls calibration strategy, parameter sampling, parallelization, and output s
 Key settings:
 \itemize{
 \item \code{calibration$n_simulations}: NULL for auto mode, integer for fixed mode
-\item \code{calibration$n_iterations}: LASER iterations per simulation (default: 3)
+\item \code{calibration$n_iterations}: stochastic engine iterations per parameter set (default: 3)
 \item \code{calibration$max_simulations_total}: Maximum total simulations (default: 100000)
 \item \code{sampling}: Which parameters to sample vs hold fixed
 \item \code{parallel}: Cluster settings for parallel execution
@@ -90,7 +90,7 @@ stopping it after \code{run_MOSAIC} returns.}
 
 \item{...}{Reserved. Supplying a removed argument (\code{dask_spec}) or any
 unrecognised argument raises an error naming it rather than silently
-ignoring it. See \link{deprecated_dask}.}
+ignoring it. See \link{removed_api}.}
 }
 \value{
 Invisibly returns a list with:
@@ -194,7 +194,7 @@ custom_config <- list(
   location_name = c("Region1", "Region2"),
   reported_cases = my_cases_data,
   reported_deaths = my_deaths_data,
-  # ... all other LASER parameters
+  # ... all other simulation parameters
 )
 
 custom_priors <- list(

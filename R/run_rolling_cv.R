@@ -81,7 +81,7 @@
 #'   \code{run_MOSAIC()} (no \code{config_best.json}); it is skipped with a
 #'   warning unless an older run dir still carries that file. Each model appears
 #'   as a value of the \code{model} column.
-#' @param n_reps_best_medoid Integer (default 50); number of stochastic LASER
+#' @param n_reps_best_medoid Integer (default 50); number of stochastic
 #'   reruns used to build the predictive median + intervals for the \code{best}
 #'   and \code{medoid} configs. These reruns execute locally in the calling R
 #'   process, so cost scales with this value times the number of
@@ -438,7 +438,7 @@ run_rolling_cv <- function(PATHS,
 #'   \code{"ensemble"}, \code{"opt"}, \code{"best"}, \code{"medoid"}); NULL
 #'   (default) uses the set recorded in each run's manifest.
 #' @param n_reps_best_medoid Integer or NULL (default); number of stochastic
-#'   LASER replicates to draw for the single-config \code{best}/\code{medoid}
+#'   replicates to draw for the single-config \code{best}/\code{medoid}
 #'   models. NULL reuses the value stored in the run manifest.
 #' @param central_method Central tendency for \code{pred_central}: \code{NULL}
 #'   (default) reuses the value recorded in the run manifest (or \code{"mean"}
@@ -713,7 +713,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 
 #' Re-simulate a single config to a prediction object matching the ensemble shape
 #'
-#' Runs \code{n_reps} stochastic LASER reruns of the saved config and reduces them
+#' Runs \code{n_reps} stochastic stochastic reruns of the saved config and reduces them
 #' to a predictive median + interval bounds on the template ensemble's date grid,
 #' so the result can be emitted by \code{.rolling_cv_compile_run}. Returns NULL if
 #' the config is absent.
@@ -736,7 +736,7 @@ compile_rolling_cv_predictions <- function(dir_output,
      cas <- array(NA_real_, c(length(seeds), nloc, nt))
      dea <- array(NA_real_, c(length(seeds), nloc, nt))
      for (s in seq_along(seeds)) {
-          r  <- MOSAIC::run_LASER(cfg, seed = seeds[s], quiet = TRUE)
+          r  <- MOSAIC::run_simulation(cfg, seed = seeds[s], quiet = TRUE)
           rc <- r$results$reported_cases
           rd <- r$results$reported_deaths
           if (!is.matrix(rc)) rc <- matrix(rc, nrow = 1L)

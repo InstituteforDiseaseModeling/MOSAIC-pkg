@@ -1,7 +1,7 @@
 #' Map infections to suspected and true cholera cases
 #'
 #' @description
-#' Given a vector of incident *symptomatic infections* \eqn{I_{\text{sym}}(t)} (e.g., from LASER model)
+#' Given a vector of incident *symptomatic infections* \eqn{I_{\text{sym}}(t)} (e.g., from transmission model)
 #' and constant \eqn{\rho} (reporting probability among symptomatic),
 #' this function returns vectors of expected **suspected** and **true/confirmed** cases aligned
 #' on report day using a simple time shift \eqn{\Delta} (days).
@@ -55,7 +55,7 @@
 #' because they depend on \eqn{I_{\text{sym}}(t-\Delta)} before the start of the series.
 #'
 #' @examples
-# These are symptomatic infections (e.g., I_sym from LASER model)
+# These are symptomatic infections (e.g., I_sym from transmission model)
 #' infections <- c(0, 1, 2, 5, 40, 120, 200, 75, 50, 30, 15, 10, 3, 0, 0)
 #' N <- 20000
 #'

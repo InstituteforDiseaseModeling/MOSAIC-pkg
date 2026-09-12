@@ -119,8 +119,7 @@ column → `psi_jt`).
   `TF_NUM_INTRAOP_THREADS` / `OMP_NUM_THREADS`) so total ≈ cores — **set at session start, before the
   first TF op**, or it silently no-ops.
 - **Where to run:** a full `n_seeds`≥5 fit is large-RAM → use **`hedgehog-run`** / **`dugong-run`**.
-  A standalone TF-only ψ fit may run *without* dugong's `r-mosaic-Rscript` wrapper (it skips the
-  laser/pyexpat path); a fit run inside `forecast-cv` (which also runs laser) needs the wrapper.
+  The `r-mosaic-Rscript` wrapper exists for the pyexpat/`libstdc++` conflict on the Python side, so a TF ψ fit is exactly the case that still needs it. Simulation no longer does (pure R since v0.66.0).
 
 ## Disambiguation (avoid the grep trap — three distinct things)
 - **`run_rolling_cv()`** (`R/run_rolling_cv.R`) — the forecast-CV harness (see the `forecast-cv`

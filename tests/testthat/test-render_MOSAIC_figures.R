@@ -3,7 +3,7 @@
 #
 # Build a minimal FINISHED dir_output on disk (no calibration), run the renderer,
 # assert figures appear, and assert NO simulation is triggered: calc_model_ensemble,
-# run_LASER, and sample_parameters are mocked to error -- if the renderer ever
+# run_simulation, and sample_parameters are mocked to error -- if the renderer ever
 # falls back to rebuilding an ensemble it would call calc_model_ensemble (which
 # re-simulates locally per calc_model_ensemble.R:551/601), failing this test.
 # =============================================================================
@@ -54,7 +54,7 @@ test_that("render_MOSAIC_figures renders predictions without triggering simulati
   # P5 guard: any re-simulation entry point is fatal.
   testthat::local_mocked_bindings(
     calc_model_ensemble = function(...) stop("P5 VIOLATION: calc_model_ensemble called"),
-    run_LASER           = function(...) stop("P5 VIOLATION: run_LASER called"),
+    run_simulation           = function(...) stop("P5 VIOLATION: run_simulation called"),
     sample_parameters   = function(...) stop("P5 VIOLATION: sample_parameters called")
   )
 
@@ -84,7 +84,7 @@ test_that("render_MOSAIC_figures warns + skips on a missing ensemble artifact", 
   # No ensemble .rds, no medoid .rds, no CSVs.
   testthat::local_mocked_bindings(
     calc_model_ensemble = function(...) stop("P5 VIOLATION"),
-    run_LASER           = function(...) stop("P5 VIOLATION"),
+    run_simulation           = function(...) stop("P5 VIOLATION"),
     sample_parameters   = function(...) stop("P5 VIOLATION")
   )
   expect_warning(
@@ -115,7 +115,7 @@ test_that("render_MOSAIC_figures warns + skips a schema-incompatible artifact", 
 
   testthat::local_mocked_bindings(
     calc_model_ensemble = function(...) stop("P5 VIOLATION"),
-    run_LASER           = function(...) stop("P5 VIOLATION"),
+    run_simulation           = function(...) stop("P5 VIOLATION"),
     sample_parameters   = function(...) stop("P5 VIOLATION")
   )
   expect_warning(

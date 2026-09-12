@@ -164,7 +164,7 @@ priors_default$parameters_global$alpha_2 <- list(
 # Replaces the direct decay_days_long prior (v0.27.0). decay_days_long is now a DERIVED
 # quantity in sample_parameters.R: decay_days_long = decay_days_short + decay_days_spread.
 # This algebraically guarantees decay_days_short < decay_days_long (required by
-# make_LASER_config()) without the post-hoc swap that previously corrupted the
+# make_simulation_config()) without the post-hoc swap that previously corrupted the
 # joint distribution, and preserves the biological upper bound across staged posteriors
 # (the old Uniform(30, 365) prior was fit as unbounded Lognormal at stage 2+).
 # Truncnorm(mean=180, sd=95, a=1, b=365) matches the prior-predictive of the old
@@ -678,7 +678,7 @@ priors_default$parameters_global$zeta_ratio <- list(
 # New prior: TruncNorm(mean=1, sd=1.5, a=0, b=7) — mode near 1 day, most mass
 # in 0-3 day range while still permitting longer delays for countries with
 # slower paper-based reporting systems.
-# Sampled value is rounded to the nearest integer before passing to make_LASER_config().
+# Sampled value is rounded to the nearest integer before passing to make_simulation_config().
 priors_default$parameters_global$delta_reporting_cases <- list(
      description = "Symptom-onset-to-case reporting delay in days (integer, 0-7)",
      distribution = "truncnorm",
@@ -697,7 +697,7 @@ priors_default$parameters_global$delta_reporting_cases <- list(
 # Prior: TruncNorm(mean=4, sd=3, a=1, b=14) - mode near 3-5 days, hard ceiling at 14.
 # Lower bound a=1: same-day death-to-report is implausible in any realistic
 # surveillance system that requires registration + notification + aggregation.
-# Sampled value is rounded to the nearest integer before passing to make_LASER_config().
+# Sampled value is rounded to the nearest integer before passing to make_simulation_config().
 priors_default$parameters_global$delta_reporting_deaths <- list(
      description = "Death-event-to-death-report delay in days (integer, 1-14)",
      distribution = "truncnorm",
@@ -756,7 +756,7 @@ for (iso in j) {
 # --- Per-country recentred transmission defaults (laser-cholera v0.14.0) ----
 # v15.9 (2026-06-16): per-country beta_j0_tot medians recentred for laser-cholera
 # v0.14.0 (incidence-based reported_cases, issue #67) from the v0.14.0 beta*mu
-# magnitude sweep (single-LASER bias->1 against surveillance under config_default
+# magnitude sweep (single-simulation bias->1 against surveillance under config_default
 # defaults; see MOSAIC-pkg/claude/beta_percountry_sweep.R). These were the 14
 # cases-data countries with a solved beta* (NAM excluded: beta-insensitive, an
 # IC/suitability issue not a transmission one). The 26 no-data countries keep the
@@ -1669,7 +1669,7 @@ for (loc in names(initial_conditions_S$parameters_location$prop_S_initial$parame
 # Add mu_j_baseline priors from disease mortality data
 #
 # mu_j_baseline is the daily per-capita cholera mortality hazard applied to
-# the symptomatic compartment (Isym) in LASER. We derive its per-country
+# the symptomatic compartment (Isym) in the engine. We derive its per-country
 # prior by inverting the steady-state data-generating identity under the
 # laser-cholera v0.13+ schema:
 #
@@ -1919,7 +1919,7 @@ for (iso in j) {
 # epidemic_threshold - Location-specific epidemic regime activation threshold
 #
 # Units: dimensionless daily Isym/N point prevalence fraction.
-# The LASER engine compares epidemic_threshold against
+# The simulation engine compares epidemic_threshold against
 #   Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases]
 # at every daily tick to decide whether to apply epidemic-mode IFR and chi_epidemic.
 #

@@ -10,7 +10,7 @@
 #' @param predictions_files Character vector of specific CSV file paths to use.
 #'   Overrides predictions_dir if provided.
 #' @param locations Character vector of specific locations to plot. NULL (default) uses all locations.
-#' @param model Legacy: a model object as returned by \code{run_LASER()}
+#' @param model Legacy: a model object as returned by \code{run_simulation()}
 #'   (any list carrying \code{$results}). Not recommended - use CSV-based
 #'   inputs instead.
 #' @param output_dir Directory where PPC plots will be saved. Creates "ppc" subdirectory.
@@ -182,10 +182,10 @@ plot_model_ppc <- function(predictions_dir = NULL,
         if (verbose) message("=== Extracting data from model object (legacy mode) ===")
 
         # Before the R engine this also accepted a reticulate handle to the
-        # Python Model object; run_LASER() now returns a plain list, so the
+        # Python Model object; run_simulation() now returns a plain list, so the
         # class test is gone and `is.list()` is the whole contract.
         if (!is.list(model)) {
-            stop("model must be a list with $params and $results, as returned by run_LASER()")
+            stop("model must be a list with $params and $results, as returned by run_simulation()")
         }
 
         obs_cases   <- model$params$reported_cases
@@ -712,10 +712,6 @@ plot_model_ppc <- function(predictions_dir = NULL,
 
         # --- Helper to extract vectors for one metric -------------------------
         .get_metric <- function(df, met, col) df[[col]][df$metric == met]
-        .get_ci     <- function(df, met, lo_col, hi_col) {
-            list(vals = df[[lo_col]][df$metric == met],
-                 hivals = df[[hi_col]][df$metric == met])
-        }
 
         # --- Aggregate plot (all locations combined) --------------------------
         obs_cases_flat   <- .get_metric(all_data, "Suspected Cases", "observed")

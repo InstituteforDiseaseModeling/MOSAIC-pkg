@@ -63,7 +63,7 @@ parameters" defines every symbol, with per-parameter derivations in the sections
 relevant `.Rmd` section on demand rather than inferring meaning from a variable name; the rendered
 `docs/*.md` can be stale. The engine-side parameter contract is
 `laser-cholera/src/laser/cholera/metapop/params.py` — historical only, as the source the R engine was
-ported from; the live contract is `R/laser_params.R`. (Reachable via the `additionalDirectories` grant.)
+ported from; the live contract is `R/sim_params.R`. (Reachable via the `additionalDirectories` grant.)
 
 The six development & maintenance specialists share a workflow gate (per CLAUDE.md):
 `devtools::test()` before/after → `devtools::document()` if signatures/roxygen changed →
@@ -74,7 +74,7 @@ exported signatures / the `run_MOSAIC()` core loop.
 
 | If the request is about… | Routes to |
 |---|---|
-| `run_MOSAIC()` loop, Dask/PSOCK, reticulate bridge, `run_LASER.R`, packaging, R CMD check, perf, test infra, docs/build mechanics, **all `plot_*` rendering** | `swe` |
+| `run_MOSAIC()` loop, Dask/PSOCK, reticulate bridge, `sim_engine.R`, packaging, R CMD check, perf, test infra, docs/build mechanics, **all `plot_*` rendering** | `swe` |
 | Likelihood math, Gibbs weights, ESS/agreement/CVW, ensemble/quantiles, WIS, R², distribution fitting | `statistician` |
 | Priors / `est_*`, initial conditions, CFR, vaccination, seasonality, shedding, biological plausibility, literature anchoring | `disease-modeler` |
 | What a parameter / model term *means* (symbol→definition), or where a model term comes from | `disease-modeler` — cites `MOSAIC-docs/04-model-description.Rmd` |
@@ -108,7 +108,7 @@ exported signatures / the `run_MOSAIC()` core loop.
 ## Skills
 
 - **`run-mosaic`** (`.claude/skills/run-mosaic/`) — assemble/modify a config + priors + control and
-  launch a `run_MOSAIC()` calibration (or a single `run_LASER()` sim): install/env, config & `psi_jt`,
+  launch a `run_MOSAIC()` calibration (or a single `run_simulation()` sim): install/env, config & `psi_jt`,
   the prior pin-vs-sample lever, the control object (canonical names, Lesson-#13 silent-drop, io
   presets), where to run, and the output tree (`config_medoid.json`, not `config_best`). **Absorbs the
   retired `run-guide` agent's scope.** Invoke via the `Skill` tool or `/guide`.
@@ -122,7 +122,7 @@ exported signatures / the `run_MOSAIC()` core loop.
   args (embargo, horizons), the raw-ψ vs post-ψ\* attenuation check, per-cutoff ESS gating, and post-hoc
   WIS/R²/coverage scoring. Composes `run-mosaic` + `est-suitability`. Invoke via the `Skill` tool.
 - **`diagnose-fit`** (`.claude/skills/diagnose-fit/`) — active model-fit diagnosis. Drives fast
-  deterministic single-LASER experiments (`MOSAIC::run_fit_sandbox`) scored by
+  deterministic single-simulation experiments (`MOSAIC::run_fit_sandbox`) scored by
   `MOSAIC::calc_fit_diagnostics` to find what parameter changes improve fit, then writes a
   calibration-actionable brief. **Preloaded into `calibration-doctor`**; other agents/the main
   session can invoke it via the `Skill` tool where that tool is enabled. The parameter→behavior

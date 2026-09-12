@@ -18,8 +18,8 @@
 # TensorFlow is the only Python capability the suite still cares about, because
 # it is the only one the package still uses (the suitability model).
 
-# Skip when the Python tensorflow module is unavailable (e.g. the worker image
-# strips it). Keeps the suite portable; a no-op where TF is installed.
+# Skip when the Python tensorflow module is unavailable (most machines that are
+# not a suitability box). Keeps the suite portable; a no-op where TF is installed.
 #
 # LAZY PROBE: importing tensorflow costs ~10s, so it is deliberately NOT probed
 # at startup (no fast-tier test reads the flag). The probe is performed here on

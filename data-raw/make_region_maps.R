@@ -77,7 +77,7 @@ snf_k4 <- c(
 # curves -> level stripped); the "Aug" clusters mix West-coast and Horn/Sahel
 # countries that merely share an August peak (e.g. ETH/SSD land in c3 via the
 # kiremt / Sahelian-band rains, not West-coast cholera ecology). Kept as a
-# candidate but NOT the default because phase-pooling is blind to the LASER decay
+# candidate but NOT the default because phase-pooling is blind to the engine decay
 # channel (psi-level sensitive). k=4 is the committed choice; a silhouette/gap
 # re-check (plan §6 gate 4 k=4 note) is deferred to the acceptance run and would
 # require re-running the underlying clustering, not this transcription.

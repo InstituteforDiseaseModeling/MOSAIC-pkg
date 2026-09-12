@@ -3,7 +3,7 @@
 \docType{data}
 \name{config_simulation_epidemic}
 \alias{config_simulation_epidemic}
-\title{Epidemic Simulation LASER Configuration}
+\title{Epidemic Simulation Simulation Configuration}
 \format{
 A named \strong{list} identical in structure to
 \link{config_default} but much smaller.  Key elements include
@@ -16,7 +16,7 @@ config_simulation_epidemic
 \description{
 A \strong{toy one-year outbreak} parameter set for quick unit-tests and
 vignette examples.
-The object is created by \code{make_simulation_epidemic_LASER_config_files.R} and saved in
+The object is created by \code{make_simulation_epidemic_config_files.R} and saved in
 the package as \strong{\code{config_simulation_epidemic}}.
 }
 \details{
@@ -36,14 +36,14 @@ the package as \strong{\code{config_simulation_epidemic}}.
 These settings produce a single, clearly defined epidemic wave in each
 patch—especially pronounced in “BAR”, which has the highest baseline
 transmission (β = 0.50).  The configuration is small enough to run in
-fractions of a second yet exercises all major LASER components, making it
+fractions of a second yet exercises all major engine components, making it
 ideal for automated tests and teaching materials.
 }
 \seealso{
 \itemize{
 \item \link{config_simulation_endemic} – long-run endemic scenario.
 \item \link{config_default} – comprehensive default configuration.
-\item \code{make_simulation_epidemic_LASER_config_files.R} – script that generates this object.
+\item \code{make_simulation_epidemic_config_files.R} – script that generates this object.
 }
 }
 \keyword{datasets}

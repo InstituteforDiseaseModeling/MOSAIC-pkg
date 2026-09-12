@@ -107,9 +107,9 @@ cutoff×location×date×metric: `segment`=IS/embargo/OOS, held-out `observed`, `
 
 ## Where to run
 A multi-cutoff coupled CV (each cutoff = one lstm_v2 fit + one full `run_MOSAIC` calibration + ~50 local
-LASER medoid reruns) is a **hedgehog/dugong** job. The `n_reps_best_medoid` reruns execute **locally in the
-calling R process, not on Dask** — size RAM accordingly. Because it runs laser, **forecast-cv REQUIRES the
-`r-mosaic-Rscript` wrapper on dugong** (a standalone TF psi fit would not). Cross-link `hedgehog-run` /
+medoid reruns) is a **hedgehog/dugong** job. The `n_reps_best_medoid` reruns execute **locally in the
+calling R process** — size RAM accordingly. forecast-cv needs dugong's `r-mosaic-Rscript` wrapper for its
+psi fit (TensorFlow/pyexpat), not for its simulations, which are pure R. Cross-link `hedgehog-run` /
 `dugong-run`; apply the TF-thread caps from est-suitability since each cutoff's psi fit has the same
 oversubscription risk.
 

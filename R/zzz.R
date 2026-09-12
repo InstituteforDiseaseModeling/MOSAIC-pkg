@@ -115,7 +115,7 @@
           "|_|  |_| \\___/ |____//_/   \\_\\|___|\\____|          /_____//_/  |_|/____//_____//_/ |_|\n",
           "\n",
           "Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation\n",
-          "for Cholera (MOSAIC) featuring the Light-agent Spatial Model for ERadication (LASER)!\n",
+          "for Cholera (MOSAIC)!\n",
           "\n",
           "Version: ", as.character(pkg_version), "\n"
      )

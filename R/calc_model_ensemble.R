@@ -121,8 +121,8 @@
 # -----------------------------------------------------------------------------
 # `parallel::parLapply()` / `pbapply::pblapply(cl=)` gather results with a
 # BLOCKING `unserialize(node$con)`. If a PSOCK worker PROCESS dies mid-task --
-# a segfault / fatal C-level abort in the embedded Python (numba/laser) runtime,
-# an OOM kill, etc. (NOT an R-level error, which the worker's tryCatch already
+# a fatal C-level abort in compiled code, an OOM kill under memory pressure,
+# etc. (NOT an R-level error, which the worker's tryCatch already
 # turns into a `success = FALSE` record) -- the behaviour is platform-dependent:
 #   * macOS surfaces the half-closed socket as "error reading from connection";
 #   * Linux can BLOCK FOREVER on the dead peer's socket.
@@ -244,7 +244,7 @@
 #' Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 #'
 #' @description
-#' Runs LASER simulations for multiple parameter sets (with stochastic reruns
+#' Runs simulations for multiple parameter sets (with stochastic reruns
 #' per set) and aggregates results using importance weights. Returns a
 #' \code{mosaic_ensemble} object containing weighted mean, median, and quantile
 #' envelopes for cases and deaths.
@@ -260,7 +260,7 @@
 #' @param parameter_weights Numeric vector of importance weights, same length as
 #'   \code{parameter_seeds} or \code{configs}. Normalized internally to sum to 1.
 #'   If \code{NULL}, all parameter sets are weighted equally.
-#' @param n_simulations_per_config Integer. Stochastic LASER reruns per parameter
+#' @param n_simulations_per_config Integer. Stochastic stochastic reruns per parameter
 #'   set. Default \code{10L}.
 #' @param envelope_quantiles Numeric vector of quantiles for confidence intervals.
 #'   Must be even length to form lower/upper pairs. Default
@@ -279,7 +279,7 @@
 #' @param mask_final_deaths_step Logical. If \code{TRUE} (default, matching
 #'   \code{\link{plot_model_ensemble}}), record that the FINAL deaths timestep is
 #'   a laser-cholera structural zero (\code{reported_deaths} written at tick
-#'   then leading-trimmed, so the last slot is never written; laser issue #82).
+#'   then leading-trimmed, so the last slot is never written; laser-cholera issue #82).
 #'   This value is NOT applied to any returned series here; it
 #'   is recorded in the returned \code{artifact_mask} element for downstream
 #'   scoring.
@@ -610,7 +610,7 @@ calc_model_ensemble <- function(config,
     # R engine it also imported laser.cholera and parked the module in each
     # worker's .GlobalEnv, which is why .mosaic_ensemble_sim_task() used to
     # look for an `lc` binding there; the R engine is reached through
-    # run_LASER() from the loaded namespace, so there is nothing to preload.
+    # run_simulation() from the loaded namespace, so there is nothing to preload.
     parallel::clusterEvalQ(cl, {
       .libPaths(unique(c(.parent_libs, .libPaths())))
       library(MOSAIC)

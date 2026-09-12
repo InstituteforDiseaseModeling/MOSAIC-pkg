@@ -54,8 +54,8 @@ fixes it. So **always run MOSAIC via the wrapper**:
 ```
 The wrapper `LD_PRELOAD`s the venv `libexpat.so.1` (and `libstdc++.so.6`, harmless here), sets
 `R_LIBS_USER=~/R/library` and `RETICULATE_PYTHON`. `check_dependencies()` and TensorFlow-only work
-pass without it (they skip the laser/pyexpat worker path), which masks the problem — use the wrapper
-anyway. Recreate it with `claude/dugong_setup/make_wrappers_dugong.sh` if lost.
+pass without it, which masks the problem — use the wrapper anyway. (Since v0.66.0 simulation is pure R
+and imports no Python, so the pyexpat conflict should now only reach the TensorFlow psi path. Unverified.) Recreate it with `claude/dugong_setup/make_wrappers_dugong.sh` if lost.
 
 The MOSAIC R package installs to the user library `~/R/library` (set via `~/.Renviron`
 `R_LIBS_USER`). conda lives at `~/miniconda`; the MOSAIC Python env is the conda env

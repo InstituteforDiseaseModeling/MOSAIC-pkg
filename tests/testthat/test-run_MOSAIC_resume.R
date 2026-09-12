@@ -1,7 +1,7 @@
 # Tests for run_MOSAIC() resume capability (resume = TRUE).
 #
 # These exercise the factored, engine-free internals so they run without the
-# Python/LASER engine. The full end-to-end interrupt/resume reproducibility
+# Python/simulation engine. The full end-to-end interrupt/resume reproducibility
 # check lives in the smoke test (claude/smoke_test_resume.R) since it needs the
 # simulation engine.
 
@@ -119,7 +119,7 @@ test_that(".mosaic_resume_check_inputs guards control$likelihood drift", {
 
   lik <- list(weight_cases = 1, weight_deaths = 1, weight_wis = 0)
   control <- list(likelihood = lik)
-  # control.json is written as sim_params: list(control = control, ...)
+  # control.json is written as control_record: list(control = control, ...)
   wj(list(control = control, timestamp = "t0"), file.path(inp, "control.json"))
 
   # identical likelihood → passes

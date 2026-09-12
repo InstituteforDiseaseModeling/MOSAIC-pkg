@@ -183,7 +183,7 @@ test_that("B2 composed spread: sd(log implied_CFR) ~ 0.787, Var(log mu) ~ 1.016"
 })
 
 # ---------------------------------------------------------------------------
-# Fixture 4 (SPEC §6.1 #4): make_LASER_config [0,1] bound. The RAW B2 product
+# Fixture 4 (SPEC §6.1 #4): make_simulation_config [0,1] bound. The RAW B2 product
 # (CFR_target * chain) CAN exceed 1 in the extreme upper tail for the highest-CFR
 # countries (P(mu>1) ~ 1e-5 at the highest real country, CFR median ~0.089;
 # SPEC_B2.md §3.5), so .b2_sample() CLAMPS the derived mu just below 1.

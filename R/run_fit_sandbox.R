@@ -1,7 +1,7 @@
-#' Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter Overrides
+#' Deterministic Fit-Diagnostic Sandbox: One Simulation with Parameter Overrides
 #'
 #' @description
-#' Runs a \strong{single deterministic} LASER simulation from a calibration config
+#' Runs a \strong{single deterministic} simulation from a calibration config
 #' (typically a run's medoid config) with optional point-value parameter overrides,
 #' then scores the result against the observed series carried in the config. This is
 #' the experiment unit behind the active fit-diagnostic workflow (the \code{diagnose-fit}
@@ -23,7 +23,7 @@
 #'   (e.g. \code{.../2_calibration/best_model/config_medoid.json}).
 #' @param params Named list of point-value parameter overrides applied to the config
 #'   before the run (unknown names are skipped with a warning). Default \code{list()}.
-#' @param seed Integer RNG seed for the LASER run. Default \code{42L}.
+#' @param seed Integer RNG seed for the simulation run. Default \code{42L}.
 #' @param locations Integer indices of location rows to aggregate. Default \code{NULL}
 #'   (all locations).
 #' @param full_metrics Logical; if \code{TRUE} (default) compute the full
@@ -34,8 +34,8 @@
 #'   \code{outdir/<run_label>/}. Default \code{NULL} (return only).
 #' @param run_label Character label for the run (used for the output subdirectory and
 #'   recorded in metrics). Default \code{"fit_sandbox"}.
-#' @param quiet Logical passed to [run_LASER()]. Default \code{TRUE}.
-#' @param .laser_runner Function used to run the model; defaults to [run_LASER()].
+#' @param quiet Logical passed to [run_simulation()]. Default \code{TRUE}.
+#' @param .sim_runner Function used to run the model; defaults to [run_simulation()].
 #'   Exposed as a seam for testing with a stubbed engine.
 #'
 #' @return A named list with \code{predictions} (long data.frame in the standard
@@ -43,7 +43,7 @@
 #'   \code{full_metrics=TRUE}, \code{fit_diagnostics} and a merged \code{scorecard}),
 #'   \code{params_applied} (data.frame of old/new values), and \code{run_label}.
 #'
-#' @seealso [calc_fit_diagnostics()], [run_LASER()]
+#' @seealso [calc_fit_diagnostics()], [run_simulation()]
 #' @export
 run_fit_sandbox <- function(config,
                             params = list(),
@@ -53,7 +53,7 @@ run_fit_sandbox <- function(config,
                             outdir = NULL,
                             run_label = "fit_sandbox",
                             quiet = TRUE,
-                            .laser_runner = run_LASER) {
+                            .sim_runner = run_simulation) {
 
   # ---- Resolve config ------------------------------------------------------
   if (is.character(config) && length(config) == 1L) {
@@ -72,7 +72,7 @@ run_fit_sandbox <- function(config,
     old_val <- config[[nm]]
     new_val <- params[[nm]]
     # Broadcast a scalar override onto a per-location (vector) parameter so the
-    # engine's length == n_locations assertion still holds (LASER hard-asserts this).
+    # engine's length == n_locations assertion still holds (the engine hard-asserts this).
     if (length(old_val) > 1L && length(new_val) == 1L) new_val <- rep(new_val, length(old_val))
     config[[nm]] <- new_val
     applied[[nm]] <- list(old = old_val, new = new_val)
@@ -91,11 +91,11 @@ run_fit_sandbox <- function(config,
   # ---- Run a single deterministic simulation -------------------------------
   # The engine writes no files of its own, so there is no scratch dir to make
   # and no `visualize`/`pdf`/`outdir` to suppress: those were the Python
-  # Analyzer's arguments, and passing them now raises (deprecated_dask). Every
-  # argument here must be a formal of the default runner, run_LASER() --
-  # asserted by test-run_fit_sandbox.R, because the tests stub .laser_runner
+  # Analyzer's arguments, and passing them now raises (removed_api). Every
+  # argument here must be a formal of the default runner, run_simulation() --
+  # asserted by test-run_fit_sandbox.R, because the tests stub .sim_runner
   # and a stub that swallows `...` cannot see a call the real runner rejects.
-  model <- .laser_runner(config = config, seed = seed, quiet = quiet)
+  model <- .sim_runner(config = config, seed = seed, quiet = quiet)
 
   pred_cases_mat  <- .fit_as_matrix(model$results$reported_cases)
   pred_deaths_mat <- .fit_as_matrix(model$results$reported_deaths)
@@ -179,7 +179,7 @@ run_fit_sandbox <- function(config,
 
 # ---- Internal helpers ------------------------------------------------------
 
-# Coerce a run_LASER/config field (matrix or vector) to a numeric matrix with
+# Coerce a run_simulation/config field (matrix or vector) to a numeric matrix with
 # locations in rows. The engine always returns a matrix now, but config-supplied
 # observed series are still sometimes bare vectors.
 .fit_as_matrix <- function(x) {

@@ -64,7 +64,7 @@ python verify_shim.py --config cfg/default60.json          # shim transparency g
 python dump_fixture.py --config cfg/default60.json \
     --components Susceptible,Census --out out/a0 \
     --label replay_susceptible_census
-Rscript -e 'MOSAIC:::laser_convert_oracle_dump("claude/oracle/out/a0", \
+Rscript -e 'MOSAIC:::sim_convert_oracle_dump("claude/oracle/out/a0", \
     "tests/testthat/fixtures/replay_susceptible_census.rds")'
 ```
 
@@ -81,7 +81,7 @@ python dump_fixture.py --config ../../inst/extdata/config_default.json \
     --components $ALL --out out/full1398 --label replay_full_length
 ```
 
-then convert each with `MOSAIC:::laser_convert_oracle_dump(<dump>, <rds>)`.
+then convert each with `MOSAIC:::sim_convert_oracle_dump(<dump>, <rds>)`.
 
 Before trusting a regenerated fixture, re-run the draw-site check:
 
@@ -98,7 +98,7 @@ because the two errors cancelled, the **count still came to 22** and a
 count-based check passed. See CLAUDE.md lesson #15.
 
 Draw sites are recorded as Python `file:line` and mapped to the engine's own
-site labels by `.LASER_ORACLE_SITE_MAP` in `R/laser_fixture.R`. Those line
+site labels by `.SIM_ORACLE_SITE_MAP` in `R/sim_fixture.R`. Those line
 numbers are specific to the build above — regenerating from a different version
 moves them, and the map then raises an unmapped-site error rather than silently
 mispairing sites.
@@ -114,7 +114,7 @@ consequences, handled differently and deliberately:
 `round(nu_*_jt[tick])`, `round(drawn / chi_eff)` and the two `epidemic_threshold`
 comparisons all turn a float32 quantity into an integer. There, reproducing the
 stored precision is not optional: an integer that differs by one decorrelates
-the whole draw sequence. `.laser_f32()` in `R/laser_params.R` does the
+the whole draw sequence. `.sim_f32()` in `R/sim_params.R` does the
 round-trip, and the list of affected fields is documented at its definition.
 
 **Where it reaches only a float, the port stays in double** and is the more
@@ -141,7 +141,7 @@ representation error re-enters as a draw parameter and accumulates. Over the
 1,398-tick default config the drift reaches 1.07e8 absolute against a reservoir
 of order 1e14 — about 1e-6 of the channel's own scale, exactly float32
 accumulation size — which is why `environmental/decay` carries its own replay
-tolerance in `.LASER_SITE_TOL`. Nothing integer depends on it: all 19 integer
+tolerance in `.SIM_SITE_TOL`. Nothing integer depends on it: all 19 integer
 channels are bit-identical over the full run.
 
 ## Known oracle quirk

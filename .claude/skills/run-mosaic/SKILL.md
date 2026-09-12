@@ -2,7 +2,7 @@
 name: run-mosaic
 description: >
   Assemble or modify a MOSAIC config + priors + control and launch a run_MOSAIC()
-  calibration (or a single deterministic run_LASER() sim). Covers install/environment,
+  calibration (or a single deterministic run_simulation() sim). Covers install/environment,
   building/subsetting a config (locations, dates, psi_jt), choosing priors and the
   pin-vs-sample lever, the control object (canonical names, weights, ESS/R² targets,
   io presets), where to run (laptop vs hedgehog/dugong), and reading the output tree.
@@ -19,11 +19,11 @@ and versions drift — cite the source of truth (`?fn`, the version-note in `dat
 `.Rmd`) rather than hard-coding a value that will rot.
 
 ## Documentation tiers (consult in this order; cite which repo)
-1. **Roxygen man pages (most version-stable):** `?run_MOSAIC`, `?run_LASER`, `?make_LASER_config`,
+1. **Roxygen man pages (most version-stable):** `?run_MOSAIC`, `?run_simulation`, `?make_simulation_config`,
    `?sample_parameters`, `?mosaic_control_defaults`, `?calc_model_ensemble`. Primary source for
    args + return contracts.
 2. **MOSAIC-pkg vignettes + examples:** `vignettes/Installation.Rmd`, `Running-MOSAIC.Rmd`,
-   `Running-LASER.Rmd`, `Deployment.Rmd`; `inst/examples/simulate_outbreak_settings.R` (5 regimes).
+   `Running-simulations.Rmd`, `Deployment.Rmd`; `inst/examples/simulate_outbreak_settings.R` (5 regimes).
 3. **MOSAIC-docs sibling repo (canonical model/param spec — read the `.Rmd`, not rendered `.md`):**
    `04-model-description.Rmd` ("Table of model parameters" = symbol→meaning for every parameter),
    `05-model-calibration.Rmd` (BFRS methodology), `06-scenarios.Rmd` (scenario construction).
@@ -39,7 +39,7 @@ and versions drift — cite the source of truth (`?fn`, the version-note in `dat
 - Start from `MOSAIC::config_default` (40-country SSA, ψ baked in) or build/subset with
   `get_location_config()` for a single country or a coupled-metapopulation **vector** of ISO3 codes.
 - The config window (`date_start`/`date_stop`) sets the simulation span; `date_start` is the anchor.
-- ψ enters as the `psi_jt` matrix (`locations × dates`). `make_LASER_config()` validates the full
+- ψ enters as the `psi_jt` matrix (`locations × dates`). `make_simulation_config()` validates the full
   config (incl. `ncol(psi_jt) == length(t)`). To use a freshly fit ψ, see the **`est-suitability`**
   skill (it writes `model/input/pred_psi_suitability_day.csv`; the bake path is
   `data-raw/make_config_default.R`).
@@ -82,7 +82,7 @@ design (unmasks implied CFR), not a regression.
 res <- MOSAIC::run_MOSAIC(config = cfg, priors = MOSAIC::priors_default,
                           control = ctrl)
 ```
-- **Single deterministic sim** (scenario exploration / teaching): `run_LASER()` with a fixed config +
+- **Single deterministic sim** (scenario exploration / teaching): `run_simulation()` with a fixed config +
   seed.
 - **Output fields:** read `model$results$reported_cases` / `reported_deaths` — NOT raw `disease_*`
   (post-v0.13 convention).
@@ -93,7 +93,7 @@ res <- MOSAIC::run_MOSAIC(config = cfg, priors = MOSAIC::priors_default,
 ## 5. Where to run
 A 40-country coupled calibration is a **hedgehog/dugong** job (~2 GB/worker), not a laptop job — use
 the **`hedgehog-run`** / **`dugong-run`** skills for VM mechanics (R wrapper, surviving disconnect,
-pulling results). On dugong, a run that invokes laser **requires** the `r-mosaic-Rscript` wrapper.
+pulling results). The engine is pure R as of v0.66.0, so a calibration no longer touches Python at all; dugong's `r-mosaic-Rscript` wrapper is now only needed for the TensorFlow psi path. Unverified on the VM — test before relying on it.
 
 ## 6. Output tree
 ```

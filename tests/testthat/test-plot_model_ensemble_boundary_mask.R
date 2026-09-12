@@ -7,7 +7,7 @@
 # object. See R/plot_model_ensemble.R and CLAUDE.md lessons #11/#12.
 
 # ---------------------------------------------------------------------------
-# Fixture: a small, fully-specified mosaic_ensemble object (no LASER needed)
+# Fixture: a small, fully-specified mosaic_ensemble object (no engine needed)
 # ---------------------------------------------------------------------------
 
 make_test_ensemble <- function(n_locs = 2L, n_times = 8L) {

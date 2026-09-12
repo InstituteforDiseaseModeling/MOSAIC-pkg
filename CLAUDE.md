@@ -91,8 +91,8 @@ reachable via the session's additional-directory access. Pull the specific secti
   - Initial conditions → "## Initial conditions"; transitions/vaccine terms → "## Table of stochastic transitions", "## Table of vaccination model terms"
 - **`MOSAIC-docs/05-model-calibration.Rmd`** — BFRS calibration methodology (weighting, convergence).
   **`MOSAIC-docs/03-data.Rmd`** — data sources & provenance. **`06-scenarios.Rmd`** — scenarios.
-- **`R/laser_params.R`** — engine-side authoritative parameter names/types (the contract the
-  simulator actually consumes), with `R/laser_results.R` for the 28-channel result contract. The
+- **`R/sim_params.R`** — engine-side authoritative parameter names/types (the contract the
+  simulator actually consumes), with `R/sim_results.R` for the 28-channel result contract. The
   read-only `laser-cholera/src/laser/cholera/metapop/params.py` is the **historical** source these
   were ported from — use it to settle *why* the engine behaves as it does, never as a statement of
   what runs today.
@@ -101,7 +101,7 @@ reachable via the session's additional-directory access. Pull the specific secti
 
 ## Package Overview
 
-**MOSAIC** (Metapopulation Outbreak Simulation And Interventions for Cholera) is a production R package for cholera transmission simulation across Sub-Saharan Africa. The transmission engine is pure R (`run_LASER()`); Python/reticulate is used only by the keras3 environmental-suitability model, and the `laser-cholera` dependency is gone entirely as of v0.67.0. The package provides functions for data processing, parameter estimation, Bayesian calibration, and visualization.
+**MOSAIC** (Metapopulation Outbreak Simulation And Interventions for Cholera) is a production R package for cholera transmission simulation across Sub-Saharan Africa. The transmission engine is pure R (`run_simulation()`); Python/reticulate is used only by the keras3 environmental-suitability model. The `laser-cholera` dependency went in v0.67.0 and the `LASER` naming in v0.68.0 — `run_LASER()`/`make_LASER_config()`/`get_default_LASER_config()` now raise an error naming their replacement. The package provides functions for data processing, parameter estimation, Bayesian calibration, and visualization.
 
 **Key capabilities:** SEIR metapopulation simulation, Bayesian Filtering with Resampling (BFRS) calibration, environmental suitability modeling, vaccination/WASH intervention analysis, spatial transmission with human mobility.
 
@@ -115,7 +115,7 @@ MOSAIC/                          # Root (set via set_root_directory())
 │   ├── inst/extdata/            # Default parameters (JSON)
 │   ├── inst/py/                 # Python environment.yml
 │   ├── data/                    # R data objects (.rda)
-│   ├── model/                   # LASER model I/O and LAUNCH.R
+│   ├── model/                   # transmission model I/O and LAUNCH.R
 │   ├── claude/                  # USE THIS for temporary files
 │   └── DESCRIPTION              # Package metadata
 ├── MOSAIC-data/                 # Data repository (raw/ is READ-ONLY)
@@ -137,7 +137,7 @@ The `run_MOSAIC()` workflow is the **centerpiece** of the package — it orchest
 - `R/run_MOSAIC_infrastructure.R` — directory setup, I/O, summary generation
 
 **BFRS calibration (2 phases):**
-1. **Adaptive calibration** — batches of LASER sims until convergence (R² target, ESS thresholds)
+1. **Adaptive calibration** — batches of simulations until convergence (R² target, ESS thresholds)
 2. **Predictive batches** — model-based batch sizing with ESS re-evaluation until convergence
 
 **Post-calibration:**
@@ -195,10 +195,10 @@ All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 | `R/calc_model_likelihood.R` | Multi-component likelihood |
 | `R/calc_model_ensemble.R` | Posterior-weighted ensemble predictions |
 | `R/sample_parameters.R` | Sample 301 parameters from priors |
-| `R/make_LASER_config.R` | Config validation (60+ parameters) |
+| `R/make_simulation_config.R` | Config validation (60+ parameters) |
 | `R/calc_model_R2.R` | R² (corr and SSE methods) + bias ratio |
 | `R/get_paths.R` | Directory path management |
-| `R/laser_engine.R` | `run_LASER()` — the pure-R transmission engine, and the only engine entry point |
+| `R/sim_engine.R` | `run_simulation()` — the pure-R transmission engine, and the only engine entry point |
 
 ## Troubleshooting
 
@@ -306,5 +306,7 @@ Record of specific errors introduced by AI coding assistants. Read these before 
 13. The renamed-control-parameter deprecation shim in `.mosaic_validate_and_merge_control()` was dead code for ~15 minor versions. It guarded the old→new copy with `is.null(def$calibration$<new>)`, but the function deep-merges the user's `control` into `mosaic_control_defaults()` FIRST, and the defaults always populate the canonical `*_adaptive`/`*_total`/`ESS_method` keys with non-NULL values. So the guard never fired: every legacy name (`batch_size`, `min_batches`, `max_batches`, `target_r2`, `max_simulations`, `max_predictive_batch`, plus the case-mismatched `ess_method`) was silently dropped and the run reverted to defaults, while the intended deprecation `warning()` never appeared. This was invisible because there is no "unknown control key" validator, and the published Running-MOSAIC vignette used the old names — so a user following the docs would set `max_simulations=1e6`/`target_r2=0.95` and silently get the defaults (100,000/0.9). Fix (v0.37.1): detect legacy names in the user's ORIGINAL `control` (never the merged `def`), and treat the canonical key as "user-set" only when it differs from the pristine default — then honour-and-warn, or (if both genuinely set) keep canonical and warn it was ignored. Lessons: (i) a deprecation/back-compat shim must key off the raw user input, not a structure already merged with defaults; (ii) any guard of the form `is.null(<thing the defaults always fill>)` is dead on arrival — test the shim with the actual `defaults()+override` usage pattern, not a bare partial list; (iii) absent an "unknown key" validator, silently-ignored config is undetectable at runtime, so add regression tests that assert the value actually takes effect (v0.37.1 fix)
 
 14. The Dask/Coiled excision (v0.65.0) removed ~2,200 lines of production code and ~1,900 of tests, and two near-misses inside it are the reusable lessons. (a) The migration plan listed `make_mosaic_cluster.R` for deletion on the strength of its own documentation ("`laser.cholera` Python module imported once per worker"), which reads as pure Dask-era plumbing — but it builds the **local** PSOCK cluster and `run_MOSAIC()` calls it in the heart of the surviving branch. Deleting it broke every local run; it was caught only by reading the call site rather than the docstring. (b) `.mosaic_resume_check_inputs()` carried an allow-list letting a resume proceed across two laser-cholera versions whose on-worker Python likelihood values were verified byte-identical. Once scoring became R-only, its `engine == "python"` condition could never be true — the branch was dead the instant the Dask path went, and it would have sat there looking like protection (the same shape as lesson #13's dead `is.null()` guard). Removing it also retired the now-uncalled `.mosaic_lc_likelihood_compatible()`. Lessons: (i) when deleting a "backend-specific" file, grep its **call sites** and check which branch they sit in — a function's documentation describes what it was built for, not what currently depends on it; (ii) after removing an execution path, re-examine every guard that discriminated *between* paths, because each one is now a constant — delete it rather than leave a condition that cannot fire; (iii) removing a path orphans its helpers transitively, so re-run the orphan grep after the obvious deletions, not just before; (iv) deleting a parity test that only asserted "path A equals path B" is correct, but check first whether it also asserted a property of path A — three of ten Dask test files did, and those assertions were re-homed rather than lost (v0.65.0)
+
+16. The LASER->simulation rename (v0.68.0) was mechanical, and the two things that went wrong were both about blast radius, not about the rename. (a) A script that re-aligned hanging-indent continuation lines after the name-length change matched *every* multi-line `function(` definition in the repo, not just renamed ones — it "fixed" 148 lines of pre-existing indentation in 43 untouched files, burying ~30 real renames in whitespace noise. Caught by `git diff --ignore-all-space` showing files whose entire diff was invisible to it; reverted by restoring the HEAD indentation for every indent-only-changed line whose governing open-paren line did not contain a renamed identifier. (b) A blanket `s/laser_/sim_/g` would have silently rewritten `laser_cholera` and `laser_core`, the names of the real external Python packages that the historical provenance comments legitimately cite — the rename had to protect those two tokens explicitly before the prefix rule ran, and every surviving `laser`/`LASER` mention then had to be triaged by hand into "renamed thing" vs "the Python package that still exists on disk". Lessons: (i) a cosmetic-cleanup script run across a repo needs its match set scoped to the change, not to the pattern — pattern breadth is not correctness; (ii) after any bulk sed, run `git diff --ignore-all-space` and treat a file that vanishes from it as a defect, not a no-op; (iii) when renaming a prefix that also prefixes an external dependency's name, protect the external tokens first and verify with a residual grep, because the failure is silent and reads as a successful rename (v0.68.0)
 
 15. Building the R engine's PRNG draw-site registry (v0.65.0), I produced the table by pairing an ordered list of *conceptual* steps ("sym deaths, disease deaths, sym recovery, asym deaths, ...") against an ordered list of line numbers scraped from `laser-cholera`. The two lists did not correspond: `reported_deaths` (`infectious.py:210`) sits between `disease_deaths` (203) and `sym_recovery` (217), so five `infectious.py` labels were shifted onto the wrong line, one real draw site was omitted, and one phantom site (`infectious/sigma_split`) was invented — it is `np.round(sigma * progressing)`, not a PRNG call. **The total still came to 22**, because the phantom exactly offset the omission, so the A-0 exit check "22/22 draw sites covered" passed while five of the 22 labels were wrong. Lessons: (i) when a lookup table is built by zipping two ordered lists, verify each pairing individually — a matching cardinality is not verification, and here the two errors were self-concealing; (ii) prefer deriving such a table mechanically from the source of truth over transcribing it, and keep the derivation runnable (`claude/oracle/verify_draw_sites.py` re-derives the site list from the oracle and diffs per site; it was negative-tested against the buggy table before being trusted); (iii) a coverage metric over a hand-written label set measures the label set, not the code — assert set *membership* against the source, not the count; (iv) the defect was invisible to the green A-0 replay because `Susceptible`/`Census` happen to use the only two labels that were correct, so passing tests on a subset said nothing about the rest of the table (v0.65.0)

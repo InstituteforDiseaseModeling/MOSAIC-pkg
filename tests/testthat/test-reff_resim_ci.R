@@ -5,7 +5,7 @@
 #   - .mosaic_build_trajectories() grid: stride = 1 -> full daily-consecutive set
 #
 # The full re-simulation (.mosaic_reff_resim_ci / add_reproductive_numbers
-# recompute_ci) drives the Python laser engine and is exercised by the smoke
+# recompute_ci) drives the simulation engine and is exercised by the smoke
 # test, not the unit suite.
 
 # -----------------------------------------------------------------------------

@@ -205,7 +205,7 @@ RWA, SEN, SLE, SOM, SSD, SWZ, TCD, TGO, TZA, UGA, ZAF, ZMB, ZWE.
 
 \seealso{
 \itemize{
-\item \link{config_default} -- Default LASER configuration that pairs with these priors.
+\item \link{config_default} -- Default simulation configuration that pairs with these priors.
 \item \code{\link[=sample_parameters]{sample_parameters()}} -- Draws samples from these priors.
 \item \link{config_simulation_epidemic} -- One-year outbreak toy configuration.
 \item \link{config_simulation_endemic} -- Multi-year endemic toy configuration.

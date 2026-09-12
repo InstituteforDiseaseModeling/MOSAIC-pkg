@@ -363,7 +363,7 @@
 #' so this is the explicit opt-out, not the default.) Indices are clamped to
 #' \code{[1L, n_time]}.
 #'
-#' @param config The LASER config list (\code{date_start}, \code{reported_cases}).
+#' @param config The simulation config list (\code{date_start}, \code{reported_cases}).
 #' @param control The resolved control list (reads \code{control$likelihood}).
 #' @return \code{list(idx_cases, idx_deaths, n_time)} with integer indices.
 #' @noRd
@@ -1207,7 +1207,7 @@
 #' Classifies a persisted MOSAIC version string as having simulated with the
 #' Python \code{laser-cholera} engine or the pure-R engine. The cutover is
 #' v0.66.0: every earlier version called Python, every later one calls
-#' \code{run_LASER()} in R.
+#' \code{run_simulation()} in R.
 #'
 #' This replaced a pair of helpers that compared two \emph{laser-cholera}
 #' versions across the v0.12 -> v0.13 deaths-likelihood-scale boundary. That
@@ -1410,7 +1410,7 @@
   if (identical(persisted_engine, "python")) {
     stop(sprintf(paste0(
       "resume: this run directory was created by MOSAIC %s, which simulated with the Python ",
-      "laser-cholera engine. MOSAIC %s simulates in R (run_LASER()). The two engines agree ",
+      "laser-cholera engine. MOSAIC %s simulates in R (run_simulation()). The two engines agree ",
       "statistically but not draw-for-draw, so pooling their shards in 2_calibration/samples/ ",
       "would produce a posterior from neither. Start a fresh run in a new directory."),
       persisted_mosaic, as.character(utils::packageVersion("MOSAIC"))), call. = FALSE)

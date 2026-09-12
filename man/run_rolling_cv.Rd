@@ -72,7 +72,7 @@ re-simulated from its saved config (see \code{n_reps_best_medoid}).
 warning unless an older run dir still carries that file. Each model appears
 as a value of the \code{model} column.}
 
-\item{n_reps_best_medoid}{Integer (default 50); number of stochastic LASER
+\item{n_reps_best_medoid}{Integer (default 50); number of stochastic
 reruns used to build the predictive median + intervals for the \code{best}
 and \code{medoid} configs. These reruns execute locally in the calling R
 process, so cost scales with this value times the number of

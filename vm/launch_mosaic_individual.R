@@ -85,7 +85,7 @@ DELETE_AFTER_COMPRESS <- FALSE  # Delete uncompressed directory after compressio
 CONTROL_SETTINGS <- list(
   # Calibration
   n_simulations = NULL,         # NULL = adaptive/auto mode; integer = fixed mode
-  n_iterations = 3,             # LASER iterations per simulation
+  n_iterations = 3,             # stochastic engine iterations per parameter set
   batch_size_adaptive = 1000,   # Simulations per Phase 1 adaptive batch
   min_batches_adaptive = 5,     # Minimum batches before convergence check
   max_batches_adaptive = 10,    # Maximum adaptive batches

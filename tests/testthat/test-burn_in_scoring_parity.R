@@ -3,9 +3,9 @@
 #
 # Per-channel scoring window (burn-in + deaths-era start).
 #
-# These tests are engine-free (no Python/LASER). They exercise the resolver,
+# These tests are engine-free. They exercise the resolver,
 # the generalized scoring mask, the per-channel deaths zeroing, the worker
-# slice math, and the resume guard. The KEN end-to-end LASER check is run
+# slice math, and the resume guard. The KEN end-to-end engine check is run
 # separately (not here).
 #
 # Non-negotiable: with burn_in_days = 0 and deaths_score_start = NULL (the

@@ -42,7 +42,7 @@ weighted \strong{median} overlaid in bold. Observed surveillance points are
 overlaid only on the \code{reported_cases}/\code{reported_deaths} panels.
 }
 \details{
-\strong{Pure read-render:} this function never imports LASER, never
+\strong{Pure read-render:} this function never runs the engine, never
 re-simulates, and never re-weights — it consumes only the compact artifact
 (per-channel weighted median + thinned actual lines, both already reduced over
 the best subset). It is the trajectory analogue of

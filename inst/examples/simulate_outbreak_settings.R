@@ -107,7 +107,7 @@ fig_dir  <- file.path(out_root, "figures")
 data_dir <- file.path(out_root, "data")
 for (d in c(out_root, fig_dir, data_dir)) if (!dir.exists(d)) dir.create(d, recursive = TRUE)
 
-SEED <- 123L   # stochastic LASER draw; fixed for reproducibility
+SEED <- 123L   # stochastic simulation draw; fixed for reproducibility
 
 # Three toy patches shared by all constructed settings (populations differ).
 J     <- c("FOO", "BAR", "BAZ")
@@ -143,9 +143,9 @@ psi_multibump <- function(base, height, peak_days, width) function(idx, tt) {
 day_index <- function(start, when) as.integer(as.Date(when) - as.Date(start)) + 1L
 
 # -----------------------------------------------------------------------------
-# 2. Build a LASER config for a custom transmission setting
+# 2. Build a simulation config for a custom transmission setting
 # -----------------------------------------------------------------------------
-# Returns a validated config list (via make_LASER_config) ready for run_LASER().
+# Returns a validated config list (via make_simulation_config) ready for run_simulation().
 # S_prop / V1_prop may be scalar (shared) or length-3 (per patch).
 
 build_regime_config <- function(date_start, date_stop,
@@ -174,7 +174,7 @@ build_regime_config <- function(date_start, date_stop,
   nu_1_jt <- nu_2_jt <- matrix(0, N_LOC, T_len, dimnames = list(J, t))
 
   # Transmission: split total beta into human + environmental shares so the
-  # make_LASER_config tolerance check (beta_j0_hum == p_beta * beta_j0_tot) holds.
+  # make_simulation_config tolerance check (beta_j0_hum == p_beta * beta_j0_tot) holds.
   beta_tot <- beta_hum + beta_env
   p_beta   <- beta_hum / beta_tot
   a_1_j    <- amp_beta * cos(PHASE)
@@ -220,7 +220,7 @@ build_regime_config <- function(date_start, date_stop,
     decay_shape_1 = 1, decay_shape_2 = 1,
     reported_cases = mat_na, reported_deaths = mat_na
   )
-  do.call(MOSAIC::make_LASER_config, args)
+  do.call(MOSAIC::make_simulation_config, args)
 }
 
 # -----------------------------------------------------------------------------
@@ -291,10 +291,10 @@ summary_rows    <- list()
 for (key in names(settings)) {
   s   <- settings[[key]]
   cfg <- s$config
-  message(sprintf("[%s] running LASER (%s) ...", s$label,
+  message(sprintf("[%s] running simulation (%s) ...", s$label,
                   paste(cfg$date_start, "->", cfg$date_stop)))
 
-  model  <- run_LASER(config = cfg, seed = SEED, quiet = TRUE)
+  model  <- run_simulation(config = cfg, seed = SEED, quiet = TRUE)
   cases  <- model$results$reported_cases   # [patch x time]
   deaths <- model$results$reported_deaths
   dates  <- seq.Date(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")

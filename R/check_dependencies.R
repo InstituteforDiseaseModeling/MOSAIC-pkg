@@ -252,7 +252,7 @@ check_dependencies <- function() {
           cli::cli_h2("Capabilities Summary")
 
           # Simulation is reported unconditionally: the transmission engine is R
-          # (run_LASER()), so it cannot be broken by anything checked above.
+          # (run_simulation()), so it cannot be broken by anything checked above.
           cli::cli_alert_success("Simulation and calibration: pure R, no Python required")
 
           if (suitability_working) {

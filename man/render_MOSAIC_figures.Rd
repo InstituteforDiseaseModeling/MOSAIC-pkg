@@ -40,7 +40,7 @@ machine, or repeatedly without re-running calibration.
 \section{Pure read-render (no re-simulation)}{
 
 This function \strong{never} calls \code{calc_model_ensemble()},
-\code{run_LASER()}, or \code{sample_parameters()}. Ensemble plots are
+\code{run_simulation()}, or \code{sample_parameters()}. Ensemble plots are
 reconstructed from the persisted \code{.rds} objects
 (\code{2_calibration/ensemble_optimized.rds} or
 \code{ensemble_candidate.rds}, and \code{medoid_ensemble.rds}). A missing,

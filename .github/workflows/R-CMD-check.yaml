@@ -73,29 +73,6 @@ jobs:
           -I$(brew --prefix udunits)/include $CPPFLAGS"
 
 
-      - name: Install Python 3.12 (arm64) on macOS
-        if: runner.os == 'macOS'
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: 1
-        run: |
-          brew install python@3.12
-          # ensure this python comes first
-          echo "$(brew --prefix python@3.12)/bin" >> $GITHUB_PATH
-          # tell reticulate to use it
-          echo "RETICULATE_PYTHON=$(brew --prefix python@3.12)/bin/python3" >> $GITHUB_ENV
-
-      - name: Set up Miniforge (Conda)
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          auto-activate-base: false
-          miniforge-version: "latest"
-
-      # There is no Python install step here any more. It existed to make the
-      # laser-cholera engine importable so skip_if_no_python_likelihood() would
-      # not skip the R-vs-Python parity tests; the engine is pure R as of
-      # v0.66.0, and both that helper and those tests are gone. Every remaining
-      # Python-dependent test (the keras3 suitability ones) is self-skipping.
-
       - name: Install R package dependencies
         run: |
           Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
@@ -124,7 +101,7 @@ jobs:
         run: Rscript -e 'testthat::test_local(stop_on_failure = TRUE)'
 
       # Nightly schedule / manual dispatch runs the SLOW tier in addition to the
-      # fast tier (engine/keras still require the worker image and stay gated).
+      # fast tier (integration/keras tests stay gated on their own env vars).
       - name: Run testthat (slow tier, serial)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
@@ -133,17 +110,20 @@ jobs:
         run: Rscript -e 'testthat::test_local(stop_on_failure = TRUE)'
 
 
-      - name: Install MOSAIC from GitHub
-        env:
-          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      # The Python environment exists ONLY for the keras3 suitability model --
+      # simulation and calibration are pure R and import nothing. Building it
+      # means a Miniforge install plus a ~2-3 GB TensorFlow solve, which is far
+      # too much to pay on every push to learn that environment.yml still
+      # solves. It runs nightly instead, where that is exactly the question.
+      - name: Set up Miniforge (Conda)
+        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && runner.os != 'macOS'
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          miniforge-version: "latest"
+
+      - name: Install and check MOSAIC Python deps
+        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && runner.os != 'macOS'
         run: |
-          Rscript -e 'remotes::install_github(repo = Sys.getenv("GITHUB_REPOSITORY"), dependencies = TRUE)'
-          Rscript -e 'library(MOSAIC)'
-
-
-      - name: Install MOSAIC Python deps
-        if: runner.os != 'macOS'
-        run: Rscript -e 'MOSAIC::install_dependencies(force=TRUE)'
-
-      - name: Check MOSAIC Python deps
-        run: Rscript -e 'MOSAIC::check_dependencies()'
+          Rscript -e 'MOSAIC::install_dependencies(force=TRUE)'
+          Rscript -e 'MOSAIC::check_dependencies()'

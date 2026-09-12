@@ -74,7 +74,7 @@ Simulations AND post-processing run on dugong's local cores; nothing leaves the 
 `control$parallel$n_cores` IS the sim parallelism — 1.5 TiB RAM at ~2 GB/worker means you can run
 very wide (170+ of 176 cores is comfortable).
 
-The Coiled hybrid backend has been **removed** from the package. It was already scientifically
+The Coiled hybrid backend has been **removed** from the package, along with the worker image and its CI (v0.68.0). It was already scientifically
 invalid (issue #113: the worker image lagged laser-cholera, so runs completed but gave low
 R²/unconverged results), and the pure-R engine migration removes the reason it existed. `dask_spec`,
 `check_coiled_workspace()` and `mosaic_dask_presets()` now raise an error rather than being ignored.

@@ -21,7 +21,7 @@ mosaic_control_defaults(
 \item{calibration}{List of calibration settings. Default is:
 \itemize{
 \item \code{n_simulations}: NULL for auto mode, or integer for fixed mode
-\item \code{n_iterations}: Number of LASER iterations per simulation (default: 3L)
+\item \code{n_iterations}: Number of stochastic engine iterations per parameter set (default: 3L)
 \item \code{max_simulations_total}: Maximum total simulations across all phases (default: 100000L)
 \item \code{batch_size_adaptive}: Simulations per batch in Phase 1 adaptive calibration (default: 500L)
 \item \code{min_batches_adaptive}: Minimum Phase 1 batches before convergence check (default: 5L)

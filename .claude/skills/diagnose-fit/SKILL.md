@@ -5,7 +5,7 @@ description: >
   calibration-actionable parameter/prior recommendations. Use after a calibration run
   returns poor fit (e.g. case/death bias, low R², timing or shape errors) and you want
   to know WHAT to change before paying for another full calibration. Drives fast
-  deterministic single-LASER experiments (MOSAIC::run_fit_sandbox) on the run's medoid
+  deterministic single-simulation experiments (MOSAIC::run_fit_sandbox) on the run's medoid
   config and scores them with MOSAIC::calc_fit_diagnostics. Not a passive metrics summary.
 ---
 
@@ -21,14 +21,14 @@ decide what to vary next based on what you just observed, like a modeler at a wo
 > parameter, the `alpha_2 < 0.4` bifurcation) were established against the Python laser-cholera
 > engine and carry over to the R engine (v0.66.0), which was ported from it behaviour-for-behaviour.
 > A change to the engine can still flip a field's semantics (it has before — see CLAUDE.md
-> Lesson #12); the engine now lives in `R/laser_engine.R` and its siblings, so re-verify there.
+> Lesson #12); the engine now lives in `R/sim_engine.R` and its siblings, so re-verify there.
 
 ## The two tools
 
 Both are exported MOSAIC functions; call them from R / `Rscript`.
 
 **`run_fit_sandbox(config, params = list(), seed = 42L, locations = NULL, full_metrics = TRUE, outdir = NULL, run_label = "...")`**
-Runs ONE deterministic `run_LASER()` from a calibration config with point-value overrides
+Runs ONE deterministic `run_simulation()` from a calibration config with point-value overrides
 (~1-2 s), aggregates predicted vs observed across `locations`, and returns
 `$predictions`, `$metrics` (incl. `fit_diagnostics` + merged `scorecard`), and
 `$params_applied`. `config` may be a list or a path to a config JSON (use the run's
@@ -92,7 +92,7 @@ country-specific and lives in the calibration-doctor's local memory, not here.)
 **Transmission scale** — `beta_j0_hum` (human transmission): primary cases-scale lever, minimal
 shape. `beta_j0_env` (environmental): primary cases-scale lever, shifts env/human balance, can
 affect onset. `p_beta` (human vs env fraction): secondary; higher → more self-limiting dynamics.
-`beta_j0_tot`: **DEAD PARAMETER — LASER reads `beta_j0_hum`/`beta_j0_env` directly and ignores it.**
+`beta_j0_tot`: **DEAD PARAMETER — the engine reads `beta_j0_hum`/`beta_j0_env` directly and ignores it.**
 
 **Timing / shape** — `psi_star_k` (suitability time offset, days): peak timing, negative shifts
 earlier. `a_1_j,b_1_j` (Fourier phase): seasonal phase. `a_2_j,b_2_j` (Fourier amplitude): seasonal
@@ -120,7 +120,7 @@ explosive potential. `psi_star_b` (logit offset on suitability): cases (env), un
 
 ## Design principles
 
-- **Deterministic first.** Single LASER runs are the unit of investigation; stochastic averaging is
+- **Deterministic first.** Single simulation runs are the unit of investigation; stochastic averaging is
   for calibration, not diagnosis.
 - **Hypothesize before sweeping.** State the hypothesis before each experiment — no brute force.
 - **Follow leads.** Investigate surprises rather than marching through the plan; the best findings

@@ -73,7 +73,7 @@ plot_psi_star_diagnostic <- function(dirs,
   config     <- jsonlite::fromJSON(config_json, simplifyVector = TRUE)
   psi_raw_all <- read.csv(psi_csv, stringsAsFactors = FALSE)
 
-  # Visualize the SAME series that feeds psi_jt -> LASER: the canonical `psi`
+  # Visualize the SAME series that feeds psi_jt -> the engine: the canonical `psi`
   # column (smoothed + bias-corrected). Fall back to `pred_smooth` only for a
   # stale pre-v0.34 CSV so the diagnostic degrades gracefully rather than erroring.
   psi_col <- if ("psi" %in% names(psi_raw_all)) "psi" else "pred_smooth"

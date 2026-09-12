@@ -5,7 +5,7 @@
 #   parameter sampling -> batched simulation dispatch -> R-side likelihood
 #   -> outlier/subset selection -> importance weights -> posterior ensemble
 #   -> best/medoid reruns -> summary.json + return contract
-# --- and stubs ONLY the Python LASER engine.
+# --- and stubs ONLY the Python simulation engine.
 #
 # The stub seam (run_MOSAIC.R:247-252 and calc_model_ensemble.R:270-274): the
 # in-process simulation worker resolves the laser-cholera module by first
@@ -19,13 +19,13 @@
 # fake. With parallel disabled, run_MOSAIC sets
 # cl <- NULL (run_MOSAIC.R:1194-1196) and the worker runs in-process here.
 
-# A handful of fixed simulations through the stub is fast (the synthetic LASER
+# A handful of fixed simulations through the stub is fast (the synthetic engine
 # call is a no-op matrix build), but parameter sampling for 40 locations x ~1278
 # timesteps is not free. Gate behind an opt-in env var so the default test run
 # stays quick; flip MOSAIC_RUN_INTEGRATION=1 to exercise it.
 run_integration <- nzchar(Sys.getenv("MOSAIC_RUN_INTEGRATION"))
 
-test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine", {
+test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation engine", {
   skip_on_cran()
   skip_if_not(run_integration,
               "set MOSAIC_RUN_INTEGRATION=1 to run the run_MOSAIC integration test")
@@ -39,7 +39,7 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
   skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
 
   # ---- config / priors -----------------------------------------------------
-  # config_default already validates through make_LASER_config; strip the
+  # config_default already validates through make_simulation_config; strip the
   # non-signature tracking fields (same shim as test-config_default.R).
   config <- MOSAIC::config_default
   config$metadata          <- NULL
@@ -66,7 +66,7 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
   obs_deaths_base[!is.finite(obs_deaths_base)] <- 0
 
   # ---- stubbed transmission engine -----------------------------------------
-  # The seam is run_LASER() in the MOSAIC namespace: both the calibration
+  # The seam is run_simulation() in the MOSAIC namespace: both the calibration
   # worker and .mosaic_ensemble_sim_task() reach the engine through it and
   # nothing else, so one mocked binding covers the whole pipeline. (Before the
   # R engine this test parked a fake Python module in .GlobalEnv$lc, which
@@ -109,7 +109,7 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
          seed = as.integer(seed_val))
   }
 
-  local_mocked_bindings(run_LASER = fake_engine, .package = "MOSAIC")
+  local_mocked_bindings(run_simulation = fake_engine, .package = "MOSAIC")
 
   # ---- control: smallest meaningful fixed-mode calibration -----------------
   # Fixed mode (n_simulations = integer) runs exactly N sims in a single batch
@@ -146,7 +146,7 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
   )
 
   # ---- run ------------------------------------------------------------------
-  # suppressWarnings: driving the REAL pipeline on synthetic LASER output emits
+  # suppressWarnings: driving the REAL pipeline on synthetic simulation output emits
   # expected, data-driven warnings that are orthogonal to the orchestration flow
   # under test -- e.g. "biologically extreme cfr_clinical_epidemic" from the
   # implied-CFR step (the fake counts are not epidemiologically calibrated) and

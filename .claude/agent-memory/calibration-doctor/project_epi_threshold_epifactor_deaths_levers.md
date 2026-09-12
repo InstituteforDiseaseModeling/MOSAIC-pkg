@@ -53,5 +53,5 @@ by-design note. The CFR_target/mu_j_baseline fix is the separate, dominant track
 **Sandbox gotcha:** run_fit_sandbox does NOT pass config epidemic_threshold to calc_fit_diagnostics
 — the endemic/epidemic SCORING split uses a data-driven default (p75 of positive observed), so
 endemic/epidemic bias columns are comparable across threshold sweeps. R scripts must use ABSOLUTE
-paths (cwd resets between bash calls). raw run_LASER returns flattened (T x 1) numpy arrays for
+paths (cwd resets between bash calls). raw run_simulation returns flattened (T x 1) numpy arrays for
 single-location configs; N channel = S+E+Isym+Iasym+R+V1+V2.

@@ -1,11 +1,8 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
-deprecated/
 data-raw/
 local/
-azure/
 model/
-src/
 docs/
 pkgdown/
 ^vignettes/articles$

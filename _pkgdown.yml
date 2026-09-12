@@ -16,8 +16,8 @@ navbar:
       menu:
       - text: Installation
         href: articles/Installation.html
-      - text: Running LASER
-        href: articles/Running-LASER.html
+      - text: Running simulations
+        href: articles/Running-simulations.html
       - text: Running MOSAIC
         href: articles/Running-MOSAIC.html
       - text: Deployment
@@ -28,7 +28,7 @@ articles:
   desc: "Installation and basic usage"
   contents:
   - Installation
-  - Running-LASER
+  - Running-simulations
   - Running-MOSAIC
   - Deployment
 
@@ -36,10 +36,10 @@ reference:
   - title: "Core Workflow"
     desc: Main functions for running MOSAIC simulations
     contents:
-    - run_LASER
+    - run_simulation
     - run_MOSAIC
     - render_MOSAIC_figures
-    - make_LASER_config
+    - make_simulation_config
     - sample_parameters
     - check_dependencies
     - install_dependencies

@@ -42,7 +42,7 @@ Mutually exclusive with \code{parameter_seeds}.}
 \code{parameter_seeds} or \code{configs}. Normalized internally to sum to 1.
 If \code{NULL}, all parameter sets are weighted equally.}
 
-\item{n_simulations_per_config}{Integer. Stochastic LASER reruns per parameter
+\item{n_simulations_per_config}{Integer. Stochastic stochastic reruns per parameter
 set. Default \code{10L}.}
 
 \item{envelope_quantiles}{Numeric vector of quantiles for confidence intervals.
@@ -67,7 +67,7 @@ element so downstream scoring (R2/bias) can exclude these positions. Set to
 \item{mask_final_deaths_step}{Logical. If \code{TRUE} (default, matching
 \code{\link{plot_model_ensemble}}), record that the FINAL deaths timestep is
 a laser-cholera structural zero (\code{reported_deaths} written at tick
-then leading-trimmed, so the last slot is never written; laser issue #82).
+then leading-trimmed, so the last slot is never written; laser-cholera issue #82).
 This value is NOT applied to any returned series here; it
 is recorded in the returned \code{artifact_mask} element for downstream
 scoring.}
@@ -151,7 +151,7 @@ contract scoring sites use to drop artifact positions.}
 }
 }
 \description{
-Runs LASER simulations for multiple parameter sets (with stochastic reruns
+Runs simulations for multiple parameter sets (with stochastic reruns
 per set) and aggregates results using importance weights. Returns a
 \code{mosaic_ensemble} object containing weighted mean, median, and quantile
 envelopes for cases and deaths.

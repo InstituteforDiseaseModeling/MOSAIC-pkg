@@ -13,7 +13,7 @@ from setup-python.R) always skips on CI.
 
 **Consequence:** every engine-backed parity/regression test — including the v0.48.0
 `test-dask_worker_score_window_parity.R` (guards the loc_idx peak-sourcing fix + per-cell weight
-parity), the python-parity suite, and run_LASER smokes — NEVER runs in CI. They run only on the
+parity), the python-parity suite, and run_simulation smokes — NEVER runs in CI. They run only on the
 local dev machine / hedgehog / dugong where the r-mosaic venv exists. Local skip count ~21 (engine
 present); CI skip count ~32+ (engine absent).
 

@@ -54,7 +54,7 @@
 #' \code{weights_location} explicitly supplied by the caller is honored upstream
 #' and never overwritten.
 #'
-#' @param config A LASER config list with \code{reported_cases} (and optionally
+#' @param config A simulation config list with \code{reported_cases} (and optionally
 #'   \code{reported_deaths}) observation matrices and the v4.1+ per-cell
 #'   \code{reported_cases_weight} / \code{reported_deaths_weight} matrices.
 #' @param floor Strictly-positive minimum weight for absence/low-signal
@@ -186,7 +186,7 @@
 #' \itemize{
 #'   \item \code{sim_id}: Unique simulation ID (1-based integer)
 #'   \item \code{seed_sim}: Parameter sampling seed (equals sim_id)
-#'   \item \code{seed_iter}: LASER model seed for iteration j
+#'   \item \code{seed_iter}: engine seed for iteration j
 #'                           = (sim_id - 1) * n_iterations + j
 #' }
 #'
@@ -312,11 +312,11 @@
       result_matrix[j, 6:(5 + n_params)] <- param_row
     }
 
-    # Run model. The engine is reached through run_LASER() and nowhere else:
+    # Run model. The engine is reached through run_simulation() and nowhere else:
     # until the R port this worker imported and called the Python module
-    # directly, so run_LASER() was not in fact a chokepoint. It is now.
+    # directly, so run_simulation() was not in fact a chokepoint. It is now.
     model <- tryCatch({
-      run_LASER(config = params_sim, seed = seed_ij, quiet = TRUE)
+      run_simulation(config = params_sim, seed = seed_ij, quiet = TRUE)
     }, error = function(e) {
       # Log model run failure (but don't fail entire simulation)
       warning("Simulation ", sim_id, " iteration ", j, " model run failed: ",
@@ -485,7 +485,7 @@
 #'   \item Posterior predictive checks and uncertainty quantification
 #' }
 #'
-#' @param config Named list of LASER model configuration (REQUIRED). Contains location_name,
+#' @param config Named list of simulation configuration (REQUIRED). Contains location_name,
 #'   reported_cases, reported_deaths, and all model parameters. Create with custom data
 #'   or obtain via \code{get_location_config()}.
 #' @param priors Named list of prior distributions (REQUIRED). Contains distribution
@@ -497,7 +497,7 @@
 #'   Key settings:
 #'   \itemize{
 #'     \item \code{calibration$n_simulations}: NULL for auto mode, integer for fixed mode
-#'     \item \code{calibration$n_iterations}: LASER iterations per simulation (default: 3)
+#'     \item \code{calibration$n_iterations}: stochastic engine iterations per parameter set (default: 3)
 #'     \item \code{calibration$max_simulations_total}: Maximum total simulations (default: 100000)
 #'     \item \code{sampling}: Which parameters to sample vs hold fixed
 #'     \item \code{parallel}: Cluster settings for parallel execution
@@ -543,7 +543,7 @@
 #'   stopping it after \code{run_MOSAIC} returns.
 #' @param ... Reserved. Supplying a removed argument (\code{dask_spec}) or any
 #'   unrecognised argument raises an error naming it rather than silently
-#'   ignoring it. See \link{deprecated_dask}.
+#'   ignoring it. See \link{removed_api}.
 #'
 #' @return Invisibly returns a list with:
 #' \describe{
@@ -623,7 +623,7 @@
 #'   location_name = c("Region1", "Region2"),
 #'   reported_cases = my_cases_data,
 #'   reported_deaths = my_deaths_data,
-#'   # ... all other LASER parameters
+#'   # ... all other simulation parameters
 #' )
 #'
 #' custom_priors <- list(
@@ -878,7 +878,7 @@ run_MOSAIC <- function(config,
   .mosaic_write_json(env_snapshot, file.path(dirs$inputs, "environment.json"), control$io)
   log_msg("  Saved %s", "1_inputs/environment.json")
 
-  sim_params <- list(
+  control_record <- list(
     control = control,
     n_iterations = n_iterations,
     iso_code = iso_code,
@@ -892,7 +892,7 @@ run_MOSAIC <- function(config,
   )
 
   log_msg("Writing setup files...")
-  .mosaic_write_json(sim_params, file.path(dirs$inputs, "control.json"), control$io)
+  .mosaic_write_json(control_record, file.path(dirs$inputs, "control.json"), control$io)
   log_msg("  Saved %s", "control.json")
 
   .mosaic_write_json(priors, file.path(dirs$inputs, "priors.json"), control$io)
@@ -1243,7 +1243,7 @@ run_MOSAIC <- function(config,
             sampling_args      = sampling_args,
             io                 = control$io,
             likelihood_settings = control$likelihood
-          ),
+                                 ),
           cl = cl,
           show_progress = control$parallel$progress
         )
@@ -1352,7 +1352,7 @@ run_MOSAIC <- function(config,
             sampling_args      = sampling_args,
             io                 = control$io,
             likelihood_settings = control$likelihood
-          ),
+                                 ),
           cl = cl,
           show_progress = control$parallel$progress
         )
@@ -2448,7 +2448,7 @@ run_MOSAIC <- function(config,
 
   # ===========================================================================
   # MEDOID MODEL -- ensemble member closest to the ensemble central trajectory
-  # Runs after the posterior ensemble using the same pattern: config -> LASER ->
+  # Runs after the posterior ensemble using the same pattern: config -> engine ->
   # R^2 -> plot.
   # ===========================================================================
 
@@ -2900,7 +2900,7 @@ run_mosaic <- run_MOSAIC
 #' @param calibration List of calibration settings. Default is:
 #'   \itemize{
 #'     \item \code{n_simulations}: NULL for auto mode, or integer for fixed mode
-#'     \item \code{n_iterations}: Number of LASER iterations per simulation (default: 3L)
+#'     \item \code{n_iterations}: Number of stochastic engine iterations per parameter set (default: 3L)
 #'     \item \code{max_simulations_total}: Maximum total simulations across all phases (default: 100000L)
 #'     \item \code{batch_size_adaptive}: Simulations per batch in Phase 1 adaptive calibration (default: 500L)
 #'     \item \code{min_batches_adaptive}: Minimum Phase 1 batches before convergence check (default: 5L)

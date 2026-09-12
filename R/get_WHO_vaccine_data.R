@@ -257,15 +257,6 @@ message("Processing raw text")
           return(lines)
      }
 
-     # Extract column names and convert them to snake_case
-     get_column_names <- function(raw_text) {
-          lines <- get_lines(raw_text)
-          header_line <- lines[1]  # Assume the first line is the header
-          column_names <- unlist(strsplit(header_line, "\t"))  # Split by tabs
-          column_names_snake <- tolower(gsub("[^a-zA-Z0-9]+$", "", gsub("[^a-zA-Z0-9]", "_", column_names)))
-          return(column_names_snake)
-     }
-
      # Extract the year
      get_year <- function(raw_text) {
           lines <- get_lines(raw_text)

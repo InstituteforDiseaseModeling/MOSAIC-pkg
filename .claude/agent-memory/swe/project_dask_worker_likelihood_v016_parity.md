@@ -45,7 +45,7 @@ shape-correct (shape terms see the spike-free sliced region either way). The ana
 NOT pass weights_obs_* (analyzer.py ~line 59-87 omits them), so the worker correctly
 recomputes when weights non-trivial OR idx>1; trivial+no-slice keeps model.log_likelihood.
 
-**Dual-mode alpha:** scalar vs uniform-vector alpha give byte-identical run_LASER output;
+**Dual-mode alpha:** scalar vs uniform-vector alpha give byte-identical run_simulation output;
 hetero-vector runs without error. Default sampling keeps alpha scalar; `auto_unbox=TRUE`
 in the Dask sampled-params JSON serializes scalar alpha as a JSON number (not a length-1
 list). `alpha_1/alpha_2` are NOT in the worker `_VECTOR_FIELDS` (stay Python float) and the

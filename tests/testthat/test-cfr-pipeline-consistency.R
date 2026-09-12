@@ -76,7 +76,7 @@ test_that("config_default$mu_j_baseline == CFR_target * static chain anchor (B2.
   expect_equal(unname(cfg$mu_j_baseline), unname(expected_mu), tolerance = 1e-8,
                info = "config_default mu_j_baseline must equal CFR_target * cfr_to_mu_adjustment")
 
-  # And the [0,1] engine bound (make_LASER_config L686) must hold for the defaults.
+  # And the [0,1] engine bound (make_simulation_config L686) must hold for the defaults.
   expect_true(all(cfg$mu_j_baseline >= 0 & cfg$mu_j_baseline <= 1),
               info = "config_default mu_j_baseline must lie in [0, 1]")
 })

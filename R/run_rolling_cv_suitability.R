@@ -338,7 +338,7 @@
      # at each location's last genuine (covariate-supported) weekly prediction
      # date. .psi_weekly_to_daily_smooth na.locf-fills the daily grid out to
      # pred_date_stop, producing a flat constant psi tail that suppresses the
-     # environmental FOI and creates an artificial end-of-series drop in LASER
+     # environmental FOI and creates an artificial end-of-series drop in simulation
      # output. genuine_last_pred is captured from the weekly grid BEFORE that fill
      # (see .psi_run_seed_ensemble). Downstream, make_config_default truncates the
      # simulation window to the common coverage across modeled locations. Mirrors

@@ -28,9 +28,10 @@ them or use the inline recipe in §3.
 
 ## 1. The R wrapper — always use it
 hedgehog is Ubuntu 20.04; its system `libstdc++` lacks `GLIBCXX_3.4.29` needed by the venv's
-compiled wheels (pyarrow/numba/laser_core). Run R via `~/bin/r-mosaic-Rscript` (batch) or
-`~/bin/r-mosaic-R` (interactive). Plain `Rscript` makes `check_dependencies()` report "BROKEN" and
-laser won't import. Invoke the wrapper **normally** (shebang repaired 2026-06-16; setup scripts now
+compiled wheels (now just the TensorFlow stack; pyarrow/numba/laser_core left with the Python engine
+in v0.67.0). Run R via `~/bin/r-mosaic-Rscript` (batch) or `~/bin/r-mosaic-R` (interactive). Plain
+`Rscript` makes `check_dependencies()` report "BROKEN" and TensorFlow won't import. Simulation itself
+no longer needs the wrapper (pure R since v0.66.0) — unverified on the VM. Invoke the wrapper **normally** (shebang repaired 2026-06-16; setup scripts now
 guard it). Only if you hit `Syntax error: "(" unexpected`: check `head -1 ~/bin/r-mosaic-Rscript`
 is `#!/usr/bin/env bash` at column 0, or prefix `bash` as a stop-gap.
 
@@ -39,7 +40,7 @@ Simulations AND post-processing run on hedgehog's local cores; nothing leaves th
 `control$parallel$n_cores`, IS the sim parallelism (118 of 120 cores ≈ comfortable on 448 GB).
 
 The Coiled hybrid backend (remote Dask workers with hedgehog as client) has been **removed** from
-the package. It was already scientifically invalid (issue #113: the worker image lagged
+the package, along with the worker image and its CI (v0.68.0). It was already scientifically invalid (issue #113: the worker image lagged
 laser-cholera, so runs completed but gave low R²/unconverged results), and the pure-R engine
 migration removes the reason it existed. `dask_spec`, `check_coiled_workspace()` and `mosaic_dask_presets()`
 now raise an error rather than being ignored.

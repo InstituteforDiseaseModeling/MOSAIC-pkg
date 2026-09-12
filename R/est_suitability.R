@@ -5,7 +5,7 @@
 # forward-filled (zoo::na.locf) with the last genuine value, producing a flat
 # constant suitability tail. That flat tail feeds psi_jt and suppresses the
 # environmental force of infection, creating an artificial end-of-series drop
-# in downstream LASER predictions. We DROP those filled tails instead.
+# in downstream simulation predictions. We DROP those filled tails instead.
 #
 # `df` must carry `iso_code` and `date`; `genuine_last` is a data.frame with
 # `iso_code` and `last_genuine_date` (Date), captured BEFORE any fill. Rows
@@ -106,13 +106,13 @@
 #' directional signal (median cross-country Pearson ~0.22, but a wide per-cell
 #' range with a large anti-correlated minority -- psi can be worse than climatology
 #' for some countries). It strictly dominates the incumbent on shape; it is NOT a
-#' decision-grade forecaster. psi reaches the downstream LASER engine through TWO
+#' decision-grade forecaster. psi reaches the downstream simulation engine through TWO
 #' channels -- a fractional deviation `(psi - psi_bar)/psi_bar` (timing/shape) and
 #' the absolute level (environmental-reservoir decay) -- so the response anchor and
 #' `bias_correct` can move outbreak magnitude, not just timing. Report the
 #' per-country spread, not just the median. The default `response_var` is
 #' `"target_D_rate_per_country_floored"` (per-capita, per-country anchor),
-#' selected over `"transmission_intensity"` by a 15-country psi->LASER calibration
+#' selected over `"transmission_intensity"` by a 15-country psi->simulation calibration
 #' case-skill comparison: D lifts cases-R2 for the priority/saturated cluster
 #' (COD 0.51->0.73, SOM 0.34->0.82, ETH 0.61->0.80) at the cost of regressions on
 #' 5 low-burden countries (RWA/MWI/AGO/NAM/SSD), accepted for the global default.
@@ -1315,7 +1315,7 @@ est_suitability <- function(PATHS,
      # Drop trailing carry-forward-filled predictions so the saved series ends at
      # each location's last genuine (covariate-supported) prediction date. This
      # removes the flat constant tail that otherwise propagates into psi_jt and
-     # produces an artificial end-of-series drop in LASER output. Downstream,
+     # produces an artificial end-of-series drop in simulation output. Downstream,
      # make_config_default truncates the simulation window to the common coverage
      # across modeled locations.
      n_daily_before <- nrow(d_pred_daily)

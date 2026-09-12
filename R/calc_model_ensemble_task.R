@@ -30,7 +30,7 @@
 #'
 #' @param task_info One-row data.frame (or list) with \code{param_idx} and
 #'   \code{stoch_idx}.
-#' @param param_configs_list List of per-parameter-set LASER configs.
+#' @param param_configs_list List of per-parameter-set simulation configs.
 #' @param capture_traj Logical. Capture the trajectory channels.
 #' @param traj_channels Character vector of result channels to capture.
 #' @param traj_scratch Directory to stream captured channels to, or NULL to
@@ -52,15 +52,15 @@
   tryCatch({
     param_config <- param_configs_list[[param_idx]]
     param_config$seed <- (param_idx * 1000L) + stoch_idx
-    model <- run_LASER(config = param_config,
-                       seed   = param_config$seed,
-                       quiet  = TRUE)
+    model <- run_simulation(config = param_config,
+                            seed   = param_config$seed,
+                            quiet  = TRUE)
     # Extract the engine's spatial-structure arrays (J x T hazard, J x J
     # coupling, J x J pi_ij) BEFORE the model is discarded below (F1). These
     # are computed by the engine's DerivedValues component at the final tick
     # and otherwise lost when the model object is gc'd. tryCatch each so a
     # pipeline subset without DerivedValues simply yields NULL (warn+skip
-    # downstream) -- run_LASER() omits both channels rather than returning
+    # downstream) -- run_simulation() omits both channels rather than returning
     # their zero-filled allocation when that component did not run.
     sh  <- tryCatch(model$results$spatial_hazard, error = function(e) NULL)
     cpl <- tryCatch(model$results$coupling,       error = function(e) NULL)

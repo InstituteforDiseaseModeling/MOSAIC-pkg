@@ -280,7 +280,7 @@ sample_parameters <- function(
 
   # Derive decay_days_long from decay_days_short + decay_days_spread (v0.27.0).
   # Algebraically guarantees decay_days_short < decay_days_long as required by
-  # make_LASER_config(), replacing the pre-v0.27 post-hoc swap that corrupted
+  # make_simulation_config(), replacing the pre-v0.27 post-hoc swap that corrupted
   # the joint distribution whenever it triggered.
   if (!is.null(config_sampled$decay_days_short) &&
       !is.null(config_sampled$decay_days_spread)) {
@@ -335,7 +335,7 @@ sample_parameters <- function(
     cat(paste(rep("=", 50), collapse = ""), "\n", sep = "")
   }
 
-  # Config is clean and ready for LASER - no R-specific metadata added
+  # Config is clean and ready for the engine - no R-specific metadata added
   return(config_sampled)
 }
 
@@ -427,7 +427,7 @@ sample_parameters <- function(
         verbose = FALSE
       )
 
-      # delta_reporting_* are integer days; make_LASER_config() rejects non-integers
+      # delta_reporting_* are integer days; make_simulation_config() rejects non-integers
       if (param_name %in% c("delta_reporting_cases", "delta_reporting_deaths")) {
         sampled_value <- as.integer(round(sampled_value))
       }
@@ -673,14 +673,14 @@ sample_parameters <- function(
 
       mu_derived <- config_sampled$CFR_target * chain
 
-      # Engine [0,1] bound (make_LASER_config L686): mu_j_baseline is a per-day
+      # Engine [0,1] bound (make_simulation_config L686): mu_j_baseline is a per-day
       # mortality hazard probability and the engine rejects mu > 1. The wider B2
       # lognormal CFR_target tail (sdlog 0.787) times a high-gamma_1 / low-chi
       # chain draw can, for the highest-CFR countries (CIV/COG/MLI/TCD, CFR
       # median up to ~0.089), push the product above 1 in a rare tail draw
       # (P(mu>1) ~ 1e-5 at the highest real country; SPEC_B2.md sec 3.5). Clamp the
       # derived value just below 1 so those rare draws do not hard-error in
-      # make_LASER_config(). The clamp acts only on the extreme upper tail and
+      # make_simulation_config(). The clamp acts only on the extreme upper tail and
       # does not perturb the bulk of the distribution or the implied-CFR identity
       # in the operating range.
       .mu_ceiling <- 1 - 1e-9

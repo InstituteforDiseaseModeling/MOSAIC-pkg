@@ -193,7 +193,7 @@
 #' priors_default
 #'
 #' @seealso
-#' * [config_default] -- Default LASER configuration that pairs with these priors.
+#' * [config_default] -- Default simulation configuration that pairs with these priors.
 #' * [sample_parameters()] -- Draws samples from these priors.
 #' * [config_simulation_epidemic] -- One-year outbreak toy configuration.
 #' * [config_simulation_endemic] -- Multi-year endemic toy configuration.
