@@ -367,13 +367,18 @@ Then every integer channel must be bit-identical and every float channel must ma
 
 **Prespecify the margins, and note what a KS test does not prove.** Failing to reject a two-sample KS test is not evidence of equivalence — with 200 seeds it is a weak instrument, and "p > 0.05 everywhere" is compatible with a real shift. So KS (per patch, Bonferroni-corrected) is used only as a *screen* for gross shape differences, and the actual pass criterion is prespecified equivalence bands on the quantities calibration consumes:
 
-| Quantity | Band |
-|---|---|
-| mean `calc_model_likelihood()` | within ±1% of the Python mean, and within ±0.25 σ of the 200-seed spread |
-| LL 5th/50th/95th percentiles | each within ±0.25 σ |
-| total cases, total deaths (summed over patches and time) | ratio in [0.98, 1.02] |
-| per-patch peak magnitude | median ratio in [0.95, 1.05] |
-| per-patch peak timing | median absolute difference ≤ 3 days |
+| Quantity | Prior band | Measured floor | Recalibrated band |
+|---|---|---|---|
+| mean `calc_model_likelihood()`, relative | ±1% | 0.14% | ±1% |
+| mean `calc_model_likelihood()`, in σ | ±0.25 σ | 0.204 σ | ±0.41 σ |
+| LL 5th percentile | ±0.25 σ | 0.144 σ | ±0.29 σ |
+| LL 50th percentile | ±0.25 σ | **0.261 σ — prior band unachievable** | ±0.52 σ |
+| LL 95th percentile | ±0.25 σ | 0.059 σ | ±0.25 σ |
+| total cases, total deaths | ratio in [0.98, 1.02] | 0.01% / 0.02% | unchanged |
+| per-patch peak magnitude | median ratio in [0.95, 1.05] | 0.04% | unchanged |
+| per-patch peak timing | median abs diff ≤ 3 days | 1.0 day | unchanged |
+
+Measured 2026-09-11 on the 40-location config, Python repA (seeds 1:200) vs repB (seeds 1001:1200). The recalibrated band is `max(prior, 2 × floor)`. **The ±0.25 σ prior band on the LL median was tighter than the engine's own seed-to-seed noise** — Python cannot pass it against itself — which is exactly the failure §7 predicted and the reason the floor is measured first.
 
 **Calibrate those bands against the engine's own noise first.** Run the *Python* engine twice with two disjoint 200-seed sets and measure how far apart the two replicates land on each quantity. That Python-vs-Python gap is the floor; any R-vs-Python band tighter than it is unachievable, and any band much looser than it is not testing anything. Adjust the table above once measured — the numbers there are priors, not results. This is cheap (400 engine runs at 0.75 s) and it is the difference between an acceptance test and a ritual.
 
@@ -597,7 +602,9 @@ The earlier draft left four open. All four are now decided, so none of them bloc
 | **A-4 cutover** | **done** — `run_LASER()` is the R engine and the only engine entry point; five production call sites converted, `R/run_LASER.R` deleted, `.mosaic_prepare_config_for_python()` and `.mosaic_strip_laser_file_handler()` removed as orphans. Suite 4,969 / 0 failures; check at baseline. Uncovered a latent `run_fit_sandbox()` breakage and three wrong assertions in a test file that had never run |
 | **C-2 LASER dependency removal** | **done** — `environment.yml` slimmed to the TensorFlow-only set; `check_dependencies()` and `lock_python_env()` retargeted; the `pkg_laser_cholera` provenance key replaced by a MOSAIC-version engine guard; the CI wheel install, `skip_if_no_python_likelihood()`, `setup-python.R`'s eager probe and `.onLoad()`'s numba workaround removed. Suite **4,973 / 0 failures** normally and **4,967 / 0 failures** against an interpreter with no `laser-cholera` installed; check at baseline. Version 0.67.0 |
 | **C-3 rename + dead-code sweep** | **done** (not in the original plan; requested after C-2) — `run_LASER()` -> `run_simulation()`, `make_LASER_config()` -> `make_simulation_config()`, `get_default_LASER_config()` deleted as a duplicate of `get_default_config()`, all engine internals `laser_*`/`LASER_*` -> `sim_*`/`SIM_*`, nine `R/laser_*.R` files renamed. Old names kept as `stop()` stubs in `R/removed_api.R`, which also absorbs the v0.65.0 Dask stubs' scheduled deletion. Also removed: the Docker worker image CI + `azure/` tree (Coiled infrastructure orphaned since v0.65.0), the PR-path conda install in CI, and six defined-but-never-called local helpers. Suite **4,980 / 0 failures**. Version 0.68.0. See CLAUDE.md lesson #16 |
-| A-5 | pending |
+| **A-3a performance measurements** | **done** — scaling curve, worker RSS and throughput measured (2026-09-11, local laptop). **The gate forces no code change.** Peak RSS is **926 MB/worker, flat from 1 to 19 workers**, less than half the Python engine's ~2 GB, so memory does not cap worker count on any host; CLAUDE.md's "~2 GB per worker / 16 cores needs ~32 GB" was stale and is corrected. The engine is **tick-bound, not patch-bound**: J=1 → 0.90 s, J=10 → 1.02 s, J=40 → 1.29 s at a fixed 1,398 ticks, i.e. 40× the patches for 1.43× the time. Parallel throughput is **not measurable on this box** (12700H: 6 P-cores + 8 E-cores, hyperthreaded, under browser load); a pure-ALU control inflated 1.24× at 6 workers where the engine inflated 2.38×, so roughly half the efficiency loss looks like genuine memory contention and half is the laptop. Needs one clean run on hedgehog/dugong before it drives any decision |
+| **A-5 Tier C, config 1 of 4** | **done, and the port passes** — 40-location config, 1,398 ticks, 200 seeds per arm. Noise floor measured first (Python repA vs repB, disjoint seed sets), then R vs Python against bands recalibrated to it: **9/9 bands PASS**, and on **5 of 9 statistics R-vs-Python is closer than Python-vs-Python is to itself**. KS screen on LL: D = 0.045, p = 0.99 (same seeds) / D = 0.120, p = 0.11 (disjoint). One Python LL outlier (seed 66, −5.7 σ) was chased down rather than waved through: it is stochastic extinction of a small patch that has observed cases, a mechanism both engines share at statistically indistinguishable rates (Python 4.61% of n=2800 vs R 5.21% of n=1400, p = 0.43), and patch 33 — the patch that drove it — is the most extinction-prone patch in **both** engines. Not a port defect. Harness in `claude/a5/` |
+| A-5 remainder | **pending** — the other three Tier C configs (single-location, high-vaccination, epidemic-threshold-crossing) and the full `run_MOSAIC()` calibration compared against the last Python-engine run on R², bias ratio, ESS and posterior marginals |
 
 ### A-3a, measured early: the performance premise was wrong
 

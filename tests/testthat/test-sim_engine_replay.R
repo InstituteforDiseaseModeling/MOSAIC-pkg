@@ -15,16 +15,6 @@
 # which oracle build produced them, and claude/oracle/ for the generator.
 # =============================================================================
 
-fixture_path <- function(name) {
-  testthat::test_path("fixtures", paste0(name, ".rds"))
-}
-
-skip_if_no_fixture <- function(name) {
-  if (!file.exists(fixture_path(name))) {
-    testthat::skip(sprintf("replay fixture '%s' not committed", name))
-  }
-}
-
 # -----------------------------------------------------------------------------
 # Replay parity
 # -----------------------------------------------------------------------------
@@ -269,12 +259,30 @@ expect_channels_match <- function(got, ref, rtol = 1e-5) {
 }
 
 replay_fixture <- function(file) {
+  skip_if_no_fixture(sub("\\.rds$", "", file))
   fx <- readRDS(test_path("fixtures", file))
   out <- run_simulation(config = fx$meta$config_list, seed = fx$meta$seed,
                      quiet = TRUE, components = PORTED,
                      rng = "replay", record = fx)
   list(fx = fx, out = out)
 }
+
+# -----------------------------------------------------------------------------
+# Fixture inventory
+# -----------------------------------------------------------------------------
+# Every Tier B assertion above degrades to a skip when its fixture is absent,
+# which is the right behaviour for a fresh clone but the wrong thing to leave
+# silent: the port's entire parity evidence would evaporate into green skips.
+# This asserts the inventory once, so a fixture that is lost, unstaged or
+# renamed fails here instead of quietly reducing what Tier B covers.
+test_that("every replay fixture Tier B depends on is present", {
+  required <- c("replay_susceptible_census", "replay_full_pipeline",
+                "replay_single_location", "replay_full_length")
+  missing <- required[!file.exists(vapply(required, fixture_path, ""))]
+  expect_equal(missing, character(0),
+               info = paste("regenerate with claude/oracle/dump_fixture.py, or",
+                            "commit them:", paste(missing, collapse = ", ")))
+})
 
 test_that("Tier B: the full ported pipeline replays the oracle draw-for-draw (40 patches)", {
   r <- replay_fixture("replay_full_pipeline.rds")
@@ -347,6 +355,7 @@ test_that("Tier B: the full-length run matches over all 1398 ticks", {
 })
 
 test_that("replay is strict in both directions: a truncated record errors", {
+  skip_if_no_fixture("replay_full_pipeline")
   fx <- readRDS(test_path("fixtures", "replay_full_pipeline.rds"))
   short <- fx
   keep <- seq_len(length(fx$calls$site) - 5L)
@@ -358,6 +367,7 @@ test_that("replay is strict in both directions: a truncated record errors", {
 })
 
 test_that("a component name that is not in the pipeline errors", {
+  skip_if_no_fixture("replay_full_pipeline")
   fx <- readRDS(test_path("fixtures", "replay_full_pipeline.rds"))
   expect_error(
     run_simulation(config = fx$meta$config_list, components = c("Susceptible", "Nonsense")),
@@ -368,6 +378,7 @@ test_that("phase order is the engine's, not the caller's argument order", {
   # Census before Susceptible would sum the previous tick's compartments. The
   # engine sorts the requested subset into the canonical pipeline order, so a
   # scrambled `components` still runs correctly.
+  skip_if_no_fixture("replay_full_pipeline")
   fx <- readRDS(test_path("fixtures", "replay_full_pipeline.rds"))
   scrambled <- rev(PORTED)
   out <- run_simulation(config = fx$meta$config_list, seed = fx$meta$seed, quiet = TRUE,

@@ -206,7 +206,7 @@ All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 
 **Parallel worker deadlock:** BLAS/Numba threading conflict. Ensure all 6 thread env vars set to "1" (built into `run_MOSAIC()`, needed for custom parallel code).
 
-**Memory issues:** ~2 GB per worker. 16 cores needs ~32 GB RAM. Use `results <- vector("list", n)` not `results <- c()`.
+**Memory issues:** **~0.9 GB per worker** (measured A-3a, v0.68.0: VmHWM 926 MB, flat from 1 to 19 workers). 16 cores needs ~15 GB. The old ~2 GB/worker figure was the *Python* engine and no longer applies; memory is no longer what caps worker count. Use `results <- vector("list", n)` not `results <- c()`.
 
 **R CMD check errors:** "Undocumented parameters" → add `@param`. "Undefined global variable" → add to `R/globals.R`. Always run `devtools::document()` first.
 

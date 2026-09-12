@@ -126,3 +126,22 @@ skip_if_slow <- function() {
     testthat::skip("slow test (set MOSAIC_RUN_SLOW_TESTS=1 to run)")
   }
 }
+
+# --- Oracle replay-fixture skips ---------------------------------------------
+
+# The Tier B replay fixtures are frozen recordings of the Python laser-cholera
+# oracle (see fixtures/ORACLE.md). They live here rather than in the test file
+# that consumes most of them because test-sim_params.R needs them too, and a
+# helper defined at the top of one test file is not reliably in scope in
+# another. test-sim_engine_replay.R asserts the full inventory in one place, so
+# a missing fixture fails loudly there rather than only thinning coverage here.
+
+fixture_path <- function(name) {
+  testthat::test_path("fixtures", paste0(name, ".rds"))
+}
+
+skip_if_no_fixture <- function(name) {
+  if (!file.exists(fixture_path(name))) {
+    testthat::skip(sprintf("replay fixture '%s' not committed", name))
+  }
+}

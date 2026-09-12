@@ -250,6 +250,7 @@ test_that("sigma outside [0, 1] is rejected, and a per-patch sigma is too", {
 # -----------------------------------------------------------------------------
 
 test_that("the engine accepts a config with empty, zero-row or absent epidemic_peaks", {
+  skip_if_no_fixture("replay_single_location")
   fx <- readRDS(test_path("fixtures", "replay_single_location.rds"))
   base <- fx$meta$config_list
   ported <- c("Susceptible", "Exposed", "Recovered", "Infectious", "Vaccinated",
@@ -275,6 +276,7 @@ test_that("the engine accepts a config with empty, zero-row or absent epidemic_p
 })
 
 test_that("epidemic_peaks does not reach the normalised parameters at all", {
+  skip_if_no_fixture("replay_single_location")
   fx <- readRDS(test_path("fixtures", "replay_single_location.rds"))
   cfg <- fx$meta$config_list
   cfg$epidemic_peaks <- data.frame(iso_code = "MOZ", year = 2023L, week = 5L)
