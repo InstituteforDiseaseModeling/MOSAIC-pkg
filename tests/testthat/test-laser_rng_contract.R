@@ -26,7 +26,7 @@ rng_config <- function(npatches = 4L, nticks = 20L) {
 }
 
 run_once <- function(seed) {
-  run_LASER_R(rng_config(), seed = seed,
+  run_LASER(rng_config(), seed = seed,
               components = c("Susceptible", "Census"), quiet = TRUE)
 }
 
@@ -146,12 +146,12 @@ test_that("a result records what produced it", {
 test_that("the seed falls back to config$seed and then to 123", {
   cfg <- rng_config()
   cfg$seed <- 555L
-  expect_identical(run_LASER_R(cfg, components = c("Susceptible", "Census"))$seed, 555L)
+  expect_identical(run_LASER(cfg, components = c("Susceptible", "Census"))$seed, 555L)
   # an explicit argument wins over the config
-  expect_identical(run_LASER_R(cfg, seed = 1L,
+  expect_identical(run_LASER(cfg, seed = 1L,
                                components = c("Susceptible", "Census"))$seed, 1L)
   cfg$seed <- NULL
-  expect_identical(run_LASER_R(cfg, components = c("Susceptible", "Census"))$seed, 123L)
+  expect_identical(run_LASER(cfg, components = c("Susceptible", "Census"))$seed, 123L)
 })
 
 # -----------------------------------------------------------------------------

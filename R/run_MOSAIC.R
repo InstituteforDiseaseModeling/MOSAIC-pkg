@@ -4,38 +4,6 @@
 # =============================================================================
 
 # =============================================================================
-# PYTHON COMPATIBILITY HELPER
-# =============================================================================
-
-# Wrap location-specific scalar params as R lists so reticulate passes them as
-# Python lists instead of Python scalars.  Python's dict_to_propertysetex uses
-# np.array() (not as_ndarray()) for these params, so a Python scalar produces a
-# 0-d array (shape ()) rather than the expected 1-d array (shape (npatches,)).
-# This only affects single-location runs where length == 1.
-#
-# @param config A MOSAIC config list
-# @return config with affected length-1 params wrapped as R lists
-# @noRd
-.mosaic_prepare_config_for_python <- function(config) {
-  # Multi-location configs never need wrapping (all location params have length > 1)
-  if (length(config$location_name) > 1L) return(config)
-
-  array_params <- c(
-    "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k",
-    "beta_j0_tot", "p_beta",
-    "prop_S_initial", "prop_E_initial", "prop_I_initial",
-    "prop_R_initial", "prop_V1_initial", "prop_V2_initial",
-    "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor"
-  )
-  for (p in array_params) {
-    if (!is.null(config[[p]]) && length(config[[p]]) == 1 && !is.list(config[[p]])) {
-      config[[p]] <- as.list(config[[p]])
-    }
-  }
-  config
-}
-
-# =============================================================================
 # PER-COUNTRY (CROSS-LOCATION) INFLUENCE WEIGHTS
 # =============================================================================
 
@@ -326,16 +294,6 @@
     }
   }
 
-  # Import laser-cholera (explicit check, no inherits)
-  # Parallel mode: lc exists in worker global environment
-  # Sequential mode: import here
-  if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
-    lc <- reticulate::import("laser.cholera.metapop.model")
-    .mosaic_strip_laser_file_handler()
-  } else {
-    lc <- get("lc", envir = .GlobalEnv)
-  }
-
   # Run iterations
   for (j in 1:n_iterations) {
     # Use iteration-specific seed (see seed scheme documentation above)
@@ -354,12 +312,11 @@
       result_matrix[j, 6:(5 + n_params)] <- param_row
     }
 
-    # Prepare config for Python (wrap length-1 array params as lists)
-    params_py <- .mosaic_prepare_config_for_python(params_sim)
-
-    # Run model
+    # Run model. The engine is reached through run_LASER() and nowhere else:
+    # until the R port this worker imported and called the Python module
+    # directly, so run_LASER() was not in fact a chokepoint. It is now.
     model <- tryCatch({
-      lc$run_model(paramfile = params_py, quiet = TRUE)
+      run_LASER(config = params_sim, seed = seed_ij, quiet = TRUE)
     }, error = function(e) {
       # Log model run failure (but don't fail entire simulation)
       warning("Simulation ", sim_id, " iteration ", j, " model run failed: ",
@@ -494,12 +451,11 @@
     }
   }
 
-  # R GC every sim to process reticulate finalizer queue;
-  # Python full GC every 100 sims (frequent full sweeps are counterproductive)
+  # R GC every sim. The Python full GC that used to run every 100th sim went
+  # with the Python engine: there is no longer a reticulate finalizer queue or
+  # a NumPy heap to sweep here, and `reticulate::import("gc")` would initialise
+  # Python in every worker to collect nothing.
   gc(verbose = FALSE)
-  if (sim_id %% 100L == 0L) {
-    reticulate::import("gc")$collect()
-  }
 
   return(file.exists(output_file))
 }

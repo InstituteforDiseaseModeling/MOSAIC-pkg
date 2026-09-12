@@ -65,51 +65,51 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
   obs_cases_base[!is.finite(obs_cases_base)]   <- 0
   obs_deaths_base[!is.finite(obs_deaths_base)] <- 0
 
-  # ---- fake laser-cholera module -------------------------------------------
+  # ---- stubbed transmission engine -----------------------------------------
+  # The seam is run_LASER() in the MOSAIC namespace: both the calibration
+  # worker and .mosaic_ensemble_sim_task() reach the engine through it and
+  # nothing else, so one mocked binding covers the whole pipeline. (Before the
+  # R engine this test parked a fake Python module in .GlobalEnv$lc, which
+  # worked only because every call site duplicated the same
+  # `exists("lc", .GlobalEnv)` lookup.)
+  #
   # Closure-captured counter proves the loop actually dispatched sims here.
   call_env <- new.env(parent = emptyenv())
   call_env$n <- 0L
   call_env$seeds <- integer(0)
 
-  fake_lc <- list(
-    run_model = function(paramfile, quiet = TRUE, ...) {
-      call_env$n <- call_env$n + 1L
+  fake_engine <- function(config, seed = NULL, quiet = FALSE, ...) {
+    call_env$n <- call_env$n + 1L
 
-      # paramfile carries the per-iteration seed (worker sets params_sim$seed)
-      # and the once-per-sim sampled transmission parameter beta_j0_tot. Derive
-      # a deterministic, bounded multiplier so DIFFERENT sims/iterations produce
-      # DIFFERENT predictions (and therefore different, non-degenerate
-      # likelihoods) while staying close enough to the observed signal that the
-      # negative-binomial likelihood is finite.
-      seed_val <- tryCatch(as.numeric(paramfile$seed)[1], error = function(e) 1)
-      if (!is.finite(seed_val)) seed_val <- 1
-      call_env$seeds <- c(call_env$seeds, as.integer(seed_val))
+    # The config carries the per-iteration seed and the once-per-sim sampled
+    # transmission parameter beta_j0_tot. Derive a deterministic, bounded
+    # multiplier so DIFFERENT sims/iterations produce DIFFERENT predictions
+    # (and therefore different, non-degenerate likelihoods) while staying close
+    # enough to the observed signal that the negative-binomial likelihood is
+    # finite.
+    seed_val <- if (!is.null(seed)) as.numeric(seed)[1] else
+      tryCatch(as.numeric(config$seed)[1], error = function(e) 1)
+    if (!is.finite(seed_val)) seed_val <- 1
+    call_env$seeds <- c(call_env$seeds, as.integer(seed_val))
 
-      beta_val <- tryCatch(as.numeric(paramfile$beta_j0_tot)[1], error = function(e) NA_real_)
-      if (!is.finite(beta_val)) beta_val <- 0
+    beta_val <- tryCatch(as.numeric(config$beta_j0_tot)[1], error = function(e) NA_real_)
+    if (!is.finite(beta_val)) beta_val <- 0
 
-      # Multiplier in roughly [0.6, 1.4]; deterministic in (seed, beta).
-      mult <- 1 + 0.4 * sin(seed_val * 0.7 + beta_val * 3.0)
+    # Multiplier in roughly [0.6, 1.4]; deterministic in (seed, beta).
+    mult <- 1 + 0.4 * sin(seed_val * 0.7 + beta_val * 3.0)
 
-      cases  <- matrix(obs_cases_base  * mult, nrow = n_loc, ncol = n_t)
-      deaths <- matrix(obs_deaths_base * mult, nrow = n_loc, ncol = n_t)
-      # Engine returns rounded reported counts; mimic non-negative integers.
-      cases[]  <- pmax(0, round(cases))
-      deaths[] <- pmax(0, round(deaths))
+    cases  <- matrix(obs_cases_base  * mult, nrow = n_loc, ncol = n_t)
+    deaths <- matrix(obs_deaths_base * mult, nrow = n_loc, ncol = n_t)
+    # Engine returns rounded reported counts; mimic non-negative integers.
+    cases[]  <- pmax(0, round(cases))
+    deaths[] <- pmax(0, round(deaths))
 
-      list(results = list(reported_cases = cases, reported_deaths = deaths))
-    }
-  )
+    list(params = config,
+         results = list(reported_cases = cases, reported_deaths = deaths),
+         seed = as.integer(seed_val))
+  }
 
-  # Save/restore any pre-existing .GlobalEnv$lc so we don't poison other tests.
-  had_lc  <- exists("lc", envir = .GlobalEnv, inherits = FALSE)
-  prev_lc <- if (had_lc) get("lc", envir = .GlobalEnv) else NULL
-  assign("lc", fake_lc, envir = .GlobalEnv)
-  withr::defer({
-    if (had_lc) assign("lc", prev_lc, envir = .GlobalEnv)
-    else if (exists("lc", envir = .GlobalEnv, inherits = FALSE))
-      rm("lc", envir = .GlobalEnv)
-  })
+  local_mocked_bindings(run_LASER = fake_engine, .package = "MOSAIC")
 
   # ---- control: smallest meaningful fixed-mode calibration -----------------
   # Fixed mode (n_simulations = integer) runs exactly N sims in a single batch

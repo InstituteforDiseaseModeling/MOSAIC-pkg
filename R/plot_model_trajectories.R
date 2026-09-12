@@ -77,7 +77,7 @@ plot_model_trajectories <- function(trajectories,
   # figure; `incidence` is the S->E new-infection flow (DM F1), Lambda/Psi are
   # per-capita per-day hazards (DM F2). Built with base data.frame -- no tibble.
   spec <- data.frame(
-    channel = c("reported_cases", "reported_deaths", "disease_deaths", "expected_cases",
+    channel = c("reported_cases", "reported_deaths", "disease_deaths",
                 "new_symptomatic", "incidence", "incidence_human", "incidence_env",
                 "Lambda", "Psi", "beta_jt_human", "beta_jt_env", "CFR",
                 "I_total", "E", "W", "V2", "V1", "R", "S",
@@ -85,7 +85,6 @@ plot_model_trajectories <- function(trajectories,
     label = c("Reported cases (model + observed)",
               "Reported deaths (model + observed)",
               "Disease deaths (model, true burden)",
-              "Expected cases (burden back-calculation)",
               "New symptomatic infections (E->I flow)",
               "New infections (S->E flow)",
               "Human-driven new infections",
@@ -100,7 +99,7 @@ plot_model_trajectories <- function(trajectories,
               "One-dose vaccinated (V1)", "Recovered (R)", "Susceptible (S)",
               "Mass balance: (S+E+I+R+V1+V2) / N", "Population (N)",
               "Epidemic fraction (ensemble share over threshold)"),
-    grp = c(rep("surveillance", 4L), rep("incidence", 4L),
+    grp = c(rep("surveillance", 3L), rep("incidence", 4L),
             rep("foi", 5L), rep("state", 7L), rep("check", 3L)),
     stringsAsFactors = FALSE)
 

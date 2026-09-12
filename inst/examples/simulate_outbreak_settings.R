@@ -53,11 +53,12 @@
 # =============================================================================
 
 # =============================================================================
-# SETUP: (optionally) update MOSAIC + the LASER engine, then check the install
+# SETUP: (optionally) update MOSAIC, then check the install
 # -----------------------------------------------------------------------------
 # If you have not updated in a while, set UPDATE_PACKAGES <- TRUE and run this
-# script once. It reinstalls the MOSAIC R package from GitHub, rebuilds the
-# Python environment with the matching laser-cholera engine, and verifies both.
+# script once. It reinstalls the MOSAIC R package from GitHub and verifies it.
+# The transmission engine is pure R and ships inside the package, so there is
+# no separate engine to install or version-match.
 #
 # IMPORTANT: reinstalling an R package that is already loaded does not take
 # effect until you restart. After updating, this script stops and asks you to
@@ -68,14 +69,14 @@
 UPDATE_PACKAGES <- FALSE   # <-- set TRUE to update everything, then restart R
 
 if (isTRUE(UPDATE_PACKAGES)) {
-  message("==> Updating MOSAIC + LASER (this can take several minutes)...")
+  message("==> Updating MOSAIC (this can take several minutes)...")
 
   # 1. MOSAIC R package (latest from GitHub)
   if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
   remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg",
                           upgrade = "never", force = TRUE)
 
-  # 2. Python environment + laser-cholera engine (rebuilt to match this MOSAIC)
+  # 2. Python environment (still needed for the keras3 suitability model)
   MOSAIC::install_dependencies(force = TRUE)
 
   # 3. Verify
@@ -94,20 +95,8 @@ if (isTRUE(UPDATE_PACKAGES)) {
 suppressMessages(library(MOSAIC))
 
 # --- Check the install before running (fail fast, with guidance, if stale) ---
-message("Checking MOSAIC + LASER installation...")
-MOSAIC::check_dependencies()   # prints engine + key Python package versions
-.laser_version <- tryCatch(
-  as.character(reticulate::import("importlib.metadata")$version("laser-cholera")),
-  error = function(e) NA_character_
-)
-if (is.na(.laser_version)) {
-  stop("The laser-cholera Python engine is not available in this R session.\n",
-       "  Set UPDATE_PACKAGES <- TRUE at the top of this script (or run\n",
-       "  MOSAIC::install_dependencies(force = TRUE)), restart R, then re-run.",
-       call. = FALSE)
-}
-message(sprintf("OK: MOSAIC %s + laser-cholera %s\n",
-                as.character(utils::packageVersion("MOSAIC")), .laser_version))
+message(sprintf("OK: MOSAIC %s (pure-R transmission engine)\n",
+                as.character(utils::packageVersion("MOSAIC"))))
 
 # -----------------------------------------------------------------------------
 # 0. Output directory + global settings
@@ -306,8 +295,8 @@ for (key in names(settings)) {
                   paste(cfg$date_start, "->", cfg$date_stop)))
 
   model  <- run_LASER(config = cfg, seed = SEED, quiet = TRUE)
-  cases  <- as.matrix(reticulate::py_to_r(model$results$reported_cases))   # [patch x time]
-  deaths <- as.matrix(reticulate::py_to_r(model$results$reported_deaths))
+  cases  <- model$results$reported_cases   # [patch x time]
+  deaths <- model$results$reported_deaths
   dates  <- seq.Date(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")
   locs   <- cfg$location_name
 

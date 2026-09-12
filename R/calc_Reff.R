@@ -393,8 +393,8 @@ calc_Reff <- function(ensemble,
 #' PATHS, priors, config = base, seed = parameter_seeds[p], sample_args)} then
 #' \code{.mosaic_clamp_transmission_params()}; the per-(param, stoch) LASER seed
 #' is the same deterministic \code{param_idx * 1000L + stoch_idx} the worker sets;
-#' the engine is invoked through \code{.mosaic_prepare_config_for_python()} +
-#' \code{lc$run_model(quiet = TRUE)}. The captured \code{reported_cases} per
+#' the engine is invoked through \code{run_LASER(quiet = TRUE)}, the same
+#' entry point the worker uses. The captured \code{reported_cases} per
 #' (param, stoch) are compared against the saved \code{cases_array} from the
 #' ensemble object (the FAITHFULNESS GATE): if they do not match, the re-sim is
 #' not reproducing the calibration and the function stops rather than shipping a
@@ -532,14 +532,6 @@ calc_Reff <- function(ensemble,
                         verbose = FALSE))
   }
 
-  # --- Load the engine (same import as the worker) ---------------------------
-  if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
-    lc <- reticulate::import("laser.cholera.metapop.model")
-    .mosaic_strip_laser_file_handler()
-  } else {
-    lc <- get("lc", envir = .GlobalEnv)
-  }
-
   # --- Re-simulate each member, capturing daily incidence + reported_cases ---
   # Member index m = (s - 1) * nP + p ; weight = pw[p] / nS.
   n_members <- nP * nS
@@ -548,10 +540,16 @@ calc_Reff <- function(ensemble,
   # Easier: keep a per-location list of [n_members x Tn] R_eff matrices.
   reff_loc <- lapply(seq_len(nL), function(i) matrix(NA_real_, n_members, Tn))
   member_w <- numeric(n_members)
-  # Statistical-equivalence gate (see rationale below). The LASER engine is
-  # bitwise-deterministic WITHIN a process but NOT across cold processes (numba
-  # RNG state differs), so a re-sim of an identical seed + config is
-  # statistically equivalent, not bitwise identical. We therefore record, per
+  # Statistical-equivalence gate (see rationale below). The R engine IS
+  # bitwise-reproducible across cold processes -- that is pinned by
+  # test-laser_rng_contract.R -- so with an identical seed and config this
+  # re-sim should now reproduce the saved cases_array exactly, where the Python
+  # engine could only be trusted to match statistically (its numba RNG state
+  # differed across processes). The gate is kept as a robust statistical one
+  # rather than tightened to equality, because it is also what catches a
+  # MIS-RECONSTRUCTED config -- a member config rebuilt with the wrong seed or
+  # the wrong sampling recipe is the failure this guards against, and that
+  # failure is not made impossible by a reproducible engine. We record, per
   # member, the relative total-case error and the cases correlation vs the saved
   # cases_array, and gate on ROBUST statistics of those (NOT the single worst
   # member): a tiny fraction of near-critical/bistable members can flip
@@ -577,9 +575,8 @@ calc_Reff <- function(ensemble,
       member_w[m] <- pw[p] / nS
       run_cfg <- cfg
       run_cfg$seed <- (p * 1000L) + s
-      model <- lc$run_model(
-        paramfile = .mosaic_prepare_config_for_python(run_cfg), quiet = TRUE)
-      inc <- model$results$incidence       # [nL, T] (or [T] when nL == 1)
+      model <- run_LASER(config = run_cfg, seed = run_cfg$seed, quiet = TRUE)
+      inc <- model$results$incidence       # [nL, T]
       rc  <- model$results$reported_cases
       inc_m <- .mosaic_reff_to_mat(inc, nL, Tn)
       rc_m  <- .mosaic_reff_to_mat(rc,  nL, Tn)
@@ -597,7 +594,6 @@ calc_Reff <- function(ensemble,
       for (i in seq_len(nL))
         reff_loc[[i]][m, ] <- .cori_reff(inc_m[i, ], g,
                                          infectiousness_floor = infectiousness_floor)
-      reticulate::import("gc")$collect()
     }
     if (verbose && (p %% 10L == 0L || p == nP))
       message(sprintf("    members done: %d/%d | rel_err med=%.4f p%.0f=%.4f | cor med=%.4f",

@@ -19,7 +19,7 @@ pass to \code{run_MOSAIC(cluster = cl)}.
 \description{
 Creates a properly configured parallel cluster for use with \code{run_MOSAIC}.
 The cluster handles all one-time setup: library loading, thread safety,
-Python/LASER import, and root directory propagation. It can be passed to
+and root directory propagation. It can be passed to
 multiple \code{run_MOSAIC} calls (e.g. across staged estimation) to avoid
 the overhead of repeated cluster creation.
 }
@@ -30,8 +30,7 @@ The cluster setup includes:
 \code{TBB_NUM_THREADS}, \code{NUMBA_NUM_THREADS}, \code{OPENBLAS_NUM_THREADS})
 set to 1 in both the main process and each worker to prevent oversubscription.
 \item BLAS threads limited to 1 per worker via \code{.mosaic_set_blas_threads(1L)}.
-\item Libraries loaded on each worker: \code{MOSAIC}, \code{reticulate}, \code{arrow}.
-\item \code{laser.cholera} Python module imported once per worker.
+\item Libraries loaded on each worker: \code{MOSAIC}, \code{arrow}.
 \item Root directory propagated from the main process via \code{set_root_directory()}.
 }
 

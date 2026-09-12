@@ -23,7 +23,7 @@
 .MOSAIC_ENSEMBLE_RAM_FRACTION <- 0.80
 .MOSAIC_ENSEMBLE_GATHERED_LIST_FACTOR <- 2
 
-# Comprehensive default set of internal LASER `model$results` channels captured
+# Comprehensive default set of internal engine `model$results` channels captured
 # for the trajectory figures (the "related quantities" beyond reported cases/
 # deaths). reported_cases/reported_deaths are NOT here -- they are sourced from
 # the ensemble cases_array/deaths_array (no re-capture). Each is harvested
@@ -37,8 +37,8 @@
   "Lambda", "Psi", "beta_jt_human", "beta_jt_env",
   # incidence & infection flows
   "incidence", "incidence_human", "incidence_env", "new_symptomatic",
-  # burden channels (expected_cases = new_symptomatic/rho; disease_deaths = true burden)
-  "expected_cases", "disease_deaths"
+  # burden channel (disease_deaths = true burden, before death reporting)
+  "disease_deaths"
 )
 
 #' Drop the heavy 4-D arrays from a mosaic_ensemble (for lightweight persistence)
@@ -606,14 +606,15 @@ calc_model_ensemble <- function(config,
     # Workers load the same MOSAIC build as this parent (no hardcoded path).
     .parent_libs <- .libPaths()
     parallel::clusterExport(cl, ".parent_libs", envir = environment())
+    # The worker preamble is now just "load MOSAIC and pin threads". Before the
+    # R engine it also imported laser.cholera and parked the module in each
+    # worker's .GlobalEnv, which is why .mosaic_ensemble_sim_task() used to
+    # look for an `lc` binding there; the R engine is reached through
+    # run_LASER() from the loaded namespace, so there is nothing to preload.
     parallel::clusterEvalQ(cl, {
       .libPaths(unique(c(.parent_libs, .libPaths())))
       library(MOSAIC)
-      library(reticulate)
       MOSAIC:::.mosaic_set_blas_threads(1L)
-      lc <- reticulate::import("laser.cholera.metapop.model")
-      MOSAIC:::.mosaic_strip_laser_file_handler()
-      assign("lc", lc, envir = .GlobalEnv)
       NULL
     })
 
@@ -657,10 +658,10 @@ calc_model_ensemble <- function(config,
     )
   } else {
     if (verbose) message("Running ", total_sims, " simulations sequentially...")
-    # In-process LASER: pin threads so numba/MKL/OpenBLAS don't oversubscribe.
-    # The parallel branch pins its workers; run_MOSAIC pins the orchestrator;
-    # pin here too so standalone calc_model_ensemble(parallel=FALSE) is
-    # self-sufficient. Idempotent.
+    # Pin BLAS threads so a threaded matrix op inside the engine cannot
+    # oversubscribe the box. The parallel branch pins its workers; run_MOSAIC
+    # pins the orchestrator; pin here too so standalone
+    # calc_model_ensemble(parallel = FALSE) is self-sufficient. Idempotent.
     MOSAIC:::.mosaic_set_blas_threads(1L)
     pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
     on.exit(pbapply::pboptions(pbo), add = TRUE)

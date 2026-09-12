@@ -267,7 +267,7 @@ test_that("the engine accepts a config with empty, zero-row or absent epidemic_p
 
   for (nm in names(variants)) {
     expect_no_error(
-      run_LASER_R(config = variants[[nm]], seed = 1L, quiet = TRUE,
+      run_LASER(config = variants[[nm]], seed = 1L, quiet = TRUE,
                   components = ported),
       message = paste("epidemic_peaks variant:", nm)
     )

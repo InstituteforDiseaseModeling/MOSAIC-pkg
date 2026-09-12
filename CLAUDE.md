@@ -98,7 +98,7 @@ reachable via the session's additional-directory access. Pull the specific secti
 
 ## Package Overview
 
-**MOSAIC** (Metapopulation Outbreak Simulation And Interventions for Cholera) is a production R package for cholera transmission simulation across Sub-Saharan Africa. It integrates with the Python laser-cholera engine via reticulate and provides functions for data processing, parameter estimation, Bayesian calibration, and visualization.
+**MOSAIC** (Metapopulation Outbreak Simulation And Interventions for Cholera) is a production R package for cholera transmission simulation across Sub-Saharan Africa. The transmission engine is pure R (`run_LASER()`); Python/reticulate is now used only by the keras3 environmental-suitability model. The package provides functions for data processing, parameter estimation, Bayesian calibration, and visualization.
 
 **Key capabilities:** SEIR metapopulation simulation, Bayesian Filtering with Resampling (BFRS) calibration, environmental suitability modeling, vaccination/WASH intervention analysis, spatial transmission with human mobility.
 
@@ -178,7 +178,7 @@ All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 ## Python Integration
 
 **Environment:** `~/.virtualenvs/r-mosaic` (managed via `install_dependencies()`)
-**Core packages:** laser-cholera, laser-core, numpy, h5py, pyarrow
+**Core packages:** numpy, h5py, pyarrow, tensorflow/keras3 (suitability model only — the transmission engine is pure R). `laser-cholera` is still declared but no longer used by the engine; its removal is pending.
 **Check:** `MOSAIC::check_dependencies()`
 **Troubleshoot:** `MOSAIC::remove_python_env()` then `MOSAIC::install_dependencies(force = TRUE)`
 
@@ -195,7 +195,7 @@ All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 | `R/make_LASER_config.R` | Config validation (60+ parameters) |
 | `R/calc_model_R2.R` | R² (corr and SSE methods) + bias ratio |
 | `R/get_paths.R` | Directory path management |
-| `R/run_LASER.R` | Python laser-cholera wrapper |
+| `R/laser_engine.R` | `run_LASER()` — the pure-R transmission engine, and the only engine entry point |
 
 ## Troubleshooting
 

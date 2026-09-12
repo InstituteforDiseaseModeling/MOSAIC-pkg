@@ -5,9 +5,9 @@
 # calc_model_ensemble(). This lives at package level rather than as a closure
 # inside calc_model_ensemble() for three reasons:
 #
-#   1. It is the engine invocation site for the ensemble path. The migration to
-#      the R transmission model swaps the engine here and nowhere else in this
-#      file (see migrate-laser-r.md, phase A-4).
+#   1. It is the engine invocation site for the ensemble path. The A-4 cutover
+#      to the R transmission model swapped the engine here and nowhere else in
+#      this file (see migrate-laser-r.md, phase A-4).
 #   2. PSOCK workers resolve it from the loaded MOSAIC namespace, so the task
 #      closure carries no function payload and needs no clusterExport().
 #   3. It is the seam the ensemble tests mock. Until v0.65.0 those tests fed
@@ -50,23 +50,18 @@
   param_idx <- task_info$param_idx
   stoch_idx <- task_info$stoch_idx
   tryCatch({
-    if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
-      lc <- reticulate::import("laser.cholera.metapop.model")
-      .mosaic_strip_laser_file_handler()
-    } else {
-      lc <- get("lc", envir = .GlobalEnv)
-    }
     param_config <- param_configs_list[[param_idx]]
     param_config$seed <- (param_idx * 1000L) + stoch_idx
-    model <- lc$run_model(
-      paramfile = .mosaic_prepare_config_for_python(param_config),
-      quiet = TRUE
-    )
+    model <- run_LASER(config = param_config,
+                       seed   = param_config$seed,
+                       quiet  = TRUE)
     # Extract the engine's spatial-structure arrays (J x T hazard, J x J
     # coupling, J x J pi_ij) BEFORE the model is discarded below (F1). These
     # are computed by the engine's DerivedValues component at the final tick
-    # and otherwise lost when the model object is gc'd. tryCatch each so an
-    # engine that drops DerivedValues simply yields NULL (warn+skip downstream).
+    # and otherwise lost when the model object is gc'd. tryCatch each so a
+    # pipeline subset without DerivedValues simply yields NULL (warn+skip
+    # downstream) -- run_LASER() omits both channels rather than returning
+    # their zero-filled allocation when that component did not run.
     sh  <- tryCatch(model$results$spatial_hazard, error = function(e) NULL)
     cpl <- tryCatch(model$results$coupling,       error = function(e) NULL)
     pij <- tryCatch(model$results$pi_ij,          error = function(e) NULL)
@@ -112,7 +107,6 @@
       }
     }
     gc(verbose = FALSE)
-    reticulate::import("gc")$collect()
     result
   }, error = function(e) {
     list(param_idx = param_idx, stoch_idx = stoch_idx,

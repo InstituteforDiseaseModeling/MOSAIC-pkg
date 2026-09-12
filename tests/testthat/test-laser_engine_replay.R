@@ -34,7 +34,7 @@ test_that("replay reproduces the oracle's channels bit-for-bit", {
   skip_if_no_fixture("replay_susceptible_census")
   fx <- laser_read_fixture(fixture_path("replay_susceptible_census"))
 
-  res <- run_LASER_R(
+  res <- run_LASER(
     config     = fx$meta$config_list,
     seed       = fx$meta$seed,
     components = as.character(fx$meta$components),
@@ -74,7 +74,7 @@ test_that("replay consumes the record exactly, in both directions", {
   truncated$calls <- lapply(fx$calls, function(v) v[keep])
 
   expect_error(
-    run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed,
+    run_LASER(config = fx$meta$config_list, seed = fx$meta$seed,
                 components = comps, rng = "replay", record = truncated),
     "Replay record exhausted"
   )
@@ -84,7 +84,7 @@ test_that("replay consumes the record exactly, in both directions", {
   n <- length(fx$calls$tick)
   padded$calls <- lapply(fx$calls, function(v) c(v, v[n]))
   expect_error(
-    run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed,
+    run_LASER(config = fx$meta$config_list, seed = fx$meta$seed,
                 components = comps, rng = "replay", record = padded),
     "not fully consumed"
   )
@@ -102,7 +102,7 @@ test_that("replay rejects a draw the oracle did not make", {
   nudged <- fx
   nudged$values$param[1L] <- fx$values$param[1L] * 1.1 + 1e-3
   expect_error(
-    run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed,
+    run_LASER(config = fx$meta$config_list, seed = fx$meta$seed,
                 components = comps, rng = "replay", record = nudged),
     "probability differs"
   )
@@ -111,7 +111,7 @@ test_that("replay rejects a draw the oracle did not make", {
   nudged_n <- fx
   nudged_n$values$n[1L] <- fx$values$n[1L] + 1
   expect_error(
-    run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed,
+    run_LASER(config = fx$meta$config_list, seed = fx$meta$seed,
                 components = comps, rng = "replay", record = nudged_n),
     "binomial n differs"
   )
@@ -121,7 +121,7 @@ test_that("replay rejects a draw the oracle did not make", {
   nudged_tick <- fx
   nudged_tick$calls$tick[1L] <- fx$calls$tick[1L] + 5L
   expect_error(
-    run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed,
+    run_LASER(config = fx$meta$config_list, seed = fx$meta$seed,
                 components = comps, rng = "replay", record = nudged_tick),
     "tick mismatch"
   )
@@ -145,7 +145,7 @@ test_that("a run reports which draw sites it exercised", {
   skip_if_no_fixture("replay_susceptible_census")
   fx <- laser_read_fixture(fixture_path("replay_susceptible_census"))
 
-  res <- run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed,
+  res <- run_LASER(config = fx$meta$config_list, seed = fx$meta$seed,
                      components = as.character(fx$meta$components),
                      rng = "replay", record = fx)
 
@@ -185,7 +185,7 @@ test_that("requesting an unported component errors rather than being skipped", {
     .LASER_PHASE_FUNCTIONS = list(Susceptible = laser_phase_susceptible),
     .package = "MOSAIC")
   expect_error(
-    run_LASER_R(config = list(), components = c("Susceptible", "Census")),
+    run_LASER(config = list(), components = c("Susceptible", "Census")),
     "not yet ported"
   )
 })
@@ -270,7 +270,7 @@ expect_channels_match <- function(got, ref, rtol = 1e-5) {
 
 replay_fixture <- function(file) {
   fx <- readRDS(test_path("fixtures", file))
-  out <- run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed,
+  out <- run_LASER(config = fx$meta$config_list, seed = fx$meta$seed,
                      quiet = TRUE, components = PORTED,
                      rng = "replay", record = fx)
   list(fx = fx, out = out)
@@ -278,7 +278,7 @@ replay_fixture <- function(file) {
 
 test_that("Tier B: the full ported pipeline replays the oracle draw-for-draw (40 patches)", {
   r <- replay_fixture("replay_full_pipeline.rds")
-  # Reaching here means every draw matched: run_LASER_R asserts each one and
+  # Reaching here means every draw matched: run_LASER asserts each one and
   # laser_assert_replay_complete() then requires the record be fully consumed,
   # so neither a skipped nor an extra draw can pass.
   expect_equal(r$fx$meta$nticks, 60L)
@@ -352,7 +352,7 @@ test_that("replay is strict in both directions: a truncated record errors", {
   keep <- seq_len(length(fx$calls$site) - 5L)
   short$calls <- lapply(fx$calls, function(v) v[keep])
   expect_error(
-    run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed, quiet = TRUE,
+    run_LASER(config = fx$meta$config_list, seed = fx$meta$seed, quiet = TRUE,
                 components = PORTED, rng = "replay", record = short),
     "Replay record exhausted")
 })
@@ -360,7 +360,7 @@ test_that("replay is strict in both directions: a truncated record errors", {
 test_that("a component name that is not in the pipeline errors", {
   fx <- readRDS(test_path("fixtures", "replay_full_pipeline.rds"))
   expect_error(
-    run_LASER_R(config = fx$meta$config_list, components = c("Susceptible", "Nonsense")),
+    run_LASER(config = fx$meta$config_list, components = c("Susceptible", "Nonsense")),
     "Unknown component")
 })
 
@@ -370,11 +370,11 @@ test_that("phase order is the engine's, not the caller's argument order", {
   # scrambled `components` still runs correctly.
   fx <- readRDS(test_path("fixtures", "replay_full_pipeline.rds"))
   scrambled <- rev(PORTED)
-  out <- run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed, quiet = TRUE,
+  out <- run_LASER(config = fx$meta$config_list, seed = fx$meta$seed, quiet = TRUE,
                      components = scrambled, rng = "replay", record = fx)
   expect_channels_match(out$results, fx$results)
 
   expect_error(
-    run_LASER_R(config = fx$meta$config_list, components = c("Susceptible", "Susceptible")),
+    run_LASER(config = fx$meta$config_list, components = c("Susceptible", "Susceptible")),
     "more than once")
 })

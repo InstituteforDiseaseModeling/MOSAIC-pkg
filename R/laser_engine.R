@@ -1,17 +1,21 @@
-#' Run the R transmission engine
+#' Run the cholera transmission model
 #'
-#' Pure-R port of the laser-cholera metapopulation engine. During the migration
-#' this is reached as \code{run_LASER_R()}; at cutover it becomes
-#' \code{run_LASER()} and the Python path is removed. There is deliberately no
-#' \code{engine =} switch -- the point of the migration is that there is one
-#' engine.
+#' Simulates the metapopulation SEIR model over the configured window and
+#' returns the result channels. This is the package's only engine entry point:
+#' there is deliberately no \code{engine =} switch, because there is only one
+#' engine. Prior to v0.66.0 this function was a \pkg{reticulate} bridge to the
+#' Python \code{laser-cholera} package; it is now pure R and the two agree to
+#' the tolerances recorded in \code{tests/testthat/fixtures/ORACLE.md}.
 #'
 #' @param config Config list, or a path to a \code{.json} / \code{.json.gz}
 #'   file. See \code{laser_params()} for the normalisation and validation
 #'   applied.
 #' @param seed Integer seed. If \code{NULL}, uses \code{config$seed} when
-#'   present, otherwise \code{123L}.
-#' @param quiet Logical; suppress progress reporting.
+#'   present, otherwise \code{123L}. The engine draws from an isolated RNG
+#'   stream and restores the caller's on exit, so calling it never perturbs
+#'   the caller's \code{.Random.seed}.
+#' @param quiet Logical; suppress progress reporting. Accepted for call
+#'   compatibility -- the R engine reports nothing either way.
 #' @param components Character vector naming the pipeline subset to run.
 #'   Defaults to the full dynamics pipeline. Used by the parity harness to
 #'   compare a component at a time against the oracle; production callers
@@ -19,17 +23,37 @@
 #' @param rng Either \code{"rng"} (draw normally) or \code{"replay"} (consume
 #'   \code{record} and assert every draw matches). Replay is a test mode.
 #' @param record Replay fixture from \code{laser_read_fixture()}.
+#' @param ... Reserved. Supplying an argument removed with the Python engine
+#'   (\code{py_module}, \code{visualize}, \code{pdf}, \code{outdir}) raises an
+#'   error naming it rather than silently ignoring it. See
+#'   \link{deprecated_dask}.
 #'
 #' @return A list with \code{params} (the normalised config), \code{results}
-#'   (the result channels as \code{[patch, time]} matrices) and \code{seed}.
+#'   (the 28 result channels as \code{[patch, time]} matrices, except
+#'   \code{pi_ij} and \code{coupling} which are \code{[patch, patch]}) and
+#'   \code{seed}.
 #'
-#' @keywords internal
-run_LASER_R <- function(config,
-                        seed       = NULL,
-                        quiet      = FALSE,
-                        components = LASER_PIPELINE,
-                        rng        = c("rng", "replay"),
-                        record     = NULL) {
+#' @examples
+#' \dontrun{
+#' # Run from a config file:
+#' result <- run_LASER(config = "path/to/laser_params.json", seed = 20250418L)
+#'
+#' # Run from a config object (uses config$seed if present, else 123L):
+#' result <- run_LASER(config = config_default, quiet = TRUE)
+#'
+#' dim(result$results$reported_cases)   # [locations, days]
+#' }
+#'
+#' @export
+run_LASER <- function(config,
+                      seed       = NULL,
+                      quiet      = FALSE,
+                      components = LASER_PIPELINE,
+                      rng        = c("rng", "replay"),
+                      record     = NULL,
+                      ...) {
+
+     .mosaic_reject_removed_args(list(...), "run_LASER")
 
      rng <- match.arg(rng)
 
@@ -115,6 +139,10 @@ run_LASER_R <- function(config,
      out
 }
 
+#' @rdname run_LASER
+#' @export
+run_laser <- run_LASER
+
 #' The dynamics pipeline, in canonical order
 #'
 #' Fixed by \code{model.py:566-579}. \code{Analyzer}, \code{Recorder} and
@@ -128,7 +156,7 @@ LASER_PIPELINE <- c(
 )
 
 # Phase dispatch table. Complete as of A-3: every component of LASER_PIPELINE
-# has an entry. The unported-component guard in run_LASER_R() is kept even so
+# has an entry. The unported-component guard in run_LASER() is kept even so
 # -- it is what stops a half-finished pipeline from looking green, and it is
 # the check that would fire if a future component were added to the pipeline
 # list without an implementation.

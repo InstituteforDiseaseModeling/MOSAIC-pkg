@@ -2,7 +2,7 @@
 #'
 #' Creates a properly configured parallel cluster for use with \code{run_MOSAIC}.
 #' The cluster handles all one-time setup: library loading, thread safety,
-#' Python/LASER import, and root directory propagation. It can be passed to
+#' and root directory propagation. It can be passed to
 #' multiple \code{run_MOSAIC} calls (e.g. across staged estimation) to avoid
 #' the overhead of repeated cluster creation.
 #'
@@ -20,8 +20,7 @@
 #'     \code{TBB_NUM_THREADS}, \code{NUMBA_NUM_THREADS}, \code{OPENBLAS_NUM_THREADS})
 #'     set to 1 in both the main process and each worker to prevent oversubscription.
 #'   \item BLAS threads limited to 1 per worker via \code{.mosaic_set_blas_threads(1L)}.
-#'   \item Libraries loaded on each worker: \code{MOSAIC}, \code{reticulate}, \code{arrow}.
-#'   \item \code{laser.cholera} Python module imported once per worker.
+#'   \item Libraries loaded on each worker: \code{MOSAIC}, \code{arrow}.
 #'   \item Root directory propagated from the main process via \code{set_root_directory()}.
 #' }
 #'
@@ -78,7 +77,6 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
     .libPaths(unique(c(.parent_libs, .libPaths())))
 
     library(MOSAIC)
-    library(reticulate)
     library(arrow)
 
     # Single-threaded BLAS / Python / Numba per worker
@@ -88,14 +86,6 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
     set_root_directory(.root_dir_val)
     PATHS <- get_paths()
 
-    # Import laser-cholera once per worker
-    lc <- reticulate::import("laser.cholera.metapop.model")
-    MOSAIC:::.mosaic_strip_laser_file_handler()
-    assign("lc", lc, envir = .GlobalEnv)
-
-    # Suppress NumPy warnings
-    warnings_py <- reticulate::import("warnings")
-    warnings_py$filterwarnings("ignore", message = "invalid value encountered in divide")
     NULL
   })
 

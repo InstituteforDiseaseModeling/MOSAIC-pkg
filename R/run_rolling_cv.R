@@ -737,8 +737,8 @@ compile_rolling_cv_predictions <- function(dir_output,
      dea <- array(NA_real_, c(length(seeds), nloc, nt))
      for (s in seq_along(seeds)) {
           r  <- MOSAIC::run_LASER(cfg, seed = seeds[s], quiet = TRUE)
-          rc <- reticulate::py_to_r(r$results$reported_cases)
-          rd <- reticulate::py_to_r(r$results$reported_deaths)
+          rc <- r$results$reported_cases
+          rd <- r$results$reported_deaths
           if (!is.matrix(rc)) rc <- matrix(rc, nrow = 1L)
           if (!is.matrix(rd)) rd <- matrix(rd, nrow = 1L)
           cas[s, , ] <- rc[, col_idx, drop = FALSE]

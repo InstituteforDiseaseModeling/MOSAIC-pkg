@@ -1,11 +1,87 @@
+# MOSAIC 0.66.0
+
+## The R engine is now the engine
+
+`run_LASER()` runs the pure-R transmission model. It was a `reticulate` bridge
+to `laser.cholera.metapop.model`; it is now the R engine itself, and for the
+first time it is the package's **only** engine entry point. It was not one
+before: `run_MOSAIC()`'s simulation worker, `calc_model_ensemble()`'s per-task
+worker and `calc_Reff()`'s re-simulation each imported the Python module and
+called `run_model()` directly, so "the engine call site" was four places that
+had to be kept in step. All four now go through `run_LASER()`.
+
+### Breaking changes
+
+* **`run_LASER()` returns an R list, not a Python object.** The shape is
+  unchanged -- `$params`, `$results`, `$seed`, with `$results` holding
+  `[location, time]` matrices -- so `model$results$reported_cases` still works,
+  but `reticulate::py_to_r()` around it does not and is no longer needed. The
+  28 channels, their orientation, their per-field storage mode and the absence
+  of dimnames are asserted by `test-laser_results_contract.R`.
+* **Single-location runs return a `1 x nticks` matrix**, where the Python
+  engine returned a bare length-`nticks` vector. Callers that already handled
+  both are unaffected.
+* **`visualize`, `pdf`, `outdir` and `py_module` are gone** from `run_LASER()`.
+  They drove the Python engine's matplotlib Analyzer or passed in a
+  pre-imported module; supplying one now raises an error naming it.
+* `make_mosaic_cluster()` no longer imports `laser.cholera` into each worker,
+  and no longer loads `reticulate` there. This was scheduled for the dependency
+  removal, but keeping it would have meant every calibration worker still paid
+  the 3.3 s import and held the Python heap for a module nothing calls. For the
+  same reason the calibration worker's every-100th-sim `reticulate::import("gc")$collect()`
+  is gone: there is no Python heap left to sweep, and the call would have
+  initialised Python in each worker to collect nothing.
+
+### Fixed
+
+* **`run_fit_sandbox()` was broken and no test could see it.** It called its
+  runner with `visualize`/`pdf`/`outdir`, which `run_LASER()` had already
+  started rejecting -- but every test in the file stubs the runner, and the
+  stubs accepted those arguments. The call is fixed, and a new test asserts the
+  sandbox only ever passes arguments that are formals of the real `run_LASER()`.
+* **`test-lasik_calculations.R` now runs, and three of its assertions were
+  wrong.** The file validates engine output against this package's analytic
+  helpers, and it had been silently inert: gated to the slow tier, and even
+  there its config path was cwd-relative and never resolved. With the R engine
+  the whole file takes ~2 s, so it is un-gated. Running it surfaced that (a)
+  the `pi_ij` comparison applied a `t()` that made it wrong by up to 0.29,
+  where the untransposed comparison agrees to 4e-16; (b) the spatial-hazard
+  check read `V1sus`/`V2sus`, compartments the engine collapsed into `V1`/`V2`
+  in v0.16.1, i.e. it passed `NULL`; (c) the population check's 1% tolerance
+  was never achievable -- the measured drift against UN WPP is 2.23% for the R
+  engine and 2.24% for the pinned Python oracle, so it is engine demography
+  rather than a port artefact, and the tolerance now says so.
+* The **coupling** comparison in the same file no longer needs its `1e-2`
+  fudge. The engine correlates the untrimmed prevalence series (`nticks + 1`
+  observations) while the result channels have the seed row trimmed;
+  reconstructing that observation from `I_j_initial`/`N_j_initial` makes
+  `calc_spatial_correlation_matrix()` reproduce the engine's matrix *exactly*,
+  which proves the trim was the entire difference rather than assuming it.
+* **`expected_cases` no longer exists** in the engine's return and has been
+  removed from `calc_model_ensemble()`'s default trajectory channels and from
+  `plot_model_trajectories()`'s panel spec. It was degrading silently to an
+  absent panel.
+
+### Removed
+
+* `.mosaic_prepare_config_for_python()` and `.mosaic_strip_laser_file_handler()`.
+  The first wrapped length-1 config fields so `reticulate` would pass them as
+  Python lists; the second deleted the log file `laser-cholera` created on
+  import. Neither has anything left to do.
+
+The `laser-cholera` dependency itself is still declared -- `check_dependencies()`,
+`lock_python_env()`, `environment.yml`, the run-provenance keys and CI still
+reference it. Removing those is the next step.
+
 # MOSAIC 0.65.0
 
-## Pure-R transmission engine (in progress)
+## Pure-R transmission engine (ported; cut over in 0.66.0)
 
-The Python `laser-cholera` transmission engine is being replaced by a pure-R
+The Python `laser-cholera` transmission engine is replaced by a pure-R
 implementation. This release lands the deterministic precomputation, the full
-tick loop and the result contract; the cutover itself is still to come, so
-`run_MOSAIC()` continues to call the Python engine. See `migrate-laser-r.md`.
+tick loop and the result contract behind an internal entry point;
+0.66.0 makes it the engine `run_MOSAIC()` actually calls. See
+`migrate-laser-r.md`.
 
 **All ten pipeline components are ported** (`Susceptible`, `Exposed`,
 `Recovered`, `Infectious`, `Vaccinated`, `Census`, `HumanToHuman`,

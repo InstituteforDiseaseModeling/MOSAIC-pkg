@@ -110,28 +110,30 @@ Note that `psi_jt` arrives as a **precomputed matrix in the config**, produced u
 
 | Site | What it is | Disposition |
 |---|---|---|
-| `R/run_MOSAIC.R:452` | **the calibration hot path** — direct `import` + `run_model()`, bypassing `run_LASER()` | convert (A-4) |
+| `R/run_MOSAIC.R:452` | **the calibration hot path** — direct `import` + `run_model()`, bypassing `run_LASER()` | **done (A-4)** — now `run_LASER(config = params_sim, seed = seed_ij, quiet = TRUE)` |
 | `R/run_MOSAIC.R:1093` | `pkg_laser_cholera` in the environment snapshot | drop from provenance schema (C-2) |
 | `R/run_MOSAIC.R:1421` | orchestrator/worker version reconciliation | delete with the Dask path (C-1) |
-| `R/run_LASER.R:64` | the public bridge | convert (A-4) |
-| `R/calc_Reff.R:537` | Rₜ recomputation | convert (A-4) |
-| `R/calc_model_ensemble.R:660`, `:748` | posterior ensemble + medoid reruns | convert (A-4) |
+| `R/run_LASER.R:64` | the public bridge | **done (A-4)** — the file is deleted; `run_LASER()` *is* the engine and lives in `R/laser_engine.R` |
+| `R/calc_Reff.R:537` | Rₜ recomputation | **done (A-4)** — and its faithfulness-gate rationale rewritten, because the R engine *is* reproducible across cold processes |
+| `R/calc_model_ensemble.R:660`, `:748` | posterior ensemble + medoid reruns | **done (A-4)** — the engine call moved into `.mosaic_ensemble_sim_task()` at C-1, so A-4 swapped it in one place; `:660`'s worker preamble no longer preloads the module. `:748` was the *Dask* medoid dispatch and went with C-1 — the local medoid rerun goes through `calc_model_ensemble()` and so through the same task |
 | `R/prefit_rolling_cv_psi.R:275` | version probe | drop (C-2) |
-| `R/plot_model_ppc.R:183` | `inherits(model, "laser.cholera.metapop.model.Model")` class test | replace with a plain `is.list()` check (A-4) |
-| `R/make_mosaic_cluster.R:92` | per-worker import | drop the import, keep the function (C-2) |
+| `R/run_MOSAIC_helpers.R:1394` | `pkg_laser_cholera` in the resume compatibility check | drop with the provenance key (C-2) — **found by the A-4 sweep, not in the original inventory** |
+| `R/attach_mosaic_env.R:6` | docstring listing `laser.cholera` as a MOSAIC Python dependency | update (C-2) — **found by the A-4 sweep** |
+| `R/plot_model_ppc.R:183` | `inherits(model, "laser.cholera.metapop.model.Model")` class test | **done (A-4)** |
+| `R/make_mosaic_cluster.R:92` | per-worker import | **done — pulled forward from C-2 into A-4.** Once nothing resolves worker-side `lc`, leaving the import would make every calibration worker pay the 3.3 s import and hold the Python heap for a module no code calls. `library(reticulate)` and the NumPy warning filter went with it; the function itself stays |
 | `R/lock_python_env.R:127-141` | import-check | retarget to TensorFlow (C-2) |
 | `R/check_dependencies.R:97,118,134,199` | `core_packages` + messaging | retarget to TensorFlow (C-2) |
 | `R/zzz.R:134` | comment only | update (C-2) |
 | `inst/python/environment.yml:19` | the pinned wheel | remove (C-2) |
 | `tests/testthat/test-check-worker-versions.R` | whole file is worker version skew | delete (C-1) |
 | `tests/testthat/test-run_MOSAIC_resume.R:410-527` | `pkg_laser_cholera` in resume-compat fixtures | retarget to a surviving provenance key (C-2) |
-| `inst/examples/simulate_outbreak_settings.R`, `inst/examples/forecast_cv_experiment.R` | example scripts | update (A-4) |
+| `inst/examples/simulate_outbreak_settings.R`, `inst/examples/forecast_cv_experiment.R` | example scripts | **done (A-4)** — engine version probes and `py_to_r()` unwrapping removed |
 | `.github/workflows/R-CMD-check.yaml` | installs the wheel in CI | remove (C-2) |
 | `vm/HEDGEHOG.md`, `azure/*.md`, `.claude/skills/{run-mosaic,hedgehog-run,dugong-run,diagnose-fit}/SKILL.md`, `.claude/agents/swe.md`, `.claude/commands/swe.md`, `.claude/agent-memory/**` | docs, skills, agent memory | update or retire (C-2) |
 
 **Every row must be discharged, and each named in the commit message** — this is precisely CLAUDE.md lesson #11's "grep exhaustively, list every file in the commit message". Note that `R/run_MOSAIC.R:452` existing at all means `run_LASER()` is *not* a chokepoint today; part of A-4 is making it one, so there is exactly one engine entry point afterwards.
 
-There is **no `engine=` switch** — the whole point is that there is only one engine. During migration the R engine is reached via an internal `run_LASER_R()` and only becomes `run_LASER()` at Phase A-4 sign-off, so `main` is never broken mid-flight.
+There is **no `engine=` switch** — the whole point is that there is only one engine. During migration the R engine was reached via an internal `run_LASER_R()` and became `run_LASER()` at Phase A-4 sign-off, so `main` was never broken mid-flight. **A-4 is done:** `run_LASER()` is the R engine, `R/run_LASER.R` is deleted, and the five production call sites (`run_MOSAIC()`'s worker, `.mosaic_ensemble_sim_task()`, `calc_Reff()`, `run_rolling_cv()`, `run_fit_sandbox()`) all reach it and nothing else.
 
 #### Input contract
 
@@ -234,7 +236,7 @@ Two rounding sites need care because a 1-ULP difference there is *not* harmless:
 - NumPy's `np.round` and R's `round` both do round-half-to-even, so they agree — but `as.integer()` **truncates**. Every `np.round(x).astype(int32)` must become `as.integer(round(x))`, never `as.integer(x)`. ~10 sites: the σ split and reported-cases χ adjustment in `infectious.py`; dose allocation in `vaccinated.py`; `local = round((1-τ)·S)` in `humantohuman.py` / `envtohuman.py`.
 - The χ adjustment itself: `np.round(binomial(...) / chi_eff)`.
 
-### 4.6 Two stale references found while surveying — fix here
+### 4.6 Two stale references found while surveying — fix here (**done at A-4, and there were four**)
 
 Pre-existing bugs against the pinned v0.16.1, exactly the class CLAUDE.md lessons #11/#12 warn about:
 
@@ -242,6 +244,15 @@ Pre-existing bugs against the pinned v0.16.1, exactly the class CLAUDE.md lesson
 - **`expected_cases` no longer exists** in `RInterface`. Referenced at `R/calc_model_ensemble.R:41`, `R/plot_model_trajectories.R:80`, `inst/python/mosaic_dask_worker.py:131` (the last of which is deleted by workstream C anyway).
 
 Port target is v0.16.1 semantics; both get resolved, with every call site listed in the commit message.
+
+**Discharged at A-4, and the survey had undercounted.** `V1sus`/`V2sus`: the spatial-hazard check in `test-lasik_calculations.R` now passes zero matrices, which is not a shortcut — v0.16.1 applies φ₁ at dose time, so an unprotected vaccinee never leaves `S` and there is no waned-vaccinated susceptible sub-compartment left to count; `derivedvalues.py` reads `S` alone. `expected_cases`: removed from `calc_model_ensemble()`'s default trajectory channels and from `plot_model_trajectories()`'s panel spec (`R/calc_model_ensemble.R:41`, `R/plot_model_trajectories.R:80`); the Dask worker copy went with C-1.
+
+Two more surfaced the moment `test-lasik_calculations.R` actually ran, and neither was findable by grepping for a renamed field:
+
+- **The `pi_ij` comparison applied a `t()` that made it wrong.** The transposed comparison disagrees with `calc_diffusion_matrix_pi()` by up to 0.29; the untransposed one agrees to 4e-16. The code even carried a comment doubting itself (*"appears pi_ij in the model may have been transposed although it did not need to be"*). `pi_ij` is `[origin, destination]` in both the engine's return and the helper's output.
+- **The population check's 1% tolerance was never achievable by either engine.** The measured max proportional deviation against UN WPP is 2.23% for the R engine and 2.24% for the pinned Python oracle on the same config — engine demography (annual rates applied through per-tick stochastic draws vs. the UN population series), not a port artefact. Tolerance documented and set to 3%.
+
+The lesson is the one this plan keeps relearning: **a test that does not run asserts nothing, and its assertions rot.** This file had been inert on two independent counts (slow-tier gate plus a cwd-relative config path), and three of its thirteen assertions were wrong by the time anyone looked.
 
 ## 5. Out of scope — the environmental-suitability (ψ) model stays on keras3
 
@@ -505,6 +516,18 @@ Three things worth recording from the port itself:
 
 **Exit:** `run_LASER()` is the single engine entry point; whole-repo `rg -i "laser.cholera|laser_cholera"` returns only C-2's targets and the fixture-oracle allowlist.
 
+**Done.** Exit criteria met: the whole-repo sweep over `R/ tests/ man/ inst/` returns eleven remaining sites and every one is a C-2 row of the §4.2 table (`check_dependencies()`, `lock_python_env()`, `prefit_rolling_cv_psi()`'s version probe, `zzz.R`'s comment, `attach_mosaic_env()`'s docstring, the `pkg_laser_cholera` provenance key in `run_MOSAIC.R` + `run_MOSAIC_helpers.R` + the resume fixtures, and the two Python test helpers). Full suite **4,969 passing, 0 failures, 33 skips**; `R CMD check` on the built tarball at 3 WARNINGs / 3 NOTEs, byte-identical to the `claude/rcmdcheck5.log` baseline except that this run *ran the tests* (the baseline used `--no-tests`) and one fewer undocumented-object NOTE entry, `.mosaic_prepare_config_for_python` having been deleted. Log at `claude/rcmdcheck7.log`.
+
+Three things A-4 changed that the plan did not anticipate:
+
+1. **`run_fit_sandbox()` was already broken, and the test suite structurally could not see it.** It called its runner with `visualize`/`pdf`/`outdir` — which C-1 had made `run_LASER()` reject — but all six tests in the file stub `.laser_runner`, and the stubs accepted those arguments. This is CLAUDE.md lesson #12(iii) exactly: a fixture that mocks the engine false-passes when the real contract tightens. Fixed, plus a test asserting the sandbox only ever passes arguments that are formals of the real `run_LASER()`.
+2. **`test-lasik_calculations.R` is un-gated and now actually runs** (~2 s for the full 1,398-tick 40-patch simulation plus thirteen analytic cross-checks, against ~16 s and a Python requirement before). Three of its assertions were wrong — see §4.6.
+3. **One test deleted rather than converted.** *"log likelihood calculations match"* compared `calc_model_likelihood()` against the Python engine's own `model$log_likelihood`. That attribute belonged to laser-cholera's engine-side likelihood module, which was never ported — scoring has been R-only since C-1 — so the test had no second implementation left to compare against. Per lesson #14(iv) the question is whether it also asserted a property of the surviving path: it did not, and `calc_model_likelihood()` has eight dedicated test files, so nothing was re-homed.
+
+Three Python-runtime costs were removed alongside the call sites, all on the same argument — after the cutover they initialise Python in every worker to do nothing: `make_mosaic_cluster()`'s per-worker `laser.cholera` import and `library(reticulate)`, the calibration worker's every-100th-sim `reticulate::import("gc")$collect()`, and the same `gc` collect inside `.mosaic_ensemble_sim_task()` and `calc_Reff()`'s re-sim loop.
+
+Not done here, deliberately: the fixture freeze and generator move. The Tier B fixtures were already frozen in `tests/testthat/fixtures/` at A-2/A-3 and `ORACLE.md` already records the oracle commit SHA and wheel hash; the generator already lives in `claude/oracle/`.
+
 ### Phase C-2 — remove the LASER dependency (2–3 days)
 
 §6.2 in full. Only now do `environment.yml`, `check_dependencies()`, `lock_python_env()`, the CI wheel install, the `pkg_laser_cholera` provenance key, and the docs/skills/agent-memory references go.
@@ -559,7 +582,8 @@ The earlier draft left four open. All four are now decided, so none of them bloc
 | **A-2 the tick loop** | **done** — all seven remaining components ported. Tier B green on three fixtures: 60t x 40p, 60t x 1p, and the full 1398t x 40p anchor. **22/22 draw sites covered, 30,751 draws matched draw-for-draw, and all 19 integer result channels bit-identical over the full 1,398 ticks.** Float channels within a scale-aware 1e-5 |
 | **A-3 DerivedValues + results** | **done** — the port is complete: all ten components, all 28 channels. Tier B re-run on all three fixtures with `DerivedValues` in the pipeline, and the draw counts came back identical (1,315 and 30,751), confirming the component consumes no randomness. `spatial_hazard` needs its own 1e-3 tolerance, traced to `beta_jt_human`'s float32 cancellation rather than to anything in `derivedvalues.py`; `coupling` matches to 1.8e-8 and the two engines agree cell-for-cell on which patches are `NaN`. New `test-laser_results_contract.R` asserts the return contract against an ordinary (non-replayed) run |
 | **A-3a performance gate** | **pre-measured, and it contradicts this plan — see below.** The user's answer: proceed with the port regardless |
-| A-4, C-2, A-5 | pending |
+| **A-4 cutover** | **done** — `run_LASER()` is the R engine and the only engine entry point; five production call sites converted, `R/run_LASER.R` deleted, `.mosaic_prepare_config_for_python()` and `.mosaic_strip_laser_file_handler()` removed as orphans. Suite 4,969 / 0 failures; check at baseline. Uncovered a latent `run_fit_sandbox()` breakage and three wrong assertions in a test file that had never run |
+| C-2, A-5 | pending |
 
 ### A-3a, measured early: the performance premise was wrong
 
@@ -583,6 +607,6 @@ After that the profile is flat — the hottest single line is 6.9% — so there 
 
 **One inventory correction found while verifying C-1.** `calc_model_ensemble()` invoked the Python engine through a *closure* defined inside its own body, which imported `laser.cholera.metapop.model` directly rather than going through `run_LASER()` — a third engine call site, and the one the cutover table (§6) reaches via `R/calc_model_ensemble.R:660`. That closure is now the package-level `.mosaic_ensemble_sim_task()` in `R/calc_model_ensemble_task.R`, so A-4 swaps the engine there in one place instead of editing a closure that PSOCK also `clusterExport`s. The hoist was forced by a subtler problem: `precomputed_results=` was the seam four test files used to feed synthetic engine output in, and its only *production* callers were the Dask gather and the Dask medoid dispatch. Deleting the argument silently took 25 assertions with it — on weight/seed alignment, artifact masking and trajectory reduction, all properties of the *surviving* local path. Mocking the hoisted task restores every one of them and exercises strictly more production code than the argument did, because the task list, the dispatch and the gather now run for real. `tests/testthat/helper-ensemble-mock.R` holds the seam; `parity_tier2.rds` still matches bit-for-bit through it, which is the evidence that the hoist changed no arithmetic. Two dead fragments fell out of the same removal, in the shape lesson #14 describes: `.spill_traj()` (orphaned — its only caller was the removed branch) and the record-carried `param_seed` tier of the member-seed fallback, which existed only because a Dask worker held a config the master did not.
 
-**Next action: Phase A-4 — cutover.** The port is finished and proven; what remains is wiring. `run_LASER()` becomes the R engine and the only engine entry point, `run_MOSAIC.R`'s direct imports go through it, and `calc_model_ensemble()` swaps engines inside `.mosaic_ensemble_sim_task()`. Then C-2 removes the `laser-cholera` dependency and A-5 is the calibration acceptance run.
+**Next action: Phase C-2 — remove the `laser-cholera` dependency.** A-4 is done: the R engine is the engine. What is left is that the package still *declares* a dependency it no longer uses — `environment.yml`'s pinned wheel, `check_dependencies()`'s `core_packages`, `lock_python_env()`'s import check, `zzz.R`'s eager import comment, `attach_mosaic_env()`'s docstring, the `pkg_laser_cholera` provenance key (written by `run_MOSAIC.R`, read by the resume check in `run_MOSAIC_helpers.R:1394` and by the fixtures in `test-run_MOSAIC_resume.R:410-527`), the two Python test helpers, and the wheel install in CI. The provenance key is the only one with a design decision in it: dropping it changes the `environment.json` schema, so old run directories must still resume. Then A-5 is the calibration acceptance run.
 
 The performance gate (A-3a) fired and the user's answer was to proceed with the port regardless; the remaining A-3a measurements — the 1/10/40-patch scaling curve, sequential vs 20-worker throughput, peak RSS per worker, end-to-end batch time — are still owed, and the one that can force a code change is peak RSS, because a worker cap by measured memory rather than `detectCores()` would have to land before A-5.

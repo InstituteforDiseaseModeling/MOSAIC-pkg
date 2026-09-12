@@ -180,8 +180,11 @@ plot_model_ppc <- function(predictions_dir = NULL,
 
         if (verbose) message("=== Extracting data from model object (legacy mode) ===")
 
-        if (!inherits(model, "laser.cholera.metapop.model.Model") && !is.list(model)) {
-            stop("model must be a laser-cholera Model object or a list")
+        # Before the R engine this also accepted a reticulate handle to the
+        # Python Model object; run_LASER() now returns a plain list, so the
+        # class test is gone and `is.list()` is the whole contract.
+        if (!is.list(model)) {
+            stop("model must be a list with $params and $results, as returned by run_LASER()")
         }
 
         obs_cases   <- model$params$reported_cases

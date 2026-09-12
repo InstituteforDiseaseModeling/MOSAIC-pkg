@@ -5,7 +5,7 @@
 #
 # The whole experiment is defined by the SPEC block below: units (countries),
 # explicit cutoff dates, horizons, embargo, psi pooling. Re-running with the same
-# SPEC + package + laser version reproduces the experiment (psi is FROZEN to a
+# SPEC + package version reproduces the experiment (psi is FROZEN to a
 # cache so the stochastic LSTM fit is fixed once; see TWO-PHASE below).
 #
 # WHAT IT DOES (red-teamed dev plan: claude/plan_forecast_cv/PLAN.md)
@@ -305,8 +305,6 @@ if (PHASE %in% c("all", "score")) {
      manifest <- list(
           experiment = "forecast_cv (HINDCAST / conditional model skill, realized covariates -- NOT forecast skill)",
           created = as.character(Sys.time()), mosaic_version = as.character(utils::packageVersion("MOSAIC")),
-          laser_version = tryCatch(as.character(reticulate::py_to_r(reticulate::import("laser.cholera")$`__version__`)),
-                                   error = function(e) NA_character_),
           git_sha = tryCatch(system(paste("git -C", shQuote(file.path(root, "MOSAIC-pkg")), "rev-parse HEAD"), intern = TRUE),
                              error = function(e) NA_character_),
           spec = SPEC, config_window = c(as.character(cfg_start), as.character(cfg_stop)),

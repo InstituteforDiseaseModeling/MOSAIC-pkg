@@ -1,5 +1,14 @@
-# run_fit_sandbox is tested with a stubbed engine via .laser_runner so no Python /
-# laser-cholera is required. The stub returns a controllable deterministic result.
+# run_fit_sandbox is tested with a stubbed engine via .laser_runner, so these
+# tests exercise the sandbox's own logic without paying for a real simulation.
+# The stub returns a controllable deterministic result.
+#
+# The catch, and why the last test in this file exists: a stub is more
+# permissive than the real runner. This file's stubs used to take
+# `visualize`/`pdf`/`outdir` because run_fit_sandbox() passed them -- and when
+# those arguments were removed with the Python engine, run_LASER() started
+# raising on them while every test here kept passing, because the stubs still
+# accepted them. The production call was broken and invisible. So: assert the
+# call shape against the real runner's formals.
 
 make_test_config <- function() {
   d0 <- as.Date("2021-01-01"); d1 <- as.Date("2022-12-31")
@@ -18,7 +27,7 @@ make_test_config <- function() {
 }
 
 # Stub: predicted cases = beta-scaled seasonal curve; deaths ~ matched.
-stub_runner <- function(config, seed, quiet, visualize, pdf, outdir) {
+stub_runner <- function(config, seed, quiet, ...) {
   mult <- if (!is.null(config$beta_j0_hum)) config$beta_j0_hum / 3e-6 else 1
   seas <- config$.seas
   list(results = list(
@@ -81,7 +90,7 @@ test_that("scalar override of a per-location (vector) parameter broadcasts to fi
   cfg$reported_cases  <- matrix(rep(round(seas), each = 3), nrow = 3)
   cfg$reported_deaths <- matrix(rep(round(seas * 0.01), each = 3), nrow = 3)
   seen_len <- NULL
-  capture_runner <- function(config, seed, quiet, visualize, pdf, outdir) {
+  capture_runner <- function(config, seed, quiet) {
     seen_len <<- length(config$beta_j0_hum)
     nd <- length(seas)
     list(results = list(reported_cases  = matrix(rep(seas, each = 3), nrow = 3),
@@ -99,4 +108,22 @@ test_that("outdir writes predictions CSV and metrics JSON", {
   run_fit_sandbox(cfg, outdir = tmp, run_label = "lbl", .laser_runner = stub_runner)
   expect_true(file.exists(file.path(tmp, "lbl", "predictions_ensemble.csv")))
   expect_true(file.exists(file.path(tmp, "lbl", "metrics.json")))
+})
+
+test_that("the sandbox calls its runner with arguments run_LASER() accepts", {
+  cfg <- make_test_config()
+  seen <- NULL
+  arg_runner <- function(...) {
+    seen <<- names(list(...))
+    stub_runner(...)
+  }
+  run_fit_sandbox(cfg, .laser_runner = arg_runner)
+
+  expect_true(length(seen) > 0L)
+  expect_true(all(nzchar(seen)))            # every argument passed by name
+  expect_setequal(setdiff(seen, names(formals(run_LASER))), character(0))
+
+  # And the default runner really is run_LASER(), so the check above is about
+  # the function production uses rather than an unrelated signature.
+  expect_identical(formals(run_fit_sandbox)$.laser_runner, quote(run_LASER))
 })

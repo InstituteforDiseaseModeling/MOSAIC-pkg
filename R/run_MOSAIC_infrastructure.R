@@ -182,31 +182,6 @@
   invisible(success)
 }
 
-#' Remove laser-cholera's root-logger FileHandler
-#'
-#' laser-cholera/src/laser/cholera/metapop/logsetup.py adds a FileHandler to the
-#' Python root logger at import time, creating a timestamped .log file in cwd.
-#' This pollutes the working directory with empty log files.
-#' Call once after the first `import("laser.cholera.metapop.model")`.
-#' @noRd
-.mosaic_strip_laser_file_handler <- function() {
-  tryCatch({
-    reticulate::py_run_string("
-import logging as _logging, os as _os
-_root = _logging.getLogger()
-for _h in list(_root.handlers):
-    if isinstance(_h, _logging.FileHandler):
-        _fn = getattr(_h, 'baseFilename', None)
-        _h.close()
-        _root.removeHandler(_h)
-        # Remove the empty log file if it was created
-        if _fn and _os.path.isfile(_fn) and _os.path.getsize(_fn) == 0:
-            _os.remove(_fn)
-", local = FALSE, convert = FALSE)
-  }, error = function(e) NULL)
-  invisible(NULL)
-}
-
 #' Capture Full Environment Snapshot
 #'
 #' Records all version, system, and runtime information needed to reproduce

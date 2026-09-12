@@ -89,12 +89,13 @@ run_fit_sandbox <- function(config,
   }
 
   # ---- Run a single deterministic simulation -------------------------------
-  # Hermetic per-call scratch dir for any engine artifacts; cleaned up on exit.
-  scratch <- tempfile("fit_sandbox_")
-  dir.create(scratch, showWarnings = FALSE, recursive = TRUE)
-  on.exit(unlink(scratch, recursive = TRUE, force = TRUE), add = TRUE)
-  model <- .laser_runner(config = config, seed = seed, quiet = quiet,
-                         visualize = FALSE, pdf = FALSE, outdir = scratch)
+  # The engine writes no files of its own, so there is no scratch dir to make
+  # and no `visualize`/`pdf`/`outdir` to suppress: those were the Python
+  # Analyzer's arguments, and passing them now raises (deprecated_dask). Every
+  # argument here must be a formal of the default runner, run_LASER() --
+  # asserted by test-run_fit_sandbox.R, because the tests stub .laser_runner
+  # and a stub that swallows `...` cannot see a call the real runner rejects.
+  model <- .laser_runner(config = config, seed = seed, quiet = quiet)
 
   pred_cases_mat  <- .fit_as_matrix(model$results$reported_cases)
   pred_deaths_mat <- .fit_as_matrix(model$results$reported_deaths)
@@ -178,8 +179,9 @@ run_fit_sandbox <- function(config,
 
 # ---- Internal helpers ------------------------------------------------------
 
-# Coerce a run_LASER/config field (numpy array via reticulate, matrix, or vector)
-# to a numeric matrix with locations in rows.
+# Coerce a run_LASER/config field (matrix or vector) to a numeric matrix with
+# locations in rows. The engine always returns a matrix now, but config-supplied
+# observed series are still sometimes bare vectors.
 .fit_as_matrix <- function(x) {
   if (is.null(x)) stop("run_fit_sandbox: expected a results/observed field but got NULL.")
   if (is.null(dim(x)) || length(dim(x)) == 1L) return(matrix(as.numeric(x), nrow = 1L))
