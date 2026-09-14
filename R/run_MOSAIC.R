@@ -408,10 +408,6 @@
       }
     }
 
-    # Explicit garbage collection on last iteration to prevent Python object buildup
-    if (j == n_iterations) {
-      gc(verbose = FALSE)
-    }
   }
 
   # Collapse iterations if n_iterations > 1
@@ -451,12 +447,14 @@
     }
   }
 
-  # R GC every sim. The Python full GC that used to run every 100th sim went
-  # with the Python engine: there is no longer a reticulate finalizer queue or
-  # a NumPy heap to sweep here, and `reticulate::import("gc")` would initialise
-  # Python in every worker to collect nothing.
-  gc(verbose = FALSE)
-
+  # No per-simulation gc(). The Python full GC went with the Python engine --
+  # there is no reticulate finalizer queue or NumPy heap left to sweep -- and
+  # the R `gc()` that stayed behind was measured at 292 ms on a warm worker
+  # heap, 14.8% of the whole per-simulation worker budget across the two call
+  # sites that used to be here. A forced full collection also defeats R's
+  # generational collector. Removing it costs 44 MB of peak worker RSS
+  # (913 -> 957 MB over 30 sims), which does not move the worker-count budget.
+  # Measurements: v0.70.0 NEWS entry.
   return(file.exists(output_file))
 }
 

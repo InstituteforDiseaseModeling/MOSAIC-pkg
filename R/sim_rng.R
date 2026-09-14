@@ -79,8 +79,22 @@ sim_draws <- function(mode = c("rng", "replay"),
      # Per-site call counts, so a run can report which of the 22 draw sites it
      # actually exercised. A site with zero calls is untested code wearing a
      # passing test, which a short run hides.
-     ctl$coverage  <- stats::setNames(integer(length(.SIM_DRAW_SITES)),
-                                      .SIM_DRAW_SITES)
+     #
+     # A hashed environment, not a named integer vector. `coverage[site] <- n`
+     # on a named vector copies the whole 22-element vector AND its name
+     # attribute on every one of ~30,750 draws per run; that allocation churn
+     # measured 12% of engine runtime on its own. An environment binding is a
+     # hashed store with no copy. `sim_draw_coverage()` materialises the
+     # data frame once, at the end of the run.
+     ctl$coverage  <- new.env(hash = TRUE, parent = emptyenv())
+     for (.s in .SIM_DRAW_SITES) assign(.s, 0L, envir = ctl$coverage)
+     # Branch on mode ONCE here rather than ~30,750 times per run. In `"rng"`
+     # mode -- every production run -- the replay machinery in
+     # `.sim_consume()` is dead weight: the draw wrapper was measured at
+     # 3.2 microseconds of overhead per call against a 2.2 microsecond
+     # `rbinom()`, i.e. 20% of engine runtime, most of it the per-call closure
+     # allocation and the extra frame rather than the bookkeeping itself.
+     ctl$fast      <- identical(mode, "rng")
 
      if (mode == "replay") {
           if (is.null(record)) {
@@ -96,9 +110,16 @@ sim_draws <- function(mode = c("rng", "replay"),
 #' Stamp the current tick and phase onto a draw controller
 #'
 #' Called by the engine loop before each phase so that a replay mismatch can
-#' report where it happened. Cheap: two assignments per phase per tick.
+#' report where it happened. A no-op in \code{"rng"} mode -- see the body.
 #' @keywords internal
 .sim_at <- function(ctl, tick, phase) {
+     # Only replay reads these: they exist so a draw mismatch can name the tick
+     # and phase it happened in. Two environment writes x 10 phases x 1,398
+     # ticks is 8% of engine runtime, paid in production to populate fields
+     # nothing in production reads. Skipped on the fast path, which leaves
+     # `ctl$tick`/`ctl$phase` at NA in `"rng"` mode -- do not instrument
+     # against them without forcing `mode = "replay"`.
+     if (ctl$fast) return(invisible(NULL))
      ctl$tick  <- tick
      ctl$phase <- phase
      invisible(NULL)
@@ -113,10 +134,24 @@ sim_draws <- function(mode = c("rng", "replay"),
 #' @return Integer vector of length \code{npatches}.
 #' @keywords internal
 .sim_binom <- function(ctl, site, n, p) {
+     if (ctl$fast) {
+          # Production path. Coverage is still counted -- it is part of the
+          # engine's return contract and three tests read it off an ordinary
+          # run -- but everything else the replay path needs is skipped: no
+          # closure allocation, no `rep()` of a scalar `p` that `rbinom()`
+          # recycles for free, no `stats::` namespace resolution per call, and
+          # no second frame. Parity is exact: recycling happens inside the
+          # sampler, so a scalar `p` yields the same variates in the same
+          # order as a materialised length-npatch `p`.
+          cnt <- ctl$coverage[[site]]
+          if (is.null(cnt)) .sim_unknown_site(site)
+          ctl$coverage[[site]] <- cnt + 1L
+          return(as.integer(rbinom(length(n), n, p)))
+     }
      npatch <- length(n)
      if (length(p) == 1L) p <- rep(p, npatch)
      .sim_consume(ctl, site, "binomial", n, p,
-                  function() as.integer(stats::rbinom(npatch, n, p)))
+                  function() as.integer(rbinom(npatch, n, p)))
 }
 
 #' Draw Poisson counts
@@ -132,9 +167,24 @@ sim_draws <- function(mode = c("rng", "replay"),
 # `as.integer()` would give NA. Callers that feed an integer compartment coerce
 # at the point of use; the value is exactly integral either way below 2^53.
 .sim_pois <- function(ctl, site, lambda, npatches = length(lambda)) {
+     if (ctl$fast) {
+          # Note `npatches`, not `length(lambda)`: this function is called with
+          # a scalar `lambda` plus an explicit `npatches`, and using the
+          # argument's length would silently draw one variate instead of
+          # npatches. `rpois()` recycles a scalar rate, so parity is exact.
+          cnt <- ctl$coverage[[site]]
+          if (is.null(cnt)) .sim_unknown_site(site)
+          ctl$coverage[[site]] <- cnt + 1L
+          return(rpois(npatches, lambda))
+     }
      if (length(lambda) == 1L) lambda <- rep(lambda, npatches)
      .sim_consume(ctl, site, "poisson", NULL, lambda,
-                  function() stats::rpois(npatches, lambda))
+                  function() rpois(npatches, lambda))
+}
+
+.sim_unknown_site <- function(site) {
+     stop(sprintf("Unknown draw site '%s'. Add it to .SIM_DRAW_SITES.", site),
+          call. = FALSE)
 }
 
 # Shared body of the two draw sites: count coverage, then either draw or
@@ -142,11 +192,9 @@ sim_draws <- function(mode = c("rng", "replay"),
 # randomness at all and cannot advance the R generator.
 .sim_consume <- function(ctl, site, kind, n, param, draw_fn) {
 
-     if (is.na(ctl$coverage[site])) {
-          stop(sprintf("Unknown draw site '%s'. Add it to .SIM_DRAW_SITES.", site),
-               call. = FALSE)
-     }
-     ctl$coverage[site] <- ctl$coverage[site] + 1L
+     cnt <- ctl$coverage[[site]]
+     if (is.null(cnt)) .sim_unknown_site(site)
+     ctl$coverage[[site]] <- cnt + 1L
 
      if (ctl$mode == "rng") return(draw_fn())
 
@@ -313,8 +361,10 @@ sim_assert_replay_complete <- function(ctl) {
 #' @return Data frame of \code{site} and \code{n_calls}, all 22 sites present.
 #' @keywords internal
 sim_draw_coverage <- function(ctl) {
-     data.frame(site = names(ctl$coverage),
-                n_calls = as.integer(ctl$coverage),
+     data.frame(site = .SIM_DRAW_SITES,
+                n_calls = vapply(.SIM_DRAW_SITES,
+                                 function(s) ctl$coverage[[s]], integer(1L),
+                                 USE.NAMES = FALSE),
                 row.names = NULL, stringsAsFactors = FALSE)
 }
 

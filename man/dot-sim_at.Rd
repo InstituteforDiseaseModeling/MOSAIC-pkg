@@ -8,6 +8,6 @@
 }
 \description{
 Called by the engine loop before each phase so that a replay mismatch can
-report where it happened. Cheap: two assignments per phase per tick.
+report where it happened. A no-op in \code{"rng"} mode -- see the body.
 }
 \keyword{internal}

@@ -7,7 +7,9 @@
 make_mosaic_cluster(n_cores = parallel::detectCores() - 1L, type = "PSOCK")
 }
 \arguments{
-\item{n_cores}{Integer. Number of worker processes (default: \code{parallel::detectCores() - 1}).}
+\item{n_cores}{Integer. Number of worker processes (default:
+\code{parallel::detectCores() - 1}). Clamped down to the number of free R
+connections if that is smaller, with a message -- see Details.}
 
 \item{type}{Character. Cluster type: \code{"PSOCK"} (default, all platforms) or
 \code{"FORK"} (Linux/Mac only, faster startup).}
@@ -33,6 +35,14 @@ set to 1 in both the main process and each worker to prevent oversubscription.
 \item Libraries loaded on each worker: \code{MOSAIC}, \code{arrow}.
 \item Root directory propagated from the main process via \code{set_root_directory()}.
 }
+
+\strong{Connection cap.} Each worker holds one R connection. A default R
+build permits 128 connections in total, three of which are already taken by
+stdin, stdout and stderr, so requesting more than ~126 workers fails inside
+\code{parallel::makeCluster()}. \code{n_cores} is therefore clamped to
+\code{parallelly::freeConnections() - 2} (two held back for worker parquet
+I/O) and a message reports the clamp. R 4.4.0 and later accept
+\code{--max-connections=N} up to 4096 to raise the ceiling.
 
 The caller is responsible for stopping the cluster when done:
 \code{parallel::stopCluster(cl)}.

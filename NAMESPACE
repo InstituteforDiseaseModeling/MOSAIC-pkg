@@ -2,7 +2,11 @@ exportPattern("^[[:alpha:]]+")
 importFrom("grDevices", "dev.off", "png")
 importFrom("methods", "as")
 importFrom("stats", "ave", "df", "predict", "reorder", 
-           "rbeta", "rgamma", "rlnorm", "rnorm", "runif")
+           "rbeta", "rgamma", "rlnorm", "rnorm", "runif",
+           # The engine's two samplers. Imported rather than called as
+           # `stats::rbinom` because `::` is a function call, and these run
+           # ~30,750 times per simulation.
+           "rbinom", "rpois")
 importFrom("utils", "download.file", "head", "read.csv", "read.table",
            "setTxtProgressBar", "txtProgressBar", "write.csv")
 import(ggplot2)

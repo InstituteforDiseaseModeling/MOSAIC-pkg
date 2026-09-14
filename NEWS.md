@@ -1,3 +1,65 @@
+# MOSAIC 0.70.0
+
+## Engine and worker runtime: 1.15x on the engine, and the per-simulation `gc()` is gone
+
+The pure-R engine ran about 1.69x slower per simulation than the retired Python engine, a regression accepted knowingly at the port (v0.66.0) on memory and startup grounds and never investigated. This release investigates it. Every change here is **bit-identical**: verified across 5 configurations x 20 seeds against the pre-change engine, comparing the full `params` + 28 result channels + seed payload and the draw-coverage counter, with the Tier B replay fixtures and the results contract passing untouched.
+
+Measured on the default 40-location, 1,398-tick config by an **interleaved paired benchmark** — 8 blocks alternating between this version and a worktree of the previous commit, 4 runs each, so slow drift in machine load cancels instead of being attributed to whichever version happened to run during it:
+
+| | median | min | per-block speedup |
+|---|---|---|---|
+| before (v0.69.1) | 1.144 s | 1.060 s | — |
+| after | **0.994 s** | **0.909 s** | **1.156x** (range 1.07-1.23 over 8 blocks) |
+
+Interleaving is not a formality here. Sequential measurements of the same two versions returned speedups from 1.28x to 1.45x and, on one run, claimed the engine was *faster* with an assertion enabled than disabled. Any unpaired A/B on this class of machine drifts by more than the effect being measured, which is the same defect that made the A-3a scaling curve worth re-running. **Per-change attribution below is therefore reported as indicative only:** the individual figures come from sequential ablation and are inflated by the same drift, in the direction that favours whichever arm ran later. Only the 1.156x total is paired.
+
+Per-simulation worker time falls considerably further than 1.156x, because `n_iterations` defaults to 3 and the `gc()` removal below is per simulation rather than per run.
+
+### Where the time actually was
+
+The premise that motivated this work was wrong in an instructive way. The patch-scaling curve implies ~69% of runtime is fixed per-tick cost and ~31% scales with patch count, and that split holds up on a re-measured, nested-subset curve (intercept 0.758 s, slope 0.0088 s/patch, five points, linear-fit R^2 0.989). But the patch-scaling term was attributed to random variate generation, at an estimated ~325 ns per variate. Measured directly, R's samplers cost **54.5 ns** per variate and **67 ms** per run in total — about 5% of runtime, not 31%. A C harness calling `Rf_rbinom` with one `GetRNGstate()` for the whole loop puts the variate-only floor at **40 ms**.
+
+So variate generation was never the cost. Profiling by function rather than by line put 53% of self time in the phase bodies themselves and 11% in `<GC>`, and the three changes below came out of that.
+
+### 1. `sim_check_invariants()` was the largest single cost, and now costs ~1.7%
+
+The engine's only oracle-independent correctness check — compartments non-negative and NA-free, `N` equal to their sum, `Lambda`/`Psi`/`W` finite and non-negative — runs on every tick of every run (`config$check_invariants` defaults to `TRUE`). It was **20.6%** of engine runtime.
+
+Almost none of that was the checking. It was allocation churn: `Reduce(`+`, lapply(compartments, ...))` built a list of nine vectors plus eight intermediate sums per tick; `intersect(c("Lambda","Psi","W"), names(state))` rebuilt and matched against the whole state environment's name vector per tick to rediscover three names `sim_alloc_state()` always creates; and `anyNA(v)` + `any(v < 0L)` walked each compartment twice, allocating a logical vector each time.
+
+The rewrite keeps every assertion and every error message: one `min()` pass per compartment (an NA anywhere makes `min()` NA, so both checks fall out of one traversal that allocates nothing), an accumulation loop for the compartment sum, `min()`/`max()` for the finiteness checks, and a `NULL` skip for absent channels. `which()` is computed only on failure. The residual cost is now within measurement noise, so **the check stays on by default** — there was no speed-versus-safety trade to make.
+
+It had no direct tests, which is why a rewrite could have silently turned any of these assertions into a no-op with the whole suite still green. `tests/testthat/test-sim_check_invariants.R` now asserts each one *fires*, plus that the engine still calls it and that the default is `TRUE`.
+
+### 2. The draw wrapper
+
+Every stochastic draw passed through four layers. In `"rng"` mode — every production run — the replay machinery is dead weight, and it cost 3.2 microseconds per call against a 2.2 microsecond `rbinom()`: a closure allocated and discarded on each of ~30,750 draws, a `rep()` materialising a length-40 `p` that `rbinom()` recycles for free, a `stats::` namespace resolution per call, and two extra frames.
+
+`sim_draws()` now branches on mode once (`ctl$fast`) and `.sim_binom`/`.sim_pois` carry a thin production path. Parity is exact because recycling happens inside the sampler, so a scalar `p` yields the same variates in the same order as a materialised one.
+
+Coverage counting is **kept** — it is part of the engine's return contract and three tests read `attr(out, "sim_coverage")` off an ordinary run — but the counter moved from a named integer vector to a hashed environment. `coverage[site] <- n` on a named vector copies the whole vector and its name attribute on every draw; that alone was ~9% of runtime. The "unknown draw site" error still fires on the fast path.
+
+`.sim_at()` is now a no-op in `"rng"` mode. It stamps the tick and phase so a *replay* mismatch can say where it happened; nothing in production reads those fields, and two environment writes x 10 phases x 1,398 ticks was 8% of runtime. **Consequence for anyone instrumenting the engine:** `ctl$tick` and `ctl$phase` stay `NA` in `"rng"` mode. Force `mode = "replay"` if you need them.
+
+### 3. No per-simulation `gc()` in the calibration worker
+
+`.mosaic_run_simulation_worker()` called `gc(verbose = FALSE)` twice per simulation — once at the end, once inside the iteration loop at `j == n_iterations`, the latter still commented as preventing "Python object buildup". The Python full GC went with the Python engine in v0.66.0; there is no reticulate finalizer queue or NumPy heap left to sweep, and the rationale left at the same time the code did not.
+
+A forced full collection on a warm worker heap measured **292 ms**, so the pair was **14.8% of the entire per-simulation worker budget** — against 2.1% for `calc_model_likelihood()` and 0.1% for the parquet write. It also defeats R's generational collector. Both calls are removed.
+
+Peak worker RSS does rise, but not enough to matter: 913 MB with the `gc()` against **957 MB** without it, over 30 simulations of the default config, read from the kernel's `VmHWM`. That is 44 MB on a worker the A-3a gate already sized at 926 MB, so the worker-count budget in CLAUDE.md is unaffected.
+
+### What was measured and left alone
+
+- **Parameter matrix orientation.** `sim_params()` transposes the `_jt` matrices out of the patch-major orientation the config delivers and into one that needs a strided read on each of 15,378 row extracts per run. Real, and self-inflicted — but measured at 0.6 ms/run for a contiguous read and 5.2 ms/run for per-tick vector lists, i.e. 0.05% to 0.4%. Not worth the blast radius of flipping 11 call sites and every `_jt` consumer. Left as is.
+- **Worker time outside the engine.** The engine is **83%** of the per-simulation worker budget (3.285 s of 3.956 s at `n_iterations = 3`). Likelihood is 2.1%, the parquet write 0.1%. Sharding the one-row-per-simulation parquet files would not measurably help the worker; its real cost is on the load-and-combine side.
+
+## `make_mosaic_cluster()` is capped by available connections
+
+`n_cores` defaulted to `parallel::detectCores() - 1L` with no cap. Every PSOCK worker holds one R connection and a default R build permits 128 in total, three already taken by stdin/stdout/stderr, so on any host with more than ~126 usable cores `parallel::makeCluster()` failed outright. This is not hypothetical: **dugong has 176 cores.**
+
+`n_cores` is now clamped to `parallelly::freeConnections() - 2` (two held back for worker parquet I/O) with a message naming the clamp and R 4.4.0's `--max-connections=N`. New dependency: `parallelly` (Imports).
+
 # MOSAIC 0.69.1
 
 ## Bug fix: `weighted_quantiles()` biased every weighted quantile downward

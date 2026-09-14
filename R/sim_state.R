@@ -103,35 +103,61 @@ sim_check_invariants <- function(state, tick, compartments) {
 
      row <- tick + 1L
 
+     # NA and negativity share a single `min()` traversal: an NA anywhere makes
+     # `min()` NA, so both checks fall out of one pass that allocates nothing.
+     # `which()` is paid only on failure. The previous `anyNA(v)` +
+     # `any(v < 0L)` pair walked the vector twice and allocated a logical
+     # vector per compartment per tick.
      for (nm in compartments) {
           v <- state[[nm]][[row]]
-          if (anyNA(v)) {
+          mn <- min(v)
+          if (is.na(mn)) {
                stop(sprintf("Tick %d: %s contains NA at patch(es) %s.",
                             tick, nm, .sim_fmt(which(is.na(v)))), call. = FALSE)
           }
-          if (any(v < 0L)) {
+          if (mn < 0L) {
                stop(sprintf("Tick %d: %s is negative at patch(es) %s.",
                             tick, nm, .sim_fmt(which(v < 0L))), call. = FALSE)
           }
      }
 
-     expected <- Reduce(`+`, lapply(compartments, function(nm) state[[nm]][[row]]))
-     actual <- state$N[[row]]
-     bad <- which(actual != expected)
-     if (length(bad)) {
-          stop(sprintf("Tick %d: N does not equal the sum of %s at patch(es) %s (N %s vs sum %s).",
-                       tick, paste(compartments, collapse = "+"),
-                       .sim_fmt(bad), .sim_fmt(actual[bad]),
-                       .sim_fmt(expected[bad])), call. = FALSE)
+     # N == sum(compartments), accumulated in a loop. The previous
+     # `Reduce(`+`, lapply(compartments, ...))` allocated a list of one vector
+     # per compartment plus an intermediate sum per step, on every tick, and
+     # that allocation churn -- not the arithmetic -- is what made this
+     # assertion cost 20% of engine runtime.
+     if (length(compartments)) {
+          expected <- state[[compartments[1L]]][[row]]
+          for (k in seq_along(compartments)[-1L]) {
+               expected <- expected + state[[compartments[k]]][[row]]
+          }
+          actual <- state$N[[row]]
+          bad <- which(actual != expected)
+          if (length(bad)) {
+               stop(sprintf("Tick %d: N does not equal the sum of %s at patch(es) %s (N %s vs sum %s).",
+                            tick, paste(compartments, collapse = "+"),
+                            .sim_fmt(bad), .sim_fmt(actual[bad]),
+                            .sim_fmt(expected[bad])), call. = FALSE)
+          }
      }
 
-     for (nm in intersect(c("Lambda", "Psi", "W"), names(state))) {
-          v <- state[[nm]][[row]]
-          if (any(!is.finite(v))) {
+     # Continuous channels: finite and non-negative. `min()`/`max()` rather
+     # than `any(!is.finite(v))`, which allocated two logical vectors per
+     # channel per tick; NA, NaN and +/-Inf all make one of the two extrema
+     # non-finite, so nothing is missed. The channel list is iterated with a
+     # NULL skip instead of `intersect(..., names(state))`, which built and
+     # matched against the whole environment's name vector every tick to
+     # rediscover three names that `sim_alloc_state()` always creates.
+     for (nm in c("Lambda", "Psi", "W")) {
+          ch <- state[[nm]]
+          if (is.null(ch)) next
+          v <- ch[[row]]
+          mn <- min(v)
+          if (!is.finite(mn) || !is.finite(max(v))) {
                stop(sprintf("Tick %d: %s is not finite at patch(es) %s.",
                             tick, nm, .sim_fmt(which(!is.finite(v)))), call. = FALSE)
           }
-          if (any(v < 0)) {
+          if (mn < 0) {
                stop(sprintf("Tick %d: %s is negative at patch(es) %s.",
                             tick, nm, .sim_fmt(which(v < 0))), call. = FALSE)
           }

@@ -201,3 +201,92 @@ test_that("sigma_split is not a draw site (it is np.round, not a PRNG call)", {
   expect_false("infectious/sigma_split" %in% MOSAIC:::.SIM_DRAW_SITES)
   expect_true("infectious/reported_deaths" %in% MOSAIC:::.SIM_DRAW_SITES)
 })
+
+# -----------------------------------------------------------------------------
+# The fast draw path (v0.70.0)
+#
+# `sim_draws()` now branches on mode once and `.sim_binom`/`.sim_pois` carry a
+# thin production path that skips the replay machinery. These tests pin the
+# things that path could plausibly break, because none of them would show up as
+# a parity failure against the replay fixtures -- those exercise the SLOW path.
+# -----------------------------------------------------------------------------
+
+test_that("the fast path is taken in rng mode and not in replay mode", {
+  expect_true(MOSAIC:::sim_draws(mode = "rng", seed = 1L)$fast)
+  rec <- sim_read_fixture(test_path("fixtures", "replay_single_location.rds"))
+  expect_false(MOSAIC:::sim_draws(mode = "replay", record = rec)$fast)
+})
+
+test_that(".sim_pois honours `npatches` when lambda is scalar", {
+  # The bug this guards: reading the draw count off `length(lambda)` instead of
+  # the `npatches` argument silently returns ONE variate where the engine
+  # expects npatches, which would corrupt every patch but the first.
+  ctl <- MOSAIC:::sim_draws(mode = "rng", seed = 1L)
+  out <- MOSAIC:::.sim_pois(ctl, "environmental/decay", 5, npatches = 7L)
+  expect_length(out, 7L)
+})
+
+test_that(".sim_pois does not coerce, so a huge lambda survives", {
+  # The environmental shedding rate is `zeta_1 * Isym` with zeta_1 of order
+  # 1e8, so lambda reaches ~1e12 and an `as.integer()` anywhere on this path
+  # returns NA. This is also the difference that made R admissible where
+  # NumPy's int64 Poisson raised ValueError on 2.6% of prior draws (v0.69.0).
+  ctl <- MOSAIC:::sim_draws(mode = "rng", seed = 1L)
+  out <- MOSAIC:::.sim_pois(ctl, "environmental/shedding_sym", 1e12, npatches = 4L)
+  expect_length(out, 4L)
+  expect_true(all(is.finite(out)))
+  expect_false(anyNA(out))
+  expect_gt(min(out), 1e11)
+})
+
+test_that(".sim_binom recycles a scalar p exactly as a materialised one does", {
+  # This identity is what makes dropping the `rep()` on the fast path
+  # parity-preserving; recycling happens inside the sampler.
+  n <- as.integer(rep(500L, 6L))
+  a <- withr::with_seed(42L, stats::rbinom(6L, n, 0.03))
+  b <- withr::with_seed(42L, stats::rbinom(6L, n, rep(0.03, 6L)))
+  expect_identical(a, b)
+})
+
+test_that("an unknown draw site still errors on the fast path", {
+  ctl <- MOSAIC:::sim_draws(mode = "rng", seed = 1L)
+  expect_error(MOSAIC:::.sim_binom(ctl, "no/such/site", 10L, 0.1),
+               "Unknown draw site")
+  expect_error(MOSAIC:::.sim_pois(ctl, "no/such/site", 1, npatches = 2L),
+               "Unknown draw site")
+})
+
+test_that("coverage is still counted on the fast path, and only for sites drawn", {
+  ctl <- MOSAIC:::sim_draws(mode = "rng", seed = 1L)
+  invisible(MOSAIC:::.sim_binom(ctl, "susceptible/births", as.integer(rep(10L, 3L)), 0.1))
+  invisible(MOSAIC:::.sim_binom(ctl, "susceptible/births", as.integer(rep(10L, 3L)), 0.1))
+  cov <- MOSAIC:::sim_draw_coverage(ctl)
+  expect_identical(nrow(cov), length(MOSAIC:::.SIM_DRAW_SITES))
+  expect_identical(cov$site, MOSAIC:::.SIM_DRAW_SITES)
+  expect_identical(cov$n_calls[cov$site == "susceptible/births"], 2L)
+  expect_identical(sum(cov$n_calls), 2L)
+})
+
+test_that("a full run still reports coverage over every site", {
+  out <- run_once(3L)
+  cov <- attr(out, "sim_coverage")
+  expect_identical(cov$site, MOSAIC:::.SIM_DRAW_SITES)
+  expect_type(cov$n_calls, "integer")
+  expect_gt(sum(cov$n_calls), 0L)
+})
+
+test_that("tick/phase stamping is skipped in rng mode and kept in replay mode", {
+  # `.sim_at()` exists only so a replay mismatch can name where it happened, so
+  # it is a no-op in production. Anything instrumenting `ctl$tick` must force
+  # replay mode.
+  ctl_fast <- MOSAIC:::sim_draws(mode = "rng", seed = 1L)
+  MOSAIC:::.sim_at(ctl_fast, 11L, "Susceptible")
+  expect_true(is.na(ctl_fast$tick))
+  expect_true(is.na(ctl_fast$phase))
+
+  rec <- sim_read_fixture(test_path("fixtures", "replay_single_location.rds"))
+  ctl_slow <- MOSAIC:::sim_draws(mode = "replay", record = rec)
+  MOSAIC:::.sim_at(ctl_slow, 11L, "Susceptible")
+  expect_identical(ctl_slow$tick, 11L)
+  expect_identical(ctl_slow$phase, "Susceptible")
+})
