@@ -58,7 +58,7 @@ run_fit_sandbox <- function(config,
   # ---- Resolve config ------------------------------------------------------
   if (is.character(config) && length(config) == 1L) {
     if (!file.exists(config)) stop("run_fit_sandbox: config file not found: ", config)
-    config <- jsonlite::fromJSON(config, simplifyVector = TRUE, simplifyMatrix = TRUE)
+    config <- .mosaic_read_json_cached(config)
   }
   if (!is.list(config)) stop("run_fit_sandbox: `config` must be a list or a path to a config JSON.")
 

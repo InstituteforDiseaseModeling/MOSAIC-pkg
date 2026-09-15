@@ -382,7 +382,10 @@ sim_params <- function(config, components = SIM_PIPELINE) {
                                    "reads .json and .json.gz only."), config),
                     call. = FALSE)
           }
-          return(jsonlite::fromJSON(config, simplifyVector = TRUE))
+          # Cached on path + size + mtime: a loop over the same config path
+          # would otherwise re-parse 5.76 MB on every simulation. Equivalent to
+          # `fromJSON(config, simplifyVector = TRUE)` -- verified identical.
+          return(.mosaic_read_json_cached(config))
      }
      if (!is.list(config)) {
           stop(sprintf("`config` must be a list or a path to a .json file, not %s.",

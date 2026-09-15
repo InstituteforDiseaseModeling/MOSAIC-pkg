@@ -721,7 +721,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' @noRd
 .rcv_simulate_config <- function(config_path, template, n_reps) {
      if (!file.exists(config_path)) return(NULL)
-     cfg       <- jsonlite::fromJSON(config_path, simplifyVector = TRUE, simplifyMatrix = TRUE)
+     cfg       <- .mosaic_read_json_cached(config_path)
      sim_dates <- seq.Date(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")
      edates    <- seq(as.Date(template$date_start), as.Date(template$date_stop),
                       length.out = template$n_time_points)

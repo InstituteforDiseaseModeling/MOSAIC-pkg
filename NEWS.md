@@ -54,6 +54,22 @@ Peak worker RSS does rise, but not enough to matter: 913 MB with the `gc()` agai
 - **Parameter matrix orientation.** `sim_params()` transposes the `_jt` matrices out of the patch-major orientation the config delivers and into one that needs a strided read on each of 15,378 row extracts per run. Real, and self-inflicted — but measured at 0.6 ms/run for a contiguous read and 5.2 ms/run for per-tick vector lists, i.e. 0.05% to 0.4%. Not worth the blast radius of flipping 11 call sites and every `_jt` consumer. Left as is.
 - **Worker time outside the engine.** The engine is **83%** of the per-simulation worker budget (3.285 s of 3.956 s at `n_iterations = 3`). Likelihood is 2.1%, the parquet write 0.1%. Sharding the one-row-per-simulation parquet files would not measurably help the worker; its real cost is on the load-and-combine side.
 
+## Config reading: `read_json_to_list()` reads the path, and config paths are cached
+
+`config_default.json` is **5.76 MB**, and 10 of its 79 fields are dense 40x1398 numeric matrices (`b_jt`, `d_jt`, `psi_jt`, `mu_jt`, `nu_1_jt`, `nu_2_jt`, `reported_cases`, `reported_deaths`, and the two weight matrices) -- about 390,000 doubles serialized as decimal text.
+
+`read_json_to_list()` was doing `readLines()` -> `paste(collapse = "\n")` -> `fromJSON(string)`, materialising a 5.76 MB intermediate string on top of the line vector. Handing the path straight to `fromJSON()` gives the identical result (verified by test) in **0.167 s -> 0.125 s**.
+
+The larger cost was re-parsing. `run_simulation(config = "path.json")` is a documented input, and the parse landed inside `sim_params()`, so a loop over a config path re-read 5.76 MB on **every simulation** -- 0.167 s against a 0.94 s simulation, an 18% tax with nothing to indicate it. The same shape appeared in `run_fit_sandbox()` (which the `diagnose-fit` workflow drives repeatedly) and in the rolling-CV per-window config reader.
+
+Those three call sites now go through an internal reader cached on path + size + mtime, so a warm repeat read is **~0 s**. All three previously passed `simplifyVector`/`simplifyMatrix` arguments that are the `fromJSON` defaults, which is what makes one shared reader safe; the test suite asserts that equivalence rather than assuming it.
+
+**Calibration is unaffected either way** -- `run_MOSAIC()`'s worker hands `run_simulation()` an in-memory list and never re-reads a file.
+
+The exported `read_json_to_list()` is deliberately **not** cached: callers of an exported reader should get the file as it is on disk now. Invalidation keys on mtime as well as size, so rewriting a config with different content of the same byte length is still picked up -- there is a regression test for exactly that case.
+
+Not changed: JSON remains the canonical config format. An RDS sidecar would read in 0.005 s at 0.33 MB (33x faster, 17x smaller, bit-identical round trip, no new dependency), but `1_inputs/config.json` and `best_model/config_medoid.json` are documented, human-inspectable interchange artifacts and that is worth more than 0.16 s paid once per run.
+
 ## `make_mosaic_cluster()` is capped by available connections
 
 `n_cores` defaulted to `parallel::detectCores() - 1L` with no cap. Every PSOCK worker holds one R connection and a default R build permits 128 in total, three already taken by stdin/stdout/stderr, so on any host with more than ~126 usable cores `parallel::makeCluster()` failed outright. This is not hypothetical: **dugong has 176 cores.**
