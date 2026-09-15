@@ -35,7 +35,10 @@
 #' \code{--max-connections=N} up to 4096 to raise the ceiling.
 #'
 #' The caller is responsible for stopping the cluster when done:
-#' \code{parallel::stopCluster(cl)}.
+#' \code{parallel::stopCluster(cl)}. The returned object also carries a
+#' \code{"mosaic_worker_pids"} attribute recorded at creation, which
+#' \code{run_MOSAIC()} uses to reap any worker that survives
+#' \code{stopCluster()} -- see \code{?.mosaic_stop_cluster}.
 #'
 #' @examples
 #' \dontrun{
@@ -117,6 +120,12 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
 
     NULL
   })
+
+  # Record the worker PIDs now, while every worker is known to be idle. They
+  # cannot be obtained later in the one case that needs them -- a wedged worker
+  # would make the query queue behind the task that wedged it -- so
+  # .mosaic_stop_cluster() reads them from here. See ?.mosaic_stop_cluster.
+  attr(cl, "mosaic_worker_pids") <- .mosaic_cluster_worker_pids(cl)
 
   message(sprintf("Cluster ready (%d workers)", n_cores))
   cl

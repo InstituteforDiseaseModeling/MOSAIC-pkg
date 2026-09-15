@@ -45,7 +45,10 @@ I/O) and a message reports the clamp. R 4.4.0 and later accept
 \code{--max-connections=N} up to 4096 to raise the ceiling.
 
 The caller is responsible for stopping the cluster when done:
-\code{parallel::stopCluster(cl)}.
+\code{parallel::stopCluster(cl)}. The returned object also carries a
+\code{"mosaic_worker_pids"} attribute recorded at creation, which
+\code{run_MOSAIC()} uses to reap any worker that survives
+\code{stopCluster()} -- see \code{?.mosaic_stop_cluster}.
 }
 \examples{
 \dontrun{

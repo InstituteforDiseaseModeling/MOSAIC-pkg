@@ -117,7 +117,10 @@
                                   n_workers, tf_intra))
      retpy <- Sys.getenv("RETICULATE_PYTHON")
      cl <- parallel::makeCluster(n_workers, type = "PSOCK")
-     on.exit(parallel::stopCluster(cl), add = TRUE)
+     # See ?.mosaic_stop_cluster: a stalled seed fit would otherwise leave a
+     # worker holding this process's stdout after stopCluster() returns.
+     .worker_pids <- .mosaic_cluster_worker_pids(cl)
+     on.exit(.mosaic_stop_cluster(cl, .worker_pids), add = TRUE)
      parallel::clusterExport(cl, c("retpy", "tf_intra"), envir = environment())
      parallel::clusterEvalQ(cl, {
           if (nzchar(retpy)) Sys.setenv(RETICULATE_PYTHON = retpy)

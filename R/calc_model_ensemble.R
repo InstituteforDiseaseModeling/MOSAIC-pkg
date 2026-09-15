@@ -601,7 +601,10 @@ calc_model_ensemble <- function(config,
     MOSAIC:::.mosaic_set_all_thread_env(1L)
 
     cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
-    on.exit(parallel::stopCluster(cl), add = TRUE)
+    # Reap workers that outlive the shutdown request -- a leaked worker holds
+    # this process's stdout open. See ?.mosaic_stop_cluster.
+    .worker_pids <- .mosaic_cluster_worker_pids(cl)
+    on.exit(.mosaic_stop_cluster(cl, .worker_pids), add = TRUE)
 
     # Workers load the same MOSAIC build as this parent (no hardcoded path).
     .parent_libs <- .libPaths()

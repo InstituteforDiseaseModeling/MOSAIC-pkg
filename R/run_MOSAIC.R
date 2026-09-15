@@ -1088,7 +1088,11 @@ run_MOSAIC <- function(config,
     on.exit({
       if (owns_cluster && !is.null(cl)) {
         try({
-          parallel::stopCluster(cl)
+          # Not stopCluster(): a worker that is not reading its socket (an
+          # interrupted run, a task that stalled) survives the shutdown
+          # request and then holds this process's stdout open, so a finished
+          # run looks hung. See ?.mosaic_stop_cluster.
+          .mosaic_stop_cluster(cl)
           log_msg("Cluster stopped successfully")
         }, silent = TRUE)
       }
@@ -1389,9 +1393,23 @@ run_MOSAIC <- function(config,
 
   # Stop R cluster only if we created it (not if caller provided it)
   if (exists("owns_cluster") && owns_cluster && !is.null(cl)) {
-    parallel::stopCluster(cl)
+    .mosaic_stop_cluster(cl)
     cl <- NULL
   }
+
+  # Parallelism for the POST-calibration ensembles (posterior + medoid).
+  #
+  # These cannot reuse `cl` -- it has just been stopped, and a caller-provided
+  # cluster is the caller's to manage -- so calc_model_ensemble() builds its
+  # own. But the decision of WHETHER to go parallel must not be read from
+  # `control$parallel$enable` alone: a caller who supplies `cluster = cl` has
+  # demonstrably got workers and may well have left `enable` at its default,
+  # in which case the calibration ran on 100+ cores and the ensembles then ran
+  # one simulation at a time. Treat a supplied cluster as consent to
+  # parallelise, and size the ensemble cluster to it.
+  ens_parallel <- isTRUE(control$parallel$enable) || !is.null(cluster)
+  ens_n_cores  <- if (!is.null(cluster) && length(cluster) > 1L) length(cluster)
+                  else control$parallel$n_cores
 
   # ===========================================================================
   # COMBINE RESULTS AND ADD FLAGS
@@ -1967,8 +1985,8 @@ run_MOSAIC <- function(config,
         sampling_args            = sampling_args,
         score_idx_cases          = control$likelihood$.score_window_resolved$idx_cases,
         score_idx_deaths         = control$likelihood$.score_window_resolved$idx_deaths,
-        parallel                 = control$parallel$enable,
-        n_cores                  = control$parallel$n_cores,
+        parallel                 = ens_parallel,
+        n_cores                  = ens_n_cores,
         root_dir                 = root_dir,
         capture_trajectories     = .traj_enabled,
         trajectory_channels      = .traj_channels,
@@ -2458,8 +2476,7 @@ run_MOSAIC <- function(config,
       # (central_method, median by default), consistent with the posterior ensemble.
       log_msg("Building medoid model stochastic ensemble (%d reruns, source=%s)...",
               n_best_stochastic_per,
-              if (isTRUE(control$parallel$enable)) "local-parallel"
-              else "local-sequential")
+              if (ens_parallel) "local-parallel" else "local-sequential")
       medoid_ensemble <- tryCatch(
         calc_model_ensemble(
           config                   = config_medoid,
@@ -2468,8 +2485,8 @@ run_MOSAIC <- function(config,
           envelope_quantiles       = c(0.025, 0.975),
           score_idx_cases          = control$likelihood$.score_window_resolved$idx_cases,
           score_idx_deaths         = control$likelihood$.score_window_resolved$idx_deaths,
-          parallel                 = isTRUE(control$parallel$enable),
-          n_cores                  = control$parallel$n_cores,
+          parallel                 = ens_parallel,
+          n_cores                  = ens_n_cores,
           root_dir                 = root_dir,
           capture_trajectories     = FALSE,  # PLAN 14.H B-MEDOID: a median over
           # ~100 identically-weighted reruns is meaningless and nothing consumes a

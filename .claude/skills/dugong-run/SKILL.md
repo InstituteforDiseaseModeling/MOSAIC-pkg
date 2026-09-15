@@ -71,18 +71,20 @@ the bug, so use the wrapper anyway. Recreate it with `claude/dugong_setup/make_w
 
 ## 2. Execution model — local PSOCK only
 Simulations AND post-processing run on dugong's local cores; nothing leaves the VM.
-`control$parallel$n_cores` IS the sim parallelism — 1.5 TiB RAM at ~2 GB/worker means you can run
-very wide (170+ of 176 cores is comfortable).
+`control$parallel$n_cores` IS the sim parallelism — 1.5 TiB RAM at **~1.0 GB/worker** (v0.71.0
+measurement: VmHWM 992 MB, flat from 1 to 19 workers) means you can run very wide (170+ of 176
+cores is comfortable). Memory is not what caps worker count; R's 128-connection limit is, and
+`make_mosaic_cluster()` clamps to it.
 
 The Coiled hybrid backend has been **removed** from the package, along with the worker image and its CI (v0.68.0). It was already scientifically
 invalid (issue #113: the worker image lagged laser-cholera, so runs completed but gave low
 R²/unconverged results), and the pure-R engine migration removes the reason it existed. `dask_spec`,
 `check_coiled_workspace()` and `mosaic_dask_presets()` now raise an error rather than being ignored.
 
-**This skill is on notice.** The ~2 GB/worker figure above is the *Python* engine's footprint; the R
-engine's live state is order tens of MB. Once real throughput and per-worker RSS are measured
-(migrate-laser-r.md phase A-3a), a 176-core VM may no longer be needed for calibration. Keep it for
-wide sweeps and psi/LSTM training until those numbers exist.
+**This skill is on notice.** Per-worker RSS has now been measured (~1.0 GB at v0.71.0, above; the
+old ~2 GB figure was the *Python* engine) and the R engine is ~2.4x faster than its first port, so a
+176-core VM may no longer be needed for calibration. What is still unmeasured is end-to-end
+calibration throughput on dugong itself. Keep the VM for wide sweeps and psi/LSTM training.
 
 ## 3. Stage and launch (run MUST survive SSH disconnect)
 1. Stage the script: `scp my_run.R dugong:~/`.

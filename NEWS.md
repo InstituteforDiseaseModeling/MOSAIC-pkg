@@ -1,3 +1,34 @@
+# MOSAIC 0.71.1
+
+## Leaked PSOCK workers are now reaped in production, not just in tests
+
+v0.71.0 fixed this for the test suite only, and said so. The production path had the same defect: `parallel::stopCluster()` shuts a worker down by writing to its socket, so a worker that is not *reading* that socket — an interrupted run, a task stalled inside `run_simulation()` and abandoned by the gather — survives its own cluster. It then holds the parent's stdout open, so a **finished** `run_MOSAIC()` looks like it is hanging: no output from `tail`, no R master in the process table. It also holds ~1 GB of RSS and one of R's 128 connection slots, which is enough to make a later cluster creation in the same session fail.
+
+New internal `.mosaic_stop_cluster()` (`R/cluster_teardown.R`) calls `stopCluster()` and then SIGKILLs any recorded worker PID whose `/proc/<pid>/cmdline` still contains `RSOCK`. Wired into all four production teardown sites: both in `run_MOSAIC()` (the `on.exit` handler and the explicit post-calibration stop), `calc_model_ensemble()`, and `ensemble_suitability()`. `make_mosaic_cluster()` records the worker PIDs on the cluster object as the `"mosaic_worker_pids"` attribute **at creation**, because they cannot be asked for at teardown time in the one case that needs them — `clusterEvalQ(cl, Sys.getpid())` would queue behind the very task that is stuck. For a cluster built elsewhere it falls back to querying, which is never worse than the old behaviour. Linux-only and `RSOCK`-gated by design; elsewhere, and for `FORK` workers, it degrades to plain `stopCluster()`.
+
+`tests/testthat/helper-cluster.R` is now a set of thin wrappers over the package functions rather than a second copy of the logic, so `test-cluster_teardown.R` (which is the only thing that can catch this becoming a no-op — it did once, see lesson 18) now tests the production code.
+
+## Post-calibration ensembles honour a caller-supplied cluster
+
+`run_MOSAIC(cluster = cl)` ran the calibration on the supplied workers and then ran both post-calibration ensembles **serially**, because `calc_model_ensemble(parallel = )` was read from `control$parallel$enable` alone — a key a caller who has already handed over a cluster has no reason to have set. The dugong recipe does set it, so production was unaffected, but the inconsistency is real. A supplied cluster is now treated as consent to parallelise and sizes the ensemble cluster (`ens_parallel` / `ens_n_cores`). The ensembles still build their own cluster: `cl` has just been stopped, and a caller-provided one is the caller's to manage.
+
+## R is now faster than the Python engine it replaced (measured)
+
+`migrate-laser-r.md` recorded R as 1.69x **slower** than laser-cholera and left the figure flagged as un-repriced after the v0.71.0 win. It has now been measured in the same interleaved paired harness as the rest of this work (6 blocks x 3 reps, both engines reading the same `config_default.json`, both thread-pinned, numba warm-up untimed):
+
+| arm | min (s) | mean (s) | R faster by, per block |
+|---|---|---|---|
+| `py_full` | 0.6765 | 0.7107 | — |
+| `r071_json` (`config = <path>`) | 0.5810 | 0.7233 | 1.15-1.23x |
+| `r071_rda` (`config = <list>`) | 0.4000 | 0.5488 | 1.65-1.72x |
+
+So the migration's headline cost has gone to zero and turned slightly positive. Two things worth carrying forward: the within-arm spread across blocks exceeds the between-arm gap, which is why these are quoted per-block and paired; and the two R arms differ by ~0.18 s of cold config parsing against Python's 0.066 s setup, making **config parsing, not the tick loop, the largest remaining single cost on the cold path**. Recorded as "Addendum 2" in `migrate-laser-r.md`, which also marks the old 1.69x decision paragraph as superseded.
+
+## Documentation
+
+- `perf-next-steps.md` (new) records the two deliberately deferred items — the C++ engine plus the two-engine architecture question, and the step-2 sampling-efficiency findings (objective noise before draw count; the ΔAIC-4 truncation question) — with the reasoning for each and the sequencing if they are picked up.
+- The `~2 GB/worker` figure, which was the *Python* engine's footprint, is corrected to the measured ~1.0 GB in `.claude/skills/dugong-run/SKILL.md` and `.claude/skills/run-mosaic/SKILL.md`. `CLAUDE.md` already carried the right number.
+
 # MOSAIC 0.71.0
 
 ## Engine runtime: 2.25x more, from one state write that was copying the whole run
