@@ -1,8 +1,8 @@
 #' Assemble engine results in the downstream contract
 #'
 #' Equivalent of the Python engine's \code{RInterface}. State is held
-#' time-major (\code{[nticks + 1, npatches]}); results are patch-major
-#' (\code{[npatches, nticks]}). The three trimming rules are not
+#' time-major (one environment per tick, each holding every channel); results
+#' are patch-major (\code{[npatches, nticks]}). The three trimming rules are not
 #' interchangeable and are reproduced exactly from \code{model.py:82-165}:
 #'
 #' \itemize{
@@ -19,7 +19,7 @@
 #' \code{double}. No dimnames -- the Python return has none and no consumer
 #' reads any.
 #'
-#' @param state State list from the run loop.
+#' @param state State environment from the run loop.
 #' @param par Parameters from \code{sim_params()}.
 #' @return Named list of \code{[npatches, nticks]} matrices.
 #' @keywords internal
@@ -28,19 +28,25 @@ sim_results <- function(state, par) {
      nticks <- par$nticks
      out <- list()
 
-     # State channels are lists of per-tick vectors (see sim_alloc_state); the
-     # [tick, patch] matrix the trim/transpose rules operate on is assembled
-     # here, once, rather than being maintained through the tick loop.
-     as_mat <- function(series) do.call(rbind, series)
+     # State is one environment per tick (see sim_alloc_state); the [tick, patch]
+     # matrix the trim/transpose rules operate on is assembled here, once,
+     # rather than being maintained through the tick loop. The three rules
+     # differ only in which rows they gather, so the trim is expressed as a row
+     # index set rather than as a negative subscript on an assembled matrix.
+     first_dropped <- seq.int(2L, nticks + 1L)   # `[1:, :]`
+     last_dropped  <- seq_len(nticks)            # `[:-1, :]`
 
-     for (nm in intersect(SIM_CHANNELS_TRIM_FIRST, names(state))) {
-          out[[nm]] <- .sim_emit(as_mat(state[[nm]][-1L]))
+     for (nm in intersect(SIM_CHANNELS_TRIM_FIRST, state$.channels)) {
+          out[[nm]] <- .sim_emit(.sim_gather(state, nm, first_dropped))
      }
-     for (nm in intersect(SIM_CHANNELS_TRIM_LAST, names(state))) {
-          out[[nm]] <- .sim_emit(as_mat(state[[nm]][-(nticks + 1L)]))
+     for (nm in intersect(SIM_CHANNELS_TRIM_LAST, state$.channels)) {
+          out[[nm]] <- .sim_emit(.sim_gather(state, nm, last_dropped))
      }
-     for (nm in intersect(SIM_CHANNELS_TRANSPOSE_ONLY, names(state))) {
-          out[[nm]] <- .sim_emit(as_mat(state[[nm]]))
+     # Doses are already nticks-shaped: `sim_alloc_state()` does not give the
+     # final row environment those two channels at all, so the row set is the
+     # whole series rather than a trim.
+     for (nm in intersect(SIM_CHANNELS_TRANSPOSE_ONLY, state$.channels)) {
+          out[[nm]] <- .sim_emit(.sim_gather(state, nm, last_dropped))
      }
      for (nm in intersect(SIM_CHANNELS_PRECOMPUTED, names(par))) {
           out[[nm]] <- .sim_emit(par[[nm]])

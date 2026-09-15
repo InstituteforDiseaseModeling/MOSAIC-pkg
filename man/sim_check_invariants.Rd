@@ -9,7 +9,7 @@ sim_check_invariants(state, tick, compartments)
 \arguments{
 \item{state}{State environment from \code{sim_alloc_state()}.}
 
-\item{tick}{Tick index just written (1-based row into the state matrices).}
+\item{tick}{Tick index just written (1-based row into the state series).}
 
 \item{compartments}{Character vector of compartments in play; \code{N} is
 checked against the sum of exactly these.}

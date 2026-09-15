@@ -49,9 +49,9 @@ sim_phase_derived_values <- function(state, par, ctl, tick) {
      # oracle slices off. `beta_jt_human` is nticks-shaped already and is NOT
      # sliced, so its row t lines up with state row t + 1.
      rows <- seq.int(2L, nticks + 1L)
-     S    <- .sim_rows(state$S, rows)
-     Njt  <- .sim_rows(state$N, rows)
-     Ijt  <- .sim_rows(state$Isym, rows) + .sim_rows(state$Iasym, rows)
+     S    <- .sim_gather(state, "S", rows)
+     Njt  <- .sim_gather(state, "N", rows)
+     Ijt  <- .sim_gather(state, "Isym", rows) + .sim_gather(state, "Iasym", rows)
 
      # Nothing here reaches an integer, so `1 - tau_i` stays in double rather
      # than going through `par$local_frac` -- see .sim_f32() for the rule.
@@ -74,10 +74,13 @@ sim_phase_derived_values <- function(state, par, ctl, tick) {
 
      H <- beta_S * (-expm1(-(S_star / Njt) * y_bar)) / (1 + beta_S)
 
-     state$spatial_hazard[rows] <- lapply(seq_len(nticks), function(i) H[i, ])
+     for (i in seq_len(nticks)) state$rows[[rows[i]]]$spatial_hazard <- H[i, ]
 
      # Coupling takes the untrimmed series: nticks + 1 observations.
-     y <- (.sim_rows(state$Isym) + .sim_rows(state$Iasym)) / .sim_rows(state$N)
+     all_rows <- seq_len(nticks + 1L)
+     y <- (.sim_gather(state, "Isym", all_rows) +
+                .sim_gather(state, "Iasym", all_rows)) /
+          .sim_gather(state, "N", all_rows)
      state$coupling <- .sim_coupling(y)
 
      state
@@ -111,12 +114,8 @@ sim_phase_derived_values <- function(state, par, ctl, tick) {
      out
 }
 
-# Assemble a [rows, npatches] matrix from a per-tick channel. The state is a
-# list of per-tick vectors (see sim_alloc_state); this is the only component
-# that needs whole-series arrays, and it needs them once.
-.sim_rows <- function(series, rows = NULL) {
-     do.call(rbind, if (is.null(rows)) series else series[rows])
-}
+# Whole-series [rows, npatches] arrays come from .sim_gather() in sim_state.R.
+# This is the only component that needs them, and it needs them once.
 
 # Scale each patch's column by `v[patch]`. Written out rather than calling
 # sweep() because the recycling direction is the thing most easily got wrong

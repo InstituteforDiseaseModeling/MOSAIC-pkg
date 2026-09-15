@@ -31,7 +31,7 @@ SIM_CHANNELS_INTEGER
 SIM_CHANNELS_DOUBLE
 }
 \arguments{
-\item{state}{State list from the run loop.}
+\item{state}{State environment from the run loop.}
 
 \item{par}{Parameters from \code{sim_params()}.}
 }
@@ -40,8 +40,8 @@ Named list of \code{[npatches, nticks]} matrices.
 }
 \description{
 Equivalent of the Python engine's \code{RInterface}. State is held
-time-major (\code{[nticks + 1, npatches]}); results are patch-major
-(\code{[npatches, nticks]}). The three trimming rules are not
+time-major (one environment per tick, each holding every channel); results
+are patch-major (\code{[npatches, nticks]}). The three trimming rules are not
 interchangeable and are reproduced exactly from \code{model.py:82-165}:
 }
 \details{

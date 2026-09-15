@@ -12,17 +12,25 @@
 # tests, so a rewrite could have silently turned any of these assertions into a
 # no-op and every existing test would still have passed. These tests exist to
 # make that impossible: each one asserts the check FIRES.
+#
+# Also in v0.70.0, state moved from one list-of-per-tick-vectors per channel to
+# one environment per tick, so these tests address a channel as
+# `state$rows[[row]]$S` rather than `state$S[[row]]`. The assertions are
+# unchanged -- only the poke site moved.
 # =============================================================================
 
 mk_state <- function(npatches = 3L, nticks = 2L) {
   st <- MOSAIC:::sim_alloc_state(nticks, npatches)
-  row <- 2L   # tick 1
+  r <- st$rows[[2L]]   # tick 1
   for (nm in c("S", "E", "Isym", "Iasym", "R", "V1", "V2")) {
-    st[[nm]][[row]] <- rep(10L, npatches)
+    r[[nm]] <- rep(10L, npatches)
   }
-  st$N[[row]] <- rep(70L, npatches)   # 7 compartments x 10
+  r$N <- rep(70L, npatches)   # 7 compartments x 10
   st
 }
+
+# The row the assertions are pointed at, for poking a single patch.
+row1 <- function(st) st$rows[[2L]]
 COMP <- c("S", "E", "Isym", "Iasym", "R", "V1", "V2")
 
 test_that("a consistent state passes", {
@@ -30,13 +38,13 @@ test_that("a consistent state passes", {
 })
 
 test_that("an NA in a compartment is caught and the patch is named", {
-  st <- mk_state(); st$S[[2L]][2L] <- NA_integer_
+  st <- mk_state(); r <- row1(st); r$S[2L] <- NA_integer_
   expect_error(sim_check_invariants(st, 1L, COMP), "S contains NA")
   expect_error(sim_check_invariants(st, 1L, COMP), "2")
 })
 
 test_that("a negative compartment is caught", {
-  st <- mk_state(); st$E[[2L]][3L] <- -1L
+  st <- mk_state(); r <- row1(st); r$E[3L] <- -1L
   expect_error(sim_check_invariants(st, 1L, COMP), "E is negative")
 })
 
@@ -44,7 +52,7 @@ test_that("N not equal to the sum of compartments is caught", {
   # The assertion that Reduce(`+`, lapply(...)) used to compute. If the
   # accumulation loop summed the wrong set, or short-circuited, this is the
   # only test that would notice.
-  st <- mk_state(); st$N[[2L]][1L] <- 69L
+  st <- mk_state(); r <- row1(st); r$N[1L] <- 69L
   expect_error(sim_check_invariants(st, 1L, COMP), "N does not equal the sum")
 })
 
@@ -57,13 +65,13 @@ test_that("the compartment sum uses exactly the compartments passed", {
 
 test_that("a non-finite continuous channel is caught, for each of the three", {
   for (nm in c("Lambda", "Psi", "W")) {
-    st <- mk_state(); st[[nm]][[2L]][1L] <- Inf
+    st <- mk_state(); r <- row1(st); r[[nm]][1L] <- Inf
     expect_error(sim_check_invariants(st, 1L, COMP),
                  sprintf("%s is not finite", nm))
-    st <- mk_state(); st[[nm]][[2L]][1L] <- NaN
+    st <- mk_state(); r <- row1(st); r[[nm]][1L] <- NaN
     expect_error(sim_check_invariants(st, 1L, COMP),
                  sprintf("%s is not finite", nm))
-    st <- mk_state(); st[[nm]][[2L]][1L] <- -Inf
+    st <- mk_state(); r <- row1(st); r[[nm]][1L] <- -Inf
     expect_error(sim_check_invariants(st, 1L, COMP),
                  sprintf("%s is not finite", nm))
   }
@@ -71,7 +79,7 @@ test_that("a non-finite continuous channel is caught, for each of the three", {
 
 test_that("a negative continuous channel is caught, for each of the three", {
   for (nm in c("Lambda", "Psi", "W")) {
-    st <- mk_state(); st[[nm]][[2L]][2L] <- -1e-9
+    st <- mk_state(); r <- row1(st); r[[nm]][2L] <- -1e-9
     expect_error(sim_check_invariants(st, 1L, COMP),
                  sprintf("%s is negative", nm))
   }
@@ -79,7 +87,7 @@ test_that("a negative continuous channel is caught, for each of the three", {
 
 test_that("a state missing a continuous channel is skipped, not an error", {
   # The NULL skip that replaced intersect(c("Lambda","Psi","W"), names(state)).
-  st <- mk_state(); rm("W", envir = st)
+  st <- mk_state(); rm("W", envir = row1(st))
   expect_true(sim_check_invariants(st, 1L, COMP))
 })
 

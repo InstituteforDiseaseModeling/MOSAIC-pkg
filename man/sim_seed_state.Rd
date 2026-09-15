@@ -7,12 +7,12 @@
 sim_seed_state(state, par)
 }
 \arguments{
-\item{state}{State list from \code{sim_alloc_state()}.}
+\item{state}{State environment from \code{sim_alloc_state()}.}
 
 \item{par}{Parameters from \code{sim_params()}.}
 }
 \value{
-The state list with row 1 seeded.
+The state environment with row 1 seeded.
 }
 \description{
 Mirrors the Python components' \code{__init__} methods, each of which writes

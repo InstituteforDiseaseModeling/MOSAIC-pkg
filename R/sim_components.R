@@ -17,14 +17,22 @@
 #'
 #' Each function takes \code{(state, par, ctl, tick)} where \code{tick} is
 #' 0-based as in Python, and writes into row \code{tick + 2} of the state
-#' matrices (R's 1-based row for Python's \code{tick + 1}).
+#' series (R's 1-based row for Python's \code{tick + 1}).
+#'
+#' State rows are environments (see \code{sim_alloc_state()}), so each phase
+#' binds the rows it needs once -- \code{rh} for \code{here}, \code{rn} for
+#' \code{nxt} -- and then reads and writes channels by name: \code{rh$S},
+#' \code{rn$E <- ...}. The two exceptions are the lagged reads, which address
+#' an arbitrary historical row and so spell it out as
+#' \code{state$rows[[probe]]$Isym}. Writing through \code{rh}/\code{rn}
+#' mutates the state in place; there is no write-back step.
 #'
 #' @name sim_components
 #' @keywords internal
 NULL
 
-# Row helpers. Python's `x[tick]` is R's `x[tick + 1L, ]`; Python's
-# `x[tick + 1]` is R's `x[tick + 2L, ]`. Naming them keeps the +1/+2 out of
+# Row helpers. Python's `x[tick]` is R's row `tick + 1L`; Python's
+# `x[tick + 1]` is R's row `tick + 2L`. Naming them keeps the +1/+2 out of
 # the dynamics, where it is the single easiest thing to get wrong.
 .row_at   <- function(tick) tick + 1L
 .row_next <- function(tick) tick + 2L
@@ -36,26 +44,28 @@ sim_phase_susceptible <- function(state, par, ctl, tick) {
      .sim_at(ctl, tick, "Susceptible")
      here <- .row_at(tick)
      nxt  <- .row_next(tick)
+     rh <- state$rows[[here]]
+     rn <- state$rows[[nxt]]
 
      # Carry forward, then kill, then birth (susceptible.py:128-145).
-     s_next <- state$S[[here]]
+     s_next <- rh$S
 
      deaths <- .sim_binom(ctl, "susceptible/non_disease_deaths",
                           s_next, par$non_disease_death_prob_jt[here, ])
      s_next <- s_next - deaths
-     state$non_disease_deaths[[here]] <- state$non_disease_deaths[[here]] + deaths
+     rh$non_disease_deaths <- rh$non_disease_deaths + deaths
 
      # Births are Poisson(N[tick] * b_jt[tick]) -- N at `tick`, not `tick + 1`.
      # Births feed an int32 compartment in the engine
      # (`.astype(S_next.dtype)`), so coerce here -- .sim_pois returns a double
      # because the environmental sites overflow int32.
      births <- as.integer(.sim_pois(ctl, "susceptible/births",
-                                      state$N[[here]] * par$b_jt[here, ],
+                                      rh$N * par$b_jt[here, ],
                                       state$.npatches))
      s_next <- s_next + births
-     state$births[[here]] <- births
+     rh$births <- births
 
-     state$S[[nxt]] <- s_next
+     rn$S <- s_next
      state
 }
 
@@ -65,15 +75,16 @@ sim_phase_census <- function(state, par, ctl, tick) {
 
      .sim_at(ctl, tick, "Census")
      nxt <- .row_next(tick)
+     rn <- state$rows[[nxt]]
 
      # `census.py:76-78` accumulates with `+=` into a zero-initialised slot,
      # which is assignment in practice; kept as accumulation so a future
      # component that pre-seeds N behaves the same way.
-     total <- state$N[[nxt]]
+     total <- rn$N
      for (nm in par$compartments) {
-          total <- total + state[[nm]][[nxt]]
+          total <- total + rn[[nm]]
      }
-     state$N[[nxt]] <- total
+     rn$N <- total
      state
 }
 
@@ -92,16 +103,18 @@ sim_phase_exposed <- function(state, par, ctl, tick) {
      .sim_at(ctl, tick, "Exposed")
      here <- .row_at(tick)
      nxt  <- .row_next(tick)
+     rh <- state$rows[[here]]
+     rn <- state$rows[[nxt]]
 
      # E -> Isym/Iasym progression lives in `Infectious`, not here; this phase
      # is demographic decay only (exposed.py:85-97).
-     e <- state$E[[here]]
+     e <- rh$E
 
      deaths <- .sim_binom(ctl, "exposed/non_disease_deaths",
                           e, par$non_disease_death_prob_jt[here, ])
 
-     state$E[[nxt]] <- e - deaths
-     state$non_disease_deaths[[here]] <- state$non_disease_deaths[[here]] + deaths
+     rn$E <- e - deaths
+     rh$non_disease_deaths <- rh$non_disease_deaths + deaths
      state
 }
 
@@ -112,28 +125,30 @@ sim_phase_recovered <- function(state, par, ctl, tick) {
      .sim_at(ctl, tick, "Recovered")
      here <- .row_at(tick)
      nxt  <- .row_next(tick)
+     rh <- state$rows[[here]]
+     rn <- state$rows[[nxt]]
 
-     r <- state$R[[here]]
+     r <- rh$R
 
      # `R_next += R` (recovered.py:96). Nothing writes R[tick+1] before this
      # phase, so it is assignment in practice -- but `Infectious` adds
      # recoveries into the same row later in the tick, so accumulating here
      # keeps the two consistent if the pipeline order ever changes.
-     r_next <- state$R[[nxt]] + r
+     r_next <- rn$R + r
 
      deaths <- .sim_binom(ctl, "recovered/non_disease_deaths",
                           r, par$non_disease_death_prob_jt[here, ])
      r_next <- r_next - deaths
-     state$non_disease_deaths[[here]] <- state$non_disease_deaths[[here]] + deaths
+     rh$non_disease_deaths <- rh$non_disease_deaths + deaths
 
      # Waning is drawn on the POST-deaths cohort `R - deaths`, so an individual
      # cannot both die and wane in the same tick (recovered.py:108-110).
      waned <- .sim_binom(ctl, "recovered/waning", r - deaths, par$waning_prob)
      r_next <- r_next - waned
 
-     state$R[[nxt]] <- r_next
+     rn$R <- r_next
      # Waned immunity returns to S, which `Susceptible` has already written.
-     state$S[[nxt]] <- state$S[[nxt]] + waned
+     rn$S <- rn$S + waned
      state
 }
 
@@ -144,27 +159,28 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
      .sim_at(ctl, tick, "Infectious")
      here <- .row_at(tick)
      nxt  <- .row_next(tick)
+     rh <- state$rows[[here]]
+     rn <- state$rows[[nxt]]
      ndd_prob <- par$non_disease_death_prob_jt[here, ]
 
      # -- symptomatic: deaths ---------------------------------------------------
-     is_next <- state$Isym[[here]]
+     is_next <- rh$Isym
      ndd <- .sim_binom(ctl, "infectious/sym_non_disease_deaths", is_next, ndd_prob)
      is_next <- is_next - ndd
-     ndd_total <- state$non_disease_deaths[[here]] + ndd
+     ndd_total <- rh$non_disease_deaths + ndd
 
      # -- symptomatic: disease deaths ------------------------------------------
      # This N is summed from the compartments at `tick`, NOT read from the
      # Census output `state$N` (infectious.py:191-196). The two differ, and the
      # reported-cases block further down deliberately uses the OTHER one. Both
      # are reproduced as written.
-     n_manual <- state$S[[here]] + state$E[[here]] +
-                 state$Isym[[here]] + state$Iasym[[here]] + state$R[[here]]
-     if ("V1" %in% par$compartments) n_manual <- n_manual + state$V1[[here]]
-     if ("V2" %in% par$compartments) n_manual <- n_manual + state$V2[[here]]
+     n_manual <- rh$S + rh$E + rh$Isym + rh$Iasym + rh$R
+     if ("V1" %in% par$compartments) n_manual <- n_manual + rh$V1
+     if ("V2" %in% par$compartments) n_manual <- n_manual + rh$V2
 
      treport <- tick - par$delta_reporting_cases
      epidemic_flag <- if (treport >= 0L) {
-          as.integer(state$Isym[[.row_at(treport)]] >
+          as.integer(state$rows[[.row_at(treport)]]$Isym >
                           par$epidemic_threshold * n_manual)
      } else {
           rep(0L, state$.npatches)
@@ -176,7 +192,7 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
               (1 + par$mu_j_epidemic_factor * epidemic_flag)
 
      dd <- .sim_binom(ctl, "infectious/disease_deaths", is_next, -expm1(-mu_jt))
-     state$disease_deaths[[here]] <- dd     # assignment, not accumulation
+     rh$disease_deaths <- dd     # assignment, not accumulation
      is_next <- is_next - dd
 
      # Reported deaths lag the disease deaths they describe, so this draw reads
@@ -184,18 +200,18 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
      idx_death_report <- tick - par$delta_reporting_deaths
      if (idx_death_report >= 0L) {
           rep_d <- .sim_binom(ctl, "infectious/reported_deaths",
-                              state$disease_deaths[[.row_at(idx_death_report)]],
+                              state$rows[[.row_at(idx_death_report)]]$disease_deaths,
                               par$rho_deaths)
-          state$reported_deaths[[here]] <- state$reported_deaths[[here]] + rep_d
+          rh$reported_deaths <- rh$reported_deaths + rep_d
      }
 
      # -- symptomatic: recovery -------------------------------------------------
      rec_sym <- .sim_binom(ctl, "infectious/sym_recovery", is_next, par$gamma_1_prob)
      is_next <- is_next - rec_sym
-     r_next <- state$R[[nxt]] + rec_sym
+     r_next <- rn$R + rec_sym
 
      # -- asymptomatic ----------------------------------------------------------
-     ia_next <- state$Iasym[[here]]
+     ia_next <- rh$Iasym
      ndd_a <- .sim_binom(ctl, "infectious/asym_non_disease_deaths", ia_next, ndd_prob)
      ia_next <- ia_next - ndd_a
      ndd_total <- ndd_total + ndd_a       # same row as the symptomatic deaths
@@ -204,15 +220,15 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
      ia_next <- ia_next - rec_asym
      r_next <- r_next + rec_asym
 
-     state$non_disease_deaths[[here]] <- ndd_total
-     state$R[[nxt]] <- r_next
+     rh$non_disease_deaths <- ndd_total
+     rn$R <- r_next
 
      # -- progression E -> I ----------------------------------------------------
      # Drawn on E[tick + 1], i.e. AFTER `Exposed` removed this tick's deaths --
      # "can't progress deceased individuals" (infectious.py:245-249).
-     e_next <- state$E[[nxt]]
+     e_next <- rn$E
      progressing <- .sim_binom(ctl, "infectious/progression", e_next, par$iota_prob)
-     state$E[[nxt]] <- e_next - progressing
+     rn$E <- e_next - progressing
 
      # The sigma split is deterministic rounding, NOT a draw. `np.round` and R's
      # `round()` are both round-half-to-even, so they agree; `as.integer()`
@@ -223,10 +239,10 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
      ia_next <- ia_next + new_asym
 
      # Written at tick + 1, not tick -- and read back at a lagged row below.
-     state$new_symptomatic[[nxt]] <- new_sym
+     rn$new_symptomatic <- new_sym
 
-     state$Isym[[nxt]]  <- is_next
-     state$Iasym[[nxt]] <- ia_next
+     rn$Isym  <- is_next
+     rn$Iasym <- ia_next
 
      # -- reported cases --------------------------------------------------------
      idx_probe <- tick - par$delta_reporting_cases
@@ -234,12 +250,12 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
           probe <- .row_at(idx_probe)
           # Note: the Census `N`, unlike the manual sum used for the epidemic
           # flag above.
-          infected_fraction <- state$Isym[[probe]] / state$N[[probe]]
+          infected_fraction <- state$rows[[probe]]$Isym / state$rows[[probe]]$N
           chi_eff <- ifelse(infected_fraction < par$epidemic_threshold,
                             par$chi_endemic, par$chi_epidemic)
           drawn <- .sim_binom(ctl, "infectious/reported_cases",
-                              state$new_symptomatic[[probe]], par$rho)
-          state$reported_cases[[here]] <- state$reported_cases[[here]] +
+                              state$rows[[probe]]$new_symptomatic, par$rho)
+          rh$reported_cases <- rh$reported_cases +
                as.integer(round(drawn / chi_eff))
      }
 
@@ -253,30 +269,32 @@ sim_phase_vaccinated <- function(state, par, ctl, tick) {
      .sim_at(ctl, tick, "Vaccinated")
      here <- .row_at(tick)
      nxt  <- .row_next(tick)
+     rh <- state$rows[[here]]
+     rn <- state$rows[[nxt]]
      ndd_prob <- par$non_disease_death_prob_jt[here, ]
 
-     v1_next <- state$V1[[here]]
-     v2_next <- state$V2[[here]]
+     v1_next <- rh$V1
+     v2_next <- rh$V2
 
      # -- natural mortality, both doses ----------------------------------------
      ndd1 <- .sim_binom(ctl, "vaccinated/v1_non_disease_deaths", v1_next, ndd_prob)
      v1_next <- v1_next - ndd1
-     ndd_total <- state$non_disease_deaths[[here]] + ndd1
+     ndd_total <- rh$non_disease_deaths + ndd1
 
      ndd2 <- .sim_binom(ctl, "vaccinated/v2_non_disease_deaths", v2_next, ndd_prob)
      v2_next <- v2_next - ndd2
      ndd_total <- ndd_total + ndd2
-     state$non_disease_deaths[[here]] <- ndd_total
+     rh$non_disease_deaths <- ndd_total
 
      # -- waning vaccine-derived immunity --------------------------------------
      waned1 <- .sim_binom(ctl, "vaccinated/v1_waning", v1_next, par$omega_1_prob)
      v1_next <- v1_next - waned1
-     s_next <- state$S[[nxt]] + waned1
+     s_next <- rn$S + waned1
 
      waned2 <- .sim_binom(ctl, "vaccinated/v2_waning", v2_next, par$omega_2_prob)
      v2_next <- v2_next - waned2
      s_next <- s_next + waned2
-     state$S[[nxt]] <- s_next
+     rn$S <- s_next
 
      # -- second doses, BEFORE first doses -------------------------------------
      # Deliberate: doing first doses first would let an individual move
@@ -287,7 +305,7 @@ sim_phase_vaccinated <- function(state, par, ctl, tick) {
           # The schedule is clamped to the donor pool. The engine logs this at
           # DEBUG and carries on; the clamp itself is the observable behaviour.
           doses2 <- pmin(doses2, v1_next)
-          state$dose_two_doses[[here]] <- doses2
+          rh$dose_two_doses <- doses2
 
           # Only the phi_2-effective fraction transits; ineffective doses leave
           # the recipient in V1.
@@ -305,13 +323,13 @@ sim_phase_vaccinated <- function(state, par, ctl, tick) {
           # fractions below all divide the SAME snapshot, so decrementing one
           # donor does not change another's share.
           sources <- par$nu_jt_sources
-          pop <- vapply(sources, function(nm) state[[nm]][[nxt]],
+          pop <- vapply(sources, function(nm) rn[[nm]],
                         numeric(state$.npatches))
           if (state$.npatches == 1L) pop <- matrix(pop, nrow = 1L)
           available <- rowSums(pop)
 
           doses1 <- pmin(doses1, as.integer(available))
-          state$dose_one_doses[[here]] <- doses1
+          rh$dose_one_doses <- doses1
 
           # Floor the denominator at 1 to avoid 0/0 where a patch has no donors
           # left; the numerator is 0 there anyway, so the share is 0.
@@ -326,14 +344,14 @@ sim_phase_vaccinated <- function(state, par, ctl, tick) {
                # doses need not sum to `doses1`. Reproduced, not corrected.
                comp_doses <- as.integer(round(doses1 * fraction))
                effective  <- as.integer(round(par$phi_1 * comp_doses))
-               state[[nm]][[nxt]] <- state[[nm]][[nxt]] - effective
+               rn[[nm]] <- rn[[nm]] - effective
                total_immunized <- total_immunized + effective
           }
           v1_next <- v1_next + total_immunized
      }
 
-     state$V1[[nxt]] <- v1_next
-     state$V2[[nxt]] <- v2_next
+     rn$V1 <- v1_next
+     rn$V2 <- v2_next
      state
 }
 
@@ -344,8 +362,10 @@ sim_phase_human_to_human <- function(state, par, ctl, tick) {
      .sim_at(ctl, tick, "HumanToHuman")
      here <- .row_at(tick)
      nxt  <- .row_next(tick)
+     rh <- state$rows[[here]]
+     rn <- state$rows[[nxt]]
 
-     total_i <- state$Isym[[here]] + state$Iasym[[here]]
+     total_i <- rh$Isym + rh$Iasym
      local_frac <- par$local_frac      # float32-precision `1 - tau_i`
 
      local_i <- local_frac * total_i
@@ -359,25 +379,25 @@ sim_phase_human_to_human <- function(state, par, ctl, tick) {
 
      effective_i <- local_i + immigrating_i
      numerator   <- par$beta_jt_human[here, ] * effective_i^par$alpha_1
-     denominator <- state$N[[here]]^par$alpha_2
+     denominator <- rh$N^par$alpha_2
      rate <- numerator / denominator
 
      # The engine clamps a negative rate and logs at DEBUG rather than failing
      # (humantohuman.py:159-161); a negative rate would make `-expm1(-rate)`
      # exceed 1 and the binomial reject it.
      rate <- pmax(rate, 0)
-     state$Lambda[[nxt]] <- rate
+     rn$Lambda <- rate
 
      # Drawn on S[tick + 1], after mortality and the waning inflows.
-     s_next <- state$S[[nxt]]
+     s_next <- rn$S
      local <- as.integer(round(local_frac * s_next))
      new_infections <- .sim_binom(ctl, "humantohuman/infection",
                                   local, -expm1(-rate))
 
-     state$S[[nxt]] <- s_next - new_infections
-     state$E[[nxt]] <- state$E[[nxt]] + new_infections
-     state$incidence_human[[nxt]] <- state$incidence_human[[nxt]] + new_infections
-     state$incidence[[nxt]]       <- state$incidence[[nxt]] + new_infections
+     rn$S <- s_next - new_infections
+     rn$E <- rn$E + new_infections
+     rn$incidence_human <- rn$incidence_human + new_infections
+     rn$incidence       <- rn$incidence + new_infections
      state
 }
 
@@ -388,23 +408,25 @@ sim_phase_env_to_human <- function(state, par, ctl, tick) {
      .sim_at(ctl, tick, "EnvToHuman")
      here <- .row_at(tick)
      nxt  <- .row_next(tick)
+     rh <- state$rows[[here]]
+     rn <- state$rows[[nxt]]
 
-     w <- state$W[[here]]
+     w <- rh$W
 
      # Psi = beta_jt_env * (1 - theta_j) * W / (kappa + W)
      psi <- par$beta_jt_env[here, ] * ((1 - par$theta_j) * w) / (par$kappa + w)
-     state$Psi[[nxt]] <- psi
+     rn$Psi <- psi
 
      local_frac <- par$local_frac      # float32-precision `1 - tau_i`
-     s_next <- state$S[[nxt]]
+     s_next <- rn$S
      local_s <- as.integer(round(local_frac * s_next))
      new_infections <- .sim_binom(ctl, "envtohuman/infection",
                                   local_s, -expm1(-psi))
 
-     state$S[[nxt]] <- s_next - new_infections
-     state$E[[nxt]] <- state$E[[nxt]] + new_infections
-     state$incidence_env[[nxt]] <- state$incidence_env[[nxt]] + new_infections
-     state$incidence[[nxt]]     <- state$incidence[[nxt]] + new_infections
+     rn$S <- s_next - new_infections
+     rn$E <- rn$E + new_infections
+     rn$incidence_env <- rn$incidence_env + new_infections
+     rn$incidence     <- rn$incidence + new_infections
      state
 }
 
@@ -415,8 +437,10 @@ sim_phase_environmental <- function(state, par, ctl, tick) {
      .sim_at(ctl, tick, "Environmental")
      here <- .row_at(tick)
      nxt  <- .row_next(tick)
+     rh <- state$rows[[here]]
+     rn <- state$rows[[nxt]]
 
-     w <- state$W[[here]]
+     w <- rh$W
      w_next <- w
 
      # Decay is Poisson-drawn and THEN clamped to W, so the reservoir cannot go
@@ -430,13 +454,13 @@ sim_phase_environmental <- function(state, par, ctl, tick) {
      # and double here, so the `(1 - theta_j) *` product keeps a fractional part
      # in both -- this is not an integer reservoir.
      shed_sym <- .sim_pois(ctl, "environmental/shedding_sym",
-                           par$zeta_1 * state$Isym[[here]], state$.npatches)
+                           par$zeta_1 * rh$Isym, state$.npatches)
      w_next <- w_next + (1 - par$theta_j) * shed_sym
 
      shed_asym <- .sim_pois(ctl, "environmental/shedding_asym",
-                            par$zeta_2 * state$Iasym[[here]], state$.npatches)
+                            par$zeta_2 * rh$Iasym, state$.npatches)
      w_next <- w_next + (1 - par$theta_j) * shed_asym
 
-     state$W[[nxt]] <- w_next
+     rn$W <- w_next
      state
 }

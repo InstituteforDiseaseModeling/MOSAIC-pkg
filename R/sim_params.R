@@ -513,15 +513,17 @@ sim_params <- function(config, components = SIM_PIPELINE) {
 #' its own compartment's \code{[0]} row from the matching \code{*_j_initial}
 #' parameter.
 #'
-#' @param state State list from \code{sim_alloc_state()}.
+#' @param state State environment from \code{sim_alloc_state()}.
 #' @param par Parameters from \code{sim_params()}.
-#' @return The state list with row 1 seeded.
+#' @return The state environment with row 1 seeded.
 #' @keywords internal
 sim_seed_state <- function(state, par) {
 
+     r1 <- state$rows[[1L]]
+
      for (nm in intersect(names(.SIM_INITIAL_FIELDS), par$compartments)) {
           field <- .SIM_INITIAL_FIELDS[[nm]]
-          if (!is.null(par[[field]])) state[[nm]][[1L]] <- par[[field]]
+          if (!is.null(par[[field]])) r1[[nm]] <- par[[field]]
      }
 
      # `I_j_initial` splits by sigma, and the split is observable: Isym takes
@@ -531,8 +533,8 @@ sim_seed_state <- function(state, par) {
      # agrees with R's round(), but as.integer() truncates.
      if (any(c("Isym", "Iasym") %in% par$compartments)) {
           isym <- as.integer(round(par$sigma * par$I_j_initial))
-          if ("Isym" %in% par$compartments)  state$Isym[[1L]]  <- isym
-          if ("Iasym" %in% par$compartments) state$Iasym[[1L]] <- par$I_j_initial - isym
+          if ("Isym" %in% par$compartments)  r1$Isym  <- isym
+          if ("Iasym" %in% par$compartments) r1$Iasym <- par$I_j_initial - isym
      }
 
      state

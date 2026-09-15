@@ -29,7 +29,8 @@
 test_that("robust gather returns correct results for more tasks than workers", {
   .skip_if_no_psock()
   cl <- parallel::makeCluster(4L, type = "PSOCK")
-  on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
+  .wpids <- cluster_worker_pids(cl)
+  on.exit(stop_cluster_hard(cl, .wpids), add = TRUE)
 
   out <- MOSAIC:::.mosaic_cluster_lapply_robust(
     cl = cl, X = as.list(1:23),
@@ -45,7 +46,8 @@ test_that("a crashed worker PROCESS does not hang the master and degrades gracef
   .skip_if_no_psock()
   skip_on_os("windows")  # tools::pskill(SIGKILL) semantics differ on Windows
   cl <- parallel::makeCluster(4L, type = "PSOCK")
-  on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
+  .wpids <- cluster_worker_pids(cl)
+  on.exit(stop_cluster_hard(cl, .wpids), add = TRUE)
 
   # Task 7 hard-kills its own worker process (a process crash, not an R error).
   f <- function(i) {
@@ -77,7 +79,8 @@ test_that("a crashed worker PROCESS does not hang the master and degrades gracef
 test_that("an unresponsive worker surfaces a diagnostic stop() within the idle timeout", {
   .skip_if_no_psock()
   cl <- parallel::makeCluster(2L, type = "PSOCK")
-  on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
+  .wpids <- cluster_worker_pids(cl)
+  on.exit(stop_cluster_hard(cl, .wpids), add = TRUE)
 
   # Task 1 sleeps far longer than the idle timeout: the gather must STOP, not hang.
   g <- function(i) { if (i == 1L) Sys.sleep(600); i }

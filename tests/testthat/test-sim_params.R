@@ -217,9 +217,10 @@ test_that("I_j_initial splits by sigma and the two halves sum back exactly", {
   par <- sim_params(cfg, components = comps)
   state <- sim_seed_state(sim_alloc_state(par$nticks, par$npatches), par)
 
-  expect_identical(state$Isym[[1]] + state$Iasym[[1]], c(101L, 7L, 0L))
+  r1 <- state$rows[[1L]]
+  expect_identical(r1$Isym + r1$Iasym, c(101L, 7L, 0L))
   # round-half-to-even: 0.5 * 101 = 50.5 -> 50, not 51
-  expect_identical(state$Isym[[1]], c(50L, 4L, 0L))
+  expect_identical(r1$Isym, c(50L, 4L, 0L))
 })
 
 test_that("sigma outside [0, 1] is rejected, and a per-patch sigma is too", {

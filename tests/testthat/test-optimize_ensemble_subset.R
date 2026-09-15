@@ -320,17 +320,33 @@ test_that("stability guard selects largest N when profile is flat", {
 test_that("parallel (cl, stride=1) is bit-identical to serial across objectives", {
   skip_if_testthat_parallel()  # spawning a PSOCK cluster inside a testthat worker is unsafe
   skip_on_cran()
-  # The worker resolves MOSAIC:::.optimize_eval_cell_block from the INSTALLED
-  # namespace (library(MOSAIC) on each worker). Skip if the installed package
-  # predates this refactor (e.g. running via load_all against a stale install).
-  skip_if_not(isTRUE(tryCatch(
-    is.function(get(".optimize_eval_cell_block", envir = asNamespace("MOSAIC"))),
-    error = function(e) FALSE)),
-    "installed MOSAIC lacks .optimize_eval_cell_block")
 
   cl <- tryCatch(parallel::makeCluster(2L, type = "PSOCK"), error = function(e) NULL)
   skip_if(is.null(cl), "could not create PSOCK cluster")
-  on.exit(parallel::stopCluster(cl), add = TRUE)
+  .wpids <- cluster_worker_pids(cl)
+  on.exit(stop_cluster_hard(cl, .wpids), add = TRUE)
+
+  # The worker resolves MOSAIC:::.optimize_eval_cell_block from the INSTALLED
+  # namespace, so this needs an install that HAS it -- skip otherwise.
+  #
+  # The question has to be put to a WORKER. The guard this replaces asked
+  # `is.function(get(".optimize_eval_cell_block", envir = asNamespace("MOSAIC")))`
+  # in the master, and under devtools::load_all() `asNamespace("MOSAIC")` is the
+  # load_all namespace: the symbol is always found, the guard never fires, and
+  # the test then died on the worker's `library(MOSAIC)` with "there is no
+  # package called 'MOSAIC'" whenever the package was not separately installed.
+  # It is a skip condition that cannot detect the thing it names -- the shape of
+  # lesson 13 -- and it is why this file errored under `devtools::test()` while
+  # appearing to pass under a bare `Rscript`, where skip_on_cran() hid it.
+  worker_ready <- tryCatch(
+    all(unlist(parallel::clusterEvalQ(cl, {
+      requireNamespace("MOSAIC", quietly = TRUE) &&
+        is.function(get0(".optimize_eval_cell_block", envir = asNamespace("MOSAIC")))
+    }))),
+    error = function(e) FALSE)
+  skip_if_not(isTRUE(worker_ready),
+              "PSOCK workers cannot attach an installed MOSAIC with .optimize_eval_cell_block")
+
   invisible(parallel::clusterEvalQ(cl, suppressMessages(library(MOSAIC))))
 
   ens <- make_mock_ensemble(n_locs = 3, n_times = 8, n_params = 16, n_stoch = 3)

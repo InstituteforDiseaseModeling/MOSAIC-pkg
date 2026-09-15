@@ -50,6 +50,14 @@ looks wrong gets an issue, not a local fix.
 
 Each function takes \code{(state, par, ctl, tick)} where \code{tick} is
 0-based as in Python, and writes into row \code{tick + 2} of the state
-matrices (R's 1-based row for Python's \code{tick + 1}).
+series (R's 1-based row for Python's \code{tick + 1}).
+
+State rows are environments (see \code{sim_alloc_state()}), so each phase
+binds the rows it needs once -- \code{rh} for \code{here}, \code{rn} for
+\code{nxt} -- and then reads and writes channels by name: \code{rh$S},
+\code{rn$E <- ...}. The two exceptions are the lagged reads, which address
+an arbitrary historical row and so spell it out as
+\code{state$rows[[probe]]$Isym}. Writing through \code{rh}/\code{rn}
+mutates the state in place; there is no write-back step.
 }
 \keyword{internal}

@@ -12,13 +12,15 @@ sim_alloc_state(nticks, npatches)
 \item{npatches}{Integer number of patches.}
 }
 \value{
-An environment of state matrices (mutated in place by the phases).
+An environment holding \code{rows} (the per-tick environments),
+\code{coupling}, and the shape/prototype metadata the results assembler
+and the invariant checker read.
 }
 \description{
 State mirrors the Python engine's layout exactly: every per-patch series is
-a \code{(nticks + 1) x npatches} matrix with \strong{time in rows and patch in
-columns}, and the transpose to the \code{[patch, time]} result orientation
-happens once at the end in \code{sim_results.R}. Flipping to
+conceptually a \code{(nticks + 1) x npatches} array with \strong{time in rows and
+patch in columns}, and the transpose to the \code{[patch, time]} result
+orientation happens once at the end in \code{sim_results.R}. Flipping to
 \code{[patch, time]} early would mean re-deriving every off-by-one in the
 port, so it is deliberately not done.
 }
@@ -27,33 +29,58 @@ Storage mode is per field, not uniform: anything counting people or events
 is \code{integer} (inheriting \code{np.int32}'s rounding discipline), while
 rates, hazards and continuous quantities are \code{double}.
 }
-\section{Why a list of per-tick vectors}{
+\section{Why one environment per tick}{
 
-Each channel is a \strong{list of \code{nticks + 1} vectors}, one per tick,
-rather than a \code{(nticks + 1) x npatches} matrix. Reading a tick is
-\code{state$S[[row]]}; writing one is \code{state$S[[row]] <- v}.
+State is \code{state$rows}, a list of \code{nticks + 1} \strong{environments},
+one per tick, each holding every channel for that tick. Reading is
+\code{state$rows[[row]]$S}; writing is \code{state$rows[[row]]$S <- v}. The
+phases bind the two rows they need once (\code{rh <- state$rows[[here]]},
+\code{rn <- state$rows[[nxt]]}) and then address channels by name.
 
-This is a measured decision, not a preference. Held as a matrix, a row write
-costs about \strong{15 microseconds} against 0.65 for a row read, because the
-subassignment copies the entire matrix. Line profiling attributed roughly
-\strong{55 percent} of a full 1398-tick run to those writes alone, and the
-engine performs about 40 of them per tick; converting to per-tick vectors took
-the run from \strong{2.91 s to 1.18 s} and allocation from 4.9 GB to 987 MB.
-A list element write is a pointer store, so it does not copy. The
-\code{[tick, patch]} matrices the results contract requires are assembled
-once, at the end, in \code{sim_results()}.
+This is a measured decision, not a preference, and it is the second such
+change to this structure -- the history is worth keeping because both moves
+were driven by the same mechanism.
+
+Held as one \code{(nticks + 1) x npatches} matrix per channel, a row write
+cost about \strong{15 microseconds} against 0.65 for a row read, because the
+subassignment copied the entire matrix. Moving to a per-channel \emph{list}
+of per-tick vectors took a full 1398-tick run from \strong{2.91 s to 1.18 s}
+and allocation from 4.9 GB to 987 MB, on the reasoning that "a list element
+write is a pointer store, so it does not copy".
+
+That reasoning was wrong, and measurably so. The channel lists were reached
+through an environment, so \code{state$S[[i]] <- v} is a
+\emph{subassignment} into \code{state$S}: the \code{*tmp*} fetch raises the
+list's reference count, and \code{[[<-} therefore duplicated the whole
+\code{nticks + 1} pointer vector on \strong{every write}. \code{tracemem()}
+confirms a copy per write, and the cost was linear in \code{nticks}
+(1.5 / 3.3 / 5.9 / 11.6 microseconds per write at 200 / 700 / 1399 / 2800
+rows) -- so it was invisible at fixture scale and worst in production.
+Padding the channel lists to 4x their length without touching the dynamics
+moved a 1.02 s run to 2.08 s, pricing the copies at \strong{0.354 s, about
+35 percent of the run}.
+
+An environment binding is a pointer store with no such copy, and there is no
+longer any long vector to duplicate: \code{state$rows} is written once, here,
+and never again. Per-write cost falls from \strong{6.15 to 0.20
+microseconds} and stops depending on \code{nticks}; reads go from 0.13 to
+0.18, which is why the phases hoist the row lookup out of the channel
+accesses rather than repeating \code{state$rows[[here]]}.
+
+The profiler had attributed this cost to the phase bodies (52.65 percent
+self time) and to \code{<GC>} (11.16 percent), which is where allocation
+churn always lands -- not to anything that looks like a state write. See
+lesson 17 in \code{CLAUDE.md}.
 }
 
-\section{Why an environment, not a list of channels}{
+\section{Reference semantics}{
 
-The channel container is an \strong{environment}, so it has reference
-semantics and the phase functions mutate it in place rather than returning a
-modified copy.
-
-The consequence is that \code{state} is mutated by every phase, and the
-\code{state <- phase(state, ...)} idiom in the tick loop is a convention
-rather than a copy: the value returned is the same environment that went in.
-Do not rely on a pre-call snapshot of the state remaining unchanged.
+Both \code{state} and each element of \code{state$rows} are environments, so
+the phase functions mutate them in place rather than returning a modified
+copy. The \code{state <- phase(state, ...)} idiom in the tick loop is a
+convention rather than a copy: the value returned is the same environment
+that went in. Do not rely on a pre-call snapshot of the state remaining
+unchanged.
 }
 
 \keyword{internal}

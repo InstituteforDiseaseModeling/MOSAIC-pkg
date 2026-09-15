@@ -31,7 +31,8 @@
 test_that(".mosaic_run_batch parallel branch returns scalar logicals via worker globalenv", {
   .skip_if_no_psock_rb()
   cl <- parallel::makeCluster(3L, type = "PSOCK")
-  on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
+  .wpids <- cluster_worker_pids(cl)
+  on.exit(stop_cluster_hard(cl, .wpids), add = TRUE)
 
   # Mimic run_MOSAIC: install .run_sim_worker on each worker's .GlobalEnv. The
   # worker_func passed to .mosaic_run_batch references it by name only; its env is
@@ -58,7 +59,8 @@ test_that(".mosaic_run_batch coerces a crashed worker to scalar FALSE (graceful,
   .skip_if_no_psock_rb()
   skip_on_os("windows")  # tools::pskill(SIGKILL) semantics differ on Windows
   cl <- parallel::makeCluster(4L, type = "PSOCK")
-  on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
+  .wpids <- cluster_worker_pids(cl)
+  on.exit(stop_cluster_hard(cl, .wpids), add = TRUE)
 
   # Worker returns TRUE normally; sim_id 6 hard-kills its process (a crash, not an
   # R error -- the case that previously hung the master on Linux).

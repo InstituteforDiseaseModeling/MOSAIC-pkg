@@ -1,3 +1,76 @@
+# MOSAIC 0.71.0
+
+## Engine runtime: 2.25x more, from one state write that was copying the whole run
+
+v0.70.0 took the engine 1.156x and reported that the remaining profile was flat. It was not. The single largest cost in the engine was a **copy of the entire per-channel pointer vector on every state write**, and it had been hiding in plain sight for the same reason it hid at the port: the profiler charges it to the phase bodies and to `<GC>`, not to anything that looks like a state write.
+
+Every change here is **bit-identical**: verified across 5 configurations x 20 seeds against the pre-change engine (full `params` + 28 result channels + seed payload, plus the draw-coverage counter), with all 420 assertions in the Tier B oracle-replay suite and all 143 in the results contract passing untouched.
+
+Measured on the default 40-location, 1,398-tick config by an **interleaved paired benchmark** (arms alternate within each block, so drift in machine load cancels rather than being attributed to one arm — see lesson 17):
+
+| | min per run | per-block speedup |
+|---|---|---|
+| v0.70.0 (007c779) | 1.012 s | — |
+| v0.71.0 | **0.452 s** | **2.25x** (range 1.88-2.33 over 6 blocks; 2.04-2.29 over a separate 8) |
+| pre-optimization baseline (1956037) | 1.140 s | **2.41x cumulative** (range 2.01-2.77) |
+
+### The mechanism
+
+Each channel was a list of `nticks + 1` per-tick vectors, and those lists lived on the state environment. So `state$S[[i]] <- v` is a **subassignment into an environment-held list**: R's `*tmp*` fetch raises the list's reference count, and `[[<-` therefore duplicates the whole 1,399-element pointer vector before storing one element. `tracemem()` reports a copy on every write.
+
+Three independent measurements agree:
+
+- **Per-write cost is linear in `nticks`** — 1.5 / 3.3 / 5.9 / 11.6 microseconds at 200 / 700 / 1,399 / 2,800 rows. A write that copies nothing would be flat. This is why the cost was invisible at fixture scale and worst in production.
+- **Padding the channel lists to 4x their length, without touching the dynamics**, moved a 1.02 s run to 2.08 s. The extra rows are never read or written, so the difference is pure copy cost: **0.354 s per 1,399 rows**, about 35% of the run.
+- **Per-write cost is 6.15 microseconds against 0.20** for the replacement.
+
+The engine performs roughly 60 state writes per tick over 1,398 ticks, so this was ~615 MB of garbage per run for ~0.5 MB of useful stores.
+
+### What replaced it
+
+State is now **one environment per tick** (`state$rows[[row]]$S`), holding every channel for that tick. Each phase binds the one or two rows it needs once — `rh` for `here`, `rn` for `nxt` — and then addresses channels by name; the lagged reads spell out `state$rows[[probe]]$Isym`. An environment binding is a pointer store with no copy, and there is no longer any long vector to duplicate: `state$rows` is written once at allocation and never again.
+
+Re-running the padding diagnostic on the new representation confirms the mechanism is gone: the `nticks` slope falls from **0.354 s to 0.025 s** per extra 1,399 rows, a 14x reduction in how much the engine cares how long the run is.
+
+The 2.25x exceeds what the padding diagnostic predicted (1.53x), because that diagnostic measures only the length-proportional part of each copy. It misses the fixed per-subassignment overhead and the collector's share of the churn.
+
+### Costs, and what did not improve
+
+- **Peak RSS rose 5%**, from 945 MB to 992 MB per process over 5 sequential runs (`VmHWM`). 1,399 hashed environments of 23 bindings cost more than 23 lists of 1,399 pointers. CLAUDE.md's ~0.9 GB/worker planning figure still holds, but it is now ~1.0 GB and should be read as such.
+- **Time in the collector fell in absolute terms and rose as a share** — 0.69 s to 0.47 s over 5 runs, but 13.3% to 18.1% of a much smaller wall. Allocation is still where the remaining engine time goes.
+- Allocation at startup rose ~2 ms (1,399 environments instead of 23 lists) and results assembly ~9 ms. Both are once per run against ~560 ms saved.
+
+### `.sim_gather()` is `rbind`, not `vapply`, on purpose
+
+The obvious way to assemble a whole-series `[rows, npatches]` array from row environments is `vapply(rows, ..., state$.proto[[nm]])`, which is faster and self-documenting about storage mode. It is also **wrong here**, in a way the 100-cell bit-identity harness cannot see, because that harness only exercises `rng` mode. `vapply` enforces its prototype's type; `do.call(rbind, ...)` promotes. In `replay` mode the draws come back from a recorded fixture rather than from `rbinom()`, so an integer-allocated channel legitimately holds doubles — and eight Tier B replay tests fail on the `vapply` form. Whether replay ought to preserve storage mode is a real question, but it is a separate one from making the engine faster, so the promotion behaviour is reproduced rather than tightened. `rbind` also gets the `npatches == 1` orientation right for free, where transposing a `vapply` result would have silently returned a single-patch series with time in the columns.
+
+### Correction to the migration record
+
+`migrate-laser-r.md` concluded, after the matrix-to-list fix: *"After that the profile is flat — the hottest single line is 6.9% — so there is no second structural win of that size."* There was: this one, worth more than the fix that prompted that sentence.
+
+The same document already contained the mechanism. It records that holding the channels in an environment *"changed nothing: `env$M[i, ] <- v` still copies, because fetching `M` bumps its reference count before the subassignment."* That is exactly right, and it was then reintroduced one level down — the fix moved the matrices into lists but left the lists on the environment, so the reference-count bump that had just been diagnosed still fired on every write. The diagnosis was correct and was not carried through to the structure that replaced it.
+
+## Test suite: a leaked worker that made a finished run look hung, and a skip condition that could not fire
+
+Two pre-existing defects in the parallel test infrastructure, found while running the suite for the engine work above.
+
+**A wedged PSOCK worker outlived its cluster and held the suite's stdout.** `stopCluster()` asks each worker to shut down by writing to its socket; a worker that is not *reading* that socket never gets the message. `test-ensemble_cluster_robust.R` has a task that calls `Sys.sleep(600)` deliberately -- that is the point of the test, which asserts the gather stops rather than hanging -- so `stopCluster()` returned cleanly while the worker slept on. The orphan inherited the test process's stdout, so the pipe never reached EOF and a suite that had **already finished** looked like it was hanging: `devtools::test() | tail` produced nothing while the R master was already gone from the process table. New `tests/testthat/helper-cluster.R` records worker PIDs at cluster creation and kills any that outlive the shutdown request, wired into all five cluster-creating tests in the two robustness files.
+
+The first version of that helper was a no-op, and every test still passed. It guarded the kill with `grepl("RSOCK", readLines("/proc/<pid>/cmdline"))`, and `/proc/<pid>/cmdline` is NUL-separated: `readLines()` truncates at the first NUL and returns `/usr/lib/R/bin/exec/R` with none of the arguments, so the guard could never match. `tests/testthat/test-cluster_teardown.R` therefore asserts the **leak** first -- that plain `stopCluster()` does leave the worker running -- and only then that the helper reaps it, because without the negative case a helper that kills nothing passes the positive one. It also asserts the PID-reuse guard does not fire on the test runner's own PID.
+
+**`test-optimize_ensemble_subset.R` errored under `devtools::test()`.** Its PSOCK test guards itself with
+
+    skip_if_not(is.function(get(".optimize_eval_cell_block", envir = asNamespace("MOSAIC"))))
+
+whose comment says "skip if the installed package predates this refactor (e.g. running via load_all against a stale install)". Under `devtools::load_all()`, `asNamespace("MOSAIC")` *is* the load_all namespace in the master process, so the symbol is always found, the skip never fires, and the test then died on the worker's `library(MOSAIC)` with "there is no package called 'MOSAIC'". It is a skip condition that cannot detect the thing it names -- the same shape as lesson 13 -- and it asked the master a question only a worker can answer. It now asks a worker via `clusterEvalQ()`. Verified to skip cleanly under `load_all` and to run and pass (88 assertions) against a real 0.71.0 install with `NOT_CRAN=true`.
+
+Note that this test still does not run under a bare `R CMD check`, where `skip_on_cran()` skips it regardless; it needs `NOT_CRAN=true` *and* an install. That is a real coverage gap, but closing it by `load_all`-ing on the workers would stop testing the production path, which is `library(MOSAIC)` (`make_mosaic_cluster()`).
+
+### Also
+
+- `sim_alloc_state()` no longer gives the final row environment the two dose channels. They are `nticks`-shaped in the Python engine and the phases only ever write them at `here` (1..nticks), so a stray read of row `nticks + 1` now returns `NULL` rather than a plausible-looking zero.
+- New `tests/testthat/test-sim_alloc_state.R` (70 assertions) pins the shapes, the per-channel storage modes, the dose contract, the `npatches == 1` orientation, and that the zero prototypes shared across rows are never mutated in place.
+
 # MOSAIC 0.70.0
 
 ## Engine and worker runtime: 1.15x on the engine, and the per-simulation `gc()` is gone
