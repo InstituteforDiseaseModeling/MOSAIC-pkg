@@ -1,0 +1,20 @@
+---
+name: reff-medoid-central-review
+description: R_eff phase-coherent medoid-central change (v0.58.2->0.59) review — medoid criterion parity, peak_Rt schema, central_method-not-honored gap, nS=2 log-median tiebreak
+metadata:
+  type: project
+---
+
+Reviewed the Cori R_eff "phase-coherent headline" change (calc_Reff.R, add_reproductive_numbers.R, plot_Reff.R) that redefines `central` from the per-day cross-member median (flattens toward 1 by phase-misaligned peaks) to the MEDOID member's R_t, keeps per-day quantiles as a faint envelope, and adds `peak_Rt`. Verdict GO (default-config batch). All 4 reff test files PASS; document() clean; no orphans/placeholders.
+
+**Medoid criterion parity (the load-bearing check).** `.mosaic_reff_select_medoid_member(ca, ensemble$cases_median, nP, nS)` reuses run_MOSAIC's medoid (run_MOSAIC.R:2790-2807): per-param-set MEDIAN over stochastic dim at LOCATION 1, log-scale MAE (eps=1) to the ensemble central cases, which.min -> p_med. run_MOSAIC then maps p_med->seed and re-runs FRESH (no specific stochastic rerun). The resim path CAN'T re-run fresh identically (cross-process numba non-determinism), so it adds a within-param-set step: stochastic rerun closest (same log-MAE) to that param set's own median -> s_med, member id m=(s_med-1)*nP+p_med. This matches the loop's m=(s-1)*nP+p indexing. Faithful reconstruction, honestly documented.
+
+**GAP (Should-fix, NOT a blocker for the 27-model batch): central_method not honored.** run_MOSAIC's medoid target is `.central(ens,"cases")` = `.mosaic_central_series(ens,"cases",central_method)` = cases_mean OR cases_median per the per-channel `central_method` flag. The resim helper HARDCODES `ensemble$cases_median`. Production default is "median" (run_MOSAIC.R:3839) so the default-config full_metapop_nmme batch matches exactly. A run calibrated with central_method$cases="mean" would pick a DIFFERENT medoid here than calibration did. This is an 8th lockstep site for [[central_method_default_sites]] that silently ignores the flag. Fix = thread central_method through .add_reff_recompute_ci (read control$summary/central_method from control.json) and pass cases_mean when set.
+
+**nS=2 tiebreak asymmetry (Nice-to-have, harmless).** Within-set distance is log-space MAE but `median()` of 2 reruns = their RAW-space mean. log compresses the upper side, so the LARGER rerun has smaller log-MAE to the raw-mean median -> for nS=2 the tiebreak deterministically picks the larger-magnitude rerun (verified empirically). Only bites at nS=2; both reruns are faithful coherent trajectories so it only changes which equivalent member is the headline. Not symmetric, not wrong.
+
+**peak_Rt schema contract (item #3, render-safe).** Production calc_Reff.R:700-707 builds peak_Rt with columns location/q2.5/q50/q97.5/`n_members`. Plot consumer `.reff_peak_table` (plot_Reff.R:268) requires ONLY location/q2.5/q50/q97.5 -> `n_members` is never read at render, so the contract holds. BUT test fixture make_reff_df (test-plot_Reff.R:54-60) builds the column as `n` (not n_members) -> the test does NOT pin the real n_members column name (false-comfort). Should-fix the fixture to `n_members`. peak_Rt burn-in masking is applied INSIDE resim before time-max (burn_idx), central/qmats burn masked by the CALLER (.add_reff_recompute_ci:363-370) with the SAME bid -> consistent.
+
+**burn_in_days plumbing.** arg > control$likelihood$burn_in_days > 30 default. Task says control=45 -> bid=45 applied to central, envelope, AND peak_Rt.
+
+**Launchers (claude/, NOT executed).** reff_one.R pins all 6 thread vars + .mosaic_set_blas_threads(1L) before laser import (root process). reff_batch_dugong_v2.R is BASH (independent nohup-per-model via ~/bin/r-mosaic-Rscript, NOT PSOCK) discovering FLAT ~/MOSAIC/output/full_metapop_nmme/<ISO> dirs with 2_calibration/ensemble_candidate.rds — avoids last run's PSOCK worker LD_PRELOAD gap (false-alarm gather crash). This closes the [[reff-resim-ci-review]] B1 thread-pin landmine: .mosaic_reff_resim_ci NOW pins threads internally (calc_Reff.R:506-509) too.

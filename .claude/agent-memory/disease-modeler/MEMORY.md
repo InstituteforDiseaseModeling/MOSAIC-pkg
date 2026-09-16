@@ -1,5 +1,13 @@
 # Disease-Modeler Agent Memory — Index
 
+- [EMDAT hazard->cholera channels (psi/theta redesign)](reference_emdat_hazard_cholera_channels.md) — flood-only covariate silently drops cyclone/surge=BIGGEST bug; rank flood>cyclone>drought(2nd-order,opposite-lag)>surge>landslide; VERDICT 3 channels not 1 (acute-flood MERGED w/ cyclone/surge/landslide + drought SEPARATE + cyclone-tail phase2); route via time-varying theta_j(t) not psi; EMDAT blind to conflict/displacement
+
+- [Deaths embargo dwell (forecast-CV)](reference_deaths_embargo_dwell.md) — infection->reported-death ~15-17d median (latent 1.4 + I1 dwell 10 + report 4), tail ~45d; DEATHS forecast-CV embargo must be >=6wk, 2wk scores fitted-tail not forecast; cases ~2wk ok
+- [COVID surveillance zero-walls in config_default](reference_covid_surveillance_zerowalls.md) — MOZ 2020-21 + NGA 2020 = FULL-WEIGHT hard-zero gaps (not NA); bias beta/psi DOWN in expanding-window fits, unequal across countries; fix via weights_obs_cases (slot now EXISTS) or window start 2021-07
+- [Production deaths-bias @ v2026-07-01.01 = B2 epidemic-factor gap](project_prod_deaths_bias_b2_epi_gap.md) — 27 promoted nationals: B2 CFR_target derivation CONFIRMED live+exact, CFR_target prior CORRECTLY centered on observed WHO CFR (NOT miscentered); residual ~2x deaths bias = mu_j_epidemic_factor (1+epi) runtime escalation NOT folded into B2 derivation (fix=B2.2 add (1+epi) to denominator) + ensemble up-weighting of high-death draws (stat, not biology). Old chain-factor/CFR-drift diagnoses now OBSOLETE under B2
+
+- [Cholera R_t/R_0 literature + near-1 national R_t verdict](reference_cholera_Rt_R0_literature.md) — explosive onset R_t 2-4+ (Haiti/Yemen/Zimbabwe) vs endemic ~1; MOSAIC near-1 national TIME-MEDIAN is EXPECTED (endemic eq + phase-cancellation) but weak MAX mildly understated; culprits ranked: national aggregation > 45d burn-in (cuts onset, use 0 for R_t) > two-clock GI omits env delay (biases toward 1, per spec) > floor/medoid smoothing
+
 - [NGA/MOZ/ETH seasonality + coverage cliffs](reference_nga_moz_eth_seasonality_coverage.md) — anti-phased peaks (NGA Aug / MOZ Mar / ETH Apr-Aug); obs cliffs NGA 2026-05 / MOZ 2026-06 / ETH 2026-03 (binding); NGA cases 100% imputed=data artifact (exploratory/no-pool); 6mo-spaced cutoffs phase-balance + zero overlap; deaths embargo >=6wk (ETH 8wk)
 
 - [Data-driven ic_t0 IC-seeding epoch generalization (v0.46.2)](project_data_driven_ic_t0_generalization.md) — ic_t0 tracks date_start (active-richest month in [ds,+12mo], +/-8wk over weekly surv); 2023->2023-02-01 inert via which.max tie-break, 2015->2015-01-01 (E/I seeded not cold); gaps: config builder lacks env override, v15.12 desc + config:15 comment cite stale floor formula

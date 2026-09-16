@@ -72,3 +72,19 @@ took) — artifact not from a tagged release.
   GMB bounded-no-collapse, COD unchanged, check_psi_amplitude collapsed/inflated/ok.
 - Did NOT touch est_suitability.R / rolling_cv / loss (other agents own); the §8.2 COMMENT in
   loss_suitability.R is now backed by a real function but the comment text itself was left as-is.
+
+**CONFIRMED ACTIVE @ v0.55.11 (2026-06-26, forecast_cv_smoke prefit, n_seeds=3, cutoff 2025-06-01):**
+B1+B5 guards are firing as designed in the frozen psi cache
+(`claude/forecast_cv_smoke/psi_cache/psi_2025-06-01.csv`). Log warnings: 15 identity-corrected,
+7 affine-guarded, check_psi_amplitude flags 5 inflated (CAF/NER/RWA/UGA/ZMB all at amp_ratio~2.0
+= the amp_range[2] CEILING, i.e. CLAMPED not runaway — the pre-fix 9.7x blow-up is gone). BUT the
+corruption is mitigated, NOT eliminated: GMB (max=0.019 sd=0.0009) and SEN (max=0.014 sd=0.0004)
+are still clamped-flat at the floor; GIN/GNB/SLE collapsed (max<0.05); NER/ZMB/AGO still hit
+psi=1.000. So the guard prevents catastrophe but a dozen West/coastal ISOs have psi that is flat
+or rail-pinned and should not be trusted as signal. The 3 forecast-cv production targets
+(NGA/MOZ/ETH) are CLEAN: well-distributed (sd 0.18-0.26), not rail-pinned, bias-correction is a
+real non-identity transform (MOZ psi != pred_smooth on all rows), none appear in any warning list.
+Verdict for the NGA/MOZ/ETH 3-country run: GREEN on the psi side — global-fit distortion of other
+countries does not feed the target ISOs. Follow-up (non-blocking): the floor-clamp still yields
+unusable flat psi for the GMB/SEN/GIN cluster; revisit whether these should fall to a climatology
+seasonal prior rather than a flat constant.

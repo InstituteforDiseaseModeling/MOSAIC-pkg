@@ -1,3 +1,4 @@
 - [Skill refs must resolve on HEAD, not just in git](feedback_skill_refs_must_be_on_branch.md) — verify cited sibling docs are ancestors of HEAD; a doc on an unmerged branch = dangling ref
 - [Canonical output-tree paths](reference_output_tree_canonical_paths.md) — no config_best.json; config_medoid.json is in 2_calibration/best_model/ NOT 3_results/; both CLAUDE.md clean as of Phase 1; grep dirs$ map in run_MOSAIC_helpers.R
 - [Skill constants rot despite hedge](feedback_skill_constants_rot_despite_hedge.md) — "reference don't transcribe" header does NOT excuse a wrong ENUM/preset/path in the body; verify enumerated arg values against the fn signature regardless
+- [Coiled steer drifts across skills](feedback_coiled_steer_drifts_across_skills.md) — Coiled/VM story spans 4 skills + 2 memories & drifts; audit all in one grep pass; >50min→local-PSOCK fact lives only in forecast-cv + alpha1 memory; laser version URLs rot one patch at a time
