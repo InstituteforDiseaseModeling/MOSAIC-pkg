@@ -347,6 +347,26 @@ test_that("parallel (cl, stride=1) is bit-identical to serial across objectives"
   skip_if_not(isTRUE(worker_ready),
               "PSOCK workers cannot attach an installed MOSAIC with .optimize_eval_cell_block")
 
+  # Existence is not enough. The workers run the INSTALLED MOSAIC, so if that
+  # differs from the build under test this compares the checkout's serial arm
+  # against the installed build's parallel arm -- and then fails, or passes, for
+  # reasons that have nothing to do with PSOCK. (It reported a spurious WIS
+  # divergence under devtools::load_all() with an older MOSAIC installed, which
+  # read exactly like a regression in the code under test.) Gate on the versions
+  # MATCHING, the same way test-sim_rng_contract.R does.
+  inst_path <- find.package("MOSAIC", lib.loc = .libPaths(), quiet = TRUE)
+  skip_if(length(inst_path) == 0L,
+          "MOSAIC is not installed; PSOCK workers cannot load it")
+  inst_ver <- tryCatch(
+    as.character(utils::packageVersion("MOSAIC", lib.loc = dirname(inst_path[1]))),
+    error = function(e) NA_character_)
+  here_ver <- as.character(utils::packageVersion("MOSAIC"))
+  skip_if(is.na(inst_ver) || !identical(inst_ver, here_ver),
+          sprintf(paste0("installed MOSAIC (%s) differs from the build under test (%s); ",
+                         "PSOCK workers would run the installed one, so this would ",
+                         "compare two different builds"),
+                  if (is.na(inst_ver)) "unreadable" else inst_ver, here_ver))
+
   invisible(parallel::clusterEvalQ(cl, suppressMessages(library(MOSAIC))))
 
   ens <- make_mock_ensemble(n_locs = 3, n_times = 8, n_params = 16, n_stoch = 3)

@@ -198,10 +198,37 @@ optimize_ensemble_subset <- function(ensemble,
 
   # ── 3. PRE-COMPUTE CONSTANTS ──────────────────────────────────────────
 
+  # The scored-cell mask. `ensemble` carries it; until v0.81.1 this function was
+  # handed it and never applied it, so subset SELECTION scored cells that the
+  # calibration likelihood and every reported metric exclude -- the burn-in /
+  # scored-window lead-in and the final deaths column, i.e. exactly the
+  # timesteps where the model is known to be wrong for mechanical reasons.
+  # Measured cost of that blindness at 100,000 simulations, same subset size:
+  # unmasked R2_cases 0.5033 vs masked 0.6302 (main) and 0.4888 vs 0.6287
+  # (pr123) -- ~0.13 absolute, consistently. Because the excluded cells
+  # contribute a large error term common to every candidate N, the objective
+  # went nearly flat (4.1% span over N = 30..117 on both arms) and the argmax
+  # became noise-picked: two engines with statistically equivalent pools chose
+  # 90 and 52.
+  artifact_mask <- ensemble$artifact_mask
+
   obs_c_flat <- as.numeric(ensemble$obs_cases)
   obs_d_flat <- as.numeric(ensemble$obs_deaths)
-  mean_obs_c <- mean(obs_c_flat, na.rm = TRUE)
-  mean_obs_d <- mean(obs_d_flat, na.rm = TRUE)
+
+  # The per-channel normalisers put cases and deaths on a comparable scale in
+  # the summed objective, so they must average the SAME cells the errors are
+  # computed over. Leaving them over all cells while the errors moved to scored
+  # cells only would make the channel balance depend on how much of each channel
+  # happens to be masked -- and the two are masked very differently (the whole
+  # scored-window lead-in for cases, one column for deaths).
+  # Shape from n_locs/n_times, not from dim(obs_cases): an ensemble may carry
+  # its observations as a bare vector, where nrow()/ncol() are NULL and matrix()
+  # errors. Those two are already resolved above and are the contract every
+  # other cell-indexing site in this function uses.
+  .obs_scored <- function(v, chan) as.numeric(.mosaic_mask_central_for_scoring(
+    matrix(v, n_locs, n_times), chan, artifact_mask))
+  mean_obs_c <- mean(.obs_scored(obs_c_flat, "cases"),  na.rm = TRUE)
+  mean_obs_d <- mean(.obs_scored(obs_d_flat, "deaths"), na.rm = TRUE)
 
   # Guard against zero means for normalization
   if (!is.finite(mean_obs_c) || mean_obs_c == 0) mean_obs_c <- 1
@@ -321,10 +348,23 @@ optimize_ensemble_subset <- function(ensemble,
     for (g in seq_len(n_grid)) {
       n <- ns[g]
 
-      median_c <- .scatter_cells(kern$median_c[, g], n_locs, n_times)
-      median_d <- .scatter_cells(kern$median_d[, g], n_locs, n_times)
-      cen_c_flat <- if (need_mean_c) as.numeric(.scatter_cells(kern$mean_c[, g], n_locs, n_times)) else as.numeric(median_c)
-      cen_d_flat <- if (need_mean_d) as.numeric(.scatter_cells(kern$mean_d[, g], n_locs, n_times)) else as.numeric(median_d)
+      # Mask the PREDICTION, not the observation -- the same side run_MOSAIC.R
+      # and calc_model_ensemble.R mask, so the scored cell set matches theirs
+      # exactly. Every metric below drops NA pairwise, so masking one side is
+      # enough.
+      .mask <- function(m, chan)
+        .mosaic_mask_central_for_scoring(m, chan, artifact_mask)
+      .mask_flat <- function(v, chan)
+        as.numeric(.mask(matrix(v, n_locs, n_times), chan))
+
+      median_c <- .mask(.scatter_cells(kern$median_c[, g], n_locs, n_times), "cases")
+      median_d <- .mask(.scatter_cells(kern$median_d[, g], n_locs, n_times), "deaths")
+      cen_c_flat <- if (need_mean_c)
+        .mask_flat(as.numeric(.scatter_cells(kern$mean_c[, g], n_locs, n_times)), "cases")
+        else as.numeric(median_c)
+      cen_d_flat <- if (need_mean_d)
+        .mask_flat(as.numeric(.scatter_cells(kern$mean_d[, g], n_locs, n_times)), "deaths")
+        else as.numeric(median_d)
       med_c_flat <- as.numeric(median_c)
       med_d_flat <- as.numeric(median_d)
 
@@ -344,14 +384,17 @@ optimize_ensemble_subset <- function(ensemble,
           r2_c + r2_d - 0.5 * (lbc + lbd)
         },
         "wis" = {
-          q025_c <- as.numeric(.scatter_cells(kern$q025_c[, g], n_locs, n_times))
-          q25_c  <- as.numeric(.scatter_cells(kern$q25_c[, g],  n_locs, n_times))
-          q75_c  <- as.numeric(.scatter_cells(kern$q75_c[, g],  n_locs, n_times))
-          q975_c <- as.numeric(.scatter_cells(kern$q975_c[, g], n_locs, n_times))
-          q025_d <- as.numeric(.scatter_cells(kern$q025_d[, g], n_locs, n_times))
-          q25_d  <- as.numeric(.scatter_cells(kern$q25_d[, g],  n_locs, n_times))
-          q75_d  <- as.numeric(.scatter_cells(kern$q75_d[, g],  n_locs, n_times))
-          q975_d <- as.numeric(.scatter_cells(kern$q975_d[, g], n_locs, n_times))
+          # The interval spread is scored against the same cells as the point
+          # forecast, so these carry the mask too -- otherwise WIS would be the
+          # one objective still rewarding fit on excluded timesteps.
+          q025_c <- .mask_flat(as.numeric(.scatter_cells(kern$q025_c[, g], n_locs, n_times)), "cases")
+          q25_c  <- .mask_flat(as.numeric(.scatter_cells(kern$q25_c[, g],  n_locs, n_times)), "cases")
+          q75_c  <- .mask_flat(as.numeric(.scatter_cells(kern$q75_c[, g],  n_locs, n_times)), "cases")
+          q975_c <- .mask_flat(as.numeric(.scatter_cells(kern$q975_c[, g], n_locs, n_times)), "cases")
+          q025_d <- .mask_flat(as.numeric(.scatter_cells(kern$q025_d[, g], n_locs, n_times)), "deaths")
+          q25_d  <- .mask_flat(as.numeric(.scatter_cells(kern$q25_d[, g],  n_locs, n_times)), "deaths")
+          q75_d  <- .mask_flat(as.numeric(.scatter_cells(kern$q75_d[, g],  n_locs, n_times)), "deaths")
+          q975_d <- .mask_flat(as.numeric(.scatter_cells(kern$q975_d[, g], n_locs, n_times)), "deaths")
           wis_c <- .compute_wis_from_quantiles(obs_c_flat,
                      q025_c, q25_c, med_c_flat, q75_c, q975_c)
           wis_d <- .compute_wis_from_quantiles(obs_d_flat,
@@ -554,7 +597,18 @@ optimize_ensemble_subset <- function(ensemble,
       n_time_points             = n_times,
       date_start                = ensemble$date_start,
       date_stop                 = ensemble$date_stop,
-      envelope_quantiles        = envelope_quantiles
+      envelope_quantiles        = envelope_quantiles,
+      # Carry the scored-cell mask forward. run_MOSAIC() replaces `ensemble`
+      # with this object and computes every HEADLINE metric from it, masking by
+      # `ensemble$artifact_mask` -- so dropping the field here did not disable
+      # masking, it silently swapped the run's real scored window for
+      # .mosaic_mask_central_for_scoring()'s fallback of cases_warmup = 2.
+      # On the 100,000-simulation runs the real spec was score_idx_cases = 31,
+      # so the headline R2 was scored over 28 timesteps that the calibration
+      # likelihood excludes -- which is why it read 0.5037 against the tier
+      # ensemble's 0.6302 on identical data, and why the headline moved 5.5%
+      # between two engines where the tier metric moved 0.2%.
+      artifact_mask             = ensemble$artifact_mask
     ),
     class = "mosaic_ensemble"
   )
