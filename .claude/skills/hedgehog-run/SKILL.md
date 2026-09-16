@@ -39,6 +39,11 @@ is `#!/usr/bin/env bash` at column 0, or prefix `bash` as a stop-gap.
 Simulations AND post-processing run on hedgehog's local cores; nothing leaves the VM. A single knob,
 `control$parallel$n_cores`, IS the sim parallelism (118 of 120 cores ≈ comfortable on 448 GB).
 
+Unlike dugong, hedgehog is **not** constrained by R's connection ceiling: each PSOCK worker holds one
+of R's 128 startup-fixed connection slots (3 go to stdin/stdout/stderr), and `n_cores = 118` sits
+under that ~125-worker limit. The wrapper still passes `--max-connections=512` so both VMs behave
+identically — see the dugong-run skill §2 for the measurements and why it must be a startup option.
+
 The Coiled hybrid backend (remote Dask workers with hedgehog as client) has been **removed** from
 the package, along with the worker image and its CI (v0.70.0). It was already scientifically invalid (issue #113: the worker image lagged
 laser-cholera, so runs completed but gave low R²/unconverged results), and the pure-R engine

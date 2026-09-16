@@ -108,6 +108,11 @@
                   call. = FALSE)
      }
      n_workers <- max(1L, min(as.integer(parallel_seeds), length(seeds), nc - 2L))
+     # Same connection clamp as every other PSOCK site: parallel_seeds is
+     # normally small enough not to reach it, but an unclamped makeCluster()
+     # here would throw rather than fit fewer seeds in parallel.
+     n_workers <- .mosaic_clamp_psock_workers(n_workers, reserve = 2L,
+                                              what = "seed-fit workers")
      if (n_workers <= 1L) return(NULL)   # nothing to gain; caller runs serial
      # Focus each worker's TF intra-op pool to its core slice so n_workers x
      # tf_intra ~ nc (saturate the box, no oversubscription). The fit

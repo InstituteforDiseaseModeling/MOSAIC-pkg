@@ -1149,6 +1149,33 @@ run_MOSAIC <- function(config,
     control$parallel$n_cores <- 1L
   }
 
+  # Connection budget, reported ONCE up front. Every PSOCK worker holds one R
+  # connection out of a startup-fixed table (128 by default), so on a host with
+  # more cores than that the run quietly does less work than asked -- the
+  # calibration cluster clamps and both ensembles clamp with it. Surface it in
+  # the run log now rather than leaving it to be inferred from worker counts
+  # hours later. Raising it requires a restart: --max-connections is a startup
+  # option, so nothing here can fix it in-session.
+  if (control$parallel$n_cores > 1L) {
+    .conn_free <- tryCatch(as.integer(parallelly::freeConnections()),
+                           error = function(e) NA_integer_)
+    .conn_all  <- tryCatch(as.integer(parallelly::availableConnections()),
+                           error = function(e) NA_integer_)
+    if (!is.na(.conn_free) && control$parallel$n_cores > .conn_free - 2L) {
+      log_warn(paste0(
+        "n_cores = %d exceeds the R connection budget (%d free of %d slots): ",
+        "the calibration cluster AND both ensembles will use at most %d workers. ",
+        "Restart R with `--max-connections=%d` (R >= 4.4.0, max 4096) to use all %d."),
+        control$parallel$n_cores, .conn_free, .conn_all,
+        max(1L, .conn_free - 2L),
+        min(4096L, max(256L, control$parallel$n_cores + 64L)),
+        control$parallel$n_cores)
+    } else if (!is.na(.conn_free)) {
+      log_msg("Connection budget OK: %d workers requested, %d of %d connections free",
+              control$parallel$n_cores, .conn_free, .conn_all)
+    }
+  }
+
   # Determine cluster ownership:
   #   owns_cluster = TRUE  -> we created it, we tear it down
   #   owns_cluster = FALSE -> caller provided it, caller tears it down

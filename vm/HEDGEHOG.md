@@ -45,6 +45,13 @@ a modern libstdc++:
 ~/bin/r-mosaic-R                     # interactive
 ```
 Plain `Rscript`/`R` will make `check_dependencies()` report "BROKEN" and laser-cholera won't import.
+
+Regenerate the wrappers with the tracked `vm/make_wrappers.sh` (`bash vm/make_wrappers.sh`), which
+serves both VMs — every `LD_PRELOAD` is `[ -f ]`-guarded, so the dugong-only libexpat/libssl
+preloads are inert here. It also passes `--max-connections=512`, lifting R's 128-slot connection
+table. hedgehog does **not** need that for calibration (120 cores -> `n_cores = 118` sits under the
+~125-worker default ceiling); it is there so both VMs behave identically and so a future larger
+box, or a wider ensemble, does not silently lose workers.
 Invoke the wrapper **normally** — the shebang was repaired on 2026-06-16, so no `bash` prefix is
 needed. (Historically a hand-edited copy of `r-mosaic-Rscript` had an indented shebang, which made
 the kernel fall back to `/bin/sh`/dash and fail with `Syntax error: "(" unexpected`; the setup

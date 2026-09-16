@@ -85,24 +85,12 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
     stop("Root directory not set. Call set_root_directory() before make_mosaic_cluster().")
   }
 
-  # Cap by available connections, not by core count alone.
-  #
-  # Every worker holds one R connection, and a default R build permits 128 in
-  # total with stdin/stdout/stderr already taken. So on any host with more than
-  # ~126 usable cores the `detectCores() - 1L` default fails outright inside
-  # makeCluster() -- which is not hypothetical: dugong has 176 cores. Two
-  # connections are held back for the workers' own parquet I/O.
-  free <- parallelly::freeConnections()
-  if (n_cores > free - 2L) {
-    n_avail <- max(1L, free - 2L)
-    message(sprintf(paste0(
-      "Requested %d workers but only %d R connections are free; using %d.\n",
-      "  R's default build caps total connections at 128. R >= 4.4.0 accepts\n",
-      "  `--max-connections=N` (up to 4096) to raise it; MOSAIC's DESCRIPTION\n",
-      "  floors at R 4.1.1, so on an older R this cap is hard."),
-      n_cores, free, n_avail))
-    n_cores <- n_avail
-  }
+  # Cap by available connections, not by core count alone. Two connections are
+  # held back for the workers' own parquet I/O. The same
+  # .mosaic_clamp_psock_workers() helper (below) guards every PSOCK site in the
+  # package, because an unclamped one does not degrade, it throws.
+  n_cores <- .mosaic_clamp_psock_workers(n_cores, reserve = 2L,
+                                         what = "cluster workers")
 
   # Set the canonical thread-env set in main process before spawning workers
   MOSAIC:::.mosaic_set_all_thread_env(1L)
@@ -145,4 +133,67 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
 
   message(sprintf("Cluster ready (%d workers)", n_cores))
   cl
+}
+
+# ---------------------------------------------------------------------------
+# Connection-budget clamp shared by every PSOCK site in the package
+# ---------------------------------------------------------------------------
+
+#' Clamp a PSOCK worker count to the free-connection budget
+#'
+#' Every PSOCK worker holds one R connection for its lifetime, and R allocates
+#' a fixed connection table at startup -- 128 slots by default, three of which
+#' are already taken by \code{stdin}, \code{stdout} and \code{stderr}. So a
+#' host with more cores than that (dugong has 176) cannot put every core in one
+#' cluster unless R was started with \code{--max-connections=N} (R >= 4.4.0,
+#' maximum 4096).
+#'
+#' This is the single place that decision is made. It exists because an
+#' unclamped \code{parallel::makeCluster()} does not degrade gracefully -- it
+#' raises \code{"all 128 connections are in use"}. When that throw happens
+#' inside a \code{tryCatch} (as it did in \code{calc_model_ensemble()}) the
+#' whole stage is silently skipped rather than merely running narrower.
+#'
+#' @param n_cores Integer. Requested number of workers.
+#' @param reserve Integer. Connections held back for the caller's own non-worker
+#'   I/O (parquet writes, log sinks). Default 2.
+#' @param what Character. Noun used in the clamp message.
+#' @param verbose Logical. Emit a message explaining the clamp and its remedy.
+#'
+#' @return Integer. \code{n_cores}, or the largest count the free-connection
+#'   budget supports (never below 1).
+#'
+#' @noRd
+.mosaic_clamp_psock_workers <- function(n_cores,
+                                        reserve = 2L,
+                                        what = "workers",
+                                        verbose = TRUE) {
+
+  n_cores <- as.integer(n_cores)
+  if (length(n_cores) != 1L || is.na(n_cores)) {
+    stop("n_cores must be a single non-NA integer")
+  }
+
+  free <- tryCatch(as.integer(parallelly::freeConnections()),
+                   error = function(e) NA_integer_)
+  # No budget reading available (unexpected): leave the request untouched
+  # rather than invent a cap.
+  if (is.na(free)) return(n_cores)
+
+  budget <- max(1L, free - as.integer(reserve))
+  if (n_cores <= budget) return(n_cores)
+
+  if (isTRUE(verbose)) {
+    total <- tryCatch(as.integer(parallelly::availableConnections()),
+                      error = function(e) NA_integer_)
+    message(sprintf(paste0(
+      "Requested %d %s but only %d R connections are free; using %d.\n",
+      "  R allocates %s connection slots at startup (3 are stdin/stdout/stderr).\n",
+      "  Restart R with `--max-connections=N` (R >= 4.4.0, max 4096) to raise it,\n",
+      "  e.g. `Rscript --max-connections=512 your_script.R`."),
+      n_cores, what, free, budget,
+      if (is.na(total)) "a fixed number of" else format(total)))
+  }
+
+  budget
 }

@@ -597,6 +597,13 @@ calc_model_ensemble <- function(config,
 
   if (parallel) {
     n_cores_use <- if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L) else n_cores
+    # run_MOSAIC() derives this from control$parallel$n_cores, which is NOT
+    # clamped on the way in (it only clamps the calibration cluster it builds
+    # itself). Unclamped, makeCluster() throws "all 128 connections are in
+    # use", run_MOSAIC()'s tryCatch swallows it, and the entire ensemble stage
+    # vanishes from a run that reports success. Clamp instead.
+    n_cores_use <- .mosaic_clamp_psock_workers(n_cores_use, reserve = 2L,
+                                               what = "ensemble workers")
 
     MOSAIC:::.mosaic_set_all_thread_env(1L)
 

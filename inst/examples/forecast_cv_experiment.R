@@ -226,15 +226,22 @@ if (PHASE %in% c("all", "calibrate")) {
                                               n_iterations   = as.integer(Sys.getenv("FORECAST_CV_N_ITER", "3"))))
           ctrl$targets     <- modifyList(ctrl$targets %||% list(), list(ESS_param = 100L))
      }
-     # R caps a local PSOCK/FORK cluster at 128 connections (~124 usable), so the
-     # CALIBRATION worker pool is capped even where the box is far larger. The psi
-     # prefit is unaffected (it uses only ~parallel_seeds workers). Override via
-     # FORECAST_CV_PSOCK_CAP (e.g. if a future R lifts the limit).
-     psock_cap   <- as.integer(Sys.getenv("FORECAST_CV_PSOCK_CAP", "120"))
+     # R fixes its connection table at startup and every PSOCK worker holds one
+     # slot, so the CALIBRATION pool is capped even where the box is far larger.
+     # That ceiling is liftable: R >= 4.4.0 takes `--max-connections=N` (max
+     # 4096) and the VM wrappers (vm/make_wrappers.sh) pass 512, so the cap is
+     # derived from the LIVE budget rather than hard-coded at 120. Explicit
+     # FORECAST_CV_PSOCK_CAP still wins. The psi prefit is unaffected (it uses
+     # only ~parallel_seeds workers).
+     psock_cap   <- Sys.getenv("FORECAST_CV_PSOCK_CAP", "")
+     psock_cap   <- if (nzchar(psock_cap)) as.integer(psock_cap) else
+                         max(1L, as.integer(parallelly::freeConnections()) - 2L)
      n_cores_cal <- min(CORES, psock_cap)
      if (CORES > n_cores_cal)
-          message(sprintf("  calibration n_cores capped at %d (R 128-connection PSOCK ceiling); psi prefit used the full %d-core budget.",
-                          n_cores_cal, CORES))
+          message(sprintf(paste0("  calibration n_cores capped at %d of %d (R connection budget: %d of %d slots free).\n",
+                                 "  Raise with `--max-connections=N` at R startup; psi prefit used the full %d-core budget."),
+                          n_cores_cal, CORES, as.integer(parallelly::freeConnections()),
+                          as.integer(parallelly::availableConnections()), CORES))
      ctrl$parallel <- modifyList(ctrl$parallel %||% list(), list(enable = n_cores_cal > 1L, n_cores = n_cores_cal))
      ctrl$paths    <- modifyList(ctrl$paths %||% list(), list(plots = FALSE))
 
