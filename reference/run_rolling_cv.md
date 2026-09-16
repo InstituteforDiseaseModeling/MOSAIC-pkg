@@ -133,7 +133,7 @@ run_rolling_cv(
   and the lstm_v2 `arch_control` list). Date arguments are ignored
   (harness-owned). Deprecated v0.33 keys (`n_splits`,
   `exclude_covariates`) are accepted but ignored with a per-cutoff
-  deprecation message — prefer `arch_control` for lstm_v2 knobs. When
+  deprecation message – prefer `arch_control` for lstm_v2 knobs. When
   `psi_cache` is supplied this spec is used *only* to recompute the
   cache spec-hash for validation; the per-cutoff
   [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
@@ -168,7 +168,7 @@ Invisibly, the manifest list. Side effects: writes `manifest.json`,
 
 This function is a **fit-and-forecast engine only**: it produces
 calibrations, projections, and one organized predictions artifact. It
-does **not** compute evaluation metrics, baselines, or skill scores —
+does **not** compute evaluation metrics, baselines, or skill scores –
 those are done post-hoc by reading `predictions.parquet`.
 
 **Window.** The in-sample (IS) start is fixed at `config$date_start`
@@ -196,7 +196,7 @@ calibration per cutoff (not per country).
 **Outputs.** Under `dir_output`: `manifest.json` (settings + per-run
 index with status), `predictions.parquet` (the compiled long table), and
 `runs/cutoff_<T>/` (the native `run_MOSAIC` directory for each cutoff).
-`predictions.parquet` is a derived view — it can be rebuilt from the run
+`predictions.parquet` is a derived view – it can be rebuilt from the run
 directories with
 [`compile_rolling_cv_predictions`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_rolling_cv_predictions.md).
 

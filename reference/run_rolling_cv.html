@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -178,7 +178,7 @@ through to <code><a href="est_suitability.html">est_suitability</a></code> (e.g.
 <code>feature_set</code>, <code>response_var</code>, <code>bias_correct</code>, and the
 lstm_v2 <code>arch_control</code> list). Date arguments are ignored (harness-owned).
 Deprecated v0.33 keys (<code>n_splits</code>, <code>exclude_covariates</code>) are
-accepted but ignored with a per-cutoff deprecation message — prefer
+accepted but ignored with a per-cutoff deprecation message – prefer
 <code>arch_control</code> for lstm_v2 knobs. When <code>psi_cache</code> is supplied this
 spec is used <em>only</em> to recompute the cache spec-hash for validation; the
 per-cutoff <code><a href="est_suitability.html">est_suitability()</a></code> fit is skipped entirely.</p></dd>
@@ -212,7 +212,7 @@ hash does not match the manifest <code>spec_hash</code> recorded for that cutoff
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>This function is a <strong>fit-and-forecast engine only</strong>: it produces
 calibrations, projections, and one organized predictions artifact. It does
-<strong>not</strong> compute evaluation metrics, baselines, or skill scores — those are
+<strong>not</strong> compute evaluation metrics, baselines, or skill scores – those are
 done post-hoc by reading <code>predictions.parquet</code>.</p>
 <p><strong>Window.</strong> The in-sample (IS) start is fixed at <code>config$date_start</code>
 (the anchor); the simulation runs over the full <code>config</code> window
@@ -235,7 +235,7 @@ all listed locations). Thus there is one <code>run_MOSAIC</code> calibration per
 <p><strong>Outputs.</strong> Under <code>dir_output</code>: <code>manifest.json</code> (settings +
 per-run index with status), <code>predictions.parquet</code> (the compiled long
 table), and <code>runs/cutoff_&lt;T&gt;/</code> (the native <code>run_MOSAIC</code> directory for
-each cutoff). <code>predictions.parquet</code> is a derived view — it can be rebuilt
+each cutoff). <code>predictions.parquet</code> is a derived view – it can be rebuilt
 from the run directories with <code><a href="compile_rolling_cv_predictions.html">compile_rolling_cv_predictions</a></code>.</p>
 <p>The predictions table has one row per (cutoff x location x date x metric) with
 columns: <code>run_id, iso_code, anchor_date, cutoff_date, date, metric,

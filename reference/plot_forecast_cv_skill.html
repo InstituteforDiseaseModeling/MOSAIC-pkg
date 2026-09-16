@@ -21,7 +21,7 @@ evaluate_rolling_cv."><meta property="og:image" content="https://institutefordis
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -157,7 +157,7 @@ n_gated), and <code>files</code> (written paths).</p>
     <p><code>value</code> selects what to plot:</p><ul><li><p><code>"R2_corr"</code> / <code>"R2_sse"</code> – out-of-sample R^2 (shape vs
 scale-aware); tally = median.</p></li>
 <li><p><code>"bias_ratio"</code> – mean(pred)/mean(obs); reference line at 1
-(perfect); tally = origins within 0.5, 2.</p></li>
+(perfect); tally = origins within [0.5, 2].</p></li>
 <li><p><code>"wis_skill"</code> / <code>"mae_skill"</code> – skill vs <code>baseline</code>
 (<code>1 - score_model/score_baseline</code>); reference line at 0; tally =
 origins with skill &gt; 0 (i.e. beating the baseline).</p></li>

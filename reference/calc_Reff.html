@@ -29,7 +29,7 @@ or zeta_*."><meta property="og:image" content="https://institutefordiseasemodeli
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -176,7 +176,7 @@ human and environmental S-&gt;E routes; only the kernel timing is two-clock.</p>
 This cheap direct path sets <code>central</code> = the renewal estimator applied to
 <code>summary$incidence$median</code> (the full daily weighted-MEDIAN incidence). The
 <strong>production</strong> path used by <code><a href="add_reproductive_numbers.html">add_reproductive_numbers</a>(
-recompute_ci = TRUE)</code> (<code>.mosaic_reff_resim_ci</code>) instead sets
+recompute_ci = TRUE)</code> (<code>.mosaic_reff_resim_ci()</code>) instead sets
 <code>central</code> = the <strong>MEDOID trajectory's R_t</strong> (a single coherent
 member's series) because the per-day cross-member median – and, equivalently,
 the renewal on the median incidence – is FLATTENED toward 1 by phase

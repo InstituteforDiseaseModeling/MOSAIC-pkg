@@ -106,7 +106,7 @@ Invisibly, a list with `plot` (ggplot), `data` (plotted long table),
   tally = median.
 
 - `"bias_ratio"` – mean(pred)/mean(obs); reference line at 1 (perfect);
-  tally = origins within 0.5, 2.
+  tally = origins within \[0.5, 2\].
 
 - `"wis_skill"` / `"mae_skill"` – skill vs `baseline`
   (`1 - score_model/score_baseline`); reference line at 0; tally =

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -113,6 +113,49 @@
 <td align="right"><strong>260.2 min</strong></td>
 <td align="right"></td>
 </tr></tbody></table><p><code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> itself reported <code>Calibration complete: 223.93 min</code>; the extra 36 min is post-calibration figure rendering, which the plan had not costed at all.</p>
+<p><strong>Both arms finished.</strong> Final end-to-end, from <code>summary.json</code>:</p>
+<table class="table"><colgroup><col width="20%"><col width="26%"><col width="26%"><col width="26%"></colgroup><thead><tr><th></th>
+<th align="right">main (Python)</th>
+<th align="right">pr123 (R)</th>
+<th align="right">ratio</th>
+</tr></thead><tbody><tr><td>full pipeline incl. rendering</td>
+<td align="right">302.6 min</td>
+<td align="right">259.9 min</td>
+<td align="right"><strong>1.16x</strong></td>
+</tr><tr><td>calibration only (to <code>Calibration complete</code>)</td>
+<td align="right">267.5 min</td>
+<td align="right">223.9 min</td>
+<td align="right"><strong>1.19x</strong></td>
+</tr><tr><td>simulation phase only</td>
+<td align="right">141.9 min</td>
+<td align="right">97.5 min</td>
+<td align="right"><strong>1.46x</strong></td>
+</tr></tbody></table><p>The headline engine number at production scale is therefore <strong>1.16-1.19x end-to-end</strong>, not the 2.2-2.5x the microbenchmarks show — because the serial phases that dominate the run are identical on both arms. (The ratio is if anything flattered <em>towards</em> main: its combine happened to run in 82.2 min against pr123’s 95.8 min, purely from which arm held the disk when. Normalising both to an equal combine puts the end-to-end ratio nearer 1.24x.) This is the strongest single argument for the rest of this document: the engine work is done, and what is left is all in the serial tail.</p>
+<p><strong>Cross-engine metric stability — evidence for item 4.</strong> The two engines are independent implementations with different RNG streams, so comparing the same metric across them measures how stable that metric is. The tier ensemble agrees closely; the headline (MAE-optimised) ensemble does not:</p>
+<table class="table"><colgroup><col width="20%"><col width="26%"><col width="26%"><col width="26%"></colgroup><thead><tr><th>metric</th>
+<th align="right">main</th>
+<th align="right">pr123</th>
+<th align="right">spread</th>
+</tr></thead><tbody><tr><td>
+<code>r2_cases_ensemble_tier</code> (n=114 / 117)</td>
+<td align="right">0.6302</td>
+<td align="right">0.6287</td>
+<td align="right"><strong>0.2%</strong></td>
+</tr><tr><td><code>r2_deaths_ensemble_tier</code></td>
+<td align="right">0.4433</td>
+<td align="right">0.4373</td>
+<td align="right"><strong>1.4%</strong></td>
+</tr><tr><td>
+<code>r2_cases_ensemble</code> (headline, n=90 / 52)</td>
+<td align="right">0.5037</td>
+<td align="right">0.4776</td>
+<td align="right"><strong>5.5%</strong></td>
+</tr><tr><td>
+<code>r2_deaths_ensemble</code> (headline)</td>
+<td align="right">0.3574</td>
+<td align="right">0.3318</td>
+<td align="right"><strong>7.7%</strong></td>
+</tr></tbody></table><p>The headline metric is roughly an order of magnitude more variable across engines than the tier metric, because the MAE optimum picked a 90-member subset on one arm and a 52-member subset on the other from statistically equivalent pools. Both engines agree on the science; they disagree on the number <code>summary.json</code> puts at the top.</p>
 <p><strong>Three results that change this plan.</strong></p>
 <ol style="list-style-type: decimal"><li><p><strong>The engine is no longer the largest cost — the serial master is.</strong> Summing the one-core rows: 95.8 + 8.6 + 20.0 + 7.3 = <strong>131.7 min, 51% of the 260-minute run, executed on a single core while 79 sit idle.</strong> The parallel phases total 127.7 min. PR #123 cut the simulation phase by 44 min; there is more than that available in work that is currently serial and embarrassingly parallel.</p></li>
 <li><p><strong>Per-shard combine cost is 2.4-2.8x worse in production than the laptop projection</strong> — 49.3 ms/shard (main) and 57.5 ms/shard (pr123) against the 20.2 ms/shard measured on the laptop at 1,000 columns. Production shards carry 1,352 columns and the two arms contended for the same disk. Item 1’s saving is correspondingly understated; see the revision there.</p></li>
@@ -158,7 +201,18 @@
 </tr></tbody></table><p>At 80 columns (single-location) the same comparison is 3.63 vs 0.85 ms/shard, i.e. <code>open_dataset</code> is 4.3x faster.</p>
 <p>The in-code comment justifies the fallback on memory grounds, and that concern is real — <code>open_dataset(dir) |&gt; collect()</code> materialises everything at once and has OOMed at 40,000+ shards. But the remedy for memory is to <strong>chunk the dataset</strong>, not to drop to per-file reads. <code><a href="https://arrow.apache.org/docs/r/reference/open_dataset.html" class="external-link">arrow::open_dataset()</a></code> accepts a file vector, so chunking preserves the memory bound and keeps most of the speed.</p>
 <p>Verified equivalent: <code>identical(dim(current), dim(proposed))</code> is <code>TRUE</code> and row counts match (2,000 / 2,000 / 2,000).</p>
-<p>Note the combine is also pinned to a single arrow thread, because <code>.mosaic_set_all_thread_env()</code> sets <code>ARROW_NUM_THREADS=1</code> for worker safety. Whether the master should raise it for the combine is a separate question worth testing.</p>
+<p>Note the combine is also pinned to a single arrow thread, because <code>.mosaic_set_all_thread_env()</code> sets <code>ARROW_NUM_THREADS=1</code> for worker safety. Whether the master should raise it for the combine was a separate question; it has now been tested, and the answer is <strong>no</strong>. Over 6,000 shards through the shipped <code>open_dataset</code> path:</p>
+<table class="table"><thead><tr><th align="right">arrow cpu / io threads</th>
+<th align="right">time</th>
+</tr></thead><tbody><tr><td align="right">1 / 2</td>
+<td align="right">10.03 s</td>
+</tr><tr><td align="right">2 / 2</td>
+<td align="right">9.20 s</td>
+</tr><tr><td align="right">4 / 4</td>
+<td align="right">8.59 s</td>
+</tr><tr><td align="right">8 / 8</td>
+<td align="right">8.45 s</td>
+</tr></tbody></table><p>Eight times the threads buys <strong>1.19x</strong>. The combine is bound by per-file metadata parsing, not by anything the thread pool parallelises, so raising <code>ARROW_NUM_THREADS</code> on the master is not worth the worker-safety risk. Item 6b is the change that actually addresses this.</p>
 <p><strong>Reconciliation with production (section 1a).</strong> The <code>streaming</code> method does not use <code>open_dataset</code> above <code>chunk_size</code>: it falls through to <code>rbindlist(lapply(chunk_files, arrow::read_parquet))</code> per 5,000-file chunk (<code>R/run_MOSAIC_helpers.R</code>, <code>streaming</code> branch, <code>n_files &gt; chunk_size</code>). So at 100,000 shards it pays the per-file <code>read_parquet</code> cost 100,000 times; the chunking bounds memory, not time. Measured cost per shard:</p>
 <table class="table"><thead><tr><th></th>
 <th align="right">ms/shard</th>
@@ -222,7 +276,7 @@
 <p><strong>The floor collapse did not reproduce at 100k / 40 locations.</strong> pr123 selected <code>n_best_subset = 52</code> from a 117-member tier subset, well clear of the floor of 30. The full score profile (<code>dugong:~/prod-pr123/output_100k/3_results/figures/diagnostics/optimization_diagnostics.csv</code>, 34 candidate sizes from n=30 to n=117) confirms the search is correct under its own objective: <code>score</code> is maximised at exactly n=52 (-2.0645), the global maximum of the profile. No defect in the optimiser.</p>
 <p>Two real problems remain, and they are different from the one originally recorded:</p>
 <p><strong>(a) The objective is nearly flat.</strong> Across the whole candidate range the score spans -2.0645 to -2.1506 — <strong>4%</strong> — and <code>mae_cases</code> spans 16.75 to 17.45, also 4%. The search evaluates 34 candidate subset sizes, each a weighted-median gather over the 4D prediction arrays, to discriminate between options that differ by 4% on the quantity it is optimising. <code><a href="reference/optimize_ensemble_subset.html">optimize_ensemble_subset()</a></code> already returns a <code>stability_flag</code> for “score profile was flat”; nothing consumes it to short-circuit the search.</p>
-<p><strong>(b) The headline R-squared is reported from the MAE optimum.</strong> The default objective is <code>"mae"</code> (normalised MAE), not R-squared, so the two need not agree — and at 100k they do not. <code>summary.json</code> reports:</p>
+<p><strong>(b) The headline R-squared is reported from the MAE optimum.</strong> Section 1a adds the decisive evidence: across two independent engine implementations the <em>tier</em> metric agrees to 0.2% (cases) and 1.4% (deaths), while the <em>headline</em> metric disagrees by 5.5% and 7.7% — an order of magnitude more variable, because the MAE optimum landed on 90 members on one arm and 52 on the other from statistically equivalent pools. The default objective is <code>"mae"</code> (normalised MAE), not R-squared, so the two need not agree — and at 100k they do not. <code>summary.json</code> reports:</p>
 <table class="table"><thead><tr><th></th>
 <th align="right">n</th>
 <th align="right">r2_cases</th>

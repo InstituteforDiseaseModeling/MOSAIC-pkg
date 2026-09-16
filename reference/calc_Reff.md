@@ -118,7 +118,7 @@ This cheap direct path sets `central` = the renewal estimator applied to
 `summary$incidence$median` (the full daily weighted-MEDIAN incidence).
 The **production** path used by
 [`add_reproductive_numbers`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md)`( recompute_ci = TRUE)`
-(`.mosaic_reff_resim_ci`) instead sets `central` = the **MEDOID
+(`.mosaic_reff_resim_ci()`) instead sets `central` = the **MEDOID
 trajectory's R_t** (a single coherent member's series) because the
 per-day cross-member median – and, equivalently, the renewal on the
 median incidence – is FLATTENED toward 1 by phase misalignment of member

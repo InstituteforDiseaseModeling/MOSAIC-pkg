@@ -15,7 +15,7 @@ compile_suitability_data()."><meta property="og:image" content="https://institut
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -97,9 +97,13 @@ first IDU event are structural zeros, NOT observed absences – see Details.</p>
 <dt>date_start, date_stop</dt>
 <dd><p>Monday and Sunday of the ISO-week.</p></dd>
 
-<dt>idmc_<kind><em>active</em>1 if any event of that kind overlaps the week.
-idmc<kind><em>new</em>Number of events of that kind starting in the week.
-idmc<kind>_displaced</kind></kind></kind></dt>
+<dt><code>idmc_&lt;kind&gt;_active</code></dt>
+<dd><p>1 if any event of that kind overlaps the week.</p></dd>
+
+<dt><code>idmc_&lt;kind&gt;_new</code></dt>
+<dd><p>Number of events of that kind starting in the week.</p></dd>
+
+<dt><code>idmc_&lt;kind&gt;_displaced</code></dt>
 <dd><p><code>log1p</code> of summed <code>figure</code> (persons
 displaced) across overlapping events; NAs treated as 0.</p></dd>
 

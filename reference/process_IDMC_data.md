@@ -57,9 +57,15 @@ week):
 
   Monday and Sunday of the ISO-week.
 
-- idmc\_*active*1 if any event of that kind overlaps the week.
-  idmc*new*Number of events of that kind starting in the week.
-  idmc_displaced:
+- `idmc_<kind>_active`:
+
+  1 if any event of that kind overlaps the week.
+
+- `idmc_<kind>_new`:
+
+  Number of events of that kind starting in the week.
+
+- `idmc_<kind>_displaced`:
 
   `log1p` of summed `figure` (persons displaced) across overlapping
   events; NAs treated as 0.
