@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.81.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.81.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -271,7 +271,11 @@
 <hr></div>
 <div class="section level2">
 <h2 id="id_5-improvement-4--optimize_subset-a-flat-objective-and-a-headline-metric-that-disagrees-with-it">5. Improvement 4 — <code>optimize_subset</code>: a flat objective, and a headline metric that disagrees with it<a class="anchor" aria-label="anchor" href="#id_5-improvement-4--optimize_subset-a-flat-objective-and-a-headline-metric-that-disagrees-with-it"></a></h2>
-<p><strong>Status:</strong> re-measured at 100k. <strong>Not a bug in the search. A flat objective, and a headline metric that does not match what is being optimised.</strong></p>
+<p><strong>Status: RESOLVED (v0.81.2) — but not for the reason recorded below.</strong> Two real defects were found and fixed; the flat-objective account in this section turned out to be wrong. See <code>claude/perf_100k_main_vs_pr123/eth_ab_mask_fix/README.md</code>.</p>
+<p><strong>What was actually wrong.</strong> <code><a href="reference/optimize_ensemble_subset.html">optimize_ensemble_subset()</a></code> builds <code>ensemble_optimized</code> without copying <code>artifact_mask</code>. <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> then scores every HEADLINE metric off that object, masking by <code>ensemble$artifact_mask</code> – now NULL, so <code>.mosaic_mask_central_for_scoring()</code> silently substituted its <code>cases_warmup = 2</code> fallback for the run’s real scored window (<code>score_idx_cases = 31</code> on the 100k runs). The headline R2 was therefore computed over 28 timesteps the calibration likelihood excludes, in every run with <code>optimize_subset = TRUE</code>. A controlled Ethiopia A/B at 5,000 simulations – identical draws, likelihoods, subsets and ESS – moved <code>r2_cases_ensemble</code> from 0.4395 to 0.7987 against a tier value of 0.7978, closing a 44.9% gap to 0.1%; deaths moved 0.0970 to 0.3544.</p>
+<p>Separately, the optimiser never applied the mask it was handed, so SELECTION scored excluded cells. That is fixed too, and it is what made the first defect visible – but measured over both 100k ensembles it <strong>changed no selection at all</strong> (argmax 90 -&gt; 90 and 52 -&gt; 52) and did not sharpen the objective (span 4.09% -&gt; 4.35% / 4.68%).</p>
+<p><strong>So the hypothesis below is disproved.</strong> The flat objective and the noise-picked argmax are real and remain unexplained; they were not caused by the masking. The cross-engine headline spread, however, was: it is gone once the headline is scored on the same window as the tier metric.</p>
+<p>The original (incorrect) diagnosis is kept below because it is what the 100k data looked like before the cause was found.</p>
 <p>In the ETH 30,000-simulation run, <strong>both</strong> engines returned <code>n_best_subset = 30</code> — the <code>min_best_subset</code> floor — out of ~27,000 retained draws. The grid search ran to completion and selected the smallest permitted subset on both arms.</p>
 <p><strong>The floor collapse did not reproduce at 100k / 40 locations.</strong> pr123 selected <code>n_best_subset = 52</code> from a 117-member tier subset, well clear of the floor of 30. The full score profile (<code>dugong:~/prod-pr123/output_100k/3_results/figures/diagnostics/optimization_diagnostics.csv</code>, 34 candidate sizes from n=30 to n=117) confirms the search is correct under its own objective: <code>score</code> is maximised at exactly n=52 (-2.0645), the global maximum of the profile. No defect in the optimiser.</p>
 <p>Two real problems remain, and they are different from the one originally recorded:</p>

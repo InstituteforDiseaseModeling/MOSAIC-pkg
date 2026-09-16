@@ -334,9 +334,40 @@ change buys nothing.
 
 ## 5. Improvement 4 — `optimize_subset`: a flat objective, and a headline metric that disagrees with it
 
-**Status:** re-measured at 100k. **Not a bug in the search. A flat
-objective, and a headline metric that does not match what is being
-optimised.**
+**Status: RESOLVED (v0.81.2) — but not for the reason recorded below.**
+Two real defects were found and fixed; the flat-objective account in
+this section turned out to be wrong. See
+`claude/perf_100k_main_vs_pr123/eth_ab_mask_fix/README.md`.
+
+**What was actually wrong.**
+[`optimize_ensemble_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/optimize_ensemble_subset.md)
+builds `ensemble_optimized` without copying `artifact_mask`.
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+then scores every HEADLINE metric off that object, masking by
+`ensemble$artifact_mask` – now NULL, so
+`.mosaic_mask_central_for_scoring()` silently substituted its
+`cases_warmup = 2` fallback for the run’s real scored window
+(`score_idx_cases = 31` on the 100k runs). The headline R2 was therefore
+computed over 28 timesteps the calibration likelihood excludes, in every
+run with `optimize_subset = TRUE`. A controlled Ethiopia A/B at 5,000
+simulations – identical draws, likelihoods, subsets and ESS – moved
+`r2_cases_ensemble` from 0.4395 to 0.7987 against a tier value of
+0.7978, closing a 44.9% gap to 0.1%; deaths moved 0.0970 to 0.3544.
+
+Separately, the optimiser never applied the mask it was handed, so
+SELECTION scored excluded cells. That is fixed too, and it is what made
+the first defect visible – but measured over both 100k ensembles it
+**changed no selection at all** (argmax 90 -\> 90 and 52 -\> 52) and did
+not sharpen the objective (span 4.09% -\> 4.35% / 4.68%).
+
+**So the hypothesis below is disproved.** The flat objective and the
+noise-picked argmax are real and remain unexplained; they were not
+caused by the masking. The cross-engine headline spread, however, was:
+it is gone once the headline is scored on the same window as the tier
+metric.
+
+The original (incorrect) diagnosis is kept below because it is what the
+100k data looked like before the cause was found.
 
 In the ETH 30,000-simulation run, **both** engines returned
 `n_best_subset = 30` — the `min_best_subset` floor — out of ~27,000
