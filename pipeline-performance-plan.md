@@ -481,8 +481,26 @@ worth more than one that guesses.
 
 ## 6a. Improvement 6 — post-calibration figure rendering is 36 min on one core
 
-**Status:** measured in production (section 1a). Not previously in this
-plan. **Saving:** up to ~30 min per 40-location run with `plots = TRUE`.
+**Status: IMPLEMENTED (v0.80.0; two defects fixed in v0.81.0).**
+**Saving:** up to ~30 min per 40-location run with `plots = TRUE`. The
+measured speedup is still outstanding — see section 10.
+
+Two things went wrong in v0.80.0 and both were invisible to the tests
+shipped with it, for the same reason: a cluster that fails to start
+falls back to [`lapply()`](https://rdrr.io/r/base/lapply.html) and
+produces byte-identical figures, so asserting output equality proves
+nothing about whether any worker ran. (i)
+[`make_mosaic_cluster()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
+stops unless
+[`set_root_directory()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_root_directory.md)
+has been called, which rendering never does — it now takes
+`require_root = FALSE`. (ii) R serialises a function that is a NAMESPACE
+BINDING by reference, so `.mosaic_traj_render_worker` came back “object
+not found” on any worker whose installed build predated it; it is
+reparented to [`globalenv()`](https://rdrr.io/r/base/environment.html)
+before dispatch, which is what `.mosaic_run_batch()` already does to its
+`worker_func`. The tests now assert the cluster is really built and that
+files actually come out of it.
 
 [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
 calls
@@ -529,9 +547,18 @@ time before and after.
 
 ## 6b. Improvement 7 — one parquet per simulation is the wrong shard granularity
 
-**Status: measured, NOT implemented. Needs a decision — it changes
-resume semantics.** **Possible saving: 60-90 min per 100k run, plus the
-same again on any resume.**
+**Status: MACHINERY IMPLEMENTED (v0.80.1, v0.81.0), DEFAULT STILL OFF.**
+**Possible saving: 60-90 min per 100k run, plus the same again on any
+resume.**
+
+`control$io$shard_batch_size` (default `1L`) makes one parquet carry N
+simulations. At the default the behaviour is byte-for-byte unchanged: a
+one-id chunk keeps the historical `sim_%07d.parquet` name and the
+sequential path still runs the original per-simulation worker.
+`.mosaic_resume_scan()` takes ids from the `sim` COLUMN rather than the
+filename (v0.80.1), so a 100-row shard scans identically to 100 one-row
+shards. **Not yet validated end to end at a real batch size, and the
+default has not been changed** — see section 10.
 
 Found while implementing item 1. The combine is slow because of **file
 framing, not data volume**, and item 1 only makes the framing cheaper to
@@ -671,3 +698,50 @@ min-of-5 carries 2.98% relative sd against median-of-5’s 6.22%); and
 Effects below roughly **7%** are not resolvable by wall clock on this
 hardware and should be measured at the call site with a 10^5-iteration
 microbenchmark instead.
+
+------------------------------------------------------------------------
+
+## 10. Outstanding (as of v0.81.2)
+
+Status of every item, so this is the only place anyone has to look.
+
+### Done
+
+| \# | change | shipped | caveat |
+|----|----|----|----|
+| 1 | chunked `open_dataset` in the combine | v0.79.0 | **production saving never confirmed** — the ~30-35 min is a projection carrying a laptop-measured 1.57x ratio across to dugong. One 100k run verifies it. |
+| 6a | parallelise [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md) | v0.80.0, fixed v0.81.0 | **speedup number outstanding** — the first benchmark was invalidated by the two defects; the re-run is what produces the figure. |
+| 4 | `optimize_subset` scoring mask | v0.81.2 | fixed, but not for the reason this document originally gave. See the open question below. |
+| 6b | shard-batching machinery | v0.80.1, v0.81.0 | **default still `1L`**; needs an end-to-end run at a real batch size before flipping it. |
+
+### Not started
+
+| \# | change | why it still matters | effort |
+|----|----|----|----|
+| 5 | guard the ensemble config broadcast | The ensemble stage peaks at **357-423 GB** at only 52-114 parameter sets (section 1a). The 100k workload already would not fit on hedgehog’s 448 GB. Cheapest item left, and the only one that turns a crash into a clear message. | ~2 h |
+| 2 | parallelise `.mosaic_reff_resim_ci()` | ~5 min per R_eff call, but on the post-hoc path [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md) never calls — so it buys nothing during calibration. | ~0.5 d |
+| 3 | measure per-worker shard directories | A measurement, not a change. Its answer may be “nothing to fix”, and item 6b may make it moot by cutting file creations ~100x. | ~2 h |
+
+### Open question, downgraded
+
+Item 4’s **flat objective is still unexplained**: the score spans ~4%
+over n = 30..117, and the argmax landed on 90 (main) and 52 (pr123) from
+statistically equivalent pools. Applying the scoring mask did not change
+that.
+
+It is no longer a *correctness* concern. With `artifact_mask`
+propagated, the masked R2 at those two subset sizes is 0.6426 (n=52)
+against 0.6406 (n=117) on pr123 — so the flat profile means many subset
+sizes really are equally good, and the headline metric no longer swings
+with the choice. What remains is a performance nit: the search evaluates
+~34 candidates to separate options differing by 4% on its own objective,
+and
+[`optimize_ensemble_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/optimize_ensemble_subset.md)
+already returns a `stability_flag` for “score profile was flat” that
+nothing consumes.
+
+### Recommended next
+
+**Item 5**, then confirm **1** and **6a** with one production run each,
+then validate **6b** and flip its default. Items 2 and 3 are the
+smallest and can wait.

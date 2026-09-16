@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.81.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.81.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -313,7 +313,8 @@
 <hr></div>
 <div class="section level2">
 <h2 id="id_6a-improvement-6--post-calibration-figure-rendering-is-36-min-on-one-core">6a. Improvement 6 — post-calibration figure rendering is 36 min on one core<a class="anchor" aria-label="anchor" href="#id_6a-improvement-6--post-calibration-figure-rendering-is-36-min-on-one-core"></a></h2>
-<p><strong>Status:</strong> measured in production (section 1a). Not previously in this plan. <strong>Saving:</strong> up to ~30 min per 40-location run with <code>plots = TRUE</code>.</p>
+<p><strong>Status: IMPLEMENTED (v0.80.0; two defects fixed in v0.81.0).</strong> <strong>Saving:</strong> up to ~30 min per 40-location run with <code>plots = TRUE</code>. The measured speedup is still outstanding — see section 10.</p>
+<p>Two things went wrong in v0.80.0 and both were invisible to the tests shipped with it, for the same reason: a cluster that fails to start falls back to <code><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply()</a></code> and produces byte-identical figures, so asserting output equality proves nothing about whether any worker ran. (i) <code><a href="reference/make_mosaic_cluster.html">make_mosaic_cluster()</a></code> stops unless <code><a href="reference/set_root_directory.html">set_root_directory()</a></code> has been called, which rendering never does — it now takes <code>require_root = FALSE</code>. (ii) R serialises a function that is a NAMESPACE BINDING by reference, so <code>.mosaic_traj_render_worker</code> came back “object not found” on any worker whose installed build predated it; it is reparented to <code><a href="https://rdrr.io/r/base/environment.html" class="external-link">globalenv()</a></code> before dispatch, which is what <code>.mosaic_run_batch()</code> already does to its <code>worker_func</code>. The tests now assert the cluster is really built and that files actually come out of it.</p>
 <p><code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> calls <code><a href="reference/render_MOSAIC_figures.html">render_MOSAIC_figures()</a></code> (<code>R/run_MOSAIC.R:2761</code>) after <code>Calibration complete</code>, and the whole of it is serial. Bracketed by output-file mtimes on the pr123 100k run:</p>
 <table class="table"><colgroup><col width="23%"><col width="23%"><col width="23%"><col width="30%"></colgroup><thead><tr><th>step</th>
 <th>span</th>
@@ -345,7 +346,8 @@
 <hr></div>
 <div class="section level2">
 <h2 id="id_6b-improvement-7--one-parquet-per-simulation-is-the-wrong-shard-granularity">6b. Improvement 7 — one parquet per simulation is the wrong shard granularity<a class="anchor" aria-label="anchor" href="#id_6b-improvement-7--one-parquet-per-simulation-is-the-wrong-shard-granularity"></a></h2>
-<p><strong>Status: measured, NOT implemented. Needs a decision — it changes resume semantics.</strong> <strong>Possible saving: 60-90 min per 100k run, plus the same again on any resume.</strong></p>
+<p><strong>Status: MACHINERY IMPLEMENTED (v0.80.1, v0.81.0), DEFAULT STILL OFF.</strong> <strong>Possible saving: 60-90 min per 100k run, plus the same again on any resume.</strong></p>
+<p><code>control$io$shard_batch_size</code> (default <code>1L</code>) makes one parquet carry N simulations. At the default the behaviour is byte-for-byte unchanged: a one-id chunk keeps the historical <code>sim_%07d.parquet</code> name and the sequential path still runs the original per-simulation worker. <code>.mosaic_resume_scan()</code> takes ids from the <code>sim</code> COLUMN rather than the filename (v0.80.1), so a 100-row shard scans identically to 100 one-row shards. <strong>Not yet validated end to end at a real batch size, and the default has not been changed</strong> — see section 10.</p>
 <p>Found while implementing item 1. The combine is slow because of <strong>file framing, not data volume</strong>, and item 1 only makes the framing cheaper to parse rather than removing it.</p>
 <p>A single-row parquet with 1,352 columns is <strong>444 KB on disk</strong> (measured) while the row itself is ~8 KB. That is ~330 bytes of parquet column metadata per column per file, and it is why the 100k run wrote <strong>52.9 GB of shards for 1.03 GB of data</strong> — a 51:1 ratio, straight from the production log (<code>Loading 100000 simulation files (52924.1 MB on disk)</code> … <code>Results in memory: 1031.7 MB</code>).</p>
 <p>Measured at 1,352 columns, 1,000 simulations, min of 3, varying only how many rows go in each file:</p>
@@ -458,6 +460,67 @@
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">sh</span> inst/bench/run_matrix.sh out.csv 4          <span class="co"># interleaved, multi-version</span></span></code></pre></div>
 <p>Two rules it enforces that matter here: <strong><code>min</code> is the headline statistic</strong>, not the mean (timing contamination is one-sided, and min-of-5 carries 2.98% relative sd against median-of-5’s 6.22%); and <strong>arms are interleaved, never blocked</strong> (an identical binary drifted 7.8% over 20 minutes on a quiet machine).</p>
 <p>Effects below roughly <strong>7%</strong> are not resolvable by wall clock on this hardware and should be measured at the call site with a 10^5-iteration microbenchmark instead.</p>
+<hr></div>
+<div class="section level2">
+<h2 id="id_10-outstanding-as-of-v0812">10. Outstanding (as of v0.81.2)<a class="anchor" aria-label="anchor" href="#id_10-outstanding-as-of-v0812"></a></h2>
+<p>Status of every item, so this is the only place anyone has to look.</p>
+<div class="section level3">
+<h3 id="done">Done<a class="anchor" aria-label="anchor" href="#done"></a></h3>
+<table class="table"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><thead><tr><th>#</th>
+<th>change</th>
+<th>shipped</th>
+<th>caveat</th>
+</tr></thead><tbody><tr><td>1</td>
+<td>chunked <code>open_dataset</code> in the combine</td>
+<td>v0.79.0</td>
+<td>
+<strong>production saving never confirmed</strong> — the ~30-35 min is a projection carrying a laptop-measured 1.57x ratio across to dugong. One 100k run verifies it.</td>
+</tr><tr><td>6a</td>
+<td>parallelise <code><a href="reference/render_MOSAIC_figures.html">render_MOSAIC_figures()</a></code>
+</td>
+<td>v0.80.0, fixed v0.81.0</td>
+<td>
+<strong>speedup number outstanding</strong> — the first benchmark was invalidated by the two defects; the re-run is what produces the figure.</td>
+</tr><tr><td>4</td>
+<td>
+<code>optimize_subset</code> scoring mask</td>
+<td>v0.81.2</td>
+<td>fixed, but not for the reason this document originally gave. See the open question below.</td>
+</tr><tr><td>6b</td>
+<td>shard-batching machinery</td>
+<td>v0.80.1, v0.81.0</td>
+<td>
+<strong>default still <code>1L</code></strong>; needs an end-to-end run at a real batch size before flipping it.</td>
+</tr></tbody></table></div>
+<div class="section level3">
+<h3 id="not-started">Not started<a class="anchor" aria-label="anchor" href="#not-started"></a></h3>
+<table class="table"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><thead><tr><th>#</th>
+<th>change</th>
+<th>why it still matters</th>
+<th>effort</th>
+</tr></thead><tbody><tr><td>5</td>
+<td>guard the ensemble config broadcast</td>
+<td>The ensemble stage peaks at <strong>357-423 GB</strong> at only 52-114 parameter sets (section 1a). The 100k workload already would not fit on hedgehog’s 448 GB. Cheapest item left, and the only one that turns a crash into a clear message.</td>
+<td>~2 h</td>
+</tr><tr><td>2</td>
+<td>parallelise <code>.mosaic_reff_resim_ci()</code>
+</td>
+<td>~5 min per R_eff call, but on the post-hoc path <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> never calls — so it buys nothing during calibration.</td>
+<td>~0.5 d</td>
+</tr><tr><td>3</td>
+<td>measure per-worker shard directories</td>
+<td>A measurement, not a change. Its answer may be “nothing to fix”, and item 6b may make it moot by cutting file creations ~100x.</td>
+<td>~2 h</td>
+</tr></tbody></table></div>
+<div class="section level3">
+<h3 id="open-question-downgraded">Open question, downgraded<a class="anchor" aria-label="anchor" href="#open-question-downgraded"></a></h3>
+<p>Item 4’s <strong>flat objective is still unexplained</strong>: the score spans ~4% over n = 30..117, and the argmax landed on 90 (main) and 52 (pr123) from statistically equivalent pools. Applying the scoring mask did not change that.</p>
+<p>It is no longer a <em>correctness</em> concern. With <code>artifact_mask</code> propagated, the masked R2 at those two subset sizes is 0.6426 (n=52) against 0.6406 (n=117) on pr123 — so the flat profile means many subset sizes really are equally good, and the headline metric no longer swings with the choice. What remains is a performance nit: the search evaluates ~34 candidates to separate options differing by 4% on its own objective, and <code><a href="reference/optimize_ensemble_subset.html">optimize_ensemble_subset()</a></code> already returns a <code>stability_flag</code> for “score profile was flat” that nothing consumes.</p>
+</div>
+<div class="section level3">
+<h3 id="recommended-next">Recommended next<a class="anchor" aria-label="anchor" href="#recommended-next"></a></h3>
+<p><strong>Item 5</strong>, then confirm <strong>1</strong> and <strong>6a</strong> with one production run each, then validate <strong>6b</strong> and flip its default. Items 2 and 3 are the smallest and can wait.</p>
+</div>
 </div>
 </div>
 
