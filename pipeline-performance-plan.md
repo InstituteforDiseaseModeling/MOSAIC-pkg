@@ -442,9 +442,30 @@ the cliff is what was missing.
 
 ## 6a. Improvement 6 — post-calibration figure rendering is 36 min on one core
 
-**Status: IMPLEMENTED (v0.80.0; two defects fixed in v0.81.0).**
-**Saving:** up to ~30 min per 40-location run with `plots = TRUE`. The measured
-speedup is still outstanding — see section 10.
+**Status: IMPLEMENTED (v0.80.0; defects fixed in v0.81.0 and v0.81.4). MEASURED.**
+**Saving: 17.6 min per 40-location run with `plots = TRUE`** (36.07 min -> 18.43 min,
+**1.96x** on 8 workers), measured on dugong re-rendering the real pr123 100k run
+directory. Identical file set on both arms (587 files), and the benchmark asserts the
+cluster actually engaged rather than inferring it from output equality.
+
+**Less than the ~30 min this section originally projected, and the reason is Amdahl,
+not the implementation.** Only the three per-location families are parallel; the
+sensitivity, correlation, ppc, spatial and ensemble figures are still serial, and the
+fan-out is capped at 8 (`.MOSAIC_DETAIL_MAX_WORKERS`). A ~60% parallel fraction on 8
+workers predicts 1/(0.4 + 0.6/8) = 2.1x, which is what was measured. Going further
+means parallelising the remaining families, not raising the worker cap.
+
+**Getting this number took three attempts**, and the first two were what found the
+defects: the cluster silently never starting (v0.81.0), then `results_all` silently
+killing all 286 posterior-detail pages (v0.81.4). With that second bug live the serial
+arm measured 15.5 min for 301 files; fixed, it measures 36.07 min for 587 and matches
+the 35.9 min seen in production. Output-equality assertions could not detect either
+defect, which is why the benchmark now checks engagement directly.
+
+Minor, unresolved: the serial arm emits 4,658 warnings and the parallel arm 552. Worker
+warnings are not forwarded to the master. The file sets are identical so nothing is
+lost from the output, but a figure that warns on a worker is quieter than one that
+warns serially.
 
 Two things went wrong in v0.80.0 and both were invisible to the tests shipped with
 it, for the same reason: a cluster that fails to start falls back to `lapply()` and
@@ -635,17 +656,17 @@ Status of every item, so this is the only place anyone has to look.
 
 | # | change | shipped | caveat |
 |---|---|---|---|
-| 5 | guard the ensemble config broadcast | v0.84.0 | measurement corrected two wrong numbers in the original section; chunking the dispatch deliberately not done. |
 | 1 | chunked `open_dataset` in the combine | v0.79.0 | **production saving never confirmed** — the ~30-35 min is a projection carrying a laptop-measured 1.57x ratio across to dugong. One 100k run verifies it. |
-| 6a | parallelise `render_MOSAIC_figures()` | v0.80.0, fixed v0.81.0 | **speedup number outstanding** — the first benchmark was invalidated by the two defects; the re-run is what produces the figure. |
+| 6a | parallelise `render_MOSAIC_figures()` | v0.80.0, fixed v0.81.0 + v0.81.4 | **measured 1.96x, 17.6 min saved** (36.07 -> 18.43 min, 8 workers). Below the ~30 min projected: only the per-location families are parallel, so Amdahl caps it. |
+| 2 | parallelise `.mosaic_reff_resim_ci()` | v0.85.0 | post-hoc path only; no calibration-time effect. |
 | 4 | `optimize_subset` scoring mask | v0.81.2 | fixed, but not for the reason this document originally gave. See the open question below. |
+| 5 | guard the ensemble config broadcast | v0.84.0 | measurement corrected two wrong numbers in the original section; chunking the dispatch deliberately not done. |
 | 6b | shard-batching machinery | v0.80.1, v0.81.0 | **default still `1L`**; needs an end-to-end run at a real batch size before flipping it. |
 
 ### Not started
 
 | # | change | why it still matters | effort |
 |---|---|---|---|
-| 2 | parallelise `.mosaic_reff_resim_ci()` | ~5 min per R_eff call, but on the post-hoc path `run_MOSAIC()` never calls — so it buys nothing during calibration. | ~0.5 d |
 | 3 | measure per-worker shard directories | A measurement, not a change. Its answer may be "nothing to fix", and item 6b may make it moot by cutting file creations ~100x. | ~2 h |
 
 ### Open question, downgraded
