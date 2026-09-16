@@ -23,7 +23,7 @@ optionally renders plot_Reff to
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.84.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.85.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -76,7 +76,8 @@ optionally renders <code><a href="plot_Reff.html">plot_Reff</a></code> to
 <span>  infectiousness_floor <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  plots <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  n_cores <span class="op">=</span> <span class="fl">1L</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -132,6 +133,14 @@ skip recomputation and return a <code>"skipped_exists"</code> status. Default
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Logical. Emit progress messages. Default <code>TRUE</code>.</p></dd>
+
+
+<dt id="arg-n-cores">n_cores<a class="anchor" aria-label="anchor" href="#arg-n-cores"></a></dt>
+<dd><p>Integer. Workers used for the <code>recompute_ci = TRUE</code>
+re-simulation, which is the only expensive part of this function
+(~1,000 engine runs at <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> defaults). Greater than 1 builds
+a PSOCK cluster and stops it before returning; <code>1L</code> (default) keeps
+the historical serial behaviour. Ignored when <code>recompute_ci = FALSE</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

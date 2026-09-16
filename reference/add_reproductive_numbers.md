@@ -24,7 +24,8 @@ add_reproductive_numbers(
   infectiousness_floor = 1,
   plots = TRUE,
   overwrite = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  n_cores = 1L
 )
 ```
 
@@ -81,6 +82,16 @@ add_reproductive_numbers(
 - verbose:
 
   Logical. Emit progress messages. Default `TRUE`.
+
+- n_cores:
+
+  Integer. Workers used for the `recompute_ci = TRUE` re-simulation,
+  which is the only expensive part of this function (~1,000 engine runs
+  at
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  defaults). Greater than 1 builds a PSOCK cluster and stops it before
+  returning; `1L` (default) keeps the historical serial behaviour.
+  Ignored when `recompute_ci = FALSE`.
 
 ## Value
 
