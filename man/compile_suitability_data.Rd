@@ -14,6 +14,7 @@ compile_suitability_data(
   forecast_horizon = 3,
   include_lags = FALSE,
   include_flood_prob = TRUE,
+  gam_train_stop = NULL,
   backfill_case_gaps = TRUE,
   backfill_max_weeks = 2L,
   backfill_method = "linear"
@@ -65,7 +66,26 @@ aggregates (\code{emdat_flood_prob_4w_max}, \code{emdat_flood_prob_12w_max},
 \code{emdat_flood_prob_12w_sum}, \code{emdat_flood_prob_anom}). The
 probability covariates are populated in both the historical training and
 the forecast windows, so the downstream LSTM consumes the same feature
-definition in both regimes.}
+definition in both regimes.
+
+As of the v7.4 hazard redesign this flag is the master switch for ALL
+THREE hazard-imputation GAMs: it additionally triggers
+\code{\link{impute_cyclone_probability}} (adds \code{emdat_cyclone_prob}
+and \code{emdat_cyclone_prob_12w_max}) and
+\code{\link{impute_drought_probability}} (adds \code{drought_prob} and
+the slow integrator \code{drought_prob_26w_mean}). Each GAM is gated on
+its own required-column contract, so a missing input skips only that
+hazard.}
+
+\item{gam_train_stop}{Date or character (\code{"YYYY-MM-DD"}) or \code{NULL}.
+Passed through to all three hazard imputers
+(\code{\link{impute_flood_probability}},
+\code{\link{impute_cyclone_probability}},
+\code{\link{impute_drought_probability}}). When non-\code{NULL}, each
+hazard GAM is FIT only on rows with \code{date <= gam_train_stop} and then
+predicts every row -- the leakage-hygiene hook for building a leak-free
+per-cutoff panel in rolling-origin forecast CV. Default \code{NULL} =
+full-data fit (back-compatible).}
 
 \item{backfill_case_gaps}{Logical (default \code{TRUE}). Linearly interpolate
 short interior gaps in the weekly case series (e.g. holiday non-reporting)

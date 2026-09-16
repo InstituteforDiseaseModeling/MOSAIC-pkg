@@ -72,6 +72,13 @@
 #'   \code{partial_pool_lambda}, \code{exclude_covariates} (lstm_v2 ablation
 #'   override), and the execution knob \code{parallel_seeds} (integer, default
 #'   `1L` = serial; not a model parameter). Ignored by the legacy path.
+#' @param source_csv `NULL` (default) or a path to the suitability panel CSV
+#'   that psi fitting should read. `NULL` uses the canonical panel
+#'   \code{file.path(PATHS$DATA_CHOLERA_WEEKLY, "cholera_country_weekly_suitability_data.csv")}.
+#'   A supplied path lets a caller point fitting at an arbitrary panel (e.g. a
+#'   v7.4-tagged or per-cutoff leak-free panel) without renaming files.
+#'   Supported only by the `lstm_v2_hierarchical_film` path; errors if supplied
+#'   with the frozen legacy path.
 #' @param plot_country_diagnostics Logical (default `FALSE`). Per-country base-R
 #'   diagnostic plots during the smoothing loop (legacy path only).
 #' @param ... Absorbs deprecated v0.33 arguments for backward compatibility:
@@ -222,6 +229,7 @@ est_suitability <- function(PATHS,
                             architecture = c("lstm_v2_hierarchical_film",
                                              "lstm_v1_legacy"),
                             arch_control = NULL,
+                            source_csv = NULL,
                             plot_country_diagnostics = FALSE,
                             ...) {
 
@@ -264,6 +272,9 @@ est_suitability <- function(PATHS,
 
      # ---- Dispatch on architecture ----------------------------------------
      if (identical(architecture, "lstm_v1_legacy")) {
+          if (!is.null(source_csv))
+               stop("est_suitability: `source_csv` override is only supported by the lstm_v2_hierarchical_film path (the legacy path is frozen at its canonical panel).",
+                    call. = FALSE)
           return(.est_suitability_legacy(
                PATHS            = PATHS,
                fit_date_start   = fit_date_start,
@@ -287,6 +298,7 @@ est_suitability <- function(PATHS,
           response_var     = response_var,
           bias_correct     = bias_correct,
           arch_control     = arch_control,
+          source_csv       = source_csv,
           plot_country_diagnostics = plot_country_diagnostics)
 }
 

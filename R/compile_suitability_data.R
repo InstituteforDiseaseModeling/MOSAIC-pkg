@@ -52,6 +52,24 @@
 #'   the forecast windows, so the downstream LSTM consumes the same feature
 #'   definition in both regimes.
 #'
+#'   As of the v7.4 hazard redesign this flag is the master switch for ALL
+#'   THREE hazard-imputation GAMs: it additionally triggers
+#'   \code{\link{impute_cyclone_probability}} (adds \code{emdat_cyclone_prob}
+#'   and \code{emdat_cyclone_prob_12w_max}) and
+#'   \code{\link{impute_drought_probability}} (adds \code{drought_prob} and
+#'   the slow integrator \code{drought_prob_26w_mean}). Each GAM is gated on
+#'   its own required-column contract, so a missing input skips only that
+#'   hazard.
+#' @param gam_train_stop Date or character (\code{"YYYY-MM-DD"}) or \code{NULL}.
+#'   Passed through to all three hazard imputers
+#'   (\code{\link{impute_flood_probability}},
+#'   \code{\link{impute_cyclone_probability}},
+#'   \code{\link{impute_drought_probability}}). When non-\code{NULL}, each
+#'   hazard GAM is FIT only on rows with \code{date <= gam_train_stop} and then
+#'   predicts every row -- the leakage-hygiene hook for building a leak-free
+#'   per-cutoff panel in rolling-origin forecast CV. Default \code{NULL} =
+#'   full-data fit (back-compatible).
+#'
 #' @return This function processes the data and merges the climate, ENSO, and cholera cases data into a single dataset. It creates a \code{cases_binary} column indicating environmental suitability based on case patterns using sophisticated temporal logic. The processed dataset is saved as a CSV file.
 #'
 #' @details
@@ -100,6 +118,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                                     date_start = "2000-01-01", date_stop = NULL,
                                     forecast_mode = TRUE, forecast_horizon = 3, include_lags = FALSE,
                                     include_flood_prob = TRUE,
+                                    gam_train_stop = NULL,
                                     backfill_case_gaps = TRUE, backfill_max_weeks = 2L,
                                     backfill_method = "linear") {
 
@@ -547,6 +566,23 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
           message("    - EM-DAT flood file not found at: ", emdat_path)
      }
 
+     # 3c. EM-DAT tropical-cyclone / storm-surge occurrence (weekly, country-level).
+     # Separate hazard series from the same processor (process_EMDAT_data),
+     # feeding impute_cyclone_probability() below. Same NA-in-forecast-window
+     # semantics as the flood panel.
+     message("  - Adding EM-DAT cyclone occurrence indicators...")
+     cyclone_path <- file.path(PATHS$DATA_EMDAT, "cyclones_country_weekly.csv")
+     if (file.exists(cyclone_path)) {
+          cyclone_data <- utils::read.csv(cyclone_path, stringsAsFactors = FALSE)
+          cyclone_cols <- c("emdat_cyclone_active", "emdat_cyclone_new",
+                            "emdat_cyclone_affected", "emdat_cyclone_deaths")
+          cyclone_data <- cyclone_data[cyclone_data$iso_code %in% iso_codes_mosaic,
+                                        c("iso_code", "year", "week", cyclone_cols)]
+          d <- merge(d, cyclone_data, by = c("iso_code", "year", "week"), all.x = TRUE)
+     } else {
+          message("    - EM-DAT cyclone file not found at: ", cyclone_path)
+     }
+
      # 4. WASH indicators (static, country-level)
      message("  - Adding WASH indicators...")
      wash_path <- file.path(PATHS$DATA_PROCESSED, "WASH", "WASH_data_Sikder_2023.csv")
@@ -734,7 +770,12 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                       # stay NA so impute_flood_probability() can replace them
                       # downstream with a GAM-imputed continuous probability.
                       "emdat_flood_active", "emdat_flood_new",
-                      "emdat_flood_affected", "emdat_flood_deaths")
+                      "emdat_flood_affected", "emdat_flood_deaths",
+                      # Same NA-aware treatment for the cyclone panel: forecast-
+                      # window rows stay NA so impute_cyclone_probability() can
+                      # replace them with a GAM-imputed continuous probability.
+                      "emdat_cyclone_active", "emdat_cyclone_new",
+                      "emdat_cyclone_affected", "emdat_cyclone_deaths")
      numeric_cols <- names(d)[sapply(d, is.numeric)]
      numeric_cols <- setdiff(numeric_cols, exclude_cols)
 
@@ -1317,10 +1358,11 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
           } else NULL
           d <- MOSAIC::impute_flood_probability(
                d,
-               output_col  = "emdat_flood_prob",
-               diagnostics = TRUE,
-               diag_dir    = diag_dir,
-               verbose     = TRUE
+               output_col     = "emdat_flood_prob",
+               gam_train_stop = gam_train_stop,
+               diagnostics    = TRUE,
+               diag_dir       = diag_dir,
+               verbose        = TRUE
           )
 
           # Country-grouped rolling-window aggregates of the imputed probability.
@@ -1373,6 +1415,75 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      } else if (isTRUE(include_flood_prob)) {
           message("Skipping flood probability imputation; missing column(s): ",
                   paste(gam_missing, collapse = ", "))
+     }
+
+     # ============================================================================
+     # CYCLONE PROBABILITY IMPUTATION (wind/coastal binomial GAM)  [v7.4]
+     # ============================================================================
+     # Sibling to the flood block: a SEPARATE wind-led GAM on the
+     # emdat_cyclone_active label (tropical cyclone + storm surge). Emits
+     # emdat_cyclone_prob + emdat_cyclone_prob_12w_max (mirroring the flood
+     # 12w_max). Gated on include_flood_prob (the hazard-imputation master
+     # switch) and on the cyclone GAM's required columns being present.
+     cyc_required <- MOSAIC:::.impute_cyclone_probability_required()
+     cyc_missing  <- setdiff(cyc_required, names(d))
+     if (isTRUE(include_flood_prob) && length(cyc_missing) == 0) {
+          message("Imputing cyclone probability with wind/coastal binomial GAM...")
+          diag_dir_cyc <- if (!is.null(PATHS$DOCS_FIGURES)) {
+               file.path(PATHS$DOCS_FIGURES, "cyclone_imputation")
+          } else NULL
+          d <- MOSAIC::impute_cyclone_probability(
+               d,
+               output_col     = "emdat_cyclone_prob",
+               gam_train_stop = gam_train_stop,
+               diagnostics    = TRUE,
+               diag_dir       = diag_dir_cyc,
+               verbose        = TRUE
+          )
+          d <- d %>%
+               dplyr::group_by(iso_code) %>%
+               dplyr::arrange(date, .by_group = TRUE) %>%
+               dplyr::mutate(
+                    emdat_cyclone_prob_12w_max = slider::slide_dbl(
+                         emdat_cyclone_prob, max, .before = 11, .complete = TRUE)
+               ) %>%
+               dplyr::ungroup()
+          # Fill the leading-edge warm-up NAs of the 12w_max with the point prob
+          # so the column carries no NA (consistent with the LSTM contract).
+          na12 <- is.na(d$emdat_cyclone_prob_12w_max)
+          d$emdat_cyclone_prob_12w_max[na12] <- d$emdat_cyclone_prob[na12]
+     } else if (isTRUE(include_flood_prob)) {
+          message("Skipping cyclone probability imputation; missing column(s): ",
+                  paste(cyc_missing, collapse = ", "))
+     }
+
+     # ============================================================================
+     # DROUGHT PROBABILITY IMPUTATION (teleconnection binomial GAM)  [v7.4]
+     # ============================================================================
+     # Label = sustained-SPEI-deficit (12w rolling mean of spei_approx <= -0.8),
+     # derived inside the imputer. Predictors = ENSO/IOD teleconnection lags +
+     # antecedent temp/precip deficit (concurrent spei_approx EXCLUDED to avoid
+     # circular leakage). Emits drought_prob + drought_prob_26w_mean (slow
+     # long-memory integrator).
+     drt_required <- MOSAIC:::.impute_drought_probability_required()
+     drt_missing  <- setdiff(drt_required, names(d))
+     if (isTRUE(include_flood_prob) && length(drt_missing) == 0) {
+          message("Imputing drought probability with teleconnection binomial GAM...")
+          diag_dir_drt <- if (!is.null(PATHS$DOCS_FIGURES)) {
+               file.path(PATHS$DOCS_FIGURES, "drought_imputation")
+          } else NULL
+          d <- MOSAIC::impute_drought_probability(
+               d,
+               output_col     = "drought_prob",
+               integrator_col = "drought_prob_26w_mean",
+               gam_train_stop = gam_train_stop,
+               diagnostics    = TRUE,
+               diag_dir       = diag_dir_drt,
+               verbose        = TRUE
+          )
+     } else if (isTRUE(include_flood_prob)) {
+          message("Skipping drought probability imputation; missing column(s): ",
+                  paste(drt_missing, collapse = ", "))
      }
 
      # The `source` column is intentionally retained in the suitability CSV
