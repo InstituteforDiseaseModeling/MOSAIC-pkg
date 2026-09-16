@@ -483,6 +483,68 @@ calc_Reff <- function(ensemble,
 #'
 #' @keywords internal
 #' @noRd
+#' Re-simulate one posterior member for the R_eff CI
+#'
+#' One (param, stoch) member: rebuild its config from its seed, simulate, and
+#' return the per-location R_eff series plus the faithfulness diagnostics. No
+#' shared state -- everything is returned, so the caller fills its own slots.
+#'
+#' Defined at FILE scope so \code{parLapplyLB} ships only the task, not the
+#' calling frame (which holds \code{cases_array} and every member config). The
+#' heavy inputs come from the worker's global environment, put there once by
+#' \code{clusterExport}, and the config is REBUILT from its seed rather than
+#' broadcast: one base config per worker instead of n_param_sets of them.
+#'
+#' @param task List with \code{p}, \code{s} and \code{saved} (the saved
+#'   \code{cases_array[, , p, s]} slice for this member).
+#' @return A list of per-member results, or a \code{$error} string.
+#' @noRd
+.mosaic_reff_resim_member <- function(task) {
+  tryCatch({
+    e <- globalenv()
+    base_config <- get(".rr_base_config", envir = e)
+    priors      <- get(".rr_priors",      envir = e)
+    samp        <- get(".rr_sampling",    envir = e)
+    PATHS       <- get(".rr_paths",       envir = e)
+    seeds       <- get(".rr_seeds",       envir = e)
+    max_days    <- get(".rr_max_days",    envir = e)
+    floor_v     <- get(".rr_floor",       envir = e)
+    nL          <- get(".rr_nL",          envir = e)
+    Tn          <- get(".rr_Tn",          envir = e)
+
+    p <- task$p; s <- task$s
+    cfg <- MOSAIC:::.mosaic_clamp_transmission_params(
+      MOSAIC::sample_parameters(PATHS = PATHS, priors = priors, config = base_config,
+                                seed = seeds[p], sample_args = samp, verbose = FALSE))
+    g <- MOSAIC:::.mosaic_generation_time_pmf(
+      iota = as.numeric(cfg$iota)[1], gamma_1 = as.numeric(cfg$gamma_1)[1],
+      gamma_2 = as.numeric(cfg$gamma_2)[1], sigma = as.numeric(cfg$sigma)[1],
+      max_days = max_days)
+
+    run_cfg <- cfg
+    run_cfg$seed <- (p * 1000L) + s
+    model <- MOSAIC::run_simulation(config = run_cfg, seed = run_cfg$seed, quiet = TRUE)
+    inc_m <- MOSAIC:::.mosaic_reff_to_mat(model$results$incidence,      nL, Tn)
+    rc_m  <- MOSAIC:::.mosaic_reff_to_mat(model$results$reported_cases, nL, Tn)
+
+    saved <- matrix(as.numeric(task$saved), nrow = nL, ncol = Tn)
+    rv <- as.numeric(rc_m); sv <- as.numeric(saved)
+    ok <- is.finite(rv) & is.finite(sv)
+    re <- cc <- ssum <- rsum <- NA_real_; mx <- 0
+    if (any(ok)) {
+      ssum <- sum(sv[ok]); rsum <- sum(rv[ok])
+      re   <- if (ssum > 0) abs(rsum - ssum) / ssum else abs(rsum - ssum)
+      cc   <- suppressWarnings(stats::cor(rv[ok], sv[ok]))
+      mx   <- max(abs(rv[ok] - sv[ok]))
+    }
+    reff <- lapply(seq_len(nL), function(i)
+      MOSAIC:::.cori_reff(inc_m[i, ], g, infectiousness_floor = floor_v))
+
+    list(p = p, s = s, reff = reff, re = re, cc = cc,
+         ssum = ssum, rsum = rsum, max_abs = mx)
+  }, error = function(e) list(p = task$p, s = task$s, error = conditionMessage(e)))
+}
+
 .mosaic_reff_resim_ci <- function(ensemble, base_config, priors, sampling_args,
                                   PATHS, max_days = 56L,
                                   probs = c(0.025, 0.5, 0.975),
@@ -490,7 +552,8 @@ calc_Reff <- function(ensemble,
                                   burn_in_days = 0L,
                                   cases_central_method = "median",
                                   gate_rel_tol = 0.05, gate_frac = 0.95,
-                                  gate_cor_min = 0.95, verbose = TRUE) {
+                                  gate_cor_min = 0.95, verbose = TRUE,
+                                  cl = NULL) {
   if (!inherits(ensemble, "mosaic_ensemble"))
     stop(".mosaic_reff_resim_ci: `ensemble` must be a mosaic_ensemble object.")
   for (nm in c("seeds", "parameter_weights", "cases_array", "n_param_sets",
@@ -521,15 +584,13 @@ calc_Reff <- function(ensemble,
   bid <- suppressWarnings(as.integer(burn_in_days))
   if (length(bid) != 1L || is.na(bid) || bid < 0L) bid <- 0L
 
-  # --- Reconstruct member configs (same recipe as the ensemble worker) -------
-  if (verbose) message("  Re-sampling ", nP, " posterior member configs...")
-  member_cfgs <- vector("list", nP)
-  for (p in seq_len(nP)) {
-    member_cfgs[[p]] <- .mosaic_clamp_transmission_params(
-      sample_parameters(PATHS = PATHS, priors = priors, config = base_config,
-                        seed = parameter_seeds[p], sample_args = sampling_args,
-                        verbose = FALSE))
-  }
+  # Member configs are NOT pre-built here any more. Each is rebuilt inside
+  # .mosaic_reff_resim_member() from its own seed, using the same recipe, which
+  # (a) lets the work parallelise without broadcasting n_param_sets configs of
+  # ~10 MB each to every worker, and (b) removes a serial nP-long
+  # sample_parameters() loop from the front of this function. Verified with a
+  # grep on the NAME that nothing else read member_cfgs -- the mistake that
+  # deleted results_all in v0.80.0 was grepping for the wrong pattern.
 
   # --- Re-simulate each member, capturing daily incidence + reported_cases ---
   # Member index m = (s - 1) * nP + p ; weight = pw[p] / nS.
@@ -563,43 +624,71 @@ calc_Reff <- function(ensemble,
   rsum_v  <- rep(NA_real_, n_members)   # per-member resim total
   max_abs <- 0
   if (verbose) message("  Re-simulating ", n_members, " members (", nP, " x ", nS, ")...")
-  for (p in seq_len(nP)) {
-    cfg <- member_cfgs[[p]]
-    g   <- .mosaic_generation_time_pmf(
-      iota = as.numeric(cfg$iota)[1], gamma_1 = as.numeric(cfg$gamma_1)[1],
-      gamma_2 = as.numeric(cfg$gamma_2)[1], sigma = as.numeric(cfg$sigma)[1],
-      max_days = max_days)
-    for (s in seq_len(nS)) {
-      m <- (s - 1L) * nP + p
-      member_w[m] <- pw[p] / nS
-      run_cfg <- cfg
-      run_cfg$seed <- (p * 1000L) + s
-      model <- run_simulation(config = run_cfg, seed = run_cfg$seed, quiet = TRUE)
-      inc <- model$results$incidence       # [nL, T]
-      rc  <- model$results$reported_cases
-      inc_m <- .mosaic_reff_to_mat(inc, nL, Tn)
-      rc_m  <- .mosaic_reff_to_mat(rc,  nL, Tn)
-      # Statistical-equivalence diagnostics vs saved cases_array (this (p, s)).
-      saved <- matrix(as.numeric(ca[, , p, s, drop = FALSE]), nrow = nL, ncol = Tn)
-      rv <- as.numeric(rc_m); sv <- as.numeric(saved)
-      ok <- is.finite(rv) & is.finite(sv)
-      if (any(ok)) {
-        ssum <- sum(sv[ok]); rsum <- sum(rv[ok])
-        re_vec[m]  <- if (ssum > 0) abs(rsum - ssum) / ssum else abs(rsum - ssum)
-        cc_vec[m]  <- suppressWarnings(stats::cor(rv[ok], sv[ok]))
-        ssum_v[m]  <- ssum; rsum_v[m] <- rsum
-        max_abs    <- max(max_abs, max(abs(rv[ok] - sv[ok])))
-      }
-      for (i in seq_len(nL))
-        reff_loc[[i]][m, ] <- .cori_reff(inc_m[i, ], g,
-                                         infectiousness_floor = infectiousness_floor)
-    }
-    if (verbose && (p %% 10L == 0L || p == nP))
-      message(sprintf("    members done: %d/%d | rel_err med=%.4f p%.0f=%.4f | cor med=%.4f",
-                      p, nP, stats::median(re_vec, na.rm = TRUE), gate_frac * 100,
-                      stats::quantile(re_vec, gate_frac, na.rm = TRUE, names = FALSE),
-                      stats::median(cc_vec, na.rm = TRUE)))
+
+  # Members are independent: each writes only its own slot, and the one running
+  # aggregate (max_abs) is associative. So this is a map, and on a cluster it is
+  # a parLapplyLB. The per-member cost is one run_simulation(), which dominates
+  # everything else here by orders of magnitude.
+  #
+  # What travels: the saved cases_array SLICE for that member (nL x Tn), not the
+  # whole 4-D array. The config is rebuilt on the worker from its seed rather
+  # than broadcast -- one base config per worker instead of n_param_sets of them,
+  # which is the same broadcast cliff .mosaic_ensemble_broadcast_gb() prices in
+  # calc_model_ensemble().
+  tasks <- vector("list", n_members)
+  for (p in seq_len(nP)) for (s in seq_len(nS)) {
+    m <- (s - 1L) * nP + p
+    member_w[m] <- pw[p] / nS
+    tasks[[m]] <- list(p = p, s = s,
+                       saved = matrix(as.numeric(ca[, , p, s, drop = FALSE]),
+                                      nrow = nL, ncol = Tn))
   }
+
+  use_cl <- !is.null(cl) && inherits(cl, "cluster") && length(cl) > 1L && n_members > 1L
+  if (use_cl) {
+    .rr_env <- new.env(parent = emptyenv())
+    assign(".rr_base_config", base_config,          envir = .rr_env)
+    assign(".rr_priors",      priors,               envir = .rr_env)
+    assign(".rr_sampling",    sampling_args,        envir = .rr_env)
+    assign(".rr_paths",       PATHS,                envir = .rr_env)
+    assign(".rr_seeds",       parameter_seeds,      envir = .rr_env)
+    assign(".rr_max_days",    max_days,             envir = .rr_env)
+    assign(".rr_floor",       infectiousness_floor, envir = .rr_env)
+    assign(".rr_nL",          nL,                   envir = .rr_env)
+    assign(".rr_Tn",          Tn,                   envir = .rr_env)
+    parallel::clusterExport(cl, ls(.rr_env, all.names = TRUE), envir = .rr_env)
+    parallel::clusterEvalQ(cl, MOSAIC:::.mosaic_set_blas_threads(1L))
+    if (verbose) message("    on ", length(cl), " workers")
+    # Reparent: a namespace binding serialises by REFERENCE, so a worker running
+    # a different build would fail to resolve it. Same reason .mosaic_run_batch()
+    # does this. See test-render-parallel.R for the regression this prevents.
+    .w <- .mosaic_reff_resim_member
+    environment(.w) <- globalenv()
+    res <- parallel::parLapplyLB(cl, tasks, .w)
+  } else {
+    res <- lapply(tasks, .mosaic_reff_resim_member)
+  }
+
+  failed <- vapply(res, function(r) !is.null(r$error), logical(1))
+  if (any(failed))
+    stop(sprintf(".mosaic_reff_resim_ci: %d of %d members failed to re-simulate; first: %s",
+                 sum(failed), n_members, res[[which(failed)[1]]]$error), call. = FALSE)
+
+  for (m in seq_len(n_members)) {
+    r <- res[[m]]
+    re_vec[m] <- r$re; cc_vec[m] <- r$cc
+    ssum_v[m] <- r$ssum; rsum_v[m] <- r$rsum
+    max_abs   <- max(max_abs, r$max_abs)
+    for (i in seq_len(nL)) reff_loc[[i]][m, ] <- r$reff[[i]]
+  }
+  rm(res, tasks); gc(FALSE)
+
+  if (verbose)
+    message(sprintf("    members done: %d/%d | rel_err med=%.4f p%.0f=%.4f | cor med=%.4f",
+                    n_members, n_members, stats::median(re_vec, na.rm = TRUE),
+                    gate_frac * 100,
+                    stats::quantile(re_vec, gate_frac, na.rm = TRUE, names = FALSE),
+                    stats::median(cc_vec, na.rm = TRUE)))
 
   # FAITHFULNESS GATE (robust statistical equivalence). Pass requires:
   #   (1) the gate_frac-percentile per-member relative total-case error <= gate_rel_tol

@@ -11,7 +11,8 @@ add_reproductive_numbers(
   infectiousness_floor = 1,
   plots = TRUE,
   overwrite = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  n_cores = 1L
 )
 }
 \arguments{
@@ -50,6 +51,12 @@ skip recomputation and return a \code{"skipped_exists"} status. Default
 \code{TRUE}.}
 
 \item{verbose}{Logical. Emit progress messages. Default \code{TRUE}.}
+
+\item{n_cores}{Integer. Workers used for the \code{recompute_ci = TRUE}
+re-simulation, which is the only expensive part of this function
+(~1,000 engine runs at \code{run_MOSAIC()} defaults). Greater than 1 builds
+a PSOCK cluster and stops it before returning; \code{1L} (default) keeps
+the historical serial behaviour. Ignored when \code{recompute_ci = FALSE}.}
 }
 \value{
 Invisibly, a one-row \code{data.frame} status with columns:

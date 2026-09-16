@@ -57,6 +57,11 @@
 #'   skip recomputation and return a \code{"skipped_exists"} status. Default
 #'   \code{TRUE}.
 #' @param verbose Logical. Emit progress messages. Default \code{TRUE}.
+#' @param n_cores Integer. Workers used for the \code{recompute_ci = TRUE}
+#'   re-simulation, which is the only expensive part of this function
+#'   (~1,000 engine runs at \code{run_MOSAIC()} defaults). Greater than 1 builds
+#'   a PSOCK cluster and stops it before returning; \code{1L} (default) keeps
+#'   the historical serial behaviour. Ignored when \code{recompute_ci = FALSE}.
 #'
 #' @return Invisibly, a one-row \code{data.frame} status with columns:
 #'   \describe{
@@ -96,7 +101,8 @@ add_reproductive_numbers <- function(output_dir,
                                      infectiousness_floor = 1,
                                      plots     = TRUE,
                                      overwrite = TRUE,
-                                     verbose   = TRUE) {
+                                     verbose   = TRUE,
+                                     n_cores   = 1L) {
 
   .status <- function(status, n_locations = NA_integer_, ci_available = NA,
                       csv = NA_character_, rds = NA_character_,
@@ -350,13 +356,32 @@ add_reproductive_numbers <- function(output_dir,
 
   PATHS <- get_paths()
 
+  # recompute_ci re-simulates every posterior member, which is the whole cost of
+  # this path: ~1,000 engine runs at run_MOSAIC()'s defaults. Build a cluster for
+  # it when asked. This function is post-hoc and standalone, so nothing else
+  # holds sockets and there is no cluster to borrow.
+  .reff_cl <- NULL
+  n_cores <- suppressWarnings(as.integer(n_cores))
+  if (length(n_cores) != 1L || is.na(n_cores)) n_cores <- 1L
+  if (n_cores > 1L) {
+    .reff_cl <- tryCatch(
+      make_mosaic_cluster(n_cores = n_cores, type = "PSOCK", require_root = FALSE),
+      error = function(e) {
+        warning("add_reproductive_numbers: could not start a cluster (",
+                conditionMessage(e), "); re-simulating serially.", call. = FALSE)
+        NULL
+      })
+    if (!is.null(.reff_cl))
+      on.exit(try(.mosaic_stop_cluster(.reff_cl), silent = TRUE), add = TRUE)
+  }
+
   res <- .mosaic_reff_resim_ci(
     ensemble = ens, base_config = base_config, priors = priors,
     sampling_args = sampling_args, PATHS = PATHS,
     probs = c(0.025, 0.5, 0.975),
     infectiousness_floor = infectiousness_floor, burn_in_days = bid,
     cases_central_method = cases_cm,
-    verbose = verbose)
+    verbose = verbose, cl = .reff_cl)
 
   if (verbose)
     message(sprintf(paste0("  Faithfulness gate PASSED (robust statistical ",
