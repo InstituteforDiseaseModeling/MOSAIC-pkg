@@ -13,7 +13,8 @@ plot_model_distributions(
   method_names,
   output_dir,
   custom_colors = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  locations = NULL
 )
 ```
 
@@ -41,6 +42,15 @@ plot_model_distributions(
 
   Logical; if `TRUE`, print per-parameter diagnostic messages while
   building the plots (default `FALSE`).
+
+- locations:
+
+  Optional character vector of ISO codes selecting which outputs to
+  draw: `NULL` (default) draws the global page and every location,
+  `character(0)` draws only the global page, and a vector of codes draws
+  only those locations. Lets a caller split the work across processes;
+  see
+  [`render_MOSAIC_figures`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md).
 
 ## Value
 

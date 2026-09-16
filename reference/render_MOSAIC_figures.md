@@ -15,7 +15,14 @@ calibration.
 ## Usage
 
 ``` r
-render_MOSAIC_figures(dir_output, which = NULL, plots = TRUE, verbose = TRUE)
+render_MOSAIC_figures(
+  dir_output,
+  which = NULL,
+  plots = TRUE,
+  verbose = TRUE,
+  cl = NULL,
+  n_cores = 1L
+)
 ```
 
 ## Arguments
@@ -43,6 +50,24 @@ render_MOSAIC_figures(dir_output, which = NULL, plots = TRUE, verbose = TRUE)
 
   Logical. Print progress messages. Default `TRUE`.
 
+- cl:
+
+  Optional PSOCK cluster (from
+  [`make_mosaic_cluster`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md))
+  used to render the three per-location figure families in parallel: the
+  prior/posterior distributions, the per-category posterior detail
+  pages, and the trajectory pages. A cluster passed here is **borrowed,
+  never stopped** – the caller owns its lifecycle. One figure per worker
+  process, each opening and closing its own graphics device, so no
+  device is ever shared.
+
+- n_cores:
+
+  Integer. When `cl` is `NULL` and this is greater than 1, render builds
+  its own PSOCK cluster of this size and stops it before returning.
+  Capped at `.MOSAIC_DETAIL_MAX_WORKERS` for the two memory-heavy
+  families regardless. Default `1L` (serial, unchanged).
+
 ## Value
 
 Invisibly, a named logical vector indicating which figure groups were
@@ -64,6 +89,27 @@ rebuilt — rebuilding would trigger local simulation on the client
 always simulates, via PSOCK or sequentially), which this function
 deliberately avoids. Every figure is wrapped in `tryCatch` so one
 failure never aborts the rest.
+
+## Parallel rendering
+
+At 40 locations this stage is the largest single-threaded block in a
+production run: measured at 35.9 min of a 260-min 100,000-simulation
+run, of which
+[`plot_model_posteriors_detail()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_posteriors_detail.md)
+alone was 20.0 min for 286 PDFs. The work is embarrassingly parallel –
+every page is an independent `ggsave` to its own filename – so passing
+`cl` or `n_cores` divides it across workers.
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+passes `n_cores`: by the time figures render, the calibration cluster
+has already been stopped (it goes at `R/run_MOSAIC.R`, right after the
+calibration loop) and
+[`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)'s
+own cluster has come and gone too, so there is nothing left to borrow
+and nothing to contend with for R's 128-connection ceiling.
+
+Per-location failures are isolated: a worker that errors on one location
+produces a warning on the master and the remaining locations still
+render, matching the serial path's per-figure `tryCatch`.
 
 ## See also
 

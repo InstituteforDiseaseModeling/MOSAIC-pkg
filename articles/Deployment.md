@@ -40,6 +40,11 @@ ssh user@host 'bash -s' < ~/MOSAIC/MOSAIC-pkg/vm/setup_mosaic.sh
 
 ### Script Contents
 
+`vm/` is not shipped inside the installed package, so this listing
+appears only when the vignette is built from a source checkout. In an
+installed copy, read the script in the repository at
+`MOSAIC-pkg/vm/setup_mosaic.sh`.
+
 ``` bash
 #!/bin/bash
 set -e  # Exit on any error

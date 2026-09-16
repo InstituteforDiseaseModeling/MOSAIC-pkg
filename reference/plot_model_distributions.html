@@ -11,7 +11,7 @@ Parameters are organized by biological category and ordered consistently across 
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.80.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -56,7 +56,8 @@ Parameters are organized by biological category and ordered consistently across 
 <span>  <span class="va">method_names</span>,</span>
 <span>  <span class="va">output_dir</span>,</span>
 <span>  custom_colors <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  locations <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -83,6 +84,14 @@ Parameters are organized by biological category and ordered consistently across 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Logical; if <code>TRUE</code>, print per-parameter diagnostic
 messages while building the plots (default <code>FALSE</code>).</p></dd>
+
+
+<dt id="arg-locations">locations<a class="anchor" aria-label="anchor" href="#arg-locations"></a></dt>
+<dd><p>Optional character vector of ISO codes selecting which
+outputs to draw: <code>NULL</code> (default) draws the global page and every
+location, <code>character(0)</code> draws only the global page, and a vector of
+codes draws only those locations. Lets a caller split the work across
+processes; see <code><a href="render_MOSAIC_figures.html">render_MOSAIC_figures</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -16,7 +16,8 @@ plot_model_posteriors_detail(
   output_dir = "./results/plots",
   subset_col = "is_best_subset",
   weight_col = "weight_best",
-  verbose = TRUE
+  verbose = TRUE,
+  locations = NULL
 )
 ```
 
@@ -62,6 +63,15 @@ plot_model_posteriors_detail(
 - verbose:
 
   Logical; print progress messages (default: TRUE)
+
+- locations:
+
+  Optional character vector of ISO codes selecting which outputs to
+  draw: `NULL` (default) draws the global pages and every location,
+  `character(0)` draws only the global pages, and a vector of codes
+  draws only those locations. Lets a caller split the work across
+  processes; see
+  [`render_MOSAIC_figures`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md).
 
 ## Value
 

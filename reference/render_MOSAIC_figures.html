@@ -21,7 +21,7 @@ machine, or repeatedly without re-running calibration."><meta property="og:image
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.79.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.80.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,7 +66,14 @@ machine, or repeatedly without re-running calibration.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">render_MOSAIC_figures</span><span class="op">(</span><span class="va">dir_output</span>, which <span class="op">=</span> <span class="cn">NULL</span>, plots <span class="op">=</span> <span class="cn">TRUE</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">render_MOSAIC_figures</span><span class="op">(</span></span>
+<span>  <span class="va">dir_output</span>,</span>
+<span>  which <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  plots <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  cl <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n_cores <span class="op">=</span> <span class="fl">1L</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -96,6 +103,23 @@ immediately without rendering (mirrors <code>control$paths$plots</code>). Defaul
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Logical. Print progress messages. Default <code>TRUE</code>.</p></dd>
 
+
+<dt id="arg-cl">cl<a class="anchor" aria-label="anchor" href="#arg-cl"></a></dt>
+<dd><p>Optional PSOCK cluster (from <code><a href="make_mosaic_cluster.html">make_mosaic_cluster</a></code>) used
+to render the three per-location figure families in parallel: the
+prior/posterior distributions, the per-category posterior detail pages, and
+the trajectory pages. A cluster passed here is <strong>borrowed, never
+stopped</strong> – the caller owns its lifecycle. One figure per worker process,
+each opening and closing its own graphics device, so no device is ever
+shared.</p></dd>
+
+
+<dt id="arg-n-cores">n_cores<a class="anchor" aria-label="anchor" href="#arg-n-cores"></a></dt>
+<dd><p>Integer. When <code>cl</code> is <code>NULL</code> and this is greater
+than 1, render builds its own PSOCK cluster of this size and stops it before
+returning. Capped at <code>.MOSAIC_DETAIL_MAX_WORKERS</code> for the two
+memory-heavy families regardless. Default <code>1L</code> (serial, unchanged).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -116,6 +140,25 @@ corrupt, or schema-incompatible artifact causes the affected figure to be
 simulation on the client (<code><a href="calc_model_ensemble.html">calc_model_ensemble()</a></code> always simulates, via
 PSOCK or sequentially), which this function deliberately avoids. Every figure
 is wrapped in <code>tryCatch</code> so one failure never aborts the rest.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="parallel-rendering">Parallel rendering<a class="anchor" aria-label="anchor" href="#parallel-rendering"></a></h2>
+
+
+<p>At 40 locations this stage is the largest single-threaded block in a
+production run: measured at 35.9 min of a 260-min 100,000-simulation run, of
+which <code><a href="plot_model_posteriors_detail.html">plot_model_posteriors_detail()</a></code> alone was 20.0 min for 286 PDFs.
+The work is embarrassingly parallel – every page is an independent
+<code>ggsave</code> to its own filename – so passing <code>cl</code> or <code>n_cores</code>
+divides it across workers. <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> passes <code>n_cores</code>: by the
+time figures render, the calibration cluster has already been stopped (it goes
+at <code>R/run_MOSAIC.R</code>, right after the calibration loop) and
+<code><a href="calc_model_ensemble.html">calc_model_ensemble()</a></code>'s own cluster has come and gone too, so there is
+nothing left to borrow and nothing to contend with for R's 128-connection
+ceiling.</p>
+<p>Per-location failures are isolated: a worker that errors on one location
+produces a warning on the master and the remaining locations still render,
+matching the serial path's per-figure <code>tryCatch</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
