@@ -376,7 +376,7 @@ test_that(".mosaic_run_engine classifies the v0.68.0 engine boundary", {
   # suffixes reduce to the leading integer of each component
   expect_equal(f("0.67.0-dev"),  "python")
   expect_equal(f("0.68.0.9000"), "R")
-  expect_equal(f("0.66rc1"),     "R")
+  expect_equal(f("0.68rc1"),     "R")
   # unparseable / degenerate -> NA
   expect_true(is.na(f("garbage")))
   expect_true(is.na(f("")))
