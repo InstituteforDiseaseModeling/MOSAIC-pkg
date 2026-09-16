@@ -2757,11 +2757,19 @@ run_MOSAIC <- function(config,
   # renderer is a pure read-render (P5): it never re-simulates.
   if (isTRUE(control$paths$plots)) {
     log_msg("Rendering figures from run directory...")
+    # There is no cluster to borrow by this point: the calibration cluster was
+    # stopped right after the calibration loop, and calc_model_ensemble() builds
+    # and tears down its own. So render builds one, sized from the run's own
+    # n_cores and capped internally by how many workers the memory-heavy figure
+    # families can actually use. Nothing else holds sockets here, so R's
+    # 128-connection ceiling is not in play.
     tryCatch(
       render_MOSAIC_figures(
         dir_output = dir_output,
         plots      = TRUE,
-        verbose    = control$logging$verbose
+        verbose    = control$logging$verbose,
+        n_cores    = if (isTRUE(control$parallel$enable))
+                       control$parallel$n_cores else 1L
       ),
       error = function(e) log_warn("render_MOSAIC_figures failed: %s", e$message)
     )

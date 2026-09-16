@@ -13,6 +13,15 @@ knitr::opts_chunk$set(
   comment = "#>",
   eval = FALSE
 )
+
+# `code = readLines(...)` is a CHUNK OPTION, so knitr evaluates it even when the
+# chunk itself has eval = FALSE. vm/ is .Rbuildignore'd, so that read fails when
+# R CMD check re-builds this vignette from the tarball. Degrade to a pointer.
+.mosaic_vig_file <- function(path) {
+  if (file.exists(path)) readLines(path) else
+    paste0("# Not available in the installed package. See ",
+           basename(path), " in the MOSAIC-pkg repository.")
+}
 ```
 
 ## Overview
@@ -48,7 +57,11 @@ ssh user@host 'bash -s' < ~/MOSAIC/MOSAIC-pkg/vm/setup_mosaic.sh
 
 ### Script Contents
 
-```{bash, code=readLines('../vm/setup_mosaic.sh'), eval=FALSE}
+`vm/` is not shipped inside the installed package, so this listing appears only
+when the vignette is built from a source checkout. In an installed copy, read
+the script in the repository at `MOSAIC-pkg/vm/setup_mosaic.sh`.
+
+```{bash, code=.mosaic_vig_file('../vm/setup_mosaic.sh'), eval=FALSE}
 ```
 
 ---

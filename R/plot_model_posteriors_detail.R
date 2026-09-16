@@ -16,6 +16,11 @@
 #' @param weight_col Character name of the per-row weight column paired with
 #'   \code{subset_col}. Defaults to \code{"weight_best"}.
 #' @param verbose Logical; print progress messages (default: TRUE)
+#' @param locations Optional character vector of ISO codes selecting which
+#'   outputs to draw: \code{NULL} (default) draws the global pages and every
+#'   location, \code{character(0)} draws only the global pages, and a vector of
+#'   codes draws only those locations. Lets a caller split the work across
+#'   processes; see \code{\link{render_MOSAIC_figures}}.
 #'
 #' @return List of plot filenames created (invisible)
 #'
@@ -39,13 +44,19 @@ plot_model_posteriors_detail <- function(quantiles_file,
                                  output_dir = "./results/plots",
                                  subset_col = "is_best_subset",
                                  weight_col = "weight_best",
-                                 verbose = TRUE) {
+                                 verbose = TRUE,
+                                 locations = NULL) {
 
   # All required packages loaded via NAMESPACE
 
   # MOSAIC color palette
   prior_color <- "#4a4a4a"      # Dark gray
   posterior_color <- "#1f77b4"  # Blue (BFRS)
+
+  # PLOT 2 below recomputes `locations` from the artifacts, so capture the
+  # caller's request first. See the block that consumes render_locations.
+  render_locations <- locations
+  render_global    <- is.null(locations) || length(locations) == 0L
 
   if (verbose) cat("Loading data files...\n")
 
@@ -74,9 +85,13 @@ plot_model_posteriors_detail <- function(quantiles_file,
   if (!weight_col %in% names(results_full)) {
     stop(sprintf("weight_col '%s' not found in results.", weight_col))
   }
-  results_all <- results_full  # All simulations
+  # `results_all <- results_full` used to sit here; nothing read it. Dropping it
+  # lets results_full be released once the two subsets are taken, which halves
+  # peak memory (the full frame is ~1.2 GB at 100,000 x 1,523) -- worth having
+  # when render_MOSAIC_figures() runs several of these in parallel.
   results_retained <- results_full[results_full$is_retained, ]  # Non-outlier models
   results_best <- results_full[as.logical(results_full[[subset_col]]), ]  # Best subset
+  rm(results_full)
 
   # Load priors
   if (!file.exists(priors_file)) {
@@ -884,6 +899,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
   # =========================================================================
   # PLOT 1: Global Parameters
   # =========================================================================
+  if (render_global) {
   if (verbose) cat("\nCreating global parameter plots...\n")
 
   # Get global parameters ordered by estimated_parameters
@@ -974,6 +990,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
     }
   }
 
+  }  # end render_global
+
   # =========================================================================
   # PLOT 2: Location-Specific Parameters
   # =========================================================================
@@ -984,6 +1002,15 @@ plot_model_posteriors_detail <- function(quantiles_file,
   locations_from_params <- unique(gsub(".*_([A-Z]{3})$", "\\1",
                                        params_with_posteriors[grepl(location_pattern, params_with_posteriors)]))
   locations <- unique(c(locations, locations_from_params))
+
+  # `locations` argument splits this function's outputs so a caller can render
+  # them on separate workers (see render_MOSAIC_figures()):
+  #   NULL          -- global pages + every location  (default, unchanged)
+  #   character(0)  -- global pages only
+  #   c("AGO", ...) -- those locations only
+  if (!is.null(render_locations)) {
+    locations <- intersect(locations, render_locations)
+  }
 
   for (iso in locations) {
     if (verbose) cat("\nCreating plots for location:", iso, "\n")

@@ -1,3 +1,139 @@
+# How many workers the two memory-heavy per-location figure families may use.
+# Each worker rendering posterior-detail pages re-reads samples.parquet (~1.2 GB
+# at 100,000 x 1,523) and each trajectory worker holds the exported
+# trajectories_ensemble object (~79 MB at 40 locations). Neither cost scales
+# with the number of locations, only with the number of workers, so the fan-out
+# is capped independently of the calibration cluster's size -- an 80-worker
+# production cluster would otherwise want ~96 GB for the detail pages alone.
+.MOSAIC_DETAIL_MAX_WORKERS <- 8L
+
+#' Unnest single-element lists produced by jsonlite
+#'
+#' \code{jsonlite::read_json(simplifyVector = FALSE)} wraps every scalar in a
+#' length-1 list. This collapses those so the prior/posterior objects can be
+#' indexed by name. Package-scoped so the renderer and
+#' \code{plot_model_distributions()} parse identically -- it used to be a local
+#' closure inside the latter, which made it unreachable from anywhere else.
+#'
+#' @param x A parsed JSON object.
+#' @return \code{x} with single-element unnamed lists collapsed.
+#' @noRd
+.mosaic_unnest_json <- function(x) {
+  if (is.list(x) && length(x) == 1 && !is.null(names(x))) return(x)
+  if (is.list(x) && length(x) == 1) return(x[[1]])
+  if (is.list(x)) return(lapply(x, .mosaic_unnest_json))
+  x
+}
+
+#' Location codes carried by a parsed prior/posterior methods list
+#'
+#' Single source of truth for "which locations does this run estimate
+#' per-location parameters for". \code{plot_model_distributions()} uses it to
+#' decide what to draw; \code{render_MOSAIC_figures()} uses it to decide what to
+#' fan out. Keeping one derivation avoids the lockstep-sibling drift of
+#' CLAUDE.md lesson #11.
+#'
+#' @param methods_data Named list of unnested prior/posterior objects.
+#' @return Character vector of ISO codes, or NULL when none are present.
+#' @noRd
+.mosaic_location_codes_from_methods <- function(methods_data) {
+  for (method_data in methods_data) {
+    pl <- method_data$parameters_location
+    if (is.null(pl)) next
+    for (param in names(pl)) {
+      if (!is.null(pl[[param]]$location)) return(names(pl[[param]]$location))
+    }
+  }
+  NULL
+}
+
+#' Location codes for a run, read from its posterior (and quantile) artifacts
+#'
+#' File-level wrapper over \code{.mosaic_location_codes_from_methods()}, unioned
+#' with the location column of the quantiles CSV when one is given -- the
+#' posterior-detail plots derive their location set from both sources, so both
+#' must be represented or a location would silently never render.
+#'
+#' @param posteriors_file Path to the posteriors JSON, or NULL.
+#' @param quantiles_file Optional path to the posterior quantiles CSV.
+#' @return Character vector of ISO codes (possibly empty).
+#' @noRd
+.mosaic_posterior_location_codes <- function(posteriors_file, quantiles_file = NULL) {
+  codes <- character(0)
+
+  if (!is.null(posteriors_file) && file.exists(posteriors_file)) {
+    obj <- tryCatch(
+      .mosaic_unnest_json(jsonlite::read_json(posteriors_file, simplifyVector = FALSE)),
+      error = function(e) {
+        # Never silent: a swallowed failure here degrades to quantiles-only and
+        # silently drops whole locations from the figure set.
+        warning("could not parse ", posteriors_file, " for location codes: ",
+                conditionMessage(e), call. = FALSE)
+        NULL
+      }
+    )
+    if (!is.null(obj)) {
+      from_json <- .mosaic_location_codes_from_methods(list(obj))
+      if (!is.null(from_json)) codes <- union(codes, from_json)
+    }
+  }
+
+  if (!is.null(quantiles_file) && file.exists(quantiles_file)) {
+    q <- tryCatch(utils::read.csv(quantiles_file, stringsAsFactors = FALSE),
+                  error = function(e) NULL)
+    if (!is.null(q) && "location" %in% names(q)) {
+      loc <- unique(q$location[!is.na(q$location) & nzchar(q$location)])
+      codes <- union(codes, loc)
+    }
+  }
+
+  codes
+}
+
+#' Build a per-location render worker in a minimal environment
+#'
+#' Defined at FILE scope on purpose. A closure created inside
+#' \code{render_MOSAIC_figures()} would carry that function's frame as its
+#' environment, and \code{parLapply} serialises a closure together with its
+#' environment -- by the time figures render, that frame holds the ensemble and
+#' trajectory objects, so every worker chunk would ship hundreds of megabytes.
+#' Built here the closure's parent is the package namespace, so only
+#' \code{fn_name} (a string), \code{args} (file paths and flags) and
+#' \code{arg_name} travel.
+#'
+#' @param fn_name Name of the exported MOSAIC plotting function to call.
+#' @param args Named list of arguments shared across locations.
+#' @param arg_name Name of the argument that receives the per-location value.
+#' @return A function of one argument suitable for \code{parLapplyLB}.
+#' @noRd
+.mosaic_mk_render_worker <- function(fn_name, args, arg_name) {
+  force(fn_name); force(args); force(arg_name)
+  function(el) {
+    a <- args
+    a[[arg_name]] <- el
+    do.call(getExportedValue("MOSAIC", fn_name), a)
+  }
+}
+
+#' Render one trajectory page from worker globals
+#'
+#' Takes \code{traj} and \code{out_traj} from the worker's global environment
+#' (put there once per worker by \code{clusterExport}) rather than as arguments,
+#' so the ~79 MB trajectories object is shipped once per worker instead of once
+#' per page.
+#'
+#' @param location Location code to render.
+#' @return Invisibly, whatever \code{plot_model_trajectories()} returns.
+#' @noRd
+.mosaic_traj_render_worker <- function(location) {
+  plot_model_trajectories(
+    trajectories = get("traj", envir = globalenv()),
+    location     = location,
+    output_dir   = get("out_traj", envir = globalenv()),
+    verbose      = FALSE
+  )
+}
+
 #' Render all MOSAIC figures from a finished run directory
 #'
 #' Reconstructs every \code{run_MOSAIC()} pipeline figure \strong{from the data
@@ -33,6 +169,34 @@
 #'   immediately without rendering (mirrors \code{control$paths$plots}). Default
 #'   \code{TRUE}.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
+#' @param cl Optional PSOCK cluster (from \code{\link{make_mosaic_cluster}}) used
+#'   to render the three per-location figure families in parallel: the
+#'   prior/posterior distributions, the per-category posterior detail pages, and
+#'   the trajectory pages. A cluster passed here is \strong{borrowed, never
+#'   stopped} -- the caller owns its lifecycle. One figure per worker process,
+#'   each opening and closing its own graphics device, so no device is ever
+#'   shared.
+#' @param n_cores Integer. When \code{cl} is \code{NULL} and this is greater
+#'   than 1, render builds its own PSOCK cluster of this size and stops it before
+#'   returning. Capped at \code{.MOSAIC_DETAIL_MAX_WORKERS} for the two
+#'   memory-heavy families regardless. Default \code{1L} (serial, unchanged).
+#'
+#' @section Parallel rendering:
+#' At 40 locations this stage is the largest single-threaded block in a
+#' production run: measured at 35.9 min of a 260-min 100,000-simulation run, of
+#' which \code{plot_model_posteriors_detail()} alone was 20.0 min for 286 PDFs.
+#' The work is embarrassingly parallel -- every page is an independent
+#' \code{ggsave} to its own filename -- so passing \code{cl} or \code{n_cores}
+#' divides it across workers. \code{run_MOSAIC()} passes \code{n_cores}: by the
+#' time figures render, the calibration cluster has already been stopped (it goes
+#' at \code{R/run_MOSAIC.R}, right after the calibration loop) and
+#' \code{calc_model_ensemble()}'s own cluster has come and gone too, so there is
+#' nothing left to borrow and nothing to contend with for R's 128-connection
+#' ceiling.
+#'
+#' Per-location failures are isolated: a worker that errors on one location
+#' produces a warning on the master and the remaining locations still render,
+#' matching the serial path's per-figure \code{tryCatch}.
 #'
 #' @return Invisibly, a named logical vector indicating which figure groups were
 #'   attempted (\code{TRUE}) vs skipped (\code{FALSE}).
@@ -44,7 +208,9 @@
 render_MOSAIC_figures <- function(dir_output,
                                   which   = NULL,
                                   plots   = TRUE,
-                                  verbose = TRUE) {
+                                  verbose = TRUE,
+                                  cl      = NULL,
+                                  n_cores = 1L) {
 
   if (!isTRUE(plots)) {
     if (verbose) message("render_MOSAIC_figures: plots = FALSE; nothing to render.")
@@ -73,6 +239,55 @@ render_MOSAIC_figures <- function(dir_output,
   dirs <- .mosaic_ensure_dir_tree(dir_output, clean_output = FALSE)
 
   .vmsg <- function(...) if (verbose) message(sprintf(...))
+
+  # --- Cluster lifecycle -----------------------------------------------------
+  # A cluster passed in is the caller's; one built here is ours to stop. Size is
+  # capped at .MOSAIC_DETAIL_MAX_WORKERS because the two memory-heavy families
+  # cannot use more than that anyway, so a bigger cluster would only cost
+  # spin-up time and sockets.
+  if (is.null(cl)) {
+    n_cores <- suppressWarnings(as.integer(n_cores))
+    if (length(n_cores) != 1L || is.na(n_cores)) n_cores <- 1L
+    n_cores <- min(n_cores, .MOSAIC_DETAIL_MAX_WORKERS)
+    if (n_cores > 1L) {
+      cl <- tryCatch(make_mosaic_cluster(n_cores = n_cores, type = "PSOCK"),
+                     error = function(e) {
+                       warning("render_MOSAIC_figures: could not start a cluster (",
+                               conditionMessage(e), "); rendering serially.",
+                               call. = FALSE)
+                       NULL
+                     })
+      if (!is.null(cl)) {
+        .vmsg("Rendering figures on %d workers", length(cl))
+        on.exit(try(.mosaic_stop_cluster(cl), silent = TRUE), add = TRUE)
+      }
+    }
+  }
+
+  # --- Per-location dispatch -------------------------------------------------
+  # Maps `f` over `x`, on `cl` when one was supplied and there is more than one
+  # element to do. Errors are returned as strings rather than thrown, so one bad
+  # location cannot abort the group (and a worker-side condition still surfaces
+  # on the master, which is not true of a bare warning() inside a PSOCK worker).
+  # parLapplyLB, not parLapply: per-location cost varies several-fold with how
+  # many parameters a location estimates, so static chunking would leave workers
+  # idle behind a long tail.
+  .render_map <- function(x, f, label, on = cl) {
+    if (!length(x)) return(invisible(NULL))
+    wrapped <- function(el) tryCatch({ f(el); NULL },
+                                     error = function(e) conditionMessage(e))
+    res <- if (is.null(on) || length(on) < 2L || length(x) < 2L) {
+      lapply(x, wrapped)
+    } else {
+      parallel::parLapplyLB(on, x, wrapped)
+    }
+    for (i in seq_along(res)) {
+      if (!is.null(res[[i]]))
+        warning(label, " failed for ", as.character(x[[i]])[1], ": ", res[[i]],
+                call. = FALSE)
+    }
+    invisible(NULL)
+  }
 
   # --- Schema-checked .rds loader (P5: load, never rebuild) -------------------
   .load_rds <- function(path, label) {
@@ -220,33 +435,68 @@ render_MOSAIC_figures <- function(dir_output,
     }
 
     if (file.exists(files$priors) && file.exists(files$posteriors)) {
-      tryCatch(
-        plot_model_distributions(
-          json_files   = c(files$priors, files$posteriors),
-          method_names = c("Prior", "Posterior"),
-          output_dir   = dirs$res_fig_post
-        ),
-        error = function(e) warning("distributions plot failed: ",
-                                    conditionMessage(e), call. = FALSE)
+      .dist_args <- list(json_files   = c(files$priors, files$posteriors),
+                         method_names = c("Prior", "Posterior"),
+                         output_dir   = dirs$res_fig_post)
+      dist_locs <- tryCatch(
+        .mosaic_posterior_location_codes(files$posteriors),
+        error = function(e) NULL
       )
+      if (is.null(cl) || length(cl) < 2L || is.null(dist_locs) || length(dist_locs) < 2L) {
+        tryCatch(do.call(plot_model_distributions, .dist_args),
+                 error = function(e) warning("distributions plot failed: ",
+                                             conditionMessage(e), call. = FALSE))
+      } else {
+        # Global page first (it is a single figure, not per-location), then fan
+        # the per-location pages out. `locations = character(0)` renders only the
+        # global page; a location vector renders only those locations.
+        tryCatch(do.call(plot_model_distributions,
+                         c(.dist_args, list(locations = character(0)))),
+                 error = function(e) warning("distributions plot failed (global): ",
+                                             conditionMessage(e), call. = FALSE))
+        .render_map(dist_locs,
+                    .mosaic_mk_render_worker("plot_model_distributions",
+                                             .dist_args, "locations"),
+                    "distributions plot")
+      }
     }
 
     if (file.exists(files$quantiles) && file.exists(files$samples) &&
         file.exists(files$priors)) {
-      tryCatch(
-        plot_model_posteriors_detail(
-          quantiles_file  = files$quantiles,
-          results_file    = files$samples,
-          priors_file     = files$priors,
-          posteriors_file = if (file.exists(files$posteriors)) files$posteriors else NULL,
-          output_dir      = dirs$res_fig_post_detail,
-          subset_col      = subset_col,
-          weight_col      = weight_col,
-          verbose         = verbose
-        ),
-        error = function(e) warning("posteriors detail plot failed: ",
-                                    conditionMessage(e), call. = FALSE)
+      .det_args <- list(
+        quantiles_file  = files$quantiles,
+        results_file    = files$samples,
+        priors_file     = files$priors,
+        posteriors_file = if (file.exists(files$posteriors)) files$posteriors else NULL,
+        output_dir      = dirs$res_fig_post_detail,
+        subset_col      = subset_col,
+        weight_col      = weight_col,
+        verbose         = verbose
       )
+      det_locs <- tryCatch(
+        .mosaic_posterior_location_codes(files$posteriors, files$quantiles),
+        error = function(e) NULL
+      )
+      # Each worker re-reads samples.parquet rather than receiving it: the read
+      # is 0.2 s (measured at 100,000 x 1,523 on dugong) while the frame is
+      # ~1.2 GB, so shipping it would cost far more than re-reading it. The
+      # trade is worker MEMORY, which is why the fan-out is capped -- see
+      # .MOSAIC_DETAIL_MAX_WORKERS.
+      if (is.null(cl) || length(cl) < 2L || is.null(det_locs) || length(det_locs) < 2L) {
+        tryCatch(do.call(plot_model_posteriors_detail, .det_args),
+                 error = function(e) warning("posteriors detail plot failed: ",
+                                             conditionMessage(e), call. = FALSE))
+      } else {
+        sub_cl <- cl[seq_len(min(length(cl), .MOSAIC_DETAIL_MAX_WORKERS))]
+        tryCatch(do.call(plot_model_posteriors_detail,
+                         c(.det_args, list(locations = character(0)))),
+                 error = function(e) warning("posteriors detail plot failed (global): ",
+                                             conditionMessage(e), call. = FALSE))
+        .render_map(det_locs,
+                    .mosaic_mk_render_worker("plot_model_posteriors_detail",
+                                             .det_args, "locations"),
+                    "posteriors detail plot", on = sub_cl)
+      }
     }
   }
 
@@ -554,17 +804,34 @@ render_MOSAIC_figures <- function(dir_output,
         warning("trajectories: artifact carries no location_names; skipping.",
                 call. = FALSE)
       } else {
-        for (loc in locs) {
-          tryCatch(
-            plot_model_trajectories(
-              trajectories = traj,
-              location     = loc,
-              output_dir   = dirs$res_fig_trajectories,
-              verbose      = verbose
-            ),
-            error = function(e) warning("trajectories plot failed for ", loc,
-                                        ": ", conditionMessage(e), call. = FALSE)
-          )
+        # Every page needs the whole `traj` object, so unlike the two families
+        # above it is exported rather than re-read -- ONCE per worker via
+        # clusterExport, never once per page. The artifact is ~79 MB at 40
+        # locations x 100k, so the fan-out is capped the same way the detail
+        # pages are.
+        out_traj <- dirs$res_fig_trajectories
+        traj_cl  <- if (is.null(cl)) NULL
+                    else cl[seq_len(min(length(cl), .MOSAIC_DETAIL_MAX_WORKERS))]
+        if (!is.null(traj_cl) && length(traj_cl) > 1L && length(locs) > 1L) {
+          .traj_env <- new.env(parent = emptyenv())
+          assign("traj",     traj,     envir = .traj_env)
+          assign("out_traj", out_traj, envir = .traj_env)
+          parallel::clusterExport(traj_cl, c("traj", "out_traj"), envir = .traj_env)
+          .render_map(locs, .mosaic_traj_render_worker, "trajectories plot",
+                      on = traj_cl)
+        } else {
+          for (loc in locs) {
+            tryCatch(
+              plot_model_trajectories(
+                trajectories = traj,
+                location     = loc,
+                output_dir   = out_traj,
+                verbose      = verbose
+              ),
+              error = function(e) warning("trajectories plot failed for ", loc,
+                                          ": ", conditionMessage(e), call. = FALSE)
+            )
+          }
         }
       }
     } else if (!is.null(traj)) {

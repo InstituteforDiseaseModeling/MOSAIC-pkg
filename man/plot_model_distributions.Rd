@@ -9,7 +9,8 @@ plot_model_distributions(
   method_names,
   output_dir,
   custom_colors = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  locations = NULL
 )
 }
 \arguments{
@@ -23,6 +24,12 @@ plot_model_distributions(
 
 \item{verbose}{Logical; if \code{TRUE}, print per-parameter diagnostic
 messages while building the plots (default \code{FALSE}).}
+
+\item{locations}{Optional character vector of ISO codes selecting which
+outputs to draw: \code{NULL} (default) draws the global page and every
+location, \code{character(0)} draws only the global page, and a vector of
+codes draws only those locations. Lets a caller split the work across
+processes; see \code{\link{render_MOSAIC_figures}}.}
 }
 \value{
 Invisibly returns a list of generated plot objects

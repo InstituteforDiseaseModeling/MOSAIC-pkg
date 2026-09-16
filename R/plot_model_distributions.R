@@ -8,6 +8,11 @@
 #' @param method_names Vector of method names corresponding to each JSON file (for legends and colors)
 #' @param output_dir Directory to save generated plots
 #' @param custom_colors Optional named vector of colors for each method (e.g., c("Prior" = "#4a4a4a", "BFRS" = "#1f77b4"))
+#' @param locations Optional character vector of ISO codes selecting which
+#'   outputs to draw: \code{NULL} (default) draws the global page and every
+#'   location, \code{character(0)} draws only the global page, and a vector of
+#'   codes draws only those locations. Lets a caller split the work across
+#'   processes; see \code{\link{render_MOSAIC_figures}}.
 #' @param verbose Logical; if \code{TRUE}, print per-parameter diagnostic
 #'   messages while building the plots (default \code{FALSE}).
 #'
@@ -35,7 +40,7 @@
 #' }
 #'
 #' @export
-plot_model_distributions <- function(json_files, method_names, output_dir, custom_colors = NULL, verbose = FALSE) {
+plot_model_distributions <- function(json_files, method_names, output_dir, custom_colors = NULL, verbose = FALSE, locations = NULL) {
 
   # All required packages loaded via NAMESPACE
 
@@ -81,19 +86,9 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # Load estimated parameters inventory
   data("estimated_parameters", package = "MOSAIC")
 
-  # Helper function to unnest single-element lists from JSON
-  unnest_json <- function(x) {
-    if (is.list(x) && length(x) == 1 && !is.null(names(x))) {
-      return(x)  # Keep named lists as-is
-    }
-    if (is.list(x) && length(x) == 1) {
-      return(x[[1]])  # Unnest single-element unnamed lists
-    }
-    if (is.list(x)) {
-      return(lapply(x, unnest_json))  # Recurse for nested lists
-    }
-    return(x)
-  }
+  # Unnesting lives at package scope as .mosaic_unnest_json() so
+  # render_MOSAIC_figures() can parse the same JSON the same way.
+  unnest_json <- .mosaic_unnest_json
 
   # Load all JSON files into a named list
   methods_data <- setNames(vector("list", length(json_files)), method_names)
@@ -187,19 +182,9 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # EXTRACT LOCATIONS FROM FIRST AVAILABLE METHOD
   # =========================================================================
 
-  location_codes <- NULL
-  for (method_name in names(methods_data)) {
-    method_data <- methods_data[[method_name]]
-    if (!is.null(method_data$parameters_location)) {
-      for (param in names(method_data$parameters_location)) {
-        if (!is.null(method_data$parameters_location[[param]]$location)) {
-          location_codes <- names(method_data$parameters_location[[param]]$location)
-          break
-        }
-      }
-      if (!is.null(location_codes)) break
-    }
-  }
+  # Derivation lives in one place so render_MOSAIC_figures() can ask for the
+  # same list without rendering (it needs it to fan locations out to workers).
+  location_codes <- .mosaic_location_codes_from_methods(methods_data)
 
   plots <- list()
 
@@ -741,10 +726,21 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     return(p)
   }
 
+  # `locations` splits this function's two outputs so a caller can render them
+  # on separate workers (see render_MOSAIC_figures()):
+  #   NULL            -- global page + every location  (default, unchanged)
+  #   character(0)    -- global page only
+  #   c("AGO", ...)   -- those locations only, no global page
+  render_global <- is.null(locations) || length(locations) == 0L
+  if (!is.null(locations)) {
+    location_codes <- intersect(location_codes, locations)
+  }
+
   # =========================================================================
   # PLOT 1: Global Parameters (Category-Based Organization)
   # =========================================================================
 
+  if (render_global) {
   cat("Plotting global parameter distributions organized by category...\n")
 
   # Get global parameters from estimated_parameters, ordered appropriately
@@ -917,6 +913,8 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       cat(paste0("  Saved: ", filename, "\n"))
     }
   }
+
+  }  # end render_global
 
   # =========================================================================
   # PLOT 2: Location-Specific Parameters (if any locations exist)

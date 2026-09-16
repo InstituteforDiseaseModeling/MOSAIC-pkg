@@ -1,7 +1,7 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.79.1
+Version: 0.80.0
 Date: 2026-07-09
 Authors@R: c(
           person("John R", "Giles",
@@ -109,7 +109,10 @@ Suggests:
   ggExtra,
   gtools,
   mockery,
-  keras3  
+  keras3,
+  knitr,
+  rmarkdown
+VignetteBuilder: knitr
 Config/Needs/website: rmarkdown
 Config/testthat/edition: 3
 Config/testthat/parallel: true

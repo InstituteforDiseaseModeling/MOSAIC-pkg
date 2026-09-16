@@ -4,7 +4,14 @@
 \alias{render_MOSAIC_figures}
 \title{Render all MOSAIC figures from a finished run directory}
 \usage{
-render_MOSAIC_figures(dir_output, which = NULL, plots = TRUE, verbose = TRUE)
+render_MOSAIC_figures(
+  dir_output,
+  which = NULL,
+  plots = TRUE,
+  verbose = TRUE,
+  cl = NULL,
+  n_cores = 1L
+)
 }
 \arguments{
 \item{dir_output}{Character. Path to a finished \code{run_MOSAIC()} output
@@ -22,6 +29,19 @@ immediately without rendering (mirrors \code{control$paths$plots}). Default
 \code{TRUE}.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
+
+\item{cl}{Optional PSOCK cluster (from \code{\link{make_mosaic_cluster}}) used
+to render the three per-location figure families in parallel: the
+prior/posterior distributions, the per-category posterior detail pages, and
+the trajectory pages. A cluster passed here is \strong{borrowed, never
+stopped} -- the caller owns its lifecycle. One figure per worker process,
+each opening and closing its own graphics device, so no device is ever
+shared.}
+
+\item{n_cores}{Integer. When \code{cl} is \code{NULL} and this is greater
+than 1, render builds its own PSOCK cluster of this size and stops it before
+returning. Capped at \code{.MOSAIC_DETAIL_MAX_WORKERS} for the two
+memory-heavy families regardless. Default \code{1L} (serial, unchanged).}
 }
 \value{
 Invisibly, a named logical vector indicating which figure groups were
@@ -49,6 +69,25 @@ corrupt, or schema-incompatible artifact causes the affected figure to be
 simulation on the client (\code{calc_model_ensemble()} always simulates, via
 PSOCK or sequentially), which this function deliberately avoids. Every figure
 is wrapped in \code{tryCatch} so one failure never aborts the rest.
+}
+
+\section{Parallel rendering}{
+
+At 40 locations this stage is the largest single-threaded block in a
+production run: measured at 35.9 min of a 260-min 100,000-simulation run, of
+which \code{plot_model_posteriors_detail()} alone was 20.0 min for 286 PDFs.
+The work is embarrassingly parallel -- every page is an independent
+\code{ggsave} to its own filename -- so passing \code{cl} or \code{n_cores}
+divides it across workers. \code{run_MOSAIC()} passes \code{n_cores}: by the
+time figures render, the calibration cluster has already been stopped (it goes
+at \code{R/run_MOSAIC.R}, right after the calibration loop) and
+\code{calc_model_ensemble()}'s own cluster has come and gone too, so there is
+nothing left to borrow and nothing to contend with for R's 128-connection
+ceiling.
+
+Per-location failures are isolated: a worker that errors on one location
+produces a warning on the master and the remaining locations still render,
+matching the serial path's per-figure \code{tryCatch}.
 }
 
 \seealso{
