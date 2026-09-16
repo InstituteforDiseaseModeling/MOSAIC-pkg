@@ -1,5 +1,78 @@
 # Changelog
 
+## MOSAIC 0.83.0
+
+### Every PSOCK cluster now clamps to the connection budget
+
+R allocates its connection table at startup: 128 slots, three already
+held by `stdin`/`stdout`/`stderr`. Every PSOCK worker holds one slot for
+its lifetime, so a default R build cannot exceed ~125 workers no matter
+how many cores the host has.
+[`make_mosaic_cluster()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
+has clamped to that budget for some time; the package’s two other
+cluster sites did not.
+
+[`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+called
+[`parallel::makeCluster()`](https://rdrr.io/r/parallel/makeCluster.html)
+raw, on an `n_cores` that
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+derives straight from `control$parallel$n_cores` — the *unclamped*
+value, whenever
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+builds its own cluster (the `cluster = NULL` path, which is every
+ordinary run; the `ens_n_cores` derivation added in v0.73.1 only reads
+the clamped length when a cluster is *supplied*). On dugong at
+`n_cores = 170` that call threw `all 128 connections are in use`, the
+`tryCatch` around both ensemble calls turned the throw into a
+`log_warn`, and the run finished reporting success with **no posterior
+ensemble, no medoid ensemble, no predictions and no figures** — after
+paying for the entire calibration. Verified on dugong: the raw call
+fails at 170 while the clamped one succeeds at 123.
+
+New internal `.mosaic_clamp_psock_workers()` (`R/make_mosaic_cluster.R`)
+is now the single place that decision is made, wired into all three
+PSOCK sites —
+[`make_mosaic_cluster()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md),
+[`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+and `ensemble_suitability()`. An over-budget request now runs narrower
+and explains itself, instead of throwing.
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+additionally reports the budget once at startup, so a shortfall appears
+in the log at minute 0 rather than being inferred from a missing
+artifact hours later. `test-psock-connection-clamp.R` pins the behaviour
+and asserts that *every*
+[`parallel::makeCluster()`](https://rdrr.io/r/parallel/makeCluster.html)
+site in `R/` routes through the clamp — guarding the asymmetry, not just
+this instance of it.
+
+### Raising the ceiling: `--max-connections` in the VM wrappers
+
+R \>= 4.4.0 accepts `--max-connections=N` (128 to 4096) to enlarge the
+table. It is a **startup** option: there is no environment variable, and
+nothing in-session can change it, so it cannot be fixed from R. The new
+tracked `vm/make_wrappers.sh` generates `~/bin/r-mosaic-{R,Rscript}` for
+both compute VMs with `--max-connections=512`, superseding the
+gitignored `claude/dugong_setup/make_wrappers_dugong.sh`. Every
+`LD_PRELOAD` in it is `[ -f ]`-guarded, so one generator serves
+hedgehog’s GLIBCXX problem and dugong’s libexpat/libssl ones; the
+generated wrapper reproduces the previous `LD_PRELOAD` chain byte for
+byte.
+
+Measured on dugong at `n_cores = 170`: **170 workers granted (was
+123)**, cluster startup 16.6 s (was 13.6 s), 176 of 1024 file
+descriptors, 121 GB of 1511 GB resident. The connection table — not
+memory, not descriptors — was the binding constraint, and ~28% of the
+machine was being left idle. The flag precedes `"$@"` so a caller’s own
+later value still wins (R takes the last occurrence); a flag placed
+*after* the script filename is ignored by R entirely. hedgehog (120
+cores, `n_cores = 118`) sits under the default ceiling and does not need
+this; it gets the flag so both VMs behave identically.
+
+`inst/examples/forecast_cv_experiment.R` now derives its calibration cap
+from the live connection budget instead of a hard-coded
+`FORECAST_CV_PSOCK_CAP=120`; an explicit env var still overrides.
+
 ## MOSAIC 0.73.1
 
 ### Leaked PSOCK workers are now reaped in production, not just in tests

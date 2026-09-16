@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.82.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.83.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,21 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.83.0" id="mosaic-0830">MOSAIC 0.83.0<a class="anchor" aria-label="anchor" href="#mosaic-0830"></a></h2>
+<div class="section level3">
+<h3 id="every-psock-cluster-now-clamps-to-the-connection-budget-0-83-0">Every PSOCK cluster now clamps to the connection budget<a class="anchor" aria-label="anchor" href="#every-psock-cluster-now-clamps-to-the-connection-budget-0-83-0"></a></h3>
+<p>R allocates its connection table at startup: 128 slots, three already held by <code>stdin</code>/<code>stdout</code>/<code>stderr</code>. Every PSOCK worker holds one slot for its lifetime, so a default R build cannot exceed ~125 workers no matter how many cores the host has. <code><a href="../reference/make_mosaic_cluster.html">make_mosaic_cluster()</a></code> has clamped to that budget for some time; the package’s two other cluster sites did not.</p>
+<p><code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> called <code><a href="https://rdrr.io/r/parallel/makeCluster.html" class="external-link">parallel::makeCluster()</a></code> raw, on an <code>n_cores</code> that <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> derives straight from <code>control$parallel$n_cores</code> — the <em>unclamped</em> value, whenever <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> builds its own cluster (the <code>cluster = NULL</code> path, which is every ordinary run; the <code>ens_n_cores</code> derivation added in v0.73.1 only reads the clamped length when a cluster is <em>supplied</em>). On dugong at <code>n_cores = 170</code> that call threw <code>all 128 connections are in use</code>, the <code>tryCatch</code> around both ensemble calls turned the throw into a <code>log_warn</code>, and the run finished reporting success with <strong>no posterior ensemble, no medoid ensemble, no predictions and no figures</strong> — after paying for the entire calibration. Verified on dugong: the raw call fails at 170 while the clamped one succeeds at 123.</p>
+<p>New internal <code>.mosaic_clamp_psock_workers()</code> (<code>R/make_mosaic_cluster.R</code>) is now the single place that decision is made, wired into all three PSOCK sites — <code><a href="../reference/make_mosaic_cluster.html">make_mosaic_cluster()</a></code>, <code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> and <code>ensemble_suitability()</code>. An over-budget request now runs narrower and explains itself, instead of throwing. <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> additionally reports the budget once at startup, so a shortfall appears in the log at minute 0 rather than being inferred from a missing artifact hours later. <code>test-psock-connection-clamp.R</code> pins the behaviour and asserts that <em>every</em> <code><a href="https://rdrr.io/r/parallel/makeCluster.html" class="external-link">parallel::makeCluster()</a></code> site in <code>R/</code> routes through the clamp — guarding the asymmetry, not just this instance of it.</p>
+</div>
+<div class="section level3">
+<h3 id="raising-the-ceiling---max-connections-in-the-vm-wrappers-0-83-0">Raising the ceiling: <code>--max-connections</code> in the VM wrappers<a class="anchor" aria-label="anchor" href="#raising-the-ceiling---max-connections-in-the-vm-wrappers-0-83-0"></a></h3>
+<p>R &gt;= 4.4.0 accepts <code>--max-connections=N</code> (128 to 4096) to enlarge the table. It is a <strong>startup</strong> option: there is no environment variable, and nothing in-session can change it, so it cannot be fixed from R. The new tracked <code>vm/make_wrappers.sh</code> generates <code>~/bin/r-mosaic-{R,Rscript}</code> for both compute VMs with <code>--max-connections=512</code>, superseding the gitignored <code>claude/dugong_setup/make_wrappers_dugong.sh</code>. Every <code>LD_PRELOAD</code> in it is <code>[ -f ]</code>-guarded, so one generator serves hedgehog’s GLIBCXX problem and dugong’s libexpat/libssl ones; the generated wrapper reproduces the previous <code>LD_PRELOAD</code> chain byte for byte.</p>
+<p>Measured on dugong at <code>n_cores = 170</code>: <strong>170 workers granted (was 123)</strong>, cluster startup 16.6 s (was 13.6 s), 176 of 1024 file descriptors, 121 GB of 1511 GB resident. The connection table — not memory, not descriptors — was the binding constraint, and ~28% of the machine was being left idle. The flag precedes <code>"$@"</code> so a caller’s own later value still wins (R takes the last occurrence); a flag placed <em>after</em> the script filename is ignored by R entirely. hedgehog (120 cores, <code>n_cores = 118</code>) sits under the default ceiling and does not need this; it gets the flag so both VMs behave identically.</p>
+<p><code>inst/examples/forecast_cv_experiment.R</code> now derives its calibration cap from the live connection budget instead of a hard-coded <code>FORECAST_CV_PSOCK_CAP=120</code>; an explicit env var still overrides.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.73.1" id="mosaic-0731">MOSAIC 0.73.1<a class="anchor" aria-label="anchor" href="#mosaic-0731"></a></h2>
 <div class="section level3">
