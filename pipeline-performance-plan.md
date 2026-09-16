@@ -7,9 +7,11 @@ Scope: everything in `run_MOSAIC()` that is **not** the transmission engine. PR 
 already took the engine 2.2–2.5x; this document is about the work that now dominates
 around it.
 
-All figures are measured on this laptop (Apple M1 Max, R 4.5.3) against the PR-123
-build at 40 locations unless stated, with the source named per row. Nothing here is
-implemented.
+Figures in sections 1-9 are measured on this laptop (Apple M1 Max, R 4.5.3) against the
+PR-123 build at 40 locations unless stated, with the source named per row. **Section 1a
+supersedes the laptop projections where the two disagree** — it is a 100,000-simulation,
+40-location production run on dugong, added 2026-09-15, and it reordered the priorities
+below. Nothing here is implemented.
 
 ---
 
@@ -41,10 +43,67 @@ locations and could carry a note.
 
 ---
 
+## 1a. Production measurement — 100,000 simulations, all 40 locations
+
+Added 2026-09-15 after the plan was first written. Everything above this line was
+projected from laptop microbenchmarks; this section is measured on **dugong**
+(176 cores, 1.5 TiB), 100,000 simulations, 40 locations, `n_iterations = 3`,
+80 workers per arm, FIXED mode, `plots = TRUE`, `capture_trajectories = TRUE`,
+`optimize_subset = TRUE`. Both arms ran concurrently on the same box, so absolute
+times carry some mutual contention; the phase *shares* are the durable result.
+
+Arms: `main` = v0.66.0 (Python laser-cholera 0.16.1), `pr123` = the pure-R engine.
+Logs: `dugong:~/prod_main.log`, `dugong:~/prod_pr123.log`. Resource sampler:
+`dugong:~/res_100k_v4.csv`.
+
+| phase | cores used | main (Python) | pr123 (R) | share of pr123 run |
+|---|---|---:|---:|---:|
+| simulation | 80 | 141.9 min | **97.5 min** | 37% |
+| shard combine | **1** | 82.2 min | **95.8 min** | **37%** |
+| weights + convergence | 1 | ~1 min | ~1 min | <1% |
+| ensemble resim + predictions | 80 | 26.5 min | 30.2 min | 12% |
+| `plot_model_distributions()` | **1** | — | 8.6 min | 3% |
+| `plot_model_posteriors_detail()` | **1** | — | 20.0 min | **8%** |
+| remaining figures + trajectories | **1** | — | 7.3 min | 3% |
+| **total** | | did not finish in window | **260.2 min** | |
+
+`run_MOSAIC()` itself reported `Calibration complete: 223.93 min`; the extra 36 min is
+post-calibration figure rendering, which the plan had not costed at all.
+
+**Three results that change this plan.**
+
+1. **The engine is no longer the largest cost — the serial master is.** Summing the
+   one-core rows: 95.8 + 8.6 + 20.0 + 7.3 = **131.7 min, 51% of the 260-minute run,
+   executed on a single core while 79 sit idle.** The parallel phases total 127.7 min.
+   PR #123 cut the simulation phase by 44 min; there is more than that available in
+   work that is currently serial and embarrassingly parallel.
+
+2. **Per-shard combine cost is 2.4-2.8x worse in production than the laptop projection**
+   — 49.3 ms/shard (main) and 57.5 ms/shard (pr123) against the 20.2 ms/shard measured
+   on the laptop at 1,000 columns. Production shards carry 1,352 columns and the two
+   arms contended for the same disk. Item 1's saving is correspondingly understated;
+   see the revision there.
+
+3. **Peak memory is in the ensemble, not the simulation.** Sampled RSS-sum across the
+   worker cohort:
+
+   | phase | main | pr123 |
+   |---|---:|---:|
+   | simulation | 117.5 GB (1.46 GB/worker) | **74.1 GB (1.13 GB/worker)** |
+   | combine (master alone) | 18.1 GB | 18.3 GB |
+   | **ensemble resim** | **422.6 GB (19.3 GB/worker)** | **357.1 GB (23.6 GB/worker)** |
+
+   System peak was 442 GB of 1.5 TiB. The ensemble stage costs **~17-20x per worker what
+   the simulation stage costs**, at only 114 (main) / 52 (pr123) parameter sets. This
+   run would not fit on hedgehog (448 GB). See the revision to item 5.
+
+---
+
 ## 2. Improvement 1 — the shard combine takes the slow branch precisely when it matters
 
-**Status:** measured, fix specified, not implemented.
-**Saving:** ~15 min per 100,000-simulation run, entirely on the serial master.
+**Status:** measured on the laptop AND in production, fix specified, not implemented.
+**Saving:** **~35-42 min per 100,000-simulation run** (revised up from ~15 min after the
+production measurement in section 1a), entirely on the serial master.
 
 `.mosaic_load_and_combine_results()` (`R/run_MOSAIC_helpers.R:764`) branches on file
 count:
@@ -79,9 +138,29 @@ Note the combine is also pinned to a single arrow thread, because
 `.mosaic_set_all_thread_env()` sets `ARROW_NUM_THREADS=1` for worker safety. Whether the
 master should raise it for the combine is a separate question worth testing.
 
+**Reconciliation with production (section 1a).** The `streaming` method does not use
+`open_dataset` above `chunk_size`: it falls through to
+`rbindlist(lapply(chunk_files, arrow::read_parquet))` per 5,000-file chunk
+(`R/run_MOSAIC_helpers.R`, `streaming` branch, `n_files > chunk_size`). So at 100,000
+shards it pays the per-file `read_parquet` cost 100,000 times; the chunking bounds
+memory, not time. Measured cost per shard:
+
+| | ms/shard | 100k shards |
+|---|---:|---:|
+| laptop projection, 1,000 cols | 20.22 | 34 min |
+| **production, 1,352 cols (main)** | **49.3** | **82.2 min** |
+| **production, 1,352 cols (pr123)** | **57.5** | **95.8 min** |
+
+The laptop measured `open_dataset(<file chunks>)` at 11.47 ms/shard against
+`lapply(read_parquet)`'s 20.22 — a **1.76x** improvement. Carrying that ratio to the
+production per-shard cost projects **47-54 min**, i.e. a saving of **35-42 min**. This
+is a projection, not a measurement: the ratio has not been re-measured at 1,352 columns
+or on dugong's disk, and doing so is the first step of implementing this item.
+
 **Acceptance:** byte-identical `samples.parquet` against the current path on a run of
 > 5,000 shards; peak master RSS no higher than the current chunked path; recorded
-combine wall time before and after.
+combine wall time before and after. Re-measure the 1.76x ratio at production column
+count before trusting the projected saving.
 
 ---
 
@@ -132,14 +211,44 @@ core topology and this change buys nothing.
 
 ---
 
-## 5. Improvement 4 — `optimize_subset` collapses to its floor
+## 5. Improvement 4 — `optimize_subset`: a flat objective, and a headline metric that disagrees with it
 
-**Status:** observed twice, cause unknown. **Correctness question first, performance
-second.**
+**Status:** re-measured at 100k. **Not a bug in the search. A flat objective, and a
+headline metric that does not match what is being optimised.**
 
 In the ETH 30,000-simulation run, **both** engines returned `n_best_subset = 30` — the
 `min_best_subset` floor — out of ~27,000 retained draws. The grid search ran to
 completion and selected the smallest permitted subset on both arms.
+
+**The floor collapse did not reproduce at 100k / 40 locations.** pr123 selected
+`n_best_subset = 52` from a 117-member tier subset, well clear of the floor of 30. The
+full score profile (`dugong:~/prod-pr123/output_100k/3_results/figures/diagnostics/optimization_diagnostics.csv`,
+34 candidate sizes from n=30 to n=117) confirms the search is correct under its own
+objective: `score` is maximised at exactly n=52 (-2.0645), the global maximum of the
+profile. No defect in the optimiser.
+
+Two real problems remain, and they are different from the one originally recorded:
+
+**(a) The objective is nearly flat.** Across the whole candidate range the score spans
+-2.0645 to -2.1506 — **4%** — and `mae_cases` spans 16.75 to 17.45, also 4%. The search
+evaluates 34 candidate subset sizes, each a weighted-median gather over the 4D
+prediction arrays, to discriminate between options that differ by 4% on the quantity it
+is optimising. `optimize_ensemble_subset()` already returns a `stability_flag` for
+"score profile was flat"; nothing consumes it to short-circuit the search.
+
+**(b) The headline R-squared is reported from the MAE optimum.** The default objective
+is `"mae"` (normalised MAE), not R-squared, so the two need not agree — and at 100k they
+do not. `summary.json` reports:
+
+| | n | r2_cases | r2_deaths |
+|---|---:|---:|---:|
+| `*_tier` (Akaike subset) | 117 | **0.6287** | **0.4373** |
+| headline (MAE-optimised) | 52 | **0.4776** | **0.3318** |
+
+So the number a reader takes as the fit of the run is **24% worse** on both channels than
+the tier ensemble computed from the same simulations. That is a reporting question, not a
+performance one, but it is decided by this switch and should be settled before
+`optimize_subset = TRUE` becomes a default.
 
 The consequence is visible in the metrics: `r2_cases_ensemble` was 0.1764 (main) vs
 0.2994 (pr123), a 70% spread, while the `_tier` variants computed over 113/114 draws
@@ -152,14 +261,18 @@ case the search could short-circuit — or the search is broken at large N. Eith
 should be understood before it is optimised, and `optimize_subset = TRUE` should probably
 not be a default until it is.
 
-**Acceptance:** an explanation, not a speedup. Then either a documented short-circuit or
-a fix.
+**Acceptance:** (a) a short-circuit driven by the existing `stability_flag` when the
+score profile is flat within a stated tolerance, with the selected n and the flat range
+both recorded; (b) a decision, with the maintainer, on which ensemble `summary.json`
+should report as headline. Neither is a speedup; (b) can change published numbers and
+must not be bundled with anything else.
 
 ---
 
 ## 6. Improvement 5 — guard the ensemble config broadcast
 
-**Status:** latent, not yet triggered. **Prevents an OOM; not a speedup.**
+**Status:** **measured in production — the ensemble is now the memory peak of the whole
+pipeline.** Prevents an OOM; not a speedup.
 
 `calc_model_ensemble()` `clusterExport`s the full list of sampled configs to every
 worker (`R/calc_model_ensemble.R:635`). A sampled config measures **4.52 MB** at 40
@@ -171,8 +284,63 @@ simulation runs. The master separately allocates
 This did not bite in the runs to date only because improvement 4 collapsed the subset to
 30. If the subset were large it would OOM on hedgehog (448 GB) before producing anything.
 
+**Production measurement (section 1a) makes this concrete.** At only 52 (pr123) / 114
+(main) parameter sets, the ensemble stage already peaks at **357 GB / 423 GB** of
+worker RSS — 23.6 GB and 19.3 GB per worker respectively, against 1.1-1.5 GB per worker
+during simulation. System peak was 442 GB. Two consequences:
+
+* **This run already would not fit on hedgehog (448 GB).** The guard is no longer
+  hypothetical protection against a subset size nobody has used; it is the difference
+  between this exact workload running and not running on the smaller VM.
+* The per-worker cost scales with the subset, so the plan's `n_subset = 1000` scenario
+  is not 20x this figure by broadcast alone — the master's two
+  `array(NA_real_, c(nL, nT, n_param_sets, n_iter))` allocations (4.47 GB each at
+  n_param=1000) are on top of it.
+
+The guard should report the computed broadcast size and the two array sizes, so the
+message names the number rather than guessing.
+
 **Fix:** compute the broadcast size up front and either refuse with a clear message or
 chunk the dispatch. A guard that states the number is worth more than one that guesses.
+
+---
+
+## 6a. Improvement 6 — post-calibration figure rendering is 36 min on one core
+
+**Status:** measured in production (section 1a). Not previously in this plan.
+**Saving:** up to ~30 min per 40-location run with `plots = TRUE`.
+
+`run_MOSAIC()` calls `render_MOSAIC_figures()` (`R/run_MOSAIC.R:2761`) after
+`Calibration complete`, and the whole of it is serial. Bracketed by output-file mtimes
+on the pr123 100k run:
+
+| step | span | output | cost |
+|---|---|---|---:|
+| `plot_model_distributions()` | 20:47:16-20:55:52 | 40 `distributions_<ISO>_Prior_Posterior.pdf` | 8.6 min |
+| `plot_model_posteriors_detail()` | 20:55:58-21:15:59 | **286 PDFs** (40 locations x 7 groups + 6 global) | **20.0 min** |
+| sensitivity, correlation, ensemble, ppc, spatial, `plot_model_trajectories()` | 21:15:59-21:23:16 | incl. 40 x (PDF + PNG) trajectories | 7.3 min |
+
+That is **36 minutes, 14% of the run**, on one core, producing ~370 independent files.
+Every one of these loops is per-location or per-(location x group) with no shared state
+between iterations — the same shape as item 2, and the largest single-threaded block
+left after item 1.
+
+Two caveats before implementing:
+
+* **Graphics devices are not automatically fork-safe or thread-safe.** The parallel unit
+  must be a whole `open device -> draw -> close device` per file inside a PSOCK worker,
+  never a shared device. PSOCK (not FORK) also avoids inheriting a device handle.
+* **The cluster may still be alive at this point.** Check whether `run_MOSAIC()` has torn
+  the calibration cluster down before `render_MOSAIC_figures()` is reached; reusing it is
+  free, and creating a second one costs the usual PSOCK spin-up.
+
+**Do this after item 1** — item 1 is larger (95.8 min vs 36 min), lower risk, and does
+not touch rendering.
+
+**Acceptance:** identical file set and identical file count against the serial path;
+spot-check that a sample of PDFs is byte-identical or visually identical (fonts and
+device metadata may differ across workers, so byte-identity is a bonus, not a
+requirement); recorded render wall time before and after.
 
 ---
 
@@ -196,18 +364,27 @@ chunk the dispatch. A guard that states the number is worth more than one that g
 
 ## 8. Sequencing
 
-| # | change | measured saving | effort | risk |
-|---|---|---|---|---|
-| 1 | chunked `open_dataset` in the combine | ~15 min / 100k run | ~1 h | low, output verifiable |
-| 2 | parallelise `.mosaic_reff_resim_ci()` | ~5 min / R_eff call | ~0.5 d | low, bit-identical expected |
-| 3 | measure per-worker shard dirs | unknown — measure first | ~2 h | none (measurement) |
-| 4 | explain `optimize_subset` floor collapse | correctness | ~0.5 d | medium, may change results |
-| 5 | guard the ensemble broadcast | prevents OOM | ~2 h | low |
+Revised 2026-09-15 after the production measurement. Ordering now follows measured
+wall-clock, not laptop projections.
 
-Do 1 and 2 first: both are contained, both have exact acceptance tests, and neither
-changes any result. Do 3 before 4 — it is a measurement, and its answer decides whether
-there is anything to fix. Item 4 is the only one that can change model output and should
-not be bundled with the others.
+| # | change | saving (100k, 40 loc) | effort | risk |
+|---|---|---|---|---|
+| 1 | chunked `open_dataset` in the combine | **~35-42 min** (projected from a measured 1.76x) | ~1 h | low, output verifiable |
+| 6a | parallelise `render_MOSAIC_figures()` | **~30 min** (measured 36 min serial) | ~1 d | low-medium, device safety |
+| 5 | guard the ensemble broadcast | prevents OOM; 357-423 GB measured | ~2 h | low |
+| 2 | parallelise `.mosaic_reff_resim_ci()` | ~5 min / R_eff call (post-hoc path only) | ~0.5 d | low, bit-identical expected |
+| 3 | measure per-worker shard dirs | unknown — measure first | ~2 h | none (measurement) |
+| 4 | `optimize_subset` flat profile + headline metric | correctness | ~0.5 d | medium, may change published numbers |
+
+Do **1** first: it is the single largest cost in the pipeline (37% of the run), it is
+contained, and its acceptance test is exact. Then **6a**, the second largest, which is
+independent of it. Then **5**, which is cheap and is the difference between this
+workload running and not running on hedgehog.
+
+Items 2 and 3 are smaller than they looked before the production run — 2 is on the
+post-hoc R_eff path that `run_MOSAIC()` does not call, and 3 is a measurement whose
+answer may be "nothing to fix". Item 4 is the only one that can change published model
+output and must not be bundled with the others.
 
 **Each item gets its own commit and version bump**, per CLAUDE.md.
 
