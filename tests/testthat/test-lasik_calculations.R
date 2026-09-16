@@ -653,12 +653,26 @@ testthat::test_that("UN population trends", {
      # Proportional-nearness test. 1% was never achievable and this assertion
      # has never run: the engine applies UN annual birth/death RATES through
      # per-tick stochastic draws rather than interpolating the UN population
-     # SERIES, so the two drift apart over the 1,398-day window. Measured max
-     # proportional deviation is 2.23% here and 2.24% for the pinned Python
-     # oracle (tests/testthat/fixtures/replay_full_length.rds) on the same
-     # config -- i.e. this is engine demography, identical in both engines, not
-     # a port artefact. 3% keeps it a real check on a systematic drift.
-     tol    <- 0.03
+     # SERIES, so the two drift apart. Measured max proportional deviation was
+     # 2.23% for the R engine and 2.24% for the pinned Python oracle
+     # (tests/testthat/fixtures/replay_full_length.rds) on the same config --
+     # i.e. this is engine demography, identical in both engines, not a port
+     # artefact.
+     #
+     # The tolerance is PER SIMULATED YEAR, not absolute, because the drift is
+     # systematic and accumulates with window length: it is a rate applied
+     # through draws diverging from a series, so twice the window is roughly
+     # twice the gap. A fixed constant silently changes strictness whenever
+     # config_default's window moves -- and it has, 1278 -> 1367 -> 1398 ->
+     # 3322 ticks across releases (CLAUDE.md lesson #5: a reasonable-looking
+     # constant becomes wrong after a scaling change).
+     #
+     # 0.8%/yr reproduces the previous 3% at the 1,398-day window it was
+     # calibrated on (1398/365.25 = 3.83 yr x 0.008 = 3.06%), so this preserves
+     # the existing standard rather than loosening it. Observed on the current
+     # 3,322-day config: 4.7% against 7.3% allowed.
+     n_years <- ncol(actual) / 365.25
+     tol     <- 0.008 * n_years
      ratios <- actual_sums / expected_sums
 
      testthat::expect_true(
