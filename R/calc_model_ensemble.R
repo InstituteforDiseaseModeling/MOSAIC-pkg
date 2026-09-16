@@ -62,7 +62,8 @@
 .mosaic_ensemble_ram_projection_gb <- function(n_locations, n_time_points,
                                                n_param_sets, n_stoch,
                                                n_capture_channels = 0L,
-                                               capture_in_gather = FALSE) {
+                                               capture_in_gather = FALSE,
+                                               broadcast_gb = 0) {
   # One dense double array = n_loc * n_time * n_param * n_stoch * 8 bytes.
   one_array_gb <- (as.numeric(n_locations) * as.numeric(n_time_points) *
                      as.numeric(n_param_sets) * as.numeric(n_stoch) * 8) / 2^30
@@ -85,7 +86,38 @@
   capture_gb <- if (n_capture_channels > 0L) one_array_gb else 0
   if (isTRUE(capture_in_gather))
     list_gb <- list_gb + as.numeric(n_capture_channels) * one_array_gb
-  dense_gb + list_gb + capture_gb
+  # `broadcast_gb` is the clusterExport of param_configs to every worker. It
+  # belongs in the SAME budget as the arrays above because the only backend left
+  # is local PSOCK: the workers are processes on this host, so their copies come
+  # out of this machine's RAM. See .mosaic_ensemble_broadcast_gb().
+  dense_gb + list_gb + capture_gb + as.numeric(broadcast_gb)
+}
+
+#' Projected RAM for broadcasting the sampled configs to PSOCK workers
+#'
+#' \code{calc_model_ensemble()} \code{clusterExport}s the whole
+#' \code{param_configs} list to every worker, so the cost is
+#' (size of one config) x n_param_sets x n_workers, and with local PSOCK every
+#' copy lives on this host.
+#'
+#' Measured at 40 locations: one sampled config is \strong{10.15 MB}, so the
+#' broadcast is 1.13 GB per worker at 114 parameter sets and \strong{9.91 GB per
+#' worker -- 793 GB across 80 workers} at 1,000. That is the cliff this exists to
+#' name: at the subset sizes used so far it is a minor term, and at the sizes the
+#' optimiser is allowed to choose it is the dominant one.
+#'
+#' @param param_configs The list of sampled configs about to be exported.
+#' @param n_workers Number of PSOCK workers that will receive a copy.
+#' @return Projected gigabytes, or 0 when there is nothing to broadcast.
+#' @noRd
+.mosaic_ensemble_broadcast_gb <- function(param_configs, n_workers) {
+  n_workers <- suppressWarnings(as.integer(n_workers))
+  if (length(n_workers) != 1L || is.na(n_workers) || n_workers < 1L) return(0)
+  if (!length(param_configs)) return(0)
+  # Size ONE config and multiply: object.size() on the whole list is O(n) in
+  # deep-list traversal and the configs are structurally identical.
+  one_gb <- as.numeric(utils::object.size(param_configs[[1L]])) / 2^30
+  one_gb * length(param_configs) * n_workers
 }
 
 # Warn (do NOT cap) when the dense-array + gathered-list footprint risks OOM.
@@ -94,23 +126,31 @@
 .mosaic_ensemble_check_ram <- function(n_locations, n_time_points, n_param_sets,
                                        n_stoch, total_ram_gb = NULL,
                                        n_capture_channels = 0L,
-                                       capture_in_gather = FALSE) {
+                                       capture_in_gather = FALSE,
+                                       broadcast_gb = 0) {
   proj_gb <- .mosaic_ensemble_ram_projection_gb(n_locations, n_time_points,
                                                 n_param_sets, n_stoch,
                                                 n_capture_channels,
-                                                capture_in_gather)
+                                                capture_in_gather,
+                                                broadcast_gb)
   if (is.null(total_ram_gb)) total_ram_gb <- .psi_total_system_ram_gb()
   if (is.na(total_ram_gb)) return(invisible(proj_gb))  # un-probed platform: skip
   if (proj_gb > .MOSAIC_ENSEMBLE_RAM_FRACTION * total_ram_gb) {
+    bcast_txt <- if (broadcast_gb > 0) sprintf(
+      " Of that, ~%.1f GB is the clusterExport of %d sampled configs to every ",
+      broadcast_gb, n_param_sets) else ""
+    bcast_txt2 <- if (broadcast_gb > 0)
+      "PSOCK worker, which lands on THIS host because the workers are local processes." else ""
     warning(sprintf(paste0(
       "calc_model_ensemble: the dense prediction arrays + gathered results list ",
       "project to ~%.1f GB on this orchestrator node (2 dense [%d x %d x %d x %d] ",
       "double arrays + the concurrent gathered list), but the system has ~%.0f GB ",
-      "RAM -- this risks an out-of-memory failure. Reduce max_best_subset (fewer ",
+      "RAM -- this risks an out-of-memory failure.%s%s Reduce max_best_subset (fewer ",
       "parameter sets) and/or n_iter_ensemble (fewer stochastic reruns per set), or ",
       "run on a larger-memory host. This is the dominant memory cliff at long ",
       "(e.g. 2015) calibration windows."),
-      proj_gb, n_locations, n_time_points, n_param_sets, n_stoch, total_ram_gb),
+      proj_gb, n_locations, n_time_points, n_param_sets, n_stoch, total_ram_gb,
+      bcast_txt, bcast_txt2),
       immediate. = TRUE, call. = FALSE)
   }
   invisible(proj_gb)
@@ -540,13 +580,23 @@ calc_model_ensemble <- function(config,
   # (warn-only, no behavior change) before the large allocation below.
   # ===========================================================================
 
+  # The worker count is resolved properly further down (it is clamped to the
+  # connection budget there). Project against the REQUESTED count: this is a
+  # warning about risk, so the upper bound is the honest input, and a clamp can
+  # only make the real figure smaller.
+  .ram_n_workers <- if (!parallel) 0L
+                    else if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L)
+                    else as.integer(n_cores)
+
   .mosaic_ensemble_check_ram(n_locations, n_time_points, n_param_sets,
                              n_simulations_per_config,
                              n_capture_channels = if (isTRUE(capture_trajectories))
                                length(trajectory_channels) else 0L,
                              # Local PSOCK spills at sim time (flat), so nothing
                              # is ever held in a gather step.
-                             capture_in_gather = FALSE)
+                             capture_in_gather = FALSE,
+                             broadcast_gb = .mosaic_ensemble_broadcast_gb(
+                               param_configs, .ram_n_workers))
 
   # ===========================================================================
   # Run simulations (parallel or sequential)
