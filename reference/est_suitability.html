@@ -15,7 +15,7 @@ suitability (psi) based on the climate covariates."><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -68,6 +68,7 @@ suitability (psi) based on the climate covariates.</p>
 <span>  bias_correct <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  architecture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lstm_v2_hierarchical_film"</span>, <span class="st">"lstm_v1_legacy"</span><span class="op">)</span>,</span>
 <span>  arch_control <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  source_csv <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  plot_country_diagnostics <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -147,6 +148,16 @@ via <code>modifyList</code> (overrides only the keys provided). Key fields:
 <code>partial_pool_lambda</code>, <code>exclude_covariates</code> (lstm_v2 ablation
 override), and the execution knob <code>parallel_seeds</code> (integer, default
 <code>1L</code> = serial; not a model parameter). Ignored by the legacy path.</p></dd>
+
+
+<dt id="arg-source-csv">source_csv<a class="anchor" aria-label="anchor" href="#arg-source-csv"></a></dt>
+<dd><p><code>NULL</code> (default) or a path to the suitability panel CSV
+that psi fitting should read. <code>NULL</code> uses the canonical panel
+<code>file.path(PATHS$DATA_CHOLERA_WEEKLY, "cholera_country_weekly_suitability_data.csv")</code>.
+A supplied path lets a caller point fitting at an arbitrary panel (e.g. a
+v7.4-tagged or per-cutoff leak-free panel) without renaming files.
+Supported only by the <code>lstm_v2_hierarchical_film</code> path; errors if supplied
+with the frozen legacy path.</p></dd>
 
 
 <dt id="arg-plot-country-diagnostics">plot_country_diagnostics<a class="anchor" aria-label="anchor" href="#arg-plot-country-diagnostics"></a></dt>

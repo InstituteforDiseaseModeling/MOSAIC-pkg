@@ -19,6 +19,7 @@ compile_suitability_data(
   forecast_horizon = 3,
   include_lags = FALSE,
   include_flood_prob = TRUE,
+  gam_train_stop = NULL,
   backfill_case_gaps = TRUE,
   backfill_max_weeks = 2L,
   backfill_method = "linear"
@@ -102,6 +103,28 @@ compile_suitability_data(
   `emdat_flood_prob_anom`). The probability covariates are populated in
   both the historical training and the forecast windows, so the
   downstream LSTM consumes the same feature definition in both regimes.
+
+  As of the v7.4 hazard redesign this flag is the master switch for ALL
+  THREE hazard-imputation GAMs: it additionally triggers
+  [`impute_cyclone_probability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_cyclone_probability.md)
+  (adds `emdat_cyclone_prob` and `emdat_cyclone_prob_12w_max`) and
+  [`impute_drought_probability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_drought_probability.md)
+  (adds `drought_prob` and the slow integrator `drought_prob_26w_mean`).
+  Each GAM is gated on its own required-column contract, so a missing
+  input skips only that hazard.
+
+- gam_train_stop:
+
+  Date or character (`"YYYY-MM-DD"`) or `NULL`. Passed through to all
+  three hazard imputers
+  ([`impute_flood_probability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_flood_probability.md),
+  [`impute_cyclone_probability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_cyclone_probability.md),
+  [`impute_drought_probability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_drought_probability.md)).
+  When non-`NULL`, each hazard GAM is FIT only on rows with
+  `date <= gam_train_stop` and then predicts every row – the
+  leakage-hygiene hook for building a leak-free per-cutoff panel in
+  rolling-origin forecast CV. Default `NULL` = full-data fit
+  (back-compatible).
 
 - backfill_case_gaps:
 

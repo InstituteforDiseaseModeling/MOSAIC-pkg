@@ -13,7 +13,7 @@ rolling windows, anomalies, and climate / WASH interaction terms."><meta propert
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,6 +64,7 @@ rolling windows, anomalies, and climate / WASH interaction terms.</p>
 <span>  forecast_horizon <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>  include_lags <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  include_flood_prob <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  gam_train_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  backfill_case_gaps <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  backfill_max_weeks <span class="op">=</span> <span class="fl">2L</span>,</span>
 <span>  backfill_method <span class="op">=</span> <span class="st">"linear"</span></span>
@@ -134,7 +135,27 @@ aggregates (<code>emdat_flood_prob_4w_max</code>, <code>emdat_flood_prob_12w_max
 <code>emdat_flood_prob_12w_sum</code>, <code>emdat_flood_prob_anom</code>). The
 probability covariates are populated in both the historical training and
 the forecast windows, so the downstream LSTM consumes the same feature
-definition in both regimes.</p></dd>
+definition in both regimes.</p>
+<p>As of the v7.4 hazard redesign this flag is the master switch for ALL
+THREE hazard-imputation GAMs: it additionally triggers
+<code><a href="impute_cyclone_probability.html">impute_cyclone_probability</a></code> (adds <code>emdat_cyclone_prob</code>
+and <code>emdat_cyclone_prob_12w_max</code>) and
+<code><a href="impute_drought_probability.html">impute_drought_probability</a></code> (adds <code>drought_prob</code> and
+the slow integrator <code>drought_prob_26w_mean</code>). Each GAM is gated on
+its own required-column contract, so a missing input skips only that
+hazard.</p></dd>
+
+
+<dt id="arg-gam-train-stop">gam_train_stop<a class="anchor" aria-label="anchor" href="#arg-gam-train-stop"></a></dt>
+<dd><p>Date or character (<code>"YYYY-MM-DD"</code>) or <code>NULL</code>.
+Passed through to all three hazard imputers
+(<code><a href="impute_flood_probability.html">impute_flood_probability</a></code>,
+<code><a href="impute_cyclone_probability.html">impute_cyclone_probability</a></code>,
+<code><a href="impute_drought_probability.html">impute_drought_probability</a></code>). When non-<code>NULL</code>, each
+hazard GAM is FIT only on rows with <code>date &lt;= gam_train_stop</code> and then
+predicts every row – the leakage-hygiene hook for building a leak-free
+per-cutoff panel in rolling-origin forecast CV. Default <code>NULL</code> =
+full-data fit (back-compatible).</p></dd>
 
 
 <dt id="arg-backfill-case-gaps">backfill_case_gaps<a class="anchor" aria-label="anchor" href="#arg-backfill-case-gaps"></a></dt>
