@@ -114,10 +114,11 @@ post-calibration figure rendering, which the plan had not costed at all.
 
 ## 2. Improvement 1 — the shard combine takes the slow branch precisely when it matters
 
-**Status:** measured on the laptop AND in production, fix specified, not
-implemented. **Saving:** **~35-42 min per 100,000-simulation run**
-(revised up from ~15 min after the production measurement in section
-1a), entirely on the serial master.
+**Status: IMPLEMENTED (v0.79.0).** Measured on the laptop and in
+production. **Saving: ~30-35 min per 100,000-simulation run** on the
+serial master — less than the ~35-42 min projected below, because
+correctness required `unify_schemas = TRUE`, which costs about half the
+available speedup. See “What was implemented”.
 
 `.mosaic_load_and_combine_results()` (`R/run_MOSAIC_helpers.R:764`)
 branches on file count:
@@ -176,11 +177,53 @@ min**, i.e. a saving of **35-42 min**. This is a projection, not a
 measurement: the ratio has not been re-measured at 1,352 columns or on
 dugong’s disk, and doing so is the first step of implementing this item.
 
-**Acceptance:** byte-identical `samples.parquet` against the current
-path on a run of \> 5,000 shards; peak master RSS no higher than the
-current chunked path; recorded combine wall time before and after.
-Re-measure the 1.76x ratio at production column count before trusting
-the projected saving.
+### What was implemented
+
+The `streaming` branch’s `n_files > chunk_size` path now reads each
+chunk with
+`arrow::open_dataset(chunk_files, format = "parquet", unify_schemas = TRUE)`
+instead of
+`rbindlist(lapply(chunk_files, arrow::read_parquet), fill = TRUE)`.
+Chunking and `chunk_size = 5000L` are unchanged, so the memory bound is
+unchanged.
+
+**`unify_schemas = TRUE` is load-bearing, and the reason is a
+silent-corruption trap.** Given a file vector, `open_dataset()` adopts
+the FIRST file’s schema and does **not** raise when a later file
+disagrees — it drops that file’s extra columns and returns NA. A
+`tryCatch` fallback around it is therefore dead code for the case it was
+written for (the same shape as lesson \#13’s dead
+[`is.null()`](https://rdrr.io/r/base/NULL.html) guard). The first
+implementation had exactly that bug; `test-combine-shards.R` caught it.
+Measured at 1,352 columns, 1,000 single-row shards, min of 3:
+
+| strategy | time | vs current | correct? |
+|----|---:|---:|----|
+| per-file `rbindlist(fill = TRUE)` — what this replaced | 21.47 s | 1.00x | yes |
+| `open_dataset()`, default schema handling | 7.81 s | 2.75x | **no — drops columns silently** |
+| **`open_dataset(unify_schemas = TRUE)`** — shipped | 13.68 s | **1.57x** | yes |
+
+Correctness costs 1.18x here, and it is not negotiable: the union-schema
+read reproduces `rbindlist(fill = TRUE)` exactly.
+
+**Acceptance — met.** At 6,000 shards across a chunk boundary (2 chunks,
+`chunk_size` 5000): `identical(got, want)` is **TRUE** (exact, not
+merely `all.equal`), column names and row order preserved, **1.74x**
+(18.13 s -\> 10.40 s at 62 columns). Peak process RSS is **unchanged** —
+0.67-0.68 GB on both arms over three alternating pairs; R’s own
+[`gc()`](https://rdrr.io/r/base/gc.html) max-used is *lower* on the new
+path (Ncells 518 vs 699 MB) because it no longer materialises one
+intermediate data.frame per file. Regression tests in
+`tests/testthat/test-combine-shards.R` pin the fast path, the fill
+semantics, and the small-file branch; the mismatched-schema test fails
+if `unify_schemas` is ever dropped.
+
+**Projected production saving.** The laptop measures 21.47 s -\> 13.68 s
+per 1,000 shards at 1,352 columns, i.e. 35.8 min -\> 22.8 min projected
+at 100k. Scaling by the 2.4-2.8x laptop-to-dugong factor established in
+section 1a, the production combine should fall from the measured 82-96
+min to roughly **55-64 min** — a saving of **~30-35 min**. This has not
+yet been confirmed on dugong at 100k; that is the next measurement.
 
 ------------------------------------------------------------------------
 
@@ -398,6 +441,71 @@ time before and after.
 
 ------------------------------------------------------------------------
 
+## 6b. Improvement 7 — one parquet per simulation is the wrong shard granularity
+
+**Status: measured, NOT implemented. Needs a decision — it changes
+resume semantics.** **Possible saving: 60-90 min per 100k run, plus the
+same again on any resume.**
+
+Found while implementing item 1. The combine is slow because of **file
+framing, not data volume**, and item 1 only makes the framing cheaper to
+parse rather than removing it.
+
+A single-row parquet with 1,352 columns is **444 KB on disk** (measured)
+while the row itself is ~8 KB. That is ~330 bytes of parquet column
+metadata per column per file, and it is why the 100k run wrote **52.9 GB
+of shards for 1.03 GB of data** — a 51:1 ratio, straight from the
+production log (`Loading 100000 simulation files (52924.1 MB on disk)` …
+`Results in memory: 1031.7 MB`).
+
+Measured at 1,352 columns, 1,000 simulations, min of 3, varying only how
+many rows go in each file:
+
+|       rows/file | files |   disk MB | per-file read | `open_dataset` |
+|----------------:|------:|----------:|--------------:|---------------:|
+| **1 (current)** |  1000 | **434.1** |       20.62 s |         8.02 s |
+|              10 |   100 |      54.0 |        1.82 s |         0.80 s |
+|             100 |    10 |      15.2 |        0.17 s |         0.10 s |
+|             500 |     2 |      11.5 |        0.04 s |         0.04 s |
+
+Batching 100 simulations per file is **121x faster to read and 29x
+smaller on disk** than the current layout — against item 1’s 1.57x.
+Extrapolated to the production run, the 95.8-minute combine becomes
+roughly **1-2 minutes**.
+
+**It also fixes a second cost that item 1 does not touch.**
+`.mosaic_resume_scan()` validates shards by *reading every one of them*
+(`R/run_MOSAIC_helpers.R`), on the stated reasoning that “Shards are one
+row, so the read is cheap”. At 1,352 columns and 444 KB per file it is
+not cheap — a resume of a 100k run pays the full combine cost a second
+time before it does any work.
+
+**Why this needs a decision rather than an implementation.** The shard
+filename is load bearing:
+
+- `.mosaic_parse_sim_ids()` derives the sim id from
+  `^sim_0*([0-9]+)\.parquet$`.
+- `.mosaic_resume_scan()` derives both the **count** (`n`) and the
+  **watermark** (`max(sim_id)`) from those ids, and
+  `.mosaic_reconstruct_state()` treats the watermark as authoritative
+  for the next sim id so that a resume never reuses a seed.
+- A crash mid-batch currently loses at most one simulation; with 100
+  rows per file it would lose up to 100 unless workers flush partial
+  batches.
+
+So batching means a naming scheme that encodes a range (or a scan that
+reads the `sim` column rather than the filename), and a decision about
+the crash-granularity trade. Neither is hard, but both change behaviour
+that resume correctness depends on, and that is the maintainer’s call —
+not something to bundle into a performance patch.
+
+**Recommended:** take this as its own piece of work after items 6a and
+5, with a proposal covering the naming scheme, the resume-scan change,
+and the partial-flush policy. It is the largest single saving identified
+anywhere in this document.
+
+------------------------------------------------------------------------
+
 ## 7. Not problems (checked, recorded so they are not re-investigated)
 
 - **No O(N^2) rescan in FIXED mode.** The adaptive loop recomputes ESS
@@ -433,12 +541,18 @@ follows measured wall-clock, not laptop projections.
 | 2 | parallelise `.mosaic_reff_resim_ci()` | ~5 min / R_eff call (post-hoc path only) | ~0.5 d | low, bit-identical expected |
 | 3 | measure per-worker shard dirs | unknown — measure first | ~2 h | none (measurement) |
 | 4 | `optimize_subset` flat profile + headline metric | correctness | ~0.5 d | medium, may change published numbers |
+| 6b | batch N simulations per shard file | **60-90 min / 100k, again on resume** | ~2 d + design | **high — changes resume semantics** |
 
 Do **1** first: it is the single largest cost in the pipeline (37% of
 the run), it is contained, and its acceptance test is exact. Then
 **6a**, the second largest, which is independent of it. Then **5**,
 which is cheap and is the difference between this workload running and
 not running on hedgehog.
+
+**Item 6b is the largest saving in this document and is deliberately
+last in the table, not last in value.** It needs a design decision on
+shard naming, the resume scan, and crash granularity before any code is
+written; see section 6b.
 
 Items 2 and 3 are smaller than they looked before the production run — 2
 is on the post-hoc R_eff path that
