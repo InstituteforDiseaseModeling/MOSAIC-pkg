@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.85.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.85.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -328,7 +328,10 @@
 <hr></div>
 <div class="section level2">
 <h2 id="id_6a-improvement-6--post-calibration-figure-rendering-is-36-min-on-one-core">6a. Improvement 6 — post-calibration figure rendering is 36 min on one core<a class="anchor" aria-label="anchor" href="#id_6a-improvement-6--post-calibration-figure-rendering-is-36-min-on-one-core"></a></h2>
-<p><strong>Status: IMPLEMENTED (v0.80.0; two defects fixed in v0.81.0).</strong> <strong>Saving:</strong> up to ~30 min per 40-location run with <code>plots = TRUE</code>. The measured speedup is still outstanding — see section 10.</p>
+<p><strong>Status: IMPLEMENTED (v0.80.0; defects fixed in v0.81.0 and v0.81.4). MEASURED.</strong> <strong>Saving: 17.6 min per 40-location run with <code>plots = TRUE</code></strong> (36.07 min -&gt; 18.43 min, <strong>1.96x</strong> on 8 workers), measured on dugong re-rendering the real pr123 100k run directory. Identical file set on both arms (587 files), and the benchmark asserts the cluster actually engaged rather than inferring it from output equality.</p>
+<p><strong>Less than the ~30 min this section originally projected, and the reason is Amdahl, not the implementation.</strong> Only the three per-location families are parallel; the sensitivity, correlation, ppc, spatial and ensemble figures are still serial, and the fan-out is capped at 8 (<code>.MOSAIC_DETAIL_MAX_WORKERS</code>). A ~60% parallel fraction on 8 workers predicts 1/(0.4 + 0.6/8) = 2.1x, which is what was measured. Going further means parallelising the remaining families, not raising the worker cap.</p>
+<p><strong>Getting this number took three attempts</strong>, and the first two were what found the defects: the cluster silently never starting (v0.81.0), then <code>results_all</code> silently killing all 286 posterior-detail pages (v0.81.4). With that second bug live the serial arm measured 15.5 min for 301 files; fixed, it measures 36.07 min for 587 and matches the 35.9 min seen in production. Output-equality assertions could not detect either defect, which is why the benchmark now checks engagement directly.</p>
+<p>Minor, unresolved: the serial arm emits 4,658 warnings and the parallel arm 552. Worker warnings are not forwarded to the master. The file sets are identical so nothing is lost from the output, but a figure that warns on a worker is quieter than one that warns serially.</p>
 <p>Two things went wrong in v0.80.0 and both were invisible to the tests shipped with it, for the same reason: a cluster that fails to start falls back to <code><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply()</a></code> and produces byte-identical figures, so asserting output equality proves nothing about whether any worker ran. (i) <code><a href="reference/make_mosaic_cluster.html">make_mosaic_cluster()</a></code> stops unless <code><a href="reference/set_root_directory.html">set_root_directory()</a></code> has been called, which rendering never does — it now takes <code>require_root = FALSE</code>. (ii) R serialises a function that is a NAMESPACE BINDING by reference, so <code>.mosaic_traj_render_worker</code> came back “object not found” on any worker whose installed build predated it; it is reparented to <code><a href="https://rdrr.io/r/base/environment.html" class="external-link">globalenv()</a></code> before dispatch, which is what <code>.mosaic_run_batch()</code> already does to its <code>worker_func</code>. The tests now assert the cluster is really built and that files actually come out of it.</p>
 <p><code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> calls <code><a href="reference/render_MOSAIC_figures.html">render_MOSAIC_figures()</a></code> (<code>R/run_MOSAIC.R:2761</code>) after <code>Calibration complete</code>, and the whole of it is serial. Bracketed by output-file mtimes on the pr123 100k run:</p>
 <table class="table"><colgroup><col width="23%"><col width="23%"><col width="23%"><col width="30%"></colgroup><thead><tr><th>step</th>
@@ -485,11 +488,7 @@
 <th>change</th>
 <th>shipped</th>
 <th>caveat</th>
-</tr></thead><tbody><tr><td>5</td>
-<td>guard the ensemble config broadcast</td>
-<td>v0.84.0</td>
-<td>measurement corrected two wrong numbers in the original section; chunking the dispatch deliberately not done.</td>
-</tr><tr><td>1</td>
+</tr></thead><tbody><tr><td>1</td>
 <td>chunked <code>open_dataset</code> in the combine</td>
 <td>v0.79.0</td>
 <td>
@@ -497,14 +496,23 @@
 </tr><tr><td>6a</td>
 <td>parallelise <code><a href="reference/render_MOSAIC_figures.html">render_MOSAIC_figures()</a></code>
 </td>
-<td>v0.80.0, fixed v0.81.0</td>
+<td>v0.80.0, fixed v0.81.0 + v0.81.4</td>
 <td>
-<strong>speedup number outstanding</strong> — the first benchmark was invalidated by the two defects; the re-run is what produces the figure.</td>
+<strong>measured 1.96x, 17.6 min saved</strong> (36.07 -&gt; 18.43 min, 8 workers). Below the ~30 min projected: only the per-location families are parallel, so Amdahl caps it.</td>
+</tr><tr><td>2</td>
+<td>parallelise <code>.mosaic_reff_resim_ci()</code>
+</td>
+<td>v0.85.0</td>
+<td>post-hoc path only; no calibration-time effect.</td>
 </tr><tr><td>4</td>
 <td>
 <code>optimize_subset</code> scoring mask</td>
 <td>v0.81.2</td>
 <td>fixed, but not for the reason this document originally gave. See the open question below.</td>
+</tr><tr><td>5</td>
+<td>guard the ensemble config broadcast</td>
+<td>v0.84.0</td>
+<td>measurement corrected two wrong numbers in the original section; chunking the dispatch deliberately not done.</td>
 </tr><tr><td>6b</td>
 <td>shard-batching machinery</td>
 <td>v0.80.1, v0.81.0</td>
@@ -517,12 +525,7 @@
 <th>change</th>
 <th>why it still matters</th>
 <th>effort</th>
-</tr></thead><tbody><tr><td>2</td>
-<td>parallelise <code>.mosaic_reff_resim_ci()</code>
-</td>
-<td>~5 min per R_eff call, but on the post-hoc path <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> never calls — so it buys nothing during calibration.</td>
-<td>~0.5 d</td>
-</tr><tr><td>3</td>
+</tr></thead><tbody><tr><td>3</td>
 <td>measure per-worker shard directories</td>
 <td>A measurement, not a change. Its answer may be “nothing to fix”, and item 6b may make it moot by cutting file creations ~100x.</td>
 <td>~2 h</td>
