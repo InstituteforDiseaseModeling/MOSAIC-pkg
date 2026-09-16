@@ -77,7 +77,7 @@ confidence interval -- matching the small-\eqn{n} discipline of
 \item \code{"R2_corr"} / \code{"R2_sse"} -- out-of-sample R^2 (shape vs
 scale-aware); tally = median.
 \item \code{"bias_ratio"} -- mean(pred)/mean(obs); reference line at 1
-(perfect); tally = origins within \link{0.5, 2}.
+(perfect); tally = origins within [0.5, 2].
 \item \code{"wis_skill"} / \code{"mae_skill"} -- skill vs \code{baseline}
 (\code{1 - score_model/score_baseline}); reference line at 0; tally =
 origins with skill > 0 (i.e. beating the baseline).

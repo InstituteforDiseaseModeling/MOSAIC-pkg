@@ -70,6 +70,39 @@ Logs: `dugong:~/prod_main.log`, `dugong:~/prod_pr123.log`. Resource sampler:
 `run_MOSAIC()` itself reported `Calibration complete: 223.93 min`; the extra 36 min is
 post-calibration figure rendering, which the plan had not costed at all.
 
+**Both arms finished.** Final end-to-end, from `summary.json`:
+
+| | main (Python) | pr123 (R) | ratio |
+|---|---:|---:|---:|
+| full pipeline incl. rendering | 302.6 min | 259.9 min | **1.16x** |
+| calibration only (to `Calibration complete`) | 267.5 min | 223.9 min | **1.19x** |
+| simulation phase only | 141.9 min | 97.5 min | **1.46x** |
+
+The headline engine number at production scale is therefore **1.16-1.19x end-to-end**,
+not the 2.2-2.5x the microbenchmarks show — because the serial phases that dominate the
+run are identical on both arms. (The ratio is if anything flattered *towards* main: its
+combine happened to run in 82.2 min against pr123's 95.8 min, purely from which arm held
+the disk when. Normalising both to an equal combine puts the end-to-end ratio nearer
+1.24x.) This is the strongest single argument for the rest of this document: the engine
+work is done, and what is left is all in the serial tail.
+
+**Cross-engine metric stability — evidence for item 4.** The two engines are independent
+implementations with different RNG streams, so comparing the same metric across them
+measures how stable that metric is. The tier ensemble agrees closely; the headline
+(MAE-optimised) ensemble does not:
+
+| metric | main | pr123 | spread |
+|---|---:|---:|---:|
+| `r2_cases_ensemble_tier` (n=114 / 117) | 0.6302 | 0.6287 | **0.2%** |
+| `r2_deaths_ensemble_tier` | 0.4433 | 0.4373 | **1.4%** |
+| `r2_cases_ensemble` (headline, n=90 / 52) | 0.5037 | 0.4776 | **5.5%** |
+| `r2_deaths_ensemble` (headline) | 0.3574 | 0.3318 | **7.7%** |
+
+The headline metric is roughly an order of magnitude more variable across engines than
+the tier metric, because the MAE optimum picked a 90-member subset on one arm and a
+52-member subset on the other from statistically equivalent pools. Both engines agree
+on the science; they disagree on the number `summary.json` puts at the top.
+
 **Three results that change this plan.**
 
 1. **The engine is no longer the largest cost — the serial master is.** Summing the
@@ -137,7 +170,19 @@ match (2,000 / 2,000 / 2,000).
 
 Note the combine is also pinned to a single arrow thread, because
 `.mosaic_set_all_thread_env()` sets `ARROW_NUM_THREADS=1` for worker safety. Whether the
-master should raise it for the combine is a separate question worth testing.
+master should raise it for the combine was a separate question; it has now been tested,
+and the answer is **no**. Over 6,000 shards through the shipped `open_dataset` path:
+
+| arrow cpu / io threads | time |
+|---:|---:|
+| 1 / 2 | 10.03 s |
+| 2 / 2 | 9.20 s |
+| 4 / 4 | 8.59 s |
+| 8 / 8 | 8.45 s |
+
+Eight times the threads buys **1.19x**. The combine is bound by per-file metadata parsing,
+not by anything the thread pool parallelises, so raising `ARROW_NUM_THREADS` on the master
+is not worth the worker-safety risk. Item 6b is the change that actually addresses this.
 
 **Reconciliation with production (section 1a).** The `streaming` method does not use
 `open_dataset` above `chunk_size`: it falls through to
@@ -271,7 +316,11 @@ prediction arrays, to discriminate between options that differ by 4% on the quan
 is optimising. `optimize_ensemble_subset()` already returns a `stability_flag` for
 "score profile was flat"; nothing consumes it to short-circuit the search.
 
-**(b) The headline R-squared is reported from the MAE optimum.** The default objective
+**(b) The headline R-squared is reported from the MAE optimum.** Section 1a adds the
+decisive evidence: across two independent engine implementations the *tier* metric agrees
+to 0.2% (cases) and 1.4% (deaths), while the *headline* metric disagrees by 5.5% and 7.7%
+— an order of magnitude more variable, because the MAE optimum landed on 90 members on
+one arm and 52 on the other from statistically equivalent pools. The default objective
 is `"mae"` (normalised MAE), not R-squared, so the two need not agree — and at 100k they
 do not. `summary.json` reports:
 

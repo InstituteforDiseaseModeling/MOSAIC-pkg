@@ -59,9 +59,9 @@
 #'   \item{iso_code}{ISO3 country code.}
 #'   \item{year, week}{ISO-8601 year and week (1-53).}
 #'   \item{date_start, date_stop}{Monday and Sunday of the ISO-week.}
-#'   \item{idmc_<kind>_active}{1 if any event of that kind overlaps the week.}
-#'   \item{idmc_<kind>_new}{Number of events of that kind starting in the week.}
-#'   \item{idmc_<kind>_displaced}{\code{log1p} of summed \code{figure} (persons
+#'   \item{\code{idmc_<kind>_active}}{1 if any event of that kind overlaps the week.}
+#'   \item{\code{idmc_<kind>_new}}{Number of events of that kind starting in the week.}
+#'   \item{\code{idmc_<kind>_displaced}}{\code{log1p} of summed \code{figure} (persons
 #'     displaced) across overlapping events; NAs treated as 0.}
 #' }
 #'

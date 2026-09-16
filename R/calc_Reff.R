@@ -175,7 +175,7 @@
 #' This cheap direct path sets \code{central} = the renewal estimator applied to
 #' \code{summary$incidence$median} (the full daily weighted-MEDIAN incidence). The
 #' \strong{production} path used by \code{\link{add_reproductive_numbers}(
-#' recompute_ci = TRUE)} (\code{\link{.mosaic_reff_resim_ci}}) instead sets
+#' recompute_ci = TRUE)} (\code{.mosaic_reff_resim_ci()}) instead sets
 #' \code{central} = the \strong{MEDOID trajectory's R_t} (a single coherent
 #' member's series) because the per-day cross-member median -- and, equivalently,
 #' the renewal on the median incidence -- is FLATTENED toward 1 by phase

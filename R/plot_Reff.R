@@ -251,7 +251,7 @@ plot_Reff <- function(reff,
   # ---------------------------------------------------------------------------
   band_note <- if (draw_outer) {
     paste0("Faint band: 95%", if (draw_inner) " (and 50%)" else "",
-           " posterior range ACROSS members at each calendar date — it does",
+           " posterior range ACROSS members at each calendar date \u2014 it does",
            " NOT show the epidemic's peak R_t (member peaks are phase-",
            "misaligned, so a per-date range flattens them toward 1). The peak",
            " R_t is shown by the medoid line and the per-member peak annotation.")

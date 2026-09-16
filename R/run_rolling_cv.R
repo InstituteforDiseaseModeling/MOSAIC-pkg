@@ -8,7 +8,7 @@
 #'
 #' This function is a \strong{fit-and-forecast engine only}: it produces
 #' calibrations, projections, and one organized predictions artifact. It does
-#' \strong{not} compute evaluation metrics, baselines, or skill scores — those are
+#' \strong{not} compute evaluation metrics, baselines, or skill scores -- those are
 #' done post-hoc by reading \code{predictions.parquet}.
 #'
 #' @details
@@ -36,7 +36,7 @@
 #' \strong{Outputs.} Under \code{dir_output}: \code{manifest.json} (settings +
 #' per-run index with status), \code{predictions.parquet} (the compiled long
 #' table), and \code{runs/cutoff_<T>/} (the native \code{run_MOSAIC} directory for
-#' each cutoff). \code{predictions.parquet} is a derived view — it can be rebuilt
+#' each cutoff). \code{predictions.parquet} is a derived view -- it can be rebuilt
 #' from the run directories with \code{\link{compile_rolling_cv_predictions}}.
 #'
 #' The predictions table has one row per (cutoff x location x date x metric) with
@@ -99,7 +99,7 @@
 #'   \code{feature_set}, \code{response_var}, \code{bias_correct}, and the
 #'   lstm_v2 \code{arch_control} list). Date arguments are ignored (harness-owned).
 #'   Deprecated v0.33 keys (\code{n_splits}, \code{exclude_covariates}) are
-#'   accepted but ignored with a per-cutoff deprecation message — prefer
+#'   accepted but ignored with a per-cutoff deprecation message -- prefer
 #'   \code{arch_control} for lstm_v2 knobs. When \code{psi_cache} is supplied this
 #'   spec is used \emph{only} to recompute the cache spec-hash for validation; the
 #'   per-cutoff \code{est_suitability()} fit is skipped entirely.
@@ -583,7 +583,7 @@ compile_rolling_cv_predictions <- function(dir_output,
      idx   <- match(T_chr, keys)
      if (is.na(idx))
           stop("psi_cache is missing cutoff ", T_chr,
-               " — present cutoffs: ", paste(keys, collapse = ", "),
+               " \u2014 present cutoffs: ", paste(keys, collapse = ", "),
                ". Re-run prefit_rolling_cv_psi() for this cutoff.", call. = FALSE)
      entry <- cuts[[idx]]
      csv   <- file.path(psi_cache, entry$csv %||%
@@ -592,7 +592,7 @@ compile_rolling_cv_predictions <- function(dir_output,
           stop("psi_cache entry for ", T_chr, " points to a missing file: ", csv,
                call. = FALSE)
      # Recompute the spec hash with the SAME contract prefit used (strip date keys
-     # first) and require an exact match — a mismatch means the run's modeling spec
+     # first) and require an exact match -- a mismatch means the run's modeling spec
      # differs from what produced the frozen psi; that is an error, not a silent NA.
      run_spec  <- .rcv_strip_date_keys(est_suitability_spec)
      run_hash  <- .rcv_psi_spec_hash(cutoff, run_spec)
@@ -695,7 +695,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' Read metrics$ess_best$value from a run's convergence diagnostics.
 #'
 #' Returns the importance-weight effective sample size for the calibration, or
-#' \code{NA_real_} if the diagnostics file or the key is missing. Never errors —
+#' \code{NA_real_} if the diagnostics file or the key is missing. Never errors --
 #' a missing diagnostic is a benign NA on the row, not a fatal condition.
 #' @keywords internal
 #' @noRd

@@ -18,7 +18,7 @@ utils::globalVariables(c("val", "unit_lab", "origin", "ess_ok", "med_val", "lab"
 #'   \item \code{"R2_corr"} / \code{"R2_sse"} -- out-of-sample R^2 (shape vs
 #'     scale-aware); tally = median.
 #'   \item \code{"bias_ratio"} -- mean(pred)/mean(obs); reference line at 1
-#'     (perfect); tally = origins within [0.5, 2].
+#'     (perfect); tally = origins within \[0.5, 2\].
 #'   \item \code{"wis_skill"} / \code{"mae_skill"} -- skill vs \code{baseline}
 #'     (\code{1 - score_model/score_baseline}); reference line at 0; tally =
 #'     origins with skill > 0 (i.e. beating the baseline).
@@ -90,8 +90,8 @@ plot_forecast_cv_skill <- function(x,
      good  <- if (is_skill) function(v) v > 0
               else if (value == "bias_ratio") function(v) v >= 0.5 & v <= 2
               else function(v) rep(NA, length(v))   # R2 -> show median, no win/loss tally
-     xlab  <- if (value == "R2_corr") "OOS R² (corr, shape)"
-              else if (value == "R2_sse") "OOS R² (SSE, scale-aware)"
+     xlab  <- if (value == "R2_corr") "OOS R\u00b2 (corr, shape)"
+              else if (value == "R2_sse") "OOS R\u00b2 (SSE, scale-aware)"
               else if (value == "bias_ratio") "OOS bias ratio (pred/obs)"
               else sprintf("OOS %s vs %s", toupper(sub("_skill", "-skill", value)),
                            if (baseline == "seasonal") "climatology" else baseline)

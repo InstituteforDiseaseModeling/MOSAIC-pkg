@@ -92,7 +92,7 @@ through to \code{\link{est_suitability}} (e.g. \code{architecture},
 \code{feature_set}, \code{response_var}, \code{bias_correct}, and the
 lstm_v2 \code{arch_control} list). Date arguments are ignored (harness-owned).
 Deprecated v0.33 keys (\code{n_splits}, \code{exclude_covariates}) are
-accepted but ignored with a per-cutoff deprecation message — prefer
+accepted but ignored with a per-cutoff deprecation message -- prefer
 \code{arch_control} for lstm_v2 knobs. When \code{psi_cache} is supplied this
 spec is used \emph{only} to recompute the cache spec-hash for validation; the
 per-cutoff \code{est_suitability()} fit is skipped entirely.}
@@ -124,7 +124,7 @@ up to \code{T}, and (4) projects forward over the out-of-sample (OOS) window.
 \details{
 This function is a \strong{fit-and-forecast engine only}: it produces
 calibrations, projections, and one organized predictions artifact. It does
-\strong{not} compute evaluation metrics, baselines, or skill scores — those are
+\strong{not} compute evaluation metrics, baselines, or skill scores -- those are
 done post-hoc by reading \code{predictions.parquet}.
 
 \strong{Window.} The in-sample (IS) start is fixed at \code{config$date_start}
@@ -151,7 +151,7 @@ all listed locations). Thus there is one \code{run_MOSAIC} calibration per cutof
 \strong{Outputs.} Under \code{dir_output}: \code{manifest.json} (settings +
 per-run index with status), \code{predictions.parquet} (the compiled long
 table), and \code{runs/cutoff_<T>/} (the native \code{run_MOSAIC} directory for
-each cutoff). \code{predictions.parquet} is a derived view — it can be rebuilt
+each cutoff). \code{predictions.parquet} is a derived view -- it can be rebuilt
 from the run directories with \code{\link{compile_rolling_cv_predictions}}.
 
 The predictions table has one row per (cutoff x location x date x metric) with
