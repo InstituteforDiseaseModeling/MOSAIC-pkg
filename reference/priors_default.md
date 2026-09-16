@@ -216,7 +216,7 @@ ZWE.
 ## See also
 
 - [config_default](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
-  – Default LASER configuration that pairs with these priors.
+  – Default simulation configuration that pairs with these priors.
 
 - [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
   – Draws samples from these priors.

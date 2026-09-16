@@ -120,9 +120,13 @@ on demand (don’t paste the whole doc into context):
 - **`MOSAIC-docs/05-model-calibration.Rmd`** — BFRS calibration
   methodology (weighting, convergence). **`MOSAIC-docs/03-data.Rmd`** —
   data sources & provenance. **`06-scenarios.Rmd`** — scenarios.
-- **`laser-cholera/src/laser/cholera/metapop/params.py`** — engine-side
-  authoritative parameter names/types (the contract the simulator
-  actually consumes; read-only).
+- **`R/sim_params.R`** — engine-side authoritative parameter names/types
+  (the contract the simulator actually consumes), with `R/sim_results.R`
+  for the 28-channel result contract. The read-only
+  `laser-cholera/src/laser/cholera/metapop/params.py` is the
+  **historical** source these were ported from — use it to settle *why*
+  the engine behaves as it does, never as a statement of what runs
+  today.
 
 ------------------------------------------------------------------------
 
@@ -130,9 +134,15 @@ on demand (don’t paste the whole doc into context):
 
 **MOSAIC** (Metapopulation Outbreak Simulation And Interventions for
 Cholera) is a production R package for cholera transmission simulation
-across Sub-Saharan Africa. It integrates with the Python laser-cholera
-engine via reticulate and provides functions for data processing,
-parameter estimation, Bayesian calibration, and visualization.
+across Sub-Saharan Africa. The transmission engine is pure R
+([`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md));
+Python/reticulate is used only by the keras3 environmental-suitability
+model. The `laser-cholera` dependency went in v0.69.0 and the `LASER`
+naming in v0.70.0 —
+[`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md)/[`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md)/[`get_default_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md)
+now raise an error naming their replacement. The package provides
+functions for data processing, parameter estimation, Bayesian
+calibration, and visualization.
 
 **Key capabilities:** SEIR metapopulation simulation, Bayesian Filtering
 with Resampling (BFRS) calibration, environmental suitability modeling,
@@ -148,12 +158,12 @@ mobility.
     │   ├── inst/extdata/            # Default parameters (JSON)
     │   ├── inst/py/                 # Python environment.yml
     │   ├── data/                    # R data objects (.rda)
-    │   ├── model/                   # LASER model I/O and LAUNCH.R
+    │   ├── model/                   # transmission model I/O and LAUNCH.R
     │   ├── claude/                  # USE THIS for temporary files
     │   └── DESCRIPTION              # Package metadata
     ├── MOSAIC-data/                 # Data repository (raw/ is READ-ONLY)
     ├── MOSAIC-docs/                 # Documentation website
-    ├── laser-cholera/               # Python simulation engine (READ-ONLY)
+    ├── laser-cholera/               # Former Python engine — READ-ONLY, historical reference only
     ├── ees-cholera-mapping/         # Web scraping tools (READ-ONLY)
     └── jhu_cholera_data/            # JHU scraper (READ-ONLY)
 
@@ -175,7 +185,7 @@ calculation - `R/run_MOSAIC_infrastructure.R` — directory setup, I/O,
 summary generation
 
 **BFRS calibration (2 phases):** 1. **Adaptive calibration** — batches
-of LASER sims until convergence (R² target, ESS thresholds) 2.
+of simulations until convergence (R² target, ESS thresholds) 2.
 **Predictive batches** — model-based batch sizing with ESS re-evaluation
 until convergence
 
@@ -228,8 +238,16 @@ All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 
 **Environment:** `~/.virtualenvs/r-mosaic` (managed via
 [`install_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/install_dependencies.md))
-**Core packages:** laser-cholera, laser-core, numpy, h5py, pyarrow
-**Check:**
+**Core packages:** numpy, tensorflow/keras3 — the suitability model, and
+nothing else. Simulation and calibration are pure R and run with no
+Python at all;
+[`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
+validates a TensorFlow environment, so a broken Python env costs you
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md),
+not
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md).
+The `laser-cholera` and `laser-core` wheels, numba, llvmlite and pyarrow
+were removed from `environment.yml` in v0.69.0. **Check:**
 [`MOSAIC::check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
 **Troubleshoot:**
 [`MOSAIC::remove_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_python_env.md)
@@ -245,10 +263,10 @@ then `MOSAIC::install_dependencies(force = TRUE)`
 | `R/calc_model_likelihood.R` | Multi-component likelihood |
 | `R/calc_model_ensemble.R` | Posterior-weighted ensemble predictions |
 | `R/sample_parameters.R` | Sample 301 parameters from priors |
-| `R/make_LASER_config.R` | Config validation (60+ parameters) |
+| `R/make_simulation_config.R` | Config validation (60+ parameters) |
 | `R/calc_model_R2.R` | R² (corr and SSE methods) + bias ratio |
 | `R/get_paths.R` | Directory path management |
-| `R/run_LASER.R` | Python laser-cholera wrapper |
+| `R/sim_engine.R` | [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md) — the pure-R transmission engine, and the only engine entry point |
 
 ## Troubleshooting
 
@@ -261,8 +279,13 @@ then `MOSAIC::install_dependencies(force = TRUE)`
 [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md),
 needed for custom parallel code).
 
-**Memory issues:** ~2 GB per worker. 16 cores needs ~32 GB RAM. Use
-`results <- vector("list", n)` not `results <- c()`.
+**Memory issues:** **~1.0 GB per worker** (v0.73.0: VmHWM 992 MB over 5
+sequential runs; was 926 MB at v0.70.0 and 945 MB at v0.72.0 — the
+per-tick row environments of v0.73.0 cost ~47 MB more than the
+per-channel pointer lists they replaced. Flat from 1 to 19 workers as of
+A-3a). 16 cores needs ~16 GB. The old ~2 GB/worker figure was the
+*Python* engine and no longer applies; memory is no longer what caps
+worker count. Use `results <- vector("list", n)` not `results <- c()`.
 
 **R CMD check errors:** “Undocumented parameters” → add `@param`.
 “Undefined global variable” → add to `R/globals.R`. Always run
@@ -521,3 +544,185 @@ before starting work — they represent patterns to actively avoid.
     silently-ignored config is undetectable at runtime, so add
     regression tests that assert the value actually takes effect
     (v0.37.1 fix)
+
+14. The Dask/Coiled excision (v0.67.0) removed ~2,200 lines of
+    production code and ~1,900 of tests, and two near-misses inside it
+    are the reusable lessons. (a) The migration plan listed
+    `make_mosaic_cluster.R` for deletion on the strength of its own
+    documentation (“`laser.cholera` Python module imported once per
+    worker”), which reads as pure Dask-era plumbing — but it builds the
+    **local** PSOCK cluster and
+    [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+    calls it in the heart of the surviving branch. Deleting it broke
+    every local run; it was caught only by reading the call site rather
+    than the docstring. (b) `.mosaic_resume_check_inputs()` carried an
+    allow-list letting a resume proceed across two laser-cholera
+    versions whose on-worker Python likelihood values were verified
+    byte-identical. Once scoring became R-only, its `engine == "python"`
+    condition could never be true — the branch was dead the instant the
+    Dask path went, and it would have sat there looking like protection
+    (the same shape as lesson \#13’s dead
+    [`is.null()`](https://rdrr.io/r/base/NULL.html) guard). Removing it
+    also retired the now-uncalled `.mosaic_lc_likelihood_compatible()`.
+    Lessons: (i) when deleting a “backend-specific” file, grep its
+    **call sites** and check which branch they sit in — a function’s
+    documentation describes what it was built for, not what currently
+    depends on it; (ii) after removing an execution path, re-examine
+    every guard that discriminated *between* paths, because each one is
+    now a constant — delete it rather than leave a condition that cannot
+    fire; (iii) removing a path orphans its helpers transitively, so
+    re-run the orphan grep after the obvious deletions, not just
+    before; (iv) deleting a parity test that only asserted “path A
+    equals path B” is correct, but check first whether it also asserted
+    a property of path A — three of ten Dask test files did, and those
+    assertions were re-homed rather than lost (v0.67.0)
+
+15. The LASER-\>simulation rename (v0.70.0) was mechanical, and the two
+    things that went wrong were both about blast radius, not about the
+    rename. (a) A script that re-aligned hanging-indent continuation
+    lines after the name-length change matched *every* multi-line
+    `function(` definition in the repo, not just renamed ones — it
+    “fixed” 148 lines of pre-existing indentation in 43 untouched files,
+    burying ~30 real renames in whitespace noise. Caught by
+    `git diff --ignore-all-space` showing files whose entire diff was
+    invisible to it; reverted by restoring the HEAD indentation for
+    every indent-only-changed line whose governing open-paren line did
+    not contain a renamed identifier. (b) A blanket `s/laser_/sim_/g`
+    would have silently rewritten `laser_cholera` and `laser_core`, the
+    names of the real external Python packages that the historical
+    provenance comments legitimately cite — the rename had to protect
+    those two tokens explicitly before the prefix rule ran, and every
+    surviving `laser`/`LASER` mention then had to be triaged by hand
+    into “renamed thing” vs “the Python package that still exists on
+    disk”. Lessons: (i) a cosmetic-cleanup script run across a repo
+    needs its match set scoped to the change, not to the pattern —
+    pattern breadth is not correctness; (ii) after any bulk sed, run
+    `git diff --ignore-all-space` and treat a file that vanishes from it
+    as a defect, not a no-op; (iii) when renaming a prefix that also
+    prefixes an external dependency’s name, protect the external tokens
+    first and verify with a residual grep, because the failure is silent
+    and reads as a successful rename (v0.70.0)
+
+16. Building the R engine’s PRNG draw-site registry (v0.67.0), I
+    produced the table by pairing an ordered list of *conceptual* steps
+    (“sym deaths, disease deaths, sym recovery, asym deaths, …”) against
+    an ordered list of line numbers scraped from `laser-cholera`. The
+    two lists did not correspond: `reported_deaths`
+    (`infectious.py:210`) sits between `disease_deaths` (203) and
+    `sym_recovery` (217), so five `infectious.py` labels were shifted
+    onto the wrong line, one real draw site was omitted, and one phantom
+    site (`infectious/sigma_split`) was invented — it is
+    `np.round(sigma * progressing)`, not a PRNG call. **The total still
+    came to 22**, because the phantom exactly offset the omission, so
+    the A-0 exit check “22/22 draw sites covered” passed while five of
+    the 22 labels were wrong. Lessons: (i) when a lookup table is built
+    by zipping two ordered lists, verify each pairing individually — a
+    matching cardinality is not verification, and here the two errors
+    were self-concealing; (ii) prefer deriving such a table mechanically
+    from the source of truth over transcribing it, and keep the
+    derivation runnable (`claude/oracle/verify_draw_sites.py` re-derives
+    the site list from the oracle and diffs per site; it was
+    negative-tested against the buggy table before being trusted); (iii)
+    a coverage metric over a hand-written label set measures the label
+    set, not the code — assert set *membership* against the source, not
+    the count; (iv) the defect was invisible to the green A-0 replay
+    because `Susceptible`/`Census` happen to use the only two labels
+    that were correct, so passing tests on a subset said nothing about
+    the rest of the table (v0.67.0)
+
+17. The v0.72.0 engine performance work produced correct fixes on top of
+    a wrong measurement, twice, and both times the error was the *timing
+    method* rather than the code. (a) The proposal it implemented
+    attributed the patch-scaling half of the runtime to random variate
+    generation at ~325 ns per variate, inferred from a linear fit plus a
+    C++ analogue benchmark. Measured directly, R’s samplers cost **54.5
+    ns** per variate and 67 ms per run — about 5% of runtime, not 31%.
+    The analogue overstated the cost ~9x because it constructed a
+    `std::binomial_distribution` per call, where `Rf_rbinom` has no
+    setup; and the estimate was never checked against the R samplers it
+    was standing in for. The consequence was a decision rule that
+    subtracted a 0.40 s “irreducible sampler floor” that is really 0.04
+    s, which would have returned “do not write the C++” on a case worth
+    ~10x. A second, independent consequence: it sent two of the three
+    proposed fixes at targets worth 0.05-0.4% while the two real costs —
+    a per-tick debug assertion defaulting to ON, and the calibration
+    worker’s per-simulation [`gc()`](https://rdrr.io/r/base/gc.html) at
+    292 ms — went unmentioned. (b) Having caught that, I then reproduced
+    the identical class of error in the ablation that located the real
+    costs: arms were timed **sequentially in one session**, so each
+    later arm inherited the drift and every arm looked better than the
+    last, yielding a clean-looking monotone table (−20.6%, −20.1%,
+    −26.0%, −32.8%) and a headline 1.38x. An interleaved, per-block
+    paired re-run against a git worktree of the baseline commit gave
+    **1.156x** (range 1.07-1.23 over 8 blocks). Two sequential runs of
+    the same two versions had already disagreed by 0.07 s, and one had
+    reported an assertion as *negative* cost — the drift exceeded the
+    effect and I quoted the number anyway before re-running it.
+    Lessons: (i) never quote an unpaired A/B timing on a shared or
+    hybrid-topology machine — interleave the arms, report per-block
+    paired ratios and their spread, and treat a sequential ablation as a
+    *ranking of where to look*, never as effect sizes; (ii) an estimate
+    standing in for a primitive (a sampler, an allocator) must be
+    validated against that primitive before anything is derived from it,
+    because a single wrong constant propagates into every downstream
+    decision rule; (iii) profile-by-function and ablation can disagree
+    legitimately — here the assertion showed 4.35% self time but ~20%
+    ablated, because its real cost was allocation churn charged to
+    `<GC>` — so when they disagree, believe the ablation about
+    *magnitude* and the profiler about *location*; (iv) check whether a
+    per-tick assertion is on in production before optimizing anything
+    else: rewriting
+    [`sim_check_invariants()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sim_check_invariants.md)
+    to drop `Reduce(`+`, lapply(...))`, a per-tick
+    `intersect(..., names(state))`, and a redundant traversal took it
+    from the largest single cost to 1.7% while keeping every assertion,
+    so there was no safety-versus-speed trade to make at all (v0.72.0)
+
+18. The v0.73.0 engine work found a 2.25x win that v0.72.0 had declared
+    absent, and the reason it was missed is that **the mechanism had
+    already been correctly diagnosed and was then reintroduced one level
+    down**. The port’s biggest fix replaced per-channel
+    `(nticks+1) x npatches` matrices with per-channel lists of per-tick
+    vectors, on the stated reasoning that “a list element write is a
+    pointer store, so it does not copy” — and `migrate-laser-r.md`
+    records, in the same paragraph, the correct mechanism for why the
+    matrix version was slow: holding the channels in an environment
+    “changed nothing: `env$M[i, ] <- v` still copies, because fetching
+    `M` bumps its reference count before the subassignment.” The
+    replacement structure left the lists on the state environment, so
+    `state$S[[i]] <- v` is still a subassignment into an
+    environment-held object, the `*tmp*` fetch still bumps the refcount,
+    and `[[<-` duplicated the whole 1,399-element pointer vector on
+    **every** write — ~60 writes/tick x 1,398 ticks, ~615 MB of garbage
+    per run, about 35% of runtime. The same document then concluded “the
+    profile is flat — the hottest single line is 6.9% — so there is no
+    second structural win of that size.” Lessons: (i) when a fix is
+    justified by a mechanism, re-apply the mechanism’s test to the
+    structure that replaces it — here one
+    [`tracemem()`](https://rdrr.io/r/base/tracemem.html) on the new
+    representation would have shown the copy immediately, and the fix
+    was shipped without it; (ii) “the profile is flat, so there is
+    nothing structural left” does not follow, because a per-function
+    profiler charges allocation churn to whatever line triggered it and
+    to `<GC>` (here 52.65% self time spread across the phase bodies plus
+    11.16% `<GC>`) — a flat profile is consistent with one diffuse cost,
+    and distinguishing the two needs a structural experiment, not a
+    finer profile; (iii) the structural experiment that worked is worth
+    reusing: **inflate a data structure without changing the work done
+    on it** (padding the channel lists to 4x their length moved a 1.02 s
+    run to 2.08 s, pricing the copies at 0.354 s with no code change),
+    and after the fix the same diagnostic is the acceptance test — the
+    slope fell from 0.354 s to 0.025 s per extra 1,399 rows; (iv) a
+    per-write cost that is **linear in the size of the container** is
+    invisible at fixture scale and worst in production, so
+    micro-benchmarks of a state write must be run at production `nticks`
+    (1.5 microseconds at 200 rows vs 11.6 at 2,800 for the same
+    operation); (v) a bit-identity harness is only as broad as the modes
+    it exercises — the 100-cell golden grid runs `rng` mode only, so it
+    certified a `vapply`-based results assembler that broke eight Tier B
+    `replay` tests, because `vapply` enforces its prototype’s storage
+    mode where `do.call(rbind, ...)` promotes, and replayed draws come
+    back from a fixture as doubles in channels allocated integer. The
+    suite caught it; the dedicated gate did not. When adding a fast
+    path, check which of the engine’s *modes* the gate actually covers
+    before trusting it (v0.73.0)

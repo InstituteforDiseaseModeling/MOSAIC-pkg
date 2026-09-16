@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,7 +43,7 @@ paths: File management (output directories, plots)
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
-    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-simulations.html">Running simulations</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
     <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
@@ -98,7 +98,7 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 
 <dl><dt id="arg-calibration">calibration<a class="anchor" aria-label="anchor" href="#arg-calibration"></a></dt>
 <dd><p>List of calibration settings. Default is:</p><ul><li><p><code>n_simulations</code>: NULL for auto mode, or integer for fixed mode</p></li>
-<li><p><code>n_iterations</code>: Number of LASER iterations per simulation (default: 3L)</p></li>
+<li><p><code>n_iterations</code>: Number of stochastic engine iterations per parameter set (default: 3L)</p></li>
 <li><p><code>max_simulations_total</code>: Maximum total simulations across all phases (default: 100000L)</p></li>
 <li><p><code>batch_size_adaptive</code>: Simulations per batch in Phase 1 adaptive calibration (default: 500L)</p></li>
 <li><p><code>min_batches_adaptive</code>: Minimum Phase 1 batches before convergence check (default: 5L)</p></li>
@@ -197,15 +197,9 @@ the medoid target, and the subset-selection objective consistently.</p></li>
 
 <dt id="arg-parallel">parallel<a class="anchor" aria-label="anchor" href="#arg-parallel"></a></dt>
 <dd><p>List of parallelization settings (infrastructure). Default is:</p><ul><li><p><code>enable</code>: Enable parallel execution (default: FALSE)</p></li>
-<li><p><code>n_cores</code>: Number of LOCAL cores (default: 1L). Governs local-machine
-parallelism only: the LASER worker count on the non-Dask path, and the
-orchestrator's sampling/parquet PSOCK worker count on the Dask path. It never sets the
-remote Dask/Coiled worker count (that is <code>dask_spec$n_workers</code>).</p></li>
+<li><p><code>n_cores</code>: Number of simulation worker processes (default: 1L)</p></li>
 <li><p><code>type</code>: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")</p></li>
 <li><p><code>progress</code>: Show progress bar (default: TRUE)</p></li>
-<li><p><code>strict_worker_version</code>: Coiled/Dask path only. Abort the run if
-any worker's laser-cholera engine version differs from the orchestrator's
-(default: TRUE). Set FALSE to downgrade a mismatch to a warning.</p></li>
 </ul></dd>
 
 

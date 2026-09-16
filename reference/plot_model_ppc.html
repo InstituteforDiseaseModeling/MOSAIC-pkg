@@ -13,7 +13,7 @@ scatter plots, Q-Q plots, residuals vs observed, and temporal residual patterns.
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -25,7 +25,7 @@ scatter plots, Q-Q plots, residuals vs observed, and temporal residual patterns.
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
-    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-simulations.html">Running simulations</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
     <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
@@ -83,8 +83,9 @@ Overrides predictions_dir if provided.</p></dd>
 
 
 <dt id="arg-model">model<a class="anchor" aria-label="anchor" href="#arg-model"></a></dt>
-<dd><p>Legacy: A laser-cholera Model object (for backward compatibility).
-Not recommended - use CSV-based inputs instead.</p></dd>
+<dd><p>Legacy: a model object as returned by <code><a href="run_simulation.html">run_simulation()</a></code>
+(any list carrying <code>$results</code>). Not recommended - use CSV-based
+inputs instead.</p></dd>
 
 
 <dt id="arg-output-dir">output_dir<a class="anchor" aria-label="anchor" href="#arg-output-dir"></a></dt>

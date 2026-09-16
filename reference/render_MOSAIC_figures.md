@@ -52,7 +52,7 @@ attempted (`TRUE`) vs skipped (`FALSE`).
 
 This function **never** calls
 [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md),
-[`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md),
+[`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md),
 or
 [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md).
 Ensemble plots are reconstructed from the persisted `.rds` objects
@@ -60,9 +60,10 @@ Ensemble plots are reconstructed from the persisted `.rds` objects
 `medoid_ensemble.rds`). A missing, corrupt, or schema-incompatible
 artifact causes the affected figure to be **warned-and-skipped**, never
 rebuilt — rebuilding would trigger local simulation on the client
-(`calc_model_ensemble(precomputed_results = NULL)` falls back to
-PSOCK/sequential), which this function deliberately avoids. Every figure
-is wrapped in `tryCatch` so one failure never aborts the rest.
+([`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+always simulates, via PSOCK or sequentially), which this function
+deliberately avoids. Every figure is wrapped in `tryCatch` so one
+failure never aborts the rest.
 
 ## See also
 

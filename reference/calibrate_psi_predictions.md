@@ -109,7 +109,7 @@ matter:
   weeks and mapped back with `plogis`, which is monotone and bounded in
   \\(0,1)\\ by construction — so low predictions map near 0 without the
   hard-\\\[0,1\]\\-clip truncation that distorted the `psi_bar`-relative
-  deviation feeding LASER.
+  deviation feeding the engine.
 
 A country with fewer than `min_train` outbreak weeks (this includes
 zero-history countries, which have none) or no logit-pred variance falls

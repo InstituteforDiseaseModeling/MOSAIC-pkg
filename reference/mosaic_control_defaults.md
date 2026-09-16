@@ -48,8 +48,8 @@ mosaic_control_defaults(
 
   - `n_simulations`: NULL for auto mode, or integer for fixed mode
 
-  - `n_iterations`: Number of LASER iterations per simulation (default:
-    3L)
+  - `n_iterations`: Number of stochastic engine iterations per parameter
+    set (default: 3L)
 
   - `max_simulations_total`: Maximum total simulations across all phases
     (default: 100000L)
@@ -206,20 +206,11 @@ mosaic_control_defaults(
 
   - `enable`: Enable parallel execution (default: FALSE)
 
-  - `n_cores`: Number of LOCAL cores (default: 1L). Governs
-    local-machine parallelism only: the LASER worker count on the
-    non-Dask path, and the orchestrator's sampling/parquet PSOCK worker
-    count on the Dask path. It never sets the remote Dask/Coiled worker
-    count (that is `dask_spec$n_workers`).
+  - `n_cores`: Number of simulation worker processes (default: 1L)
 
   - `type`: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 
   - `progress`: Show progress bar (default: TRUE)
-
-  - `strict_worker_version`: Coiled/Dask path only. Abort the run if any
-    worker's laser-cholera engine version differs from the
-    orchestrator's (default: TRUE). Set FALSE to downgrade a mismatch to
-    a warning.
 
 - io:
 

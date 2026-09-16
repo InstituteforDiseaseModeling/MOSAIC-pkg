@@ -63,16 +63,15 @@ contact:
 
 Main functions for running MOSAIC simulations
 
-- [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
-  [`run_laser()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
-  : Run LASER Model Simulation
+- [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md)
+  : Run the cholera transmission model
 - [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   : Run MOSAIC Calibration Workflow
 - [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
   : Render all MOSAIC figures from a finished run directory
-- [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
-  : Create a Configuration File for LASER
+- [`make_simulation_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_simulation_config.md)
+  : Create a Simulation Configuration File
 - [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
   : Sample Parameters from Prior Distributions
 - [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
@@ -97,9 +96,6 @@ Functions for configuring MOSAIC execution settings
 
 Functions starting with run\_, make\_, or create\_
 
-- [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
-  [`run_laser()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
-  : Run LASER Model Simulation
 - [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   : Run MOSAIC Calibration Workflow
@@ -107,12 +103,12 @@ Functions starting with run\_, make\_, or create\_
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
 - [`run_fit_sandbox()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_fit_sandbox.md)
-  : Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter
+  : Deterministic Fit-Diagnostic Sandbox: One Simulation with Parameter
   Overrides
 - [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
   : Rolling-Window Forecast Validation for the MOSAIC Transmission Model
-- [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
-  : Create a Configuration File for LASER
+- [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md)
+  : Run the cholera transmission model
 - [`make_forecast_cv_table()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_forecast_cv_table.md)
   : Publication table for rolling-origin forecast cross-validation
 - [`make_lagged_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.md)
@@ -121,6 +117,8 @@ Functions starting with run\_, make\_, or create\_
   : Create a Reusable MOSAIC Parallel Cluster
 - [`make_param_df()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.md)
   : Get Template for Parameter Values
+- [`make_simulation_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_simulation_config.md)
+  : Create a Simulation Configuration File
 - [`create_sampling_args()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/create_sampling_args.md)
   : Create Sampling Arguments for Common Patterns
 
@@ -479,10 +477,8 @@ Helper and utility functions
   : Calculate the Centroid of a Country from its Shapefile
 - [`get_country_shp()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_country_shp.md)
   : Get a country shapefile from GeoBoundaries API
-- [`get_default_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_LASER_config.md)
-  : Create Default LASER Configuration
 - [`get_default_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_config.md)
-  : Create Default LASER Configuration
+  : Create Default Simulation Configuration
 - [`get_default_subset_tiers()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_subset_tiers.md)
   : Get Default Subset Tiers for Post-Hoc Optimization
 - [`get_distance_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_distance_matrix.md)
@@ -527,8 +523,6 @@ Helper and utility functions
   : Get WHO Region for ISO Country Codes
 - [`check_affine_normalization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_affine_normalization.md)
   : Check Affine Normalization (Zero-Centered Min-Max Scaling)
-- [`check_coiled_workspace()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_coiled_workspace.md)
-  : Check Coiled Workspace Capacity and Activity
 - [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
   : Check Installed R and Python Dependencies for MOSAIC
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
@@ -603,11 +597,11 @@ Gompertz distribution functions
 Built-in datasets
 
 - [`config_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
-  : Default LASER Configuration
+  : Default Simulation Configuration
 - [`config_simulation_endemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.md)
-  : Endemic Simulation LASER Configuration
+  : Endemic Simulation Simulation Configuration
 - [`config_simulation_epidemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_epidemic.md)
-  : Epidemic Simulation LASER Configuration
+  : Epidemic Simulation Simulation Configuration
 - [`priors_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/priors_default.md)
   : Default prior distributions for MOSAIC model parameters
 - [`estimated_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/estimated_parameters.md)
@@ -738,8 +732,6 @@ Other exported functions and internal helpers
   predictions
 - [`check_affine_normalization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_affine_normalization.md)
   : Check Affine Normalization (Zero-Centered Min-Max Scaling)
-- [`check_coiled_workspace()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_coiled_workspace.md)
-  : Check Coiled Workspace Capacity and Activity
 - [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
   : Check Installed R and Python Dependencies for MOSAIC
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
@@ -759,11 +751,11 @@ Other exported functions and internal helpers
 - [`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
   : Compile Environmental Suitability Data for Cholera Transmission
 - [`config_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
-  : Default LASER Configuration
+  : Default Simulation Configuration
 - [`config_simulation_endemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.md)
-  : Endemic Simulation LASER Configuration
+  : Endemic Simulation Simulation Configuration
 - [`config_simulation_epidemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_epidemic.md)
-  : Epidemic Simulation LASER Configuration
+  : Epidemic Simulation Simulation Configuration
 - [`convert_config_to_dataframe()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/convert_config_to_dataframe.md)
   : Convert Config to DataFrame
 - [`convert_config_to_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/convert_config_to_matrix.md)
@@ -894,10 +886,8 @@ Other exported functions and internal helpers
   : Calculate the Centroid of a Country from its Shapefile
 - [`get_country_shp()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_country_shp.md)
   : Get a country shapefile from GeoBoundaries API
-- [`get_default_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_LASER_config.md)
-  : Create Default LASER Configuration
 - [`get_default_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_config.md)
-  : Create Default LASER Configuration
+  : Create Default Simulation Configuration
 - [`get_default_subset_tiers()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_subset_tiers.md)
   : Get Default Subset Tiers for Post-Hoc Optimization
 - [`get_distance_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_distance_matrix.md)
@@ -983,8 +973,6 @@ Other exported functions and internal helpers
   : Simple Logging Function with Timestamps
 - [`logit()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/logit.md)
   : Logit Transformation
-- [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
-  : Create a Configuration File for LASER
 - [`make_forecast_cv_table()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_forecast_cv_table.md)
   : Publication table for rolling-origin forecast cross-validation
 - [`make_lagged_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.md)
@@ -993,14 +981,14 @@ Other exported functions and internal helpers
   : Create a Reusable MOSAIC Parallel Cluster
 - [`make_param_df()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.md)
   : Get Template for Parameter Values
+- [`make_simulation_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_simulation_config.md)
+  : Create a Simulation Configuration File
 - [`mosaic_color_variant()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_color_variant.md)
   : Create Lighter, Darker, or Muted Variants of a Color
 - [`mosaic_colors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_colors.md)
   : Get MOSAIC Semantic Colors
 - [`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
   : Build Complete MOSAIC Control Structure
-- [`mosaic_dask_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_dask_presets.md)
-  : Get an Optimal Dask/Coiled Cluster Spec for a Given Worker Count
 - [`mosaic_io_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_io_presets.md)
   : Get Pre-configured I/O Settings
 - [`mosaic_pal_countries()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_pal_countries.md)
@@ -1200,9 +1188,6 @@ Other exported functions and internal helpers
   : Render all MOSAIC figures from a finished run directory
 - [`rgompertz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/rgompertz.md)
   : Generate Random Gompertz Variates
-- [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
-  [`run_laser()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
-  : Run LASER Model Simulation
 - [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   : Run MOSAIC Calibration Workflow
@@ -1210,10 +1195,12 @@ Other exported functions and internal helpers
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
 - [`run_fit_sandbox()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_fit_sandbox.md)
-  : Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter
+  : Deterministic Fit-Diagnostic Sandbox: One Simulation with Parameter
   Overrides
 - [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
   : Rolling-Window Forecast Validation for the MOSAIC Transmission Model
+- [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md)
+  : Run the cholera transmission model
 - [`sample_from_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_from_prior.md)
   : Sample from Prior Distribution (Simplified)
 - [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
@@ -1279,7 +1266,7 @@ Installation and basic usage
 
 - [Installation](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Installation.md):
 - [Running
-  LASER](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Running-LASER.md):
+  simulations](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Running-simulations.md):
 - [Running
   MOSAIC](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Running-MOSAIC.md):
 - [Deployment](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Deployment.md):

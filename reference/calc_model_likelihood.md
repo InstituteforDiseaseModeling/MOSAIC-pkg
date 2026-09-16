@@ -71,7 +71,8 @@ calc_model_likelihood(
 
 - config:
 
-  Optional LASER config list (location_name, date_start, date_stop).
+  Optional simulation config list (location_name, date_start,
+  date_stop).
 
 - nb_k_min_cases:
 

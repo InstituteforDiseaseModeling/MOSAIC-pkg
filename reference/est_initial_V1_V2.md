@@ -101,8 +101,8 @@ and `$prop_V2_initial$location[[iso]]` each carry
 
 Biological notes:
 
-- V1/V2 in the MOSAIC/LASER model are *administrative* compartments
-  (dose received). LASER's `vaccinated.py` independently splits the
+- V1/V2 in the MOSAIC/transmission model are *administrative*
+  compartments (dose received). The engine independently splits the
   initial counts into immune (V*k*imm) and susceptible (V*k*sus)
   substates via `phi_1`/`phi_2`. This function therefore does NOT
   multiply by `phi_1`/`phi_2` — doing so would double-count

@@ -1,14 +1,13 @@
-# Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter Overrides
+# Deterministic Fit-Diagnostic Sandbox: One Simulation with Parameter Overrides
 
-Runs a **single deterministic** LASER simulation from a calibration
-config (typically a run's medoid config) with optional point-value
-parameter overrides, then scores the result against the observed series
-carried in the config. This is the experiment unit behind the active
-fit-diagnostic workflow (the `diagnose-fit` skill): ~1-2 seconds per
-run, no calibration machinery, so a modeller (or the
-`mosaic-calibration-doctor` agent) can test hypotheses about which
-parameters drive a fit deficiency before committing to an expensive
-recalibration.
+Runs a **single deterministic** simulation from a calibration config
+(typically a run's medoid config) with optional point-value parameter
+overrides, then scores the result against the observed series carried in
+the config. This is the experiment unit behind the active fit-diagnostic
+workflow (the `diagnose-fit` skill): ~1-2 seconds per run, no
+calibration machinery, so a modeller (or the `mosaic-calibration-doctor`
+agent) can test hypotheses about which parameters drive a fit deficiency
+before committing to an expensive recalibration.
 
 It is country-agnostic — nothing is hard-coded to a specific location.
 The observed data, dates, and locations are read from the supplied
@@ -26,7 +25,7 @@ run_fit_sandbox(
   outdir = NULL,
   run_label = "fit_sandbox",
   quiet = TRUE,
-  .laser_runner = run_LASER
+  .sim_runner = run_simulation
 )
 ```
 
@@ -45,7 +44,7 @@ run_fit_sandbox(
 
 - seed:
 
-  Integer RNG seed for the LASER run. Default `42L`.
+  Integer RNG seed for the simulation run. Default `42L`.
 
 - locations:
 
@@ -72,13 +71,13 @@ run_fit_sandbox(
 - quiet:
 
   Logical passed to
-  [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md).
+  [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md).
   Default `TRUE`.
 
-- .laser_runner:
+- .sim_runner:
 
   Function used to run the model; defaults to
-  [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md).
+  [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md).
   Exposed as a seam for testing with a stubbed engine.
 
 ## Value
@@ -100,4 +99,4 @@ for a per-patch view. Full metrics are delegated to
 ## See also
 
 [`calc_fit_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_fit_diagnostics.md),
-[`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
+[`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md)

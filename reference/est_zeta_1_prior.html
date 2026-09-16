@@ -23,7 +23,7 @@ is a daily rate, not a total-per-infection."><meta property="og:image" content="
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,7 +35,7 @@ is a daily rate, not a total-per-infection."><meta property="og:image" content="
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
-    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-simulations.html">Running simulations</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
     <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
@@ -118,7 +118,7 @@ is then fit by maximum-likelihood on the log10 scale.</p>
 \(\zeta_{1,i} = c_i \times V_i\) with lower and upper bounds taken from
 the spread of the concentration and volume anchors for that severity class.
 Time-averaged stool volumes are used (<code>V_sev</code> = 8, <code>V_mod</code> = 4,
-<code>V_mild</code> = 0.5 L/day) because the LASER Poisson update multiplies the rate
+<code>V_mild</code> = 0.5 L/day) because the engine's Poisson update multiplies the rate
 by the current <code>I_sym</code> compartment, which already integrates the shedding
 course via \(\gamma_1\). Peak purging rates (~1 L/h, ~14-24 L/day) are
 treated as upper-bound sensitivity rows, not the central anchor.</p>

@@ -1,9 +1,9 @@
-# Epidemic Simulation LASER Configuration
+# Epidemic Simulation Simulation Configuration
 
 A **toy one-year outbreak** parameter set for quick unit-tests and
 vignette examples. The object is created by
-`make_simulation_epidemic_LASER_config_files.R` and saved in the package
-as **`config_simulation_epidemic`**.
+`make_simulation_epidemic_config_files.R` and saved in the package as
+**`config_simulation_epidemic`**.
 
 ## Usage
 
@@ -36,7 +36,7 @@ but much smaller. Key elements include day-by-day matrices (`b_jt`,
 These settings produce a single, clearly defined epidemic wave in each
 patch—especially pronounced in “BAR”, which has the highest baseline
 transmission (β = 0.50). The configuration is small enough to run in
-fractions of a second yet exercises all major LASER components, making
+fractions of a second yet exercises all major engine components, making
 it ideal for automated tests and teaching materials.
 
 ## See also
@@ -47,5 +47,5 @@ it ideal for automated tests and teaching materials.
 - [config_default](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
   – comprehensive default configuration.
 
-- `make_simulation_epidemic_LASER_config_files.R` – script that
-  generates this object.
+- `make_simulation_epidemic_config_files.R` – script that generates this
+  object.

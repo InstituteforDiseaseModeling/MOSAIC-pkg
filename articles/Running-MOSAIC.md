@@ -8,8 +8,8 @@ stochasticity** using the
 function. This workflow samples parameters from prior distributions and
 runs multiple simulations to quantify uncertainty.
 
-For running single deterministic simulations, see the **Running LASER**
-vignette.
+For running single deterministic simulations, see the **Running
+simulations** vignette.
 
 **Before you begin**: Complete the Installation vignette to set up
 MOSAIC and its dependencies.

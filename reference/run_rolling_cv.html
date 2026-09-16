@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -27,7 +27,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
-    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-simulations.html">Running simulations</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
     <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
@@ -74,7 +74,6 @@ up to <code>T</code>, and (4) projects forward over the out-of-sample (OOS) wind
 <span>  central_method <span class="op">=</span> <span class="st">"median"</span>,</span>
 <span>  est_suitability_spec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  psi_cache <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">dir_output</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -146,7 +145,7 @@ candidate ensemble.</p></dd>
 <code>c("ensemble","ensemble_opt","medoid")</code>). <code>"ensemble"</code>
 (posterior-weighted candidate) is always included. <code>"ensemble_opt"</code> is
 the optimizer-selected subset (only emitted when <code>optimize_subset =
-  TRUE</code> and <code>ensemble_optimized.rds</code> exists). <code>"medoid"</code> is
+TRUE</code> and <code>ensemble_optimized.rds</code> exists). <code>"medoid"</code> is
 re-simulated from its saved config (see <code>n_reps_best_medoid</code>).
 <code>"best"</code> is accepted for back-compat but is no longer produced by
 <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> (no <code>config_best.json</code>); it is skipped with a
@@ -155,10 +154,10 @@ as a value of the <code>model</code> column.</p></dd>
 
 
 <dt id="arg-n-reps-best-medoid">n_reps_best_medoid<a class="anchor" aria-label="anchor" href="#arg-n-reps-best-medoid"></a></dt>
-<dd><p>Integer (default 50); number of stochastic LASER
+<dd><p>Integer (default 50); number of stochastic
 reruns used to build the predictive median + intervals for the <code>best</code>
 and <code>medoid</code> configs. These reruns execute locally in the calling R
-process (not on Dask), so cost scales with this value times the number of
+process, so cost scales with this value times the number of
 cutoffs and locations.</p></dd>
 
 
@@ -193,10 +192,6 @@ call is skipped and the frozen <code>psi_&lt;T&gt;.csv</code> is loaded from thi
 directory instead. The run <strong>hard-errors</strong> if a requested cutoff is
 absent from the cache manifest, or if the run's <code>est_suitability_spec</code>
 hash does not match the manifest <code>spec_hash</code> recorded for that cutoff.</p></dd>
-
-
-<dt id="arg-dask-spec">dask_spec<a class="anchor" aria-label="anchor" href="#arg-dask-spec"></a></dt>
-<dd><p>Optional Dask/Coiled spec passed to <code>run_MOSAIC</code>.</p></dd>
 
 
 <dt id="arg-dir-output">dir_output<a class="anchor" aria-label="anchor" href="#arg-dir-output"></a></dt>

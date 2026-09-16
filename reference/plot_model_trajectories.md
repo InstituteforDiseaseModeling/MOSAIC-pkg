@@ -56,7 +56,7 @@ Invisibly, a named list of the file paths written.
 
 ## Details
 
-**Pure read-render:** this function never imports LASER, never
+**Pure read-render:** this function never runs the engine, never
 re-simulates, and never re-weights — it consumes only the compact
 artifact (per-channel weighted median + thinned actual lines, both
 already reduced over the best subset). It is the trajectory analogue of

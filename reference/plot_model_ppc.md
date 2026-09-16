@@ -39,8 +39,10 @@ plot_model_ppc(
 
 - model:
 
-  Legacy: A laser-cholera Model object (for backward compatibility). Not
-  recommended - use CSV-based inputs instead.
+  Legacy: a model object as returned by
+  [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md)
+  (any list carrying `$results`). Not recommended - use CSV-based inputs
+  instead.
 
 - output_dir:
 

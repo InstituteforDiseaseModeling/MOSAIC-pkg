@@ -1,6 +1,6 @@
-# Default LASER Configuration
+# Default Simulation Configuration
 
-The **canonical** LASER parameter object shipped with MOSAIC. It
+The **canonical** simulation parameter object shipped with MOSAIC. It
 contains default values for *all* model parameters, initial state
 vectors, and file-path references required to run the full cholera
 metapopulation transmission model across any number of locations.
@@ -33,10 +33,10 @@ and persisted as `data/config_default.rda`. Elements include:
 ## Details
 
 Unlike the lightweight *simulation* configs exported in
-`make_simulation_epidemic_LASER_config_files.R` and
-`make_simulation_endemic_LASER_config_files.R`, the **default**
-configuration assumes the presence of external data files arranged in
-canonical MOSAIC directories:
+`make_simulation_epidemic_config_files.R` and
+`make_simulation_endemic_config_files.R`, the **default** configuration
+assumes the presence of external data files arranged in canonical MOSAIC
+directories:
 
 - MODEL_INPUT:
 
@@ -64,16 +64,16 @@ which run without any external dependencies.
 
 **Note on Initial Condition Formats**: This configuration includes both
 count (`*_j_initial`) and proportion (`prop_*_initial`) representations
-of initial conditions. The count fields are required by the LASER model
-for simulation, while the proportion fields are optional and provided
-for statistical analysis convenience. Both formats are automatically
-maintained in sync during parameter sampling operations.
+of initial conditions. The count fields are required by the transmission
+model for simulation, while the proportion fields are optional and
+provided for statistical analysis convenience. Both formats are
+automatically maintained in sync during parameter sampling operations.
 
 ## See also
 
 - `data-raw/make_config_default.R` – the script that builds this object.
 
-- [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
+- [`make_simulation_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_simulation_config.md)
   – the validator/factory function used internally by the build script
   to validate every parameter.
 

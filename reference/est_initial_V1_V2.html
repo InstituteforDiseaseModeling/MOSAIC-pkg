@@ -19,7 +19,7 @@ proportions to Beta distributions."><meta property="og:image" content="https://i
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,7 +31,7 @@ proportions to Beta distributions."><meta property="og:image" content="https://i
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
-    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-simulations.html">Running simulations</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
     <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
@@ -151,8 +151,8 @@ in the CSV. Defaults match the pre-v0.22.11 uninformative priors
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Biological notes:</p><ul><li><p>V1/V2 in the MOSAIC/LASER model are <em>administrative</em> compartments
-(dose received). LASER's <code>vaccinated.py</code> independently splits the
+    <p>Biological notes:</p><ul><li><p>V1/V2 in the MOSAIC/transmission model are <em>administrative</em> compartments
+(dose received). The engine independently splits the
 initial counts into immune (V<em>k</em>imm) and susceptible (V<em>k</em>sus)
 substates via <code>phi_1</code>/<code>phi_2</code>. This function therefore does NOT
 multiply by <code>phi_1</code>/<code>phi_2</code> — doing so would double-count

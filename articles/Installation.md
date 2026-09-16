@@ -47,7 +47,7 @@ When MOSAIC loads successfully, you should see:
     |_|  |_| \___/ |____//_/   \_\|___|\____|          /_____//_/  |_|/____//_____//_/ |_|
 
     Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation
-    for Cholera (MOSAIC) featuring the Light-agent Spatial Model for ERadication (LASER)!
+    for Cholera (MOSAIC)!
 
     Version: 0.37.0
 
@@ -83,7 +83,6 @@ mkdir -p ~/MOSAIC && cd ~/MOSAIC
 git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git
 git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
 git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git
-git clone git@github.com:InstituteforDiseaseModeling/laser-cholera.git
 git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
 ```
 

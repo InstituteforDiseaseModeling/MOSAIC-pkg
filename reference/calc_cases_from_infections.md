@@ -1,10 +1,10 @@
 # Map infections to suspected and true cholera cases
 
 Given a vector of incident *symptomatic infections*
-\\I\_{\text{sym}}(t)\\ (e.g., from LASER model) and constant \\\rho\\
-(reporting probability among symptomatic), this function returns vectors
-of expected **suspected** and **true/confirmed** cases aligned on report
-day using a simple time shift \\\Delta\\ (days).
+\\I\_{\text{sym}}(t)\\ (e.g., from transmission model) and constant
+\\\rho\\ (reporting probability among symptomatic), this function
+returns vectors of expected **suspected** and **true/confirmed** cases
+aligned on report day using a simple time shift \\\Delta\\ (days).
 
 By default, the positive predictive value \\\chi\\ among suspected cases
 is set to `chi_endemic` for all times. If `epidemic_threshold` is

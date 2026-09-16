@@ -27,7 +27,6 @@ run_rolling_cv(
   central_method = "median",
   est_suitability_spec = list(),
   psi_cache = NULL,
-  dask_spec = NULL,
   dir_output,
   verbose = TRUE
 )
@@ -111,11 +110,10 @@ run_rolling_cv(
 
 - n_reps_best_medoid:
 
-  Integer (default 50); number of stochastic LASER reruns used to build
-  the predictive median + intervals for the `best` and `medoid` configs.
-  These reruns execute locally in the calling R process (not on Dask),
-  so cost scales with this value times the number of cutoffs and
-  locations.
+  Integer (default 50); number of stochastic reruns used to build the
+  predictive median + intervals for the `best` and `medoid` configs.
+  These reruns execute locally in the calling R process, so cost scales
+  with this value times the number of cutoffs and locations.
 
 - central_method:
 
@@ -152,10 +150,6 @@ run_rolling_cv(
   directory instead. The run **hard-errors** if a requested cutoff is
   absent from the cache manifest, or if the run's `est_suitability_spec`
   hash does not match the manifest `spec_hash` recorded for that cutoff.
-
-- dask_spec:
-
-  Optional Dask/Coiled spec passed to `run_MOSAIC`.
 
 - dir_output:
 

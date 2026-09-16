@@ -35,7 +35,7 @@ Posterior predictive checks and uncertainty quantification
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -47,7 +47,7 @@ Posterior predictive checks and uncertainty quantification
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
-    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-simulations.html">Running simulations</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
     <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
@@ -88,7 +88,7 @@ Posterior predictive checks and uncertainty quantification
 <span>  control <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  resume <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  cluster <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">run_mosaic</span><span class="op">(</span></span>
@@ -98,7 +98,7 @@ Posterior predictive checks and uncertainty quantification
 <span>  control <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  resume <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  cluster <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -107,7 +107,7 @@ Posterior predictive checks and uncertainty quantification
 
 
 <dl><dt id="arg-config">config<a class="anchor" aria-label="anchor" href="#arg-config"></a></dt>
-<dd><p>Named list of LASER model configuration (REQUIRED). Contains location_name,
+<dd><p>Named list of simulation configuration (REQUIRED). Contains location_name,
 reported_cases, reported_deaths, and all model parameters. Create with custom data
 or obtain via <code><a href="get_location_config.html">get_location_config()</a></code>.</p></dd>
 
@@ -126,7 +126,7 @@ All results will be saved here. Must be unique per run.</p></dd>
 <dd><p>Control list created with <code><a href="mosaic_control_defaults.html">mosaic_control_defaults()</a></code>. If <code>NULL</code>, uses defaults.
 Controls calibration strategy, parameter sampling, parallelization, and output settings.
 Key settings:</p><ul><li><p><code>calibration$n_simulations</code>: NULL for auto mode, integer for fixed mode</p></li>
-<li><p><code>calibration$n_iterations</code>: LASER iterations per simulation (default: 3)</p></li>
+<li><p><code>calibration$n_iterations</code>: stochastic engine iterations per parameter set (default: 3)</p></li>
 <li><p><code>calibration$max_simulations_total</code>: Maximum total simulations (default: 100000)</p></li>
 <li><p><code>sampling</code>: Which parameters to sample vs hold fixed</p></li>
 <li><p><code>parallel</code>: Cluster settings for parallel execution</p></li>
@@ -152,39 +152,32 @@ exists that the on-disk shards would shrink (start fresh, or remove it to recomp
 calibration mode (auto vs fixed) differ from those persisted in
 <code>1_inputs/</code> (each changes the draws or likelihood, making the pool
 incomparable);</p></li>
-<li><p>the current <code>laser-cholera</code> engine version crosses the v0.13
-deaths-scale boundary relative to the original run;</p></li>
+<li><p>the run directory was created before MOSAIC v0.68.0, so its shards
+came from the Python <code>laser-cholera</code> engine rather than the R one
+(the two agree statistically but not draw-for-draw, so pooling them
+would give a posterior from neither simulator);</p></li>
 <li><p>the likelihood-value provenance differs – i.e. the existing shards
 were scored by a different likelihood engine or implementation than the
-current session would produce (e.g. R <code>calc_model_likelihood</code> on
-the local backend vs on-worker Python scoring on the Dask backend, or
-an R likelihood-code change that altered values).</p></li>
-</ul><p>If the engine version cannot be determined (no record / Python not bound) the
-deaths-scale check is skipped with a warning. Has no effect when no shards
-exist (equivalent to a fresh run).</p></dd>
+current session would produce (an archived Python-scored shard, or an
+R likelihood-code change that altered values).</p></li>
+</ul><p>If the originating MOSAIC version cannot be determined (no
+<code>1_inputs/environment.json</code>, or an unparseable version) the engine
+check is skipped with a warning. Has no effect when no shards exist
+(equivalent to a fresh run).</p></dd>
 
 
 <dt id="arg-cluster">cluster<a class="anchor" aria-label="anchor" href="#arg-cluster"></a></dt>
-<dd><p>Optional pre-built R parallel cluster from
-<code><a href="make_mosaic_cluster.html">make_mosaic_cluster</a></code>. Only used when <code>dask_spec = NULL</code>.
-When provided, skips cluster creation and teardown, reusing existing workers.
-Useful for staged estimation where multiple <code>run_MOSAIC</code> calls share a
-cluster. When <code>dask_spec</code> is provided this argument is not used; the
-caller retains ownership of any cluster passed and is responsible for stopping
-it after <code>run_MOSAIC</code> returns.</p></dd>
+<dd><p>Optional pre-built R parallel cluster. When provided, skips
+cluster creation and teardown, reusing existing workers. Useful for staged
+estimation where multiple <code>run_MOSAIC</code> calls share a cluster. The
+caller retains ownership of any cluster passed and is responsible for
+stopping it after <code>run_MOSAIC</code> returns.</p></dd>
 
 
-<dt id="arg-dask-spec">dask_spec<a class="anchor" aria-label="anchor" href="#arg-dask-spec"></a></dt>
-<dd><p>Optional named list specifying a Dask/Coiled cluster. When
-provided, simulations are dispatched to Dask workers instead of a local R
-parallel cluster. Required fields: <code>type</code> ("coiled" or "scheduler").
-Coiled fields: <code>n_workers</code>, <code>software</code>, <code>workspace</code> (required
-for multi-workspace Coiled accounts), <code>vm_types</code>, <code>scheduler_vm_types</code>,
-<code>region</code>, <code>idle_timeout</code>. Scheduler fields: <code>address</code>.
-Optional Coiled pass-through fields: <code>timeout</code>, <code>environ</code>,
-<code>scheduler_disk_size</code>, <code>worker_disk_size</code>, <code>scheduler_options</code>,
-<code>worker_options</code>, <code>spot_policy</code>, <code>host_setup_script</code>.
-When <code>NULL</code> (default) the local R parallel backend is used.</p></dd>
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Reserved. Supplying a removed argument (<code>dask_spec</code>) or any
+unrecognised argument raises an error naming it rather than silently
+ignoring it. See <a href="removed_api.html">removed_api</a>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -290,7 +283,7 @@ When <code>NULL</code> (default) the local R parallel backend is used.</p></dd>
 <span class="r-in"><span>  location_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Region1"</span>, <span class="st">"Region2"</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  reported_cases <span class="op">=</span> <span class="va">my_cases_data</span>,</span></span>
 <span class="r-in"><span>  reported_deaths <span class="op">=</span> <span class="va">my_deaths_data</span>,</span></span>
-<span class="r-in"><span>  <span class="co"># ... all other LASER parameters</span></span></span>
+<span class="r-in"><span>  <span class="co"># ... all other simulation parameters</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">custom_priors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>

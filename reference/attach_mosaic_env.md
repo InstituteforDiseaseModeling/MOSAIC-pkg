@@ -2,8 +2,10 @@
 
 Explicitly attaches the r-mosaic Python environment to the current R
 session. This function initializes Python with the r-mosaic environment,
-making all MOSAIC Python dependencies (laser.cholera, torch, zuko, etc.)
-available.
+making the MOSAIC Python dependencies (tensorflow/keras, numpy)
+available. Those serve the environmental-suitability model only –
+simulation and calibration are pure R since v0.68.0 and need no Python
+at all.
 
 The function:
 

@@ -1,9 +1,9 @@
 # Compute the model-implied mobility flux from a run configuration
 
-Derives the **model's own implied daily mobility flux** from a LASER
-configuration's population sizes and calibrated mobility point
-estimates. This is the single source of truth for the four mobility
-figures in the `"spatial"` group of
+Derives the **model's own implied daily mobility flux** from a
+simulation configuration's population sizes and calibrated mobility
+point estimates. This is the single source of truth for the four
+mobility figures in the `"spatial"` group of
 [`render_MOSAIC_figures`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
 (\\\pi\_{ij}\\ diffusion, \\\tau_i\\ departure, modeled flux matrix,
 mobility network).
@@ -18,9 +18,9 @@ calc_mobility_flux(config)
 
 - config:
 
-  A LASER configuration list (as read from `1_inputs/config.json` or
-  produced by
-  [`make_LASER_config`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)).
+  A simulation configuration list (as read from `1_inputs/config.json`
+  or produced by
+  [`make_simulation_config`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_simulation_config.md)).
   Must contain `longitude`, `latitude`, `N_j_initial`, `tau_i`,
   `location_name`, and the scalars `mobility_omega`, `mobility_gamma`.
 

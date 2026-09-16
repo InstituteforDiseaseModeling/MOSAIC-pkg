@@ -21,7 +21,7 @@ machine, or repeatedly without re-running calibration."><meta property="og:image
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,7 +33,7 @@ machine, or repeatedly without re-running calibration."><meta property="og:image
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
-    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-simulations.html">Running simulations</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
     <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
@@ -107,16 +107,15 @@ attempted (<code>TRUE</code>) vs skipped (<code>FALSE</code>).</p>
 
 
 <p>This function <strong>never</strong> calls <code><a href="calc_model_ensemble.html">calc_model_ensemble()</a></code>,
-<code><a href="run_LASER.html">run_LASER()</a></code>, or <code><a href="sample_parameters.html">sample_parameters()</a></code>. Ensemble plots are
+<code><a href="run_simulation.html">run_simulation()</a></code>, or <code><a href="sample_parameters.html">sample_parameters()</a></code>. Ensemble plots are
 reconstructed from the persisted <code>.rds</code> objects
 (<code>2_calibration/ensemble_optimized.rds</code> or
 <code>ensemble_candidate.rds</code>, and <code>medoid_ensemble.rds</code>). A missing,
 corrupt, or schema-incompatible artifact causes the affected figure to be
 <strong>warned-and-skipped</strong>, never rebuilt — rebuilding would trigger local
-simulation on the client (<code>calc_model_ensemble(precomputed_results =
-NULL)</code> falls back to PSOCK/sequential), which this function deliberately
-avoids. Every figure is wrapped in <code>tryCatch</code> so one failure never
-aborts the rest.</p>
+simulation on the client (<code><a href="calc_model_ensemble.html">calc_model_ensemble()</a></code> always simulates, via
+PSOCK or sequentially), which this function deliberately avoids. Every figure
+is wrapped in <code>tryCatch</code> so one failure never aborts the rest.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

@@ -42,9 +42,9 @@ compile_rolling_cv_predictions(
 
 - n_reps_best_medoid:
 
-  Integer or NULL (default); number of stochastic LASER replicates to
-  draw for the single-config `best`/`medoid` models. NULL reuses the
-  value stored in the run manifest.
+  Integer or NULL (default); number of stochastic replicates to draw for
+  the single-config `best`/`medoid` models. NULL reuses the value stored
+  in the run manifest.
 
 - central_method:
 

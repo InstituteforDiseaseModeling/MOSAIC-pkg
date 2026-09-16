@@ -359,7 +359,8 @@ This script is identical to the complete setup but skips R installation
 
 - System libraries (GDAL, PROJ, GEOS, UDUNITS, Python)
 - MOSAIC R package from GitHub
-- Python dependencies (laser-cholera)
+- Python dependencies (TensorFlow, for the suitability model only –
+  simulation and calibration are pure R and need no Python)
 - Verifies installation with
   [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
 

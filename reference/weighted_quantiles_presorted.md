@@ -2,7 +2,7 @@
 
 Internal core of
 [`weighted_quantiles`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_quantiles.md):
-the cumulative-weight interpolation, assuming inputs are already
+the midpoint-position interpolation, assuming inputs are already
 filtered (finite values, positive weights) and sorted ascending by value
 with weights aligned. Exposed so hot callers that sort once and reuse
 the order across many subsets (e.g.

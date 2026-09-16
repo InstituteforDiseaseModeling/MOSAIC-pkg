@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -19,7 +19,7 @@
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
-    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-simulations.html">Running simulations</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
     <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
@@ -49,10 +49,10 @@
 
       <dl><dt>
 
-          <code><a href="run_LASER.html">run_LASER()</a></code> <code><a href="run_LASER.html">run_laser()</a></code>
+          <code><a href="run_simulation.html">run_simulation()</a></code>
 
         </dt>
-        <dd>Run LASER Model Simulation</dd>
+        <dd>Run the cholera transmission model</dd>
 
         <dt>
 
@@ -70,10 +70,10 @@
 
         <dt>
 
-          <code><a href="make_LASER_config.html">make_LASER_config()</a></code>
+          <code><a href="make_simulation_config.html">make_simulation_config()</a></code>
 
         </dt>
-        <dd>Create a Configuration File for LASER</dd>
+        <dd>Create a Simulation Configuration File</dd>
 
         <dt>
 
@@ -144,13 +144,6 @@
 
       <dl><dt>
 
-          <code><a href="run_LASER.html">run_LASER()</a></code> <code><a href="run_LASER.html">run_laser()</a></code>
-
-        </dt>
-        <dd>Run LASER Model Simulation</dd>
-
-        <dt>
-
           <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
 
         </dt>
@@ -168,7 +161,7 @@
           <code><a href="run_fit_sandbox.html">run_fit_sandbox()</a></code>
 
         </dt>
-        <dd>Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter Overrides</dd>
+        <dd>Deterministic Fit-Diagnostic Sandbox: One Simulation with Parameter Overrides</dd>
 
         <dt>
 
@@ -179,10 +172,10 @@
 
         <dt>
 
-          <code><a href="make_LASER_config.html">make_LASER_config()</a></code>
+          <code><a href="run_simulation.html">run_simulation()</a></code>
 
         </dt>
-        <dd>Create a Configuration File for LASER</dd>
+        <dd>Run the cholera transmission model</dd>
 
         <dt>
 
@@ -211,6 +204,13 @@
 
         </dt>
         <dd>Get Template for Parameter Values</dd>
+
+        <dt>
+
+          <code><a href="make_simulation_config.html">make_simulation_config()</a></code>
+
+        </dt>
+        <dd>Create a Simulation Configuration File</dd>
 
         <dt>
 
@@ -1309,17 +1309,10 @@
 
         <dt>
 
-          <code><a href="get_default_LASER_config.html">get_default_LASER_config()</a></code>
-
-        </dt>
-        <dd>Create Default LASER Configuration</dd>
-
-        <dt>
-
           <code><a href="get_default_config.html">get_default_config()</a></code>
 
         </dt>
-        <dd>Create Default LASER Configuration</dd>
+        <dd>Create Default Simulation Configuration</dd>
 
         <dt>
 
@@ -1467,13 +1460,6 @@
 
         </dt>
         <dd>Check Affine Normalization (Zero-Centered Min-Max Scaling)</dd>
-
-        <dt>
-
-          <code><a href="check_coiled_workspace.html">check_coiled_workspace()</a></code>
-
-        </dt>
-        <dd>Check Coiled Workspace Capacity and Activity</dd>
 
         <dt>
 
@@ -1715,21 +1701,21 @@
           <code><a href="config_default.html">config_default</a></code>
 
         </dt>
-        <dd>Default LASER Configuration</dd>
+        <dd>Default Simulation Configuration</dd>
 
         <dt>
 
           <code><a href="config_simulation_endemic.html">config_simulation_endemic</a></code>
 
         </dt>
-        <dd>Endemic Simulation LASER Configuration</dd>
+        <dd>Endemic Simulation Simulation Configuration</dd>
 
         <dt>
 
           <code><a href="config_simulation_epidemic.html">config_simulation_epidemic</a></code>
 
         </dt>
-        <dd>Epidemic Simulation LASER Configuration</dd>
+        <dd>Epidemic Simulation Simulation Configuration</dd>
 
         <dt>
 
@@ -2141,13 +2127,6 @@
 
         <dt>
 
-          <code><a href="check_coiled_workspace.html">check_coiled_workspace()</a></code>
-
-        </dt>
-        <dd>Check Coiled Workspace Capacity and Activity</dd>
-
-        <dt>
-
           <code><a href="check_dependencies.html">check_dependencies()</a></code>
 
         </dt>
@@ -2214,21 +2193,21 @@
           <code><a href="config_default.html">config_default</a></code>
 
         </dt>
-        <dd>Default LASER Configuration</dd>
+        <dd>Default Simulation Configuration</dd>
 
         <dt>
 
           <code><a href="config_simulation_endemic.html">config_simulation_endemic</a></code>
 
         </dt>
-        <dd>Endemic Simulation LASER Configuration</dd>
+        <dd>Endemic Simulation Simulation Configuration</dd>
 
         <dt>
 
           <code><a href="config_simulation_epidemic.html">config_simulation_epidemic</a></code>
 
         </dt>
-        <dd>Epidemic Simulation LASER Configuration</dd>
+        <dd>Epidemic Simulation Simulation Configuration</dd>
 
         <dt>
 
@@ -2645,17 +2624,10 @@
 
         <dt>
 
-          <code><a href="get_default_LASER_config.html">get_default_LASER_config()</a></code>
-
-        </dt>
-        <dd>Create Default LASER Configuration</dd>
-
-        <dt>
-
           <code><a href="get_default_config.html">get_default_config()</a></code>
 
         </dt>
-        <dd>Create Default LASER Configuration</dd>
+        <dd>Create Default Simulation Configuration</dd>
 
         <dt>
 
@@ -2939,13 +2911,6 @@
 
         <dt>
 
-          <code><a href="make_LASER_config.html">make_LASER_config()</a></code>
-
-        </dt>
-        <dd>Create a Configuration File for LASER</dd>
-
-        <dt>
-
           <code><a href="make_forecast_cv_table.html">make_forecast_cv_table()</a></code>
 
         </dt>
@@ -2974,6 +2939,13 @@
 
         <dt>
 
+          <code><a href="make_simulation_config.html">make_simulation_config()</a></code>
+
+        </dt>
+        <dd>Create a Simulation Configuration File</dd>
+
+        <dt>
+
           <code><a href="mosaic_color_variant.html">mosaic_color_variant()</a></code>
 
         </dt>
@@ -2992,13 +2964,6 @@
 
         </dt>
         <dd>Build Complete MOSAIC Control Structure</dd>
-
-        <dt>
-
-          <code><a href="mosaic_dask_presets.html">mosaic_dask_presets()</a></code>
-
-        </dt>
-        <dd>Get an Optimal Dask/Coiled Cluster Spec for a Given Worker Count</dd>
 
         <dt>
 
@@ -3646,13 +3611,6 @@
 
         <dt>
 
-          <code><a href="run_LASER.html">run_LASER()</a></code> <code><a href="run_LASER.html">run_laser()</a></code>
-
-        </dt>
-        <dd>Run LASER Model Simulation</dd>
-
-        <dt>
-
           <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
 
         </dt>
@@ -3670,7 +3628,7 @@
           <code><a href="run_fit_sandbox.html">run_fit_sandbox()</a></code>
 
         </dt>
-        <dd>Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter Overrides</dd>
+        <dd>Deterministic Fit-Diagnostic Sandbox: One Simulation with Parameter Overrides</dd>
 
         <dt>
 
@@ -3678,6 +3636,13 @@
 
         </dt>
         <dd>Rolling-Window Forecast Validation for the MOSAIC Transmission Model</dd>
+
+        <dt>
+
+          <code><a href="run_simulation.html">run_simulation()</a></code>
+
+        </dt>
+        <dd>Run the cholera transmission model</dd>
 
         <dt>
 

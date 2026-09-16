@@ -24,7 +24,7 @@ per-simulation cost, 40 locations, `n_iterations = 3`:
 
 | component | cost | share |
 |----|----|----|
-| 3 x `run_simulation()` | 1.011 s | **97%** |
+| 3 x [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md) | 1.011 s | **97%** |
 | [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md) (production call) | 0.035 s | 3% |
 | likelihood + clamp + parquet write | \< 0.05 s | ~1% |
 

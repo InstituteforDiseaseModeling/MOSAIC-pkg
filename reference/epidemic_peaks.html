@@ -11,7 +11,7 @@ smoothing and prominence-based peak detection algorithms."><meta property="og:im
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.73.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -23,7 +23,7 @@ smoothing and prominence-based peak detection algorithms."><meta property="og:im
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
-    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-simulations.html">Running simulations</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
     <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
@@ -88,12 +88,12 @@ function on combined daily surveillance data from WHO and other sources.</p>
 surveillance time series (2010+) and is <strong>not</strong> pre-trimmed to any
 particular simulation window. Consumers that score peaks against a
 specific config window (e.g. <code><a href="calc_model_likelihood.html">calc_model_likelihood()</a></code>, the Python
-likelihood port, the LASER config builders) must filter against
+likelihood port, the simulation config builders) must filter against
 <code>[date_start, date_stop]</code> first – otherwise <code>which.min(abs(date_seq - peak_date))</code> silently snaps out-of-window peaks to t=1 or t=N and
 biases the peak-shape likelihood terms. The internal helper
 <code>MOSAIC:::.filter_epidemic_peaks()</code> is the canonical filter and is
 applied at build time inside <code>make_config_default.R</code>, at runtime
-inside <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code>'s Dask injector, and defensively inside
+inside <code><a href="get_location_config.html">get_location_config()</a></code>, and defensively inside
 <code><a href="calc_model_likelihood.html">calc_model_likelihood()</a></code>.</p>
 <p>Epidemic peaks are identified using the following methodology:</p><ul><li><p>Time series smoothing with 28-day running mean window</p></li>
 <li><p>Local maxima detection with 10-day comparison windows</p></li>

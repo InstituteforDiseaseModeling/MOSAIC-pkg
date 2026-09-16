@@ -1,9 +1,9 @@
 # Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 
-Runs LASER simulations for multiple parameter sets (with stochastic
-reruns per set) and aggregates results using importance weights. Returns
-a `mosaic_ensemble` object containing weighted mean, median, and
-quantile envelopes for cases and deaths.
+Runs simulations for multiple parameter sets (with stochastic reruns per
+set) and aggregates results using importance weights. Returns a
+`mosaic_ensemble` object containing weighted mean, median, and quantile
+envelopes for cases and deaths.
 
 This is the computation half of the ensemble workflow. Use
 [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
@@ -29,7 +29,6 @@ calc_model_ensemble(
   parallel = FALSE,
   n_cores = NULL,
   root_dir = NULL,
-  precomputed_results = NULL,
   capture_trajectories = FALSE,
   trajectory_channels = .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT,
   trajectory_n_lines = 150L,
@@ -64,7 +63,8 @@ calc_model_ensemble(
 
 - n_simulations_per_config:
 
-  Integer. Stochastic LASER reruns per parameter set. Default `10L`.
+  Integer. Stochastic stochastic reruns per parameter set. Default
+  `10L`.
 
 - envelope_quantiles:
 
@@ -105,9 +105,9 @@ calc_model_ensemble(
   [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)),
   record that the FINAL deaths timestep is a laser-cholera structural
   zero (`reported_deaths` written at tick then leading-trimmed, so the
-  last slot is never written; laser issue \#82). This value is NOT
-  applied to any returned series here; it is recorded in the returned
-  `artifact_mask` element for downstream scoring.
+  last slot is never written; laser-cholera issue \#82). This value is
+  NOT applied to any returned series here; it is recorded in the
+  returned `artifact_mask` element for downstream scoring.
 
 - score_idx_cases, score_idx_deaths:
 
@@ -127,11 +127,7 @@ calc_model_ensemble(
 - root_dir:
 
   Character. MOSAIC root directory. Required when `parallel = TRUE`.
-
-- precomputed_results:
-
-  Optional list of pre-gathered LASER results (e.g. from Dask). Each
-  element must have `$param_idx`, `$stoch_idx`, `$reported_cases`,
+  Each element must have `$param_idx`, `$stoch_idx`, `$reported_cases`,
   `$reported_deaths`, and `$success`.
 
 - capture_trajectories:

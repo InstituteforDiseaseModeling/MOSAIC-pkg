@@ -51,15 +51,15 @@ surveillance time series (2010+) and is **not** pre-trimmed to any
 particular simulation window. Consumers that score peaks against a
 specific config window (e.g.
 [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md),
-the Python likelihood port, the LASER config builders) must filter
+the Python likelihood port, the simulation config builders) must filter
 against `[date_start, date_stop]` first – otherwise
 `which.min(abs(date_seq - peak_date))` silently snaps out-of-window
 peaks to t=1 or t=N and biases the peak-shape likelihood terms. The
 internal helper `MOSAIC:::.filter_epidemic_peaks()` is the canonical
 filter and is applied at build time inside `make_config_default.R`, at
 runtime inside
-[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)'s
-Dask injector, and defensively inside
+[`get_location_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_config.md),
+and defensively inside
 [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md).
 
 Epidemic peaks are identified using the following methodology:
