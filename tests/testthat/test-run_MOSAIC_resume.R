@@ -83,6 +83,82 @@ test_that(".mosaic_resume_scan quarantines bad shards and sweeps temp files", {
   expect_true(file.exists(file.path(d, ".quarantine", "sim_0000004.parquet")))
 })
 
+# ---- ids come from the `sim` column, not the filename ----------------------
+#
+# The scan reads each shard's `sim` column rather than parsing its name. That is
+# what lets one shard carry many simulations (pipeline plan item 6b) without the
+# resume watermark -- the guarantee that a resumed run never reuses a seed --
+# depending on a filename convention.
+
+# A shard holding several simulations, named for the range it covers.
+make_batch_shard <- function(dir, sim_ids) {
+  df <- data.frame(
+    sim        = as.integer(sim_ids),
+    iter       = 1L,
+    seed_sim   = as.integer(sim_ids),
+    seed_iter  = NA_real_,
+    likelihood = -10
+  )
+  arrow::write_parquet(df, file.path(dir, sprintf("sim_%07d-%07d.parquet",
+                                                  min(sim_ids), max(sim_ids))))
+}
+
+test_that(".mosaic_resume_scan counts every simulation in a multi-row shard", {
+  d <- new_samples_dir()
+  make_batch_shard(d, 1:100)
+  make_batch_shard(d, 101:150)
+
+  scan <- MOSAIC:::.mosaic_resume_scan(d)
+
+  expect_equal(scan$n, 150L)            # simulations, not files
+  expect_equal(scan$watermark, 150L)    # the seed frontier
+  expect_equal(scan$ids, 1:150)
+})
+
+test_that("batched and one-per-file shards give an identical scan", {
+  d1 <- new_samples_dir(); for (id in 1:20) make_shard(d1, id)
+  d2 <- new_samples_dir(); make_batch_shard(d2, 1:20)
+
+  a <- MOSAIC:::.mosaic_resume_scan(d1)
+  b <- MOSAIC:::.mosaic_resume_scan(d2)
+
+  expect_identical(a$ids, b$ids)
+  expect_identical(a$n, b$n)
+  expect_identical(a$watermark, b$watermark)
+})
+
+test_that("the sim column wins when it disagrees with the filename", {
+  # A shard whose name says 9 but whose data says 42. The column is what the
+  # combine and every downstream consumer use, so the scan must agree with them
+  # -- otherwise the frontier could hand out an id that already exists.
+  d <- new_samples_dir()
+  arrow::write_parquet(
+    data.frame(sim = 42L, iter = 1L, seed_sim = 42L, seed_iter = NA_real_,
+               likelihood = -1),
+    file.path(d, "sim_0000009.parquet"))
+
+  scan <- MOSAIC:::.mosaic_resume_scan(d)
+
+  expect_equal(scan$ids, 42L)
+  expect_equal(scan$watermark, 42L)
+})
+
+test_that("a multi-row shard with an unreadable row set is quarantined whole", {
+  d <- new_samples_dir()
+  make_batch_shard(d, 1:10)
+  # no `sim` column at all -> the whole shard is unusable
+  arrow::write_parquet(
+    data.frame(iter = 1L, likelihood = -3),
+    file.path(d, "sim_0000011-0000020.parquet"))
+
+  scan <- MOSAIC:::.mosaic_resume_scan(d)
+
+  expect_equal(scan$ids, 1:10)
+  expect_equal(scan$watermark, 10L)
+  expect_true(file.exists(file.path(d, ".quarantine",
+                                    "sim_0000011-0000020.parquet")))
+})
+
 # ---- shard validation (read data + schema/type, not just num_rows) ---------
 
 test_that(".mosaic_resume_scan quarantines schema/type-invalid shards", {

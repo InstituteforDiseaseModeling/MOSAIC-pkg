@@ -1070,23 +1070,46 @@
   # and we additionally require the load-bearing columns (sim, likelihood) to be
   # present with a numeric likelihood. A footer-valid but data-corrupt or
   # schema-wrong shard would otherwise survive the scan and abort/poison the
-  # downstream combine. Shards are one row, so the read is cheap.
-  bad    <- character(0)
-  ok_ids <- integer(0)
-  for (f in files) {
-    parsed <- .mosaic_parse_sim_ids(f)
-    n_row <- tryCatch({
+  # downstream combine.
+  #
+  # This read is NOT cheap at production scale, whatever an earlier comment here
+  # claimed: a one-row shard with 1,352 columns is ~444 KB on disk (~98% parquet
+  # column framing), so a resume of a 100,000-simulation run re-reads ~53 GB
+  # before doing any work -- the same cost as the combine, paid twice. Shrinking
+  # it is pipeline plan item 6b (fewer, fatter shards), not something this
+  # function can fix on its own.
+  # Ids come from each shard's `sim` COLUMN, not from its filename.
+  #
+  # The column is what the combine and every downstream consumer already treat
+  # as the simulation id, so reading it here removes a second, parallel source
+  # of truth that could disagree with it. It also stops the scan caring how many
+  # rows a shard holds or how it is named, which is what lets a shard carry more
+  # than one simulation (pipeline plan item 6b) without touching this function
+  # again.
+  #
+  # Accumulation is pre-allocated per file rather than grown with c(): at
+  # 100,000 shards the append form is quadratic, which is the pattern CLAUDE.md
+  # calls out under "Memory issues".
+  bad_i  <- logical(length(files))
+  id_acc <- vector("list", length(files))
+  for (i in seq_along(files)) {
+    f <- files[i]
+    ids_f <- tryCatch({
       df <- as.data.frame(arrow::read_parquet(file.path(dir_cal_samples, f)))
-      if (!all(c("sim", "likelihood") %in% names(df))) NA_integer_
-      else if (!is.numeric(df$likelihood)) NA_integer_
-      else nrow(df)
-    }, error = function(e) NA_integer_)
-    if (is.na(n_row) || n_row < 1L || !length(parsed)) {
-      bad <- c(bad, f)
-    } else {
-      ok_ids <- c(ok_ids, parsed)
-    }
+      if (!all(c("sim", "likelihood") %in% names(df))) NULL
+      else if (!is.numeric(df$likelihood)) NULL
+      else if (nrow(df) < 1L) NULL
+      else {
+        sim_ids <- suppressWarnings(as.integer(df$sim))
+        sim_ids <- sim_ids[!is.na(sim_ids)]
+        if (!length(sim_ids)) NULL else sim_ids
+      }
+    }, error = function(e) NULL)
+    if (is.null(ids_f)) bad_i[i] <- TRUE else id_acc[[i]] <- ids_f
   }
+  bad    <- files[bad_i]
+  ok_ids <- unlist(id_acc, use.names = FALSE)
+  if (is.null(ok_ids)) ok_ids <- integer(0)
 
   if (length(bad)) {
     if (quarantine) {
