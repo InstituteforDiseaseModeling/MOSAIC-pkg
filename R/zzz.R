@@ -120,34 +120,23 @@
           "Version: ", as.character(pkg_version), "\n"
      )
 
-     # Only actively attach Python in interactive sessions
-     # For scripts/workers, RETICULATE_PYTHON (set in .onLoad) is sufficient
-     # Python will initialize lazily when first used
-     if (interactive()) {
-          # Automatically attach r-mosaic Python environment
-          # This initializes Python and makes tensorflow/keras available
-          # immediately for est_suitability(); the transmission engine is R.
-          attachment_success <- tryCatch({
-               MOSAIC::attach_mosaic_env(silent = TRUE)
-               TRUE
-          }, error = function(e) {
-               # If auto-attach fails, provide helpful guidance
-               cli::cli_alert_warning("Failed to auto-attach r-mosaic Python environment")
-               cli::cli_text("Error: {e$message}")
-               cli::cli_text("")
-               cli::cli_text("To diagnose: {.run MOSAIC::check_python_env()}")
-               cli::cli_text("To install: {.run MOSAIC::install_dependencies()}")
-               cli::cli_text("")
-               FALSE
-          })
-
-          # Inform users about detachment option if attachment succeeded
-          if (attachment_success) {
-               cli::cli_text("")
-               cli::cli_alert_info("Python environment automatically attached to r-mosaic")
-               cli::cli_text("To use a different Python: {.run MOSAIC::detach_mosaic_env()}")
-               cli::cli_text("")
-          }
-     }
+     # Python is NOT attached here, in any session.
+     #
+     # .onLoad has already set RETICULATE_PYTHON (above), which is the only
+     # thing needed to make reticulate resolve the right interpreter. Attaching
+     # additionally called reticulate::py_config(), and THAT is what forces
+     # Python to initialise -- measured at 5.2 s on every interactive
+     # library(MOSAIC).
+     #
+     # Nothing on the simulation or calibration path touches Python: the
+     # transmission engine has been pure R since v0.68.0 and psi enters the
+     # engine as a precomputed psi_jt matrix baked into the config. The only
+     # consumer is est_suitability() and the keras3 suitability pipeline, which
+     # initialises Python lazily on its first keras3 call and picks up the same
+     # RETICULATE_PYTHON.
+     #
+     # So the cost was paid by every interactive session and the benefit
+     # collected by the few that refit psi. Call MOSAIC::attach_mosaic_env()
+     # explicitly if you want Python up front.
 
 }

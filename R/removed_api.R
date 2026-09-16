@@ -102,6 +102,24 @@ NULL
           old, new), call. = FALSE)
 }
 
+#' Removed: \code{lock_python_env()}
+#'
+#' @rdname removed_api
+#' @export
+lock_python_env <- function(...) {
+     stop(paste0(
+          "lock_python_env() has been removed (v0.78.0) and is not needed.\n",
+          "It existed to pin every parallel worker to the same interpreter, back ",
+          "when each one imported laser-cholera. Nothing on the simulation or ",
+          "calibration path touches Python any more -- the engine is pure R and ",
+          "psi enters it as a precomputed psi_jt matrix -- so there are no ",
+          "workers to pin. Following its advice now would cost a ~26 s ",
+          "TensorFlow import per worker for nothing.\n",
+          "If you want Python up front in a session that will refit psi, call ",
+          "MOSAIC::attach_mosaic_env(). To verify the environment, call ",
+          "MOSAIC::check_dependencies()."), call. = FALSE)
+}
+
 #' @rdname removed_api
 #' @param ... Ignored; present only so the stub accepts any old call shape.
 #' @export

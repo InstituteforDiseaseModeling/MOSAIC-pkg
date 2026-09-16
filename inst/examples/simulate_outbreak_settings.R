@@ -76,13 +76,11 @@ if (isTRUE(UPDATE_PACKAGES)) {
   remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg",
                           upgrade = "never", force = TRUE)
 
-  # 2. Python environment (still needed for the keras3 suitability model)
-  MOSAIC::install_dependencies(force = TRUE)
-
-  # 3. Verify
+  # 2. Verify. No Python step: the engine is pure R, and this script only
+  #    simulates. Build the TensorFlow env (MOSAIC::install_dependencies())
+  #    only if you also intend to re-fit suitability with est_suitability().
   message("\n==> Verifying installation...")
-  MOSAIC::check_python_env()
-  MOSAIC::check_dependencies()
+  packageVersion("MOSAIC")
 
   message("\n=============================================================\n",
           " Update complete. Now RESTART R, set UPDATE_PACKAGES <- FALSE,\n",

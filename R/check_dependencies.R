@@ -33,9 +33,10 @@ check_dependencies <- function() {
      paths <- MOSAIC::get_python_paths()
 
      # Check that the desired environment exists.
-     if (!dir.exists(paths$env) || !file.exists(paths$exe)) {
-          cli::cli_alert_danger("Conda environment not found or incomplete at {paths$env}.")
-          cli::cli_text("To finish setup, run {.run MOSAIC::install_dependencies()}. To re-install, run {.run MOSAIC::install_dependencies(force=T)}.")
+     if (!dir.exists(paths$env) || !file.exists(paths$exec)) {
+          cli::cli_alert_info("No Python conda environment at {paths$env}.")
+          cli::cli_text("This is not an error. Simulation and calibration are pure R and need no Python.")
+          cli::cli_text("Install it only to re-fit the suitability model with {.fn MOSAIC::est_suitability}: {.run MOSAIC::install_dependencies()} (or {.run MOSAIC::install_dependencies(force=T)} to rebuild).")
           return(invisible(NULL))
      } else {
           cli::cli_alert_success("Found Python conda environment at {paths$env}.")
@@ -151,7 +152,7 @@ check_dependencies <- function() {
                if (pkg_import_name %in% c("tensorflow", "keras")) {
 
                     pip_info <- tryCatch(
-                         system2(paths$exe, c("-m", "pip", "show", pkg_import_name),
+                         system2(paths$exec, c("-m", "pip", "show", pkg_import_name),
                                  stdout = TRUE, stderr = FALSE),
                          error = function(e) character(0)
                     )

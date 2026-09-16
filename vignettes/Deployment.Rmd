@@ -114,14 +114,14 @@ result <- run_MOSAIC(
 
 ## Troubleshooting
 
-**Python issues:**
+**Python issues** (only affects `est_suitability()`; simulation and calibration are pure R):
 ```{r troubleshoot}
 # Check Python configuration
 reticulate::py_config()
 
 # Reset if needed
-remove_MOSAIC_python_env()
-install_dependencies()
+remove_python_env()
+install_dependencies(force = TRUE)
 ```
 
 ---

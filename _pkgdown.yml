@@ -95,7 +95,6 @@ reference:
     - matches("^use_")
     - matches("^attach_")
     - matches("^detach_")
-    - matches("^lock_")
     - matches("logit")
     - log_msg
 

@@ -169,7 +169,7 @@ install_dependencies <- function(force = FALSE) {
      # Verify that the expected Python executable exists.
      # -----------------------------------------------------------------------
 
-     if (!file.exists(paths$exe)) cli::cli_abort("Python executable not found at {py_exe}. The conda environment may not have been created properly.")
+     if (!file.exists(paths$exec)) cli::cli_abort("Python executable not found at {paths$exec}. The conda environment may not have been created properly.")
 
 
      # -----------------------------------------------------------------------

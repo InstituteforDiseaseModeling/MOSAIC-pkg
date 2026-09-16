@@ -41,7 +41,7 @@ config <- MOSAIC::config_simulation_epidemic
 
 model_epidemic <- run_simulation(config = config, seed = 123, quiet = FALSE)
 
-# Extract time series results (convert Python objects to R matrices)
+# Extract time series results (locations x time matrices)
 cases_epidemic <- as.matrix(model_epidemic$results$reported_cases)
 deaths_epidemic <- as.matrix(model_epidemic$results$reported_deaths)
 
@@ -96,7 +96,7 @@ config <- MOSAIC::config_simulation_endemic
 
 model_endemic <- run_simulation(config = config, seed = 123, quiet = FALSE)
 
-# Extract time series results (convert Python objects to R matrices)
+# Extract time series results (locations x time matrices)
 cases_endemic <- as.matrix(model_endemic$results$reported_cases)
 deaths_endemic <- as.matrix(model_endemic$results$reported_deaths)
 

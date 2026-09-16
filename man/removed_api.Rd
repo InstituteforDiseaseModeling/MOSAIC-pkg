@@ -2,12 +2,15 @@
 % Please edit documentation in R/removed_api.R
 \name{removed_api}
 \alias{removed_api}
+\alias{lock_python_env}
 \alias{run_LASER}
 \alias{run_laser}
 \alias{make_LASER_config}
 \alias{get_default_LASER_config}
 \title{Removed MOSAIC functions and arguments}
 \usage{
+lock_python_env(...)
+
 run_LASER(...)
 
 run_laser(...)

@@ -185,11 +185,14 @@ model parameters.
 a \emph{rate}, not a period -- prior median ~0.71/day. The engine uses
 \code{iota * E} as the flow out of E.}
 
-\item{gamma_1}{Symptomatic shedding-duration rate \code{I_sym -> R} (numeric= 0, per day; "severe / symptomatic" branch).}
+\item{gamma_1}{Symptomatic shedding-duration rate \code{I_sym -> R} (numeric
+>= 0, per day; "severe / symptomatic" branch).}
 
-\item{gamma_2}{Asymptomatic shedding-duration rate \code{I_asym -> R} (numeric= 0, per day; "mild / asymptomatic" branch).}
+\item{gamma_2}{Asymptomatic shedding-duration rate \code{I_asym -> R} (numeric
+>= 0, per day; "mild / asymptomatic" branch).}
 
-\item{epsilon}{Natural-infection immunity waning rate \code{R -> S} (numeric= 0, per day). Distinct from vaccine waning (omega_1, omega_2).}
+\item{epsilon}{Natural-infection immunity waning rate \code{R -> S} (numeric
+>= 0, per day). Distinct from vaccine waning (\code{omega_1}, \code{omega_2}).}
 
 \item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to
 length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
@@ -214,7 +217,7 @@ presents to surveillance (numeric in [0, 1]). \emph{Not} a reporting
 fraction and \emph{not} sigma -- this is the upstream care-seeking
 step of the surveillance cascade.}
 
-\item{rho_deaths}{Death detection rate: probability a true cholera death is captured by surveillance (numeric in [0, 1] or NULL). Consumed by the engine from laser-cholera v0.13+ (laser-cholera#49) to produce reported_deaths; older engine versions ignore this and use raw simulated counts.}
+\item{rho_deaths}{Death detection rate: probability a true cholera death is captured by surveillance (numeric in [0, 1] or NULL). Consumed by the engine to produce reported_deaths (originally laser-cholera#49; the pure-R engine implements the same rule).}
 
 \item{sigma}{Proportion of infections that are symptomatic (numeric in [0, 1]).}
 
