@@ -101,8 +101,9 @@ rely on the return value.** The consumed artifact is the side-effect file
 `model/input/pred_psi_suitability_day.csv` (canonical **`psi`** column — sourced from
 `pred_bias_corrected` when `bias_correct=TRUE`, else `pred_smooth`). Also written: weekly CSV,
 `psi_suitability_config.json`, weight files.
-**Bake into the package default** (optional) via `data-raw/make_config_default.R` (reads the `psi`
-column → `psi_jt`).
+**Bake into the package default** (optional): stage this CSV as `model/input/pred_psi_suitability_day.csv`,
+then rebuild `config_default` via `data-raw/make_config_default.R` (reads the `psi` column → `psi_jt`).
+For the full back-history / alternate-ψ rebuild sequence see the **`run-mosaic`** skill.
 
 ## Reproducibility, threading & where to run
 - **Not bitwise-reproducible run-to-run** — `recurrent_dropout` defeats `tf$random$set_seed` even at

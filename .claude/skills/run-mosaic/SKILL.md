@@ -44,6 +44,22 @@ and versions drift — cite the source of truth (`?fn`, the version-note in `dat
   skill (it writes `model/input/pred_psi_suitability_day.csv`; the bake path is
   `data-raw/make_config_default.R`).
 
+### Back-history / alternate-ψ config rebuild
+To rebuild `config_default` from an earlier start date (or with an alternate ψ), set the env var and
+rebuild both data objects:
+```bash
+export MOSAIC_BUILD_DATE_START=YYYY-01-01   # priors ic_t0 is data-driven within [date_start, +12mo]
+                                            # (the old hard 2023-02-01 floor is gone)
+Rscript data-raw/make_priors_default.R      # 1. rebuild priors
+Rscript -e 'devtools::install(".")'         # 2. install (config build reads the new priors)
+Rscript data-raw/make_config_default.R      # 3. rebuild config
+Rscript -e 'devtools::install(".")'         # 4. install
+```
+To bake an **alternate ψ** (e.g. NMME), stage the ψ DAY csv at `model/input/pred_psi_suitability_day.csv`
+**before** step 3 — the config build reads it for `date_stop` + `psi_jt`. Do NOT hand-inject `psi_jt`
+into an existing config (→ all -Inf likelihoods); rebuild. See the **`est-suitability`** skill and the
+psi-refit memory.
+
 ## 2. Priors — and the pin-vs-sample lever
 `MOSAIC::priors_default` carries per-country priors. **Always check the live version + inline
 version-note in `data-raw/make_priors_default.R` before trusting a center — do not transcribe
@@ -76,6 +92,25 @@ preset (`default` / `debug` / `fast` / `archive`; `?mosaic_io_presets`). Multi-l
 `sample_tau_i`, `sample_mobility_*`. `central_method` (`"median"` default vs `"mean"`) sets the
 ensemble central tendency — see `?calc_model_ensemble`; a ~2× deaths bias under `"mean"` is by
 design (unmasks implied CFR), not a regression.
+
+**FIXED vs AUTO mode (matters for resumability and for what you can measure):**
+- `n_simulations = <integer>` ⇒ **FIXED**: runs exactly that many simulations in a single batch,
+  regardless of convergence. `converged = FALSE` in `summary.json` is EXPECTED here, not an error.
+  Use it when you want a predictable runtime or a controlled comparison — it is the only mode in
+  which two runs do the same amount of work. Note the whole budget dispatches as one batch, so
+  mid-run resume is coarse: shards land per simulation, but the adaptive checkpointing that AUTO
+  does per batch is absent.
+- `n_simulations = NULL` ⇒ **AUTO** (adaptive + predictive batches): each batch is
+  dispatch→gather→write→checkpoint, so per-batch resume works and the run stops when the ESS/R²
+  targets are met. Prefer AUTO for production fits, with `max_simulations_total = <budget>` as
+  the ceiling.
+- Pinning FIXED pins only the SIMULATIONS. Post-calibration still runs a best-subset grid search
+  plus `n_iter_ensemble` × subset-size and `n_iter_best` medoid re-simulations — hundreds to
+  thousands of extra engine runs. For a like-for-like timing comparison also pin
+  `targets$min_best_subset == targets$max_best_subset`, `predictions$n_iter_ensemble` and
+  `predictions$n_iter_best`.
+- Validation rule: `batch_size_adaptive` must be strictly **<** `max_simulations_total`.
+- Resume: `run_MOSAIC(resume = TRUE)` requires `clean_output = FALSE`.
 
 ## 4. Launch
 ```r
