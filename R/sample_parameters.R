@@ -14,7 +14,7 @@
 #'   Available options include:
 #'   \itemize{
 #'     \item sample_alpha_1: Population mixing within metapops (default TRUE)
-#'     \item sample_alpha_2: Degree of frequency driven transmission (default TRUE)
+#'     \item sample_alpha_2: Degree of frequency driven transmission (default FALSE; pinned, weakly identified)
 #'     \item sample_decay_days_short: Minimum V. cholerae survival (default TRUE)
 #'     \item sample_decay_days_spread: Spread between min and max V. cholerae
 #'       survival; decay_days_long is derived as short + spread (default TRUE)
@@ -134,7 +134,7 @@ sample_parameters <- function(
   default_sample_args <- list(
     # Global parameter sampling controls (21 parameters)
     sample_alpha_1 = TRUE,
-    sample_alpha_2 = TRUE,
+    sample_alpha_2 = FALSE,  # PINNED by default (weakly identified; psi absorbs the signal)
     sample_decay_days_short = TRUE,
     sample_decay_days_spread = TRUE,
     sample_decay_shape_1 = TRUE,
