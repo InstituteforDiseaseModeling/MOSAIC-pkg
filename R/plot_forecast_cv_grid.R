@@ -11,7 +11,7 @@
 #'     \eqn{\le} cutoff), \code{x} = embargo-gap weeks, open circle = out-of-sample
 #'     (validation, shown up to \code{forecast_display_months} past the cutoff).
 #'   \item Model \code{pred_median}: solid line + full-opacity CI ribbon for
-#'     dates \eqn{\le} cutoff; dashed line + lighter CI ribbon after the cutoff
+#'     dates \eqn{\le} cutoff; solid line + lighter CI ribbon after the cutoff (distinguished by the dashed cutoff rule)
 #'     (clipped to \code{forecast_display_months}).
 #'   \item Dashed vertical line at the cutoff; a faint dotted line at
 #'     \code{cutoff + scored_horizon_months} marks the formally-scored boundary
@@ -131,26 +131,31 @@ plot_forecast_cv_grid <- function(predictions,
           vlines <- di[!duplicated(di$cutoff_date), , drop = FALSE]
           vlines$scored_end <- vlines$cutoff_date + ceiling(scored_horizon_months * 30.4375)
 
+          # Layer order (bottom -> top): CI ribbon, then cutoff/scored rules,
+          # then observed points, then the model median line ON TOP of everything.
           p <- ggplot2::ggplot() +
                ggplot2::geom_ribbon(data = pre,  ggplot2::aes(.data$date, ymin = .data[[lo]], ymax = .data[[hi]]),
                                     fill = colors[["ci"]], alpha = 0.40) +
                ggplot2::geom_ribbon(data = post, ggplot2::aes(.data$date, ymin = .data[[lo]], ymax = .data[[hi]]),
                                     fill = colors[["ci"]], alpha = 0.17) +
-               ggplot2::geom_line(data = pre,  ggplot2::aes(.data$date, .data$pred_median),
-                                  color = colors[["line"]], linewidth = 0.55) +
-               ggplot2::geom_line(data = post, ggplot2::aes(.data$date, .data$pred_median),
-                                  color = colors[["line"]], linewidth = 0.55, linetype = "22") +
                ggplot2::geom_vline(data = vlines, ggplot2::aes(xintercept = .data$scored_end),
                                    linetype = "dotted", color = "grey65", linewidth = 0.3) +
                ggplot2::geom_vline(data = vlines, ggplot2::aes(xintercept = .data$cutoff_date),
                                    linetype = "dashed", color = "grey35", linewidth = 0.35)
-          # points only when present (avoids empty-column shape-scale warning)
+          # observed points (behind the model line); only when present
           if (nrow(oi) > 0)
                p <- p +
                     ggplot2::geom_point(data = oi, ggplot2::aes(.data$date, .data$observed, shape = .data$cls),
-                                        color = "grey15", fill = "white", size = 1.15, stroke = 0.5) +
+                                        color = "grey15", fill = "white", size = 1.15, stroke = 0.5,
+                                        alpha = 0.30) +
                     ggplot2::scale_shape_manual(values = c("IS (train)" = 16, "gap" = 4, "OOS (validation)" = 21),
                                                 drop = FALSE, name = NULL)
+          # model median line LAST -> drawn on top of ribbon + points
+          p <- p +
+               ggplot2::geom_line(data = pre,  ggplot2::aes(.data$date, .data$pred_median),
+                                  color = colors[["line"]], linewidth = 1.0) +
+               ggplot2::geom_line(data = post, ggplot2::aes(.data$date, .data$pred_median),
+                                  color = colors[["line"]], linewidth = 1.0)
           p +
                ggplot2::scale_x_date(limits = x_range, date_breaks = "6 months", date_labels = "%y-%m",
                                      expand = ggplot2::expansion(mult = 0.01)) +
@@ -174,7 +179,7 @@ plot_forecast_cv_grid <- function(predictions,
           patchwork::plot_annotation(
                title = sprintf("MOSAIC rolling-origin forecast CV -- reported %s (%s)", metric, model),
                subtitle = paste0("filled circle = in-sample train | x = embargo gap | open circle = OOS validation   ||   ",
-                                 "solid + 95% CI up to cutoff (dashed line); dashed + lighter CI after ",
+                                 "solid + 95% CI up to cutoff (dashed line); solid + lighter CI after ",
                                  "(shown to ", forecast_display_months, " mo; dotted line = ",
                                  scored_horizon_months, "-mo scored horizon)"),
                caption = ylab) &

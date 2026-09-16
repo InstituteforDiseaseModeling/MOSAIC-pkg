@@ -79,7 +79,7 @@ Encodings (locked for the OCV-4 experiment):
 \eqn{\le} cutoff), \code{x} = embargo-gap weeks, open circle = out-of-sample
 (validation, shown up to \code{forecast_display_months} past the cutoff).
 \item Model \code{pred_median}: solid line + full-opacity CI ribbon for
-dates \eqn{\le} cutoff; dashed line + lighter CI ribbon after the cutoff
+dates \eqn{\le} cutoff; solid line + lighter CI ribbon after the cutoff (distinguished by the dashed cutoff rule)
 (clipped to \code{forecast_display_months}).
 \item Dashed vertical line at the cutoff; a faint dotted line at
 \code{cutoff + scored_horizon_months} marks the formally-scored boundary
