@@ -32,3 +32,4 @@ __pycache__$
 ^vignettes/figures$
 ^vignettes/articles/cache$
 ^vignettes/articles/figures$
+^pipeline-performance-plan\.md$
