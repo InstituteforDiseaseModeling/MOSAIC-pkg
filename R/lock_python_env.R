@@ -126,7 +126,7 @@ lock_python_env <- function() {
     # Import tensorflow to ensure it's available and lock in the environment.
     # This used to import laser.cholera.metapop.model, back when the Python
     # engine was what the environment existed to provide. The engine is R as of
-    # v0.66.0, so the import that proves the environment is usable is the one
+    # v0.68.0, so the import that proves the environment is usable is the one
     # the suitability model needs.
     cli::cli_text("Importing tensorflow to verify installation...")
 

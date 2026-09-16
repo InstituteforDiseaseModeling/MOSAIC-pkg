@@ -217,7 +217,7 @@
       sys      <- reticulate::import("sys", delay_load = FALSE)
       py_ver   <- strsplit(as.character(sys$version), " ")[[1]][1]
       importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
-      # laser-cholera / laser-core left this list in v0.67.0 with the Python
+      # laser-cholera / laser-core left this list in v0.69.0 with the Python
       # engine. The Python environment now serves the suitability model only,
       # so what is worth snapshotting is the TensorFlow stack. The transmission
       # engine's version is the MOSAIC version, recorded under `R` above.

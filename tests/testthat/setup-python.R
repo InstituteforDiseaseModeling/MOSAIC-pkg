@@ -6,7 +6,7 @@
 #
 # It used to do two things. The second -- a one-time probe of the Python
 # interpreter and the two laser-cholera submodules, cached in options() for
-# helper-skips.R to read -- went with the Python engine in v0.67.0. Its only
+# helper-skips.R to read -- went with the Python engine in v0.69.0. Its only
 # consumer was skip_if_no_python_likelihood(), which gated the R-vs-Python
 # likelihood parity tests; those tests and that helper are gone, so the probe
 # was caching three flags nothing read, at the cost of a reticulate interpreter

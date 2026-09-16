@@ -71,7 +71,7 @@ eyes and the janitor of the shared infra, not a gate you hand authoring to.
   `dask_spec`, `check_coiled_workspace()` and `mosaic_dask_presets()` now hard-error rather than being
   ignored.
 - **There is one transmission engine: `run_simulation()`, in R.** The Python `laser-cholera` engine and
-  the reticulate bridge to it were removed in v0.66.0, and the dependency itself in v0.67.0 — see
+  the reticulate bridge to it were removed in v0.68.0, and the dependency itself in v0.69.0 — see
   `migrate-laser-r.md`. Nothing on the simulation or calibration path touches Python; `reticulate`
   survives only for the keras3 suitability model. A worker that imports Python is a bug.
 - Temp/exploratory files go in `claude/`. Never modify the read-only repos (laser-cholera/,

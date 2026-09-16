@@ -3,7 +3,7 @@
 #' Simulates the metapopulation SEIR model over the configured window and
 #' returns the result channels. This is the package's only engine entry point:
 #' there is deliberately no \code{engine =} switch, because there is only one
-#' engine. Prior to v0.66.0 this function was a \pkg{reticulate} bridge to the
+#' engine. Prior to v0.68.0 this function was a \pkg{reticulate} bridge to the
 #' Python \code{laser-cholera} package; it is now pure R and the two agree to
 #' the tolerances recorded in \code{tests/testthat/fixtures/ORACLE.md}.
 #'

@@ -15,8 +15,8 @@
 # =============================================================================
 
 test_that("the Dask/Coiled helpers are gone entirely", {
-  # v0.65.0 replaced them with stop() stubs "for one minor version after the
-  # engine cutover". The cutover was v0.66.0, so v0.68.0 is when that expires
+  # v0.67.0 replaced them with stop() stubs "for one minor version after the
+  # engine cutover". The cutover was v0.68.0, so v0.70.0 is when that expires
   # and the names go for real -- otherwise the stubs outlive their own charter
   # and become permanent furniture.
   expect_false(exists("check_coiled_workspace", where = asNamespace("MOSAIC"),

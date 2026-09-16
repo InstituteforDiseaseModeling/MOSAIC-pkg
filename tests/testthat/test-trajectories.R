@@ -1,7 +1,7 @@
 # Trajectory capture/reduce + plotter tests. All ENGINE-FREE (CI-safe per PLAN
 # 14.D): capture-and-reduce is exercised by mocking calc_model_ensemble()'s
 # per-task worker (see helper-ensemble-mock.R), and the plotter via a synthetic
-# mosaic_trajectories fixture. Before v0.65.0 the engine was bypassed with
+# mosaic_trajectories fixture. Before v0.67.0 the engine was bypassed with
 # calc_model_ensemble(precomputed_results=), which went with the Dask backend;
 # mocking the worker keeps every assertion here and additionally runs the real
 # task-list/dispatch/gather and the real worker-side spill-to-scratch.

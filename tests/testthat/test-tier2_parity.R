@@ -20,7 +20,7 @@
 #    this no-failed-sim fixture; the NA behavior is covered by
 #    test-optimize_ensemble_subset.R), and the optimize path was re-confirmed
 #    bit-identical at tolerance = 0 after the v0.36.9 (R-7) presort-memory refactor.
-#  * Re-baselined in v0.69.1 for the weighted_quantiles() plotting-position fix
+#  * Re-baselined in v0.71.1 for the weighted_quantiles() plotting-position fix
 #    (claude/parity/rebaseline_parity_tier2.R). That fix moved the interpolation
 #    from each observation's upper weight-block edge to its midpoint, so every
 #    quantile-derived reference field legitimately changed; the INPUTS (ens, lls,
@@ -110,7 +110,7 @@ test_that("#2b: calc_model_ensemble is bit-identical to the fixed reference", {
   fx <- readRDS(test_path("fixtures", "parity_tier2.rds"))
   ci <- fx$ce_inputs
   # The fixture's canned engine output used to be injected via
-  # precomputed_results=; that argument went with the Dask backend (v0.65.0), so
+  # precomputed_results=; that argument went with the Dask backend (v0.67.0), so
   # it is now served through the mocked per-task worker. The aggregation math the
   # fixture pins is untouched, so the golden values still apply.
   local_mocked_ensemble_sims(ci$precomputed)

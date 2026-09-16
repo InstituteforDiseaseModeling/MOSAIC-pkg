@@ -10,7 +10,7 @@
 # --- Python-capability skips -------------------------------------------------
 #
 # There is exactly one of these left. skip_if_no_python_likelihood() and the
-# PY_LIKELIHOOD_MODULE constant were removed in v0.67.0: they gated the
+# PY_LIKELIHOOD_MODULE constant were removed in v0.69.0: they gated the
 # R-vs-Python calc_model_likelihood parity tests, which went with the Python
 # engine, leaving the helper with zero callers. The eager probe in
 # setup-python.R that fed it went at the same time.

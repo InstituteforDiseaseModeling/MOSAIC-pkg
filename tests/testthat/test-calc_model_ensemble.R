@@ -365,7 +365,7 @@ test_that("ensemble weighting pairs each (param,stoch) prediction with its OWN p
 #
 # A third test here used to assert that an injected record with
 # param_idx > n_param_sets raised "misaligned". That guard validated the
-# precomputed_results list, which no longer exists (v0.65.0): the local path
+# precomputed_results list, which no longer exists (v0.67.0): the local path
 # builds its own task list with expand.grid(param_idx = seq_len(n_param_sets)),
 # so an out-of-range param_idx is now unrepresentable rather than merely
 # rejected. The guard could not fire, so it went with the argument.

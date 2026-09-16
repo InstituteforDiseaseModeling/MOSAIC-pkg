@@ -356,26 +356,26 @@ test_that(".mosaic_resume_check_inputs is a no-op when inputs not yet persisted"
 # ---- transmission-engine guard ----------------------------------------------
 #
 # These replace the v0.12 -> v0.13 laser-cholera deaths-scale tests. The guard
-# they covered was retired in v0.67.0 (its "current" operand was the installed
+# they covered was retired in v0.69.0 (its "current" operand was the installed
 # laser-cholera wheel, which stopped describing what simulated anything at the
-# v0.66.0 R cutover), but the two properties those tests actually asserted --
+# v0.68.0 R cutover), but the two properties those tests actually asserted --
 # tolerant version parsing, and a boundary that separates incompatible shards --
 # are properties of the replacement, so they are re-homed here rather than lost.
 
-test_that(".mosaic_run_engine classifies the v0.66.0 engine boundary", {
+test_that(".mosaic_run_engine classifies the v0.68.0 engine boundary", {
   f <- MOSAIC:::.mosaic_run_engine
   # before the cutover -> Python laser-cholera
-  expect_equal(f("0.65.0"), "python")
+  expect_equal(f("0.67.0"), "python")
   expect_equal(f("0.32.0"), "python")
   expect_equal(f("0.13"),   "python")
   expect_equal(f("0.0.9"),  "python")
   # at and after the cutover -> R
-  expect_equal(f("0.66.0"), "R")
-  expect_equal(f("0.67.3"), "R")
+  expect_equal(f("0.68.0"), "R")
+  expect_equal(f("0.69.3"), "R")
   expect_equal(f("1.0.0"),  "R")
   # suffixes reduce to the leading integer of each component
-  expect_equal(f("0.65.0-dev"),  "python")
-  expect_equal(f("0.66.0.9000"), "R")
+  expect_equal(f("0.67.0-dev"),  "python")
+  expect_equal(f("0.68.0.9000"), "R")
   expect_equal(f("0.66rc1"),     "R")
   # unparseable / degenerate -> NA
   expect_true(is.na(f("garbage")))
@@ -385,7 +385,7 @@ test_that(".mosaic_run_engine classifies the v0.66.0 engine boundary", {
   expect_true(is.na(f(NULL)))
 })
 
-test_that(".mosaic_resume_check_inputs hard-errors on a pre-v0.66.0 run directory", {
+test_that(".mosaic_resume_check_inputs hard-errors on a pre-v0.68.0 run directory", {
   base <- tempfile("eng_"); inp <- file.path(base, "1_inputs")
   dir.create(inp, recursive = TRUE)
   dirs <- list(inputs = inp)
@@ -395,13 +395,13 @@ test_that(".mosaic_resume_check_inputs hard-errors on a pre-v0.66.0 run director
   wj(config, file.path(inp, "config.json"))
 
   # Shards from the Python engine -> refuse to pool them with R-engine draws.
-  wj(list(R = list(MOSAIC = "0.65.0")), file.path(inp, "environment.json"))
+  wj(list(R = list(MOSAIC = "0.67.0")), file.path(inp, "environment.json"))
   expect_error(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors),
                "simulated with the Python")
 
   # Same engine -> no error and, unlike the old guard, no warning either: the
   # discriminator is on disk, so there is nothing to be unable to determine.
-  wj(list(R = list(MOSAIC = "0.66.0")), file.path(inp, "environment.json"))
+  wj(list(R = list(MOSAIC = "0.68.0")), file.path(inp, "environment.json"))
   expect_silent(expect_true(
     MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
 
@@ -419,7 +419,7 @@ test_that(".mosaic_resume_check_inputs hard-errors on a pre-v0.66.0 run director
 test_that("the resume guard needs no Python to classify a run directory", {
   # The point of keying on the MOSAIC version rather than a laser-cholera one:
   # the check must not depend on what is installed in the Python environment,
-  # which after v0.67.0 no longer contains laser-cholera at all.
+  # which after v0.69.0 no longer contains laser-cholera at all.
   #
   # removeSource() first: deparse() on a srcref-carrying closure reproduces the
   # comments, and the comments here legitimately mention laser-cholera to
@@ -445,7 +445,7 @@ test_that(".mosaic_likelihood_provenance always reports R-side scoring", {
   expect_equal(p$impl_version, MOSAIC:::.mosaic_likelihood_impl_version())
 
   # The descriptor takes no arguments. It carried an unused `lc_version` until
-  # v0.67.0 -- C-1 had already reduced the body to a constant, leaving a
+  # v0.69.0 -- C-1 had already reduced the body to a constant, leaving a
   # parameter every caller filled and nothing read. Asserted so it cannot creep
   # back as a silently-ignored knob (CLAUDE.md lesson #13).
   expect_length(formals(MOSAIC:::.mosaic_likelihood_provenance), 0L)
@@ -458,13 +458,13 @@ test_that(".mosaic_resume_check_inputs rejects a different likelihood provenance
   config <- list(location_name = "ETH"); priors <- list(a = 1)
   wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
 
-  # Stamp the persisted MOSAIC version on the R side of the v0.66.0 engine
+  # Stamp the persisted MOSAIC version on the R side of the v0.68.0 engine
   # boundary so the transmission-engine guard passes and cannot mask the
   # likelihood-provenance behaviour under test here. This used to require
   # pinning a live laser-cholera version read out of the Python environment --
   # a docker image whose wheel lagged env.yml would trip the engine guard first
   # and never reach the provenance dict. The fixture is now a literal.
-  r_engine_env <- list(R = list(MOSAIC = "0.66.0"))
+  r_engine_env <- list(R = list(MOSAIC = "0.68.0"))
 
   cur <- MOSAIC:::.mosaic_likelihood_provenance()
 

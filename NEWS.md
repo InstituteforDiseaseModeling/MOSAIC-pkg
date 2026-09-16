@@ -1,8 +1,8 @@
-# MOSAIC 0.71.1
+# MOSAIC 0.73.1
 
 ## Leaked PSOCK workers are now reaped in production, not just in tests
 
-v0.71.0 fixed this for the test suite only, and said so. The production path had the same defect: `parallel::stopCluster()` shuts a worker down by writing to its socket, so a worker that is not *reading* that socket — an interrupted run, a task stalled inside `run_simulation()` and abandoned by the gather — survives its own cluster. It then holds the parent's stdout open, so a **finished** `run_MOSAIC()` looks like it is hanging: no output from `tail`, no R master in the process table. It also holds ~1 GB of RSS and one of R's 128 connection slots, which is enough to make a later cluster creation in the same session fail.
+v0.73.0 fixed this for the test suite only, and said so. The production path had the same defect: `parallel::stopCluster()` shuts a worker down by writing to its socket, so a worker that is not *reading* that socket — an interrupted run, a task stalled inside `run_simulation()` and abandoned by the gather — survives its own cluster. It then holds the parent's stdout open, so a **finished** `run_MOSAIC()` looks like it is hanging: no output from `tail`, no R master in the process table. It also holds ~1 GB of RSS and one of R's 128 connection slots, which is enough to make a later cluster creation in the same session fail.
 
 New internal `.mosaic_stop_cluster()` (`R/cluster_teardown.R`) calls `stopCluster()` and then SIGKILLs any recorded worker PID whose `/proc/<pid>/cmdline` still contains `RSOCK`. Wired into all four production teardown sites: both in `run_MOSAIC()` (the `on.exit` handler and the explicit post-calibration stop), `calc_model_ensemble()`, and `ensemble_suitability()`. `make_mosaic_cluster()` records the worker PIDs on the cluster object as the `"mosaic_worker_pids"` attribute **at creation**, because they cannot be asked for at teardown time in the one case that needs them — `clusterEvalQ(cl, Sys.getpid())` would queue behind the very task that is stuck. For a cluster built elsewhere it falls back to querying, which is never worse than the old behaviour. Linux-only and `RSOCK`-gated by design; elsewhere, and for `FORK` workers, it degrades to plain `stopCluster()`.
 
@@ -14,7 +14,7 @@ New internal `.mosaic_stop_cluster()` (`R/cluster_teardown.R`) calls `stopCluste
 
 ## R is now faster than the Python engine it replaced (measured)
 
-`migrate-laser-r.md` recorded R as 1.69x **slower** than laser-cholera and left the figure flagged as un-repriced after the v0.71.0 win. It has now been measured in the same interleaved paired harness as the rest of this work (6 blocks x 3 reps, both engines reading the same `config_default.json`, both thread-pinned, numba warm-up untimed):
+`migrate-laser-r.md` recorded R as 1.69x **slower** than laser-cholera and left the figure flagged as un-repriced after the v0.73.0 win. It has now been measured in the same interleaved paired harness as the rest of this work (6 blocks x 3 reps, both engines reading the same `config_default.json`, both thread-pinned, numba warm-up untimed):
 
 | arm | min (s) | mean (s) | R faster by, per block |
 |---|---|---|---|
@@ -29,11 +29,11 @@ So the migration's headline cost has gone to zero and turned slightly positive. 
 - `perf-next-steps.md` (new) records the two deliberately deferred items — the C++ engine plus the two-engine architecture question, and the step-2 sampling-efficiency findings (objective noise before draw count; the ΔAIC-4 truncation question) — with the reasoning for each and the sequencing if they are picked up.
 - The `~2 GB/worker` figure, which was the *Python* engine's footprint, is corrected to the measured ~1.0 GB in `.claude/skills/dugong-run/SKILL.md` and `.claude/skills/run-mosaic/SKILL.md`. `CLAUDE.md` already carried the right number.
 
-# MOSAIC 0.71.0
+# MOSAIC 0.73.0
 
 ## Engine runtime: 2.25x more, from one state write that was copying the whole run
 
-v0.70.0 took the engine 1.156x and reported that the remaining profile was flat. It was not. The single largest cost in the engine was a **copy of the entire per-channel pointer vector on every state write**, and it had been hiding in plain sight for the same reason it hid at the port: the profiler charges it to the phase bodies and to `<GC>`, not to anything that looks like a state write.
+v0.72.0 took the engine 1.156x and reported that the remaining profile was flat. It was not. The single largest cost in the engine was a **copy of the entire per-channel pointer vector on every state write**, and it had been hiding in plain sight for the same reason it hid at the port: the profiler charges it to the phase bodies and to `<GC>`, not to anything that looks like a state write.
 
 Every change here is **bit-identical**: verified across 5 configurations x 20 seeds against the pre-change engine (full `params` + 28 result channels + seed payload, plus the draw-coverage counter), with all 420 assertions in the Tier B oracle-replay suite and all 143 in the results contract passing untouched.
 
@@ -41,8 +41,8 @@ Measured on the default 40-location, 1,398-tick config by an **interleaved paire
 
 | | min per run | per-block speedup |
 |---|---|---|
-| v0.70.0 (007c779) | 1.012 s | — |
-| v0.71.0 | **0.452 s** | **2.25x** (range 1.88-2.33 over 6 blocks; 2.04-2.29 over a separate 8) |
+| v0.72.0 (007c779) | 1.012 s | — |
+| v0.73.0 | **0.452 s** | **2.25x** (range 1.88-2.33 over 6 blocks; 2.04-2.29 over a separate 8) |
 | pre-optimization baseline (1956037) | 1.140 s | **2.41x cumulative** (range 2.01-2.77) |
 
 ### The mechanism
@@ -93,7 +93,7 @@ The first version of that helper was a no-op, and every test still passed. It gu
 
     skip_if_not(is.function(get(".optimize_eval_cell_block", envir = asNamespace("MOSAIC"))))
 
-whose comment says "skip if the installed package predates this refactor (e.g. running via load_all against a stale install)". Under `devtools::load_all()`, `asNamespace("MOSAIC")` *is* the load_all namespace in the master process, so the symbol is always found, the skip never fires, and the test then died on the worker's `library(MOSAIC)` with "there is no package called 'MOSAIC'". It is a skip condition that cannot detect the thing it names -- the same shape as lesson 13 -- and it asked the master a question only a worker can answer. It now asks a worker via `clusterEvalQ()`. Verified to skip cleanly under `load_all` and to run and pass (88 assertions) against a real 0.71.0 install with `NOT_CRAN=true`.
+whose comment says "skip if the installed package predates this refactor (e.g. running via load_all against a stale install)". Under `devtools::load_all()`, `asNamespace("MOSAIC")` *is* the load_all namespace in the master process, so the symbol is always found, the skip never fires, and the test then died on the worker's `library(MOSAIC)` with "there is no package called 'MOSAIC'". It is a skip condition that cannot detect the thing it names -- the same shape as lesson 13 -- and it asked the master a question only a worker can answer. It now asks a worker via `clusterEvalQ()`. Verified to skip cleanly under `load_all` and to run and pass (88 assertions) against a real 0.73.0 install with `NOT_CRAN=true`.
 
 Note that this test still does not run under a bare `R CMD check`, where `skip_on_cran()` skips it regardless; it needs `NOT_CRAN=true` *and* an install. That is a real coverage gap, but closing it by `load_all`-ing on the workers would stop testing the production path, which is `library(MOSAIC)` (`make_mosaic_cluster()`).
 
@@ -102,17 +102,17 @@ Note that this test still does not run under a bare `R CMD check`, where `skip_o
 - `sim_alloc_state()` no longer gives the final row environment the two dose channels. They are `nticks`-shaped in the Python engine and the phases only ever write them at `here` (1..nticks), so a stray read of row `nticks + 1` now returns `NULL` rather than a plausible-looking zero.
 - New `tests/testthat/test-sim_alloc_state.R` (70 assertions) pins the shapes, the per-channel storage modes, the dose contract, the `npatches == 1` orientation, and that the zero prototypes shared across rows are never mutated in place.
 
-# MOSAIC 0.70.0
+# MOSAIC 0.72.0
 
 ## Engine and worker runtime: 1.15x on the engine, and the per-simulation `gc()` is gone
 
-The pure-R engine ran about 1.69x slower per simulation than the retired Python engine, a regression accepted knowingly at the port (v0.66.0) on memory and startup grounds and never investigated. This release investigates it. Every change here is **bit-identical**: verified across 5 configurations x 20 seeds against the pre-change engine, comparing the full `params` + 28 result channels + seed payload and the draw-coverage counter, with the Tier B replay fixtures and the results contract passing untouched.
+The pure-R engine ran about 1.69x slower per simulation than the retired Python engine, a regression accepted knowingly at the port (v0.68.0) on memory and startup grounds and never investigated. This release investigates it. Every change here is **bit-identical**: verified across 5 configurations x 20 seeds against the pre-change engine, comparing the full `params` + 28 result channels + seed payload and the draw-coverage counter, with the Tier B replay fixtures and the results contract passing untouched.
 
 Measured on the default 40-location, 1,398-tick config by an **interleaved paired benchmark** — 8 blocks alternating between this version and a worktree of the previous commit, 4 runs each, so slow drift in machine load cancels instead of being attributed to whichever version happened to run during it:
 
 | | median | min | per-block speedup |
 |---|---|---|---|
-| before (v0.69.1) | 1.144 s | 1.060 s | — |
+| before (v0.71.1) | 1.144 s | 1.060 s | — |
 | after | **0.994 s** | **0.909 s** | **1.156x** (range 1.07-1.23 over 8 blocks) |
 
 Interleaving is not a formality here. Sequential measurements of the same two versions returned speedups from 1.28x to 1.45x and, on one run, claimed the engine was *faster* with an assertion enabled than disabled. Any unpaired A/B on this class of machine drifts by more than the effect being measured, which is the same defect that made the A-3a scaling curve worth re-running. **Per-change attribution below is therefore reported as indicative only:** the individual figures come from sequential ablation and are inflated by the same drift, in the direction that favours whichever arm ran later. Only the 1.156x total is paired.
@@ -147,7 +147,7 @@ Coverage counting is **kept** — it is part of the engine's return contract and
 
 ### 3. No per-simulation `gc()` in the calibration worker
 
-`.mosaic_run_simulation_worker()` called `gc(verbose = FALSE)` twice per simulation — once at the end, once inside the iteration loop at `j == n_iterations`, the latter still commented as preventing "Python object buildup". The Python full GC went with the Python engine in v0.66.0; there is no reticulate finalizer queue or NumPy heap left to sweep, and the rationale left at the same time the code did not.
+`.mosaic_run_simulation_worker()` called `gc(verbose = FALSE)` twice per simulation — once at the end, once inside the iteration loop at `j == n_iterations`, the latter still commented as preventing "Python object buildup". The Python full GC went with the Python engine in v0.68.0; there is no reticulate finalizer queue or NumPy heap left to sweep, and the rationale left at the same time the code did not.
 
 A forced full collection on a warm worker heap measured **292 ms**, so the pair was **14.8% of the entire per-simulation worker budget** — against 2.1% for `calc_model_likelihood()` and 0.1% for the parquet write. It also defeats R's generational collector. Both calls are removed.
 
@@ -180,7 +180,7 @@ Not changed: JSON remains the canonical config format. An RDS sidecar would read
 
 `n_cores` is now clamped to `parallelly::freeConnections() - 2` (two held back for worker parquet I/O) with a message naming the clamp and R 4.4.0's `--max-connections=N`. New dependency: `parallelly` (Imports).
 
-# MOSAIC 0.69.1
+# MOSAIC 0.71.1
 
 ## Bug fix: `weighted_quantiles()` biased every weighted quantile downward
 
@@ -206,7 +206,7 @@ The golden fixture `tests/testthat/fixtures/parity_tier2.rds` was re-baselined, 
 
 Found while running the phase A-5 calibration acceptance; it affected neither arm's comparison, since both were reduced by the same function.
 
-# MOSAIC 0.69.0
+# MOSAIC 0.71.0
 
 ## The R engine is accepted
 
@@ -228,22 +228,22 @@ NumPy's Poisson sampler raises `ValueError('lam value too large')` above λ ≈ 
 
 The practical consequence is that the R engine explores a thin band of prior tail that the Python engine silently discarded. R is the correct arm; no change was made.
 
-# MOSAIC 0.68.0
+# MOSAIC 0.70.0
 
 ## `LASER` is gone from the names too
 
-The engine has been pure R since v0.66.0 and the `laser-cholera` dependency went in v0.67.0. `LASER` named the Python package MOSAIC used to shell out to, so every `LASER` in the API was pointing at something that no longer exists. This release renames them and clears out what the migration left behind.
+The engine has been pure R since v0.68.0 and the `laser-cholera` dependency went in v0.69.0. `LASER` named the Python package MOSAIC used to shell out to, so every `LASER` in the API was pointing at something that no longer exists. This release renames them and clears out what the migration left behind.
 
 ### Breaking changes
 
 * **`run_LASER()` is now `run_simulation()`**, **`make_LASER_config()` is now `make_simulation_config()`**, and **`get_default_LASER_config()` is gone** in favour of the identical `get_default_config()` (the two were byte-for-byte duplicates and neither had a caller). The old names are kept as stubs that raise an error naming the new one -- not as silent aliases, which is how a dead name survives for years. Arguments and behaviour are unchanged. The lowercase alias `run_laser()` is likewise a stub.
 * **The engine's internals are `sim_*`, not `laser_*`.** `laser_params()` -> `sim_params()`, `laser_results()` -> `sim_results()`, `LASER_CHANNELS` -> `SIM_CHANNELS`, `LASER_PIPELINE` -> `SIM_PIPELINE`, and so on for every engine symbol; the files follow (`R/laser_engine.R` -> `R/sim_engine.R`). The two attributes on a `run_simulation()` return are now `sim_provenance` and `sim_coverage`.
-* **`check_coiled_workspace()` and `mosaic_dask_presets()` are deleted.** v0.65.0 replaced them with `stop()` stubs "for one minor version after the engine cutover"; the cutover was v0.66.0, so this is when that expires.
+* **`check_coiled_workspace()` and `mosaic_dask_presets()` are deleted.** v0.67.0 replaced them with `stop()` stubs "for one minor version after the engine cutover"; the cutover was v0.68.0, so this is when that expires.
 * **The `Running LASER` vignette is now `Running simulations`** (`vignettes/Running-simulations.Rmd`).
 
 ### Removed
 
-* **The Docker worker image and its CI.** `.github/workflows/docker-image-update.yaml` built and published `mosaic-worker:latest` and refreshed the Coiled software environment; `.github/workflows/smoke-test.yml` pulled that image on every push. Both existed to serve the Dask/Coiled backend, which went in v0.65.0. The `azure/` tree (the Dask/Coiled scripts, Dockerfile and runbooks) goes with them. The ACR image and the Coiled environment themselves are external and still need deleting by hand.
+* **The Docker worker image and its CI.** `.github/workflows/docker-image-update.yaml` built and published `mosaic-worker:latest` and refreshed the Coiled software environment; `.github/workflows/smoke-test.yml` pulled that image on every push. Both existed to serve the Dask/Coiled backend, which went in v0.67.0. The `azure/` tree (the Dask/Coiled scripts, Dockerfile and runbooks) goes with them. The ACR image and the Coiled environment themselves are external and still need deleting by hand.
 * **Dead local helpers,** each defined and never called: `draw_loc_or_default()` in `est_initial_E_I()`, `.get_ci()` in `plot_model_ppc()`, `.lookup_prior_family()` in `calc_model_posterior_quantiles()`, `get_column_names()` in `get_WHO_vaccine_data()`, `log_sum_exp()` in `calc_model_ess_parameter()`, and a 62-line `calc_kl_analytical()` in `plot_model_distributions()` that duplicated the exported `calc_kl_divergence()`.
 * `.Rbuildignore` entries for `deprecated/` and `src/`, neither of which exists.
 
@@ -253,22 +253,22 @@ The engine has been pure R since v0.66.0 and the `laser-cholera` dependency went
 * `install_dependencies()` no longer claims to install "the LASER disease transmission model simulation tool"; its documentation now says what the environment is actually for.
 * The startup banner no longer advertises LASER.
 
-# MOSAIC 0.67.0
+# MOSAIC 0.69.0
 
 ## The `laser-cholera` dependency is gone
 
-v0.66.0 made the R engine the only engine. This release removes the Python
+v0.68.0 made the R engine the only engine. This release removes the Python
 package it replaced. Nothing on the simulation or calibration path touches
 Python any more; `reticulate` survives solely for the keras3 environmental-
 suitability model, which is unchanged.
 
 ### Breaking changes
 
-* **Resuming a run directory created before v0.66.0 is now a hard error.** Its
+* **Resuming a run directory created before v0.68.0 is now a hard error.** Its
   shards came from the Python engine, and the two engines agree statistically
   but not draw-for-draw, so pooling them would produce a posterior from neither
   simulator. The check reads the MOSAIC version recorded in
-  `1_inputs/environment.json`. Run directories created by v0.66.0 or later
+  `1_inputs/environment.json`. Run directories created by v0.68.0 or later
   resume exactly as before.
 * **`1_inputs/environment.json` no longer records `python$pkg_laser_cholera`**
   (nor `pkg_laser_core`), and now records `pkg_tensorflow` and `pkg_keras`
@@ -304,12 +304,12 @@ suitability model, which is unchanged.
 * `.mosaic_lc_pre013()` and `.mosaic_lc_deaths_scale()`, which classified two
   laser-cholera versions against the v0.13 deaths-likelihood-scale boundary.
   Their "current" operand was read from the installed wheel, which after the
-  v0.66.0 cutover no longer described what had simulated anything -- and once
+  v0.68.0 cutover no longer described what had simulated anything -- and once
   the wheel left `environment.yml` the guard would have reported itself
   SKIPPED on every single resume. Replaced by `.mosaic_run_engine()`, which
   answers the larger question the boundary was a proxy for: which engine
   produced these shards.
-* `.mosaic_likelihood_provenance()`'s `lc_version` argument. v0.65.0 had
+* `.mosaic_likelihood_provenance()`'s `lc_version` argument. v0.67.0 had
   already reduced the body to a constant, leaving a parameter every caller
   filled and nothing read.
 * `skip_if_no_python_likelihood()` and the eager Python probe in
@@ -319,7 +319,7 @@ suitability model, which is unchanged.
   process to cache three flags nothing read. The CI step that installed the
   wheel so those tests would not skip is gone with them.
 
-# MOSAIC 0.66.0
+# MOSAIC 0.68.0
 
 ## The R engine is now the engine
 
@@ -394,14 +394,14 @@ The `laser-cholera` dependency itself is still declared -- `check_dependencies()
 `lock_python_env()`, `environment.yml`, the run-provenance keys and CI still
 reference it. Removing those is the next step.
 
-# MOSAIC 0.65.0
+# MOSAIC 0.67.0
 
-## Pure-R transmission engine (ported; cut over in 0.66.0)
+## Pure-R transmission engine (ported; cut over in 0.68.0)
 
 The Python `laser-cholera` transmission engine is replaced by a pure-R
 implementation. This release lands the deterministic precomputation, the full
 tick loop and the result contract behind an internal entry point;
-0.66.0 makes it the engine `run_MOSAIC()` actually calls. See
+0.68.0 makes it the engine `run_MOSAIC()` actually calls. See
 `migrate-laser-r.md`.
 
 **All ten pipeline components are ported** (`Susceptible`, `Exposed`,

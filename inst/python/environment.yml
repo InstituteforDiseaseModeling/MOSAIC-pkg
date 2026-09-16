@@ -9,8 +9,8 @@ dependencies:
   - packaging=24.0         # Python dependency management
   # This environment exists solely for the environmental-suitability (psi) model,
   # which keras3 runs on TensorFlow. The transmission engine is pure R as of
-  # v0.66.0, so the LASER stack (laser-cholera, laser-core, numba, llvmlite) and
-  # pyarrow were removed in v0.67.0 -- nothing in the package imports them.
+  # v0.68.0, so the LASER stack (laser-cholera, laser-core, numba, llvmlite) and
+  # pyarrow were removed in v0.69.0 -- nothing in the package imports them.
   - pip:
       - "numpy<2"          # Prevent pip deps from upgrading to numpy 2.x
       - tensorflow>=2.16.0,<2.21 # 2.16+ required by keras3 R; <2.21 avoids protobuf segfault on macOS Tahoe

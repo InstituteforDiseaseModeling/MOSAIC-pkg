@@ -1206,22 +1206,22 @@
 #'
 #' Classifies a persisted MOSAIC version string as having simulated with the
 #' Python \code{laser-cholera} engine or the pure-R engine. The cutover is
-#' v0.66.0: every earlier version called Python, every later one calls
+#' v0.68.0: every earlier version called Python, every later one calls
 #' \code{run_simulation()} in R.
 #'
 #' This replaced a pair of helpers that compared two \emph{laser-cholera}
 #' versions across the v0.12 -> v0.13 deaths-likelihood-scale boundary. That
-#' comparison stopped meaning anything at the v0.66.0 cutover: its "current"
+#' comparison stopped meaning anything at the v0.68.0 cutover: its "current"
 #' operand was read from \code{importlib.metadata.version("laser-cholera")},
 #' i.e. whichever wheel happened to be installed, which no longer describes what
-#' simulated anything -- and once v0.67.0 dropped the wheel from
+#' simulated anything -- and once v0.69.0 dropped the wheel from
 #' \code{environment.yml} it would have been permanently absent, firing the
 #' guard's "SKIPPED" warning on every single resume. The hazard it guarded did
 #' not go away, though; it got larger. A change of engine is a superset of a
 #' change of deaths scale, and the MOSAIC version records it exactly, with no
 #' Python needed.
 #'
-#' Tolerant of suffixes ("0.66.0.9000", "0.65.0-dev"): each dotted component is
+#' Tolerant of suffixes ("0.68.0.9000", "0.67.0-dev"): each dotted component is
 #' reduced to its leading run of digits. Returns NA when the version cannot be
 #' parsed to at least major.minor.
 #'
@@ -1233,7 +1233,7 @@
   parts <- strsplit(as.character(v), "\\.")[[1]]
   nums  <- suppressWarnings(as.integer(sub("^([0-9]+).*$", "\\1", parts)))
   if (length(nums) < 2L || is.na(nums[1]) || is.na(nums[2])) return(NA_character_)
-  if (nums[1] > 0L || nums[2] >= 66L) "R" else "python"
+  if (nums[1] > 0L || nums[2] >= 68L) "R" else "python"
 }
 
 
@@ -1260,7 +1260,7 @@
 #' to read those and refuse to pool them with R-scored draws -- deleting the
 #' field would make an old shard indistinguishable from a current one.
 #'
-#' The function took an \code{lc_version} argument until v0.67.0. It never read
+#' The function took an \code{lc_version} argument until v0.69.0. It never read
 #' it: C-1 reduced the body to a constant when scoring became R-only, leaving a
 #' parameter every caller filled and nothing consumed.
 #'
@@ -1282,7 +1282,7 @@
 #' cannot be performed the check downgrades to a warning rather than blocking.
 #'
 #' Also guards the transmission engine: resuming a run directory created before
-#' MOSAIC v0.66.0 is a hard error, because its shards came from the Python
+#' MOSAIC v0.68.0 is a hard error, because its shards came from the Python
 #' laser-cholera engine and pooling them with R-engine draws would produce a
 #' posterior from neither simulator. When \code{control} is supplied, the
 #' likelihood target (\code{control$likelihood}) is also compared, since it is
@@ -1384,7 +1384,7 @@
     }
   }
 
-  # Transmission-engine check: v0.66.0 replaced the Python laser-cholera engine
+  # Transmission-engine check: v0.68.0 replaced the Python laser-cholera engine
   # with the pure-R one. The two agree statistically but not draw-for-draw, so
   # resuming a Python-engine run directory here would pool shards from two
   # different simulators into one posterior -- a posterior from neither.
@@ -1424,7 +1424,7 @@
       "no parseable MOSAIC version recorded in 1_inputs/environment.json"
     warning(sprintf(paste0(
       "resume: the transmission-engine guard was SKIPPED (%s). If this run was started before ",
-      "MOSAIC v0.66.0 its shards came from the Python engine, and the resumed posterior would ",
+      "MOSAIC v0.68.0 its shards came from the Python engine, and the resumed posterior would ",
       "mix two simulators."), reason), call. = FALSE)
   }
 
@@ -2092,7 +2092,7 @@
     # worker PROCESS dies mid-task -- an OOM kill, or any other fatal C-level
     # abort (NOT an R-level error, which the worker already turns into a FALSE
     # record). The embedded Python interpreter used to be the likeliest source
-    # of such an abort; the engine is pure R since v0.66.0, so OOM is now the
+    # of such an abort; the engine is pure R since v0.68.0, so OOM is now the
     # realistic case, but a blocking gather is just as unrecoverable either way. Calibration runs 10,000s of sims
     # per country, the highest-exposure parallel gather in the package, so route it
     # through the same socketSelect()-timeout dispatch used by calc_model_ensemble()

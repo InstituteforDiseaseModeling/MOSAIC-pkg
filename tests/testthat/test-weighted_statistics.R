@@ -75,8 +75,8 @@ test_that("weighted statistics handle edge cases", {
   expect_no_error(weighted_quantiles(x, w_single, 0.5))
   expect_no_error(calc_weighted_mode(x, w_single))
 })
-# --- weighted_quantiles plotting positions (v0.69.1 fix) ---------------------
-# Until v0.69.1 the interpolation used each observation's UPPER weight-block
+# --- weighted_quantiles plotting positions (v0.71.1 fix) ---------------------
+# Until v0.71.1 the interpolation used each observation's UPPER weight-block
 # edge, cumsum(w)/sum(w), which biases every quantile downward in proportion to
 # how concentrated the weights are -- the BFRS posterior regime. These pin the
 # properties that bias violated, so the regression cannot return silently. Each

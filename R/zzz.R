@@ -16,8 +16,8 @@
      #
      # The third runtime used to be libgomp via scipy, pulled in by the Python
      # engine, and the sharpest edge was numba's libiomp5 (the laser-cholera
-     # JIT). Both left with the engine in v0.66.0, and numba left the Python
-     # environment entirely in v0.67.0, so the NUMBA_THREADING_LAYER=workqueue
+     # JIT). Both left with the engine in v0.68.0, and numba left the Python
+     # environment entirely in v0.69.0, so the NUMBA_THREADING_LAYER=workqueue
      # workaround that used to sit here was setting a variable for a package
      # that is no longer installed. What remains is the TensorFlow path, which
      # only the suitability model touches -- calibration workers are now pure R

@@ -10,7 +10,7 @@
 #      this file (see migrate-laser-r.md, phase A-4).
 #   2. PSOCK workers resolve it from the loaded MOSAIC namespace, so the task
 #      closure carries no function payload and needs no clusterExport().
-#   3. It is the seam the ensemble tests mock. Until v0.65.0 those tests fed
+#   3. It is the seam the ensemble tests mock. Until v0.67.0 those tests fed
 #      synthetic engine output in through calc_model_ensemble(precomputed_results=),
 #      an argument whose only production callers were the Dask gather and the
 #      Dask medoid dispatch. Removing the Dask backend removed both callers, but

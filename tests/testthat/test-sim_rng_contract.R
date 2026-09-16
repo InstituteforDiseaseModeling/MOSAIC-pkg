@@ -155,7 +155,7 @@ test_that("the seed falls back to config$seed and then to 123", {
 })
 
 # -----------------------------------------------------------------------------
-# Draw-site registry consistency (v0.65.0)
+# Draw-site registry consistency (v0.67.0)
 #
 # The first version of these tables mislabelled five infectious.py draw sites,
 # omitted a real one (reported_deaths) and invented a phantom one (sigma_split,
@@ -203,7 +203,7 @@ test_that("sigma_split is not a draw site (it is np.round, not a PRNG call)", {
 })
 
 # -----------------------------------------------------------------------------
-# The fast draw path (v0.70.0)
+# The fast draw path (v0.72.0)
 #
 # `sim_draws()` now branches on mode once and `.sim_binom`/`.sim_pois` carry a
 # thin production path that skips the replay machinery. These tests pin the
@@ -230,7 +230,7 @@ test_that(".sim_pois does not coerce, so a huge lambda survives", {
   # The environmental shedding rate is `zeta_1 * Isym` with zeta_1 of order
   # 1e8, so lambda reaches ~1e12 and an `as.integer()` anywhere on this path
   # returns NA. This is also the difference that made R admissible where
-  # NumPy's int64 Poisson raised ValueError on 2.6% of prior draws (v0.69.0).
+  # NumPy's int64 Poisson raised ValueError on 2.6% of prior draws (v0.71.0).
   ctl <- MOSAIC:::sim_draws(mode = "rng", seed = 1L)
   out <- MOSAIC:::.sim_pois(ctl, "environmental/shedding_sym", 1e12, npatches = 4L)
   expect_length(out, 4L)

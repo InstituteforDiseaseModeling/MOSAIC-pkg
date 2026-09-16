@@ -9,19 +9,19 @@
 #' settings to defaults for fifteen versions with no warning. A loud error is
 #' cheaper than a deprecation cycle and far safer than silence.
 #'
-#' \strong{v0.68.0 -- the LASER naming.} \code{LASER} named the Python
+#' \strong{v0.70.0 -- the LASER naming.} \code{LASER} named the Python
 #' \code{laser-cholera} package that MOSAIC used to shell out to. The engine has
-#' been pure R since v0.66.0 and the dependency went in v0.67.0, so the name
+#' been pure R since v0.68.0 and the dependency went in v0.69.0, so the name
 #' pointed at something that no longer exists. \code{run_LASER()} is now
 #' \code{\link{run_simulation}}, \code{make_LASER_config()} is
 #' \code{\link{make_simulation_config}}, and \code{get_default_LASER_config()}
 #' -- a byte-for-byte duplicate of \code{\link{get_default_config}} with zero
 #' callers -- is gone in favour of the latter.
 #'
-#' \strong{v0.65.0 -- the Dask/Coiled backend.} Removed with the distributed
+#' \strong{v0.67.0 -- the Dask/Coiled backend.} Removed with the distributed
 #' backend: the \code{dask_spec} argument to \code{run_MOSAIC()} /
 #' \code{run_rolling_cv()}, plus \code{check_coiled_workspace()} and
-#' \code{mosaic_dask_presets()} (both deleted outright in v0.68.0, one minor
+#' \code{mosaic_dask_presets()} (both deleted outright in v0.70.0, one minor
 #' version after the engine cutover, as scheduled).
 #'
 #' @name removed_api
@@ -82,7 +82,7 @@ NULL
           call. = FALSE)
 }
 
-# Renamed in v0.68.0 -> the message explaining each. Kept as a table rather
+# Renamed in v0.70.0 -> the message explaining each. Kept as a table rather
 # than five hand-written bodies so the stub, its error text and the test that
 # asserts the table is complete cannot drift apart.
 .MOSAIC_RENAMED_FUNS <- c(
@@ -97,7 +97,7 @@ NULL
      stop(sprintf(paste0(
           "%s() has been renamed to %s(). `LASER` named the Python laser-cholera ",
           "package MOSAIC used to call out to; the engine has been pure R since ",
-          "v0.66.0 and the dependency was removed in v0.67.0, so the old name ",
+          "v0.68.0 and the dependency was removed in v0.69.0, so the old name ",
           "pointed at something that no longer exists. The arguments are unchanged."),
           old, new), call. = FALSE)
 }

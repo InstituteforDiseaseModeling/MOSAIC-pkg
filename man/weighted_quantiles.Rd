@@ -30,7 +30,7 @@ Each observation is placed at the midpoint of its own weight block,
 \eqn{(\sum_{k \le i} w_k - w_i/2) / \sum_k w_k}, and quantiles are linearly
 interpolated between those positions. For equal weights the positions are
 \eqn{(i - 0.5)/n}, so the unweighted case reduces to the standard Hazen
-(type-5) quantile. Before v0.69.1 the upper edge \eqn{\sum_{k \le i} w_k}
+(type-5) quantile. Before v0.71.1 the upper edge \eqn{\sum_{k \le i} w_k}
 was used instead, which biased every quantile downward in proportion to how
 concentrated the weights were; see NEWS for the size of the effect on
 \code{calc_model_ensemble()}.

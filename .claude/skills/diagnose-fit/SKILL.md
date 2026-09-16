@@ -19,7 +19,7 @@ decide what to vary next based on what you just observed, like a modeler at a wo
 
 > **Engine-version note:** the parameter→behavior facts below (e.g. `beta_j0_tot` is a dead
 > parameter, the `alpha_2 < 0.4` bifurcation) were established against the Python laser-cholera
-> engine and carry over to the R engine (v0.66.0), which was ported from it behaviour-for-behaviour.
+> engine and carry over to the R engine (v0.68.0), which was ported from it behaviour-for-behaviour.
 > A change to the engine can still flip a field's semantics (it has before — see CLAUDE.md
 > Lesson #12); the engine now lives in `R/sim_engine.R` and its siblings, so re-verify there.
 

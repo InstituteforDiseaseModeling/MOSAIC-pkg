@@ -17,7 +17,7 @@
 # A third source used to sit ahead of those two: a `param_seed` field on the
 # result record, which existed because a Dask worker held the config the master
 # did not. Both that field and the precomputed_results argument that delivered it
-# went with the Dask backend (v0.65.0). The invariant under test is unchanged --
+# went with the Dask backend (v0.67.0). The invariant under test is unchanged --
 # a member's seed must describe that member's own trajectory -- and is now
 # exercised through the config-$seed tier, which is what the local path uses.
 #

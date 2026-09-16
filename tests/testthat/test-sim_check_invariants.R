@@ -6,14 +6,14 @@
 # Python agree because both are wrong. It runs on EVERY tick of every
 # production run (config$check_invariants defaults to TRUE).
 #
-# In v0.70.0 its body was rewritten for speed -- one min() pass instead of
+# In v0.72.0 its body was rewritten for speed -- one min() pass instead of
 # anyNA() + any(v < 0), an accumulation loop instead of Reduce(`+`, lapply()),
 # and a NULL skip instead of intersect(..., names(state)). It had no direct
 # tests, so a rewrite could have silently turned any of these assertions into a
 # no-op and every existing test would still have passed. These tests exist to
 # make that impossible: each one asserts the check FIRES.
 #
-# Also in v0.70.0, state moved from one list-of-per-tick-vectors per channel to
+# Also in v0.72.0, state moved from one list-of-per-tick-vectors per channel to
 # one environment per tick, so these tests address a channel as
 # `state$rows[[row]]$S` rather than `state$S[[row]]`. The assertions are
 # unchanged -- only the poke site moved.

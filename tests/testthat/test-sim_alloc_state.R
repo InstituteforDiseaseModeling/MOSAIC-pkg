@@ -1,7 +1,7 @@
 # =============================================================================
 # test-sim_alloc_state.R
 #
-# v0.70.0 changed the engine's state representation: each channel used to be a
+# v0.72.0 changed the engine's state representation: each channel used to be a
 # list of `nticks + 1` per-tick vectors held on the state environment, and is
 # now a per-tick environment holding every channel (`state$rows[[row]]$S`).
 # The change was made because `state$S[[i]] <- v` is a subassignment into an

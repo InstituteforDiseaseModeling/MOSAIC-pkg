@@ -68,7 +68,7 @@ exists that the on-disk shards would shrink (start fresh, or remove it to recomp
 calibration mode (auto vs fixed) differ from those persisted in
 \code{1_inputs/} (each changes the draws or likelihood, making the pool
 incomparable);
-\item the run directory was created before MOSAIC v0.66.0, so its shards
+\item the run directory was created before MOSAIC v0.68.0, so its shards
 came from the Python \code{laser-cholera} engine rather than the R one
 (the two agree statistically but not draw-for-draw, so pooling them
 would give a posterior from neither simulator);

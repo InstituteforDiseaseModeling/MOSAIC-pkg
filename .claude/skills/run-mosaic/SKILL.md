@@ -91,9 +91,9 @@ res <- MOSAIC::run_MOSAIC(config = cfg, priors = MOSAIC::priors_default,
   and `MOSAIC:::.mosaic_set_blas_threads(1L)` (built into `run_MOSAIC()`).
 
 ## 5. Where to run
-A 40-country coupled calibration is a **hedgehog/dugong** job (~1.0 GB/worker as of v0.71.0; the old ~2 GB figure was the Python engine), not a laptop job — use
+A 40-country coupled calibration is a **hedgehog/dugong** job (~1.0 GB/worker as of v0.73.0; the old ~2 GB figure was the Python engine), not a laptop job — use
 the **`hedgehog-run`** / **`dugong-run`** skills for VM mechanics (R wrapper, surviving disconnect,
-pulling results). The engine is pure R as of v0.66.0, so a calibration no longer touches Python at all; dugong's `r-mosaic-Rscript` wrapper is now only needed for the TensorFlow psi path. Unverified on the VM — test before relying on it.
+pulling results). The engine is pure R as of v0.68.0, so a calibration no longer touches Python at all; dugong's `r-mosaic-Rscript` wrapper is now only needed for the TensorFlow psi path. Unverified on the VM — test before relying on it.
 
 ## 6. Output tree
 ```

@@ -35,9 +35,9 @@ Provisioning scripts that built this node: `claude/dugong_setup/` (`install_dugo
 - **MOSAIC version on VM:** `ssh dugong '~/bin/r-mosaic-Rscript -e "cat(as.character(packageVersion(\"MOSAIC\")))"'`
   (note the wrapper — §1). If stale, update via §1a.
 - **Engine version:** there is no separate one to check. The transmission engine is pure R as of
-  MOSAIC v0.66.0, so the MOSAIC version above *is* the engine version. (The old check here imported
+  MOSAIC v0.68.0, so the MOSAIC version above *is* the engine version. (The old check here imported
   `laser.cholera` and compared it against the wheel pinned in `inst/python/environment.yml`; the
-  wheel left that file in v0.67.0.)
+  wheel left that file in v0.69.0.)
 
 ### 1a. Updating MOSAIC on dugong
 Public repo — no GITHUB_PAT needed. Run via the wrapper (`~/bin/r-mosaic-R` in tmux for a long install):
@@ -64,24 +64,24 @@ TensorFlow-only work PASS without the wrapper (they skip the pyexpat worker path
 the bug, so use the wrapper anyway. Recreate it with `claude/dugong_setup/make_wrappers_dugong.sh` if lost.
 
 > **Unverified, worth testing:** this whole `LD_PRELOAD` dance exists because PSOCK workers imported
-> Python. Since v0.66.0 calibration workers are pure R and import nothing, so the wrapper may be
+> Python. Since v0.68.0 calibration workers are pure R and import nothing, so the wrapper may be
 > unnecessary for `run_MOSAIC()` — and still required for `est_suitability()`, which does import
 > Python. Nobody has tested this on the VM. Keep using the wrapper until someone does; it is
 > harmless when unneeded.
 
 ## 2. Execution model — local PSOCK only
 Simulations AND post-processing run on dugong's local cores; nothing leaves the VM.
-`control$parallel$n_cores` IS the sim parallelism — 1.5 TiB RAM at **~1.0 GB/worker** (v0.71.0
+`control$parallel$n_cores` IS the sim parallelism — 1.5 TiB RAM at **~1.0 GB/worker** (v0.73.0
 measurement: VmHWM 992 MB, flat from 1 to 19 workers) means you can run very wide (170+ of 176
 cores is comfortable). Memory is not what caps worker count; R's 128-connection limit is, and
 `make_mosaic_cluster()` clamps to it.
 
-The Coiled hybrid backend has been **removed** from the package, along with the worker image and its CI (v0.68.0). It was already scientifically
+The Coiled hybrid backend has been **removed** from the package, along with the worker image and its CI (v0.70.0). It was already scientifically
 invalid (issue #113: the worker image lagged laser-cholera, so runs completed but gave low
 R²/unconverged results), and the pure-R engine migration removes the reason it existed. `dask_spec`,
 `check_coiled_workspace()` and `mosaic_dask_presets()` now raise an error rather than being ignored.
 
-**This skill is on notice.** Per-worker RSS has now been measured (~1.0 GB at v0.71.0, above; the
+**This skill is on notice.** Per-worker RSS has now been measured (~1.0 GB at v0.73.0, above; the
 old ~2 GB figure was the *Python* engine) and the R engine is ~2.4x faster than its first port, so a
 176-core VM may no longer be needed for calibration. What is still unmeasured is end-to-end
 calibration throughput on dugong itself. Keep the VM for wide sweeps and psi/LSTM training.

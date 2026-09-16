@@ -136,7 +136,7 @@ test_that("per-member peak R_t = post-burn-in time-max reduced by weighted_quant
   # (cumsum(w) - w/2)/sum(w) = (0.05, 0.20, 0.65): p = 0.5 lands between x = 3
   # and x = 4, giving 3 + (0.5 - 0.20)/(0.65 - 0.20) = 11/3.
   #
-  # This was 23/7 = 3.2857 before v0.69.1, when weighted_quantiles() interpolated
+  # This was 23/7 = 3.2857 before v0.71.1, when weighted_quantiles() interpolated
   # against the upper weight-block edge and so under-credited the dominant
   # member. The corrected value sits closer to 4.0, which is what this test's own
   # comment asks for.

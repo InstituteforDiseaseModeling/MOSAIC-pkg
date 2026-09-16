@@ -4,7 +4,7 @@
 # Feeds canned engine records into calc_model_ensemble() by mocking its
 # per-task simulation worker, MOSAIC:::.mosaic_ensemble_sim_task().
 #
-# Until v0.65.0 these tests injected the same records through
+# Until v0.67.0 these tests injected the same records through
 # calc_model_ensemble(precomputed_results = ). That argument's only production
 # callers were the Dask gather and the Dask medoid dispatch, so it went with the
 # Dask backend -- but the tests that used it were never about Dask. They assert
