@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.83.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.84.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -301,15 +301,30 @@
 <hr></div>
 <div class="section level2">
 <h2 id="id_6-improvement-5--guard-the-ensemble-config-broadcast">6. Improvement 5 — guard the ensemble config broadcast<a class="anchor" aria-label="anchor" href="#id_6-improvement-5--guard-the-ensemble-config-broadcast"></a></h2>
-<p><strong>Status:</strong> <strong>measured in production — the ensemble is now the memory peak of the whole pipeline.</strong> Prevents an OOM; not a speedup.</p>
-<p><code><a href="reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> <code>clusterExport</code>s the full list of sampled configs to every worker (<code>R/calc_model_ensemble.R:635</code>). A sampled config measures <strong>4.52 MB</strong> at 40 locations. At <code>n_subset = 1000</code> x 80 workers that is ~360 GB of broadcast, before any simulation runs. The master separately allocates <code>array(NA_real_, c(nL, nT, n_param_sets, n_iter))</code> <strong>twice</strong> — 4.47 GB each at <code>nL=40, nT=1398, n_param=1000, n_iter=10</code>.</p>
+<p><strong>Status: IMPLEMENTED (v0.84.0).</strong> Prevents an OOM; not a speedup.</p>
+<p><strong>Two numbers in this section were wrong and are corrected below.</strong> A sampled config is <strong>10.15 MB</strong> at 40 locations, not 4.52 MB. And the “19.3 / 23.6 GB per worker” figure quoted further down is not a per-worker figure at all: those samples were taken when the sampler saw a single process, so they are the MASTER’s RSS. Median worker RSS during the ensemble stage is <strong>0.67 GB rising to 4.26 GB</strong>; the master alone peaks at 19-23.6 GB. The 357-423 GB total is real; its attribution was not.</p>
+<p><code><a href="reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> <code>clusterExport</code>s the full list of sampled configs to every worker. Measured, at 40 locations, one sampled config is <strong>10.15 MB</strong> (9.78 MB serialised, which is what actually goes down the socket):</p>
+<table class="table"><thead><tr><th align="right">n_param_sets</th>
+<th align="right">per worker</th>
+<th align="right">across 80 workers</th>
+</tr></thead><tbody><tr><td align="right">52 (pr123’s subset)</td>
+<td align="right">0.52 GB</td>
+<td align="right">41.2 GB</td>
+</tr><tr><td align="right">114 (main’s subset)</td>
+<td align="right">1.13 GB</td>
+<td align="right">90.4 GB</td>
+</tr><tr><td align="right">1,000</td>
+<td align="right"><strong>9.91 GB</strong></td>
+<td align="right"><strong>793 GB</strong></td>
+</tr></tbody></table><p>With local PSOCK — the only backend left — the workers are processes on the orchestrator, so every copy comes out of the same machine’s RAM as the dense arrays. At the subset sizes used so far the broadcast is a minor term (1.13 GB of a ~4.3 GB per-worker peak); at the sizes the optimiser is permitted to choose it is the dominant one and nothing was checking it. The master separately allocates <code>array(NA_real_, c(nL, nT, n_param_sets, n_iter))</code> <strong>twice</strong> — 4.47 GB each at <code>nL=40, nT=1398, n_param=1000, n_iter=10</code>.</p>
 <p>This did not bite in the runs to date only because improvement 4 collapsed the subset to 30. If the subset were large it would OOM on hedgehog (448 GB) before producing anything.</p>
 <p><strong>Production measurement (section 1a) makes this concrete.</strong> At only 52 (pr123) / 114 (main) parameter sets, the ensemble stage already peaks at <strong>357 GB / 423 GB</strong> of worker RSS — 23.6 GB and 19.3 GB per worker respectively, against 1.1-1.5 GB per worker during simulation. System peak was 442 GB. Two consequences:</p>
 <ul><li>
 <strong>This run already would not fit on hedgehog (448 GB).</strong> The guard is no longer hypothetical protection against a subset size nobody has used; it is the difference between this exact workload running and not running on the smaller VM.</li>
 <li>The per-worker cost scales with the subset, so the plan’s <code>n_subset = 1000</code> scenario is not 20x this figure by broadcast alone — the master’s two <code>array(NA_real_, c(nL, nT, n_param_sets, n_iter))</code> allocations (4.47 GB each at n_param=1000) are on top of it.</li>
 </ul><p>The guard should report the computed broadcast size and the two array sizes, so the message names the number rather than guessing.</p>
-<p><strong>Fix:</strong> compute the broadcast size up front and either refuse with a clear message or chunk the dispatch. A guard that states the number is worth more than one that guesses.</p>
+<p><strong>What was implemented.</strong> <code>.mosaic_ensemble_broadcast_gb()</code> prices the export from the actual size of one config, and <code>.mosaic_ensemble_ram_projection_gb()</code> now adds it to the same budget as the arrays — because on local PSOCK it is the same budget. The existing warning names the figure and says where it lands, rather than reporting an array total that omits the larger term. Projection uses the REQUESTED worker count: it is a warning about risk, so the upper bound is the honest input, and the connection clamp can only make the real figure smaller.</p>
+<p>Chunking the dispatch was NOT done. It is the right fix if the guard starts firing in practice, but it changes how workers are fed and deserves its own measurement; naming the cliff is what was missing.</p>
 <hr></div>
 <div class="section level2">
 <h2 id="id_6a-improvement-6--post-calibration-figure-rendering-is-36-min-on-one-core">6a. Improvement 6 — post-calibration figure rendering is 36 min on one core<a class="anchor" aria-label="anchor" href="#id_6a-improvement-6--post-calibration-figure-rendering-is-36-min-on-one-core"></a></h2>
@@ -470,7 +485,11 @@
 <th>change</th>
 <th>shipped</th>
 <th>caveat</th>
-</tr></thead><tbody><tr><td>1</td>
+</tr></thead><tbody><tr><td>5</td>
+<td>guard the ensemble config broadcast</td>
+<td>v0.84.0</td>
+<td>measurement corrected two wrong numbers in the original section; chunking the dispatch deliberately not done.</td>
+</tr><tr><td>1</td>
 <td>chunked <code>open_dataset</code> in the combine</td>
 <td>v0.79.0</td>
 <td>
@@ -498,11 +517,7 @@
 <th>change</th>
 <th>why it still matters</th>
 <th>effort</th>
-</tr></thead><tbody><tr><td>5</td>
-<td>guard the ensemble config broadcast</td>
-<td>The ensemble stage peaks at <strong>357-423 GB</strong> at only 52-114 parameter sets (section 1a). The 100k workload already would not fit on hedgehog’s 448 GB. Cheapest item left, and the only one that turns a crash into a clear message.</td>
-<td>~2 h</td>
-</tr><tr><td>2</td>
+</tr></thead><tbody><tr><td>2</td>
 <td>parallelise <code>.mosaic_reff_resim_ci()</code>
 </td>
 <td>~5 min per R_eff call, but on the post-hoc path <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> never calls — so it buys nothing during calibration.</td>

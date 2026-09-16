@@ -440,14 +440,34 @@ numbers and must not be bundled with anything else.
 
 ## 6. Improvement 5 — guard the ensemble config broadcast
 
-**Status:** **measured in production — the ensemble is now the memory
-peak of the whole pipeline.** Prevents an OOM; not a speedup.
+**Status: IMPLEMENTED (v0.84.0).** Prevents an OOM; not a speedup.
+
+**Two numbers in this section were wrong and are corrected below.** A
+sampled config is **10.15 MB** at 40 locations, not 4.52 MB. And the
+“19.3 / 23.6 GB per worker” figure quoted further down is not a
+per-worker figure at all: those samples were taken when the sampler saw
+a single process, so they are the MASTER’s RSS. Median worker RSS during
+the ensemble stage is **0.67 GB rising to 4.26 GB**; the master alone
+peaks at 19-23.6 GB. The 357-423 GB total is real; its attribution was
+not.
 
 [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
-`clusterExport`s the full list of sampled configs to every worker
-(`R/calc_model_ensemble.R:635`). A sampled config measures **4.52 MB**
-at 40 locations. At `n_subset = 1000` x 80 workers that is ~360 GB of
-broadcast, before any simulation runs. The master separately allocates
+`clusterExport`s the full list of sampled configs to every worker.
+Measured, at 40 locations, one sampled config is **10.15 MB** (9.78 MB
+serialised, which is what actually goes down the socket):
+
+|        n_param_sets |  per worker | across 80 workers |
+|--------------------:|------------:|------------------:|
+| 52 (pr123’s subset) |     0.52 GB |           41.2 GB |
+| 114 (main’s subset) |     1.13 GB |           90.4 GB |
+|               1,000 | **9.91 GB** |        **793 GB** |
+
+With local PSOCK — the only backend left — the workers are processes on
+the orchestrator, so every copy comes out of the same machine’s RAM as
+the dense arrays. At the subset sizes used so far the broadcast is a
+minor term (1.13 GB of a ~4.3 GB per-worker peak); at the sizes the
+optimiser is permitted to choose it is the dominant one and nothing was
+checking it. The master separately allocates
 `array(NA_real_, c(nL, nT, n_param_sets, n_iter))` **twice** — 4.47 GB
 each at `nL=40, nT=1398, n_param=1000, n_iter=10`.
 
@@ -473,9 +493,19 @@ peak was 442 GB. Two consequences:
 The guard should report the computed broadcast size and the two array
 sizes, so the message names the number rather than guessing.
 
-**Fix:** compute the broadcast size up front and either refuse with a
-clear message or chunk the dispatch. A guard that states the number is
-worth more than one that guesses.
+**What was implemented.** `.mosaic_ensemble_broadcast_gb()` prices the
+export from the actual size of one config, and
+`.mosaic_ensemble_ram_projection_gb()` now adds it to the same budget as
+the arrays — because on local PSOCK it is the same budget. The existing
+warning names the figure and says where it lands, rather than reporting
+an array total that omits the larger term. Projection uses the REQUESTED
+worker count: it is a warning about risk, so the upper bound is the
+honest input, and the connection clamp can only make the real figure
+smaller.
+
+Chunking the dispatch was NOT done. It is the right fix if the guard
+starts firing in practice, but it changes how workers are fed and
+deserves its own measurement; naming the cliff is what was missing.
 
 ------------------------------------------------------------------------
 
@@ -709,6 +739,7 @@ Status of every item, so this is the only place anyone has to look.
 
 | \# | change | shipped | caveat |
 |----|----|----|----|
+| 5 | guard the ensemble config broadcast | v0.84.0 | measurement corrected two wrong numbers in the original section; chunking the dispatch deliberately not done. |
 | 1 | chunked `open_dataset` in the combine | v0.79.0 | **production saving never confirmed** — the ~30-35 min is a projection carrying a laptop-measured 1.57x ratio across to dugong. One 100k run verifies it. |
 | 6a | parallelise [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md) | v0.80.0, fixed v0.81.0 | **speedup number outstanding** — the first benchmark was invalidated by the two defects; the re-run is what produces the figure. |
 | 4 | `optimize_subset` scoring mask | v0.81.2 | fixed, but not for the reason this document originally gave. See the open question below. |
@@ -718,7 +749,6 @@ Status of every item, so this is the only place anyone has to look.
 
 | \# | change | why it still matters | effort |
 |----|----|----|----|
-| 5 | guard the ensemble config broadcast | The ensemble stage peaks at **357-423 GB** at only 52-114 parameter sets (section 1a). The 100k workload already would not fit on hedgehog’s 448 GB. Cheapest item left, and the only one that turns a crash into a clear message. | ~2 h |
 | 2 | parallelise `.mosaic_reff_resim_ci()` | ~5 min per R_eff call, but on the post-hoc path [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md) never calls — so it buys nothing during calibration. | ~0.5 d |
 | 3 | measure per-worker shard directories | A measurement, not a change. Its answer may be “nothing to fix”, and item 6b may make it moot by cutting file creations ~100x. | ~2 h |
 
