@@ -156,6 +156,13 @@
     OPENBLAS_NUM_THREADS = n_chr,
     NUMEXPR_NUM_THREADS  = n_chr,
     TBB_NUM_THREADS      = n_chr,
+    # Retained deliberately although numba left the Python environment with
+    # laser-cholera in v0.69.0: this is a generic oversubscription guard and
+    # costs nothing to set for an absent package, so it keeps working if a
+    # future dependency pulls numba back in. Distinct from zzz.R's
+    # NUMBA_THREADING_LAYER = "workqueue", which WAS removed -- that was a
+    # workaround for a specific numba/data.table libiomp5 clash, and a
+    # workaround for a bug in an absent package is dead code, not a guard.
     NUMBA_NUM_THREADS    = n_chr,
     ARROW_NUM_THREADS    = n_chr   # Apache Arrow CPU thread pool (parquet writer)
   )

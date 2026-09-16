@@ -232,11 +232,10 @@
   # source of truth so re-sampled medoid/ensemble configs clamp identically.
   params_sim <- .mosaic_clamp_transmission_params(params_sim)
 
-  # Never let the engine score internally: MOSAIC computes the likelihood in R
-  # after the simulation returns. Kept explicit rather than relying on the
-  # default, because a config that arrived with calc_likelihood = TRUE would
-  # otherwise be scored twice by two different implementations.
-  params_sim$calc_likelihood <- FALSE
+  # (A `params_sim$calc_likelihood <- FALSE` stood here, stopping the Python
+  # engine from scoring internally alongside MOSAIC's own R likelihood. The
+  # R engine has no internal scoring and sim_params() does not read the
+  # field, so the assignment was a no-op from v0.68.0 onward.)
 
   # Pre-allocate simresults collector (validation mode only)
   simresults_raw <- if (!is.null(dir_cal_simresults)) vector("list", n_iterations) else NULL

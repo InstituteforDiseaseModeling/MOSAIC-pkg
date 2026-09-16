@@ -104,7 +104,7 @@
 #'        presents to surveillance (numeric in \[0, 1\]). *Not* a reporting
 #'        fraction and *not* sigma -- this is the upstream care-seeking
 #'        step of the surveillance cascade.
-#' @param rho_deaths Death detection rate: probability a true cholera death is captured by surveillance (numeric in \[0, 1\] or NULL). Consumed by the engine from laser-cholera v0.13+ (laser-cholera#49) to produce reported_deaths; older engine versions ignore this and use raw simulated counts.
+#' @param rho_deaths Death detection rate: probability a true cholera death is captured by surveillance (numeric in \[0, 1\] or NULL). Consumed by the engine to produce reported_deaths (originally laser-cholera#49; the pure-R engine implements the same rule).
 #' @param sigma Proportion of infections that are symptomatic (numeric in \[0, 1\]).
 #' @param chi_endemic Positive predictive value among suspected cases during endemic periods (numeric in (0, 1]).
 #' @param chi_epidemic Positive predictive value among suspected cases during epidemic periods (numeric in (0, 1]).
@@ -964,8 +964,9 @@ make_simulation_config <- function(output_file_path = NULL,
           if (length(unknown_iso) > 0) {
                stop(sprintf(
                     paste0("epidemic_peaks contains iso_code(s) not in location_name: %s. ",
-                           "laser-cholera v0.13+ asserts every iso_code in epidemic_peaks ",
-                           "appears in location_name. Pre-filter via ",
+                           "The peak-shape likelihood terms in calc_model_likelihood() and ",
+                           "the epidemic-peak plots index peaks by location, so a peak for a ",
+                           "location that is not in the config has nowhere to go. Pre-filter via ",
                            "MOSAIC:::.filter_epidemic_peaks(peaks, date_start, date_stop, location_name)."),
                     paste(unknown_iso, collapse = ", ")), call. = FALSE)
           }

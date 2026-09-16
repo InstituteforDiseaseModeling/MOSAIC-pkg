@@ -211,20 +211,30 @@ message("Toy simulation config written to:\n  - ", normalizePath(fp_json))
 identical(sim_config, MOSAIC::read_json_to_list(fp_json))
 
 
-mpm <- reticulate::import("laser.cholera.metapop.model")
-sim <- mpm$run_model(paramfile = sim_config)
+# The transmission engine is pure R as of v0.68.0; laser-cholera left the
+# package entirely in v0.69.0, so the reticulate import that used to stand
+# here can no longer resolve. Seed comes from sim_config$seed, exactly as
+# run_model(paramfile=) resolved it.
+sim <- MOSAIC::run_simulation(config = sim_config, quiet = TRUE)
 
 
 
-# laser-cholera v0.13+: patches.reported_cases is rho/chi-adjusted (matches
-# surveillance-comparable scale); patches.reported_deaths is rho_deaths-applied
-# with a delta_reporting_deaths-day lag. These populate config$reported_cases
-# and config$reported_deaths consumed downstream by calc_model_likelihood().
-exp_cases  <- sim$patches$reported_cases
-exp_deaths <- sim$patches$reported_deaths
+# ORIENTATION, and it changed with the engine. Python's `patches` frame is
+# [time + 1, patch] including the t = 0 seed row, which is why this block used
+# to read `t(exp_cases[-1, ])`. run_simulation()'s return contract is already
+# [n_loc, time] with the seed row trimmed (see sim_results.R), so applying that
+# transpose now would both transpose AND shift the synthetic surveillance
+# series by one step -- and the result would still look plausible.
+#
+# Semantics are unchanged: reported_cases is rho/chi-adjusted (surveillance-
+# comparable scale) and reported_deaths has rho_deaths applied with a
+# delta_reporting_deaths-day lag. Both populate config$reported_cases /
+# $reported_deaths consumed downstream by calc_model_likelihood().
+exp_cases  <- sim$results$reported_cases
+exp_deaths <- sim$results$reported_deaths
 
-sim_config$reported_cases <- t(exp_cases[-1,])
-sim_config$reported_deaths <- t(exp_deaths[-1,])
+sim_config$reported_cases  <- exp_cases
+sim_config$reported_deaths <- exp_deaths
 
 # Convert to matrices ------------------------------------------------------ #
 

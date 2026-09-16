@@ -187,9 +187,10 @@
       # No worker holds a task but work remains -> every worker has died.
       stop(sprintf(paste0(
         "%s parallel gather: all %d worker(s) crashed with %d task(s) ",
-        "unfinished. A worker process died (fatal abort in the embedded Python/numba engine ",
-        "or an OOM kill), not an R-level error. Re-run with parallel = FALSE to surface the ",
-        "underlying engine error, or reduce n_cores to lower memory pressure."),
+        "unfinished. A worker process died at the OS level (a segfault in a compiled ",
+        "dependency, or an OOM kill), not an R-level error -- an R error would have been ",
+        "returned as a failed task rather than killing the worker. Re-run with ",
+        "parallel = FALSE to surface it, or reduce n_cores to lower memory pressure."),
         label, n_workers, n - n_done), call. = FALSE)
     }
     cons <- lapply(cl[busy_w], function(node) node$con)
@@ -203,10 +204,9 @@
       stop(sprintf(paste0(
         "%s parallel gather stalled: no worker produced a result ",
         "within %d s. %d task(s) still in flight (indices: %s) on worker(s) that have gone ",
-        "unresponsive -- a worker process most likely crashed (a fatal abort in the embedded ",
-        "Python/numba engine or an OOM kill). The cluster is being torn down. Re-run with ",
-        "parallel = FALSE to surface the underlying engine error, or reduce n_cores to lower ",
-        "memory pressure."),
+        "unresponsive -- a worker process most likely crashed at the OS level (a segfault in ",
+        "a compiled dependency, or an OOM kill). The cluster is being torn down. Re-run ",
+        "with parallel = FALSE to surface it, or reduce n_cores to lower memory pressure."),
         label, as.integer(idle_timeout_sec), length(stalled),
         paste(stalled, collapse = ", ")),
         call. = FALSE)
@@ -643,7 +643,7 @@ calc_model_ensemble <- function(config,
     if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
 
     # Worker-death-robust gather (see .mosaic_cluster_lapply_robust): a PSOCK
-    # worker that crashes its process (fatal Python/numba abort, OOM kill)
+    # worker that crashes its process (OS-level abort in a compiled dependency, OOM kill)
     # would otherwise block the master forever in unserialize() on Linux.
     # This dispatcher waits on the worker sockets with a finite timeout and
     # surfaces a diagnostic stop() instead of hanging.
