@@ -9,7 +9,11 @@ overhead of repeated cluster creation.
 ## Usage
 
 ``` r
-make_mosaic_cluster(n_cores = parallel::detectCores() - 1L, type = "PSOCK")
+make_mosaic_cluster(
+  n_cores = parallel::detectCores() - 1L,
+  type = "PSOCK",
+  require_root = TRUE
+)
 ```
 
 ## Arguments
@@ -23,7 +27,17 @@ make_mosaic_cluster(n_cores = parallel::detectCores() - 1L, type = "PSOCK")
 - type:
 
   Character. Cluster type: `"PSOCK"` (default, all platforms) or
-  `"FORK"` (Linux/Mac only, faster startup).
+
+- require_root:
+
+  Logical. When `TRUE` (default) a root directory must be set and is
+  propagated to the workers, which simulation workers need to resolve
+  [`get_paths()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md).
+  `FALSE` allows a cluster without one, for workers handed explicit
+  paths –
+  [`render_MOSAIC_figures`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
+  runs post-hoc on a finished run directory and may have no MOSAIC tree
+  at all. `"FORK"` (Linux/Mac only, faster startup).
 
 ## Value
 
