@@ -601,14 +601,14 @@ Practical consequences to respect throughout workstream C:
   [`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md),
   [`detach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/detach_mosaic_env.md),
   [`use_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/use_mosaic_env.md),
-  [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md),
+  [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md),
   [`remove_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_python_env.md),
   and the `RETICULATE_PYTHON` block in `R/zzz.R`. They are edited, not
   deleted: `check_dependencies.R:97`’s
   `core_packages <- c("laser.cholera", "laser.core", "numpy", "h5py", "pyarrow")`
   becomes `c("numpy", "tensorflow")`, its laser-specific messaging
   (`:117-141`, `:199-204`, `:273-275`) goes, and
-  [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md)’s
+  [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md)’s
   laser import-check (`:127-141`) is replaced by a TensorFlow check.
 - The `est-suitability` and `forecast-cv` skills are **unaffected and
   unblocked** — `forecast-cv`’s per-cutoff ψ re-fit keeps working
@@ -628,7 +628,7 @@ so that the package is runnable at every boundary (§2):
   installed, pinned, and checked.
 - **C-2 (after A-4 cutover): the LASER dependency.** `environment.yml`,
   [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md),
-  [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md),
+  [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md),
   CI, provenance keys, docs.
 
 ### 6.1 C-1 — Dask/Coiled
@@ -697,7 +697,7 @@ TensorFlow-only set in §5; narrow
 `core_packages <- c("laser.cholera", "laser.core", "numpy", "h5py", "pyarrow")`
 → `c("numpy", "tensorflow")`, plus its laser-specific messaging at
 `:117-141`, `:199-204`, `:273-275`); retarget
-[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md)’s
+[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md)’s
 import check (`:127-141`) to TensorFlow; narrow `setup-python.R` /
 `helper-skips.R` from “is laser-cholera importable” to “is TensorFlow
 importable”; drop `pkg_laser_cholera` from the environment-snapshot
@@ -1342,7 +1342,7 @@ fixture-oracle allowlist.
 `R/ tests/ man/ inst/` returns eleven remaining sites and every one is a
 C-2 row of the §4.2 table
 ([`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md),
-[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md),
+[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md),
 [`prefit_rolling_cv_psi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/prefit_rolling_cv_psi.md)’s
 version probe, `zzz.R`’s comment,
 [`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md)’s
@@ -1405,7 +1405,7 @@ hash; the generator already lives in `claude/oracle/`.
 
 §6.2 in full. Only now do `environment.yml`,
 [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md),
-[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md),
+[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md),
 the CI wheel install, the `pkg_laser_cholera` provenance key, and the
 docs/skills/agent-memory references go.
 
@@ -1574,7 +1574,7 @@ them blocks work.
 | **A-3 DerivedValues + results** | **done** — the port is complete: all ten components, all 28 channels. Tier B re-run on all three fixtures with `DerivedValues` in the pipeline, and the draw counts came back identical (1,315 and 30,751), confirming the component consumes no randomness. `spatial_hazard` needs its own 1e-3 tolerance, traced to `beta_jt_human`’s float32 cancellation rather than to anything in `derivedvalues.py`; `coupling` matches to 1.8e-8 and the two engines agree cell-for-cell on which patches are `NaN`. New `test-laser_results_contract.R` asserts the return contract against an ordinary (non-replayed) run |
 | **A-3a performance gate** | **pre-measured, and it contradicts this plan — see below.** The user’s answer: proceed with the port regardless |
 | **A-4 cutover** | **done** — [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md) is the R engine and the only engine entry point; five production call sites converted, `R/run_LASER.R` deleted, `.mosaic_prepare_config_for_python()` and `.mosaic_strip_laser_file_handler()` removed as orphans. Suite 4,969 / 0 failures; check at baseline. Uncovered a latent [`run_fit_sandbox()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_fit_sandbox.md) breakage and three wrong assertions in a test file that had never run |
-| **C-2 LASER dependency removal** | **done** — `environment.yml` slimmed to the TensorFlow-only set; [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md) and [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md) retargeted; the `pkg_laser_cholera` provenance key replaced by a MOSAIC-version engine guard; the CI wheel install, `skip_if_no_python_likelihood()`, `setup-python.R`’s eager probe and `.onLoad()`’s numba workaround removed. Suite **4,973 / 0 failures** normally and **4,967 / 0 failures** against an interpreter with no `laser-cholera` installed; check at baseline. Version 0.69.0 |
+| **C-2 LASER dependency removal** | **done** — `environment.yml` slimmed to the TensorFlow-only set; [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md) and [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md) retargeted; the `pkg_laser_cholera` provenance key replaced by a MOSAIC-version engine guard; the CI wheel install, `skip_if_no_python_likelihood()`, `setup-python.R`’s eager probe and `.onLoad()`’s numba workaround removed. Suite **4,973 / 0 failures** normally and **4,967 / 0 failures** against an interpreter with no `laser-cholera` installed; check at baseline. Version 0.69.0 |
 | **C-3 rename + dead-code sweep** | **done** (not in the original plan; requested after C-2) — [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md) -\> [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md), [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md) -\> [`make_simulation_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_simulation_config.md), [`get_default_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md) deleted as a duplicate of [`get_default_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_config.md), all engine internals `laser_*`/`LASER_*` -\> `sim_*`/`SIM_*`, nine `R/laser_*.R` files renamed. Old names kept as [`stop()`](https://rdrr.io/r/base/stop.html) stubs in `R/removed_api.R`, which also absorbs the v0.67.0 Dask stubs’ scheduled deletion. Also removed: the Docker worker image CI + `azure/` tree (Coiled infrastructure orphaned since v0.67.0), the PR-path conda install in CI, and six defined-but-never-called local helpers. Suite **4,980 / 0 failures**. Version 0.70.0. See CLAUDE.md lesson \#16 |
 | **A-3a performance measurements** | **done** — scaling curve, worker RSS and throughput measured (2026-09-11, local laptop). **The gate forces no code change.** Peak RSS is **926 MB/worker, flat from 1 to 19 workers**, less than half the Python engine’s ~2 GB, so memory does not cap worker count on any host; CLAUDE.md’s “~2 GB per worker / 16 cores needs ~32 GB” was stale and is corrected. The engine is **tick-bound, not patch-bound**: J=1 → 0.90 s, J=10 → 1.02 s, J=40 → 1.29 s at a fixed 1,398 ticks, i.e. 40× the patches for 1.43× the time. Parallel throughput is **not measurable on this box** (12700H: 6 P-cores + 8 E-cores, hyperthreaded, under browser load); a pure-ALU control inflated 1.24× at 6 workers where the engine inflated 2.38×, so roughly half the efficiency loss looks like genuine memory contention and half is the laptop. Needs one clean run on hedgehog/dugong before it drives any decision |
 | **A-5 Tier C, all 4 configs** | **done, and the port passes** — default 40-location, single-location (MOZ), high-vaccination and epidemic-threshold-crossing, 200 seeds per arm, noise floor measured first on each. **36/36 bands PASS** (§7). Configs 2–4 were built by `claude/a5/make_tierc_configs.py` and each was verified to reach the path it targets *before* 600 engine runs were spent on it: the default config’s `nu_2_jt` is all zeros and only 17 of 40 patches get any `nu_1_jt`, so the entire second-dose block was cold in config 1 (dose-two total 0 → 176M); and under the default thresholds 3 of 40 patches never cross at all, so the threshold config sets each patch’s threshold to its own median `Isym/N` (patches never/always above 3 → 0, median crossings/patch 8 → 28). Two configs needed a third Python and a second R replicate before their result could be trusted — see §7. Harness in `claude/a5/` |

@@ -772,7 +772,7 @@ keras3 environmental- suitability model, which is unchanged.
   [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
   and not
   [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md).
-- **[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md)
+- **[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md)
   verifies the environment by importing `tensorflow`** rather than
   `laser.cholera.metapop.model`.
 - The `psi_manifest.json` written by
@@ -907,7 +907,7 @@ in step. All four now go through
 
 The `laser-cholera` dependency itself is still declared –
 [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md),
-[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md),
+[`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/removed_api.md),
 `environment.yml`, the run-provenance keys and CI still reference it.
 Removing those is the next step.
 

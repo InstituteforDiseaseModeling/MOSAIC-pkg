@@ -11,13 +11,25 @@ MOSAIC has two installation levels depending on your needs:
 
 Most users should start with **Basic**.
 
+**Python is optional.** As of v0.68.0 the transmission engine is pure R,
+so simulation and calibration -
+[`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md),
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md),
+and everything downstream of them - need no Python at all. A Python
+environment is required only to *re-fit* the environmental-suitability
+(psi) model with
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md),
+which uses TensorFlow/Keras. Pre-computed suitability values ship with
+the package, so you can run and calibrate models without ever installing
+it. See [Optional: Python for environmental
+suitability](#optional-python-for-environmental-suitability).
+
 ------------------------------------------------------------------------
 
 ## Basic Setup
 
-Install the R package from GitHub and let it automatically set up Python
-dependencies. This is sufficient for running models with pre-configured
-parameters and data.
+Install the R package from GitHub. This is all you need to run models
+with pre-configured parameters and data - there is no Python step.
 
 ``` r
 
@@ -27,13 +39,8 @@ if (!require("remotes")) install.packages("remotes")
 # Install MOSAIC R package
 remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg", upgrade = "never", force = TRUE)
 
-# Load and install Python dependencies
+# Load the package (prints the banner below)
 library(MOSAIC)
-install_dependencies()
-
-# Check Python environment and dependencies
-check_python_env()
-check_dependencies()
 ```
 
 **Successful installation output:**
@@ -49,7 +56,40 @@ When MOSAIC loads successfully, you should see:
     Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation
     for Cholera (MOSAIC)!
 
-    Version: 0.37.0
+    Version: <the version you installed>
+
+------------------------------------------------------------------------
+
+## Optional: Python for environmental suitability
+
+Skip this section unless you intend to re-fit the
+environmental-suitability (psi) model.
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+trains an LSTM in TensorFlow/Keras and is the only function in the
+package that touches Python. Everything else - including
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md) -
+reads psi from pre-computed values and never initialises a Python
+interpreter.
+
+``` r
+
+library(MOSAIC)
+
+# Build the conda environment (installs Miniconda if you do not have conda)
+install_dependencies()
+
+# Verify it
+check_python_env()      # interpreter, paths, reticulate binding
+check_dependencies()    # package versions + a capabilities summary
+```
+
+[`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
+ends with a capabilities summary. Simulation and calibration are always
+reported as available because they are pure R; only the suitability line
+depends on what it finds. If this environment is missing or broken, the
+cost is
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+and nothing else.
 
 ------------------------------------------------------------------------
 
@@ -93,14 +133,13 @@ git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
 # Install R package from source (upgrade = "never" avoids prompts)
 devtools::install("~/MOSAIC/MOSAIC-pkg", upgrade = "never")
 
-# Set up Python and paths
+# Set paths
 library(MOSAIC)
-install_dependencies()
 set_root_directory("~/MOSAIC")
 
-# Check Python environment and dependencies
-check_python_env()
-check_dependencies()
+# Only if you will re-fit the suitability model -- see the optional section above
+# install_dependencies()
+# check_dependencies()
 ```
 
 ### Development Workflow
@@ -149,7 +188,9 @@ included with the package.
 
 ## Troubleshooting
 
-**Python issues:**
+**Python issues** (only affects
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md);
+simulation and calibration are pure R):
 
 ``` r
 
@@ -161,8 +202,8 @@ check_dependencies()
 reticulate::py_config()
 
 # Reset if needed
-remove_MOSAIC_python_env()
-install_dependencies()
+remove_python_env()
+install_dependencies(force = TRUE)
 ```
 
 **Path issues (Developer only):**

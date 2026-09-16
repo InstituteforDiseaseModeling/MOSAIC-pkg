@@ -6,6 +6,8 @@ error saying what it was and what to call instead.
 ## Usage
 
 ``` r
+lock_python_env(...)
+
 run_LASER(...)
 
 run_laser(...)

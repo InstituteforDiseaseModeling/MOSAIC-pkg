@@ -572,8 +572,6 @@ Helper and utility functions
   : Attach MOSAIC Python Environment
 - [`detach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/detach_mosaic_env.md)
   : Detach MOSAIC Python Environment
-- [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md)
-  : Lock Python Environment to r-mosaic
 - [`inv_logit()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/inv_logit.md)
   : Inverse Logit (Logistic) Transformation
 - [`logit()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/logit.md)
@@ -969,8 +967,6 @@ Other exported functions and internal helpers
 - [`load_or_install_packages()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/load_or_install_packages.md)
   : Load or Install Required Packages (with GitHub handling for
   mobility, propvacc, and MOSAIC)
-- [`lock_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/lock_python_env.md)
-  : Lock Python Environment to r-mosaic
 - [`log_msg()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/log_msg.md)
   : Simple Logging Function with Timestamps
 - [`logit()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/logit.md)

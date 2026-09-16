@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.77.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.78.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -457,14 +457,16 @@ simulation and calibration are pure R and need no Python)</li>
 <div class="section level2">
 <h2 id="troubleshooting">Troubleshooting<a class="anchor" aria-label="anchor" href="#troubleshooting"></a>
 </h2>
-<p><strong>Python issues:</strong></p>
+<p><strong>Python issues</strong> (only affects
+<code><a href="../reference/est_suitability.html">est_suitability()</a></code>; simulation and calibration are pure
+R):</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Check Python configuration</span></span>
 <span><span class="fu">reticulate</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/reticulate/reference/py_config.html" class="external-link">py_config</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Reset if needed</span></span>
-<span><span class="fu">remove_MOSAIC_python_env</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/install_dependencies.html">install_dependencies</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="../reference/remove_python_env.html">remove_python_env</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/install_dependencies.html">install_dependencies</a></span><span class="op">(</span>force <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">

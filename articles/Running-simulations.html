@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.77.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.78.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -107,7 +107,7 @@ growth patterns typical of cholera epidemics.</p>
 <span></span>
 <span><span class="va">model_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_simulation.html">run_simulation</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Extract time series results (convert Python objects to R matrices)</span></span>
+<span><span class="co"># Extract time series results (locations x time matrices)</span></span>
 <span><span class="va">cases_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_epidemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">reported_cases</span><span class="op">)</span></span>
 <span><span class="va">deaths_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_epidemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">reported_deaths</span><span class="op">)</span></span>
 <span></span>
@@ -158,7 +158,7 @@ patterns with seasonal fluctuations.</p>
 <span></span>
 <span><span class="va">model_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_simulation.html">run_simulation</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Extract time series results (convert Python objects to R matrices)</span></span>
+<span><span class="co"># Extract time series results (locations x time matrices)</span></span>
 <span><span class="va">cases_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_endemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">reported_cases</span><span class="op">)</span></span>
 <span><span class="va">deaths_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_endemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">reported_deaths</span><span class="op">)</span></span>
 <span></span>

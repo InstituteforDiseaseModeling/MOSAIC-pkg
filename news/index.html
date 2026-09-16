@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.77.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.78.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -325,7 +325,7 @@
 <ul><li>
 <strong><code><a href="../reference/check_dependencies.html">check_dependencies()</a></code> validates a TensorFlow environment, not a LASER one.</strong> Its “core” capability category is gone along with the packages that populated it – there is no longer a Python capability whose loss breaks simulation – so it reports one capability, suitability estimation, and says plainly that a broken Python environment costs you <code><a href="../reference/est_suitability.html">est_suitability()</a></code> and not <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code>.</li>
 <li>
-<strong><code><a href="../reference/lock_python_env.html">lock_python_env()</a></code> verifies the environment by importing <code>tensorflow</code></strong> rather than <code>laser.cholera.metapop.model</code>.</li>
+<strong><code><a href="../reference/removed_api.html">lock_python_env()</a></code> verifies the environment by importing <code>tensorflow</code></strong> rather than <code>laser.cholera.metapop.model</code>.</li>
 <li>The <code>psi_manifest.json</code> written by <code><a href="../reference/prefit_rolling_cv_psi.html">prefit_rolling_cv_psi()</a></code> no longer carries a <code>laser_version</code> field. It was write-only provenance – cache hits key on <code>spec_hash</code> – and psi is upstream of the transmission engine, so the engine version never bore on whether a frozen psi CSV was reusable.</li>
 </ul></div>
 <div class="section level4">
@@ -371,7 +371,7 @@
 <h4 id="removed-0-68-0">Removed<a class="anchor" aria-label="anchor" href="#removed-0-68-0"></a></h4>
 <ul><li>
 <code>.mosaic_prepare_config_for_python()</code> and <code>.mosaic_strip_laser_file_handler()</code>. The first wrapped length-1 config fields so <code>reticulate</code> would pass them as Python lists; the second deleted the log file <code>laser-cholera</code> created on import. Neither has anything left to do.</li>
-</ul><p>The <code>laser-cholera</code> dependency itself is still declared – <code><a href="../reference/check_dependencies.html">check_dependencies()</a></code>, <code><a href="../reference/lock_python_env.html">lock_python_env()</a></code>, <code>environment.yml</code>, the run-provenance keys and CI still reference it. Removing those is the next step.</p>
+</ul><p>The <code>laser-cholera</code> dependency itself is still declared – <code><a href="../reference/check_dependencies.html">check_dependencies()</a></code>, <code><a href="../reference/removed_api.html">lock_python_env()</a></code>, <code>environment.yml</code>, the run-provenance keys and CI still reference it. Removing those is the next step.</p>
 </div>
 </div>
 </div>

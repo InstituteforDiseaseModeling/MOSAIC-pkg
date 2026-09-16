@@ -277,18 +277,18 @@ make_simulation_config(
 
 - gamma_1:
 
-  Symptomatic shedding-duration rate `I_sym -> R` (numeric= 0, per day;
-  "severe / symptomatic" branch).
+  Symptomatic shedding-duration rate `I_sym -> R` (numeric \>= 0, per
+  day; "severe / symptomatic" branch).
 
 - gamma_2:
 
-  Asymptomatic shedding-duration rate `I_asym -> R` (numeric= 0, per
+  Asymptomatic shedding-duration rate `I_asym -> R` (numeric \>= 0, per
   day; "mild / asymptomatic" branch).
 
 - epsilon:
 
-  Natural-infection immunity waning rate `R -> S` (numeric= 0, per day).
-  Distinct from vaccine waning (omega_1, omega_2).
+  Natural-infection immunity waning rate `R -> S` (numeric \>= 0, per
+  day). Distinct from vaccine waning (`omega_1`, `omega_2`).
 
 - mu_jt:
 
@@ -329,10 +329,9 @@ make_simulation_config(
 - rho_deaths:
 
   Death detection rate: probability a true cholera death is captured by
-  surveillance (numeric in \[0, 1\] or NULL). Consumed by the engine
-  from laser-cholera v0.13+ (laser-cholera#49) to produce
-  reported_deaths; older engine versions ignore this and use raw
-  simulated counts.
+  surveillance (numeric in \[0, 1\] or NULL). Consumed by the engine to
+  produce reported_deaths (originally laser-cholera#49; the pure-R
+  engine implements the same rule).
 
 - sigma:
 

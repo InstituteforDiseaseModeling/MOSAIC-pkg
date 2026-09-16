@@ -398,7 +398,9 @@ result <- run_MOSAIC(
 
 ## Troubleshooting
 
-**Python issues:**
+**Python issues** (only affects
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md);
+simulation and calibration are pure R):
 
 ``` r
 
@@ -406,8 +408,8 @@ result <- run_MOSAIC(
 reticulate::py_config()
 
 # Reset if needed
-remove_MOSAIC_python_env()
-install_dependencies()
+remove_python_env()
+install_dependencies(force = TRUE)
 ```
 
 ------------------------------------------------------------------------

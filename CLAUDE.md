@@ -156,7 +156,7 @@ mobility.
     │   ├── R/                       # Function files
     │   ├── tests/testthat/          # Unit tests
     │   ├── inst/extdata/            # Default parameters (JSON)
-    │   ├── inst/py/                 # Python environment.yml
+    │   ├── inst/python/             # Python environment.yml (suitability only)
     │   ├── data/                    # R data objects (.rda)
     │   ├── model/                   # transmission model I/O and LAUNCH.R
     │   ├── claude/                  # USE THIS for temporary files
