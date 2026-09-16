@@ -31,3 +31,4 @@ __pycache__$
 ^vignettes/articles/figures$
 ^migrate-laser-r\.md$
 ^plan-review\.md$
+^pipeline-performance-plan\.md$

@@ -1,8 +1,19 @@
-test_that("get_feature_set resolves v7.3 / default and rejects unknown", {
+test_that("get_feature_set resolves v7.3 / v7.4 / default and rejects unknown", {
   v73 <- get_feature_set("v7.3")
   expect_type(v73, "character")
   expect_length(v73, 38L)
   expect_identical(v73, MINFEAT_V7_3_FEATURE_SET)
+
+  v74 <- get_feature_set("v7.4")
+  expect_type(v74, "character")
+  expect_length(v74, 42L)
+  expect_identical(v74, MINFEAT_V7_4_FEATURE_SET)
+  # v7.4 is a strict superset of v7.3 plus exactly the 4 hazard channels
+  expect_true(all(v73 %in% v74))
+  expect_setequal(setdiff(v74, v73),
+                  c("emdat_cyclone_prob", "emdat_cyclone_prob_12w_max",
+                    "drought_prob", "drought_prob_26w_mean"))
+
   expect_null(get_feature_set("default"))
   expect_error(get_feature_set("bogus"))
 })

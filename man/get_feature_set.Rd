@@ -4,16 +4,17 @@
 \alias{get_feature_set}
 \title{Resolve a named feature set to a covariate vector}
 \usage{
-get_feature_set(name = c("v7.3", "default"))
+get_feature_set(name = c("v7.3", "v7.4", "default"))
 }
 \arguments{
-\item{name}{Feature-set name: \code{"v7.3"} (38 screening-informed features) or
+\item{name}{Feature-set name: \code{"v7.3"} (38 screening-informed features),
+\code{"v7.4"} (v7.3 + 4 cyclone/drought hazard channels = 42 features), or
 \code{"default"} (full production candidate set; returns \code{NULL} so the
 caller uses all available covariates).}
 }
 \value{
-Character vector of covariate names for \code{"v7.3"}; \code{NULL} for
-\code{"default"}. Errors on an unknown name.
+Character vector of covariate names for \code{"v7.3"} / \code{"v7.4"};
+\code{NULL} for \code{"default"}. Errors on an unknown name.
 }
 \description{
 Resolve a named feature set to a covariate vector

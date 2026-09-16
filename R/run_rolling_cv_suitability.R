@@ -186,6 +186,7 @@
                                      response_var = "transmission_intensity",
                                      bias_correct = TRUE,
                                      arch_control = NULL,
+                                     source_csv = NULL,
                                      plot_country_diagnostics = FALSE,
                                      verbose = TRUE) {
 
@@ -194,12 +195,20 @@
           stop("est_suitability(architecture='lstm_v2_hierarchical_film') requires the 'keras3' + 'reticulate' Python stack. Run MOSAIC::install_dependencies() and MOSAIC::check_dependencies().",
                call. = FALSE)
 
-     if (length(PATHS$DATA_CHOLERA_WEEKLY) != 1L || !nzchar(PATHS$DATA_CHOLERA_WEEKLY) ||
-         length(PATHS$MODEL_INPUT) != 1L || !nzchar(PATHS$MODEL_INPUT))
-          stop("est_suitability: PATHS$DATA_CHOLERA_WEEKLY and PATHS$MODEL_INPUT must be non-empty paths (use get_paths()).",
+     if (length(PATHS$MODEL_INPUT) != 1L || !nzchar(PATHS$MODEL_INPUT))
+          stop("est_suitability: PATHS$MODEL_INPUT must be a non-empty path (use get_paths()).",
                call. = FALSE)
-     source_csv <- file.path(PATHS$DATA_CHOLERA_WEEKLY,
-                             "cholera_country_weekly_suitability_data.csv")
+     # source_csv override: when NULL (default) fall back to the canonical
+     # panel under PATHS$DATA_CHOLERA_WEEKLY. A caller may instead point psi
+     # fitting at an arbitrary panel (e.g. a v7.4-tagged or per-cutoff
+     # leak-free panel) without renaming files.
+     if (is.null(source_csv)) {
+          if (length(PATHS$DATA_CHOLERA_WEEKLY) != 1L || !nzchar(PATHS$DATA_CHOLERA_WEEKLY))
+               stop("est_suitability: PATHS$DATA_CHOLERA_WEEKLY must be a non-empty path (use get_paths()) when source_csv is not supplied.",
+                    call. = FALSE)
+          source_csv <- file.path(PATHS$DATA_CHOLERA_WEEKLY,
+                                  "cholera_country_weekly_suitability_data.csv")
+     }
      if (!file.exists(source_csv))
           stop("est_suitability: suitability CSV not found at ", source_csv, call. = FALSE)
 

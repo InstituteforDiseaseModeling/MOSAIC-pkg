@@ -12,8 +12,10 @@ MINFEAT_V7_3_FEATURE_SET
 \description{
 Curated covariate sets that \code{\link{est_suitability}} can select via its
 \code{feature_set} argument. \code{"v7.3"} is the screening-informed 38-feature
-set (cross-country sign-consistency; see provenance below); \code{"default"} is
-the full production candidate set (no restriction).
+set (cross-country sign-consistency; see provenance below); \code{"v7.4"} is
+v7.3 PLUS four lean hazard channels (cyclone + drought) from the v7.4
+hazard-covariate redesign; \code{"default"} is the full production candidate
+set (no restriction).
 }
 \details{
 Provenance: \code{MOSAIC-Mozambique/claude/minfeat_v7_iterations.md} and the
