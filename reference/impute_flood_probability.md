@@ -16,6 +16,7 @@ distribution shift the raw 0/1 indicator would otherwise introduce.
 impute_flood_probability(
   d,
   output_col = "emdat_flood_prob",
+  gam_train_stop = NULL,
   diagnostics = TRUE,
   diag_dir = NULL,
   verbose = TRUE
@@ -42,6 +43,18 @@ impute_flood_probability(
 
   Character. Name of the new probability column. Default
   `"emdat_flood_prob"`.
+
+- gam_train_stop:
+
+  Date or character (`"YYYY-MM-DD"`) or `NULL`. When non-`NULL`, the
+  binomial GAM is FIT only on rows with `date <= gam_train_stop`; the
+  fitted model then PREDICTS every row (so rows `<= gam_train_stop` are
+  genuine in-sample and rows `> gam_train_stop` are leak-free
+  extrapolation). This is the leakage-hygiene hook for rolling-origin
+  forecast cross-validation, where a fold's hazard covariates must not
+  be informed by that fold's OOS future. Default `NULL` = current
+  full-data fit (back-compatible). Only the fit-row subset changes;
+  `select=TRUE`/fREML/the formula are identical.
 
 - diagnostics:
 

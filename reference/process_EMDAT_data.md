@@ -1,10 +1,12 @@
-# Process EM-DAT Flood Events Into a Country-Week Panel
+# Process EM-DAT Flood and Tropical-Cyclone Events Into Country-Week Panels
 
 Reads the most recent EM-DAT public-extract xlsx file in
-`PATHS$DATA_EMDAT_RAW`, filters to flood events in MOSAIC AFRO
-countries, expands each event across the ISO-8601 weeks it spans, and
-writes a complete country-week panel of flood-occurrence covariates to
-`PATHS$DATA_EMDAT/floods_country_weekly.csv`.
+`PATHS$DATA_EMDAT_RAW`, filters to (a) flood events and (b)
+tropical-cyclone / storm-surge events in MOSAIC AFRO countries, expands
+each event across the ISO-8601 weeks it spans, and writes two complete
+country-week panels of hazard-occurrence covariates:
+`PATHS$DATA_EMDAT/floods_country_weekly.csv` and
+`PATHS$DATA_EMDAT/cyclones_country_weekly.csv`.
 
 ## Usage
 
@@ -27,10 +29,11 @@ process_EMDAT_data(PATHS)
 
 ## Value
 
-Invisibly returns the path to the written CSV. The CSV contains one row
-per (iso_code, year, week) for every ISO-week between `date_start`
-(default 2000-01-03) and the latest week covered by any flood event in
-the raw extract, restricted to `iso_codes_mosaic`. Columns:
+Invisibly returns a named character vector with the paths to the two
+written CSVs (`flood` and `cyclone`). Each CSV contains one row per
+(iso_code, year, week) for every ISO-week between `date_start` (default
+2000-01-03) and the latest week covered by any event of that hazard in
+the raw extract, restricted to `iso_codes_mosaic`. Flood columns:
 
 - iso_code:
 
@@ -70,7 +73,25 @@ the raw extract, restricted to `iso_codes_mosaic`. Columns:
   `log1p` of summed `Total Deaths` across overlapping events (NAs
   treated as 0).
 
+The cyclone CSV mirrors this schema with `emdat_cyclone_active`,
+`emdat_cyclone_new`, `emdat_cyclone_affected`, and
+`emdat_cyclone_deaths`.
+
 ## Details
+
+The flood label is unchanged (`Disaster Type == "Flood"`). The cyclone
+label is a SEPARATE series built from `Disaster Type == "Storm"`
+restricted to
+`Disaster Subtype %in% c("Tropical cyclone", "Storm surge")` – the
+crisply-dated, water-producing storm events (49 events / ~74 active
+weeks in the 2026-05 extract). Storm (General), Severe weather,
+Lightning/Thunderstorms, Tornado, Hail, and Blizzard/Winter storm are
+deliberately EXCLUDED: they are not reliably water-producing and would
+dilute the cyclone signal. Tropical cyclones were previously silently
+dropped by the flood-only filter, neutering the downstream flood GAM's
+wind smooth; the separate cyclone series feeds a dedicated wind/coastal
+GAM
+([`impute_cyclone_probability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_cyclone_probability.md)).
 
 EM-DAT records carry frequent missing day-of-month and occasional
 missing end-month values. Imputation rules:

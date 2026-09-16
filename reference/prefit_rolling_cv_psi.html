@@ -17,7 +17,7 @@ the calibration backtest reuses the identical frozen psi across reruns."><meta p
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.66.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -117,6 +117,33 @@ per fitted cutoff plus the manifest under <code>dir_cache</code>.</p>
 (no observation after <code>T</code> informs the psi representation); the prediction
 window (<code>pred_date_start</code>/<code>pred_date_stop</code>) is harness-owned and held
 fixed across cutoffs so every frozen CSV spans the same grid.</p>
+<p><strong>Leak-free v7.4 hazard panel (opt-in).</strong> When the RAW
+<code>est_suitability_spec</code> requests <code>feature_set = "v7.4"</code>, the four
+imputed hazard channels (flood/cyclone/drought probabilities) would LEAK if
+their GAMs were fit once on the full series: a fold's covariates would depend
+on outcomes in that fold's OOS future. To prevent this, for each cutoff
+<code>T</code> this function rebuilds a <em>leak-free</em> panel via
+<code><a href="compile_suitability_data.html">compile_suitability_data</a>(gam_train_stop = T, include_flood_prob
+= TRUE)</code> – every hazard GAM is fit only on rows with <code>date &lt;= T</code> and
+then predicts every row – writes it to <code>dir_cache/panel_v74_&lt;T&gt;.csv</code>,
+and fits psi via <code>est_suitability(source_csv = &lt;panel&gt;, feature_set =
+"v7.4", fit_date_stop = T)</code>. The panel is compiled ONCE per cutoff and reused
+across the whole \(\ge\)10-seed psi ensemble (the 3 GAMs are not refit per
+seed). When v7.4 is not requested the DEFAULT path is byte-unchanged: psi is
+fit from the canonical panel with no <code>source_csv</code> and no
+<code>gam_train_stop</code> (v1/v7.3 behaviour).</p>
+<p><strong>Panel-window alignment (v7.4).</strong> The leak-free panel's compile/GAM-fit
+window is deliberately aligned to the psi-LSTM <em>training</em> window
+\([\code{fit_date_start}, T]\), NOT an arbitrary-wide (e.g. 2000-&gt;2027)
+span. Imputed hazard-probability magnitudes dilute when the compile window is
+wider than the LSTM fit window (more all-zero rows shrink the same event
+labels), so the hazard probabilities the LSTM ingests must be computed over
+the same rows the LSTM trains on. The compile <code>date_start</code> is therefore
+resolved from the spec's LSTM <code>fit_date_start</code>
+(<code>est_suitability_spec$arch_control$fit_date_start</code>, default
+<code>"2015-01-01"</code>) and <code>date_stop</code> from the cutoff <code>T</code>. This
+resolved window is folded into the cache spec-hash (below) so a panel built
+over a different window cannot be silently reused.</p>
 <p><strong>Atomic cache (concurrency-safe).</strong> <code><a href="est_suitability.html">est_suitability()</a></code> writes a
 single global <code>MODEL_INPUT/pred_psi_suitability_day.csv</code>; this function
 copies that file into <code>dir_cache/psi_&lt;T&gt;.csv</code> via a tempfile +
@@ -124,9 +151,14 @@ copies that file into <code>dir_cache/psi_&lt;T&gt;.csv</code> via a tempfile +
 <p><strong>Cache key (spec hash).</strong> For each cutoff a <code>spec_hash</code> is computed
 over <code>list(fit_date_stop = T, est_suitability_spec)</code> where the resolved
 spec includes <code>arch_control$n_seeds</code>. The number of pooled seeds is part
-of the key: refitting with a different seed count invalidates the cache.
-<code>run_rolling_cv(psi_cache=)</code> recomputes the same hash from its own
-<code>est_suitability_spec</code> and <strong>hard-errors</strong> on a mismatch.</p>
+of the key: refitting with a different seed count invalidates the cache. When
+the spec requests <code>feature_set = "v7.4"</code>, a <code>v74_panel</code> block
+(<code>leakfree = TRUE</code>, resolved <code>compile_date_start</code>, and
+<code>gam_train_stop = T</code>) is also folded into the hash, so a frozen psi
+built from a v7.3 panel – or from a v7.4 panel compiled over a different
+window – cannot be silently reused. <code>run_rolling_cv(psi_cache=)</code>
+recomputes the same hash from its own <code>est_suitability_spec</code> and
+<strong>hard-errors</strong> on a mismatch.</p>
 <p><strong>Idempotent / resume.</strong> A cutoff is skipped when its <code>psi_&lt;T&gt;.csv</code>
 exists and the manifest already records a matching <code>spec_hash</code> for that
 cutoff; rerunning therefore only fits the missing/changed cutoffs.</p>

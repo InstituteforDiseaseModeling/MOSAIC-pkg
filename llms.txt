@@ -113,6 +113,8 @@ Functions starting with run\_, make\_, or create\_
   : Rolling-Window Forecast Validation for the MOSAIC Transmission Model
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
   : Create a Configuration File for LASER
+- [`make_forecast_cv_table()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_forecast_cv_table.md)
+  : Publication table for rolling-origin forecast cross-validation
 - [`make_lagged_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.md)
   : Create Lagged Versions of Data
 - [`make_mosaic_cluster()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
@@ -301,7 +303,8 @@ Processing and downloading data
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
   and Fit Beta Distributions (2014-2024)
 - [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
-  : Process EM-DAT Flood Events Into a Country-Week Panel
+  : Process EM-DAT Flood and Tropical-Cyclone Events Into Country-Week
+  Panels
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
   : Process GTFCC Vaccination Data for MOSAIC Model
 - [`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)
@@ -378,6 +381,12 @@ Plotting functions
   : Plot Effective Range Function
 - [`plot_epidemic_peaks()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_epidemic_peaks.md)
   : Plot Epidemic Peaks from Detection Results
+- [`plot_forecast_cv_grid()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_forecast_cv_grid.md)
+  : Publication timeseries grid for rolling-origin forecast
+  cross-validation
+- [`plot_forecast_cv_skill()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_forecast_cv_skill.md)
+  : Headline forecast-CV plot: per-country out-of-sample metric across
+  origins
 - [`plot_generation_time()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_generation_time.md)
   : Plot Generation Time as Gamma Distribution for Days and Weeks
 - [`plot_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility.md)
@@ -630,6 +639,9 @@ Other exported functions and internal helpers
 
 - [`MINFEAT_V7_3_FEATURE_SET`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MINFEAT_V7_3_FEATURE_SET.md)
   : Named LSTM covariate feature sets for est_suitability()
+- [`MINFEAT_V7_4_FEATURE_SET`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MINFEAT_V7_4_FEATURE_SET.md)
+  : v7.4 LSTM covariate feature set (v7.3 + lean cyclone/drought hazard
+  channels)
 - [`add_reproductive_numbers()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md)
   : Add Cori R_eff to an existing MOSAIC model output directory
 - [`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md)
@@ -930,6 +942,11 @@ Other exported functions and internal helpers
   : Get WHO Region for ISO Country Codes
 - [`grid_search_best_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/grid_search_best_subset.md)
   : Grid Search for Best Subset with Early Stopping
+- [`impute_cyclone_probability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_cyclone_probability.md)
+  : Impute Country-Week Tropical-Cyclone Probability from EM-DAT and
+  Climate
+- [`impute_drought_probability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_drought_probability.md)
+  : Impute Country-Week Drought Probability from a SPEI-Deficit Label
 - [`impute_flood_probability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_flood_probability.md)
   : Impute Country-Week Flood Probability from EM-DAT and Climate
   Covariates
@@ -968,6 +985,8 @@ Other exported functions and internal helpers
   : Logit Transformation
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
   : Create a Configuration File for LASER
+- [`make_forecast_cv_table()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_forecast_cv_table.md)
+  : Publication table for rolling-origin forecast cross-validation
 - [`make_lagged_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.md)
   : Create Lagged Versions of Data
 - [`make_mosaic_cluster()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
@@ -1028,6 +1047,12 @@ Other exported functions and internal helpers
   : Plot Effective Range Function
 - [`plot_epidemic_peaks()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_epidemic_peaks.md)
   : Plot Epidemic Peaks from Detection Results
+- [`plot_forecast_cv_grid()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_forecast_cv_grid.md)
+  : Publication timeseries grid for rolling-origin forecast
+  cross-validation
+- [`plot_forecast_cv_skill()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_forecast_cv_skill.md)
+  : Headline forecast-CV plot: per-country out-of-sample metric across
+  origins
 - [`plot_generation_time()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_generation_time.md)
   : Plot Generation Time as Gamma Distribution for Days and Weeks
 - [`plot_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility.md)
@@ -1118,7 +1143,8 @@ Other exported functions and internal helpers
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
   and Fit Beta Distributions (2014-2024)
 - [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
-  : Process EM-DAT Flood Events Into a Country-Week Panel
+  : Process EM-DAT Flood and Tropical-Cyclone Events Into Country-Week
+  Panels
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
   : Process GTFCC Vaccination Data for MOSAIC Model
 - [`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)

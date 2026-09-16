@@ -4,8 +4,9 @@ Curated covariate sets that
 [`est_suitability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
 can select via its `feature_set` argument. `"v7.3"` is the
 screening-informed 38-feature set (cross-country sign-consistency; see
-provenance below); `"default"` is the full production candidate set (no
-restriction).
+provenance below); `"v7.4"` is v7.3 PLUS four lean hazard channels
+(cyclone + drought) from the v7.4 hazard-covariate redesign; `"default"`
+is the full production candidate set (no restriction).
 
 ## Usage
 
