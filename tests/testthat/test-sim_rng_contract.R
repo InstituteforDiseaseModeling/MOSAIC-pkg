@@ -101,6 +101,8 @@ test_that("a caller's non-default RNGkind is restored, and does not change resul
 # Parallel reproducibility
 # -----------------------------------------------------------------------------
 
+`%||%` <- function(a, b) if (is.null(a) || is.na(a)) b else a
+
 test_that("PSOCK workers reproduce sequential results seed-for-seed", {
   skip_on_cran()
   skip_if_not_installed("parallel")
@@ -114,8 +116,29 @@ test_that("PSOCK workers reproduce sequential results seed-for-seed", {
   # `skip_if_not_installed()` is the wrong detector here: under load_all the
   # namespace is registered, so requireNamespace() succeeds for a package that
   # is not on disk anywhere. Ask the library paths directly.
-  skip_if(length(find.package("MOSAIC", lib.loc = .libPaths(), quiet = TRUE)) == 0L,
+  #
+  # Presence is NOT sufficient, and checking only presence was a real defect:
+  # the workers load whatever MOSAIC is on `.libPaths()`, which under
+  # `devtools::test()` is the INSTALLED build, not the checkout under test. A
+  # developer with any older MOSAIC installed got a hard failure
+  # ("could not find function \"run_simulation\"") that says nothing about
+  # reproducibility -- precisely the outcome the guard above exists to avoid.
+  # Worse, when the installed build merely *differs* the test silently compares
+  # the checkout's sequential arm against the installed build's parallel arm,
+  # so it can pass or fail for reasons unrelated to PSOCK.
+  #
+  # Gate on the installed version MATCHING the version under test.
+  inst_path <- find.package("MOSAIC", lib.loc = .libPaths(), quiet = TRUE)
+  skip_if(length(inst_path) == 0L,
           "MOSAIC is not installed; PSOCK workers cannot load it")
+  inst_ver <- tryCatch(as.character(utils::packageVersion("MOSAIC", lib.loc = dirname(inst_path[1]))),
+                       error = function(e) NA_character_)
+  here_ver <- as.character(utils::packageVersion("MOSAIC"))
+  skip_if(is.na(inst_ver) || !identical(inst_ver, here_ver),
+          sprintf(paste0("installed MOSAIC (%s) differs from the build under test (%s); ",
+                         "PSOCK workers would run the installed one, so this would ",
+                         "compare two different builds"),
+                  inst_ver %||% "unreadable", here_ver))
 
   seeds <- 1:6
   sequential <- lapply(seeds, function(s) run_once(s)$results$S)
