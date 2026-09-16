@@ -196,11 +196,83 @@
 #' - Seeds don't overlap between simulations
 #'
 #' @noRd
+
+#' Run several simulations and write them as one shard
+#'
+#' Runs \code{sim_ids} one at a time through
+#' \code{.mosaic_run_simulation_worker(write_shard = FALSE)} and writes the
+#' surviving rows as a SINGLE parquet named for the id range it covers.
+#'
+#' Why: a one-row shard at production width is almost all framing. At 1,352
+#' columns it costs ~444 KB on disk for ~8 KB of data, so a 100,000-simulation
+#' run wrote 52.9 GB of shards for 1.03 GB of data, and both the combine and the
+#' resume scan then pay to re-read all of it. Measured at 1,352 columns,
+#' 1,000 simulations: 434 MB and 20.62 s to read back at one row per file,
+#' against 15.2 MB and 0.17 s at 100 rows per file.
+#'
+#' The cost is crash granularity: a worker that dies mid-chunk loses the whole
+#' chunk instead of one simulation, because nothing is on disk until the chunk
+#' finishes. An R-level error in ONE simulation does not -- each is wrapped, so
+#' its siblings still land. Resume re-draws whatever is missing either way.
+#'
+#' @param sim_ids Integer vector of simulation ids for this chunk.
+#' @param dir_cal_samples Directory to write the shard into.
+#' @param io Control \code{io} list, passed to \code{.mosaic_write_parquet()}.
+#' @param ... Passed through to \code{.mosaic_run_simulation_worker()}.
+#' @return Logical vector, one element per element of \code{sim_ids}.
+#' @noRd
+.mosaic_run_simulation_chunk <- function(sim_ids, dir_cal_samples, io, ...) {
+
+  sim_ids <- as.integer(sim_ids)
+  if (!length(sim_ids)) return(logical(0))
+
+  mats <- lapply(sim_ids, function(id) {
+    tryCatch(
+      .mosaic_run_simulation_worker(sim_id = id,
+                                    dir_cal_samples = dir_cal_samples,
+                                    io = io, ...,
+                                    write_shard = FALSE),
+      error = function(e) NULL
+    )
+  })
+
+  ok <- !vapply(mats, is.null, logical(1))
+  if (!any(ok)) return(rep(FALSE, length(sim_ids)))
+
+  shard <- as.data.frame(do.call(rbind, mats[ok]))
+  # A one-id chunk keeps the historical single-simulation name, so a run at the
+  # default shard_batch_size = 1 writes byte-for-byte what it always did and an
+  # existing output directory stays resumable.
+  out <- file.path(
+    dir_cal_samples,
+    if (min(sim_ids) == max(sim_ids)) sprintf("sim_%07d.parquet", sim_ids[1])
+    else sprintf("sim_%07d-%07d.parquet", min(sim_ids), max(sim_ids))
+  )
+  written <- tryCatch({
+    .mosaic_write_parquet(shard, out, io)
+    file.exists(out)
+  }, error = function(e) {
+    # Say why. Without this a malformed `io`, a full disk or a permissions
+    # problem all present as "every simulation in this chunk failed", with no
+    # trace of the real cause anywhere in the run log.
+    warning(sprintf("shard write failed for sims %d-%d: %s",
+                    min(sim_ids), max(sim_ids), conditionMessage(e)),
+            call. = FALSE)
+    FALSE
+  })
+
+  # Nothing is successful unless the shard actually landed: a row that was
+  # computed but not persisted is not a completed simulation, and claiming it
+  # would let the batch tally drift from what resume can see on disk.
+  ok & written
+}
+
 .mosaic_run_simulation_worker <- function(sim_id, n_iterations, priors, config, PATHS,
                                           dir_cal_samples,
                                           dir_cal_simresults = NULL,
                                           param_names_all, param_lookup, sampling_args, io,
-                                          likelihood_settings) {
+                                          likelihood_settings,
+                                          write_shard = TRUE) {
 
   # Pre-allocate result matrix (FIXED: proper pre-allocation)
   n_params <- length(param_names_all)
@@ -225,7 +297,10 @@
     NULL
   })
 
-  if (is.null(params_sim)) return(FALSE)
+  # A failed draw returns the caller's failure sentinel: FALSE when this worker
+  # owns the write, NULL when a chunk wrapper is collecting rows (which then has
+  # nothing to contribute for this sim_id).
+  if (is.null(params_sim)) return(if (write_shard) FALSE else NULL)
 
   # Guardrails: clamp transmission parameters to prevent the engine's ValueError
   # (GitHub #24: p = -np.expm1(-rate) produces p > 1 when rate < 0). Single
@@ -427,9 +502,18 @@
     }
   }
 
-  # Write parameter file
-  output_file <- file.path(dir_cal_samples, sprintf("sim_%07d.parquet", sim_id))
-  .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
+  # Write parameter file.
+  #
+  # write_shard = FALSE hands `result_matrix` back instead, so a caller running
+  # several simulations can write them as ONE parquet. That matters because a
+  # single-row shard at production width is almost entirely framing: 1,352
+  # columns cost ~444 KB on disk for ~8 KB of data, so the 100,000-simulation
+  # run wrote 52.9 GB of shards for 1.03 GB of data (pipeline plan item 6b).
+  # The simulation and scoring above are untouched either way.
+  if (isTRUE(write_shard)) {
+    output_file <- file.path(dir_cal_samples, sprintf("sim_%07d.parquet", sim_id))
+    .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
+  }
 
   # Write raw simulation results for validation (when save_simresults = TRUE)
   if (!is.null(simresults_raw) && !is.null(dir_cal_simresults)) {
@@ -454,6 +538,7 @@
   # generational collector. Removing it costs 44 MB of peak worker RSS
   # (913 -> 957 MB over 30 sims), which does not move the worker-count budget.
   # Measurements: v0.72.0 NEWS entry.
+  if (!isTRUE(write_shard)) return(result_matrix)
   return(file.exists(output_file))
 }
 
@@ -1130,6 +1215,22 @@ run_MOSAIC <- function(config,
           likelihood_settings = likelihood_settings
         )
       }, envir = .GlobalEnv)
+      assign(".run_sim_worker_chunk", function(sim_ids) {
+        MOSAIC:::.mosaic_run_simulation_chunk(
+          sim_ids = sim_ids,
+          n_iterations = n_iterations,
+          priors = priors,
+          config = config,
+          PATHS = PATHS,
+          dir_cal_samples = dirs$cal_samples,
+          dir_cal_simresults = dirs$cal_simresults,
+          param_names_all = param_names_all,
+          param_lookup = param_lookup,
+          sampling_args = sampling_args,
+          io = io_settings,
+          likelihood_settings = likelihood_settings
+        )
+      }, envir = .GlobalEnv)
       NULL
     })
   }
@@ -1218,8 +1319,23 @@ run_MOSAIC <- function(config,
 
       batch_start_time <- Sys.time()
 
-      # Dispatch batch: R parallel or sequential
-      success_indicators <- if (!is.null(cl)) {
+      # Dispatch batch: R parallel or sequential.
+      #
+      # shard_batch_size > 1 changes the UNIT OF WORK from one simulation to a
+      # contiguous run of them, so each task writes one shard holding many rows
+      # instead of many shards holding one (pipeline plan item 6b). Everything
+      # downstream is unaffected: the resume scan reads ids from the `sim`
+      # column and the combine globs sim_*.parquet either way.
+      shard_batch <- .mosaic_resolve_shard_batch(control$io$shard_batch_size)
+
+      success_indicators <- if (!is.null(cl) && shard_batch > 1L) {
+        .mosaic_run_batch(
+          sim_ids = .mosaic_chunk_ids(sim_ids, shard_batch),
+          worker_func = function(sim_ids) .run_sim_worker_chunk(sim_ids),
+          cl = cl,
+          show_progress = control$parallel$progress
+        )
+      } else if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
         .mosaic_run_batch(
           sim_ids = sim_ids,
@@ -1228,8 +1344,30 @@ run_MOSAIC <- function(config,
           show_progress = control$parallel$progress
         )
       } else {
-        # Sequential: define inline (use named args to avoid positional shift)
-        .mosaic_run_batch(
+        # Sequential. shard_batch_size is honoured here too -- a control setting
+        # that silently did nothing on one of the two dispatch paths is the
+        # failure mode of CLAUDE.md lesson #13 -- but only ABOVE 1, so the
+        # default keeps running through the original per-simulation worker
+        # rather than through new code.
+        if (shard_batch > 1L) .mosaic_run_batch(
+          sim_ids = .mosaic_chunk_ids(sim_ids, shard_batch),
+          worker_func = function(ids) .mosaic_run_simulation_chunk(
+            sim_ids            = ids,
+            n_iterations       = n_iterations,
+            priors             = priors,
+            config             = config,
+            PATHS              = PATHS,
+            dir_cal_samples    = dirs$cal_samples,
+            dir_cal_simresults = dirs$cal_simresults,
+            param_names_all    = param_names_all,
+            param_lookup       = param_lookup,
+            sampling_args      = sampling_args,
+            io                 = control$io,
+            likelihood_settings = control$likelihood
+                                 ),
+          cl = cl,
+          show_progress = control$parallel$progress
+        ) else .mosaic_run_batch(
           sim_ids = sim_ids,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
             sim_id             = sim_id,
@@ -1327,8 +1465,18 @@ run_MOSAIC <- function(config,
       # Run batch
       batch_start_time <- Sys.time()
 
-      # Dispatch batch: R parallel or sequential
-      success_indicators <- if (!is.null(cl)) {
+      # Dispatch batch: R parallel or sequential. See the calibration-phase
+      # dispatch above for why shard_batch_size changes the unit of work.
+      shard_batch <- .mosaic_resolve_shard_batch(control$io$shard_batch_size)
+
+      success_indicators <- if (!is.null(cl) && shard_batch > 1L) {
+        .mosaic_run_batch(
+          sim_ids = .mosaic_chunk_ids(sim_ids, shard_batch),
+          worker_func = function(sim_ids) .run_sim_worker_chunk(sim_ids),
+          cl = cl,
+          show_progress = control$parallel$progress
+        )
+      } else if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
         .mosaic_run_batch(
           sim_ids = sim_ids,
@@ -1337,8 +1485,30 @@ run_MOSAIC <- function(config,
           show_progress = control$parallel$progress
         )
       } else {
-        # Sequential: define inline (use named args to avoid positional shift)
-        .mosaic_run_batch(
+        # Sequential. shard_batch_size is honoured here too -- a control setting
+        # that silently did nothing on one of the two dispatch paths is the
+        # failure mode of CLAUDE.md lesson #13 -- but only ABOVE 1, so the
+        # default keeps running through the original per-simulation worker
+        # rather than through new code.
+        if (shard_batch > 1L) .mosaic_run_batch(
+          sim_ids = .mosaic_chunk_ids(sim_ids, shard_batch),
+          worker_func = function(ids) .mosaic_run_simulation_chunk(
+            sim_ids            = ids,
+            n_iterations       = n_iterations,
+            priors             = priors,
+            config             = config,
+            PATHS              = PATHS,
+            dir_cal_samples    = dirs$cal_samples,
+            dir_cal_simresults = dirs$cal_simresults,
+            param_names_all    = param_names_all,
+            param_lookup       = param_lookup,
+            sampling_args      = sampling_args,
+            io                 = control$io,
+            likelihood_settings = control$likelihood
+                                 ),
+          cl = cl,
+          show_progress = control$parallel$progress
+        ) else .mosaic_run_batch(
           sim_ids = sim_ids,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
             sim_id             = sim_id,
@@ -3341,6 +3511,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     compression_level = 3L,
     load_method = "streaming",         # "streaming" (memory-safe) or "rbind" (legacy)
     load_chunk_size = 5000L,           # Files per chunk when loading many small parquets
+    shard_batch_size = 1L,             # Simulations per shard file (1 = one file per simulation)
     save_simresults = FALSE,           # Save raw per-(sim,iter,j,t) output for validation
     verbose_weights = FALSE,           # Print detailed weight calculation diagnostics
     persist_ensemble_arrays = FALSE    # Retain dense cases_array/deaths_array in persisted ensemble RDS files (FALSE => stripped at save; small artifacts)

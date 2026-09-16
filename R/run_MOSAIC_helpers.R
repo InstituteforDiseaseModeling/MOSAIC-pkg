@@ -2126,6 +2126,41 @@
 #' @param show_progress Logical, whether to show progress bar
 #' @return List of success indicators from worker function
 #' @noRd
+#' Resolve control$io$shard_batch_size to a usable positive integer
+#'
+#' Garbage (NULL, NA, a string, a vector, a negative) falls back to 1, i.e. the
+#' historical one-file-per-simulation behaviour, rather than propagating into
+#' the dispatch. A silently-wrong batch size would change how many simulations a
+#' crash costs, so it degrades to the safe value instead of guessing.
+#'
+#' @param x The raw control value.
+#' @return A single positive integer.
+#' @noRd
+.mosaic_resolve_shard_batch <- function(x) {
+  if (is.null(x)) return(1L)
+  n <- suppressWarnings(as.integer(x)[1])
+  if (is.na(n) || n < 1L) return(1L)
+  n
+}
+
+#' Split simulation ids into contiguous chunks
+#'
+#' Contiguous on purpose: the shard is named for the \code{min}-\code{max} range
+#' it covers, which is only informative if the ids in it are consecutive.
+#'
+#' @param sim_ids Integer vector of ids, assumed sorted.
+#' @param size Chunk size (>= 1).
+#' @return A list of integer vectors, each of length \code{size} except possibly
+#'   the last.
+#' @noRd
+.mosaic_chunk_ids <- function(sim_ids, size) {
+  sim_ids <- as.integer(sim_ids)
+  if (!length(sim_ids)) return(list())
+  size <- .mosaic_resolve_shard_batch(size)
+  if (size <= 1L) return(as.list(sim_ids))
+  unname(split(sim_ids, ceiling(seq_along(sim_ids) / size)))
+}
+
 .mosaic_run_batch <- function(sim_ids, worker_func, cl, show_progress) {
   if (is.null(cl)) {
     # Sequential execution

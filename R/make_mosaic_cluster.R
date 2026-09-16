@@ -10,6 +10,11 @@
 #'   \code{parallel::detectCores() - 1}). Clamped down to the number of free R
 #'   connections if that is smaller, with a message -- see Details.
 #' @param type Character. Cluster type: \code{"PSOCK"} (default, all platforms) or
+#' @param require_root Logical. When \code{TRUE} (default) a root directory must
+#'   be set and is propagated to the workers, which simulation workers need to
+#'   resolve \code{get_paths()}. \code{FALSE} allows a cluster without one, for
+#'   workers handed explicit paths -- \code{\link{render_MOSAIC_figures}} runs
+#'   post-hoc on a finished run directory and may have no MOSAIC tree at all.
 #'   \code{"FORK"} (Linux/Mac only, faster startup).
 #'
 #' @return A \code{cluster} object (from \code{parallel::makeCluster}) ready to
@@ -59,7 +64,8 @@
 #' @seealso [run_MOSAIC()] for the calibration workflow that accepts this cluster.
 #' @export
 make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
-                                type = "PSOCK") {
+                                type = "PSOCK",
+                                require_root = TRUE) {
 
   # Validate
   if (!is.numeric(n_cores) || n_cores < 1L) {
@@ -68,8 +74,14 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
   n_cores <- as.integer(n_cores)
   type <- match.arg(type, c("PSOCK", "FORK"))
 
+  # The root directory exists to give workers the same get_paths() view as the
+  # parent. Simulation workers need it; figure-rendering workers do not -- they
+  # are handed explicit paths out of a finished run directory, and
+  # render_MOSAIC_figures() is documented as runnable post-hoc on a machine that
+  # has no MOSAIC tree at all. require_root = FALSE serves that case rather than
+  # forcing a second, near-duplicate cluster builder to exist alongside this one.
   root_dir <- getOption("root_directory")
-  if (is.null(root_dir)) {
+  if (is.null(root_dir) && isTRUE(require_root)) {
     stop("Root directory not set. Call set_root_directory() before make_mosaic_cluster().")
   }
 
@@ -115,8 +127,12 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
     # (.mosaic_set_blas_threads also calls .mosaic_set_all_thread_env)
     MOSAIC:::.mosaic_set_blas_threads(1L)
 
-    set_root_directory(.root_dir_val)
-    PATHS <- get_paths()
+    # NULL only when require_root = FALSE and no root was set (figure rendering);
+    # skip rather than fail, so those workers come up without a MOSAIC tree.
+    if (!is.null(.root_dir_val)) {
+      set_root_directory(.root_dir_val)
+      PATHS <- get_paths()
+    }
 
     NULL
   })

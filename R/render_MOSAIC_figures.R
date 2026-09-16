@@ -250,7 +250,13 @@ render_MOSAIC_figures <- function(dir_output,
     if (length(n_cores) != 1L || is.na(n_cores)) n_cores <- 1L
     n_cores <- min(n_cores, .MOSAIC_DETAIL_MAX_WORKERS)
     if (n_cores > 1L) {
-      cl <- tryCatch(make_mosaic_cluster(n_cores = n_cores, type = "PSOCK"),
+      # require_root = FALSE: rendering workers are handed explicit paths from the
+      # run directory, so demanding set_root_directory() would make this function
+      # unusable exactly where it is meant to shine -- post-hoc, on a machine
+      # with no MOSAIC tree. Without it the cluster silently failed to start and
+      # every render quietly ran serially.
+      cl <- tryCatch(make_mosaic_cluster(n_cores = n_cores, type = "PSOCK",
+                                         require_root = FALSE),
                      error = function(e) {
                        warning("render_MOSAIC_figures: could not start a cluster (",
                                conditionMessage(e), "); rendering serially.",
@@ -817,8 +823,17 @@ render_MOSAIC_figures <- function(dir_output,
           assign("traj",     traj,     envir = .traj_env)
           assign("out_traj", out_traj, envir = .traj_env)
           parallel::clusterExport(traj_cl, c("traj", "out_traj"), envir = .traj_env)
-          .render_map(locs, .mosaic_traj_render_worker, "trajectories plot",
-                      on = traj_cl)
+          # Reparent to globalenv() before dispatch. R serialises a function
+          # that is a NAMESPACE BINDING by reference -- it sends the name, and
+          # the worker looks it up in ITS MOSAIC, which is whatever library()
+          # loaded. An internal added in this version is then "object not found"
+          # on any worker running a different build. Reparenting ships the body
+          # by value instead, and its `plot_model_trajectories` call resolves
+          # through the worker's search path. Same reason .mosaic_run_batch()
+          # does this to its worker_func.
+          traj_worker <- .mosaic_traj_render_worker
+          environment(traj_worker) <- globalenv()
+          .render_map(locs, traj_worker, "trajectories plot", on = traj_cl)
         } else {
           for (loc in locs) {
             tryCatch(

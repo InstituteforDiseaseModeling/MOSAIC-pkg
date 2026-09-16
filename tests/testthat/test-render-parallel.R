@@ -134,6 +134,58 @@ test_that("parallel trajectory rendering writes the same files as serial", {
   expect_identical(parallel, serial)
 })
 
+test_that("the parallel path actually starts workers", {
+  skip_on_cran()
+  skip_if_testthat_parallel()
+
+  # Output equality alone cannot detect this: a cluster that fails to start
+  # falls back to lapply() and produces byte-identical figures. That is exactly
+  # what happened -- make_mosaic_cluster() demanded set_root_directory(), so
+  # every render silently ran serially while the tests stayed green. Assert the
+  # cluster is really built, and that no root directory is needed to build it.
+  withr::local_options(list(root_directory = NULL))
+
+  root <- withr::local_tempdir()
+  dirs <- MOSAIC:::.mosaic_ensure_dir_tree(root, clean_output = FALSE)
+  saveRDS(MOSAIC:::.mosaic_stamp_artifact(make_traj(c("AAA", "BBB", "CCC"))),
+          file.path(dirs$calibration, "trajectories_ensemble.rds"))
+
+  warnings_seen <- character(0)
+  msgs <- character(0)
+  withCallingHandlers(
+    render_MOSAIC_figures(root, which = "trajectories", verbose = TRUE,
+                          n_cores = 2L),
+    warning = function(w) {
+      warnings_seen <<- c(warnings_seen, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    },
+    message = function(m) {
+      msgs <<- c(msgs, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    }
+  )
+
+  expect_false(any(grepl("could not start a cluster", warnings_seen)))
+  expect_true(any(grepl("Rendering figures on 2 workers", msgs)))
+  expect_gt(length(list.files(dirs$res_fig_trajectories)), 0L)
+})
+
+test_that("make_mosaic_cluster can build without a root directory", {
+  skip_on_cran()
+  skip_if_testthat_parallel()
+
+  withr::local_options(list(root_directory = NULL))
+  expect_error(make_mosaic_cluster(n_cores = 2L), "Root directory not set")
+
+  cl <- make_mosaic_cluster(n_cores = 2L, require_root = FALSE)
+  on.exit(try(MOSAIC:::.mosaic_stop_cluster(cl), silent = TRUE), add = TRUE)
+  expect_length(cl, 2L)
+  # workers came up with MOSAIC loaded and distinct processes
+  pids <- unlist(parallel::clusterEvalQ(cl, Sys.getpid()))
+  expect_length(unique(pids), 2L)
+  expect_true(all(unlist(parallel::clusterEvalQ(cl, "MOSAIC" %in% loadedNamespaces()))))
+})
+
 test_that("n_cores is capped and a bad value degrades to serial", {
   skip_on_cran()
   skip_if_testthat_parallel()
