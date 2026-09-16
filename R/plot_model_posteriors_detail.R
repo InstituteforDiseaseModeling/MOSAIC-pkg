@@ -85,13 +85,17 @@ plot_model_posteriors_detail <- function(quantiles_file,
   if (!weight_col %in% names(results_full)) {
     stop(sprintf("weight_col '%s' not found in results.", weight_col))
   }
-  # `results_all <- results_full` used to sit here; nothing read it. Dropping it
-  # lets results_full be released once the two subsets are taken, which halves
-  # peak memory (the full frame is ~1.2 GB at 100,000 x 1,523) -- worth having
-  # when render_MOSAIC_figures() runs several of these in parallel.
+  # results_all is the UNFILTERED sample set and is read below as the prior
+  # series (create_parameter_panels: `prior_samples <- results_all[[param_name]]`).
+  # v0.80.0 deleted it as dead code on the strength of a grep whose pattern did
+  # not actually contain "results_all" -- the line matched only because
+  # `results_full` appears on its right-hand side. R CMD check caught the
+  # dangling reference. Restored, along with the full frame it aliases: an alias
+  # keeps the object alive, so the rm() that went with the deletion freed
+  # nothing anyway.
+  results_all <- results_full  # All simulations
   results_retained <- results_full[results_full$is_retained, ]  # Non-outlier models
   results_best <- results_full[as.logical(results_full[[subset_col]]), ]  # Best subset
-  rm(results_full)
 
   # Load priors
   if (!file.exists(priors_file)) {
