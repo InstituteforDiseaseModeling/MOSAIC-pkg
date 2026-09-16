@@ -48,7 +48,7 @@ sample_parameters(
   - sample_alpha_1: Population mixing within metapops (default TRUE)
 
   - sample_alpha_2: Degree of frequency driven transmission (default
-    TRUE)
+    FALSE; pinned, weakly identified)
 
   - sample_decay_days_short: Minimum V. cholerae survival (default TRUE)
 

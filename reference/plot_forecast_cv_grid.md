@@ -111,8 +111,9 @@ Encodings (locked for the OCV-4 experiment):
   (validation, shown up to `forecast_display_months` past the cutoff).
 
 - Model `pred_median`: solid line + full-opacity CI ribbon for dates
-  \\\le\\ cutoff; dashed line + lighter CI ribbon after the cutoff
-  (clipped to `forecast_display_months`).
+  \\\le\\ cutoff; solid line + lighter CI ribbon after the cutoff
+  (distinguished by the dashed cutoff rule) (clipped to
+  `forecast_display_months`).
 
 - Dashed vertical line at the cutoff; a faint dotted line at
   `cutoff + scored_horizon_months` marks the formally-scored boundary

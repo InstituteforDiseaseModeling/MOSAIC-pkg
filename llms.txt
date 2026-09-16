@@ -305,6 +305,8 @@ Processing and downloading data
   Panels
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
   : Process GTFCC Vaccination Data for MOSAIC Model
+- [`process_IDMC_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_IDMC_data.md)
+  : Process IDMC Internal Displacement Events Into Country-Week Panels
 - [`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)
   : Process Weekly Cholera Data from JHU: Convert to MOSAIC Format
 - [`process_OAG_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_OAG_data.md)
@@ -1135,6 +1137,8 @@ Other exported functions and internal helpers
   Panels
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
   : Process GTFCC Vaccination Data for MOSAIC Model
+- [`process_IDMC_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_IDMC_data.md)
+  : Process IDMC Internal Displacement Events Into Country-Week Panels
 - [`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)
   : Process Weekly Cholera Data from JHU: Convert to MOSAIC Format
 - [`process_OAG_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_OAG_data.md)
