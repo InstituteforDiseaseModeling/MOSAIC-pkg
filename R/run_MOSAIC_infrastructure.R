@@ -395,6 +395,18 @@
 #'   Ensemble bias ratios against both tendencies (see above).
 #' @param io I/O settings for JSON writing
 #' @noRd
+#' Coerce a possibly-absent JSON scalar to a rounded numeric
+#' @param x Value read back from convergence_diagnostics.json.
+#' @return Numeric scalar, or NA_real_ when absent/non-finite.
+#' @keywords internal
+#' @noRd
+.mosaic_diag_num <- function(x) {
+  if (is.null(x)) return(NA_real_)
+  x <- suppressWarnings(as.numeric(x))
+  if (length(x) != 1L || !is.finite(x)) return(NA_real_)
+  round(x, 6)
+}
+
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
                                        r2_cases_ensemble = NA_real_,
                                        r2_deaths_ensemble = NA_real_,
@@ -527,6 +539,23 @@
     ess_target          = ess_stats$target,
     ess_min             = ess_stats$min_ess,
     ess_median          = ess_stats$median_ess,
+    # Exact (untruncated) importance-sampling diagnostics. REPORTED, NOT GATED.
+    # `ess_best` above is computed on delta-AIC-truncated weights, which bound
+    # every weight into a narrow band and therefore keep ESS_B high regardless
+    # of fit. These fields are the honest IS numbers: ess_is_all is the
+    # effective sample size of the raw likelihood weights over all draws, and
+    # khat_all >= 0.7 means IS estimates are unreliable. A large gap between
+    # ess_best and ess_is_all is expected and is the point of reporting both.
+    ess_is_best         = .mosaic_diag_num(diag$importance_sampling$best_subset$ess_is),
+    ess_is_all          = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is),
+    ess_is_all_prop     = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is_prop),
+    khat_all            = .mosaic_diag_num(diag$importance_sampling$all_draws$khat),
+    khat_all_status     = if (!is.null(diag$importance_sampling$all_draws$khat_status)) {
+                              as.character(diag$importance_sampling$all_draws$khat_status)
+                          } else NA_character_,
+    n_positive_ratios_all = if (!is.null(diag$importance_sampling$all_draws$n_positive_ratios)) {
+                              as.integer(diag$importance_sampling$all_draws$n_positive_ratios)
+                          } else NA_integer_,
     # Implied CFR per location (period-weighted from posterior ensemble
     # predictions: sum simulated reported_deaths / sum simulated reported_cases
     # over the calibration window, per ensemble member). Reports median +

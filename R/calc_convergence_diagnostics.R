@@ -149,6 +149,7 @@ calc_convergence_diagnostics <- function(
     # Settings
     ess_method = c("kish", "perplexity"),
     temperature = 1,
+    is_diagnostics = NULL,
     verbose = TRUE
 ) {
 
@@ -443,6 +444,22 @@ calc_convergence_diagnostics <- function(
             convergence_status = overall_status
         )
     )
+
+    # Exact importance-sampling diagnostics: reported, never gated.
+    if (!is.null(is_diagnostics)) {
+        diagnostics$importance_sampling <- list(
+            best_subset = is_diagnostics$best,
+            all_draws   = is_diagnostics$all,
+            description = paste(
+                "Exact (untruncated) importance-sampling diagnostics.",
+                "ESS_IS is the effective sample size of the raw likelihood",
+                "weights; Pareto k-hat >= 0.7 means IS estimates are",
+                "unreliable. These are NOT the gated ESS_B, which is computed",
+                "on truncated weights and is bounded away from its worst case",
+                "by the truncation itself."
+            )
+        )
+    }
 
     # Add parameter ESS metric if available
     if (!is.null(param_ess_results)) {

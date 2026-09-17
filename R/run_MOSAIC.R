@@ -1819,6 +1819,8 @@ run_MOSAIC <- function(config,
     A_final <- NA_real_
     CVw_final <- NA_real_
     gibbs_temperature_final <- 1
+    is_diag_best <- .mosaic_empty_is_diag()
+    is_diag_all  <- .mosaic_empty_is_diag()
 
   } else {
     # Calculate final metrics for best subset
@@ -1832,6 +1834,8 @@ run_MOSAIC <- function(config,
       A_final <- NA_real_
       CVw_final <- NA_real_
       gibbs_temperature_final <- 1
+      is_diag_best <- .mosaic_empty_is_diag()
+      is_diag_all  <- .mosaic_empty_is_diag()
     } else {
       # Use truncated Akaike weights with fixed effective range for best subset
       # Effective AIC = 4 for best subset (5% threshold)
@@ -1839,17 +1843,39 @@ run_MOSAIC <- function(config,
       best_aic_final <- min(aic_final[is.finite(aic_final)])
       delta_aic_final <- aic_final - best_aic_final
 
-      # Truncate to effective range
-      effective_range_best <- 4.0
-      delta_aic_truncated <- pmin(delta_aic_final, effective_range_best)
+      weighting_scheme <- control$targets$best_subset_weighting %||% "saturated"
+      if (!weighting_scheme %in% c("saturated", "tempered")) {
+        stop("control$targets$best_subset_weighting must be 'saturated' or 'tempered'; got '",
+             weighting_scheme, "'.", call. = FALSE)
+      }
 
-      # Calculate standard Akaike weights: w prop.to exp(-0.5 * delta_aic)
-      gibbs_temperature_final <- 0.5  # Standard for Akaike weights
-      weights_final <- calc_model_weights_gibbs(
-        x = delta_aic_truncated,
-        eta = gibbs_temperature_final,
-        verbose = FALSE
-      )
+      if (identical(weighting_scheme, "tempered")) {
+        # Adaptive-eta Gibbs weights: eta is chosen so the worst retained draw
+        # sits at `weight_floor`, rather than saturating delta at a fixed 4.
+        adaptive_final <- .mosaic_calc_adaptive_gibbs_weights(
+          likelihood = top_subset_final$likelihood,
+          verbose    = FALSE
+        )
+        weights_final <- adaptive_final$weights
+        gibbs_temperature_final <- adaptive_final$temperature
+        effective_range_best <- adaptive_final$effective_range
+      } else {
+        # Truncate to effective range. NOTE: this SATURATES delta at 4 rather
+        # than applying the Delta <= 6 cut-off; every draw past 4 receives the
+        # same weight exp(-2), so weight ratios are capped at exp(2) = 7.39 and
+        # the subset posterior is close to uniform regardless of fit. The IS
+        # diagnostics computed below are what reveal that; ESS_B does not.
+        effective_range_best <- 4.0
+        delta_aic_truncated <- pmin(delta_aic_final, effective_range_best)
+
+        # Calculate standard Akaike weights: w prop.to exp(-0.5 * delta_aic)
+        gibbs_temperature_final <- 0.5  # Standard for Akaike weights
+        weights_final <- calc_model_weights_gibbs(
+          x = delta_aic_truncated,
+          eta = gibbs_temperature_final,
+          verbose = FALSE
+        )
+      }
 
       w_tilde_final <- weights_final
       w_final <- weights_final * length(weights_final)
@@ -1860,10 +1886,39 @@ run_MOSAIC <- function(config,
       A_final <- ag_final$A
       CVw_final <- calc_model_cvw(w_final)
 
+      # Exact (untruncated) importance-sampling diagnostics. ESS_B above is
+      # computed on truncated weights and is bounded away from its worst case by
+      # construction; these are the numbers that show whether the importance
+      # sampler actually explored the posterior.
+      is_diag_best <- calc_is_diagnostics(top_subset_final$likelihood,
+                                          method = control$targets$ESS_method)
+      is_diag_all  <- calc_is_diagnostics(results$likelihood,
+                                          method = control$targets$ESS_method)
+
       actual_range_final <- diff(range(delta_aic_final[is.finite(delta_aic_final)]))
-      log_msg("  Subset selection weights (truncated Akaike, effective range = %.1f):", effective_range_best)
+      log_msg("  Subset selection weights (scheme = %s, effective range = %.1f):",
+              weighting_scheme, effective_range_best)
       log_msg("    Actual delta AIC range: %.1f", actual_range_final)
-      log_msg("    Temperature: %.4f (standard Akaike)", gibbs_temperature_final)
+      log_msg("    Temperature: %.4f", gibbs_temperature_final)
+      log_msg("  Exact IS diagnostics (untruncated -- not used for the gate):")
+      log_msg("    ESS_IS (best subset): %s of %d draws",
+              if (is.finite(is_diag_best$ess_is)) sprintf("%.2f", is_diag_best$ess_is) else "NA",
+              is_diag_best$n)
+      log_msg("    ESS_IS (all draws):   %s of %d draws",
+              if (is.finite(is_diag_all$ess_is)) sprintf("%.2f", is_diag_all$ess_is) else "NA",
+              is_diag_all$n)
+      log_msg("    Pareto k-hat (all draws): %s [%s]",
+              if (is.finite(is_diag_all$khat)) sprintf("%.3f", is_diag_all$khat) else "NA",
+              is_diag_all$khat_status)
+      if (is.finite(is_diag_all$ess_is) && is_diag_all$ess_is < 2) {
+        log_warn(paste0("Exact importance-sampling ESS is %.2f: the untruncated ",
+                        "posterior is effectively a point mass. ESS_B = %.1f above ",
+                        "is computed on truncated weights and does NOT contradict ",
+                        "this."), is_diag_all$ess_is, ESS_B_final)
+      } else if (is.finite(is_diag_all$khat) && is_diag_all$khat >= 0.7) {
+        log_warn("Pareto k-hat = %.3f (>= 0.7): importance-sampling estimates are unreliable.",
+                 is_diag_all$khat)
+      }
     }
   }
 
@@ -2007,6 +2062,9 @@ run_MOSAIC <- function(config,
     target_max_best_subset = control$targets$max_best_subset,
     target_ess_param = control$targets$ESS_param,
     target_ess_param_prop = control$targets$ESS_param_prop,
+
+    # Exact IS diagnostics (reported, not gated)
+    is_diagnostics = list(best = is_diag_best, all = is_diag_all),
 
     # Settings
     ess_method = control$targets$ESS_method,
@@ -3490,7 +3548,18 @@ mosaic_control_defaults <- function(calibration = NULL,
 
     # ESS calculation method
     ESS_method = "perplexity",   # "kish" or "perplexity" (ESS formula)
-    ESS_marginal_method = "kde"  # "kde" (default) or "binned" (more conservative, higher sim cost)
+    ESS_marginal_method = "kde",  # "kde" (default) or "binned" (more conservative, higher sim cost)
+
+    # Best-subset weighting scheme.
+    #   "saturated" (default, historical): w propto exp(-0.5 * min(delta, 4)).
+    #     Bounds every weight into [exp(-2), 1], so the subset posterior is
+    #     close to uniform and ESS_B is high by construction. See the
+    #     "Assign best-subset weights" section of MOSAIC-docs/05-model-calibration.Rmd.
+    #   "tempered": adaptive-eta Gibbs weights (.mosaic_calc_adaptive_gibbs_weights),
+    #     which keep the worst retained draw at `weight_floor` instead of a fixed
+    #     delta cut. Preserves more of the likelihood ordering within the subset.
+    # Changing this changes every posterior; it is NOT a cosmetic switch.
+    best_subset_weighting = "saturated"
   )
 
   # Default prediction settings

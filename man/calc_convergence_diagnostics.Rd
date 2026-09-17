@@ -23,6 +23,7 @@ calc_convergence_diagnostics(
   target_ess_param_prop = 0.95,
   ess_method = c("kish", "perplexity"),
   temperature = 1,
+  is_diagnostics = NULL,
   verbose = TRUE
 )
 }
@@ -73,6 +74,13 @@ workflow.}
 
 \item{temperature}{Numeric temperature parameter used for weight scaling
 (default 1, for documentation purposes)}
+
+\item{is_diagnostics}{Optional named list with elements \code{best} and
+\code{all}, each as returned by \code{\link{calc_is_diagnostics}}. These
+are the EXACT (untruncated) importance-sampling diagnostics. They are
+reported alongside \code{ESS_B} but are deliberately NOT part of the
+pass/fail gate, because \code{ESS_B} is computed on truncated weights and
+cannot fall below a floor set by the truncation alone.}
 
 \item{verbose}{Logical indicating whether to print diagnostic messages
 (default TRUE)}
