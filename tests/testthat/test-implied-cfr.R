@@ -5,10 +5,28 @@
 #   .mosaic_add_implied_cfr_columns()  — per-sample algebraic CFR
 #   .mosaic_calc_cfr_period_implied()  — period-weighted CFR from ensemble
 #
-# These guard the v0.13+ schema identity
-#   CFR_observed = mu_jt * rho_deaths * chi / rho
+# These guard the CURRENT schema identity, per 04-model-description.Rmd eq. at
+# :997 (the canonical spec):
+#   CFR_reported = mu_jt * rho_deaths * chi / ((1 - exp(-gamma_1)) * rho)
 # and its per-episode counterpart
 #   CFR_clinical = 1 - exp(-mu_jt / gamma_1)
+#
+# RE-BASELINED v0.88.0. This file previously guarded the pre-#67 form, without
+# the (1 - exp(-gamma_1)) incidence-dwell divisor, and described it as "the
+# v0.13+ schema identity". laser-cholera v0.14.0 (issue #67) made reported_cases
+# a thinning of daily INCIDENCE rather than of symptomatic PREVALENCE, which
+# introduces that divisor -- the spec derives it explicitly, and
+# sample_parameters.R has implemented the matching forward derivation all along.
+# So calc_implied_cfr() and its test encoded a superseded identity while the
+# function that PRODUCES mu encoded the current one, and the test locked the
+# inconsistency in. Measured effect: the surveillance CFR was understated by
+# 1/(1 - exp(-gamma_1)) -- 10.5x at the shipped gamma_1 = 0.1 -- so the dashed
+# regime reference lines on the CFR(t) trajectory panel sat an order of
+# magnitude below the curve they exist to bracket.
+#
+# test-implied-cfr-roundtrip.R is the durable guard: it pins this function to be
+# the exact inverse of sample_parameters.R's derivation, so the two cannot drift
+# apart again regardless of what either believes the constant should be.
 # against silent regressions in numerical guards, domain clamping, and
 # array-orientation contracts.
 # =============================================================================
@@ -31,8 +49,11 @@ test_that("implied CFR matches steady-state identity at known values", {
   expect_true(all(c("cfr_baseline_ETH", "cfr_epidemic_ETH",
                     "cfr_clinical_baseline_ETH", "cfr_clinical_epidemic_ETH") %in% names(out)))
 
-  # Hand-verify first sample: 0.010 * 0.420 * 0.520 / 0.276 = 0.00791...
-  expect_equal(out$cfr_baseline_ETH[1], 0.010 * 0.420 * 0.520 / 0.276, tolerance = 1e-10)
+  # Hand-verify first sample, now including the incidence-dwell divisor:
+  #   0.010 * 0.420 * 0.520 / ((1 - exp(-0.200)) * 0.276)
+  expect_equal(out$cfr_baseline_ETH[1],
+               0.010 * 0.420 * 0.520 / ((1 - exp(-0.200)) * 0.276),
+               tolerance = 1e-10)
 
   # cfr_epidemic with eps=0 should differ from baseline only by chi_epi/chi_end
   ratio <- out$cfr_epidemic_ETH[1] / out$cfr_baseline_ETH[1]
@@ -51,6 +72,7 @@ test_that("implied CFR is clamped to [0, 1] and non-finite becomes NA", {
     rho_deaths                = c(0.42,    0.42,   0.42),
     chi_endemic               = c(0.52,    0.52,   0.52),
     chi_epidemic              = c(0.76,    0.76,   0.76),
+    gamma_1                   = c(0.20,    0.20,   0.20),
     mu_j_baseline_ETH         = c(0.02,    0.02,   0.05),
     mu_j_epidemic_factor_ETH  = c(0.5,     0.5,    50.0)
   )
@@ -89,14 +111,23 @@ test_that("empty iso_codes returns input unchanged", {
   expect_identical(names(out), names(results))
 })
 
-test_that("missing gamma_1 omits clinical CFR but keeps surveillance CFRs", {
+test_that("missing gamma_1 omits BOTH CFR families", {
+  # CONTRACT CHANGE, v0.88.0. Previously the surveillance CFR was emitted
+  # without gamma_1, because the identity it used did not contain gamma_1. The
+  # current identity does, so without it the surveillance CFR cannot be computed
+  # -- and emitting the gamma_1-free value would silently reinstate the
+  # superseded form. Omission is the honest failure: a missing column is
+  # visible, a wrong one is not.
+  #
+  # gamma_1 is a global sampled parameter present in every run_MOSAIC() sample
+  # frame, so this branch is an edge case, not a production path.
   results <- data.frame(
     rho = 0.276, rho_deaths = 0.42, chi_endemic = 0.52, chi_epidemic = 0.76,
     mu_j_baseline_ETH = 0.012, mu_j_epidemic_factor_ETH = 0.5
   )
   out <- MOSAIC:::.mosaic_add_implied_cfr_columns(results, iso_codes = "ETH", verbose = FALSE)
-  expect_true("cfr_baseline_ETH" %in% names(out))
-  expect_true("cfr_epidemic_ETH" %in% names(out))
+  expect_false("cfr_baseline_ETH" %in% names(out))
+  expect_false("cfr_epidemic_ETH" %in% names(out))
   expect_false("cfr_clinical_baseline_ETH" %in% names(out))
 })
 

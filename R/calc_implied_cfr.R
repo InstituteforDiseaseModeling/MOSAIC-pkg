@@ -139,19 +139,50 @@
           }
 
           # Surveillance CFR (deaths-among-reported-cases). Domain [0,1].
+          #
+          # This MUST be the exact inverse of the derivation in
+          # sample_parameters.R, which builds mu from a target CFR as
+          #     mu = CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi)
+          # so recovering the CFR requires dividing by the incidence-dwell
+          # factor (1 - exp(-gamma_1)) as well as the reporting chain:
+          #     CFR = mu * rho_deaths * chi / (rho * (1 - exp(-gamma_1)))
+          #
+          # Until v0.88.0 the dwell factor was missing here. That is the
+          # pre-v0.14.0 identity, from before laser-cholera #67 made
+          # reported_cases an INCIDENCE flow rather than a prevalence one: a
+          # per-day mortality hazard was being divided by a dimensionless
+          # reporting ratio, which is dimensionally wrong. It understated the
+          # surveillance CFR by 1/(1 - exp(-gamma_1)) -- 10.5x at the shipped
+          # gamma_1 = 0.1, 20.5x at 0.05, 2.5x at 0.5 -- so the dashed
+          # endemic/epidemic reference lines on the CFR(t) trajectory panel sat
+          # an order of magnitude below the curve they exist to bracket.
+          # Verified by round trip: derive mu from CFR_target the way
+          # sample_parameters does, invert it here, recover CFR_target exactly.
+          #
+          # gamma_1 is required for this, so when it is absent the surveillance
+          # CFR is omitted rather than emitted wrong. It is a global column and
+          # is present in every run_MOSAIC() sample frame.
+          if (!has_gamma1) {
+               if (verbose && n_locs_done == 0L) {
+                    message("  Note: gamma_1 not in samples \u2014 surveillance CFR omitted ",
+                            "(it is needed to invert the incidence-dwell factor)")
+               }
+          } else {
+          g1_dwell <- 1 - exp(-results$gamma_1)
           results[[paste0("cfr_baseline_", iso)]] <- .clamp01(
                mu_eff_end *
                     results$rho_deaths *
                     results$chi_endemic /
-                    results$rho
+                    (results$rho * g1_dwell)
           )
           results[[paste0("cfr_epidemic_", iso)]] <- .clamp01(
                mu_eff_epi *
                     results$rho_deaths *
                     results$chi_epidemic /
-                    results$rho
+                    (results$rho * g1_dwell)
           )
           n_added <- n_added + 2L
+          }
 
           # Clinical (per-episode) CFR. 1 - exp(-mu_eff / gamma_1); always [0,1].
           if (has_gamma1) {
