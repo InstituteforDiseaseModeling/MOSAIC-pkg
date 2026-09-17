@@ -35,8 +35,12 @@ test_that("alpha_2 = 0 survives a real simulation and is density-dependent", {
 test_that("config validator and engine agree on the alpha_2 boundary", {
   # make_simulation_config()'s documented contract is "[0, 1]". If that ever
   # tightens, this test says so rather than letting the two drift apart again.
-  src <- readLines(test_path("..", "..", "R", "make_simulation_config.R"), warn = FALSE)
+  # Guard BEFORE reading: R/ is absent under an installed R CMD check, and
+  # readLines() throws there rather than falling through to a later skip_if().
+  f <- test_path("..", "..", "R", "make_simulation_config.R")
+  skip_if_not(file.exists(f), "package source R/ not available (installed check)")
+  src <- readLines(f, warn = FALSE)
   line <- grep("alpha_2 must be numeric in", src, value = TRUE)
-  skip_if(length(line) == 0, "validator message not found (installed check)")
+  skip_if(length(line) == 0, "validator message not found")
   expect_match(line[1], "\\[0, 1\\]", fixed = FALSE)
 })
