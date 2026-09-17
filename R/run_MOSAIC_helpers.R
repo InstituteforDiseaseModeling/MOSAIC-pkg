@@ -791,8 +791,31 @@
       # OOM with 40K+ single-row parquets (10-20KB overhead per file expands to several GB).
       n_files <- length(files)
       if (n_files <= chunk_size) {
-        # Small enough to load in one shot
-        arrow::open_dataset(dir_params, format = "parquet") %>%
+        # Small enough to load in one shot.
+        #
+        # unify_schemas = TRUE is REQUIRED, not an optimisation knob. Without it
+        # open_dataset() adopts the schema of the first file it reads and
+        # silently DROPS any column a later file adds -- no error, no warning,
+        # just missing columns in samples.parquet. The chunked branch below
+        # tolerates that case via rbindlist(fill = TRUE); this branch did not,
+        # and the difference was invisible because both return a data frame of
+        # the right row count.
+        #
+        # This branch became production's normal path in v0.87.0: batching 100
+        # simulations per shard turns a 100,000-simulation run into ~1,000
+        # files, well under chunk_size = 5000. Before that flip the same run
+        # wrote 100,000 files and took the chunked branch, so the gap never
+        # mattered in practice. Flipping the default without fixing this would
+        # have routed every production run onto the one path that can lose
+        # columns -- and run_MOSAIC.R deletes the shards straight after
+        # combining, so the loss would be unrecoverable.
+        #
+        # Cost is bounded by construction: this branch only runs at <= 5,000
+        # files, where the schema scan is a small fraction of the read. (The
+        # chunked branch is a different story -- there unify_schemas measured
+        # 2.1x slower on dugong, which is why v0.86.0 reverted it there.)
+        arrow::open_dataset(dir_params, format = "parquet",
+                            unify_schemas = TRUE) %>%
           dplyr::collect() %>%
           as.data.frame()
       } else {

@@ -90,3 +90,60 @@ test_that("the small-file branch is unaffected", {
      expect_identical(nrow(got), 6L)
      expect_setequal(got$sim, 1:6)
 })
+
+
+# =============================================================================
+# The SMALL-FILE branch (n_files <= chunk_size) must union schemas too.
+#
+# Found by the v0.84.0 red-team review (C1, four independent confirmations).
+# It used a bare open_dataset(dir), which adopts the FIRST file's schema and
+# silently drops any column a later file adds -- while the chunked branch
+# tolerated the same case via rbindlist(fill = TRUE). Both return a data frame
+# of the right row count, so the gap was invisible.
+#
+# v0.87.0 made this branch production's normal path: 100 simulations per shard
+# turns a 100,000-simulation run into ~1,000 files, under chunk_size = 5000.
+# run_MOSAIC.R then deletes the shards, so a dropped column is unrecoverable.
+# =============================================================================
+
+test_that("the small-file branch fills mismatched schemas instead of dropping", {
+     skip_if_not_installed("arrow")
+
+     set.seed(21)
+     dfs <- c(
+          lapply(1:4, function(i) data.frame(sim = i, likelihood = rnorm(1), a = runif(1))),
+          lapply(5:8, function(i) data.frame(sim = i, likelihood = rnorm(1), z = runif(1)))
+     )
+     d <- write_shards(file.path(tempdir(), "combine_small_mixed"), dfs)
+     on.exit(unlink(d, recursive = TRUE), add = TRUE)
+
+     # chunk_size > n forces the small-file branch
+     got  <- MOSAIC:::.mosaic_load_and_combine_results(d, chunk_size = 100L, verbose = FALSE)
+     want <- combine_per_file(d)
+
+     expect_identical(nrow(got), 8L)
+     # The column a LATER file adds must survive. Without unify_schemas `z`
+     # vanishes here and the test fails with 3 columns instead of 4.
+     expect_true(all(c("a", "z") %in% names(got)))
+     expect_setequal(names(got), names(want))
+     expect_true(anyNA(got$a)); expect_true(anyNA(got$z))
+     expect_setequal(got$sim, 1:8)
+})
+
+test_that("small-file and chunked branches agree on the same mismatched input", {
+     skip_if_not_installed("arrow")
+
+     set.seed(22)
+     dfs <- c(
+          lapply(1:6,  function(i) data.frame(sim = i, likelihood = rnorm(1), a = runif(1))),
+          lapply(7:12, function(i) data.frame(sim = i, likelihood = rnorm(1), z = runif(1)))
+     )
+     d <- write_shards(file.path(tempdir(), "combine_branch_parity"), dfs)
+     on.exit(unlink(d, recursive = TRUE), add = TRUE)
+
+     small   <- MOSAIC:::.mosaic_load_and_combine_results(d, chunk_size = 100L, verbose = FALSE)
+     chunked <- MOSAIC:::.mosaic_load_and_combine_results(d, chunk_size = 5L,   verbose = FALSE)
+
+     ord <- function(x) { x <- x[order(x$sim), sort(names(x)), drop = FALSE]; rownames(x) <- NULL; x }
+     expect_equal(ord(small), ord(chunked))
+})
