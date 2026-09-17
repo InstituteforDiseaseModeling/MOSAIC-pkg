@@ -235,6 +235,7 @@
           rec_dropout   = 0.10,
           l2            = 5e-4,
           lr            = 0.001,
+          adam_eps      = 1e-7,   # keras optimizer_adam default (torch's is 1e-8)
           batch_size    = 128L,
           epochs        = 200L,
           patience      = 10L,

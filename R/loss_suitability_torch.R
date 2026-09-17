@@ -96,7 +96,10 @@
           n_val <- dim(data_bundle$X_val)[1]
      }
 
-     opt      <- torch::optim_adam(net$parameters, lr = hp$lr %||% 0.001)
+     # keras optimizer_adam defaults to epsilon = 1e-7; torch optim_adam defaults
+     # to 1e-8. Everything else (lr, beta_1, beta_2, amsgrad) already matches.
+     opt      <- torch::optim_adam(net$parameters, lr = hp$lr %||% 0.001,
+                                   eps = hp$adam_eps %||% 1e-7)
      l2_terms <- .psi_torch_l2_terms(net, hp)
 
      # ---- epoch-end evaluation over a held-out set (no grad) ---------------
