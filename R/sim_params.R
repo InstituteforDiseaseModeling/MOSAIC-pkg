@@ -230,15 +230,24 @@ sim_params <- function(config, components = SIM_PIPELINE) {
      }
 
      if ("HumanToHuman" %in% components) {
-          # alpha_1 is scalar-or-per-patch in the engine and must be in (0, 1];
-          # alpha_2 is a plain scalar.
+          # alpha_1 is scalar-or-per-patch in the engine and must be in (0, 1]
+          # -- 0 would collapse the I-dependence to a constant.
           par$alpha_1 <- .sim_patch_vector(config$alpha_1, "alpha_1",
                                            par$npatches, upper = 1)
           if (any(par$alpha_1 <= 0)) {
                stop("`alpha_1` must be in (0, 1]; got a value <= 0 at patch(es) ",
                     .sim_fmt(which(par$alpha_1 <= 0)), ".", call. = FALSE)
           }
-          par$alpha_2 <- .sim_scalar(config$alpha_2, "alpha_2", positive = TRUE)
+          # alpha_2 is a plain scalar in [0, 1]. Unlike alpha_1, ZERO IS VALID:
+          # N^0 = 1 removes the population-size normalisation entirely, which is
+          # density-dependent transmission. Both the config validator
+          # (make_simulation_config: "alpha_2 in [0, 1]") and the model spec
+          # ("determines density (0) vs frequency (1) dependence") call it legal,
+          # so `positive = TRUE` here rejected a documented configuration. It
+          # also left alpha_2 with no upper bound, accepting values > 1 that the
+          # config validator forbids. Bound it on both sides instead.
+          par$alpha_2 <- .sim_scalar(config$alpha_2, "alpha_2",
+                                     lower = 0, upper = 1)
      }
 
      if (any(c("EnvToHuman", "Environmental") %in% components)) {
