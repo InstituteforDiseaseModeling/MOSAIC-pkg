@@ -14,12 +14,25 @@
 # failures hide behind a tryCatch.
 # =============================================================================
 
+# R/globals.R exists only in a source checkout. Under R CMD check the package is
+# installed and the source tree is gone, so the test skips there -- the same way
+# test-psock-connection-clamp.R handles it. R CMD check runs its own codetools
+# pass anyway, which is what caught the results_all regression this guards; this
+# test exists to catch it at devtools::test() time, before a check runs.
+globals_src <- function() {
+  f <- normalizePath(file.path(testthat::test_path(), "..", "..", "R", "globals.R"),
+                     mustWork = FALSE)
+  testthat::skip_if_not(file.exists(f),
+                        "package source R/ not available (installed check)")
+  f
+}
+
 # Names the package declares via utils::globalVariables() in R/globals.R.
 # R CMD check suppresses these; codetools called directly does not, and without
 # them every ggplot2 aes() column (x, y, method, ...) reads as an undefined
 # global. Parsing globals.R is deliberate -- hardcoding a list here would drift.
 declared_globals <- function() {
-  exprs <- parse(file = testthat::test_path("..", "..", "R", "globals.R"))
+  exprs <- parse(file = globals_src())
   out <- character(0)
   for (e in exprs) {
     if (is.call(e)) {
@@ -73,6 +86,7 @@ test_that("plotting functions have no dangling variable references", {
 })
 
 test_that("the specific v0.80.0 regression stays fixed", {
+  # Deparse-based, so this one works installed or from source.
   # `results_all` is the unfiltered sample set, read as the prior series.
   src <- deparse(get("plot_model_posteriors_detail", envir = asNamespace("MOSAIC")))
   reads   <- any(grepl("results_all\\[\\[", src))
