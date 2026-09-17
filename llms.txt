@@ -227,6 +227,8 @@ Calculation functions
 - [`calc_fit_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_fit_diagnostics.md)
   : Fit Diagnostics: Bias, Shape, and Variance for a Single
   Observed/Predicted Series
+- [`calc_is_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_is_diagnostics.md)
+  : Exact importance-sampling diagnostics for BFRS draws
 - [`calc_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   [`calculate_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   : Calculate Kullback-Leibler Divergence Between Two Distributions
@@ -667,6 +669,8 @@ Other exported functions and internal helpers
 - [`calc_fit_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_fit_diagnostics.md)
   : Fit Diagnostics: Bias, Shape, and Variance for a Single
   Observed/Predicted Series
+- [`calc_is_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_is_diagnostics.md)
+  : Exact importance-sampling diagnostics for BFRS draws
 - [`calc_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   [`calculate_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   : Calculate Kullback-Leibler Divergence Between Two Distributions

@@ -27,6 +27,7 @@ calc_convergence_diagnostics(
   target_ess_param_prop = 0.95,
   ess_method = c("kish", "perplexity"),
   temperature = 1,
+  is_diagnostics = NULL,
   verbose = TRUE
 )
 ```
@@ -115,6 +116,16 @@ calc_convergence_diagnostics(
 
   Numeric temperature parameter used for weight scaling (default 1, for
   documentation purposes)
+
+- is_diagnostics:
+
+  Optional named list with elements `best` and `all`, each as returned
+  by
+  [`calc_is_diagnostics`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_is_diagnostics.md).
+  These are the EXACT (untruncated) importance-sampling diagnostics.
+  They are reported alongside `ESS_B` but are deliberately NOT part of
+  the pass/fail gate, because `ESS_B` is computed on truncated weights
+  and cannot fall below a floor set by the truncation alone.
 
 - verbose:
 
