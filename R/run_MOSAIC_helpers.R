@@ -2122,11 +2122,28 @@
 #' @param x The raw control value.
 #' @return A single positive integer.
 #' @noRd
-.mosaic_resolve_shard_batch <- function(x) {
+.mosaic_resolve_shard_batch <- function(x, n_sims = NA_integer_,
+                                       n_workers = NA_integer_,
+                                       tasks_per_worker = 4L) {
   if (is.null(x)) return(1L)
   n <- suppressWarnings(as.integer(x)[1])
   if (is.na(n) || n < 1L) return(1L)
-  n
+
+  # Cap so the batch never starves the cluster. A fixed batch is a fixed number
+  # of TASKS, and at small budgets that can be fewer tasks than workers: 500
+  # simulations at 100 per shard is 5 tasks, so 5 of 24 workers do anything.
+  # Keep at least `tasks_per_worker` tasks each so the load balancer has
+  # something to balance.
+  #
+  # At production scale this never binds: 100,000 simulations across 80 workers
+  # allows 312 per shard, well above the default of 100.
+  ns <- suppressWarnings(as.integer(n_sims)[1])
+  nw <- suppressWarnings(as.integer(n_workers)[1])
+  if (!is.na(ns) && !is.na(nw) && ns > 0L && nw > 0L) {
+    cap <- as.integer(max(1L, floor(ns / (nw * max(1L, tasks_per_worker)))))
+    n <- min(n, cap)
+  }
+  as.integer(max(1L, n))
 }
 
 #' Split simulation ids into contiguous chunks

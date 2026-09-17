@@ -159,10 +159,45 @@ test_that("a chunk reports failure when the shard cannot be written", {
   expect_identical(ok, rep(FALSE, 3L))
 })
 
-test_that("shard_batch_size is a documented io control defaulting to 1", {
+test_that("shard_batch_size is a documented io control defaulting to 100", {
+  # Flipped from 1L in v0.87.0 after measuring, on dugong at production width:
+  # 57x faster to combine, 174.2 -> 1.5 min resume scan at 100k, 34.6x smaller
+  # on disk, and byte-identical samples.parquet.
   ctrl <- mosaic_control_defaults()
   expect_true("shard_batch_size" %in% names(ctrl$io))
-  expect_identical(ctrl$io$shard_batch_size, 1L)
+  expect_identical(ctrl$io$shard_batch_size, 100L)
   expect_identical(mosaic_control_defaults(io = list(shard_batch_size = 250L))$io$shard_batch_size,
                    250L)
+  expect_identical(mosaic_control_defaults(io = list(shard_batch_size = 1L))$io$shard_batch_size,
+                   1L)
+})
+
+test_that("the batch is clamped so it cannot starve the cluster", {
+  f <- MOSAIC:::.mosaic_resolve_shard_batch
+
+  # Without sizing context the requested value stands (back-compatible).
+  expect_identical(f(100L), 100L)
+
+  # A fixed batch is a fixed number of TASKS. 500 simulations at 100 per shard
+  # is 5 tasks, so on 24 workers only 5 would do anything. Clamp to keep at
+  # least tasks_per_worker tasks each.
+  expect_identical(f(100L, n_sims = 500L,   n_workers = 24L), 5L)
+  expect_identical(f(100L, n_sims = 2000L,  n_workers = 24L), 20L)
+
+  # At production scale the clamp never binds: 100k / (80 * 4) = 312 > 100.
+  expect_identical(f(100L, n_sims = 100000L, n_workers = 80L), 100L)
+
+  # Tiny budgets fall all the way back to one simulation per shard.
+  expect_identical(f(100L, n_sims = 50L, n_workers = 24L), 1L)
+
+  # Serial runs are one "worker", so the clamp is generous.
+  expect_identical(f(100L, n_sims = 1000L, n_workers = 1L), 100L)
+
+  # Garbage context is ignored rather than propagated.
+  expect_identical(f(100L, n_sims = NA_integer_, n_workers = 24L), 100L)
+  expect_identical(f(100L, n_sims = 500L, n_workers = NA_integer_), 100L)
+  expect_identical(f(100L, n_sims = 0L, n_workers = 24L), 100L)
+
+  # The clamp can never raise the requested value.
+  expect_identical(f(1L, n_sims = 100000L, n_workers = 80L), 1L)
 })
