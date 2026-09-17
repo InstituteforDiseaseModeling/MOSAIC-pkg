@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.85.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.86.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -178,7 +178,24 @@
 </ol><hr></div>
 <div class="section level2">
 <h2 id="id_2-improvement-1--the-shard-combine-takes-the-slow-branch-precisely-when-it-matters">2. Improvement 1 — the shard combine takes the slow branch precisely when it matters<a class="anchor" aria-label="anchor" href="#id_2-improvement-1--the-shard-combine-takes-the-slow-branch-precisely-when-it-matters"></a></h2>
-<p><strong>Status: IMPLEMENTED (v0.79.0).</strong> Measured on the laptop and in production. <strong>Saving: ~30-35 min per 100,000-simulation run</strong> on the serial master — less than the ~35-42 min projected below, because correctness required <code>unify_schemas = TRUE</code>, which costs about half the available speedup. See “What was implemented”.</p>
+<p><strong>Status: REVERTED (v0.86.0). The change was a 2.1x REGRESSION on production hardware.</strong> Measured on dugong at 20,000 real shards of 1,355 columns:</p>
+<table class="table"><colgroup><col width="27%"><col width="36%"><col width="36%"></colgroup><thead><tr><th>path</th>
+<th align="right">ms/shard</th>
+<th align="right">projected at 100k</th>
+</tr></thead><tbody><tr><td>per-file <code>rbindlist</code> (the original)</td>
+<td align="right"><strong>47.18</strong></td>
+<td align="right"><strong>78.6 min</strong></td>
+</tr><tr><td>
+<code>open_dataset(unify_schemas = TRUE)</code> (v0.79.0)</td>
+<td align="right"><strong>100.48</strong></td>
+<td align="right"><strong>167.5 min</strong></td>
+</tr><tr><td>100 rows/file, <code>open_dataset</code> (item 6b)</td>
+<td align="right"><strong>0.82</strong></td>
+<td align="right"><strong>1.4 min</strong></td>
+</tr></tbody></table><p>The 78.6 min projection agrees with the <strong>82.2 min</strong> this path actually took in the 100,000-simulation production run, which is what makes the comparison trustworthy.</p>
+<p><strong>The laptop measurement inverted on the VM.</strong> On an M1 Max, <code>open_dataset</code> with <code>unify_schemas = TRUE</code> measured 1.57x FASTER than per-file reads; on dugong it is 2.1x slower. The likely cause is that <code>unify_schemas</code> scans every file’s schema footer before reading any data — a second full traversal of 20,000 files that a laptop’s page cache hides and a VM disk does not. And it is not optional: without it <code>open_dataset</code> adopts the first file’s schema and silently DROPS columns a later file adds.</p>
+<p><strong>The lesson is the one this document keeps relearning.</strong> A ratio measured on one machine is not a ratio; it is a ratio on that machine. The projection recorded here — “~30-35 min saved, carrying a laptop-measured 1.57x across to dugong” — was wrong in SIGN, and it shipped. It never reached a production run only because the 100k runs predate v0.79.0.</p>
+<p>The real fix for combine cost is item 6b, which takes the same work to 0.82 ms/shard: <strong>57x faster than the original path and 122x faster than the one that replaced it.</strong> <strong>Saving: ~30-35 min per 100,000-simulation run</strong> on the serial master — less than the ~35-42 min projected below, because correctness required <code>unify_schemas = TRUE</code>, which costs about half the available speedup. See “What was implemented”.</p>
 <p><code>.mosaic_load_and_combine_results()</code> (<code>R/run_MOSAIC_helpers.R:764</code>) branches on file count:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="cf">if</span> (n_files <span class="sc">&lt;=</span> chunk_size)   arrow<span class="sc">::</span><span class="fu">open_dataset</span>(dir) <span class="sc">|&gt;</span> <span class="fu">collect</span>()      <span class="co"># FAST</span></span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="cf">else</span>                         <span class="fu">rbindlist</span>(<span class="fu">lapply</span>(files, read_parquet))      <span class="co"># SLOW</span></span></code></pre></div>
@@ -490,9 +507,8 @@
 <th>caveat</th>
 </tr></thead><tbody><tr><td>1</td>
 <td>chunked <code>open_dataset</code> in the combine</td>
-<td>v0.79.0</td>
-<td>
-<strong>production saving never confirmed</strong> — the ~30-35 min is a projection carrying a laptop-measured 1.57x ratio across to dugong. One 100k run verifies it.</td>
+<td><strong>REVERTED v0.86.0</strong></td>
+<td>measured a <strong>2.1x regression</strong> on dugong (100.48 vs 47.18 ms/shard); the laptop ratio inverted on the VM. Superseded by 6b, which is 57x faster than the original path.</td>
 </tr><tr><td>6a</td>
 <td>parallelise <code><a href="reference/render_MOSAIC_figures.html">render_MOSAIC_figures()</a></code>
 </td>

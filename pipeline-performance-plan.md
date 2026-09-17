@@ -150,11 +150,42 @@ disagree on the number `summary.json` puts at the top.
 
 ## 2. Improvement 1 — the shard combine takes the slow branch precisely when it matters
 
-**Status: IMPLEMENTED (v0.79.0).** Measured on the laptop and in
-production. **Saving: ~30-35 min per 100,000-simulation run** on the
-serial master — less than the ~35-42 min projected below, because
-correctness required `unify_schemas = TRUE`, which costs about half the
-available speedup. See “What was implemented”.
+**Status: REVERTED (v0.86.0). The change was a 2.1x REGRESSION on
+production hardware.** Measured on dugong at 20,000 real shards of 1,355
+columns:
+
+| path | ms/shard | projected at 100k |
+|----|---:|---:|
+| per-file `rbindlist` (the original) | **47.18** | **78.6 min** |
+| `open_dataset(unify_schemas = TRUE)` (v0.79.0) | **100.48** | **167.5 min** |
+| 100 rows/file, `open_dataset` (item 6b) | **0.82** | **1.4 min** |
+
+The 78.6 min projection agrees with the **82.2 min** this path actually
+took in the 100,000-simulation production run, which is what makes the
+comparison trustworthy.
+
+**The laptop measurement inverted on the VM.** On an M1 Max,
+`open_dataset` with `unify_schemas = TRUE` measured 1.57x FASTER than
+per-file reads; on dugong it is 2.1x slower. The likely cause is that
+`unify_schemas` scans every file’s schema footer before reading any data
+— a second full traversal of 20,000 files that a laptop’s page cache
+hides and a VM disk does not. And it is not optional: without it
+`open_dataset` adopts the first file’s schema and silently DROPS columns
+a later file adds.
+
+**The lesson is the one this document keeps relearning.** A ratio
+measured on one machine is not a ratio; it is a ratio on that machine.
+The projection recorded here — “~30-35 min saved, carrying a
+laptop-measured 1.57x across to dugong” — was wrong in SIGN, and it
+shipped. It never reached a production run only because the 100k runs
+predate v0.79.0.
+
+The real fix for combine cost is item 6b, which takes the same work to
+0.82 ms/shard: **57x faster than the original path and 122x faster than
+the one that replaced it.** **Saving: ~30-35 min per 100,000-simulation
+run** on the serial master — less than the ~35-42 min projected below,
+because correctness required `unify_schemas = TRUE`, which costs about
+half the available speedup. See “What was implemented”.
 
 `.mosaic_load_and_combine_results()` (`R/run_MOSAIC_helpers.R:764`)
 branches on file count:
@@ -764,7 +795,7 @@ Status of every item, so this is the only place anyone has to look.
 
 | \# | change | shipped | caveat |
 |----|----|----|----|
-| 1 | chunked `open_dataset` in the combine | v0.79.0 | **production saving never confirmed** — the ~30-35 min is a projection carrying a laptop-measured 1.57x ratio across to dugong. One 100k run verifies it. |
+| 1 | chunked `open_dataset` in the combine | **REVERTED v0.86.0** | measured a **2.1x regression** on dugong (100.48 vs 47.18 ms/shard); the laptop ratio inverted on the VM. Superseded by 6b, which is 57x faster than the original path. |
 | 6a | parallelise [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md) | v0.80.0, fixed v0.81.0 + v0.81.4 | **measured 1.96x, 17.6 min saved** (36.07 -\> 18.43 min, 8 workers). Below the ~30 min projected: only the per-location families are parallel, so Amdahl caps it. |
 | 2 | parallelise `.mosaic_reff_resim_ci()` | v0.85.0 | post-hoc path only; no calibration-time effect. |
 | 4 | `optimize_subset` scoring mask | v0.81.2 | fixed, but not for the reason this document originally gave. See the open question below. |
