@@ -192,12 +192,22 @@ test_that("the seed falls back to config$seed and then to 123", {
 # commit pinned in fixtures/ORACLE.md.
 # -----------------------------------------------------------------------------
 
-test_that("the draw-site registry and the oracle site map describe the same sites", {
+test_that("the oracle site map is exactly the R registry minus the R-only sites", {
+  # The relationship is now CONTAINMENT, not equality: the oracle map describes
+  # laser-cholera 0.16.1 (22 sites) and the R registry may add deliberate
+  # divergences on top, each listed in .SIM_RNG_ONLY_SITES and drawn only in
+  # "rng" mode. Equality held until v0.89.0 added the stochastic sigma split.
   sites <- MOSAIC:::.SIM_DRAW_SITES
   map   <- MOSAIC:::.SIM_ORACLE_SITE_MAP
+  only  <- MOSAIC:::.SIM_RNG_ONLY_SITES
 
-  expect_setequal(sites, unname(map))
-  expect_equal(length(sites), length(map))
+  expect_setequal(setdiff(sites, only), unname(map))
+  expect_equal(length(sites) - length(only), length(map))
+
+  # Every R-only site must genuinely be in the registry, and none may leak into
+  # the oracle map -- that map is a statement about Python.
+  expect_true(all(only %in% sites))
+  expect_false(any(only %in% unname(map)))
 })
 
 test_that("every draw site is unique and well-formed", {
@@ -219,9 +229,24 @@ test_that("every draw site is unique and well-formed", {
     "humantohuman", "envtohuman", "environmental")))
 })
 
-test_that("sigma_split is not a draw site (it is np.round, not a PRNG call)", {
-  # Guards the specific phantom that made the original count look right.
-  expect_false("infectious/sigma_split" %in% MOSAIC:::.SIM_DRAW_SITES)
+test_that("sigma_split is an R-ONLY draw site, never an oracle one", {
+  # HISTORY, because this test has now guarded two different things.
+  #
+  # Originally: a PHANTOM `infectious/sigma_split` was invented in the registry
+  # by mistake (CLAUDE.md lesson #15) when the oracle did np.round, not a draw.
+  # The phantom exactly offset an omitted real site, so "22/22 covered" passed
+  # while five labels were wrong. This test was written to stop that recurring.
+  #
+  # Since v0.89.0 it IS a real draw -- but only in the R engine, in "rng" mode,
+  # because the spec specifies a stochastic split and the oracle's deterministic
+  # round() is wrong in the mean at low counts. The lesson's guard is preserved
+  # in the form that still matters: it must never be claimed as an ORACLE site.
+  expect_true("infectious/sigma_split" %in% MOSAIC:::.SIM_DRAW_SITES)
+  expect_true("infectious/sigma_split" %in% MOSAIC:::.SIM_RNG_ONLY_SITES)
+  expect_false("infectious/sigma_split" %in% unname(MOSAIC:::.SIM_ORACLE_SITE_MAP))
+  expect_false("infectious/sigma_split" %in% names(MOSAIC:::.SIM_ORACLE_SITE_MAP))
+
+  # The real site the phantom once displaced is still present.
   expect_true("infectious/reported_deaths" %in% MOSAIC:::.SIM_DRAW_SITES)
 })
 

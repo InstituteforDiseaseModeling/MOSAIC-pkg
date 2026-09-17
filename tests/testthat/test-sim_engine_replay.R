@@ -122,11 +122,14 @@ test_that("replay rejects a draw the oracle did not make", {
 # -----------------------------------------------------------------------------
 
 test_that("the draw-site registry matches the oracle's site map", {
-  # Both sides enumerate the 22 active draw sites of laser-cholera v0.16.1.
-  # If one gains an entry and the other does not, replay would fail with an
-  # unmapped-site error at run time; failing here says why.
-  expect_setequal(unname(.SIM_ORACLE_SITE_MAP), .SIM_DRAW_SITES)
-  expect_length(.SIM_DRAW_SITES, 22L)
+  # The oracle map enumerates the 22 active draw sites of laser-cholera v0.16.1.
+  # The R registry is that set PLUS any deliberate R-only divergence, each named
+  # in .SIM_RNG_ONLY_SITES and drawn only in "rng" mode (v0.89.0's stochastic
+  # sigma split is the first). If the two drift apart in any OTHER way, replay
+  # fails with an unmapped-site error at run time; failing here says why.
+  replayable <- setdiff(.SIM_DRAW_SITES, MOSAIC:::.SIM_RNG_ONLY_SITES)
+  expect_setequal(unname(.SIM_ORACLE_SITE_MAP), replayable)
+  expect_length(replayable, 22L)
   expect_false(anyDuplicated(.SIM_DRAW_SITES) > 0L)
 })
 
@@ -141,7 +144,12 @@ test_that("a run reports which draw sites it exercised", {
 
   cov <- attr(res, "sim_coverage")
   expect_s3_class(cov, "data.frame")
-  expect_identical(nrow(cov), 22L)
+  # Coverage reports every registered site, including the R-only one, which is
+  # structurally 0 under replay because replay uses the oracle's deterministic
+  # split. That zero is the contract, not a gap -- see the assertion below.
+  expect_identical(nrow(cov), length(MOSAIC:::.SIM_DRAW_SITES))
+  expect_identical(
+    cov$n_calls[cov$site == "infectious/sigma_split"], 0L)
   # A short run records calls, not sites: only the components in play fire.
   # The point of reporting coverage is that A-2 can gate on 22/22 rather than
   # on a green short run, which would hide untested conditional branches.
@@ -293,11 +301,19 @@ test_that("Tier B: the full ported pipeline replays the oracle draw-for-draw (40
   expect_equal(r$fx$meta$npatches, 40L)
   expect_equal(length(r$fx$calls$site), 1315L)
 
-  # All 22 draw sites exercised. A site with no calls is untested code wearing a
-  # passing test, so this is asserted rather than assumed.
+  # All 22 REPLAYABLE draw sites exercised. A site with no calls is untested
+  # code wearing a passing test, so this is asserted rather than assumed.
+  #
+  # The R-only sites are excluded by construction: under replay they are not
+  # drawn at all, because drawing them would consume a variate the fixture has
+  # no record of and desynchronise everything after it. They are covered
+  # distributionally by test-sigma-split.R instead -- CLAUDE.md lesson #18(v)
+  # says a parity harness only covers the modes it exercises, and this is the
+  # mode it cannot.
+  replayable <- setdiff(MOSAIC:::.SIM_DRAW_SITES, MOSAIC:::.SIM_RNG_ONLY_SITES)
   cov <- attr(r$out, "sim_coverage")
-  expect_equal(sum(cov$n_calls > 0L), length(MOSAIC:::.SIM_DRAW_SITES))
-  expect_setequal(cov$site[cov$n_calls > 0L], MOSAIC:::.SIM_DRAW_SITES)
+  expect_equal(sum(cov$n_calls > 0L), length(replayable))
+  expect_setequal(cov$site[cov$n_calls > 0L], replayable)
 })
 
 test_that("Tier B: all 28 result channels match, integer channels bit-identically (40 patches)", {

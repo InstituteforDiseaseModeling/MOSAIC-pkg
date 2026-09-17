@@ -230,10 +230,40 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
      progressing <- .sim_binom(ctl, "infectious/progression", e_next, par$iota_prob)
      rn$E <- e_next - progressing
 
-     # The sigma split is deterministic rounding, NOT a draw. `np.round` and R's
-     # `round()` are both round-half-to-even, so they agree; `as.integer()`
-     # alone would truncate and bias the split downward.
-     new_sym  <- as.integer(round(par$sigma * progressing))
+     # The symptomatic split.
+     #
+     # THE SPEC (04-model-description.Rmd, "Table of stochastic transitions")
+     # specifies a stochastic split: each progressing individual is
+     # independently symptomatic with probability sigma. The ORACLE
+     # (laser-cholera 0.16.1, infectious.py) instead does a deterministic
+     # `np.round(sigma * progressing)`, and the R port reproduced that
+     # faithfully -- so both engines diverged from the spec in the same way.
+     #
+     # The deterministic form is wrong in the MEAN, not just the variance,
+     # because round() is not linear at small counts: round(sigma * n) = 0 for
+     # every n <= 2 at sigma = 0.2. Measured on production configs, 15.4% of
+     # patch-days with E >= 1 yield zero symptomatic, and GNB/COG/NAM lose the
+     # symptomatic arm on 28-41% of days. At low incidence -- exactly where
+     # outbreak onset is decided -- the split systematically suppresses the
+     # symptomatic arm, and the symptomatic arm is what surveillance observes.
+     #
+     # MODE-DEPENDENT, DELIBERATELY. In "replay" mode the deterministic form is
+     # retained, because replay exists to validate the port draw-for-draw
+     # against the oracle and the oracle IS the deterministic form. Drawing here
+     # would consume a variate Python never drew, desynchronising every
+     # subsequent draw and destroying the parity harness for all 22 other sites.
+     # Replay answers "did we port Python correctly?"; for that question,
+     # reproducing Python is correct. Production ("rng") answers "does the model
+     # implement the spec?", and there the binomial is correct.
+     #
+     # The cost of this split is that replay no longer covers the rng-mode form
+     # -- CLAUDE.md lesson #18(v) exactly. test-sigma-split.R covers it
+     # distributionally instead.
+     if (isTRUE(ctl$mode == "replay")) {
+          new_sym <- as.integer(round(par$sigma * progressing))
+     } else {
+          new_sym <- .sim_binom(ctl, "infectious/sigma_split", progressing, par$sigma)
+     }
      new_asym <- progressing - new_sym
      is_next <- is_next + new_sym
      ia_next <- ia_next + new_asym
@@ -413,8 +443,50 @@ sim_phase_env_to_human <- function(state, par, ctl, tick) {
 
      w <- rh$W
 
-     # Psi = beta_jt_env * (1 - theta_j) * W / (kappa + W)
-     psi <- par$beta_jt_env[here, ] * ((1 - par$theta_j) * w) / (par$kappa + w)
+     # Psi = beta_jt_env * (1 - theta_j) * D / (kappa + D), where D is the
+     # PER-CAPITA reservoir W/N -- not the patch total W.
+     #
+     # WHY (v0.89.0). The reservoir update accumulates ABSOLUTE cells summed
+     # over everyone shedding, so W is extensive: it scales with the number of
+     # infectious people and, through them, with patch population. kappa is a
+     # CONCENTRATION -- 04-model-description.Rmd defines it as "the V. cholerae
+     # concentration at which the per-contact probability of infection is 50%"
+     # and its prior is fitted to volunteer dose-response studies reporting
+     # CFU concentrations. Comparing an extensive stock against an intensive
+     # constant is dimensionally incoherent, and it pins the dose-response at 1.
+     #
+     # The spec flags this itself, in the shedding section: "the W-vs-kappa
+     # scale matching is an open methodological question: at very high
+     # simulated W, the dose-response W/(kappa + W) saturates near unity and the
+     # environmental force of infection becomes weakly identifying for kappa."
+     # Measured, it is worse than "weakly identifying at very high W": with the
+     # shipped zeta_1 a SINGLE symptomatic person puts W/(kappa+W) at 0.9994,
+     # 95.7% of patch-days exceed 0.99, and across all nine corner combinations
+     # of the joint kappa x zeta_1 prior the response lies in [0.986, 1.000].
+     # No draw anywhere in the prior escapes saturation, so kappa, zeta_1,
+     # zeta_2, zeta_ratio and the four decay parameters are flat directions --
+     # their posteriors return their priors.
+     #
+     # Dividing by N restores density dependence and puts kappa on a per-capita
+     # scale where it identifies something: the symptomatic prevalence at which
+     # environmental transmission half-saturates. At the shipped kappa = 1e6
+     # that is ~0.3% symptomatic prevalence -- linear at low prevalence,
+     # saturating during large outbreaks, which is what a dose-response should
+     # do. It also brings the realised human share near onset to ~25%, against
+     # the p_beta prior's 34.7%, WITHOUT touching p_beta or the mobility priors.
+     #
+     # HONEST LIMIT: W/N is cells per capita, not cells per mL, so this does not
+     # literally make W a concentration. The residual per-capita-to-per-volume
+     # conversion stays absorbed into zeta, exactly as the spec's shedding
+     # section describes ("the two specifications differ only by whether the
+     # daily stool-volume integral is absorbed into zeta_k").
+     #
+     # REPLAY keeps the oracle's raw-W form: replay validates the port against
+     # laser-cholera draw-for-draw, and the oracle uses raw W. See
+     # .SIM_RNG_ONLY_CORRECTIONS in sim_rng.R for the full list of deliberate
+     # rng-mode divergences and what replay therefore no longer covers.
+     dose <- if (isTRUE(ctl$mode == "replay")) w else w / pmax(rh$N, 1)
+     psi <- par$beta_jt_env[here, ] * ((1 - par$theta_j) * dose) / (par$kappa + dose)
      rn$Psi <- psi
 
      local_frac <- par$local_frac      # float32-precision `1 - tau_i`

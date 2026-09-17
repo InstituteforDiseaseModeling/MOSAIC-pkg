@@ -35,6 +35,11 @@ NULL
      "infectious/asym_non_disease_deaths", # infectious.py:231
      "infectious/asym_recovery",           # infectious.py:239
      "infectious/progression",             # infectious.py:249
+     # NOT an oracle site. laser-cholera splits E->I deterministically with
+     # np.round(sigma * progressing); the spec specifies a stochastic split and
+     # v0.89.0 implements it, so this variate exists in "rng" mode only. Replay
+     # keeps the oracle's deterministic form -- see sim_components.R.
+     "infectious/sigma_split",             # (R-only, rng mode)
      "infectious/reported_cases",          # infectious.py:267  (conditional)
      "vaccinated/v1_non_disease_deaths",   # vaccinated.py:157
      "vaccinated/v2_non_disease_deaths",   # vaccinated.py:163
@@ -46,6 +51,56 @@ NULL
      "environmental/shedding_sym",         # environmental.py:139
      "environmental/shedding_asym"         # environmental.py:143
 )
+
+#' Draw sites that exist in the R engine but NOT in the oracle
+#'
+#' The R engine is a port of laser-cholera 0.16.1 and reproduces its PRNG calls
+#' draw-for-draw, which is what makes the Tier B replay fixtures a valid parity
+#' harness. Any site listed here is a DELIBERATE divergence: a variate the R
+#' engine draws in \code{"rng"} mode that Python never drew.
+#'
+#' Such a site must be drawn ONLY in \code{"rng"} mode. Drawing it under
+#' \code{"replay"} would consume a variate the fixture has no record of and
+#' desynchronise every subsequent draw, destroying parity for the other 22 sites.
+#'
+#' \code{infectious/sigma_split} is the first and only entry (v0.89.0): the spec
+#' specifies a stochastic symptomatic split and the oracle does a deterministic
+#' \code{np.round}, which is wrong in the mean at low counts. See
+#' \code{sim_components.R} for the full rationale.
+#'
+#' NOTE for anyone extending this: CLAUDE.md lesson #15 records that a PHANTOM
+#' \code{infectious/sigma_split} was once invented in this registry by mistake,
+#' when it was not a PRNG call anywhere. It is a real draw now, but only on the
+#' R side -- it must never appear in \code{.SIM_ORACLE_SITE_MAP}, and a test
+#' asserts exactly that.
+#' @keywords internal
+.SIM_RNG_ONLY_SITES <- c("infectious/sigma_split")
+
+#' Spec corrections applied in "rng" mode but not in "replay"
+#'
+#' The single place that records where the production engine deliberately
+#' departs from laser-cholera 0.16.1, and therefore exactly what the Tier B
+#' replay fixtures no longer certify about production.
+#'
+#' Replay exists to answer "did we port Python correctly?", so it reproduces the
+#' oracle including its defects. Production answers "does the engine implement
+#' the model?", and where the spec and the oracle disagree, production follows
+#' the spec. Every entry here needs its own non-replay test, because the parity
+#' harness structurally cannot cover it -- CLAUDE.md lesson #18(v).
+#'
+#' \describe{
+#'   \item{infectious/sigma_split}{v0.89.0. The oracle splits E->I with
+#'     \code{np.round(sigma * progressing)}; the spec's stochastic-transitions
+#'     table specifies a binomial. round() is not linear, so the deterministic
+#'     form is wrong in the MEAN at low counts (zero symptomatic for every
+#'     progression <= 2 at sigma = 0.2). Covered by test-sigma-split.R.}
+#'   \item{envtohuman/dose_percapita}{v0.89.0. The oracle's dose-response is
+#'     \code{W/(kappa + W)} with W an absolute cell count; kappa is a
+#'     concentration. Production divides by N. Covered by
+#'     test-env-dose-response.R.}
+#' }
+#' @keywords internal
+.SIM_RNG_ONLY_CORRECTIONS <- c("infectious/sigma_split", "envtohuman/dose_percapita")
 
 #' Create a draw controller for one simulation
 #'

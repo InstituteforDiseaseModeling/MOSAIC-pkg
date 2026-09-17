@@ -3380,7 +3380,7 @@ mosaic_control_defaults <- function(calibration = NULL,
 
     # Reporting/observation
     sample_sigma = TRUE,             # Proportion symptomatic
-    sample_kappa = TRUE,             # Overdispersion parameter
+    sample_kappa                  = FALSE,             # Overdispersion parameter
     sample_chi_endemic = TRUE,       # PPV among suspected cases (endemic)
     sample_chi_epidemic = TRUE,      # PPV among suspected cases (epidemic)
     sample_rho_deaths = TRUE,        # Death detection rate (laser-cholera#49)
