@@ -1,11 +1,20 @@
-# Regression tests for .mosaic_load_and_combine_results()'s chunked fast path.
+# Regression tests for .mosaic_load_and_combine_results()'s chunked branch.
 #
-# The >chunk_size branch reads each chunk with arrow::open_dataset() on the file
-# vector instead of one read_parquet() per file. open_dataset() takes the FIRST
-# file's schema, so shards that disagree on columns must fall back to the
-# per-file rbindlist(fill = TRUE) path that tolerated them. These tests pin both
-# halves: the fast path must agree with the per-file path exactly, and the
-# fallback must still fill.
+# v0.79.0 read each chunk with arrow::open_dataset(unify_schemas = TRUE);
+# v0.86.0 reverted that after measuring it 2.1x SLOWER on dugong (100.48 vs
+# 47.18 ms/shard at 1,355 columns) where a laptop had shown it 1.57x faster.
+#
+# These tests survive the revert unchanged because what they pin is the
+# CONTRACT, not the implementation: whatever the branch does, it must agree with
+# a plain per-file rbindlist(fill = TRUE) on row count, column set, row order
+# and values -- including when shards disagree on columns. That contract is what
+# makes the implementation safe to swap again.
+#
+# If anyone re-introduces open_dataset here, note that unify_schemas = TRUE is
+# NOT optional: without it open_dataset adopts the FIRST file's schema and
+# silently DROPS columns a later file adds. The mismatched-schema test below is
+# what catches that, and it is also the reason the fast path was slow -- the
+# schema scan is a second full traversal of every file.
 
 write_shards <- function(dir, dfs) {
      dir.create(dir, recursive = TRUE, showWarnings = FALSE)

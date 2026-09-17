@@ -796,59 +796,45 @@
           dplyr::collect() %>%
           as.data.frame()
       } else {
-        # Chunked approach: bound the working set by reading `chunk_size` files at
-        # a time. Each chunk goes through arrow::open_dataset() on the FILE VECTOR
-        # rather than one read_parquet() per file, so arrow assembles the chunk in
-        # its own C++ layer instead of returning 5,000 intermediate data.frames to
-        # R. Measured at the production column count (1,352 cols, 1,000 single-row
-        # shards, min of 3 on an M1 Max):
+        # Chunked approach: bound the working set by reading `chunk_size` files
+        # at a time and rbindlist each chunk.
         #
-        #   per-file rbindlist(fill = TRUE)      21.47 s   1.00x  (what this replaced)
-        #   open_dataset(), default schema        7.81 s   2.75x  -- WRONG, see below
-        #   open_dataset(unify_schemas = TRUE)   13.68 s   1.57x  -- what we use
+        # v0.79.0 replaced the per-file read here with
+        # arrow::open_dataset(chunk_files, unify_schemas = TRUE) on the strength
+        # of a LAPTOP measurement (1.57x faster at 1,352 columns). Measured on
+        # dugong -- the hardware production actually runs on -- it is 2.1x
+        # SLOWER, so v0.86.0 reverted it. At 20,000 real shards of 1,355 columns:
         #
-        # The default is not merely faster, it is silently incorrect here. Given a
-        # file vector, open_dataset() adopts the FIRST file's schema and does not
-        # raise when a later file disagrees: it drops that file's extra columns and
-        # returns NA. A shard set where some shards carry a column others lack
-        # therefore comes back missing data with no error to catch -- which is why
-        # this cannot be guarded with tryCatch. `unify_schemas = TRUE` reads every
-        # shard's schema and takes their union, reproducing exactly what
-        # rbindlist(fill = TRUE) did. Half the available speedup buys that, and it
-        # is not optional: test-combine-shards.R pins the behaviour.
+        #   per-file rbindlist                47.18 ms/shard   ->  78.6 min at 100k
+        #   open_dataset(unify_schemas=TRUE) 100.48 ms/shard   -> 167.5 min at 100k
         #
-        # The tryCatch below is for arrow failing outright on a chunk (a torn or
-        # unreadable shard), not for schema drift, which is handled above.
+        # The 78.6 min projection agrees with the 82.2 min this path actually
+        # took in the 100,000-simulation production run, which is what makes the
+        # comparison trustworthy. `unify_schemas = TRUE` is the likely cost: it
+        # scans every file's schema footer before reading any data, a second full
+        # traversal that a laptop's page cache hides and a VM disk does not. It
+        # is also not optional -- without it open_dataset silently DROPS columns
+        # a later file adds, which is why the fast path cannot simply skip it.
+        #
+        # Do not re-introduce this without measuring on the target hardware. The
+        # real fix for combine cost is fewer, fatter shards
+        # (control$io$shard_batch_size), which takes the same work to 0.82
+        # ms/shard -- 57x faster than this path and 122x faster than the
+        # open_dataset one.
         n_chunks <- ceiling(n_files / chunk_size)
         if (verbose) log_msg("Loading in %d chunks of up to %d files", n_chunks, chunk_size)
         chunk_list <- vector("list", n_chunks)
-        n_fallback <- 0L
         for (ci in seq_len(n_chunks)) {
           idx_start <- (ci - 1L) * chunk_size + 1L
           idx_end <- min(ci * chunk_size, n_files)
           chunk_files <- files[idx_start:idx_end]
-          chunk_list[[ci]] <- tryCatch(
-            data.table::as.data.table(
-              dplyr::collect(
-                arrow::open_dataset(chunk_files, format = "parquet",
-                                    unify_schemas = TRUE)
-              )
-            ),
-            error = function(e) {
-              n_fallback <<- n_fallback + 1L
-              data.table::rbindlist(
-                lapply(chunk_files, arrow::read_parquet),
-                fill = TRUE
-              )
-            }
+          chunk_list[[ci]] <- data.table::rbindlist(
+            lapply(chunk_files, arrow::read_parquet),
+            fill = TRUE
           )
           if (verbose && ci %% 5 == 0) {
             log_msg("  Loaded chunk %d/%d (%d files)", ci, n_chunks, idx_end)
           }
-        }
-        if (n_fallback > 0L) {
-          log_msg("  %d/%d chunk(s) could not be read as a dataset; read per-file instead",
-                  n_fallback, n_chunks)
         }
         as.data.frame(data.table::rbindlist(chunk_list, fill = TRUE))
       }
