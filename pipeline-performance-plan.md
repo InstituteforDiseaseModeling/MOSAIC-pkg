@@ -707,7 +707,7 @@ be measured at the call site with a 10^5-iteration microbenchmark instead.
 
 ---
 
-## 10. Outstanding (as of v0.81.2)
+## 10. Outstanding (as of v0.87.0)
 
 Status of every item, so this is the only place anyone has to look.
 
@@ -722,11 +722,13 @@ Status of every item, so this is the only place anyone has to look.
 | 5 | guard the ensemble config broadcast | v0.84.0 | measurement corrected two wrong numbers in the original section; chunking the dispatch deliberately not done. |
 | 6b | shard batching, **on by default** | v0.80.1, v0.81.0, **v0.87.0** | **57x combine, 116x resume-scan, 34.6x disk**; output byte-identical; interrupt-and-resume verified. |
 
-### Not started
+### Closed without doing
 
-| # | change | why it still matters | effort |
-|---|---|---|---|
-| 3 | measure per-worker shard directories | **Now moot, and can be closed.** It asked whether contention from ~70 file creations/sec into one directory hurt parallel efficiency. With 6b on by default that rate falls ~100x (one file per 100 simulations), so the contention it was written to investigate no longer exists at a scale worth measuring. | closed |
+| # | change | why |
+|---|---|---|
+| 3 | measure per-worker shard directories | It asked whether contention from ~70 file creations/sec into one directory hurt parallel efficiency. With 6b on by default that rate falls ~100x (one file per 100 simulations), so the contention it was written to investigate no longer exists at a scale worth measuring. |
+
+**Every numbered item in this document is now either shipped or closed.**
 
 ### Open question, downgraded
 
@@ -742,7 +744,30 @@ evaluates ~34 candidates to separate options differing by 4% on its own objectiv
 `optimize_ensemble_subset()` already returns a `stability_flag` for "score profile was
 flat" that nothing consumes.
 
-### Recommended next
+### What is left
 
-**Item 5**, then confirm **1** and **6a** with one production run each, then validate
-**6b** and flip its default. Items 2 and 3 are the smallest and can wait.
+Nothing in the numbered list. Two things are worth doing when convenient, neither
+blocking:
+
+1. **A single 100k production run to bank the end-to-end number.** Everything here was
+   measured component-wise, and the components are trustworthy (the combine projection
+   agreed with production to within 5%). What has not been measured is the whole
+   pipeline with 6a and 6b both on. Expected shape, against the 260-minute pr123
+   baseline: simulation unchanged at ~97 min, combine 95.8 -> ~1.5 min, rendering
+   35.9 -> ~18 min. That is a run worth doing for the record, not for a decision.
+2. **The flat `optimize_subset` objective** (above) — a compute nit, not a correctness
+   one. `stability_flag` already exists and nothing consumes it.
+
+### What this round actually cost and returned
+
+Six items shipped. Two of them were WRONG when first measured on production hardware,
+and benchmarking is what caught both:
+
+* **Item 1 was a 2.1x regression**, shipped on a laptop ratio that inverted on the VM.
+  Reverted before it ever reached a production run.
+* **Item 6a's parallelism never engaged** (the cluster silently failed to start), and
+  separately `results_all` was killing all 286 posterior-detail figures per run. Both
+  were invisible to a green test suite; the benchmark found them.
+
+The lesson worth carrying: a ratio measured on one machine is a ratio **on that
+machine**, and an output-equality test cannot tell you whether the fast path ran.
