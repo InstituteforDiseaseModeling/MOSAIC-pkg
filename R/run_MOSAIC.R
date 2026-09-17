@@ -2454,6 +2454,62 @@ run_MOSAIC <- function(config,
             description = "Number of simulations in optimizer-refined subset (drives canonical posterior when optimize_subset = TRUE)"
           )
           conv_diag$summary$n_best_subset_optimized <- as.integer(subset_opt$optimal_n)
+
+          # The convergence gate above scored the TIER subset (is_best_subset).
+          # When optimization succeeds, the posterior is built from the smaller
+          # OPTIMIZED subset (is_best_subset_opt) instead -- so the gated numbers
+          # describe a population the run does not actually use. Recompute the
+          # same three metrics on the subset that IS used, plus the exact
+          # untruncated IS ESS, and record them alongside.
+          #
+          # These are REPORTED, NOT GATED: no run's convergence verdict changes.
+          # They exist so that a gap between the scored and used subsets is
+          # visible instead of silent.
+          w_opt <- results$weight_best_opt[results$is_best_subset_opt]
+          w_opt <- w_opt[is.finite(w_opt) & w_opt > 0]
+          if (length(w_opt) >= 2L) {
+            w_opt_norm <- w_opt / sum(w_opt)
+            ess_opt <- calc_model_ess(w_opt_norm, method = control$targets$ESS_method)
+            A_opt   <- calc_model_agreement_index(w_opt_norm * length(w_opt_norm))$A
+            cvw_opt <- calc_model_cvw(w_opt_norm * length(w_opt_norm))
+            is_opt  <- calc_is_diagnostics(
+              results$likelihood[results$is_best_subset_opt],
+              method = control$targets$ESS_method
+            )
+
+            conv_diag$metrics$ess_best_optimized <- list(
+              value = ess_opt,
+              description = paste(
+                "ESS of the weights the posterior ACTUALLY uses",
+                "(is_best_subset_opt / weight_best_opt).",
+                "Reported, not gated -- ess_best above is scored on the tier subset."
+              )
+            )
+            conv_diag$metrics$A_B_optimized    <- list(value = A_opt,
+              description = "Agreement index on the optimized (used) subset. Reported, not gated.")
+            conv_diag$metrics$cvw_B_optimized  <- list(value = cvw_opt,
+              description = "Weight CV on the optimized (used) subset. Reported, not gated.")
+            conv_diag$metrics$ess_is_optimized <- list(value = is_opt$ess_is,
+              description = "Exact untruncated importance-sampling ESS on the optimized (used) subset. Reported, not gated.")
+
+            gated_ess <- tryCatch(as.numeric(conv_diag$metrics$ess_best$value),
+                                  error = function(e) NA_real_)
+            log_msg("  Convergence metrics on the subset ACTUALLY USED (reported, not gated):")
+            log_msg("    ESS_B(used, n=%d) = %.2f   vs   ESS_B(scored tier, n=%d) = %s",
+                    length(w_opt_norm), ess_opt,
+                    as.integer(subset_opt$diagnostics_n),
+                    if (is.finite(gated_ess)) sprintf("%.2f", gated_ess) else "NA")
+            log_msg("    A(used) = %.4f | CVw(used) = %.4f | exact IS ESS(used) = %s",
+                    A_opt, cvw_opt,
+                    if (is.finite(is_opt$ess_is)) sprintf("%.2f", is_opt$ess_is) else "NA")
+            tgt <- control$targets$ESS_best %||% NA_real_
+            if (is.finite(tgt) && is.finite(ess_opt) && ess_opt < tgt && is.finite(gated_ess) && gated_ess >= tgt) {
+              log_warn(paste0("The gate PASSED on the tier subset (ESS_B = %.2f >= %.0f) but the ",
+                              "subset the posterior actually uses has ESS_B = %.2f, below the same ",
+                              "target. The convergence verdict describes draws this run does not use."),
+                       gated_ess, tgt, ess_opt)
+            }
+          }
           jsonlite::write_json(conv_diag, conv_diag_file, pretty = TRUE,
                                auto_unbox = TRUE, digits = NA)
         }

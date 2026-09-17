@@ -546,6 +546,15 @@
     # effective sample size of the raw likelihood weights over all draws, and
     # khat_all >= 0.7 means IS estimates are unreliable. A large gap between
     # ess_best and ess_is_all is expected and is the point of reporting both.
+    # Metrics on the subset the posterior ACTUALLY uses. The gated ess_best /
+    # A / CVw above are scored on the TIER subset; when subset optimization
+    # succeeds, the canonical posterior is built from the smaller optimized
+    # subset instead. A gap between these two groups means the convergence
+    # verdict describes draws the run does not use. Reported, never gated.
+    ess_best_optimized  = .mosaic_diag_num(diag$metrics$ess_best_optimized$value),
+    A_best_optimized    = .mosaic_diag_num(diag$metrics$A_B_optimized$value),
+    cvw_best_optimized  = .mosaic_diag_num(diag$metrics$cvw_B_optimized$value),
+    ess_is_optimized    = .mosaic_diag_num(diag$metrics$ess_is_optimized$value),
     ess_is_best         = .mosaic_diag_num(diag$importance_sampling$best_subset$ess_is),
     ess_is_all          = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is),
     ess_is_all_prop     = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is_prop),
