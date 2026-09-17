@@ -86,7 +86,8 @@
 #' @keywords internal
 #' @noRd
 .psi_fit_seeds_parallel <- function(seeds, parallel_seeds, fit_predict_fn,
-                                    data_bundle, hyperparams, verbose = TRUE) {
+                                    data_bundle, hyperparams, backend = "keras",
+                                    verbose = TRUE) {
      # Core pool for THIS process: a caller-supplied per-process budget
      # (MOSAIC_PSI_CORE_BUDGET) when set -- so parallel callers can hand each
      # process a slice -- else the whole box. Unset => unchanged legacy behavior.
@@ -118,32 +119,41 @@
      # tf_intra ~ nc (saturate the box, no oversubscription). The fit
      # (.psi_fit_predict_lstm) reads MOSAIC_PSI_TF_INTRAOP and applies the cap.
      tf_intra <- max(1L, nc %/% n_workers)
-     if (verbose) message(sprintf("  [ensemble] parallel seed fitting: %d PSOCK worker(s), %d TF intra-op threads each",
-                                  n_workers, tf_intra))
+     if (verbose) message(sprintf("  [ensemble] parallel seed fitting: %d PSOCK worker(s), %d %s compute thread(s) each",
+                                  n_workers, tf_intra,
+                                  if (identical(backend, "torch")) "torch" else "TF intra-op"))
      retpy <- Sys.getenv("RETICULATE_PYTHON")
      cl <- parallel::makeCluster(n_workers, type = "PSOCK")
      # See ?.mosaic_stop_cluster: a stalled seed fit would otherwise leave a
      # worker holding this process's stdout after stopCluster() returns.
      .worker_pids <- .mosaic_cluster_worker_pids(cl)
      on.exit(.mosaic_stop_cluster(cl, .worker_pids), add = TRUE)
-     parallel::clusterExport(cl, c("retpy", "tf_intra"), envir = environment())
+     parallel::clusterExport(cl, c("retpy", "tf_intra", "backend"), envir = environment())
      parallel::clusterEvalQ(cl, {
-          if (nzchar(retpy)) Sys.setenv(RETICULATE_PYTHON = retpy)
           suppressMessages(library(MOSAIC))
           # Canonical per-worker thread pin (all 7 vars incl ARROW + the BLAS
-          # clamp), set BEFORE keras3/TF import so TF reads the pinned env.
-          # Matches every other PSOCK worker in the package.
+          # clamp). Matches every other PSOCK worker in the package.
           MOSAIC:::.mosaic_set_blas_threads(1L)
-          # Focus TF's intra-op pool to this worker's slice (BLAS pin above does
-          # NOT govern TF's Eigen pool); read by .psi_fit_predict_lstm.
-          # GUARD: no TF op may precede this threading cap. tf.config.threading
-          # set_intra/inter_op (applied downstream from these env vars) are SILENT
-          # no-ops once the TF runtime has initialised its thread pools at the
-          # first op. We only set env vars here and defer library(keras3)/TF import
-          # until after — so the cap is established before any op runs.
-          Sys.setenv(MOSAIC_PSI_TF_INTRAOP = as.character(tf_intra),
-                     MOSAIC_PSI_TF_INTEROP = "1")
-          suppressMessages(library(keras3))
+          if (identical(backend, "torch")) {
+               # torch honours its thread cap at ANY point -- there is no
+               # "must precede the first op" hazard, and no Python at all.
+               Sys.setenv(MOSAIC_PSI_TORCH_THREADS = as.character(tf_intra))
+               suppressMessages(library(torch))
+               try(torch::torch_set_num_threads(as.integer(tf_intra)), silent = TRUE)
+          } else {
+               if (nzchar(retpy)) Sys.setenv(RETICULATE_PYTHON = retpy)
+               # Focus TF's intra-op pool to this worker's slice (the BLAS pin
+               # above does NOT govern TF's Eigen pool); read by
+               # .psi_fit_predict_lstm.
+               # GUARD: no TF op may precede this threading cap. tf.config.threading
+               # set_intra/inter_op (applied downstream from these env vars) are SILENT
+               # no-ops once the TF runtime has initialised its thread pools at the
+               # first op. We only set env vars here and defer library(keras3)/TF import
+               # until after, so the cap is established before any op runs.
+               Sys.setenv(MOSAIC_PSI_TF_INTRAOP = as.character(tf_intra),
+                          MOSAIC_PSI_TF_INTEROP = "1")
+               suppressMessages(library(keras3))
+          }
           NULL
      })
      parallel::clusterExport(cl, c("fit_predict_fn", "data_bundle", "hyperparams"),
@@ -170,6 +180,8 @@
 #'   (default 0.01 — the ENSEMBLE eps, DISTINCT from the loss logit_eps 1e-6).
 #' @param parallel_seeds Integer; >1 fits seeds across PSOCK workers (default 1L
 #'   serial). Falls back to serial if the cluster cannot be set up.
+#' @param backend "keras" (default) or "torch"; selects what each PSOCK seed
+#'   worker loads and how its compute threads are pinned.
 #' @return list(ensemble_long, by_country, seeds_by_country, fit_info,
 #'   rw_diagnostics, genuine_last_pred \[per-iso last covariate-supported weekly
 #'   prediction date, pre-fill\], ensemble \[target headline\],
@@ -184,6 +196,7 @@
                                    loess_surface = "direct",
                                    loess_degree  = 2L,
                                    parallel_seeds = 1L,
+                                   backend      = "keras",
                                    verbose      = TRUE) {
 
      if (length(data_bundle$dates_pred) == 0L)
@@ -235,7 +248,8 @@
      if (as.integer(parallel_seeds) > 1L && length(seeds) > 1L) {
           seed_fits <- tryCatch(
                .psi_fit_seeds_parallel(seeds, parallel_seeds, fit_predict_fn,
-                                       data_bundle, hyperparams, verbose = verbose),
+                                       data_bundle, hyperparams, backend = backend,
+                                       verbose = verbose),
                error = function(e) {
                     warning(sprintf(".psi_run_seed_ensemble: parallel seed fitting failed (%s); falling back to serial.",
                                     conditionMessage(e)), call. = FALSE)

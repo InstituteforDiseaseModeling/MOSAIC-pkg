@@ -72,8 +72,23 @@ via \code{modifyList} (overrides only the keys provided). Key fields:
 \code{region_map} (one of \code{"snf_k5"} (default), \code{"csv"}, \code{"seasonal_v1"},
 \code{"hydro_v1"}, \code{"snf_k4"}), \code{use_confidence_weight}, \code{timesteps},
 \code{partial_pool_lambda}, \code{exclude_covariates} (lstm_v2 ablation
-override), and the execution knob \code{parallel_seeds} (integer, default
-\code{1L} = serial; not a model parameter). Ignored by the legacy path.}
+override), and the execution knobs \code{parallel_seeds} (integer, default
+\code{1L} = serial; not a model parameter) and \code{backend}. Ignored by the
+legacy path.
+
+\strong{\code{backend}} selects the tensor library that fits the network:
+\code{"keras"} (default) uses keras3/TensorFlow through \pkg{reticulate} and
+requires the Python environment; \code{"torch"} uses \pkg{torch} (LibTorch) and
+requires no Python at all. The two build the same graph -- transplanting
+keras weights into the torch module reproduces its forward pass to float32
+precision (\code{tests/testthat/test-psi_torch_keras_parity.R}) -- but
+training is not bitwise comparable across backends, and is not bitwise
+reproducible within either: psi is reproducible at the pooled seed-ensemble
+level only. \code{recurrent_dropout} is the single keras feature LibTorch
+lacks natively; the torch backend reproduces it with one dropout mask on the
+recurrent state held fixed across timesteps (Gal & Ghahramani), as keras
+does, and uses the fused LSTM kernel whenever \code{rec_dropout == 0} or at
+inference.}
 
 \item{source_csv}{\code{NULL} (default) or a path to the suitability panel CSV
 that psi fitting should read. \code{NULL} uses the canonical panel

@@ -27,79 +27,14 @@
 # provided package-wide by R/aaa_utils.R.
 # =============================================================================
 
-#' Fit the gauge_A hierarchical-FiLM LSTM and predict over X_pred.
+# ---- keras graph construction -----------------------------------------------
+# Factored out of .psi_fit_predict_lstm() so the torch-parity test can build the
+# graph without training it. Behaviour is unchanged; `activation` (previously
+# read from the enclosing `lc`) is the only value now passed in.
 #' @keywords internal
 #' @noRd
-.psi_fit_predict_lstm <- function(data_bundle, seed = 11L, hyperparams = list()) {
-     set.seed(seed)
-     tf <- reticulate::import("tensorflow", convert = FALSE)
-     # Focus TF's intra/inter-op thread pools (env-driven) BEFORE any op is built
-     # so N parallel seed workers don't each size their pool to the whole box --
-     # the OMP/BLAS pin does NOT govern TF's Eigen intra-op pool. The per-worker
-     # budget is set by .psi_fit_seeds_parallel(); a serial fit reads the whole-
-     # process budget. tryCatch is silent because the call errors (no-op) once the
-     # runtime is initialized, e.g. a 2nd seed fit in the same process.
-     .tf_intra <- suppressWarnings(as.integer(Sys.getenv("MOSAIC_PSI_TF_INTRAOP", "")))
-     .tf_inter <- suppressWarnings(as.integer(Sys.getenv("MOSAIC_PSI_TF_INTEROP", "")))
-     if (!is.na(.tf_intra) && .tf_intra > 0L)
-          try(tf$config$threading$set_intra_op_parallelism_threads(.tf_intra), silent = TRUE)
-     if (!is.na(.tf_inter) && .tf_inter > 0L)
-          try(tf$config$threading$set_inter_op_parallelism_threads(.tf_inter), silent = TRUE)
-     tf$random$set_seed(as.integer(seed))
-     np <- reticulate::import("numpy", convert = FALSE)
-     np$random$seed(as.integer(seed))
-
-     hp <- utils::modifyList(list(
-          units_1       = 128L, units_2 = 64L, units_3 = 32L,
-          dropout       = 0.3,
-          rec_dropout   = 0.10,
-          l2            = 5e-4,
-          lr            = 0.001,
-          batch_size    = 128L,
-          epochs        = 200L,
-          patience      = 10L,
-          rlr_factor    = 0.5,
-          rlr_patience  = 8L,
-          min_lr        = 1e-6,
-          restore_best_weights = TRUE,
-          n_epochs_fixed = NULL,
-          country_dim          = 16L,
-          partial_pool_lambda  = 0.1,
-          region_l2            = 1e-4,
-          sample_weights       = "balanced_uniform",
-          balance_R            = 1.0,
-          loss_kind            = "bce",
-          # Loss internals (passive under bce + balanced_uniform; defaults match
-          # the B4 fixture pins). Threaded so a research override is honored.
-          logit_eps            = 1e-6, logit_clip = 6,
-          sw_offset            = 0.1,  sw_min      = 0.1,
-          sw_offset_quad       = 0.05, sw_min_quad = 0.05
-     ), hyperparams)
-
-     enc <- data_bundle$encoders
-     if (is.null(enc))
-          stop(".psi_fit_predict_lstm: gauge_A requires data_bundle$encoders")
-
-     lc <- .psi_configure_loss(
-          data_bundle$y_train, data_bundle$y_val,
-          sample_weights  = hp$sample_weights,
-          loss_kind       = hp$loss_kind,
-          balance_R       = hp$balance_R %||% 1.0,
-          logit_eps       = hp$logit_eps %||% 1e-6,
-          logit_clip      = hp$logit_clip %||% 6,
-          sw_offset       = hp$sw_offset %||% 0.1,
-          sw_min          = hp$sw_min %||% 0.1,
-          sw_offset_quad  = hp$sw_offset_quad %||% 0.05,
-          sw_min_quad     = hp$sw_min_quad %||% 0.05,
-          country_balance = isTRUE(hp$country_balance),
-          country_train   = data_bundle$country_ids_train,
-          country_val     = data_bundle$country_ids_val,
-          confidence_weight_train = data_bundle$confidence_weight_train,
-          confidence_weight_val   = data_bundle$confidence_weight_val)
-
-     timesteps  <- dim(data_bundle$X_train)[2]
-     n_features <- dim(data_bundle$X_train)[3]
-
+.psi_build_keras_model <- function(hp, enc, timesteps, n_features,
+                                   activation = "sigmoid") {
      # ---- Shared LSTM trunk ------------------------------------------------
      build_trunk <- function(input_feat) {
           x <- keras3::layer_lstm(input_feat,
@@ -193,11 +128,89 @@
           keras3::op_multiply(z_r, keras3::op_add(one_c, gamma_c)),
           beta_c)
 
-     out <- keras3::layer_dense(z_c, units = 1, activation = lc$activation,
+     out <- keras3::layer_dense(z_c, units = 1, activation = activation,
                                 name = "out_head")
-     model <- keras3::keras_model(
+
+     keras3::keras_model(
           inputs  = list(input_feat, input_country, input_region),
           outputs = out)
+}
+
+#' Fit the gauge_A hierarchical-FiLM LSTM and predict over X_pred.
+#' @keywords internal
+#' @noRd
+.psi_fit_predict_lstm <- function(data_bundle, seed = 11L, hyperparams = list()) {
+     set.seed(seed)
+     tf <- reticulate::import("tensorflow", convert = FALSE)
+     # Focus TF's intra/inter-op thread pools (env-driven) BEFORE any op is built
+     # so N parallel seed workers don't each size their pool to the whole box --
+     # the OMP/BLAS pin does NOT govern TF's Eigen intra-op pool. The per-worker
+     # budget is set by .psi_fit_seeds_parallel(); a serial fit reads the whole-
+     # process budget. tryCatch is silent because the call errors (no-op) once the
+     # runtime is initialized, e.g. a 2nd seed fit in the same process.
+     .tf_intra <- suppressWarnings(as.integer(Sys.getenv("MOSAIC_PSI_TF_INTRAOP", "")))
+     .tf_inter <- suppressWarnings(as.integer(Sys.getenv("MOSAIC_PSI_TF_INTEROP", "")))
+     if (!is.na(.tf_intra) && .tf_intra > 0L)
+          try(tf$config$threading$set_intra_op_parallelism_threads(.tf_intra), silent = TRUE)
+     if (!is.na(.tf_inter) && .tf_inter > 0L)
+          try(tf$config$threading$set_inter_op_parallelism_threads(.tf_inter), silent = TRUE)
+     tf$random$set_seed(as.integer(seed))
+     np <- reticulate::import("numpy", convert = FALSE)
+     np$random$seed(as.integer(seed))
+
+     hp <- utils::modifyList(list(
+          units_1       = 128L, units_2 = 64L, units_3 = 32L,
+          dropout       = 0.3,
+          rec_dropout   = 0.10,
+          l2            = 5e-4,
+          lr            = 0.001,
+          batch_size    = 128L,
+          epochs        = 200L,
+          patience      = 10L,
+          rlr_factor    = 0.5,
+          rlr_patience  = 8L,
+          min_lr        = 1e-6,
+          restore_best_weights = TRUE,
+          n_epochs_fixed = NULL,
+          country_dim          = 16L,
+          partial_pool_lambda  = 0.1,
+          region_l2            = 1e-4,
+          sample_weights       = "balanced_uniform",
+          balance_R            = 1.0,
+          loss_kind            = "bce",
+          # Loss internals (passive under bce + balanced_uniform; defaults match
+          # the B4 fixture pins). Threaded so a research override is honored.
+          logit_eps            = 1e-6, logit_clip = 6,
+          sw_offset            = 0.1,  sw_min      = 0.1,
+          sw_offset_quad       = 0.05, sw_min_quad = 0.05
+     ), hyperparams)
+
+     enc <- data_bundle$encoders
+     if (is.null(enc))
+          stop(".psi_fit_predict_lstm: gauge_A requires data_bundle$encoders")
+
+     lc <- .psi_configure_loss(
+          data_bundle$y_train, data_bundle$y_val,
+          sample_weights  = hp$sample_weights,
+          loss_kind       = hp$loss_kind,
+          balance_R       = hp$balance_R %||% 1.0,
+          logit_eps       = hp$logit_eps %||% 1e-6,
+          logit_clip      = hp$logit_clip %||% 6,
+          sw_offset       = hp$sw_offset %||% 0.1,
+          sw_min          = hp$sw_min %||% 0.1,
+          sw_offset_quad  = hp$sw_offset_quad %||% 0.05,
+          sw_min_quad     = hp$sw_min_quad %||% 0.05,
+          country_balance = isTRUE(hp$country_balance),
+          country_train   = data_bundle$country_ids_train,
+          country_val     = data_bundle$country_ids_val,
+          confidence_weight_train = data_bundle$confidence_weight_train,
+          confidence_weight_val   = data_bundle$confidence_weight_val)
+
+     timesteps  <- dim(data_bundle$X_train)[2]
+     n_features <- dim(data_bundle$X_train)[3]
+
+     model <- .psi_build_keras_model(hp, enc, timesteps, n_features,
+                                     activation = lc$activation)
 
      keras3::compile(model,
           optimizer = keras3::optimizer_adam(learning_rate = hp$lr),

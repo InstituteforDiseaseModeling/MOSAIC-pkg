@@ -159,7 +159,7 @@
      # Production defaults = fixture + the two sanctioned divergences + the
      # parallel_seeds execution knob (NOT in the fixture; does not change results).
      prod <- utils::modifyList(fixture, list(n_seeds = 5L, region_map = "snf_k5",
-                                             parallel_seeds = 1L))
+                                             parallel_seeds = 1L, backend = "keras"))
      ac <- if (is.null(arch_control)) prod else utils::modifyList(prod, arch_control)
      int_fields <- c("units_1", "units_2", "units_3", "batch_size", "epochs",
                      "patience", "country_dim", "timesteps", "n_seeds",
@@ -190,10 +190,24 @@
                                      plot_country_diagnostics = FALSE,
                                      verbose = TRUE) {
 
-     if (!requireNamespace("keras3", quietly = TRUE) ||
-         !requireNamespace("reticulate", quietly = TRUE))
-          stop("est_suitability(architecture='lstm_v2_hierarchical_film') requires the 'keras3' + 'reticulate' Python stack. Run MOSAIC::install_dependencies() and MOSAIC::check_dependencies().",
-               call. = FALSE)
+     # Backend selection. `backend` is peeked from the user's arch_control (the
+     # fixture does not carry it); .psi_load_arch_control() below records the
+     # resolved value. "keras" is the incumbent keras3/TensorFlow path; "torch"
+     # is the pure-R LibTorch path (no Python).
+     backend <- match.arg(arch_control$backend %||% "keras", c("keras", "torch"))
+     if (identical(backend, "torch")) {
+          if (!requireNamespace("torch", quietly = TRUE))
+               stop("est_suitability(backend='torch') requires the 'torch' package. install.packages('torch').",
+                    call. = FALSE)
+          if (!isTRUE(torch::torch_is_installed()))
+               stop("est_suitability(backend='torch'): the torch R package is present but LibTorch/Lantern is not installed. Run torch::install_torch().",
+                    call. = FALSE)
+     } else {
+          if (!requireNamespace("keras3", quietly = TRUE) ||
+              !requireNamespace("reticulate", quietly = TRUE))
+               stop("est_suitability(architecture='lstm_v2_hierarchical_film') requires the 'keras3' + 'reticulate' Python stack. Run MOSAIC::install_dependencies() and MOSAIC::check_dependencies().",
+                    call. = FALSE)
+     }
 
      if (length(PATHS$MODEL_INPUT) != 1L || !nzchar(PATHS$MODEL_INPUT))
           stop("est_suitability: PATHS$MODEL_INPUT must be a non-empty path (use get_paths()).",
@@ -254,6 +268,7 @@
           message(glue::glue("lstm_v2: fit_date_start={fit_date_start}  cutoff(fit_date_stop)={cutoff_date}"))
           message(glue::glue("lstm_v2: prediction window {pred_date_start} -> {pred_date_stop}"))
           message(glue::glue("lstm_v2: feature_set='{feature_set}' ({length(features)} candidates), region_map='{ac$region_map}', n_seeds={ac$n_seeds}"))
+          message(glue::glue("lstm_v2: backend='{backend}'"))
      }
 
      # ---- Build the data bundle -------------------------------------------
@@ -278,9 +293,11 @@
 
      # ---- Seed ensemble (each seed = whole RW-CV + refit + predict) --------
      seeds <- seq.int(ac$seed_base, by = ac$seed_step, length.out = ac$n_seeds)
+     arch_fn <- if (identical(backend, "torch")) .psi_fit_predict_lstm_torch
+                else                                .psi_fit_predict_lstm
      fit_fn <- function(data_bundle, seed, hyperparams)
           .psi_fit_predict_rw_cv(data_bundle = data_bundle,
-                                 fit_predict_fn = .psi_fit_predict_lstm,
+                                 fit_predict_fn = arch_fn,
                                  seed = seed, hyperparams = hyperparams,
                                  verbose = verbose)
      arch_hp <- list(
@@ -313,7 +330,7 @@
           logit_eps = ac$ensemble_logit_eps,
           loess_surface = ac$loess_surface %||% "direct",
           loess_degree  = as.integer(ac$loess_degree %||% 2L),
-          parallel_seeds = ac$parallel_seeds, verbose = verbose)
+          parallel_seeds = ac$parallel_seeds, backend = backend, verbose = verbose)
 
      # ---- Bias correction -> canonical psi ---------------------------------
      el <- ens$ensemble_long
@@ -386,6 +403,7 @@
 
      config_info <- list(
           architecture     = "lstm_v2_hierarchical_film",
+          backend          = backend,
           fit_date_start   = as.character(fit_date_start),
           fit_date_stop    = as.character(cutoff_date),
           pred_date_start  = as.character(pred_date_start),
