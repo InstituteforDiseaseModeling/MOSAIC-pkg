@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.86.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.87.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -381,7 +381,26 @@
 <hr></div>
 <div class="section level2">
 <h2 id="id_6b-improvement-7--one-parquet-per-simulation-is-the-wrong-shard-granularity">6b. Improvement 7 — one parquet per simulation is the wrong shard granularity<a class="anchor" aria-label="anchor" href="#id_6b-improvement-7--one-parquet-per-simulation-is-the-wrong-shard-granularity"></a></h2>
-<p><strong>Status: MACHINERY IMPLEMENTED (v0.80.1, v0.81.0), DEFAULT STILL OFF.</strong> <strong>Possible saving: 60-90 min per 100k run, plus the same again on any resume.</strong></p>
+<p><strong>Status: SHIPPED AND ON BY DEFAULT (v0.87.0).</strong> <code>control$io$shard_batch_size</code> defaults to <strong>100</strong>.</p>
+<p>Measured on dugong against 20,000 real shards of 1,355 columns, plus two correctness tests on live ETH calibrations:</p>
+<table class="table"><colgroup><col width="27%"><col width="36%"><col width="36%"></colgroup><thead><tr><th>gate</th>
+<th align="right">1 row/file</th>
+<th align="right">100 rows/file</th>
+</tr></thead><tbody><tr><td>combine</td>
+<td align="right">47.18 ms/shard — <strong>78.6 min at 100k</strong>
+</td>
+<td align="right">0.82 ms/shard — <strong>1.4 min</strong>
+</td>
+</tr><tr><td>resume scan</td>
+<td align="right"><strong>174.2 min at 100k</strong></td>
+<td align="right"><strong>1.5 min</strong></td>
+</tr><tr><td>on disk (20k sims)</td>
+<td align="right">10,601.6 MB</td>
+<td align="right">306.3 MB</td>
+</tr></tbody></table><p><strong>57x faster to combine, 116x faster to resume-scan, 34.6x smaller on disk.</strong></p>
+<p><strong>Output is byte-identical.</strong> Same ETH config and seeds at batch 1 vs batch 100: 2,000 rows and 78 columns both ways, <code><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical()</a></code> TRUE on the whole <code>samples.parquet</code>, including every likelihood and sim id. Batching changes only how rows are packed into files, and that is now demonstrated rather than assumed. The batch arm was also 18% faster end to end (5.98 vs 7.32 min) at a scale where the combine is nearly free either way.</p>
+<p><strong>Interrupt-and-resume holds.</strong> A 4,000-simulation run at batch 100 was killed once five batch shards existed and no <code>samples.parquet</code> did — the state resume exists for. The scan read n=500, watermark=2400 from the <code>sim</code> column of non-contiguous shards (<code>sim_0000001-0000100</code>, <code>sim_0000601-0000700</code>, …), and the resumed run reached 4,000 rows with no duplicated sim id, no duplicated seed, and every pre-kill id preserved. Ids are deliberately NOT contiguous afterwards: new draws start past the watermark, which is exactly what prevents seed reuse.</p>
+<p><strong>The batch is clamped when the budget is small.</strong> A fixed batch is a fixed number of TASKS, so 500 simulations at 100 per shard would be 5 tasks on 24 workers. The resolver keeps at least 4 tasks per worker, so small runs fall back toward 1 and large ones are unaffected (100,000 across 80 workers allows 312, above the default). <strong>Possible saving: 60-90 min per 100k run, plus the same again on any resume.</strong></p>
 <p><code>control$io$shard_batch_size</code> (default <code>1L</code>) makes one parquet carry N simulations. At the default the behaviour is byte-for-byte unchanged: a one-id chunk keeps the historical <code>sim_%07d.parquet</code> name and the sequential path still runs the original per-simulation worker. <code>.mosaic_resume_scan()</code> takes ids from the <code>sim</code> COLUMN rather than the filename (v0.80.1), so a 100-row shard scans identically to 100 one-row shards. <strong>Not yet validated end to end at a real batch size, and the default has not been changed</strong> — see section 10.</p>
 <p>Found while implementing item 1. The combine is slow because of <strong>file framing, not data volume</strong>, and item 1 only makes the framing cheaper to parse rather than removing it.</p>
 <p>A single-row parquet with 1,352 columns is <strong>444 KB on disk</strong> (measured) while the row itself is ~8 KB. That is ~330 bytes of parquet column metadata per column per file, and it is why the 100k run wrote <strong>52.9 GB of shards for 1.03 GB of data</strong> — a 51:1 ratio, straight from the production log (<code>Loading 100000 simulation files (52924.1 MB on disk)</code> … <code>Results in memory: 1031.7 MB</code>).</p>
@@ -530,10 +549,12 @@
 <td>v0.84.0</td>
 <td>measurement corrected two wrong numbers in the original section; chunking the dispatch deliberately not done.</td>
 </tr><tr><td>6b</td>
-<td>shard-batching machinery</td>
-<td>v0.80.1, v0.81.0</td>
+<td>shard batching, <strong>on by default</strong>
+</td>
+<td>v0.80.1, v0.81.0, <strong>v0.87.0</strong>
+</td>
 <td>
-<strong>default still <code>1L</code></strong>; needs an end-to-end run at a real batch size before flipping it.</td>
+<strong>57x combine, 116x resume-scan, 34.6x disk</strong>; output byte-identical; interrupt-and-resume verified.</td>
 </tr></tbody></table></div>
 <div class="section level3">
 <h3 id="not-started">Not started<a class="anchor" aria-label="anchor" href="#not-started"></a></h3>
@@ -543,8 +564,9 @@
 <th>effort</th>
 </tr></thead><tbody><tr><td>3</td>
 <td>measure per-worker shard directories</td>
-<td>A measurement, not a change. Its answer may be “nothing to fix”, and item 6b may make it moot by cutting file creations ~100x.</td>
-<td>~2 h</td>
+<td>
+<strong>Now moot, and can be closed.</strong> It asked whether contention from ~70 file creations/sec into one directory hurt parallel efficiency. With 6b on by default that rate falls ~100x (one file per 100 simulations), so the contention it was written to investigate no longer exists at a scale worth measuring.</td>
+<td>closed</td>
 </tr></tbody></table></div>
 <div class="section level3">
 <h3 id="open-question-downgraded">Open question, downgraded<a class="anchor" aria-label="anchor" href="#open-question-downgraded"></a></h3>

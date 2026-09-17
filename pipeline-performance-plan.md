@@ -633,9 +633,45 @@ time before and after.
 
 ## 6b. Improvement 7 — one parquet per simulation is the wrong shard granularity
 
-**Status: MACHINERY IMPLEMENTED (v0.80.1, v0.81.0), DEFAULT STILL OFF.**
-**Possible saving: 60-90 min per 100k run, plus the same again on any
-resume.**
+**Status: SHIPPED AND ON BY DEFAULT (v0.87.0).**
+`control$io$shard_batch_size` defaults to **100**.
+
+Measured on dugong against 20,000 real shards of 1,355 columns, plus two
+correctness tests on live ETH calibrations:
+
+| gate | 1 row/file | 100 rows/file |
+|----|---:|---:|
+| combine | 47.18 ms/shard — **78.6 min at 100k** | 0.82 ms/shard — **1.4 min** |
+| resume scan | **174.2 min at 100k** | **1.5 min** |
+| on disk (20k sims) | 10,601.6 MB | 306.3 MB |
+
+**57x faster to combine, 116x faster to resume-scan, 34.6x smaller on
+disk.**
+
+**Output is byte-identical.** Same ETH config and seeds at batch 1 vs
+batch 100: 2,000 rows and 78 columns both ways,
+[`identical()`](https://rdrr.io/r/base/identical.html) TRUE on the whole
+`samples.parquet`, including every likelihood and sim id. Batching
+changes only how rows are packed into files, and that is now
+demonstrated rather than assumed. The batch arm was also 18% faster end
+to end (5.98 vs 7.32 min) at a scale where the combine is nearly free
+either way.
+
+**Interrupt-and-resume holds.** A 4,000-simulation run at batch 100 was
+killed once five batch shards existed and no `samples.parquet` did — the
+state resume exists for. The scan read n=500, watermark=2400 from the
+`sim` column of non-contiguous shards (`sim_0000001-0000100`,
+`sim_0000601-0000700`, …), and the resumed run reached 4,000 rows with
+no duplicated sim id, no duplicated seed, and every pre-kill id
+preserved. Ids are deliberately NOT contiguous afterwards: new draws
+start past the watermark, which is exactly what prevents seed reuse.
+
+**The batch is clamped when the budget is small.** A fixed batch is a
+fixed number of TASKS, so 500 simulations at 100 per shard would be 5
+tasks on 24 workers. The resolver keeps at least 4 tasks per worker, so
+small runs fall back toward 1 and large ones are unaffected (100,000
+across 80 workers allows 312, above the default). **Possible saving:
+60-90 min per 100k run, plus the same again on any resume.**
 
 `control$io$shard_batch_size` (default `1L`) makes one parquet carry N
 simulations. At the default the behaviour is byte-for-byte unchanged: a
@@ -800,13 +836,13 @@ Status of every item, so this is the only place anyone has to look.
 | 2 | parallelise `.mosaic_reff_resim_ci()` | v0.85.0 | post-hoc path only; no calibration-time effect. |
 | 4 | `optimize_subset` scoring mask | v0.81.2 | fixed, but not for the reason this document originally gave. See the open question below. |
 | 5 | guard the ensemble config broadcast | v0.84.0 | measurement corrected two wrong numbers in the original section; chunking the dispatch deliberately not done. |
-| 6b | shard-batching machinery | v0.80.1, v0.81.0 | **default still `1L`**; needs an end-to-end run at a real batch size before flipping it. |
+| 6b | shard batching, **on by default** | v0.80.1, v0.81.0, **v0.87.0** | **57x combine, 116x resume-scan, 34.6x disk**; output byte-identical; interrupt-and-resume verified. |
 
 ### Not started
 
 | \# | change | why it still matters | effort |
 |----|----|----|----|
-| 3 | measure per-worker shard directories | A measurement, not a change. Its answer may be “nothing to fix”, and item 6b may make it moot by cutting file creations ~100x. | ~2 h |
+| 3 | measure per-worker shard directories | **Now moot, and can be closed.** It asked whether contention from ~70 file creations/sec into one directory hurt parallel efficiency. With 6b on by default that rate falls ~100x (one file per 100 simulations), so the contention it was written to investigate no longer exists at a scale worth measuring. | closed |
 
 ### Open question, downgraded
 
