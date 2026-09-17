@@ -497,20 +497,28 @@ calc_Reff <- function(ensemble,
 #'
 #' @param task List with \code{p}, \code{s} and \code{saved} (the saved
 #'   \code{cases_array[, , p, s]} slice for this member).
+#' @param ctx The shared inputs, as built by \code{.mosaic_reff_ctx()}. Passed
+#'   explicitly on the serial route; on the parallel route the caller exports it
+#'   once per worker as \code{.rr_ctx} and leaves this \code{NULL} so the worker
+#'   picks it up from its own global environment rather than shipping a copy per
+#'   task. v0.85.0 had the worker read the globals UNCONDITIONALLY, which made
+#'   the serial route fail on its first member with "object '.rr_base_config' not
+#'   found" -- and the test written alongside it asserted exactly that error, so
+#'   it certified the broken state instead of catching it.
 #' @return A list of per-member results, or a \code{$error} string.
 #' @noRd
-.mosaic_reff_resim_member <- function(task) {
+.mosaic_reff_resim_member <- function(task, ctx = NULL) {
   tryCatch({
-    e <- globalenv()
-    base_config <- get(".rr_base_config", envir = e)
-    priors      <- get(".rr_priors",      envir = e)
-    samp        <- get(".rr_sampling",    envir = e)
-    PATHS       <- get(".rr_paths",       envir = e)
-    seeds       <- get(".rr_seeds",       envir = e)
-    max_days    <- get(".rr_max_days",    envir = e)
-    floor_v     <- get(".rr_floor",       envir = e)
-    nL          <- get(".rr_nL",          envir = e)
-    Tn          <- get(".rr_Tn",          envir = e)
+    if (is.null(ctx)) ctx <- get(".rr_ctx", envir = globalenv())
+    base_config <- ctx$base_config
+    priors      <- ctx$priors
+    samp        <- ctx$sampling
+    PATHS       <- ctx$paths
+    seeds       <- ctx$seeds
+    max_days    <- ctx$max_days
+    floor_v     <- ctx$floor
+    nL          <- ctx$nL
+    Tn          <- ctx$Tn
 
     p <- task$p; s <- task$s
     cfg <- MOSAIC:::.mosaic_clamp_transmission_params(
@@ -644,29 +652,30 @@ calc_Reff <- function(ensemble,
                                       nrow = nL, ncol = Tn))
   }
 
+  # ONE context, used by both routes. Serial passes it as an argument; parallel
+  # exports it once per worker and the worker reads it from its own globalenv,
+  # so it does not travel per task.
+  ctx <- list(base_config = base_config, priors = priors,
+              sampling = sampling_args, paths = PATHS,
+              seeds = parameter_seeds, max_days = max_days,
+              floor = infectiousness_floor, nL = nL, Tn = Tn)
+
   use_cl <- !is.null(cl) && inherits(cl, "cluster") && length(cl) > 1L && n_members > 1L
   if (use_cl) {
     .rr_env <- new.env(parent = emptyenv())
-    assign(".rr_base_config", base_config,          envir = .rr_env)
-    assign(".rr_priors",      priors,               envir = .rr_env)
-    assign(".rr_sampling",    sampling_args,        envir = .rr_env)
-    assign(".rr_paths",       PATHS,                envir = .rr_env)
-    assign(".rr_seeds",       parameter_seeds,      envir = .rr_env)
-    assign(".rr_max_days",    max_days,             envir = .rr_env)
-    assign(".rr_floor",       infectiousness_floor, envir = .rr_env)
-    assign(".rr_nL",          nL,                   envir = .rr_env)
-    assign(".rr_Tn",          Tn,                   envir = .rr_env)
-    parallel::clusterExport(cl, ls(.rr_env, all.names = TRUE), envir = .rr_env)
+    assign(".rr_ctx", ctx, envir = .rr_env)
+    parallel::clusterExport(cl, ".rr_ctx", envir = .rr_env)
     parallel::clusterEvalQ(cl, MOSAIC:::.mosaic_set_blas_threads(1L))
     if (verbose) message("    on ", length(cl), " workers")
     # Reparent: a namespace binding serialises by REFERENCE, so a worker running
     # a different build would fail to resolve it. Same reason .mosaic_run_batch()
-    # does this. See test-render-parallel.R for the regression this prevents.
+    # does this. The worker is called with ctx = NULL so it reads .rr_ctx from
+    # the worker's globalenv -- passing ctx here would ship it once per TASK.
     .w <- .mosaic_reff_resim_member
     environment(.w) <- globalenv()
     res <- parallel::parLapplyLB(cl, tasks, .w)
   } else {
-    res <- lapply(tasks, .mosaic_reff_resim_member)
+    res <- lapply(tasks, function(tk) .mosaic_reff_resim_member(tk, ctx))
   }
 
   failed <- vapply(res, function(r) !is.null(r$error), logical(1))

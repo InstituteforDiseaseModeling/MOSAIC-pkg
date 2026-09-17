@@ -186,7 +186,7 @@ add_reproductive_numbers <- function(output_dir,
       .add_reff_recompute_ci(output_dir = output_dir, base_config = cfg,
                              burn_in_days = burn_in_days,
                              infectiousness_floor = infectiousness_floor,
-                             verbose = verbose),
+                             verbose = verbose, n_cores = n_cores),
       error = function(e) e)
   } else {
     reff <- tryCatch(
@@ -308,7 +308,8 @@ add_reproductive_numbers <- function(output_dir,
 #' @keywords internal
 #' @noRd
 .add_reff_recompute_ci <- function(output_dir, base_config, burn_in_days = NULL,
-                                   infectiousness_floor = 1, verbose = TRUE) {
+                                   infectiousness_floor = 1, verbose = TRUE,
+                                   n_cores = 1L) {
   ens_path <- file.path(output_dir, "2_calibration", "ensemble_candidate.rds")
   pri_path <- file.path(output_dir, "1_inputs", "priors.json")
   ctl_path <- file.path(output_dir, "1_inputs", "control.json")
