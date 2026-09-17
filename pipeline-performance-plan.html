@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.87.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.87.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -516,7 +516,7 @@
 <p>Effects below roughly <strong>7%</strong> are not resolvable by wall clock on this hardware and should be measured at the call site with a 10^5-iteration microbenchmark instead.</p>
 <hr></div>
 <div class="section level2">
-<h2 id="id_10-outstanding-as-of-v0812">10. Outstanding (as of v0.81.2)<a class="anchor" aria-label="anchor" href="#id_10-outstanding-as-of-v0812"></a></h2>
+<h2 id="id_10-outstanding-as-of-v0870">10. Outstanding (as of v0.87.0)<a class="anchor" aria-label="anchor" href="#id_10-outstanding-as-of-v0870"></a></h2>
 <p>Status of every item, so this is the only place anyone has to look.</p>
 <div class="section level3">
 <h3 id="done">Done<a class="anchor" aria-label="anchor" href="#done"></a></h3>
@@ -557,25 +557,36 @@
 <strong>57x combine, 116x resume-scan, 34.6x disk</strong>; output byte-identical; interrupt-and-resume verified.</td>
 </tr></tbody></table></div>
 <div class="section level3">
-<h3 id="not-started">Not started<a class="anchor" aria-label="anchor" href="#not-started"></a></h3>
-<table class="table"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><thead><tr><th>#</th>
+<h3 id="closed-without-doing">Closed without doing<a class="anchor" aria-label="anchor" href="#closed-without-doing"></a></h3>
+<table class="table"><colgroup><col width="33%"><col width="33%"><col width="33%"></colgroup><thead><tr><th>#</th>
 <th>change</th>
-<th>why it still matters</th>
-<th>effort</th>
+<th>why</th>
 </tr></thead><tbody><tr><td>3</td>
 <td>measure per-worker shard directories</td>
-<td>
-<strong>Now moot, and can be closed.</strong> It asked whether contention from ~70 file creations/sec into one directory hurt parallel efficiency. With 6b on by default that rate falls ~100x (one file per 100 simulations), so the contention it was written to investigate no longer exists at a scale worth measuring.</td>
-<td>closed</td>
-</tr></tbody></table></div>
+<td>It asked whether contention from ~70 file creations/sec into one directory hurt parallel efficiency. With 6b on by default that rate falls ~100x (one file per 100 simulations), so the contention it was written to investigate no longer exists at a scale worth measuring.</td>
+</tr></tbody></table><p><strong>Every numbered item in this document is now either shipped or closed.</strong></p>
+</div>
 <div class="section level3">
 <h3 id="open-question-downgraded">Open question, downgraded<a class="anchor" aria-label="anchor" href="#open-question-downgraded"></a></h3>
 <p>Item 4’s <strong>flat objective is still unexplained</strong>: the score spans ~4% over n = 30..117, and the argmax landed on 90 (main) and 52 (pr123) from statistically equivalent pools. Applying the scoring mask did not change that.</p>
 <p>It is no longer a <em>correctness</em> concern. With <code>artifact_mask</code> propagated, the masked R2 at those two subset sizes is 0.6426 (n=52) against 0.6406 (n=117) on pr123 — so the flat profile means many subset sizes really are equally good, and the headline metric no longer swings with the choice. What remains is a performance nit: the search evaluates ~34 candidates to separate options differing by 4% on its own objective, and <code><a href="reference/optimize_ensemble_subset.html">optimize_ensemble_subset()</a></code> already returns a <code>stability_flag</code> for “score profile was flat” that nothing consumes.</p>
 </div>
 <div class="section level3">
-<h3 id="recommended-next">Recommended next<a class="anchor" aria-label="anchor" href="#recommended-next"></a></h3>
-<p><strong>Item 5</strong>, then confirm <strong>1</strong> and <strong>6a</strong> with one production run each, then validate <strong>6b</strong> and flip its default. Items 2 and 3 are the smallest and can wait.</p>
+<h3 id="what-is-left">What is left<a class="anchor" aria-label="anchor" href="#what-is-left"></a></h3>
+<p>Nothing in the numbered list. Two things are worth doing when convenient, neither blocking:</p>
+<ol style="list-style-type: decimal"><li>
+<strong>A single 100k production run to bank the end-to-end number.</strong> Everything here was measured component-wise, and the components are trustworthy (the combine projection agreed with production to within 5%). What has not been measured is the whole pipeline with 6a and 6b both on. Expected shape, against the 260-minute pr123 baseline: simulation unchanged at ~97 min, combine 95.8 -&gt; ~1.5 min, rendering 35.9 -&gt; ~18 min. That is a run worth doing for the record, not for a decision.</li>
+<li>
+<strong>The flat <code>optimize_subset</code> objective</strong> (above) — a compute nit, not a correctness one. <code>stability_flag</code> already exists and nothing consumes it.</li>
+</ol></div>
+<div class="section level3">
+<h3 id="what-this-round-actually-cost-and-returned">What this round actually cost and returned<a class="anchor" aria-label="anchor" href="#what-this-round-actually-cost-and-returned"></a></h3>
+<p>Six items shipped. Two of them were WRONG when first measured on production hardware, and benchmarking is what caught both:</p>
+<ul><li>
+<strong>Item 1 was a 2.1x regression</strong>, shipped on a laptop ratio that inverted on the VM. Reverted before it ever reached a production run.</li>
+<li>
+<strong>Item 6a’s parallelism never engaged</strong> (the cluster silently failed to start), and separately <code>results_all</code> was killing all 286 posterior-detail figures per run. Both were invisible to a green test suite; the benchmark found them.</li>
+</ul><p>The lesson worth carrying: a ratio measured on one machine is a ratio <strong>on that machine</strong>, and an output-equality test cannot tell you whether the fast path ran.</p>
 </div>
 </div>
 </div>
