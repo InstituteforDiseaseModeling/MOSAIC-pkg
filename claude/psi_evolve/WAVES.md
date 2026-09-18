@@ -1864,3 +1864,81 @@ verdicts.
 
 `C9d` is **not adopted**, and I am not tuning its gate further: choosing a threshold that excludes
 ZMB after seeing ZMB is the selection-on-the-evaluation-set error this file already records twice.
+
+## Wave 23 — the floor is measured, my prediction was wrong by 2.4x, and its first act was to stop an over-claim
+
+`P000` (v7.3 package default) and `P000R` (identical spec, disjoint seed block 1001 vs 11) both
+completed 9/9 cutoffs at `n_seeds = 10`. This is the measurement PROTOCOL section 3b makes a
+prerequisite and that waves 0-20 never made.
+
+```
+S(P000)  = -0.2753        S(P000R) = -0.3665
+FLOOR |dS| = 0.0912   at n_seeds = 10, 6 selection blocks, 90 cells
+per-country |delta|: median 0.0683    max 0.6113 (COD)
+per-origin  |dS|   : median 0.0898    max 0.2354
+```
+
+### The prediction I registered was wrong, and the way it was wrong is informative
+
+I pre-registered ~0.038, from `0.070 x sqrt(3/10)` on the reasoning that the seed ensemble pools by
+logit median so pooled-psi noise should fall as `1/sqrt(n_seeds)`. **Measured 0.0912 — 2.4x that,
+and no lower than the v2 floor of 0.070 at three seeds** (different grids, so not strictly
+comparable, but the predicted collapse plainly did not happen).
+
+The diagnosis is available because I also measured the cell-level quantity:
+
+| quantity | 3 seeds (v2) | 10 seeds (v3) |
+|---|---|---|
+| replicate psi-**cell** correlation | 0.853 | **0.977-0.984** |
+| replicate **S** floor | 0.070 | **0.0912** |
+
+**Seed pooling works on cells and does not work on `S`.** The residual is not independent across
+seeds: it is concentrated in a few country-blocks the model is unstable on in *every* seed. COD
+alone moves 0.6113 between two fits of the same spec while the median country moves 0.0683 — and
+COD carries the largest weight in the objective (0.132). Averaging ten seeds cannot fix a country
+that is unstable in all ten.
+
+**So spending compute on seeds is not the lever PROTOCOL 3b assumed it was.** The resolvable effect
+size stays near 0.09 whatever the seed count. That is a direct hit on the programme's remaining
+power and it is escalated below.
+
+### Its first act was to stop an over-claim — which is exactly what it is for
+
+`P000` vs `P001` (v7.3 default vs the v7.4 stack the production validation actually ran):
+
+```
+single-draw gate:  dS +0.1051   A1 PASS (even against the 0.0912 floor, barely)
+                   A2 bootstrap CI [-0.1428, +0.4603]  FAIL
+                   A2 exact 2 of 6 origins positive, p = 0.6875  FAIL
+                   A3 ZWE -0.1577  FAIL      A6 seasonal -0.2323  FAIL   => REJECT
+```
+
+But `P000` has **two** draws, because `P000R` is the same spec: −0.2753 and −0.3665, mean −0.3209.
+Against `P001`'s single −0.3804 the difference of means is **+0.0595 — below the floor**. So the
+honest statement is that **v7.3 and v7.4 are indistinguishable at this budget**, and quoting the
++0.1051 from P000's luckier draw would have been precisely the over-claim waves 0-20 made
+repeatedly. Note also that only **2 of 6 origins** are positive despite a positive aggregate: the
+redistribution signature, for the fourth time.
+
+Direction still corroborates the earlier v7.4 head-to-head loss, now on the production grid.
+
+**Incumbent := `P000`** — indistinguishable from `P001`, but it is what ships and it now has two
+draws, so its score is the better-estimated of the two.
+
+### Launched, with the floor in hand
+
+`N8` (`country_balance = TRUE`) and `N5` (`film_input = TRUE`) are running — MOSAIC 0.91.6
+installed on dugong, both knobs verified live, 18 processes, fold counts matching section 6. They
+will be gated with `PSI_FLOOR=0.0912`, which is a hard bar: an arm must move `S` by more than 0.09
+to be readable at all.
+
+### ESCALATION (PROTOCOL section 9): T7 is now in view
+
+T7 is "the measured floor stays above the largest effect any remaining registered arm could
+plausibly produce". It has not fired — N8 and N5 are unrun, and the largest class-C effect seen
+(`C9d`, +0.141) does exceed 0.0912 — but the margin is thin and the seed lever that was supposed to
+buy resolution does not work. If N8 and N5 both land inside +/-0.09, the honest conclusion is
+**"not measurable at this budget"**, not "does not work", and the options are: accept a weaker
+evidentiary standard, change the estimand so it is less hostage to one unstable country (COD's
+0.611 dominates a 16-country weighted mean), or stop the refit track and keep only cache-paired
+work. That is a decision for the user, not for me.
