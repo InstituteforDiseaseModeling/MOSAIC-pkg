@@ -31,14 +31,18 @@ One wave = one batch of arms taken to a decision. Target 4-6 h wall on dugong.
 
 ```
 0 FLOOR       the applicable fit-noise floor for this arm's CLASS and SEED COUNT must
-              already be measured (§3b). If it is not, that measurement IS the wave.
+              already be measured (§3b) -- `compare_arms.R A.rds A_replicate.rds --floor`.
+              If it is not, that measurement IS the wave.
 1 SELECT      pick arms from BACKLOG per the policy in §2
 2 PREREGISTER append one REGISTERED row per arm BEFORE any fit runs:
               arm_id, parent, one-line hypothesis, the ONE change vs parent, arm CLASS,
               predicted direction (+/-/0), spec hash, n_seeds, objective_version
-3 RUN         launch on dugong under the budget in §6
-4 SCORE       compute S(arm) on SELECTION blocks only; write SCORED row
-5 GATE        apply §3 A1-A6; if any fails -> REJECT and stop here
+3 RUN         `launch_arm.sh` on dugong under the budget in §6, after the §5.6 smoke
+4 SCORE       `score_arm_driver.R` on SELECTION blocks only; write SCORED row. If the
+              arm's psi came from a per-cutoff panel, run `audit_target_scale.R` on its
+              cache and attach the table (§5.7)
+5 GATE        `compare_arms.R ARM.rds INCUMBENT.rds` with PSI_FLOOR from step 0;
+              apply §3 A1-A6; if any fails -> REJECT and stop here
 6 CONFIRM     score on the LOCKED confirmation blocks; write CONFIRMED row
 7 REVIEW      adversarial pass (§4) by an agent that did not run the arm
 8 DECIDE      ADOPT (incumbent := arm) or REJECT, with reason, appended to REGISTRY
@@ -106,6 +110,13 @@ and the measured per-country delta SD of 0.378, P(some top-10 country shows delt
 **0.998**. It is informative for cache-paired arms, where fit noise cancels. For a refit arm, an A3
 failure is only meaningful if the regressing country's delta exceeds that arm's per-country floor
 (§3b) — otherwise record it as "A3 fail, within per-country noise" and let A1/A2 decide.
+
+**All six gates are computed by one script, `compare_arms.R`, and nowhere else.** Through wave 20
+every gate was derived inside the wave that wanted it, which is how the no-regression guard shipped
+failing open in four ways, how a percentile bootstrap whose median sat 0.32 from its point estimate
+got quoted, and how the exact origin-level test went unrun for twenty waves. A gate verdict that did
+not come out of that script is not a verdict. Pass the measured floor in via `PSI_FLOOR=<value>`;
+the script refuses to certify a class-R arm without it.
 
 **Rejection is the default and is cheap.** Record it and move on. "Ship zero" is a legitimate
 terminal state for the whole programme.
@@ -258,6 +269,13 @@ v3 reuses a psi cache built on 2026-07-11 under MOSAIC 0.63.0 by a different pro
 - Record the MOSAIC version that produced each cache. A cross-version comparison must be
   registered as such, and `P001` (v0.63.0) vs a new arm (v0.90.x) is exactly that — the version
   delta is a known, registered confound on the `P000`/`P001` contrast, not a hidden one.
+- **An arm whose psi was trained on a per-cutoff panel (every v7.4 arm, including `P001`) must be
+  scored with `audit_target_scale.R` run on its cache, and the table attached to the score.** The
+  target is normalised per country over its panel's compile window, so such an arm is scored against
+  an observed series it did not train on (BACKLOG `D7`). The audit's verdict is tied to the estimand
+  -- a median over blocks moves only if half the blocks move -- so it reports affected BLOCKS, not a
+  raw row tail. Measured on the OCV-4 cache: worst country 2 of 9 blocks, so `S` and A3 are robust
+  and the score is admissible.
 
 ---
 
@@ -363,9 +381,11 @@ guardrail breach, a negative-control win, or a proposed objective change.
 2. **`P000`** — refit the package-default psi at the same 9 cutoffs (~3.6 h with `HA-02`, 9 h
    without). `incumbent :=` whichever of `P000`/`P001` wins on selection; the contrast is the
    v7.3-vs-v7.4 result.
-3. **`FLOOR-10`** — replicate the incumbent from a disjoint seed block. This is the number that
-   makes every subsequent class-R arm interpretable, and it is PREREQ, not optional. At v2 it cost
-   ~1 dugong-hour and was never run.
+3. **`FLOOR-10`** — replicate the incumbent from a disjoint seed block
+   (`PSI_SEED_BASE=1001 ./launch_arm.sh P000R 9 10 18`, then
+   `compare_arms.R <P000R>.rds <P000>.rds --floor`). This is the number that makes every subsequent
+   class-R arm interpretable, and it is PREREQ, not optional. At v2 it cost ~1 dugong-hour and was
+   never run.
 4. **`HA-02`** — build and smoke the epoch/ensemble decoupling, then run it as an equivalence arm.
    Without it the `F` ladder cannot run at production seed counts.
 5. **`TRUNK-REG`** — build the trunk registry (§5.6) so `N` arms exist as registered specs.
