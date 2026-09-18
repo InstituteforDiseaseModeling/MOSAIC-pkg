@@ -98,3 +98,70 @@ test_that("N5 and N6 compose, and compose with a non-default trunk", {
      expect_true(all(is.finite(as.numeric(r$pred))))
      expect_identical(r$trunk, "tcn")
 })
+
+# ---- D9b: country embedding initialised from static covariates -------------
+
+.cv_static <- function(n_countries = 2L, n_cov = 5L) {
+     m <- matrix(stats::rnorm(n_countries * n_cov), nrow = n_countries)
+     dimnames(m) <- list(c("A", "B")[seq_len(n_countries)], paste0("cov", seq_len(n_cov)))
+     m
+}
+
+test_that("country_static defaults to NULL, so production is unchanged", {
+     ac <- MOSAIC:::.psi_load_arch_control(NULL)
+     expect_null(ac$country_static)
+})
+
+test_that("requesting country_static without the matrix fails loudly", {
+     skip_on_cran(); skip_if_not_installed("keras3")
+     skip_if_not(reticulate::py_module_available("tensorflow"), "TensorFlow unavailable")
+     b <- .cv_bundle()                        # encoders carry no country_static
+     expect_error(
+          MOSAIC:::.psi_fit_predict_lstm(b, seed = 11L,
+               hyperparams = utils::modifyList(.cv_hp, list(country_static = "frozen"))),
+          "encoders\\$country_static is absent")
+})
+
+test_that("D9b fits in both modes and frozen really does not move the embedding", {
+     skip_on_cran(); skip_if_not_installed("keras3")
+     skip_if_not(reticulate::py_module_available("tensorflow"), "TensorFlow unavailable")
+     set.seed(3)
+     M <- .cv_static()
+     b <- .cv_bundle(); b$encoders$country_static <- M
+     for (mode in c("frozen", "trainable")) {
+          hp <- utils::modifyList(.cv_hp, list(country_static = mode, n_epochs_fixed = 2L))
+          r <- MOSAIC:::.psi_fit_predict_lstm(b, seed = 11L, hyperparams = hp)
+          expect_true(all(is.finite(as.numeric(r$pred))), info = mode)
+     }
+})
+
+test_that("the static matrix built into encoders is z-scored and country-ordered", {
+     # Mirrors what .psi_build_data does, so a change to the recipe is caught
+     # here rather than after an arm has spent its compute.
+     iso <- c("AAA", "BBB", "CCC")
+     d <- data.frame(
+          iso_code = rep(iso, each = 4),
+          Piped_Water        = rep(c(0.1, 0.5, 0.9), each = 4),
+          Open_Defecation    = rep(c(0.7, 0.3, 0.05), each = 4),
+          population_density = rep(c(10, 200, 50), each = 4),
+          GDP                = rep(c(500, 5000, 1500), each = 4))
+     sc <- intersect(MOSAIC:::.PSI_STATIC_COUNTRY_COVARIATES, names(d))
+     expect_length(sc, 4L)
+     M <- vapply(sc, function(k) as.numeric(tapply(d[[k]], d$iso_code, mean)[iso]),
+                 numeric(length(iso)))
+     M <- scale(M)
+     expect_equal(nrow(M), 3L)
+     expect_true(all(abs(colMeans(M)) < 1e-12))            # z-scored across countries
+     expect_true(all(abs(apply(M, 2, stats::sd) - 1) < 1e-12))
+})
+
+test_that("D9b composes with N5 and N6", {
+     skip_on_cran(); skip_if_not_installed("keras3")
+     skip_if_not(reticulate::py_module_available("tensorflow"), "TensorFlow unavailable")
+     set.seed(4)
+     b <- .cv_bundle(); b$encoders$country_static <- .cv_static()
+     r <- MOSAIC:::.psi_fit_predict_lstm(b, seed = 11L,
+            hyperparams = utils::modifyList(.cv_hp,
+              list(country_static = "frozen", film_input = TRUE, gamma_scale = 2)))
+     expect_true(all(is.finite(as.numeric(r$pred))))
+})

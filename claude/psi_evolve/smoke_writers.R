@@ -50,7 +50,10 @@ SPECS <- list(
   n5   = list(ac = list(n_seeds = 1L, film_input = TRUE),
               need = "film_input", note = "N5 input-FiLM (country-variability)"),
   n6   = list(ac = list(n_seeds = 1L, gamma_scale = 2),
-              need = "gamma_scale", note = "N6 sign-permissive country gamma")
+              need = "gamma_scale", note = "N6 sign-permissive country gamma"),
+  d9b  = list(ac = list(n_seeds = 1L, country_static = "frozen"),
+              need = "country_static",
+              note = "D9b country embedding from static covariates (frozen)")
 )
 
 fail <- character(0)

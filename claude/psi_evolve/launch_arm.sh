@@ -15,6 +15,7 @@
 #   PSI_FILM_INPUT=1                   N5: condition the trunk's INPUTS
 #   PSI_GAMMA_SCALE=2                  N6: let country modulation flip sign
 #   PSI_COUNTRY_BALANCE=1              N8: per-country loss balancing
+#   PSI_COUNTRY_STATIC=frozen          D9b: country embedding from covariates
 #   PSI_FEATURE_SET=v7.3|v7.4          data (D arms; v7.4 = leak-free panels)
 #   PSI_EPOCH_SELECT=k                 HA-02: fold loop on k seeds, refit all
 #   PSI_SEED_BASE=1001                 REPLICATE (disjoint seed block -> floor)
@@ -49,6 +50,7 @@ for i in $(seq 0 $((N-1))); do
       PSI_FILM_INPUT="${PSI_FILM_INPUT:-0}" \
       PSI_GAMMA_SCALE="${PSI_GAMMA_SCALE:-}" \
       PSI_COUNTRY_BALANCE="${PSI_COUNTRY_BALANCE:-0}" \
+      PSI_COUNTRY_STATIC="${PSI_COUNTRY_STATIC:-}" \
       PSI_FEATURE_SET="${PSI_FEATURE_SET:-v7.3}" \
       PSI_EPOCH_SELECT="${PSI_EPOCH_SELECT:-0}" \
       PSI_LEAD="${PSI_LEAD:-0}" PSI_EXCLUDE="${PSI_EXCLUDE:-}" \

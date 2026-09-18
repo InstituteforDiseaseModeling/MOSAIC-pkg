@@ -1,3 +1,17 @@
+#' Static per-country covariates carried into the encoders for D9b.
+#'
+#' All present in the canonical panel and all absent from the v7.3/v7.4 feature
+#' sets. Eight are exactly constant in time per country; the remaining four vary
+#' only slowly and are effectively constant within a 13-week input window.
+#' @keywords internal
+#' @noRd
+.PSI_STATIC_COUNTRY_COVARIATES <- c(
+     "Piped_Water", "Other_Improved_Water", "Unimproved_Water", "Surface_Water",
+     "Septic_or_Sewer_Sanitation", "Other_Improved_Sanitation",
+     "Unimproved_Sanitation", "Open_Defecation",
+     "population_density", "urban_population_pct", "GDP", "poverty_ratio")
+
+
 # =============================================================================
 # build_suitability_sequences.R — Data loading, target construction, train-only
 # feature scaling, and country-blocked LSTM sequence building for the lstm_v2
@@ -352,8 +366,46 @@
                           length(region_list)), call. = FALSE)
      }
 
+     # ---- D9b: per-country STATIC covariate matrix, in country-ID order ----
+     # WHY. Country identity currently reaches the model only as a learned ID
+     # embedding, so the model can pool across countries by hard region
+     # membership and never by SIMILARITY -- and it is most data-hungry exactly
+     # where data is scarcest (RWA 29 non-zero case-weeks, KEN 41, AGO 51).
+     # These covariates are constant (8 of them exactly: per-country temporal
+     # CV = 0.000) or near-constant per country while varying strongly across
+     # them (cross-country CV 0.44-1.18), which is why they are NOT usable as
+     # sequence features -- a constant channel tells an LSTM nothing the country
+     # FiLM's beta_c does not already supply. Carried here instead so the FiLM
+     # generator can be initialised FROM them (see .psi_fit_predict_lstm), which
+     # costs one field rather than threading a new model input through the
+     # bundle, both slicers and make_x.
+     country_static <- NULL
+     .sc <- intersect(.PSI_STATIC_COUNTRY_COVARIATES, names(d))
+     if (length(.sc) >= 2L) {
+          M <- vapply(.sc, function(k) {
+               v <- tapply(d[[k]], d$iso_code, function(z) mean(z, na.rm = TRUE))
+               as.numeric(v[iso_list])
+          }, numeric(length(iso_list)))
+          M <- matrix(M, nrow = length(iso_list), dimnames = list(iso_list, .sc))
+          # drop degenerate columns, then z-score across countries so no single
+          # covariate's units dominate the embedding
+          sdv  <- apply(M, 2, stats::sd, na.rm = TRUE)
+          keep <- is.finite(sdv) & sdv > 0
+          M <- M[, keep, drop = FALSE]
+          if (ncol(M) >= 2L) {
+               M <- scale(M)
+               M[!is.finite(M)] <- 0
+               country_static <- matrix(as.numeric(M), nrow = length(iso_list),
+                                        dimnames = list(iso_list, colnames(M)))
+               if (verbose)
+                    message(sprintf("  country_static: %d covariates x %d countries",
+                                    ncol(country_static), nrow(country_static)))
+          }
+     }
+
      encoders <- list(
           n_countries           = length(iso_list),
+          country_static        = country_static,
           n_regions             = length(region_list),
           iso_list              = iso_list,
           region_list           = region_list,

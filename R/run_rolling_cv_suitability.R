@@ -314,6 +314,7 @@
           tcn_kernel = ac$tcn_kernel, tcn_dilations = ac$tcn_dilations,
           # Country-variability capacity (N5/N6). Defaults reproduce production.
           film_input = isTRUE(ac$film_input), gamma_scale = ac$gamma_scale %||% 1,
+          country_static = ac$country_static,
           # Loss internals — passive under bce + balanced_uniform (the B4/production
           # config), but threaded so an arch_control research override (mse_logit /
           # linear / quadratic) is honored rather than silently ignored. Values
@@ -495,6 +496,7 @@
                # Two psi files with different values here are not comparable.
                film_input        = isTRUE(ac$film_input),
                gamma_scale       = ac$gamma_scale %||% 1,
+               country_static    = ac$country_static,
                # HA-02 epoch provenance: which seeds chose the epoch, and which
                # epoch every ensemble member was refitted at.
                epoch_select_seeds = if (ha02$active) ha02$k else NULL,

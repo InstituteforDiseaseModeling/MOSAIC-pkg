@@ -123,6 +123,11 @@ if (nzchar(Sys.getenv("PSI_GAMMA_SCALE", ""))) {
   cat("N6: gamma_scale =", ac$gamma_scale,
       "-- country modulation may flip sign when > 1\n")
 }
+if (nzchar(Sys.getenv("PSI_COUNTRY_STATIC", ""))) {
+  ac$country_static <- Sys.getenv("PSI_COUNTRY_STATIC")   # "frozen" | "trainable"
+  cat("D9b: country embedding initialised from static covariates (",
+      ac$country_static, ")\n", sep = "")
+}
 if (Sys.getenv("PSI_COUNTRY_BALANCE", "0") == "1") {
   ac$country_balance <- TRUE
   cat("N8: country_balance ON -- per-country aggregate loss balancing\n")
@@ -185,7 +190,8 @@ cat("\n================ ARM ", ARM, " ================\n", sep = "")
 cat("geometry     :", geom_name, "| trunk:", TRUNK, "| feature_set:", FEATSET, "\n")
 cat("country caps :", "film_input", isTRUE(ac$film_input),
     "| gamma_scale", ac$gamma_scale %||% 1,
-    "| country_balance", isTRUE(ac$country_balance), "\n")
+    "| country_balance", isTRUE(ac$country_balance),
+    "| country_static", ac$country_static %||% "none", "\n")
 cat("seeds        :", NSEED, "| epoch_select:", ESK, "| lead:", ac$lead, "\n")
 cat("shard        :", SHARD, "of", NSHARD, "| MOSAIC", as.character(packageVersion("MOSAIC")), "\n")
 cat("cutoffs      :", paste(format(cutoffs), collapse = ", "), "\n")

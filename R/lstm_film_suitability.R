@@ -84,7 +84,8 @@
           # Country-variability capacity (psi_evolve `N` arms). Both default to
           # the production behaviour, so an unset spec is byte-identical.
           film_input           = FALSE,   # N5: condition the trunk's INPUTS
-          gamma_scale          = 1        # N6: >1 lets country modulation flip sign
+          gamma_scale          = 1,       # N6: >1 lets country modulation flip sign
+          country_static       = NULL     # D9b: "frozen" | "trainable" | NULL
      ), hyperparams)
 
      enc <- data_bundle$encoders
@@ -299,13 +300,50 @@
      # c_dev is the deviation of each country's modulation from its region's.
      # Zero-init => data-sparse countries inherit pure regional modulation; the
      # L2 penalty (partial_pool_lambda) pulls them back toward zero deviation.
-     country_dev_layer <- keras3::layer_embedding(
-          input_dim                = enc$n_countries,
-          output_dim               = hp$country_dim,
-          embeddings_initializer   = "zeros",
-          embeddings_regularizer   = if (use_partial_pool)
-               keras3::regularizer_l2(hp$partial_pool_lambda) else NULL,
-          name = "country_deviation_embedding")
+     # ---- D9b: initialise the country embedding FROM static covariates -----
+     # Production learns a free `country_dim`-wide vector per country from the
+     # ID alone, so countries can only be pooled by hard region membership --
+     # and the embedding is most data-hungry exactly where data is scarcest.
+     # D9b replaces it with the country's standardised WASH / density /
+     # urbanisation / GDP / poverty vector:
+     #   "frozen"    -> country differences MUST be a linear map of those
+     #                  characteristics; zero free parameters per country, the
+     #                  strongest form of "pool by similarity"
+     #   "trainable" -> the same, as a warm start that can still depart
+     # NOTE THE INITIALISATION IS THE MIRROR IMAGE OF N5's. There the embedding
+     # was zeroed and the dense left default, so the branch is identity at init
+     # yet still receives gradient. Here the embedding is deliberately NONZERO,
+     # so the dense must be zeroed instead to keep the country FiLM at identity
+     # at init; gradient still flows into the dense because its input is
+     # nonzero. Zeroing both, or neither, breaks one of the two properties.
+     .cs_mode <- hp$country_static
+     .cs <- if (!is.null(.cs_mode) && !is.null(enc$country_static) &&
+                nrow(enc$country_static) == enc$n_countries) enc$country_static else NULL
+     if (!is.null(.cs_mode) && is.null(.cs))
+          stop(".psi_fit_predict_lstm: country_static = '", .cs_mode,
+               "' requested but encoders$country_static is absent or the wrong shape.",
+               call. = FALSE)
+     if (!is.null(.cs)) {
+          country_dev_layer <- keras3::layer_embedding(
+               input_dim                = enc$n_countries,
+               output_dim               = ncol(.cs),
+               weights                  = list(.cs),
+               trainable                = !identical(.cs_mode, "frozen"),
+               embeddings_regularizer   = if (use_partial_pool &&
+                                              !identical(.cs_mode, "frozen"))
+                    keras3::regularizer_l2(hp$partial_pool_lambda) else NULL,
+               name = "country_deviation_embedding")
+          .film_c_init <- "zeros"
+     } else {
+          country_dev_layer <- keras3::layer_embedding(
+               input_dim                = enc$n_countries,
+               output_dim               = hp$country_dim,
+               embeddings_initializer   = "zeros",
+               embeddings_regularizer   = if (use_partial_pool)
+                    keras3::regularizer_l2(hp$partial_pool_lambda) else NULL,
+               name = "country_deviation_embedding")
+          .film_c_init <- "glorot_uniform"
+     }
      c_dev <- input_country |> country_dev_layer() |>
           keras3::layer_flatten(name = "country_dev_flat")
 
@@ -321,9 +359,11 @@
      gamma_c <- keras3::layer_dense(c_dev, units = film_dim,
                                     activation = if (.gs == 1) "tanh" else
                                          function(x) .gs * keras3::op_tanh(x),
+                                    kernel_initializer = .film_c_init,
                                     name = "film_gamma_country")
      beta_c  <- keras3::layer_dense(c_dev, units = film_dim,
                                     activation = "linear",
+                                    kernel_initializer = .film_c_init,
                                     name = "film_beta_country")
      one_c <- keras3::op_ones_like(gamma_c)
      z_c <- keras3::op_add(
