@@ -1852,6 +1852,9 @@ run_MOSAIC <- function(config,
       if (identical(weighting_scheme, "tempered")) {
         # Adaptive-eta Gibbs weights: eta is chosen so the worst retained draw
         # sits at `weight_floor`, rather than saturating delta at a fixed 4.
+        # NOTE this is SHARPER than the saturated default, not softer -- see the
+        # warning on control$targets$best_subset_weighting. The degeneracy check
+        # below exists because this scheme can put ~96% of the mass on one draw.
         adaptive_final <- .mosaic_calc_adaptive_gibbs_weights(
           likelihood = top_subset_final$likelihood,
           verbose    = FALSE
@@ -1885,6 +1888,19 @@ run_MOSAIC <- function(config,
       ag_final <- calc_model_agreement_index(w_final)
       A_final <- ag_final$A
       CVw_final <- calc_model_cvw(w_final)
+
+      # Guard: whichever scheme is selected, a subset posterior that has
+      # collapsed onto one or two draws is not usable for credible intervals.
+      # "tempered" can do this (96% on one draw, measured), so say so loudly
+      # rather than letting a near point mass through as a posterior.
+      if (is.finite(ESS_B_final) && ESS_B_final < 0.05 * length(w_tilde_final)) {
+        log_warn(paste0("Best-subset weighting '%s' produced a near-degenerate ",
+                        "posterior: ESS_B = %.2f over %d members (%.1f%% of mass ",
+                        "on the single heaviest draw). Credible intervals from ",
+                        "this subset are not trustworthy."),
+                 weighting_scheme, ESS_B_final, length(w_tilde_final),
+                 100 * max(w_tilde_final))
+      }
 
       # Exact (untruncated) importance-sampling diagnostics. ESS_B above is
       # computed on truncated weights and is bounded away from its worst case by
@@ -3612,8 +3628,15 @@ mosaic_control_defaults <- function(calibration = NULL,
     #     close to uniform and ESS_B is high by construction. See the
     #     "Assign best-subset weights" section of MOSAIC-docs/05-model-calibration.Rmd.
     #   "tempered": adaptive-eta Gibbs weights (.mosaic_calc_adaptive_gibbs_weights),
-    #     which keep the worst retained draw at `weight_floor` instead of a fixed
-    #     delta cut. Preserves more of the likelihood ordering within the subset.
+    #     which pin the WORST retained draw at `weight_floor`.
+    #     WARNING -- this is SHARPER than "saturated", not softer. eta is derived
+    #     from max(delta) WITHIN the set it is given: over all draws max(delta)
+    #     ~2.9e6 gives a near-flat weighting, but within the ~115-member best
+    #     subset max(delta) ~4.2e3, so eta is ~680x larger. Measured on ETH 25k:
+    #     ESS_perplexity 107.48 -> 1.25, with 96.08% of the posterior mass on a
+    #     SINGLE draw. It does preserve the likelihood ordering faithfully
+    #     (Spearman 1.0 vs 0.16), but at the cost of a near point-mass posterior.
+    #     Do not enable it expecting a gentler scheme.
     # Changing this changes every posterior; it is NOT a cosmetic switch.
     best_subset_weighting = "saturated"
   )
