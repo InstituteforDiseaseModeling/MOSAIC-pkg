@@ -13,11 +13,19 @@ test_that("Pareto k-hat is calibrated against its published thresholds", {
   # Light tail: finite IS variance -> khat well below 0.5
   good <- calc_is_diagnostics(rnorm(2000, sd = 0.5))
   expect_lt(good$khat, 0.5)
-  expect_identical(good$khat_status, "ok")
+  expect_match(good$khat_status, "^good")
 
   # Heavy tail: khat climbs into the unreliable band
   bad <- calc_is_diagnostics(rnorm(2000, sd = 3))
   expect_gt(bad$khat, good$khat)
+
+  # The status must convey USABILITY, not just that the fit converged: a bare
+  # "ok" beside k-hat = 73.9 misled a reader of summary.json.
+  worst <- calc_is_diagnostics(c(0, -rexp(1999, rate = 1 / 5e5)))
+  if (is.finite(worst$khat) && worst$khat >= 0.7) {
+    expect_match(worst$khat_status, "unreliable")
+  }
+  expect_false(identical(bad$khat_status, "ok"))
 })
 
 test_that("a collapsed importance sampler is reported, not smoothed over", {

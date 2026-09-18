@@ -159,7 +159,16 @@ calc_is_diagnostics <- function(log_lik, method = c("kish", "perplexity")) {
      k <- k * nx / (nx + a) + a * 0.5 / (nx + a)
 
      if (!is.finite(k)) return(bad("non-finite shape estimate"))
-     attr(k, "status") <- "ok"
+     # The status must report whether the ESTIMATE IS USABLE, not merely whether
+     # the fit converged. A bare "ok" next to k-hat = 73.9 reads as reassurance
+     # and is actively misleading; the thresholds are Vehtari et al. (2024).
+     attr(k, "status") <- if (k < 0.5) {
+          "good: finite IS variance"
+     } else if (k < 0.7) {
+          "marginal: IS variance is large but finite"
+     } else {
+          "unreliable: k-hat >= 0.7, IS estimates have unbounded variance"
+     }
      k
 }
 
