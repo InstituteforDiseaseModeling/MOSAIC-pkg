@@ -165,7 +165,10 @@
                      "patience", "country_dim", "timesteps", "n_seeds",
                      "seed_base", "seed_step", "max_gap_days", "rlr_patience",
                      "rw_step_months", "rw_test_months", "rw_subsample",
-                     "rw_gap_weeks", "parallel_seeds")
+                     "rw_gap_weeks", "parallel_seeds",
+                     # HA-01 12-week-horizon knobs. All absent from the B4 fixture,
+                     # so they resolve to NULL and the historical behaviour stands.
+                     "lead", "step_days", "test_days", "min_test_days")
      for (k in int_fields) if (!is.null(ac[[k]]) && !is.na(ac[[k]]))
           ac[[k]] <- as.integer(round(as.numeric(ac[[k]])))
      # Warn (once, before any worker spawns) if parallel_seeds risks OOM on this
@@ -266,11 +269,16 @@
           country_pool   = ac$country_pool %||% "all_mosaic",
           target_iso     = ac$target_iso %||% "MOZ",
           timesteps      = ac$timesteps,
+          lead           = as.integer(ac$lead %||% 0L),
           features       = features,
           split_params   = list(rw_step_months = ac$rw_step_months,
                                  rw_test_months = ac$rw_test_months,
                                  rw_subsample   = ac$rw_subsample,
-                                 rw_gap_weeks   = ac$rw_gap_weeks),
+                                 rw_gap_weeks   = ac$rw_gap_weeks,
+                                 rw_step_days   = ac$step_days,
+                                 rw_test_days   = ac$test_days,
+                                 rw_min_test_days = ac$min_test_days,
+                                 rw_min_train_years = ac$min_train_years),
           use_confidence_weight = isTRUE(ac$use_confidence_weight),
           response_var   = response_var,
           max_gap_days   = ac$max_gap_days,
