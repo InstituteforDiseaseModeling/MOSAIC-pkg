@@ -39,21 +39,31 @@ All at the incumbent's `n_seeds`, on the frozen 9-cutoff grid. Fold counts are e
 
 ## PRIORITY (wave 23): country-variability capacity is now the top of the ladder
 
-**Why this is promoted above everything else.** Every arm in this programme has helped some
-countries and hurt others, and wave 22 showed the split is not idiosyncratic: `C9d`'s benefit
-separates along the **shipped `snf_k5` region map** — snf_1 (AGO, MOZ, MWI, ZWE, ZMB) weighted
-**−0.259 with every member non-positive**, snf_2 (COD, SSD, SOM, ETH, BDI, TZA, RWA, KEN) **+0.498**
-with 6 of 8 positive, Wilcoxon p = 0.045. Meanwhile the architecture audit found that country
-conditioning acts **only on the trunk's 32-dim output** while the recurrent weights are identical
-for all 40 countries — so the model structurally cannot express what actually differs. The measured
-horizon decay ratio spans **0.083 (ZWE) to 1.387 (MWI)**: a 17x spread in the one property the
-architecture forces to be common.
+**Why this family is prioritised — RESTATED at wave 24, because the original argument was wrong.**
 
-There is also a structural consequence for the objective: **if every intervention's benefit splits
-by region, the A3 breadth guard will reject any arm that is not regionally neutral, and a single
-shared-trunk model cannot be regionally neutral.** Either the model gains regional capacity, or the
-programme is fitting the wrong object. That makes this family the highest-value work available, not
-merely the next item.
+The wave-22 motivation was that every arm's benefit splits along the shipped `snf_k5` map
+(snf_1 weighted −0.259, all members non-positive; snf_2 +0.498; Wilcoxon p = 0.045).
+**That claim is RETRACTED.** Tested against a pure fit-noise null — `P000R` vs `P000`, the *same
+spec*, so the delta is only the seed block — region adds `p = 0.1416` (R² 0.181), which is
+indistinguishable from what it adds on the two real arms (`p = 0.0804` and `p = 0.1173`). Region
+explains about as much of the noise as of any effect, because the floor shows fit instability
+concentrated in COD (0.611), SOM (0.212) and BDI (0.145) — **all snf_2**, which is therefore simply
+the noisy region. Mean reversion was also tested and is not the explanation.
+
+**What still justifies this family is the architecture audit, whose findings are structural facts
+about the model and do not depend on any delta analysis:**
+
+- country/region conditioning acts **only on the trunk's 32-dim output**, while the recurrent
+  weights that process the 13-week sequence are identical for all 40 countries;
+- `country_balance = FALSE`, so the shared trunk is fitted in proportion to data volume;
+- **zero** static country covariates in the feature set, so country identity is a bare ID embedding
+  and countries can be pooled only by hard region membership, never by similarity;
+- tanh γ is **sign-preserving**, so a country can damp or double a trunk feature but never reverse it.
+
+Those are defects whether or not the deltas show a regional pattern. The per-country *decay-ratio*
+spread (0.083 ZWE to 1.387 MWI) is still cited as motivation but is **itself measured on a single
+fit and not yet tested against the noise null** — that check is queued and should be done before the
+spread is quoted again.
 
 | order | id | change | class | cost | status |
 |---|---|---|---|---|---|
