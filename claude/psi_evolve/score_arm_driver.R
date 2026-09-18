@@ -35,12 +35,13 @@ obs <- obs[is.finite(obs$observed), ]
 obs <- obs[!duplicated(obs[, c("iso_code", "date")]), ]
 cat("observed series from panel column '", RESPONSE_VAR, "': ", nrow(obs), " rows\n", sep = "")
 
-preds <- list(); used <- integer(0)
+preds <- list(); pres <- list(); used <- integer(0)
 for (i in seq_len(nrow(grid))) {
      f <- file.path(CACHE, sprintf("psi_%s.csv", format(grid$cutoff[i])))
      if (!file.exists(f)) next
      p <- utils::read.csv(f, stringsAsFactors = FALSE)
      p$date <- as.Date(p$date)
+     praw <- p
      # THIS cutoff's block only: a model may only be scored on the block it was
      # fitted to forecast.
      p <- p[p$date >= grid$test_start[i] & p$date <= grid$test_end[i], ]
@@ -50,10 +51,17 @@ for (i in seq_len(nrow(grid))) {
      if ("pred_smooth" %in% names(p)) keepc <- c(keepc, "pred_smooth")
      if ("pred_raw" %in% names(p))    keepc <- c(keepc, "pred_raw")
      preds[[length(preds) + 1L]] <- p[, keepc]
+     # D2: keep this fold's PRE-CUTOFF predictions too. Residual-mode intervals are
+     # estimated from them; without this the sample is the block itself (12 points
+     # for fold 2, zero for fold 1).
+     pc <- praw[praw$date <= grid$cutoff[i], , drop = FALSE]
+     if (nrow(pc)) { pc$fold <- grid$block[i]
+       pres[[length(pres) + 1L]] <- pc[, intersect(keepc, names(pc))] }
      used <- c(used, grid$block[i])
 }
 if (!length(preds)) stop("score_arm_driver: no psi cache files matched the evaluation grid")
 pred <- do.call(rbind, preds)
+pred_pre <- if (length(pres)) do.call(rbind, pres) else NULL
 folds <- data.frame(fold = grid$block, train_end = grid$cutoff,
                     test_start = grid$test_start, test_end = grid$test_end)
 
@@ -62,7 +70,7 @@ cat("arm:", ARM, "| mode:", MODE, "| cutoffs present:", length(used),
 IM  <- Sys.getenv("PSI_INTERVAL_MODE", "seed")
 PC  <- Sys.getenv("PSI_COLUMN", "psi")
 res <- score_psi_arm(ARM, pred, obs, folds, mode = MODE, dir = HERE, verbose = TRUE,
-                     interval_mode = IM, psi_column = PC)
+                     interval_mode = IM, psi_column = PC, pred_pre = pred_pre)
 
 cat("\n=== PER-COUNTRY WIS-SKILL vs persistence ===\n")
 pi <- res$per_iso[order(-res$per_iso$w), ]

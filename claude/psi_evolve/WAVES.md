@@ -1442,3 +1442,52 @@ implicit bias correction inside the interval terms) is the substantive path.
 The registered interpretable work is exhausted: B-CAL2 is done, and everything remaining either
 needs a refit (below the 0.070 floor) or is a protocol/objective change an agent may not enact.
 Budget is not the constraint (66 of 200 dugong-hours, 18 of 30 waves) — resolution is.
+
+## Wave 19 — D2 fixed: one of three interval sign-flips was an artifact, and A000's residual score was badly wrong
+
+I had stopped twice saying the interval question needed a human. On re-reading the review's order of
+operations that was too quick: **`residual` is a diagnostic option, not the objective** (`seed` is),
+so fixing its defects is not an objective change and was mine to do.
+
+**The defect (D2).** Residual-mode intervals were estimated from `pred`, which the driver had
+already truncated to the evaluation blocks — 12 points for fold 2 and **zero for fold 1**, silently
+dropping the earliest block from every country. Meanwhile each cached psi file already holds
+**~3,230 pre-cutoff rows per country** (`pred_date_start = 2015-03-26`), which the driver discarded
+at line 46. Fixed by threading a `pred_pre` frame; residual quantiles now come from in-sample
+pre-cutoff history, the same quantity and scale as the baseline's.
+
+**Structural effect:** residual-mode cells **183 → 199** (the dropped fold is back), and A000's
+residual score moves **−0.3503 → −0.1361**. The 12-point estimator was not merely noisy; it was
+badly miscalibrated, and it made residual mode look far worse than it is.
+
+### The three sign-flips, re-tested
+
+| comparison | seed | residual (D2-fixed) | flip survives? |
+|---|---|---|---|
+| B-CAL vs A000 | −0.030 | **+0.055** | **YES** |
+| **B-CAL2 vs A000** | −0.025 | **−0.021** | **NO — was a D2 artifact** |
+| AR-03 vs A100 | −0.169 | **+0.113** | **YES** |
+
+**One of three flips was my own scorer defect.** B-CAL2 is now consistently negative under both
+modes, so its rejection (wave 18) is unambiguous rather than mode-dependent. B-CAL and AR-03 still
+reverse, so the interval question is genuinely open for those two — but it is a smaller question
+than I reported: it concerns two comparisons, not three, and one of the two (AR-03) is a
+below-resolution screen anyway.
+
+### A stale number in the record, flagged
+
+Earlier waves compared psi to the per-country constant using **residual = −0.2216 (constant) vs
+−0.3503 (A000)** and concluded the constant won. With D2 fixed A000's residual is **−0.1361**, so
+that comparison is **superseded and its direction probably reverses.** The wave-17 retraction of
+"psi loses to a flat constant" already stands on an independent argument (conditioning on target
+variability); this is a second, independent reason the claim was wrong. I have not recomputed the
+constant under the fixed estimator, so I am flagging the old figure as stale rather than asserting
+a new one.
+
+### Test coverage closed on the path that produced these numbers
+
+The review found **zero tests touched `interval_mode = "residual"`** — the path behind B-CAL's
++0.117, the NC2 finding and every residual number in the ledger, and the path containing D2. Added
+two: one asserts residual mode scores, that it loses cells without `pred_pre` (i.e. reproduces D2),
+and that supplying `pred_pre` restores parity with seed-mode cell counts; the other asserts
+`pred_pre` is validated rather than silently ignored. **11 scorer tests pass.**

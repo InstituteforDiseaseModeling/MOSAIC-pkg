@@ -128,3 +128,38 @@ test_that("the no-regression guard FAILS when top-10 countries are unscored", {
   expect_false(r$guard_ok)
   expect_match(r$guard_note, "unscored")
 })
+
+test_that("residual interval mode scores, and pred_pre widens its estimation sample", {
+  # The review found ZERO tests touched interval_mode = "residual" -- the path that
+  # produced B-CAL's +0.117, the NC2 finding, and every residual-mode number in the
+  # ledger. It also contained D2: without `pred_pre` the residual sample is the
+  # block itself, which is empty for the first fold, silently dropping it.
+  p <- mk_pred(function(o) o)
+  r_seed <- score_psi_arm("S", p, obs, folds, "selection", verbose = FALSE,
+                          interval_mode = "seed")
+  r_res  <- score_psi_arm("R", p, obs, folds, "selection", verbose = FALSE,
+                          interval_mode = "residual")
+  expect_true(is.finite(r_res$S))
+  expect_identical(r_res$interval_mode, "residual")
+  # without pred_pre the first fold cannot form residuals -> fewer cells than seed
+  expect_lt(r_res$n_cells, r_seed$n_cells)
+
+  # with pred_pre (pre-block history per fold) every fold is scoreable again
+  pre <- do.call(rbind, lapply(seq_len(nrow(folds)), function(k) {
+    d <- dates[dates <= folds$train_end[k]]
+    do.call(rbind, lapply(isos, function(i) data.frame(
+      iso_code = i, date = d, fold = folds$fold[k],
+      psi = obs$observed[obs$iso_code == i & obs$date %in% d],
+      stringsAsFactors = FALSE)))
+  }))
+  r_pp <- score_psi_arm("P", p, obs, folds, "selection", verbose = FALSE,
+                        interval_mode = "residual", pred_pre = pre)
+  expect_equal(r_pp$n_cells, r_seed$n_cells)
+})
+
+test_that("pred_pre is validated rather than silently ignored", {
+  p <- mk_pred(function(o) o)
+  expect_error(score_psi_arm("V", p, obs, folds, "selection", interval_mode = "residual",
+                             pred_pre = data.frame(iso_code = "COD", date = Sys.Date())),
+               "needs iso_code, date, fold")
+})

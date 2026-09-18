@@ -88,7 +88,8 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
                           mode = c("selection", "confirmation"),
                           incumbent = NULL, dir = .PSI_EVOLVE_DIR, verbose = TRUE,
                           interval_mode = c("seed", "residual"),
-                          psi_column = "psi") {
+                          psi_column = "psi",
+                          pred_pre = NULL) {
      mode <- match.arg(mode)
      interval_mode <- match.arg(interval_mode)
      # `train_end` is load-bearing: it is the model's information cut-off and the
@@ -111,6 +112,13 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
      if (!psi_column %in% names(pred))
           stop("score_psi_arm: psi_column '", psi_column, "' not in `pred`.", call. = FALSE)
      if (!identical(psi_column, "psi")) pred$psi <- pred[[psi_column]]
+     if (!is.null(pred_pre)) {
+          if (!all(c("iso_code", "date", "fold", psi_column) %in% names(pred_pre)))
+               stop("score_psi_arm: `pred_pre` needs iso_code, date, fold and '", psi_column, "'.",
+                    call. = FALSE)
+          if (!identical(psi_column, "psi")) pred_pre$psi <- pred_pre[[psi_column]]
+          pred_pre$date <- as.Date(pred_pre$date)
+     }
      stopifnot(is.data.frame(pred), is.data.frame(obs), is.data.frame(folds))
      W <- .pe_weights(dir)
      pool <- W$iso_code
@@ -186,8 +194,26 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
                } else {
                     # Symmetric with the baseline: empirical quantiles of the
                     # model's OWN residuals on this country's pre-block history.
-                    pre <- pred[pred$iso_code == iso & pred$date < as.Date(fd$test_start), ,
-                                drop = FALSE]
+                    #
+                    # D2 (red-team, wave 13): this used to read `pred`, which the
+                    # driver has already truncated to the evaluation blocks. So the
+                    # residual sample was 12 out-of-sample points for the second fold
+                    # and ZERO for the first -- which silently dropped the earliest
+                    # block from every country (A000: 199 -> 183 cells = exactly one
+                    # fold x 16 countries), and made the interval estimator's quality
+                    # depend on the fold index. `quantile(r, 0.025)` on 12 points is
+                    # essentially the sample minimum (~85% coverage, not 95%).
+                    #
+                    # The fix costs nothing: each cached psi file already spans the
+                    # full prediction window from `pred_date_start`, so ~3,230
+                    # pre-cutoff rows per country exist and the driver was discarding
+                    # them. Supplied via `pred_pre`, the model's residual sample is
+                    # now in-sample pre-cutoff history -- the same quantity, on the
+                    # same scale, as the baseline's.
+                    src <- if (!is.null(pred_pre)) pred_pre else pred
+                    pre <- src[src$iso_code == iso & src$date <= as.Date(fd$train_end), ,
+                               drop = FALSE]
+                    if (!is.null(pred_pre)) pre <- pre[pre$fold == fd$fold, , drop = FALSE]
                     pm  <- merge(pre[, c("date", "psi")], o[, c("date", "observed")], by = "date")
                     r   <- pm$observed - pm$psi
                     r   <- r[is.finite(r)]
