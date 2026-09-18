@@ -1491,3 +1491,59 @@ The review found **zero tests touched `interval_mode = "residual"`** — the pat
 two: one asserts residual mode scores, that it loses cells without `pred_pre` (i.e. reproduces D2),
 and that supplying `pred_pre` restores parity with seed-mode cell counts; the other asserts
 `pred_pre` is validated rather than silently ignored. **11 scorer tests pass.**
+
+## Wave 20 — redoing what D2 invalidated: two more corrections, one of them to my own prediction
+
+### (1) The constant still wins pooled — my "probably reverses" was wrong
+
+| | superseded (broken estimator) | D2-fixed |
+|---|---|---|
+| A000 | −0.3503 | **−0.1361** |
+| constant | −0.2216 | **−0.1039** |
+| A000 − const | −0.129 | **−0.032** |
+
+The gap shrank by 75% but **did not reverse**. Last wave I wrote that the direction "probably
+reverses"; it does not. I hedged the wording, which was right, but the prediction itself was wrong
+and is now measured.
+
+Note this does not resurrect the retracted claim: wave 17 showed psi beats the constant **within
+all three target-variability tertiles** (+0.378 / +0.316 / +0.017), so the pooled loss remains an
+aggregation artifact — now a smaller one.
+
+### (2) B-CAL is weaker than I called it — the bootstrap and an exact test disagree
+
+B-CAL, D2-fixed residual, full grid:
+
+```
+delta S      = +0.0551          A1 margin 0.0153        PASS
+A2 bootstrap = median +0.157, 95% CI [+0.083, +0.275]   PASS
+exact origin-level sign-flip p = 0.4036 (13 origins, 7 wins)   NOT SIGNIFICANT
+A3 top-10 worst = -0.2053 (MOZ)                          FAIL
+```
+
+**The bootstrap says pass; an exact test on the same 13 origins says p = 0.40.** Seven wins from
+thirteen origins is a coin flip. The bootstrap resamples origins and recomputes a burden-weighted
+mean, so it can return a tight interval while the per-origin *direction* is random — the weighted
+statistic is carried by a few high-weight countries whose deltas happen to be consistent. The exact
+test makes no distributional assumption and is the one to believe at this n; it was the
+statistician lane's recommendation and this is the first time I have run it.
+
+**So "B-CAL is the only well-identified effect in the ledger" needs qualifying.** It is the only
+effect free of *fit* noise (cache-paired), which is real and distinguishes it from A100/T1. But it is
+not statistically distinguishable from chance at the origin level, and it fails A3 under both
+interval modes — now with MOZ (−0.205) as the worst regressor rather than ZMB.
+
+### (3) The residual-mode fit-noise floor, re-measured
+
+`|ΔS|` between A000 and its seed replicate under the fixed estimator: **0.1587** (was 0.2128).
+
+**Which floor applies to which comparison — worth stating explicitly, because I have conflated them:**
+
+| comparison type | example | fit-noise floor |
+|---|---|---|
+| **cache-paired** (same fits, different post-processing) | B-CAL, B-CAL2, interval mode, `psi_column` | **none — identical fits** |
+| **refit** (geometry, target, features, seeds) | A100, T1, AR-03 | **0.070 seed / 0.159 residual** |
+
+So B-CAL's +0.055 is *not* below its applicable floor — cache-pairing removes it. What B-CAL fails
+is the exact origin-level test and A3, not the noise floor. A100's +0.040 and T1's −0.042 remain
+below theirs.
