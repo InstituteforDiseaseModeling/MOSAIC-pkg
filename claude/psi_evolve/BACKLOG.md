@@ -37,6 +37,23 @@ All at the incumbent's `n_seeds`, on the frozen 9-cutoff grid. Fold counts are e
 | F7 | epoch estimator: trimmed mean / per-fold-weighted instead of `median(best_epoch)` | estimator only | as parent | +0 | 0/+ | F-select; cheap, and the median discards the fold spread entirely |
 | F8 | **fold-model ensembling** — the RW fold models enter the prediction instead of being discarded | prediction assembly | as parent | M | + | **F-ensemble** — today `n_folds` trained models are thrown away and one refit replaces them; bagging over origins is the standard answer and is free of extra fits |
 
+## The wave-22 finding reorders the ladder
+
+C6 established that psi's out-of-sample failure is a **systematic horizon-growing level collapse**
+(0.179 -> 0.089 against a flat truth of ~0.22), that it is model-side, and that six class-C repairs
+all fail A3 because the correction helps in sustained-transmission countries and destroys countries
+whose epidemic is ending. **The binding constraint is that psi has no information about whether
+transmission is currently sustained or ending** — its inputs are climate only. That makes the next
+arm a refit, and reorders what is worth running:
+
+| id | arm | class | why it moved |
+|---|---|---|---|
+| **D8** | **recent-incidence (autoregressive) input channel** | R | THE headline hypothesis. Every serious epidemic forecaster is autoregressive; this one is not. It is the only arm that supplies the information the class-C repairs were trying to infer from the level and could not. **SCOPE CAVEAT, for the user not the agent:** psi is consumed by the engine as an *environmental forcing* term, so an autoregressive psi partly duplicates the engine's own transmission dynamics — the same "changes what psi means" warning `DA-05` and `CV-01` carry. Worth measuring regardless, because it bounds how much of the 12-week gap is a missing-input problem. |
+| **N3** | multi-horizon heads (4/8/12 wk) | R | promoted. C6 shows the error is strongly horizon-structured (h1 -0.19, h2 -0.51, h3 -0.30 and a monotone level decay), and the model has ONE head trained on one target. The most direct architectural answer to a horizon-structured error. |
+| **AR-07** | probabilistic psi into the engine | R | promoted from PARKED. psi's intervals are seed dispersion with 6.8% zero-width rows, and C7b/C7b_C9d move by ~0.19 in residual mode while losing in seed mode — the interval treatment is doing real work in these verdicts, not just decorating them. |
+| C7d | combination weight per country AND per horizon week | C | PARKED as not estimable: ~1 block per (country x horizon-week) cell on this grid. C7c's pooled version scored -0.874. |
+| C9e | any further tuning of the C9d gate threshold | C | **DO NOT RUN.** Choosing a threshold that excludes ZMB after seeing ZMB is selection on the evaluation set — the error this ledger already records twice (B-CAL2, C7). |
+
 ## Backbone N — architecture (blocked on `TRUNK-REG`)
 
 | id | arm | one change vs parent | cost | predicted | evidence |
