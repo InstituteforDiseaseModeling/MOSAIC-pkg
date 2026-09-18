@@ -335,7 +335,8 @@
      out_daily <- el[, c("iso_code", "date", "cases", "psi", "pred_raw",
                          "pred_smooth", "pred_bias_corrected",
                          "q025", "q25", "q75", "q975")]
-     out_daily$year        <- as.integer(format(out_daily$date, "%Y"))
+     # DA-01: ISO week-based year (`%G`) to match the `%V` week below.
+     out_daily$year        <- as.integer(format(out_daily$date, "%G"))
      out_daily$week        <- as.integer(format(out_daily$date, "%V"))
      out_daily$cases_binary <- as.integer(out_daily$cases > 0)
      out_daily$pred        <- out_daily$pred_raw   # backward-compat alias for cosmetic plotters

@@ -9,7 +9,19 @@ model/LAUNCH.R
 model/output/
 /output/
 **data_psi_suitability.csv
-claude/
+# Ignore claude/ CONTENTS rather than the directory itself, so git still descends
+# into it and the negation below can take effect (git never re-includes a path
+# under an excluded directory).
+claude/*
+# Exception: the psi 12-week evolution process ledger must be durable across
+# sessions and machines (see claude/psi_evolve/PROTOCOL.md).
+!claude/psi_evolve/
+# ...but not its bulk artefacts: data backups, run logs and per-arm outputs are
+# large and reproducible. Only the process ledger itself is tracked.
+claude/psi_evolve/da01_backup/
+claude/psi_evolve/*.log
+claude/psi_evolve/results/
+claude/psi_evolve/psi_cache/
 *.tar.gz
 *.Rcheck/
 ..Rcheck/
