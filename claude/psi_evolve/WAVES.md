@@ -1750,3 +1750,117 @@ a v2 effect size should be expected to carry over: the direction did, the size d
 
 It also validated the gate calculator on real inputs, including its graceful fallback when
 `REGISTRY.tsv` is absent on the remote (multiplicity term falls back and says so).
+
+## Wave 22 — the largest defect in the programme, found for free, and why repairing it does not (yet) convert into skill
+
+The loop was launched. `P000` and `P000R` (its replicate, disjoint seed block 1001) are fitting on
+dugong — 18 processes x 9 threads, the reference and the fit-noise floor in one wave. While they
+ran I took the class-C work, which is free and needs no floor.
+
+### Launch discipline earned its keep twice in the first ten minutes
+
+`P000` was launched, the verification printed **50 inner folds where PROTOCOL section 6 says 9**,
+and I killed it before it ran. The fit was correct (`[rolling_cv] 9 RW steps ... subsample=6`); **my
+verification was wrong**: it read the raw geometry preset, but `p000` is deliberately EMPTY and the
+fit resolves it against the B4 fixture, which pins `rw_subsample = 6`. That is CLAUDE.md lesson 13
+inverted — a check keyed on raw input where the real path uses a defaults-merged structure — and a
+check that cries wolf is a check nobody reads. Fixed to resolve through
+`.psi_load_arch_control()` first; all six presets now reproduce section 6's table exactly
+(89 / 255 / 229 / 677 / 1351 / 912).
+
+Then, trying to verify the other presets, I ran `source("run_arm.R")` — which **starts nine real
+fits**. Killed within a minute. There was no way to inspect a plan without launching it, so
+`PSI_DRYRUN=1` now prints the resolved plan and exits.
+
+### C6 — the diagnostic that reframes the whole programme
+
+OBJECTIVE section 3 has listed "score vs position-in-window" as reported since v1 and it had never
+been computed. Decomposing skill by weeks-past-embargo into its numerator and denominator:
+
+| wk | WIS_mod | WIS_base | skill | psi_mean | obs_mean |
+|---|---|---|---|---|---|
+| 1 | 0.100 | 0.089 | −0.125 | **0.179** | 0.230 |
+| 4 | 0.162 | 0.094 | −0.726 | 0.107 | 0.247 |
+| 9 | 0.155 | 0.096 | −0.614 | **0.089** | 0.214 |
+| 13 | 0.171 | 0.111 | −0.534 | 0.093 | 0.226 |
+
+`WIS_base` is **flat** (0.088-0.111), so the baseline is not the story and the non-monotone
+per-horizon profile is a second-order artifact of the ratio. The real finding is the `psi_mean`
+column: **psi decays from 0.179 to 0.089 while the truth stays flat at ~0.22.** Mean signed error
+grows −0.052 → −0.140.
+
+And it is the **model**, not the post-processing — all three columns decay by the same factor from
+week ≤2 to week ≥9 (psi 55%, `pred_smooth` 61%, `pred_raw` 65%) while observed holds at 95%. In
+sample the model is well calibrated (psi 0.273, `pred_raw` 0.226 vs observed 0.238); out of sample
+at week 9+ psi is **42% of the truth**.
+
+**This is the largest single defect measured anywhere in this programme, and it explains most of its
+history:** why psi loses to persistence (whose bias is ~+0.02), why it loses to a flat climatology,
+why wave 17 found psi only beats a constant where the target is FLAT, and why calibration drives
+`psi_star_b` to its prior floor downstream (DS-02) — psi arrives systematically too low and too
+dead. It also quantifies the `psi_flat_tail_lstm_v2_unfixed` agent memory on the production grid.
+
+### Six class-C arms against it. The biggest effect in the ledger — and it still fails A3.
+
+| arm | what | dS (seed) | residual | A3 worst |
+|---|---|---|---|---|
+| C9a | flat per-country shift to the pre-cutoff level | −0.023 | −0.559 | — |
+| C9b | horizon-indexed, from the previous cutoff's realized error | −0.247 | −0.584 | — |
+| C9c | horizon-indexed, toward psi's OWN pre-cutoff level, per country | **+0.071** | −0.310 | — |
+| **C9c_h** | C9c at half strength | **+0.137** | −0.296 | **ZMB −1.124** |
+| **C9d** | C9c_h gated on pre-cutoff incidence > pool median | **+0.141** | −0.312 | **ZMB −0.949** |
+| C7 | combination with climatology, lambda from pre-cutoff MAE | −0.159 | −0.385 | — |
+| C7b | same, lambda from EARLIER CUTOFFS' realized blocks | −0.040 | **−0.290** | — |
+| C7c | C7b with a horizon-ramped lambda pooled across countries | −0.874 | −0.368 | — |
+
+`C9d` is the largest aggregate gain in the ledger (+0.141, S −0.380 → −0.239), improves in **both**
+interval modes and at **all three** horizons, and is class C so no fit-noise floor applies — the
+consistency no v2 arm had. It still **REJECTS**: bootstrap CI [−0.708, +0.321] (one origin at
+−1.524), exact test 4/6 origins p = 0.69, and A3 fails on **ZMB −0.949**, **ZWE −0.368**. The
+aggregate is a redistribution — COD +0.756, SSD +0.624, SOM +0.549, ETH +0.467 bought with
+ZMB/ZWE — which is the wave-12 pattern for the third time and exactly the trade A3 exists to refuse.
+
+### Four mechanisms established, each by a failed arm
+
+1. **A flat shift is the wrong shape.** C9a damaged the short horizons (h1mo −0.189 → −0.467) where
+   psi has not yet decayed, while helping the long ones. Horizon indexing is required.
+2. **Pooling a correction across countries fails, three times over.** C9b pooled its decay curve
+   (−0.247); C7c pooled its lambda curve (−0.874). Per-country corrections (C9c, C9d) are the only
+   ones that gain anything. A per-country x per-horizon-week curve is not estimable on 6 blocks.
+3. **A pre-cutoff-fit selection signal cannot see an out-of-sample collapse.** C7's lambda came out
+   **1.00 for 14 of 16 countries** — "ignore climatology" — because psi is excellent in-sample and
+   only dies out of sample. This is wave 18's B-CAL2 finding restated, PROTOCOL records the caution,
+   and I registered C7 without applying it. Re-estimating lambda from earlier cutoffs' realized
+   blocks (C7b) fixes the diagnosis and flips the residual-mode verdict (−0.480 → −0.290).
+4. **And the one that closes the family:** I hypothesised the correction could be gated on how much
+   psi decays — a property of the model's own output, hence leakage-free. **Refuted:**
+   cor(decay, benefit) = −0.11. What does predict the benefit is recent observed *incidence*:
+   +0.476 against the block outcome and **+0.738 against the PRE-CUTOFF level** — stronger for the
+   pre-cutoff version, so the gate is a legitimate cutoff-time variable, not a bet on the outcome.
+   But gating on it (C9d) still fails, and ZMB shows why: **ZMB's trailing incidence was high at
+   these cutoffs because its 2023-24 epidemic was ending.** No pre-cutoff *level* threshold can
+   distinguish sustained transmission from a decaying one.
+
+### Where that leaves the technique portfolio
+
+The binding constraint is now specific: **psi has no information about whether transmission is
+currently sustained or ending**, because its inputs are climate only. Every level repair above is an
+attempt to infer that from the level, and the level cannot carry it. That is a *model input*
+problem, not a post-processing one — which makes the next arm a refit, and refits need the floor
+that `P000R` is measuring right now.
+
+The headline hypothesis for the R-class ladder is therefore **D8: give the model a recent-incidence
+(autoregressive) input channel.** Every serious epidemic forecaster is autoregressive and this one
+is not. It is registered with the caveat that it changes what psi MEANS — psi is consumed by the
+engine as an environmental forcing term, so an autoregressive psi partly duplicates the engine's own
+transmission dynamics (the same "changes what psi means" warning DA-05 and CV-01 carry). That makes
+it a scope question for the user as well as an arm.
+
+Also newly motivated: **N3 (multi-horizon heads)** — C6 shows the error is strongly horizon-
+structured and the current model has a single head trained on one target; and **AR-07** — psi's
+intervals are seed dispersion with 6.8% zero-width rows, and C7b/C7b_C9d improve by ~0.19 in
+residual mode while losing in seed mode, so the interval treatment is doing real work in these
+verdicts.
+
+`C9d` is **not adopted**, and I am not tuning its gate further: choosing a threshold that excludes
+ZMB after seeing ZMB is the selection-on-the-evaluation-set error this file already records twice.

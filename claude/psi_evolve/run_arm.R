@@ -136,16 +136,26 @@ spec <- list(feature_set = FEATSET, arch_control = ac)
 # A silent 6x stride multiplication once turned a 12-fold grid into 2 and was
 # caught only by comparing against an independent computation BEFORE the run.
 # Do that computation here, every time, and print it.
-mk <- getFromNamespace(".psi_make_rw_cv_steps", "MOSAIC")
+#
+# CRITICAL: resolve `ac` through .psi_load_arch_control() FIRST. The arm presets
+# are sparse overrides -- `p000` is deliberately EMPTY -- and the fit resolves
+# them against the B4 fixture, which pins rw_subsample = 6. Reading the raw
+# preset instead computed 50 folds where the fit runs 9: the verification
+# disagreed with a CORRECT fit, which is the same defect shape as CLAUDE.md
+# lesson 13 (a guard keyed on raw input where the real path uses a
+# defaults-merged structure), and a check that cries wolf is a check nobody
+# reads. Caught at the 2026-09-18 P000 launch by this very print.
+acr <- getFromNamespace(".psi_load_arch_control", "MOSAIC")(ac)
+mk  <- getFromNamespace(".psi_make_rw_cv_steps", "MOSAIC")
 nf <- vapply(cutoffs, function(T0) length(mk(
-        fit_date_start = ac$fit_date_start %||% "2015-01-01", cutoff_date = T0,
-        step_months = ac$rw_step_months %||% 1L,
-        test_months = ac$rw_test_months %||% 5L,
-        gap_weeks   = ac$rw_gap_weeks   %||% 4L,
-        subsample   = ac$rw_subsample   %||% 1L,
-        timesteps   = ac$timesteps      %||% 13L,
-        min_test_days = ac$min_test_days, step_days = ac$step_days,
-        test_days = ac$test_days, min_train_years = ac$min_train_years)), integer(1))
+        fit_date_start = acr$fit_date_start %||% "2015-01-01", cutoff_date = T0,
+        step_months = acr$rw_step_months %||% 1L,
+        test_months = acr$rw_test_months %||% 5L,
+        gap_weeks   = acr$rw_gap_weeks   %||% 4L,
+        subsample   = acr$rw_subsample   %||% 1L,
+        timesteps   = acr$timesteps      %||% 13L,
+        min_test_days = acr$min_test_days, step_days = acr$step_days,
+        test_days = acr$test_days, min_train_years = acr$min_train_years)), integer(1))
 
 # The production psi cache is READ-ONLY (PROTOCOL 5.7): never write an arm into it.
 CACHE <- file.path(HERE, paste0("psi_cache_", ARM, if (SMOKE) "_smoke" else ""))
@@ -164,6 +174,16 @@ cat("fit units    :", if (ESK > 0L) sprintf("%d fold-fits + %d refits (HA-02)",
                                    length(cutoffs) * NSEED), "\n")
 cat("cache        :", CACHE, "\n\n")
 utils::str(ac)
+
+# PSI_DRYRUN=1 prints the resolved plan and exits BEFORE any fitting. The
+# launch-verification step (PROTOCOL 1.3) needs a way to check the geometry
+# against section 6's table without burning compute; without this the only way
+# to see the plan was to start the fit, and sourcing this script to inspect it
+# starts 9 real fits. Learned the hard way 2026-09-18.
+if (Sys.getenv("PSI_DRYRUN", "0") == "1") {
+  cat("\nDRY RUN -- no fit launched. Resolved inner folds per cutoff above.\n")
+  quit(save = "no", status = 0)
+}
 
 t0 <- Sys.time()
 res <- prefit_rolling_cv_psi(
