@@ -1547,3 +1547,206 @@ interval modes — now with MOZ (−0.205) as the worst regressor rather than ZM
 So B-CAL's +0.055 is *not* below its applicable floor — cache-pairing removes it. What B-CAL fails
 is the exact origin-level test and A3, not the noise floor. A100's +0.040 and T1's −0.042 remain
 below theirs.
+
+## Wave 21 — the process is re-anchored on the production validation grid, and it can now test CV structure, architecture and data
+
+**User instruction (2026-09-18), which is the authorization PROTOCOL 5.1 requires:** test whether
+changes to the *training* CV structure or the *NN architecture* improve on the current production
+model; define IS/OOS from the forecast-validation cutoffs **already run** for the production model;
+use **more CV folds** on the IS data; and cover data upgrades too.
+
+### What already existed, found rather than assumed
+
+The production model's forecast validation is **OCV-4**: 9 quarterly cutoffs 2024-01-01 → 2026-01-01,
+units NGA/MOZ/COD/ETH, horizons 1/2/3 months, v1 and v2 both complete
+(`claude/forecast_cv_ocv4_q2yr{,_v2}/` on the laptop, plus
+`output/validation/forecast_cv/ocv4_q2yr/v1_baseline/`). Critically, **each cutoff's production psi
+is already frozen**: 9 × `psi_<cutoff>.csv` + 9 leak-free `panel_v74_<cutoff>.csv` in
+`/home/jgiles/MOSAIC/MOSAIC-pkg/claude/forecast_cv_ocv4_q2yr/psi_cache/` **on dugong** (1.7 GB, built
+2026-07-11, MOSAIC 0.63.0, per-cutoff sha256 in its `psi_manifest.json`), fitted **globally over all
+40 ISOs** — so the frozen 16-country scoring pool still applies and the weights file is untouched.
+
+That psi used `feature_set = "v7.4"` with `rw_step_months=1, rw_test_months=4, rw_subsample=2,
+n_seeds=10` — **not** the package default (v7.3, `rw_test_months=5`, `rw_subsample=6`). "The current
+production model" was therefore ambiguous, and the user's decision was to score **both**: `P001`
+(validated stack, free) and `P000` (shipped default, one refit). The contrast is the v7.3-vs-v7.4
+data-upgrade result obtained as a by-product.
+
+### Objective v3
+
+| | v2 | v3 |
+|---|---|---|
+| grid | 18 invented cutoffs, 84-day stride | **the 9 OCV-4 production cutoffs** |
+| blocks | 84 d, 14 d embargo | 92 d, 14 d embargo — **identical arithmetic to `.rolling_cv_label()`** |
+| phases | 12 of 12 | **4 of 12** (Jan/Apr/Jul/Oct) — a real, accepted loss |
+| split | 14 selection / 4 confirmation | 6 selection / 3 LOCKED confirmation |
+| cells | 199 | 90 selection (134 of 144 country-blocks observed) |
+| incumbent cost | one full refit | **zero for P001** |
+| baselines | persistence | persistence + **`seasonal`** + persistence_last |
+| horizons | pooled only | pooled + **h1mo/h2mo/h3mo** |
+
+Weights file and sha are **unchanged**, so per-country weights carry over — but the blocks changed,
+so **every v2 `S` is superseded**. v2's *method* findings (the fit-noise floor, the aggregation
+artifact, interval-mode sensitivity) carry over; its numbers do not.
+
+**Why accept 4/12 phase coverage after wave 2 spent a wave establishing 12/12.** Comparability with
+the production validation plus a free incumbent is worth more than phase breadth at this budget. The
+price is recorded as binding: no arm may be justified by a seasonal-phase argument, and a
+phase-extension set (cutoff + 42 d) is pre-registered but unbuilt — it has no incumbent cache, so it
+is not free and runs only to defend an arm that already won.
+
+**The `seasonal` must-beat (A6) replaces the wave-8 constant rule.** `persistence` is
+`mean(tail(observed, 4))` — a flat local constant — so beating it says nothing about whether psi's
+*dynamics* are informative, which is what wave 17 measured (+0.378 where the target is flat, +0.017
+where it moves). A week-of-year climatology is the cheapest baseline that actually varies in time.
+
+### The process can now run refit arms, which is what waves 0-20 could not
+
+Waves 0-20's single transferable finding was that **every refit-arm delta was smaller than the
+spread between two fits of the same arm** (0.070 seed / 0.159 residual). The user's request is
+entirely for refit-class arms, so the revision is built around making them interpretable:
+
+1. **Arm CLASSES are now registered** (PROTOCOL 3b). Class C (cache-paired) has no fit noise and is
+   always preferred when it can test the same hypothesis; class R must clear a floor **measured at
+   its own seed count**.
+2. **`FLOOR-10` is a PREREQ, not an option.** The v2 floor was measured at 3 seeds; production uses
+   10, and pooled-psi noise should fall as ~1/sqrt(n_seeds) → predicted ~0.038. That prediction is
+   registered and must be measured before any class-R arm is read.
+3. **Seed count is a registered dimension.** Every class-R arm runs at the incumbent's `n_seeds`;
+   lowering it to save compute is a different arm, not a saving.
+4. **A2 now requires the bootstrap AND an exact origin-level sign test**, because at v2 they
+   disagreed (B-CAL: CI [+0.083, +0.275] but p = 0.4036).
+5. **A3 is documented as a near-certain rejector for class R** (P ≈ 0.998 under a zero effect) and
+   is read against the per-country floor.
+6. **Screening is retired** (sign-flip floor p = 0.125 at 4-6 origins; unchanged-arm subset swing
+   0.77). Arms run the full 9-cutoff grid; cost control comes from `HA-02`.
+7. **`compare_arms.R` computes A1-A6 in one code path.** Through wave 20 every gate was derived
+   inside the wave that wanted it — which is how the guard shipped failing open four ways and how
+   the exact test went unrun for twenty waves.
+8. **T7 (resolution failure)** is a new stopping rule: if the floor stays above any plausible
+   remaining effect, the honest conclusion is "not measurable at this budget", not "does not work".
+
+### Two package gaps closed, because the request was not runnable without them
+
+**`TRUNK-REG` — architecture arms did not exist as specs.** `est_suitability()` exposed only
+`lstm_v2_hierarchical_film` and `lstm_v1_legacy`; there was no TCN anywhere in the package (the
+bake-off's `tcn_v1` lives in `claude/psi_arch_bench/`, outside it). `build_trunk()`
+(`R/lstm_film_suitability.R:104`) already returned `(B, units_3)` with a trunk-agnostic FiLM stack
+downstream, so `arch_control$trunk = lstm|gru|tcn` is a genuinely single change. All three build and
+fit through the FiLM head (147,328 / 111,168 / 45,536 params); the artefact now records which trunk
+made it.
+
+This also closes a confound I should state plainly: **the April bake-off's LSTM entry was the
+then-production 3-layer LSTM, and `lstm_film_suitability.R` landed 2026-06-07 — after it.** So "the
+TCN led the bake-off" is a result against a *retired* architecture, and `tcn_v1` ranked **last of
+six** under that bake-off's own v2 (26-week) protocol. `N1` is the first honest test.
+
+**`HA-02` — "more CV folds" was unaffordable at the production seed count.** The inner RW-CV
+produces exactly one number that reaches the deployed model, `round(median(best_epoch))`, and every
+seed re-ran the whole fold loop to re-derive it. Cost was `folds × seeds`:
+
+| geometry | folds (9 cutoffs) | @10 seeds | @10 with HA-02 |
+|---|---|---|---|
+| `P000` pkg default | 89 | 9 h | **3.6 h** |
+| `F4` 84 d stride | 229 | 21 h | **5.7 h** |
+| `F1` 28 d stride | 677 | 53 h | **12.4 h** |
+| `F2` 14 d stride | 1,351 | 105 h | **22.5 h** |
+| `F5` 7 d stride | 2,697 | 210 h | 43 h — out of budget at any seed count |
+
+`epoch_select_seeds = k` runs the fold loop on k seeds and refits all of them at the pooled epoch.
+Default NULL keeps the historical path byte-unchanged. A test asserts the decoupled path picks the
+**same epoch** the one-shot path would have.
+
+**And PROTOCOL 3c, which matters more than either:** an `F` arm must name what the extra folds
+*inform*. More folds buy only a more stable estimate of one scalar, and that saturates — 89 folds
+already estimate it. So `F1`/`F2` are registered with predicted direction **0** (the honest null),
+and the arms with a mechanism are `F6` (choose the epoch by held-out WIS instead of pooled BCE),
+`F7` (a better estimator than the median) and `F8` (bag the fold models instead of discarding them).
+"More folds is more data" is not a mechanism: the training data per fold is unchanged.
+
+### A defect found by doing the work: the target scale is panel-dependent (D7)
+
+`target_D_rate_per_country_floored` is normalised **per country over its panel's compile window**.
+The leak-free per-cutoff v7.4 panels (2015-01-01 → cutoff) therefore do **not** carry the canonical
+panel's target values: over the pool × 9 scored blocks, **1.23% of rows differ by > 0.01, 0.70% by
+> 0.05, max 1.00** (TZA 1.00, SSD 0.61, COD 0.35).
+
+My first verdict rule ("any top-10 country with max diff > 0.1 → inadmissible") fired on 6 of 10
+countries and was wrong — it keyed on a raw tail of ~2 rows in 119, while the estimand is a **median
+over blocks**, which only moves if half the blocks move. Re-tied to the estimand: the worst country
+has **2 of 9 blocks affected**, so `S` and the A3 guard are robust and scoring on the canonical
+series is admissible. `audit_target_scale.R` now runs this per arm and must be attached to any
+v7.4 score.
+
+The deeper issue is the reverse of how it first looks: the **canonical** denominator is computed over
+the full series including post-cutoff data, so the *shipped* v7.3 path trains on a mildly look-ahead
+target scale and the per-cutoff version is the leak-free one. Fixing that changes the observed
+series, so it is an objective change (5.1) and is registered as `D7`, not enacted.
+
+### P001: the first v3 number, at zero compute
+
+```
+[P001 | selection | obj v3]  S = -0.3804   (exNGA -0.3898)   n_beat = 5/16   6 blocks, 90 cells
+  vs persistence      -0.3804  (5/16)
+  vs seasonal         -0.2492  (6/16)   -> A6 FAILS
+  vs persistence_last -0.4004  (5/16)
+  per horizon:  h1mo -0.1885    h2mo -0.5131    h3mo -0.2962
+```
+
+Two things worth stating on their own:
+
+**The production model fails A6** — it loses to a week-of-year climatology at 12 weeks. A6 was
+written as an adoption filter on arms; the incumbent failing it means the bar is now "beat
+climatology", which an arm merely better than P001 will not clear. That is deliberate (OBJECTIVE 3b)
+and it is directly T2-relevant: if no arm beats `seasonal`, the honest output is that a
+climatological curve is the better 12-week product.
+
+**The per-horizon profile is NON-MONOTONE:** h2mo (−0.513) is worse than h3mo (−0.296). The 12-week
+loss is therefore not a compounding-with-horizon problem, which was unmeasurable under v2 (pooled
+only) and is the kind of thing that should steer arm design — `N3` (multi-horizon heads) is now the
+better-motivated architecture arm, not the afterthought.
+
+Per-country: only MOZ (+0.335), MWI (+0.285), ZMB (+0.630), CMR (+0.835) and KEN (+0.125) beat
+persistence; COD (−0.933), SSD (−1.343), AGO (−0.934), RWA (−2.784) are the worst.
+
+### Verified, not asserted
+
+- full suite **0 failures / 0 errors / 9,795 passing** (up 46: 20 trunk-registry, 26 HA-02)
+- scorer: **16 tests pass**, rewritten against the real frozen grid
+- `smoke_writers.R` extended to the two new fit-only paths and **PASSED** on all three variants
+  (base / tcn / ha02), including the new provenance keys
+- all three trunks build and fit through the FiLM head; unknown trunk and bad dilation spec both error
+- `audit_target_scale.R` and the full `score_arm_driver.R` chain **run on dugong against the
+  read-only production cache**
+
+### Next, in order (PROTOCOL 10)
+
+`P000` (3.6 h) → `FLOOR-10` (3.6 h) → `HA-02` equivalence arm → then the `F` → `N` → `D` ladders.
+Budget: 66 of 200 dugong-hours consumed; the ladder above costs ~66 h with replicates.
+
+### Addendum — a second v3 result, free, and it revises a v2 conclusion
+
+`compare_arms.R` needed exercising on real inputs, so I ran the cheapest class-C arm available:
+`pred_smooth` (bias correction OFF) scored from the **same** P001 cache — identical fits, so no
+fit-noise floor applies.
+
+```
+C-BCAL3 vs P001 (selection, seed intervals, 6 origins, 90 cells)
+  dS            = +0.0206   A1 margin 0.0120        PASS
+  A2 bootstrap  = median +0.0133, 95% CI [-0.0290, +0.0536]   FAIL
+  A2 exact test = 4/6 origins positive, p = 0.6875            FAIL
+  A3 guard      = worst top-10 -0.0286 (MWI)                  FAIL
+  A6            = loses to `seasonal` (-0.2194)               FAIL
+  => REJECT
+```
+
+**This revises the v2 reading of B-CAL.** Wave 16 called it "the only well-identified effect in the
+ledger" at +0.117, later +0.055 after the D2 fix. On the production grid the same comparison is
+**+0.0206** — 5x smaller than the original and 2.7x smaller than the corrected figure — with the
+bootstrap spanning zero and an exact test at p = 0.69. The per-country heterogeneity reproduces
+exactly (NGA +0.153, LBR +0.135, BDI +0.059 against RWA −0.231, KEN −0.030, MWI −0.029), so the
+*mechanism* was real; the *magnitude* was grid-specific. That is a useful calibration on how much of
+a v2 effect size should be expected to carry over: the direction did, the size did not.
+
+It also validated the gate calculator on real inputs, including its graceful fallback when
+`REGISTRY.tsv` is absent on the remote (multiplicity term falls back and says so).

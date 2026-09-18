@@ -168,7 +168,10 @@
                      "rw_gap_weeks", "parallel_seeds",
                      # HA-01 12-week-horizon knobs. All absent from the B4 fixture,
                      # so they resolve to NULL and the historical behaviour stands.
-                     "lead", "step_days", "test_days", "min_test_days")
+                     "lead", "step_days", "test_days", "min_test_days",
+                     # HA-02 (epoch/ensemble decoupling) + the TCN trunk's kernel.
+                     # Absent from the fixture -> NULL -> historical behaviour.
+                     "epoch_select_seeds", "tcn_kernel")
      for (k in int_fields) if (!is.null(ac[[k]]) && !is.na(ac[[k]]))
           ac[[k]] <- as.integer(round(as.numeric(ac[[k]])))
      # Warn (once, before any worker spawns) if parallel_seeds risks OOM on this
@@ -303,6 +306,12 @@
           region_l2 = ac$region_l2, sample_weights = ac$sample_weights,
           balance_R = ac$balance_R, loss_kind = ac$loss_kind,
           country_balance = isTRUE(ac$country_balance),
+          # Trunk registry (psi_evolve `N` arms). Defaults to the production LSTM;
+          # `gru`/`tcn` swap ONLY the sequence encoder, leaving the FiLM
+          # conditioning, the head, the loss and the features identical, so an
+          # architecture arm is a single registered change.
+          trunk = ac$trunk %||% "lstm",
+          tcn_kernel = ac$tcn_kernel, tcn_dilations = ac$tcn_dilations,
           # Loss internals — passive under bce + balanced_uniform (the B4/production
           # config), but threaded so an arch_control research override (mse_logit /
           # linear / quadratic) is honored rather than silently ignored. Values
@@ -314,6 +323,52 @@
      # (hierarchical + film + tanh); the fixture carries them for provenance, but
      # the exp/concat/flat/hypernet branches were dropped, so they are not live
      # arch_control overrides.
+
+     # ---- HA-02: epoch/ensemble decoupling (opt-in) ------------------------
+     # The inner RW-CV exists to choose ONE scalar, round(median(best_epoch)).
+     # By default every seed re-runs the entire fold loop to re-derive it, so
+     # cost is folds x seeds and a high-fold inner CV is unaffordable at the
+     # production seed count. With `epoch_select_seeds = k`, the fold loop runs
+     # on k designated seeds only; the ensemble then refits every seed at the
+     # pooled epoch. Cost becomes folds x k + refits x seeds.
+     #
+     # k = 1 is legitimate but note the epoch is then a single draw from a
+     # non-deterministic fit; k = 2-3 is the intended range. The chosen epoch is
+     # recorded in the manifest so two artefacts can be compared on it.
+     epoch_sel_k <- as.integer(ac$epoch_select_seeds %||% 0L)
+     ha02 <- list(active = epoch_sel_k > 0L, k = epoch_sel_k,
+                  seeds = NULL, epochs = NULL, epoch = NA_integer_)
+     if (ha02$active) {
+          if (epoch_sel_k > ac$n_seeds)
+               stop(sprintf("arch_control$epoch_select_seeds (%d) exceeds n_seeds (%d).",
+                            epoch_sel_k, ac$n_seeds), call. = FALSE)
+          sel_seeds <- seeds[seq_len(epoch_sel_k)]
+          if (verbose)
+               message(sprintf("HA-02: selecting the refit epoch from %d of %d seeds (%s); %d RW folds each",
+                               epoch_sel_k, ac$n_seeds,
+                               paste(sel_seeds, collapse = ", "), length(bundle$rw_steps)))
+          sel <- vapply(sel_seeds, function(sd) {
+               o <- .psi_fit_predict_rw_cv(data_bundle = bundle,
+                                           fit_predict_fn = .psi_fit_predict_lstm,
+                                           seed = sd, hyperparams = arch_hp,
+                                           verbose = verbose, epoch_only = TRUE)
+               as.integer(o$n_epochs)
+          }, integer(1))
+          fixed_ep <- as.integer(round(stats::median(sel)))
+          if (is.na(fixed_ep) || fixed_ep < 1L)
+               stop("HA-02: epoch selection produced no usable epoch.", call. = FALSE)
+          if (verbose)
+               message(sprintf("HA-02: per-seed epochs %s -> refitting all %d seeds at %d epochs",
+                               paste(sel, collapse = ", "), ac$n_seeds, fixed_ep))
+          ha02$seeds  <- sel_seeds
+          ha02$epochs <- sel
+          ha02$epoch  <- fixed_ep
+          fit_fn <- function(data_bundle, seed, hyperparams)
+               .psi_fit_predict_rw_cv(data_bundle = data_bundle,
+                                      fit_predict_fn = .psi_fit_predict_lstm,
+                                      seed = seed, hyperparams = hyperparams,
+                                      verbose = verbose, fixed_epoch = fixed_ep)
+     }
 
      ens <- .psi_run_seed_ensemble(
           fit_predict_fn = fit_fn, data_bundle = bundle, seeds = seeds,
@@ -429,6 +484,17 @@
                                             error = function(e) NA_real_),
                source_csv_mtime  = tryCatch(as.character(file.info(source_csv)$mtime),
                                             error = function(e) NA_character_),
+               # architecture identity: WHICH trunk produced this artefact. Two
+               # psi files from different trunks are not comparable, and before
+               # the registry there was no field that could say so.
+               trunk             = ac$trunk %||% "lstm",
+               tcn_kernel        = if (identical(ac$trunk, "tcn")) ac$tcn_kernel else NULL,
+               # HA-02 epoch provenance: which seeds chose the epoch, and which
+               # epoch every ensemble member was refitted at.
+               epoch_select_seeds = if (ha02$active) ha02$k else NULL,
+               epoch_select_from  = if (ha02$active) ha02$seeds else NULL,
+               epoch_select_vals  = if (ha02$active) ha02$epochs else NULL,
+               epoch_fixed        = if (ha02$active) ha02$epoch else NULL,
                # sequence + CV geometry (what makes a fold grid reproducible)
                timesteps         = ac$timesteps,
                lead              = as.integer(ac$lead %||% 0L),

@@ -1,16 +1,26 @@
 # =============================================================================
 # score_psi_arm.R -- the ONE scorer for the psi 12-week evolution process.
 #
-# Implements OBJECTIVE.md v2 exactly:
-#   S(arm) = sum_j w_j * median_over_folds( wis_skill_j )
-# where wis_skill is vs the PERSISTENCE baseline on held-out 84-day blocks,
-# w_j is the frozen sqrt-burden weight, over the 16-country scoring pool.
+# Implements OBJECTIVE.md v3 exactly:
+#   S(arm) = sum_j w_j * median_over_blocks( wis_skill_j )
+# where wis_skill is vs the PERSISTENCE baseline on the held-out 92-day block of
+# each of the 9 PRODUCTION VALIDATION cutoffs (the OCV-4 grid), w_j is the frozen
+# sqrt-burden weight, over the 16-country scoring pool.
 #
 # Guards that make the number trustworthy (PROTOCOL.md sections 5.1, 5.3):
 #   * the frozen weights file is sha256-checked on every call;
-#   * `mode` is explicit and the fold split is enforced here, not by the caller,
-#     so confirmation folds cannot leak into a selection score;
+#   * the declared objective_version in OBJECTIVE.md must match this scorer;
+#   * `mode` is explicit and the split is enforced here from EVAL_GRID.csv, never
+#     taken from the caller, so confirmation blocks cannot leak into a selection
+#     score AND a caller passing the wrong block geometry is rejected;
 #   * countries outside the frozen pool are dropped, loudly.
+#
+# v3 additions:
+#   * all three baselines scored on identical cells (persistence = the objective's
+#     denominator; `seasonal` = the A6 must-beat; persistence_last = reported);
+#   * per-horizon decomposition (h1mo/h2mo/h3mo) on the same cells, so "is the
+#     12-week loss a 12-week problem or a compounding 4-week one" is answerable
+#     without a second run.
 #
 # WIS and the baseline come from the package's own internals so the model and
 # the baseline are scored by identical code (forecast-CV finding FCV-07 was the
@@ -53,7 +63,56 @@
 
 # Top-10 burden countries -- the no-regression guard set (OBJECTIVE.md section 2)
 .PE_TOP10 <- c("COD","NGA","SSD","ETH","MOZ","SOM","MWI","AGO","ZWE","ZMB")
-.PE_SPLIT_DATE <- as.Date("2025-01-01")   # selection < this <= confirmation
+.PE_OBJECTIVE_VERSION <- 3L
+
+# The objective version this scorer implements must match the one OBJECTIVE.md
+# declares. Code and objective drifting apart silently is the failure mode
+# PROTOCOL 5.1 exists to prevent, and the weights sha cannot catch it: v3 reuses
+# v1/v2's weights file unchanged, so the hash matches across a grid change that
+# makes every prior score incomparable.
+.pe_assert_objective_version <- function(dir = .PSI_EVOLVE_DIR) {
+     f <- file.path(dir, "OBJECTIVE.md")
+     if (!file.exists(f))
+          stop("score_psi_arm: OBJECTIVE.md not found at ", f, call. = FALSE)
+     ln <- grep("^objective_version:", readLines(f, warn = FALSE), value = TRUE)
+     if (!length(ln))
+          stop("score_psi_arm: OBJECTIVE.md declares no `objective_version:`.", call. = FALSE)
+     v <- as.integer(trimws(sub("^objective_version:", "", ln[1])))
+     if (!identical(v, .PE_OBJECTIVE_VERSION))
+          stop(sprintf(paste0("score_psi_arm: objective mismatch. OBJECTIVE.md declares v%d but this ",
+                              "scorer implements v%d. Scores across versions are not comparable."),
+                       v, .PE_OBJECTIVE_VERSION), call. = FALSE)
+     invisible(v)
+}
+
+# The frozen evaluation grid. Read here rather than trusted from the caller: the
+# split, the block geometry and the horizon boundaries are objective parameters
+# (OBJECTIVE 4a), and at v2 nothing verified that the driver's `folds` frame
+# actually matched them.
+.pe_grid <- function(dir = .PSI_EVOLVE_DIR) {
+     f <- file.path(dir, "EVAL_GRID.csv")
+     if (!file.exists(f)) stop("score_psi_arm: EVAL_GRID.csv not found at ", f, call. = FALSE)
+     g <- utils::read.csv(f, stringsAsFactors = FALSE)
+     need <- c("block", "cutoff", "h1mo_end", "h2mo_end", "test_start", "test_end",
+               "split", "grid")
+     miss <- setdiff(need, names(g))
+     if (length(miss))
+          stop("score_psi_arm: EVAL_GRID.csv is missing column(s): ",
+               paste(miss, collapse = ", "), call. = FALSE)
+     g <- g[g$grid == "prod", , drop = FALSE]
+     for (k in c("cutoff", "h1mo_end", "h2mo_end", "test_start", "test_end"))
+          g[[k]] <- as.Date(g[[k]])
+     if (!all(g$split %in% c("selection", "confirmation")))
+          stop("score_psi_arm: EVAL_GRID.csv `split` must be selection|confirmation.",
+               call. = FALSE)
+     g
+}
+
+# Baselines scored on every cell. `persistence` is the objective's denominator;
+# `seasonal` is the A6 must-beat (the cheapest baseline that actually VARIES in
+# time -- persistence is a flat local constant, so beating it says nothing about
+# whether psi's dynamics are informative); `persistence_last` is reported.
+.PE_BASELINES <- c("persistence", "seasonal", "persistence_last")
 
 #' Score one arm.
 #'
@@ -120,16 +179,44 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
           pred_pre$date <- as.Date(pred_pre$date)
      }
      stopifnot(is.data.frame(pred), is.data.frame(obs), is.data.frame(folds))
+     .pe_assert_objective_version(dir)
      W <- .pe_weights(dir)
      pool <- W$iso_code
+     G <- .pe_grid(dir)
 
-     # ---- enforce the split HERE, never trust the caller ---------------------
+     # ---- enforce the split AND the geometry HERE, never trust the caller ----
+     # v3: the split comes from EVAL_GRID.csv's `split` column, and every fold the
+     # caller supplies must match the frozen grid on all four dates. At v2 the
+     # split was a date constant and the geometry was unverified, so a driver that
+     # built `folds` incorrectly would have produced a clean-looking score on the
+     # wrong blocks -- the same silent-wrong-number class as the wave-4 stride bug.
+     folds$fold       <- as.integer(folds$fold)
+     folds$train_end  <- as.Date(folds$train_end)
      folds$test_start <- as.Date(folds$test_start)
-     keep <- if (mode == "selection") folds$test_start <  .PE_SPLIT_DATE
-             else                     folds$test_start >= .PE_SPLIT_DATE
-     folds <- folds[keep, , drop = FALSE]
+     folds$test_end   <- as.Date(folds$test_end)
+     unknown <- setdiff(folds$fold, G$block)
+     if (length(unknown))
+          stop("score_psi_arm: fold(s) not in the frozen grid: ",
+               paste(unknown, collapse = ", "), call. = FALSE)
+     gi <- match(folds$fold, G$block)
+     bad <- which(folds$train_end  != G$cutoff[gi] |
+                  folds$test_start != G$test_start[gi] |
+                  folds$test_end   != G$test_end[gi])
+     if (length(bad))
+          stop(sprintf(paste0("score_psi_arm: fold geometry does not match the frozen grid for ",
+                              "block(s) %s. Expected block %d = cutoff %s, test [%s, %s]; got ",
+                              "train_end %s, test [%s, %s]."),
+                       paste(folds$fold[bad], collapse = ","), folds$fold[bad[1]],
+                       G$cutoff[gi[bad[1]]], G$test_start[gi[bad[1]]], G$test_end[gi[bad[1]]],
+                       folds$train_end[bad[1]], folds$test_start[bad[1]], folds$test_end[bad[1]]),
+               call. = FALSE)
+     folds$split <- G$split[gi]
+     folds$h1mo_end <- G$h1mo_end[gi]
+     folds$h2mo_end <- G$h2mo_end[gi]
+     folds <- folds[folds$split == mode, , drop = FALSE]
      if (nrow(folds) == 0L)
-          stop(sprintf("score_psi_arm: no %s folds (split at %s)", mode, .PE_SPLIT_DATE), call. = FALSE)
+          stop(sprintf("score_psi_arm: no %s blocks present in `folds` (grid has %d)",
+                       mode, sum(G$split == mode)), call. = FALSE)
      pred <- pred[pred$fold %in% folds$fold, , drop = FALSE]
 
      # ---- restrict to the frozen pool, loudly --------------------------------
@@ -222,28 +309,100 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
                     lo95 <- m$psi + q[1]; lo50 <- m$psi + q[2]
                     hi50 <- m$psi + q[3]; hi95 <- m$psi + q[4]
                }
-               wis_model <- mean(wis_fn(m$observed, m$psi, lo50, hi50, lo95, hi95), na.rm = TRUE)
-               b <- bl_fn(is_df, m$date, "persistence")
-               if (!any(is.finite(b$point))) next
-               wis_base <- mean(wis_fn(m$observed, b$point, b$pi50_lo, b$pi50_hi,
-                                       b$pi95_lo, b$pi95_hi), na.rm = TRUE)
-               if (!is.finite(wis_base) || wis_base <= 0) next
+               # Per-ROW WIS for the model and for every baseline, computed once.
+               # The horizon decomposition then aggregates the same rows into
+               # buckets -- so a bucket score and the pooled score are guaranteed
+               # to be the same quantity on the same cells, rather than two
+               # separate runs that could diverge.
+               wis_m_row <- wis_fn(m$observed, m$psi, lo50, hi50, lo95, hi95)
+               bl_row <- list()
+               for (bn in .PE_BASELINES) {
+                    b <- bl_fn(is_df, m$date, bn)
+                    bl_row[[bn]] <- if (any(is.finite(b$point)))
+                         wis_fn(m$observed, b$point, b$pi50_lo, b$pi50_hi,
+                                b$pi95_lo, b$pi95_hi)
+                    else rep(NA_real_, nrow(m))
+               }
+               # The objective's denominator must exist for the cell to count.
+               wb_all <- mean(bl_row[["persistence"]], na.rm = TRUE)
+               if (!is.finite(wb_all) || wb_all <= 0) next
 
-               cells[[length(cells) + 1L]] <- data.frame(
-                    iso_code = iso, fold = fd$fold, n_days = nrow(m),
-                    wis_model = wis_model, wis_base = wis_base,
-                    wis_skill = 1 - wis_model / wis_base, stringsAsFactors = FALSE)
+               # Horizon buckets, identical to MOSAIC:::.rolling_cv_label():
+               # h1mo = oos0+1..oos0+31, h2mo = ..+61, h3mo = ..+92.
+               hb <- ifelse(m$date <= fd$h1mo_end, "h1mo",
+                            ifelse(m$date <= fd$h2mo_end, "h2mo", "h3mo"))
+               idx_list <- c(list(all = rep(TRUE, nrow(m))),
+                             stats::setNames(lapply(c("h1mo", "h2mo", "h3mo"),
+                                                    function(h) hb == h),
+                                             c("h1mo", "h2mo", "h3mo")))
+               for (hn in names(idx_list)) {
+                    idx <- idx_list[[hn]]
+                    # A bucket needs >= 2 observed weeks to mean anything; the
+                    # pooled cell keeps the historical >= 4 floor via nrow(m).
+                    if (sum(idx) < if (hn == "all") 4L else 2L) next
+                    wm <- mean(wis_m_row[idx], na.rm = TRUE)
+                    row <- data.frame(iso_code = iso, fold = fd$fold, horizon = hn,
+                                      n_days = sum(idx), wis_model = wm,
+                                      stringsAsFactors = FALSE)
+                    for (bn in .PE_BASELINES) {
+                         wb <- mean(bl_row[[bn]][idx], na.rm = TRUE)
+                         row[[paste0("wis_base_", bn)]]  <- wb
+                         row[[paste0("skill_", bn)]] <-
+                              if (is.finite(wb) && wb > 0) 1 - wm / wb else NA_real_
+                    }
+                    # Back-compatible names: the objective's baseline.
+                    row$wis_base  <- row$wis_base_persistence
+                    row$wis_skill <- row$skill_persistence
+                    cells[[length(cells) + 1L]] <- row
+               }
           }
      }
      if (!length(cells)) stop("score_psi_arm: no scoreable (country, fold) cells", call. = FALSE)
      cells <- do.call(rbind, cells)
+     cells_all <- cells[cells$horizon == "all", , drop = FALSE]
+     if (!nrow(cells_all))
+          stop("score_psi_arm: no scoreable (country, block) cells at the pooled horizon",
+               call. = FALSE)
 
-     # ---- aggregate: median over folds within country, then burden-weighted --
-     per_iso <- stats::aggregate(wis_skill ~ iso_code, cells, stats::median)
-     per_iso <- merge(per_iso, W[, c("iso_code", "w")], by = "iso_code")
-     per_iso$w <- per_iso$w / sum(per_iso$w)          # renormalise over scored countries
-     S <- sum(per_iso$w * per_iso$wis_skill)
-     n_beat <- sum(per_iso$wis_skill > 0)
+     # ---- aggregate: median over blocks within country, then burden-weighted -
+     # One helper for every skill column, so the objective's S, the baseline
+     # comparisons and the per-horizon numbers are computed by IDENTICAL code.
+     # NOTE this estimand is median-then-weight, so it is NOT additive across
+     # subsets: the pooled S is not a weighted average of the per-horizon S
+     # values, and a uniform within-subset win can pool to a loss (wave 17).
+     # PROTOCOL section 4 requires subset claims to be computed, never inferred.
+     agg_S <- function(df, col) {
+          d <- df[is.finite(df[[col]]), c("iso_code", col), drop = FALSE]
+          if (!nrow(d))
+               return(list(per_iso = NULL, S = NA_real_, n_beat = NA_integer_, n_scored = 0L))
+          names(d)[2] <- "skill"
+          pi <- stats::aggregate(skill ~ iso_code, d, stats::median)
+          pi <- merge(pi, W[, c("iso_code", "w")], by = "iso_code")
+          pi$w <- pi$w / sum(pi$w)                    # renormalise over scored countries
+          list(per_iso = pi, S = sum(pi$w * pi$skill),
+               n_beat = sum(pi$skill > 0), n_scored = nrow(pi))
+     }
+
+     primary <- agg_S(cells_all, "skill_persistence")
+     per_iso <- primary$per_iso
+     names(per_iso)[names(per_iso) == "skill"] <- "wis_skill"
+     S <- primary$S
+     n_beat <- primary$n_beat
+
+     # A6 (OBJECTIVE 3b): the same arm, same cells, against each baseline.
+     S_by_baseline <- lapply(.PE_BASELINES, function(bn) {
+          a <- agg_S(cells_all, paste0("skill_", bn))
+          list(S = a$S, n_beat = a$n_beat, n_scored = a$n_scored)
+     })
+     names(S_by_baseline) <- .PE_BASELINES
+
+     # Per-horizon decomposition, vs the objective's baseline, on the same cells.
+     per_horizon <- lapply(c("h1mo", "h2mo", "h3mo"), function(hn) {
+          a <- agg_S(cells[cells$horizon == hn, , drop = FALSE], "skill_persistence")
+          list(horizon = hn, S = a$S, n_beat = a$n_beat, n_scored = a$n_scored,
+               n_cells = sum(cells$horizon == hn))
+     })
+     names(per_horizon) <- c("h1mo", "h2mo", "h3mo")
 
      # ---- no-regression guard (OBJECTIVE section 2) --------------------------
      top10_worst <- NA_real_; guard_ok <- NA; S_delta <- NA_real_; guard_note <- NA_character_
@@ -288,16 +447,35 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
      pn <- per_iso[per_iso$iso_code != "NGA", ]
      S_exNGA <- if (nrow(pn)) sum(pn$w / sum(pn$w) * pn$wis_skill) else NA_real_
 
-     out <- list(arm_id = arm_id, mode = mode, objective_version = 2L,
+     out <- list(arm_id = arm_id, mode = mode,
+                 objective_version = .PE_OBJECTIVE_VERSION,
                  interval_mode = interval_mode, psi_column = psi_column,
                  S = S, S_delta = S_delta, S_exNGA = S_exNGA,
                  n_beat = n_beat, n_scored = nrow(per_iso),
                  top10_worst = top10_worst, guard_ok = guard_ok, guard_note = guard_note,
-                 n_folds = nrow(folds), n_cells = nrow(cells),
+                 n_folds = nrow(folds), n_cells = nrow(cells_all),
+                 blocks = sort(unique(folds$fold)),
+                 S_by_baseline = S_by_baseline,
+                 beats_seasonal = isTRUE(is.finite(S_by_baseline$seasonal$S) &&
+                                         S_by_baseline$seasonal$S > 0),
+                 per_horizon = per_horizon,
                  per_iso = per_iso, cells = cells)
      if (verbose) {
-          message(sprintf("[%s | %s] S = %.4f  (exNGA %.4f)  n_beat = %d/%d  folds = %d  cells = %d",
-                          arm_id, mode, S, S_exNGA, n_beat, nrow(per_iso), nrow(folds), nrow(cells)))
+          message(sprintf("[%s | %s | obj v%d] S = %.4f  (exNGA %.4f)  n_beat = %d/%d  blocks = %d  cells = %d",
+                          arm_id, mode, .PE_OBJECTIVE_VERSION, S, S_exNGA, n_beat,
+                          nrow(per_iso), nrow(folds), nrow(cells_all)))
+          message(sprintf("   vs baselines: %s",
+                          paste(sprintf("%s %+.4f (n_beat %s)", .PE_BASELINES,
+                                        vapply(S_by_baseline, function(z) z$S, numeric(1)),
+                                        vapply(S_by_baseline, function(z)
+                                               as.character(z$n_beat), character(1))),
+                                collapse = "  |  ")))
+          message(sprintf("   A6 (must beat `seasonal`): %s",
+                          if (out$beats_seasonal) "PASS" else "FAIL"))
+          message(sprintf("   per horizon: %s",
+                          paste(sprintf("%s %+.4f", names(per_horizon),
+                                        vapply(per_horizon, function(z) z$S, numeric(1))),
+                                collapse = "  ")))
           if (!is.na(top10_worst))
                message(sprintf("   top-10 worst delta = %+.4f  -> guard %s",
                                top10_worst, if (isTRUE(guard_ok)) "PASS" else "FAIL"))

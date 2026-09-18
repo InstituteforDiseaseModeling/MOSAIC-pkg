@@ -1,6 +1,8 @@
 # =============================================================================
-# lstm_film_suitability.R — The gauge_A LSTM for the lstm_v2 suitability path:
-# a 3-stack LSTM trunk (128 -> 64 -> 32) with hierarchical FiLM modulation
+# lstm_film_suitability.R — The gauge_A sequence model for the lstm_v2
+# suitability path: a 3-stack trunk (128 -> 64 -> 32; LSTM by default, with GRU
+# and dilated-causal-TCN variants selectable via
+# `arch_control$trunk`) with hierarchical FiLM modulation
 # (region FiLM then country-deviation FiLM, tanh gamma). Ported from the
 # MOSAIC-Mozambique sandbox (archs/arch_lstm.R), GAUGE_A ONLY — the flat,
 # concat, input-FiLM, hypernet, and exp-gamma ("gauge_B") branches are dropped.
@@ -73,7 +75,12 @@
           # the B4 fixture pins). Threaded so a research override is honored.
           logit_eps            = 1e-6, logit_clip = 6,
           sw_offset            = 0.1,  sw_min      = 0.1,
-          sw_offset_quad       = 0.05, sw_min_quad = 0.05
+          sw_offset_quad       = 0.05, sw_min_quad = 0.05,
+          # Trunk registry (psi_evolve `N` arms). "lstm" is the production trunk
+          # and is byte-identical to the pre-registry code path.
+          trunk                = "lstm",
+          tcn_kernel           = 3L,
+          tcn_dilations        = c(1L, 2L, 4L)
      ), hyperparams)
 
      enc <- data_bundle$encoders
@@ -100,24 +107,94 @@
      timesteps  <- dim(data_bundle$X_train)[2]
      n_features <- dim(data_bundle$X_train)[3]
 
-     # ---- Shared LSTM trunk ------------------------------------------------
+     # ---- Shared sequence trunk (registry: lstm | gru | tcn) ---------------
+     # The trunk is the ONE thing an architecture arm varies. Every variant must
+     # return (B, units_3) so the hierarchical-FiLM stack, the head, the loss and
+     # the feature pipeline below are untouched -- that is what makes a trunk swap
+     # a single registered change (psi_evolve PROTOCOL section 2) rather than a
+     # confounded bundle. `trunk = "lstm"` reproduces the production trunk
+     # exactly; the other two are unreachable unless asked for by name.
+     #
+     # WHY THIS EXISTS. The April 2026 architecture bake-off
+     # (claude/psi_arch_bench/) ranked six trunks, and `tcn_v1` led at both 4 and
+     # 13 weeks -- but its LSTM entry was the THEN-production 3-layer LSTM, and
+     # this hierarchical-FiLM model landed 2026-06-07, after that bake-off. So no
+     # alternative trunk has ever been compared against the model now in
+     # production. This registry is how that comparison becomes possible without
+     # also changing the FiLM conditioning, the head or the features.
+     trunk_kind <- tolower(as.character(hp$trunk %||% "lstm"))
+     if (!trunk_kind %in% c("lstm", "gru", "tcn"))
+          stop(".psi_fit_predict_lstm: unknown trunk '", trunk_kind,
+               "'. Supported: 'lstm' (production), 'gru', 'tcn'.", call. = FALSE)
+
      build_trunk <- function(input_feat) {
-          x <- keras3::layer_lstm(input_feat,
-               units = hp$units_1, return_sequences = TRUE,
-               kernel_regularizer = keras3::regularizer_l2(hp$l2),
-               recurrent_dropout  = hp$rec_dropout, name = "lstm1")
-          x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop1")
-          x <- keras3::layer_lstm(x,
-               units = hp$units_2, return_sequences = TRUE,
-               kernel_regularizer = keras3::regularizer_l2(hp$l2),
-               recurrent_dropout  = hp$rec_dropout, name = "lstm2")
-          x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop2")
-          x <- keras3::layer_lstm(x,
-               units = hp$units_3, return_sequences = FALSE,
-               kernel_regularizer = keras3::regularizer_l2(hp$l2),
-               recurrent_dropout  = hp$rec_dropout, name = "lstm3")
-          x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop3")
-          x
+          if (trunk_kind == "lstm") {
+               x <- keras3::layer_lstm(input_feat,
+                    units = hp$units_1, return_sequences = TRUE,
+                    kernel_regularizer = keras3::regularizer_l2(hp$l2),
+                    recurrent_dropout  = hp$rec_dropout, name = "lstm1")
+               x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop1")
+               x <- keras3::layer_lstm(x,
+                    units = hp$units_2, return_sequences = TRUE,
+                    kernel_regularizer = keras3::regularizer_l2(hp$l2),
+                    recurrent_dropout  = hp$rec_dropout, name = "lstm2")
+               x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop2")
+               x <- keras3::layer_lstm(x,
+                    units = hp$units_3, return_sequences = FALSE,
+                    kernel_regularizer = keras3::regularizer_l2(hp$l2),
+                    recurrent_dropout  = hp$rec_dropout, name = "lstm3")
+               x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop3")
+               return(x)
+          }
+
+          if (trunk_kind == "gru") {
+               # Same depth, widths, regularisation and dropout schedule as the
+               # LSTM trunk; only the recurrent cell differs.
+               x <- keras3::layer_gru(input_feat,
+                    units = hp$units_1, return_sequences = TRUE,
+                    kernel_regularizer = keras3::regularizer_l2(hp$l2),
+                    recurrent_dropout  = hp$rec_dropout, name = "gru1")
+               x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop1")
+               x <- keras3::layer_gru(x,
+                    units = hp$units_2, return_sequences = TRUE,
+                    kernel_regularizer = keras3::regularizer_l2(hp$l2),
+                    recurrent_dropout  = hp$rec_dropout, name = "gru2")
+               x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop2")
+               x <- keras3::layer_gru(x,
+                    units = hp$units_3, return_sequences = FALSE,
+                    kernel_regularizer = keras3::regularizer_l2(hp$l2),
+                    recurrent_dropout  = hp$rec_dropout, name = "gru3")
+               x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop3")
+               return(x)
+          }
+
+          # TCN: dilated CAUSAL convolutions. `padding = "causal"` is what makes
+          # this a forecaster rather than a smoother -- timestep t sees only
+          # t' <= t, so no target-adjacent covariate can leak backwards through
+          # the receptive field. Causal padding preserves sequence length, so the
+          # stack ends by taking the LAST timestep (the window's target anchor,
+          # matching return_sequences = FALSE on the recurrent trunks) via a crop
+          # + flatten rather than a pooling layer, which would average away the
+          # recency the recurrent trunks keep.
+          dil <- as.integer(hp$tcn_dilations %||% c(1L, 2L, 4L))
+          if (length(dil) != 3L)
+               stop(".psi_fit_predict_lstm: tcn_dilations must have length 3 (one per stack level).",
+                    call. = FALSE)
+          units <- c(as.integer(hp$units_1), as.integer(hp$units_2), as.integer(hp$units_3))
+          x <- input_feat
+          for (i in 1:3) {
+               x <- keras3::layer_conv_1d(x,
+                    filters = units[i], kernel_size = as.integer(hp$tcn_kernel %||% 3L),
+                    padding = "causal", dilation_rate = dil[i], activation = "relu",
+                    kernel_regularizer = keras3::regularizer_l2(hp$l2),
+                    name = sprintf("tcn%d", i))
+               x <- keras3::layer_dropout(x, rate = hp$dropout,
+                                          name = sprintf("drop%d", i))
+          }
+          # (B, timesteps, units_3) -> (B, 1, units_3) -> (B, units_3)
+          x <- keras3::layer_cropping_1d(x, cropping = c(as.integer(timesteps - 1L), 0L),
+                                         name = "tcn_last_step")
+          keras3::layer_flatten(x, name = "tcn_flat")
      }
 
      skip_region      <- enc$n_regions <= 1L
@@ -209,6 +286,7 @@
      result$loss_type      <- hp$loss_kind %||% "bce"
      result$arch_kind      <- "hierarchical"
      result$hier_mode      <- "film"
+     result$trunk          <- trunk_kind
      result$sample_weights <- hp$sample_weights
      result
 }

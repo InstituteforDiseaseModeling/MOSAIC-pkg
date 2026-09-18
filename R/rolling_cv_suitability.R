@@ -260,25 +260,57 @@
 #' on full IS data at round(median(best_epoch)) with no early stopping and
 #' forecasts over data_bundle$X_pred. Return value matches the arch fit_predict
 #' contract plus $rw_diagnostics.
+#'
+#' \strong{Epoch/ensemble decoupling (HA-02).} The fold loop exists to produce
+#' ONE number that reaches the deployed model: \code{round(median(best_epoch))}.
+#' Every seed of the ensemble re-running the whole loop therefore costs
+#' \code{folds x seeds} to estimate a single scalar \code{seeds} times over,
+#' which is what made a high-fold inner CV unaffordable at production seed counts
+#' (measured: a 28-day inner stride over the 9 production cutoffs is 677 folds =
+#' ~53 dugong-hours at 10 seeds, versus ~12 h decoupled). Two arguments split the
+#' two jobs:
+#' \itemize{
+#'   \item \code{epoch_only = TRUE} -- run the fold loop, return the chosen
+#'     epoch, and skip the final refit/predict entirely.
+#'   \item \code{fixed_epoch = n} -- skip the fold loop and refit at \code{n}.
+#' }
+#' Both default off, so the historical path (every seed runs its own fold loop)
+#' is unchanged unless a caller opts in via
+#' \code{arch_control$epoch_select_seeds}.
 #' @keywords internal
 #' @noRd
 .psi_fit_predict_rw_cv <- function(data_bundle, fit_predict_fn,
                                    seed = 11L, hyperparams = list(),
-                                   verbose = TRUE) {
+                                   verbose = TRUE,
+                                   fixed_epoch = NULL, epoch_only = FALSE) {
      rw_steps <- data_bundle$rw_steps
      if (is.null(rw_steps) || length(rw_steps) == 0L)
           stop(".psi_fit_predict_rw_cv: data_bundle$rw_steps is empty")
+     if (!is.null(fixed_epoch)) {
+          if (isTRUE(epoch_only))
+               stop(".psi_fit_predict_rw_cv: fixed_epoch and epoch_only are mutually exclusive.",
+                    call. = FALSE)
+          fixed_epoch <- suppressWarnings(as.integer(round(as.numeric(fixed_epoch))))
+          if (length(fixed_epoch) != 1L || is.na(fixed_epoch) || fixed_epoch < 1L)
+               stop(".psi_fit_predict_rw_cv: fixed_epoch must be a single positive integer.",
+                    call. = FALSE)
+     }
 
      if (verbose) message(sprintf("  [RW CV] %d steps", length(rw_steps)))
 
      n_steps      <- length(rw_steps)
      fold_preds   <- list()          # CV-07: per-fold held-out predictions
-     best_epochs  <- integer(n_steps)
-     val_losses   <- numeric(n_steps)
-     val_metrics  <- numeric(n_steps)
-     step_minutes <- numeric(n_steps)
+     # NA, not 0: the fold loop assigns every element on the normal path, but
+     # under HA-02's `fixed_epoch` it does not run at all -- and a diagnostics
+     # vector of zeros would read as "best epoch 0" rather than "no fold ran".
+     best_epochs  <- rep(NA_integer_, n_steps)
+     val_losses   <- rep(NA_real_, n_steps)
+     val_metrics  <- rep(NA_real_, n_steps)
+     step_minutes <- numeric(n_steps)   # 0 minutes of fold time is literally true
 
-     for (k in seq_along(rw_steps)) {
+     # HA-02: with a fixed epoch there is nothing for the fold loop to decide,
+     # so it is skipped wholesale rather than run and discarded.
+     for (k in if (is.null(fixed_epoch)) seq_along(rw_steps) else integer(0)) {
           step <- rw_steps[[k]]
           if (verbose)
                message(sprintf("    step %2d/%d  train_end=%s  test=[%s, %s]",
@@ -360,7 +392,13 @@
 
      # Aggregate: how many epochs for the final fit?
      good <- !is.na(best_epochs) & best_epochs > 0L
-     if (!any(good)) {
+     if (!is.null(fixed_epoch)) {
+          n_epochs_final <- fixed_epoch
+          epoch_source   <- "fixed"
+          if (verbose)
+               message(sprintf("  [RW CV] HA-02: fold loop skipped; refit at the supplied epoch (%d)",
+                               n_epochs_final))
+     } else if (!any(good)) {
           # CORRECTION vs sandbox (plan §8 gate 6b): cap the all-steps-failed
           # fallback at min(50, epochs). The sandbox used `epochs %||% 50` which
           # resolves to the fixture's epochs=200 -> a 200-epoch refit with NO
@@ -370,15 +408,38 @@
                           n_steps),
                   sprintf("falling back to %d epochs (floored at 50 to avoid an over-trained refit).",
                           n_epochs_final), call. = FALSE)
+          epoch_source <- "fallback"
           if (verbose)
                message(sprintf("  [RW CV] no valid best_epoch; defaulting to %d epochs (floored)",
                                n_epochs_final))
      } else {
           n_epochs_final <- as.integer(round(stats::median(best_epochs[good])))
+          epoch_source   <- "rw_median"
           if (verbose)
                message(sprintf("  [RW CV] best_epochs: min=%d med=%d max=%d -> final fit at %d epochs",
                                min(best_epochs[good]), n_epochs_final,
                                max(best_epochs[good]), n_epochs_final))
+     }
+
+     # HA-02 phase 1: the caller wanted only the epoch. Return before the refit
+     # so the expensive part is paid once per ARM rather than once per seed.
+     if (isTRUE(epoch_only)) {
+          return(list(
+               pred          = NULL,
+               val_loss      = if (any(good)) mean(val_losses, na.rm = TRUE) else NA_real_,
+               val_metric    = if (any(good)) mean(val_metrics, na.rm = TRUE) else NA_real_,
+               train_minutes = sum(step_minutes),
+               n_epochs      = n_epochs_final,
+               epoch_only    = TRUE,
+               rw_diagnostics = list(
+                    n_rw_steps     = n_steps,
+                    best_epochs    = best_epochs,
+                    val_losses     = val_losses,
+                    val_metrics    = val_metrics,
+                    step_minutes   = step_minutes,
+                    n_epochs_final = n_epochs_final,
+                    epoch_source   = epoch_source,
+                    all_steps_failed = !any(good))))
      }
 
      # ---- Final fit on full IS data, fixed epoch count ---------------------
@@ -415,6 +476,7 @@
                step_minutes   = step_minutes,
                final_minutes  = final_minutes,
                n_epochs_final = n_epochs_final,
+               epoch_source   = epoch_source,
                all_steps_failed = !any(good),
                # CV-07: one row per (fold, country, held-out target date).
                # NULL when no fold produced a scoreable block.
