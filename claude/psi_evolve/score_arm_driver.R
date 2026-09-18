@@ -46,8 +46,10 @@ for (i in seq_len(nrow(grid))) {
      p <- p[p$date >= grid$test_start[i] & p$date <= grid$test_end[i], ]
      if (!nrow(p)) next
      p$fold <- grid$block[i]
-     preds[[length(preds) + 1L]] <- p[, c("iso_code", "date", "fold",
-                                          "psi", "q025", "q25", "q75", "q975")]
+     keepc <- c("iso_code", "date", "fold", "psi", "q025", "q25", "q75", "q975")
+     if ("pred_smooth" %in% names(p)) keepc <- c(keepc, "pred_smooth")
+     if ("pred_raw" %in% names(p))    keepc <- c(keepc, "pred_raw")
+     preds[[length(preds) + 1L]] <- p[, keepc]
      used <- c(used, grid$block[i])
 }
 if (!length(preds)) stop("score_arm_driver: no psi cache files matched the evaluation grid")
@@ -58,12 +60,13 @@ folds <- data.frame(fold = grid$block, train_end = grid$cutoff,
 cat("arm:", ARM, "| mode:", MODE, "| cutoffs present:", length(used),
     "of", nrow(grid), "| pred rows:", nrow(pred), "\n")
 IM  <- Sys.getenv("PSI_INTERVAL_MODE", "seed")
+PC  <- Sys.getenv("PSI_COLUMN", "psi")
 res <- score_psi_arm(ARM, pred, obs, folds, mode = MODE, dir = HERE, verbose = TRUE,
-                     interval_mode = IM)
+                     interval_mode = IM, psi_column = PC)
 
 cat("\n=== PER-COUNTRY WIS-SKILL vs persistence ===\n")
 pi <- res$per_iso[order(-res$per_iso$w), ]
 print(data.frame(iso = pi$iso_code, w = round(pi$w, 4),
                  wis_skill = round(pi$wis_skill, 4)), row.names = FALSE)
-saveRDS(res, file.path(HERE, sprintf("score_%s_%s_%s%s.rds", ARM, MODE, IM,
+saveRDS(res, file.path(HERE, sprintf("score_%s_%s_%s_%s%s.rds", ARM, MODE, IM, PC,
                                      Sys.getenv("PSI_TAG", ""))))

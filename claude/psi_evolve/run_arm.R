@@ -61,6 +61,15 @@ if (NSHARD > 1L) {
 # one change with the components enumerated, not as four.
 ac <- list(n_seeds = NSEED, parallel_seeds = 1L,
            lead = as.integer(Sys.getenv("PSI_LEAD", "0")))
+# PSI_SEED_BASE shifts the whole seed block (seeds = seq(base, by=step, len=n)).
+# This is what makes a REPLICATE possible: an identical arm refitted from a
+# disjoint seed block measures the within-arm fit noise, which PROTOCOL section 4
+# requires as the floor any delta must clear -- and which no arm in waves 0-13
+# ever measured.
+if (nzchar(Sys.getenv("PSI_SEED_BASE", ""))) {
+  ac$seed_base <- as.integer(Sys.getenv("PSI_SEED_BASE"))
+  cat("REPLICATE: seed_base =", ac$seed_base, "\n")
+}
 if (Sys.getenv("PSI_GEOM", "") == "12wk") {
   ac <- c(ac, list(
     test_days       = 84L,
@@ -68,6 +77,19 @@ if (Sys.getenv("PSI_GEOM", "") == "12wk") {
     rw_gap_weeks    = 2L,
     min_train_years = 4,
     step_days       = as.integer(Sys.getenv("PSI_STRIDE_DAYS", "84"))))
+}
+# AR-03: restrict to features OBSERVABLE at the forecast origin. At a 12-week
+# origin a feature at lag L (weeks relative to the target) sits at target-L, so it
+# is observable iff L >= 12; concurrent and short-lag channels must be supplied as
+# projections, which past the ERA5 horizon are free-running CMIP6 with no anomaly
+# skill at this lead. Measured: 20 of 38 v7.3 features are NOT observable.
+#
+# CONSERVATIVE BY DESIGN: this also drops ENSO4/ENSO34 short lags, which NMME
+# genuinely forecasts with skill at 12 weeks. So AR-03 is a LOWER BOUND on what a
+# forecast-honest feature set can do, not the best such set.
+if (nzchar(Sys.getenv("PSI_EXCLUDE", ""))) {
+  ac$exclude_covariates <- strsplit(Sys.getenv("PSI_EXCLUDE"), ",")[[1]]
+  cat("AR-03: excluding", length(ac$exclude_covariates), "non-observable features\n")
 }
 spec <- list(feature_set = Sys.getenv("PSI_FEATURE_SET", "v7.3"), arch_control = ac)
 cat("arch_control:\n"); utils::str(ac)

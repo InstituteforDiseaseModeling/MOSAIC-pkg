@@ -18,6 +18,10 @@ obs <- do.call(rbind, lapply(isos, function(i)
 folds <- data.frame(fold = 1:6,
   test_start = as.Date(c("2023-01-02","2023-07-03","2024-01-01","2024-07-01","2025-01-06","2025-07-07")))
 folds$test_end <- folds$test_start + 83
+# train_end is the model's information cut-off; the baseline is anchored on it
+# (D1). The real driver supplies it as the evaluation grid's cutoff = test_start
+# minus the 14-day embargo.
+folds$train_end <- folds$test_start - 14
 
 mk_pred <- function(fn) do.call(rbind, lapply(seq_len(nrow(folds)), function(k) {
   d <- dates[dates >= folds$test_start[k] & dates <= folds$test_end[k]]
@@ -98,4 +102,29 @@ test_that("a small fraction of zero-width rows warns but still scores", {
   expect_warning(r <- score_psi_arm("W", p, obs, folds, "selection", verbose = FALSE),
                  "zero-width")
   expect_true(is.finite(r$S))
+})
+
+test_that("a `folds` frame without train_end is refused, not silently emptied", {
+  # Before D1 the baseline was cut at test_start and train_end was unused, so a
+  # folds frame lacking it scored fine. Now it is load-bearing: absent, every
+  # is_df is empty and the scorer would report "no scoreable cells", which reads
+  # as a data problem rather than a malformed argument.
+  bad <- folds[, c("fold", "test_start", "test_end")]
+  expect_error(score_psi_arm("NF", mk_pred(function(o) o), obs, bad, "selection"),
+               "missing required column")
+})
+
+test_that("the no-regression guard FAILS when top-10 countries are unscored", {
+  # D3: previously a top-10 country absent from the arm or from `incumbent` was
+  # silently exempt, and an all-missing set returned min(NA, na.rm=TRUE) = Inf,
+  # which passed the >= -0.02 test. The pool here has 5 of the 10 top-10
+  # countries, so the guard cannot be evaluated and must report FAIL.
+  p  <- mk_pred(function(o) o)
+  r0 <- score_psi_arm("B", p, obs, folds, "selection", verbose = FALSE)
+  inc <- setNames(r0$per_iso$wis_skill, r0$per_iso$iso_code)
+  expect_warning(r <- score_psi_arm("A", p, obs, folds, "selection",
+                                    incumbent = inc, verbose = FALSE),
+                 "guard CANNOT be evaluated")
+  expect_false(r$guard_ok)
+  expect_match(r$guard_note, "unscored")
 })

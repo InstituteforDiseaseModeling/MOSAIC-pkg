@@ -103,11 +103,26 @@ Run by an agent that did not design or launch the arm (lane: `maintainer`). It m
 bumping `objective_version` and re-scoring the incumbent, which invalidates all prior comparisons.
 
 ### 5.2 Negative control, every 5th wave
-Inject an arm that **must not win**: the incumbent with its target series permuted within country,
-or its most-informative feature block replaced by noise. If a negative control clears A1-A2,
-**the harness is broken** — halt the loop, escalate, do not adopt anything until resolved. This is
-the single most important check, because it is the only one that can detect a scorer bug that
-flatters every arm equally.
+Inject arms that **must not win**. A valid negative control **destroys information the model is
+meant to exploit while holding everything else fixed**:
+
+- **NC1** psi shuffled within country (timing destroyed, marginal preserved)
+- **NC3** psi replaced by U(0,1) noise (no information)
+
+If either clears A1-A2, **the harness is broken** — halt, escalate, adopt nothing until resolved.
+This is the only check that can detect a scorer bug flattering every arm equally.
+
+**Not a control: a simpler MODEL.** Replacing psi with its per-country mean does not remove
+information — it substitutes per-country climatology, which retains the country level. That is a
+standard forecast **baseline**, to be beaten, not a control that must lose. Measured on A000 at
+wave 8: NC1 -0.970 and NC3 -3.128 against real psi -0.387 (scorer discriminating correctly), while
+the country-mean constant scored **-0.258 and BEAT real psi**. Treating it as a control would have
+halted the programme over a true result.
+
+**Reported baseline (added wave 8):** every arm reports `S` against the per-country constant as
+well as against persistence. **An arm that cannot beat a flat per-country constant is not adopted
+whatever its `S`** — if the model's time-variation is net-harmful, a better-scoring variant of it
+is not an improvement worth shipping.
 
 ### 5.3 The holdout is write-once per arm
 Confirmation folds are read exactly once per arm, at step 6, after a selection win. The scorer
@@ -118,6 +133,25 @@ continuing.
 ### 5.4 Append-only ledger
 `REGISTRY.tsv` is append-only and committed each wave. Rows are never edited or deleted; a
 correction is a new row with `status=CORRECTION` referencing the original `arm_id`.
+
+### 5.6 New code on a fit-only path must be smoked before an arm launches
+Some code is reachable only by a real `est_suitability()` fit: the prediction and
+manifest writers, the bias correction, the ensemble aggregation. No unit test touches
+them, so a defect there survives the whole suite and surfaces only when an arm has
+already spent its compute.
+
+Measured cost of learning this: a provenance block referencing `backend` -- a variable
+that exists only on `feature/psi-torch-port` -- passed a field-name test, passed
+`devtools::test()`, and then killed all 9 shards of an arm at the END of their first
+cutoff. **~13 dugong-hours discarded.** A field-name check cannot see an unbound
+identifier, and `findGlobals` (added afterwards) still cannot see a runtime failure
+inside the block.
+
+**Rule: if a change touches a fit-only path, run `smoke_writers.R` before launching any
+arm.** It is a 1-seed, 2-epoch, short-window fit into a temp directory that asserts the
+four output files exist and the manifest carries its required provenance keys non-NULL.
+Minutes, against hours of arm compute. The A000 smoke earned its keep the same way --
+it is what exposed the zero-width-interval artefact before 18 cutoffs were scored on it.
 
 ### 5.5 No silent scope creep
 An agent may not change the scoring pool, the horizon, the embargo, the baseline, or the

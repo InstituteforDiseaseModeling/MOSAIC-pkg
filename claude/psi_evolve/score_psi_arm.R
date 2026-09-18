@@ -33,7 +33,13 @@
           system2("shasum", c("-a", "256", shQuote(f)), stdout = TRUE),
           error = function(e) NA_character_)
      sha <- if (length(sha) && !is.na(sha[1])) sub(" .*$", "", sha[1]) else NA_character_
-     if (!is.na(sha) && !identical(sha, expect_sha)) {
+     # D4 (red-team, wave 13): if `shasum` is absent or errors, `sha` was NA and the
+     # check was skipped SILENTLY -- section 5.1 says hash-checked at every scoring run.
+     if (is.na(sha))
+          stop("score_psi_arm: cannot compute the weights sha256 (is `shasum` available?). ",
+               "PROTOCOL 5.1 requires the frozen objective to be hash-checked on every ",
+               "scoring run; refusing to score unverified.", call. = FALSE)
+     if (!identical(sha, expect_sha)) {
           stop(sprintf(paste0("score_psi_arm: FROZEN OBJECTIVE VIOLATION. weights_frozen.csv sha256 is\n",
                               "  %s\nbut OBJECTIVE.md pins\n  %s\n",
                               "Scores under a changed objective are not comparable. Bump objective_version ",
@@ -81,9 +87,30 @@
 score_psi_arm <- function(arm_id, pred, obs, folds,
                           mode = c("selection", "confirmation"),
                           incumbent = NULL, dir = .PSI_EVOLVE_DIR, verbose = TRUE,
-                          interval_mode = c("seed", "residual")) {
+                          interval_mode = c("seed", "residual"),
+                          psi_column = "psi") {
      mode <- match.arg(mode)
      interval_mode <- match.arg(interval_mode)
+     # `train_end` is load-bearing: it is the model's information cut-off and the
+     # baseline is anchored on it (D1). Absent, `fd$train_end` is NULL, every
+     # `is_df` comes back empty and the scorer reports "no scoreable cells" --
+     # which reads like a data problem rather than a malformed `folds`. Say so.
+     req_folds <- c("fold", "train_end", "test_start", "test_end")
+     miss_f <- setdiff(req_folds, names(folds))
+     if (length(miss_f))
+          stop("score_psi_arm: `folds` is missing required column(s): ",
+               paste(miss_f, collapse = ", "),
+               ". `train_end` is the model's information cut-off and anchors the baseline.",
+               call. = FALSE)
+     # `psi_column` selects which series is scored as the point forecast. "psi"
+     # (== pred_bias_corrected) is what the engine consumes; "pred_smooth" is the
+     # same seed ensemble BEFORE calibrate_psi_predictions()'s per-country affine.
+     # NOTE the shipped q025/q25/q75/q975 are the seed-dispersion quantiles of
+     # pred_smooth, so pairing them with the bias-corrected psi leaves the
+     # intervals not centred on the point -- a second reason to compare the two.
+     if (!psi_column %in% names(pred))
+          stop("score_psi_arm: psi_column '", psi_column, "' not in `pred`.", call. = FALSE)
+     if (!identical(psi_column, "psi")) pred$psi <- pred[[psi_column]]
      stopifnot(is.data.frame(pred), is.data.frame(obs), is.data.frame(folds))
      W <- .pe_weights(dir)
      pool <- W$iso_code
@@ -143,8 +170,15 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
                m <- m[is.finite(m$observed) & is.finite(m$psi), , drop = FALSE]
                if (nrow(m) < 4L) next
 
-               # baseline fitted on this country's history strictly BEFORE the block
-               is_df <- o[o$date < as.Date(fd$test_start) & is.finite(o$observed), , drop = FALSE]
+               # D1 (red-team, wave 13): the baseline must share the MODEL's
+               # information set. This previously cut at `test_start` = cutoff + 14d,
+               # but the model sees nothing past `cutoff`. `.rcv_baseline("persistence")`
+               # is `mean(tail(observed, 4))`, so TWO of its four anchor weeks were
+               # post-cutoff: it was effectively a 1-to-12-week-ahead forecast against
+               # the model's 3-to-14-week-ahead one. `fd$train_end` was passed in by the
+               # driver and never used. Consequence: every "psi loses to persistence by
+               # X" computed before this fix is an UPPER BOUND on X.
+               is_df <- o[o$date <= as.Date(fd$train_end) & is.finite(o$observed), , drop = FALSE]
                if (nrow(is_df) < 8L) next
 
                if (identical(interval_mode, "seed")) {
@@ -186,14 +220,42 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
      n_beat <- sum(per_iso$wis_skill > 0)
 
      # ---- no-regression guard (OBJECTIVE section 2) --------------------------
-     top10_worst <- NA_real_; guard_ok <- NA; S_delta <- NA_real_
+     top10_worst <- NA_real_; guard_ok <- NA; S_delta <- NA_real_; guard_note <- NA_character_
      if (!is.null(incumbent)) {
-          t10 <- intersect(per_iso$iso_code, .PE_TOP10)
-          d   <- per_iso$wis_skill[match(t10, per_iso$iso_code)] - incumbent[t10]
-          top10_worst <- if (length(d)) min(d, na.rm = TRUE) else NA_real_
-          guard_ok <- is.na(top10_worst) || top10_worst >= -0.02
-          inc_v <- incumbent[per_iso$iso_code]
-          S_delta <- S - sum(per_iso$w * inc_v, na.rm = TRUE)
+          # D3 (red-team, wave 13): this guard FAILED OPEN in four ways -- a top-10
+          # country missing from `incumbent` gave NA which `min(na.rm=TRUE)` discarded
+          # (silently exempt); all-missing gave `min(NA, na.rm=TRUE) = Inf` and
+          # `Inf >= -0.02` is TRUE, i.e. a PASS; a top-10 country that failed to score
+          # was dropped by intersect() and went unguarded; and S_delta counted a missing
+          # incumbent country's skill as 0 while keeping its weight in S. Same shape as
+          # `.drop_filled_prediction_tail()`, fixed one wave earlier with the note that a
+          # guard against silent corruption must not itself fail silently.
+          t10_scored  <- intersect(per_iso$iso_code, .PE_TOP10)
+          t10_missing <- setdiff(.PE_TOP10, t10_scored)
+          inc_missing <- t10_scored[!t10_scored %in% names(incumbent) |
+                                    is.na(incumbent[t10_scored])]
+          if (length(t10_missing) || length(inc_missing)) {
+               guard_ok <- FALSE
+               guard_note <- sprintf(paste0("guard CANNOT be evaluated: %d top-10 country(ies) ",
+                                            "unscored [%s]; %d lack an incumbent value [%s]"),
+                                     length(t10_missing), paste(t10_missing, collapse = ","),
+                                     length(inc_missing), paste(inc_missing, collapse = ","))
+               warning("score_psi_arm: ", guard_note, ". Treating as FAIL.", call. = FALSE)
+          }
+          d <- per_iso$wis_skill[match(t10_scored, per_iso$iso_code)] - incumbent[t10_scored]
+          d <- d[is.finite(d)]
+          top10_worst <- if (length(d)) min(d) else NA_real_
+          if (is.na(guard_ok))
+               guard_ok <- is.finite(top10_worst) && top10_worst >= -0.02
+          # S_delta only where BOTH arms scored the country, so a missing incumbent
+          # cannot be silently counted as zero skill while keeping its weight.
+          both <- per_iso$iso_code[per_iso$iso_code %in% names(incumbent) &
+                                   is.finite(incumbent[per_iso$iso_code])]
+          if (length(both)) {
+               pb <- per_iso[per_iso$iso_code %in% both, ]
+               wb <- pb$w / sum(pb$w)
+               S_delta <- sum(wb * pb$wis_skill) - sum(wb * incumbent[pb$iso_code])
+          }
      }
 
      # ---- S excluding NGA (PROTOCOL section 4: a win must survive it) --------
@@ -201,10 +263,10 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
      S_exNGA <- if (nrow(pn)) sum(pn$w / sum(pn$w) * pn$wis_skill) else NA_real_
 
      out <- list(arm_id = arm_id, mode = mode, objective_version = 2L,
-                 interval_mode = interval_mode,
+                 interval_mode = interval_mode, psi_column = psi_column,
                  S = S, S_delta = S_delta, S_exNGA = S_exNGA,
                  n_beat = n_beat, n_scored = nrow(per_iso),
-                 top10_worst = top10_worst, guard_ok = guard_ok,
+                 top10_worst = top10_worst, guard_ok = guard_ok, guard_note = guard_note,
                  n_folds = nrow(folds), n_cells = nrow(cells),
                  per_iso = per_iso, cells = cells)
      if (verbose) {
