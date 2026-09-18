@@ -464,3 +464,91 @@ and subnational resolution) a live possibility rather than a formality.
 Secondary note: 16.55% of rows had zero-width intervals at `n_seeds = 3` (below the 50% error
 threshold, above the 1% warning). LBR (-1.27) and RWA (-1.33) are the worst-scoring countries and
 are exactly the low-signal, eps-clamped ones.
+
+## Wave 4 — arms launched, killed, fixed, relaunched
+
+**A silent 6x stride multiplication, caught at launch verification rather than in a score.**
+
+I launched A100 (the 12-week training-geometry bundle) and S1 (the same with a 4-week stride), then
+checked the fold counts against an independent computation before letting them run. They did not
+match: the grid function gives 12 folds (84-day stride) and 36 (28-day stride) for the 2022-01-01
+cutoff, but the running arms reported **2 and 6 — exactly 6x fewer**.
+
+Cause: `step_days` and `rw_subsample` are two ways to express the same thinning of the RW grid, and
+HA-01 applied **both**. The B4 fixture sets `rw_subsample = 6` unconditionally, so an arm asking for
+an 84-day stride got an effective stride of **504 days**. The `subsample=6` was printed in the log
+line I had already read; the 6:1 ratio is what made it visible.
+
+Both arms were killed and their psi caches deleted before anything was scored, so no comparison was
+affected. Fixed in `.psi_make_rw_cv_steps()` (v0.90.10, `61d5cac74`): when `step_days` is supplied
+it IS the stride and `subsample` is ignored with a message. Month-based path unchanged. Regression
+test asserts `subsample = 1` and `subsample = 6` give the same count under a day-based stride, that
+the count is the expected 12, and that the month-based path still thins.
+
+Redeployed (0.90.10) and relaunched. **Verified after relaunch: A100 = 12 RW steps, S1 = 36** —
+matching the independent computation exactly.
+
+This is the ninth defect of the session and the fifth that would have produced a wrong number
+rather than an error. It is also the first one caught by a pre-registered verification step rather
+than by noticing something odd, which is the cheapest place to catch them.
+
+Cosmetic follow-up: the `[rolling_cv] ... RW steps` message still prints the month-based
+`step`/`test`/`subsample` values even when the day-based knobs are in force. Misleading, not wrong.
+
+## Wave 5 — the interval question, measured: it does not change the verdict
+
+I escalated the interval asymmetry as needing a human decision. Having now built both modes and
+measured them, **it is not blocking**, and saying so is more useful than leaving it open.
+
+`interval_mode = "residual"` gives psi empirical residual-quantile intervals from its own pre-block
+errors, built exactly as the persistence baseline's are. Re-scored A000 (scoring only — no refit):
+
+| | S | S exNGA | n_beat | cells |
+|---|---|---|---|---|
+| `seed` (objective v2 default) | **-0.2461** | -0.1813 | 3/16 | 199 |
+| `residual` (symmetric) | **-0.3866** | -0.2416 | 3/16 | 183 |
+| interval-free (MAE-skill) | **-0.405** | — | — | 5,952 |
+
+**Symmetric intervals make psi score WORSE, not better** — the opposite of what I expected when I
+recommended the change. The reason is that WIS trades two penalties: seed intervals are near-zero
+width, so psi paid almost no width penalty and only the non-coverage penalty; residual intervals are
+wide (its residuals are large), so it pays the width. Neither mode is straightforwardly "fairer" —
+they weight width against coverage differently.
+
+**What matters is that all three measures agree**: S between -0.25 and -0.39, `n_beat = 3/16` under
+both interval modes, MAE-skill -0.405. The verdict on A000 is robust to the choice, so no decision
+is needed to proceed, and objective v2 stands unchanged.
+
+**Escalation status: DOWNGRADED from blocking to a recorded open question.** Worth settling before
+any arm is adopted on a narrow margin (an arm could still win on interval calibration rather than
+skill), but it cannot flip tonight's finding. `interval_mode` is available on the scorer as a
+reported diagnostic; the default is untouched, so nothing was enacted.
+
+Per-country detail is informative about WHERE psi fails. Under symmetric intervals the worst are
+MWI (-1.68), NGA (-1.35), TZA (-0.90) and COD (-0.48); the only consistent winners across both
+modes are AGO and ZMB. ETH, ZWE, KEN and SOM are close to parity (|skill| < 0.11) under symmetric
+intervals, which is a different picture from the seed-interval ranking and worth keeping.
+
+## Wave 5 (cont.) — two corrections to my own reasoning, before spending budget on them
+
+**1. CV-08 (parallelise the fold loop) would NOT have fixed S1's cost, and I was about to build it
+for that reason.** S1's shards were ~5 h each because each runs ~300 sequential fits (48-60 folds x
+3 seeds x 2 cutoffs). Fold-level parallelism looks like the obvious fix — but the box is already
+core-saturated *across shards*: 176 cores at 8 threads is ~22 concurrent fits however you slice it,
+and sharding by cutoff already achieves that. Total work is fixed at ~2,600 fits for S1, so ~2 h is
+the floor regardless of which axis is parallelised.
+
+CV-08's real value is narrower than the backlog implies: it helps when you have FEWER units than
+cores (one psi fit on a big box), not when a matrix already saturates them. Downgraded accordingly.
+**S1 is intrinsically 3-4x A100 because it has 3-4x the folds — that is the arm, not an inefficiency.**
+
+**2. I should have screened S1 rather than running it at full cost.** PROTOCOL section 2 prescribes
+successive halving — run candidates cheap, promote the survivors — and I launched a 4-5x-cost arm at
+full grid anyway, for a knob I had already argued was second-order against a -0.41 gap. That is the
+protocol existing and not being followed.
+
+Killed S1 (9 shards, cleanly, by matching `PSI_ARM` in `/proc/<pid>/environ` since the arm id is in
+the env rather than argv) and cleared its cache; nothing had been scored. A100 now has the box to
+itself. Added `PSI_SCREEN_EVERY=k` to the runner: S1 will be re-run as a **6-cutoff screen** (every
+3rd cutoff, ~1/3 the cost), which still spans multiple seasons because the grid's 84-day stride
+rotates through the year. Promoted to the full 18 only if the screen is promising.

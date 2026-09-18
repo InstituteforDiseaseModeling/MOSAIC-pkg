@@ -61,10 +61,29 @@
 #'   read once per arm, only after a selection win.
 #' @param incumbent optional named numeric of per-country skill for the current
 #'   incumbent; enables the no-regression guard and S_delta.
+#' @param interval_mode How the MODEL's prediction intervals are formed.
+#'   \code{"seed"} (the objective-v2 default) uses the seed-dispersion quantiles
+#'   the psi pipeline emits. \code{"residual"} instead builds empirical
+#'   residual-quantile intervals from the model's own pre-block errors, exactly as
+#'   the persistence baseline's are built.
+#'
+#'   WHY THIS OPTION EXISTS. Seed dispersion measures how much the FIT wobbles
+#'   across random seeds; it is not predictive uncertainty. Measured on A000 over
+#'   5,952 paired cells: psi's 95% interval is 49x NARROWER than the baseline's
+#'   and covers 18.0% of outcomes against the baseline's 92.4%. WIS therefore
+#'   charges psi for being under-dispersed rather than for being wrong, and an
+#'   arm's score becomes partly a function of its seed count. \code{"residual"}
+#'   makes the two sides symmetric.
+#'
+#'   This is a REPORTED diagnostic, not the objective: PROTOCOL section 5.1
+#'   forbids an agent from enacting an objective change. Switching the default
+#'   requires a human decision and an \code{objective_version} bump.
 score_psi_arm <- function(arm_id, pred, obs, folds,
                           mode = c("selection", "confirmation"),
-                          incumbent = NULL, dir = .PSI_EVOLVE_DIR, verbose = TRUE) {
+                          incumbent = NULL, dir = .PSI_EVOLVE_DIR, verbose = TRUE,
+                          interval_mode = c("seed", "residual")) {
      mode <- match.arg(mode)
+     interval_mode <- match.arg(interval_mode)
      stopifnot(is.data.frame(pred), is.data.frame(obs), is.data.frame(folds))
      W <- .pe_weights(dir)
      pool <- W$iso_code
@@ -97,7 +116,10 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
      # systematically worse for a reason unrelated to its quality. Measured on a
      # 1-seed smoke: 100% of rows zero-width, S = -0.88, which is an artifact and
      # not a result. Refuse rather than return a number that reads as a score.
-     zw <- mean(abs(pred$q975 - pred$q025) < 1e-12, na.rm = TRUE)
+     # Under "residual" the emitted seed quantiles are replaced, so the
+     # zero-width check below is only meaningful for "seed".
+     zw <- if (identical(interval_mode, "seed"))
+          mean(abs(pred$q975 - pred$q025) < 1e-12, na.rm = TRUE) else 0
      if (is.finite(zw) && zw > 0.5) {
           stop(sprintf(paste0("score_psi_arm: %.1f%% of prediction rows have a ZERO-WIDTH 95%% ",
                               "interval (q025 == q975). This is what a single-seed fit produces, ",
@@ -121,11 +143,26 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
                m <- m[is.finite(m$observed) & is.finite(m$psi), , drop = FALSE]
                if (nrow(m) < 4L) next
 
-               wis_model <- mean(wis_fn(m$observed, m$psi, m$q25, m$q75, m$q025, m$q975), na.rm = TRUE)
-
                # baseline fitted on this country's history strictly BEFORE the block
                is_df <- o[o$date < as.Date(fd$test_start) & is.finite(o$observed), , drop = FALSE]
                if (nrow(is_df) < 8L) next
+
+               if (identical(interval_mode, "seed")) {
+                    lo50 <- m$q25; hi50 <- m$q75; lo95 <- m$q025; hi95 <- m$q975
+               } else {
+                    # Symmetric with the baseline: empirical quantiles of the
+                    # model's OWN residuals on this country's pre-block history.
+                    pre <- pred[pred$iso_code == iso & pred$date < as.Date(fd$test_start), ,
+                                drop = FALSE]
+                    pm  <- merge(pre[, c("date", "psi")], o[, c("date", "observed")], by = "date")
+                    r   <- pm$observed - pm$psi
+                    r   <- r[is.finite(r)]
+                    if (length(r) < 8L) next
+                    q   <- stats::quantile(r, c(0.025, 0.25, 0.75, 0.975), names = FALSE)
+                    lo95 <- m$psi + q[1]; lo50 <- m$psi + q[2]
+                    hi50 <- m$psi + q[3]; hi95 <- m$psi + q[4]
+               }
+               wis_model <- mean(wis_fn(m$observed, m$psi, lo50, hi50, lo95, hi95), na.rm = TRUE)
                b <- bl_fn(is_df, m$date, "persistence")
                if (!any(is.finite(b$point))) next
                wis_base <- mean(wis_fn(m$observed, b$point, b$pi50_lo, b$pi50_hi,
@@ -164,6 +201,7 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
      S_exNGA <- if (nrow(pn)) sum(pn$w / sum(pn$w) * pn$wis_skill) else NA_real_
 
      out <- list(arm_id = arm_id, mode = mode, objective_version = 2L,
+                 interval_mode = interval_mode,
                  S = S, S_delta = S_delta, S_exNGA = S_exNGA,
                  n_beat = n_beat, n_scored = nrow(per_iso),
                  top10_worst = top10_worst, guard_ok = guard_ok,

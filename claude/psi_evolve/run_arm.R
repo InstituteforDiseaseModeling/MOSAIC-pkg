@@ -22,6 +22,19 @@ grid <- utils::read.csv(file.path(HERE, "EVAL_GRID.csv"), stringsAsFactors = FAL
 cutoffs <- as.Date(grid$cutoff)
 if (SMOKE) { cutoffs <- cutoffs[c(1, nrow(grid))]; NSEED <- 1L }
 
+# PROTOCOL section 2 successive halving: a SCREENING arm may run on a subset of
+# the evaluation grid at reduced cost, and is promoted to the full grid only if
+# it looks promising. PSI_SCREEN_EVERY=k keeps every k-th cutoff (phase coverage
+# is preserved because the grid's 84-day stride rotates through the year, so any
+# regular subset still spans multiple seasons). Scoring is unaffected -- the
+# scorer reads whichever cutoffs are present and reports the count.
+SCREEN <- as.integer(Sys.getenv("PSI_SCREEN_EVERY", "1"))
+if (SCREEN > 1L) {
+     keep_s <- (seq_along(cutoffs) - 1L) %% SCREEN == 0L
+     cutoffs <- cutoffs[keep_s]
+     cat("SCREENING: every", SCREEN, "th cutoff ->", length(cutoffs), "of", nrow(grid), "\n")
+}
+
 # Shard the cutoff list across processes. prefit_rolling_cv_psi() iterates its
 # cutoffs serially, so concurrency has to come from running several processes
 # over disjoint subsets. Each writes psi_<cutoff>.csv into the SAME cache dir,

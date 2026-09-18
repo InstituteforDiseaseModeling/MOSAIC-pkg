@@ -57,11 +57,13 @@ folds <- data.frame(fold = grid$block, train_end = grid$cutoff,
 
 cat("arm:", ARM, "| mode:", MODE, "| cutoffs present:", length(used),
     "of", nrow(grid), "| pred rows:", nrow(pred), "\n")
-res <- score_psi_arm(ARM, pred, obs, folds, mode = MODE, dir = HERE, verbose = TRUE)
+IM  <- Sys.getenv("PSI_INTERVAL_MODE", "seed")
+res <- score_psi_arm(ARM, pred, obs, folds, mode = MODE, dir = HERE, verbose = TRUE,
+                     interval_mode = IM)
 
 cat("\n=== PER-COUNTRY WIS-SKILL vs persistence ===\n")
 pi <- res$per_iso[order(-res$per_iso$w), ]
 print(data.frame(iso = pi$iso_code, w = round(pi$w, 4),
                  wis_skill = round(pi$wis_skill, 4)), row.names = FALSE)
-saveRDS(res, file.path(HERE, sprintf("score_%s_%s%s.rds", ARM, MODE,
+saveRDS(res, file.path(HERE, sprintf("score_%s_%s_%s%s.rds", ARM, MODE, IM,
                                      Sys.getenv("PSI_TAG", ""))))
