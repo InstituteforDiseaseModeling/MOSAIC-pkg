@@ -449,7 +449,11 @@
                use_confidence_weight = isTRUE(ac$use_confidence_weight),
                # software identity
                mosaic_version    = as.character(utils::packageVersion("MOSAIC")),
-               backend           = backend,
+               # NOTE: no `backend` field. A `backend` variable exists only on the
+               # feature/psi-torch-port branch; on main there is one keras path.
+               # Referencing it here was cross-branch contamination and it killed
+               # every shard of an arm at the END of its first cutoff -- after all
+               # the fitting work, when the manifest is written.
                r_version         = paste(R.version$major, R.version$minor, sep = "."),
                tf_version        = tryCatch(
                     as.character(reticulate::py_get_attr(

@@ -39,3 +39,43 @@ test_that("provenance is additive -- the pre-existing manifest keys are still wr
      expect_equal(gone, character(0),
                   info = paste("a legacy manifest key was dropped:", paste(gone, collapse = ", ")))
 })
+
+test_that("the suitability writers reference no undefined variables (catches cross-branch drift)", {
+     # WHY THIS EXISTS. The provenance test above greps the SOURCE for field names.
+     # It passed while the writer was broken: the block referenced `backend`, a
+     # variable that exists only on the feature/psi-torch-port branch, and every
+     # shard of an arm died at the END of its first cutoff -- after all the fitting
+     # work -- when the manifest was written. A static field-name check cannot see
+     # that; an unbound-global check can, and it guards the whole class.
+     skip_if_not_installed("codetools")
+     fns <- c(".est_suitability_lstm_v2", ".psi_fit_predict_rw_cv",
+              ".psi_slice_rw_step", ".psi_slice_full_is", ".psi_make_rw_cv_steps",
+              ".drop_filled_prediction_tail")
+     known <- c(
+          # operators / base-ish things findGlobals reports but which are bound
+          "%||%", "%in%", "%%", ":", "c", "list", "length", "seq_along", "seq.int",
+          # package-internal helpers these functions legitimately call
+          ".psi_build_sequences", ".psi_build_data", ".psi_load_arch_control",
+          ".psi_resolve_features", ".psi_resolve_region_map", ".psi_run_seed_ensemble",
+          ".psi_fit_predict_lstm", ".psi_make_rw_cv_steps", ".psi_slice_rw_step",
+          ".psi_slice_full_is", ".drop_filled_prediction_tail",
+          ".psi_check_parallel_seeds_ram", ".psi_weekly_to_daily_smooth",
+          "calibrate_psi_predictions", "check_psi_amplitude", "get_feature_set")
+     offenders <- list()
+     for (fn in fns) {
+          f <- tryCatch(get(fn, envir = asNamespace("MOSAIC")), error = function(e) NULL)
+          if (is.null(f)) next
+          g <- codetools::findGlobals(f, merge = FALSE)$variables
+          # anything not exported/bound in base, the namespace, or the allowlist
+          bad <- g[!vapply(g, function(v)
+               exists(v, envir = asNamespace("MOSAIC")) ||
+               exists(v, envir = baseenv()) ||
+               v %in% known, logical(1))]
+          if (length(bad)) offenders[[fn]] <- bad
+     }
+     expect_equal(offenders, list(),
+                  info = paste("undefined variable(s):",
+                               paste(names(offenders), vapply(offenders, paste,
+                                                              character(1), collapse = ","),
+                                     collapse = "; ")))
+})
