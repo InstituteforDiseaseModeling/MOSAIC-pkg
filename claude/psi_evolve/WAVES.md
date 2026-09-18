@@ -131,3 +131,103 @@ the selection/confirmation split enforced inside the scorer rather than by the c
 `test_score_psi_arm.R`: 6/6 pass, covering a near-perfect vs noise arm, split enforcement
 (4 selection / 2 confirmation folds), pool restriction, the no-regression guard firing, refusal of a
 tampered weights file, and the exNGA report.
+
+### Adversarial review (PROTOCOL section 4) — REQUEST-CHANGES, 3 blocking, all fixed
+
+The review lane falsified a claim I had written into the code, which is exactly what the step is
+for. Committed as `4f03bea3f` (v0.90.6) after all three were addressed.
+
+**B1 — my guard does not catch the defect its own comment used as the worked example.** I wrote
+that the duplicate-key guard "would have caught the class", illustrating it with the *climate*
+case. It would not: the climate side collapses January and December inside `group_by()` into ONE
+row, producing a silently-wrong value and **never a duplicate key**. All 99 duplicates came from
+the surveillance grid, where two Mondays collide onto one label
+(`{2012-01-02, 2012-12-31}`, `{2018-01-01, 2018-12-31}`, `{2024-01-01, 2024-12-30}` x 33 countries
+= 99). This is the CLAUDE.md lesson-#15 shape: a coverage claim that passes for the wrong reason.
+**Fixed** by correcting the comment and adding the assertion that *does* discriminate — every
+weekly cell must span <= 7 days — inside `process_open_meteo_data()`. Verified across all 40
+countries: 0 cells span more than 7 days post-rebuild, so it will not false-fire.
+
+**B2 — the fix does not take effect on the production refresh path.** `process_open_meteo_data()`
+caches on source-vs-output mtimes, which a code-only change never invalidates, and both production
+callers omit `force`. My rebuild script passes `force = TRUE` so this wave is fine, but the next
+`update_mosaic_data()` run would silently keep mislabelled parquets. There is direct precedent in
+this same function (the soil-moisture schema change in NEWS.md). **Fixed** in
+`update_mosaic_data.R` — but see the cross-session note below.
+
+**B3 — a missed site in the same defect family.** `process_SUPP_data.R:81,83` pairs
+`lubridate::year()` with `lubridate::epiweek()`: the calendar year disagrees with the ISO year on 8
+Mondays over 2000-2027, and MMWR weeks differ from `%V` on 212 of 1461 Mondays (14.5%) — a
+different convention from every other source in the package. Latent because the columns are dropped
+downstream, but the file on disk is schema-identical to the WHO/JHU ones (lesson #11). **Fixed.**
+
+**Non-blocking, also applied:** the guard message now names both possible causes (N9); the W53
+rationale names all three sites that would have to change together and drops a claim about the 2026
+horizon that the rebuilt panel made false (N3, N4); a caveat that `month`/`doy` remain
+calendar-derived and must not be joined on (N10); and the new test no longer leaks
+`root_directory` into the parallel suite via `withr::defer` (N8) — `Config/testthat/parallel: true`
+reuses workers without resetting options, so eight later files were affected.
+
+**The most valuable item was N7: my tests did not test my fix.** All four fast tests only exercised
+`format()` on a date sequence — reverting any of the four call sites would have left them green.
+**Added** a static-source test that parses every file in `R/` and fails if a calendar year sits
+within three lines of an ISO/epi week derivation. Negative-tested: it detects the pre-fix
+`process_SUPP_data.R` site and passes after. That guard is the only one that would have caught B3.
+
+**CROSS-SESSION NOTE — needs a human decision.** `R/update_mosaic_data.R` is an **untracked new
+file belonging to another in-flight session**. I edited it for B2 before realising, then unstaged
+it; the edit (a comment plus `force = TRUE`) is left in the working tree, uncommitted, so its owner
+sees it. It is correct and B2 is unaddressed without it, but it is not mine to commit.
+
+**Known pre-existing failure, not ours:** `test-process_EMDAT_data.R:146` fails against the other
+session's in-flight `process_EMDAT_data.R`. A fully green `devtools::test()` is not achievable for
+this branch until that session updates its test.
+
+**Deferred as its own change (N1):** `est_seasonal_dynamics.R:112` derives
+`week = lubridate::week(date)` (calendar-anchored, not ISO) and merges against the surveillance
+panel this commit just relabelled — 37.6% of matched rows pair a surveillance week whose Monday
+lies outside the precip week's own span. Pre-existing, slightly *improved* by DA-01, feeds Fourier
+seasonality -> region maps -> priors. Hand to disease-modeler/data-engineer; do not fold in.
+
+### Next: validation-slice widening (blocks the 12-week window AND the lead-12 target)
+
+## Wave 1 — HA-01 complete: the 12-week geometry is now reachable
+
+**The blocking finding from Wave 0 is resolved.** Relaxing `min_test_days` was not sufficient: an
+84-day block is 12 weekly rows and cannot build a single 13-timestep sequence, because
+`.psi_build_sequences()` anchors each window's target at its own end and the slice only contained
+in-block rows. Two coupled changes fix it, and they are the same two the lead-12 target needs.
+
+**1. Forecast lead.** `.psi_build_sequences()` gains `lead` (weeks). At `lead = 0` it is
+bit-identical to the historical concurrent mapping. At `lead = h` the target is anchored `h` weeks
+after the input window ends, and the returned `dates` are TARGET dates — so every downstream date
+filter (train cutoffs, validation blocks) becomes target-anchored automatically, which is what
+makes a 13-week embargo unnecessary and keeps training targets from crossing `train_end` by
+construction. A gap guard rejects a window whose target is separated from its input by more than
+the nominal lead plus `max_gap_days`.
+
+**2. Validation input context.** `.psi_slice_rw_step()` widens the validation slice backwards by
+`timesteps - 1 + lead` weeks, then keeps only sequences whose TARGET lies inside the block. The
+context rows are inputs only and are never scored. This is also exactly the deployment situation —
+a forecast is made from covariates the model has already seen — so it does not make validation
+easier than deployment.
+
+**Threaded end to end:** `lead`, `step_days`, `test_days`, `min_test_days` and `min_train_years`
+now flow `arch_control -> split_params -> .psi_make_rw_cv_steps / .psi_build_data`. Verified that
+the full target geometry is reachable from `arch_control` alone:
+
+```
+arch_control = list(lead = 12L, step_days = 28L, test_days = 84L,
+                    min_test_days = 84L, rw_gap_weeks = 2L, timesteps = 13L)
+  -> 164 folds | 84-day windows | first block 2014-01-15 .. 2014-04-08
+```
+
+**Tests:** `test-psi-lead-and-context.R`, 18 assertions. The decisive one asserts the OLD behaviour
+**errors** on an 84-day block ("no valid sequences") and the new slice builds them — so it fails if
+the context widening is ever reverted. Also asserts `lead = 0` is bit-identical, that `lead = 12`
+anchors the target at row 25 for a 13-row window, that 12 fewer sequences per country are produced,
+that no validation target ever falls outside its block, and that training targets never cross
+`train_end`.
+
+**Default behaviour unchanged:** `lead` is absent from the B4 fixture, so it resolves to 0 and
+every existing call path is untouched.

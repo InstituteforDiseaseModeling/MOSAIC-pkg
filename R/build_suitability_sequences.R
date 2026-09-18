@@ -24,11 +24,20 @@
 # and a per-sequence confidence weight anchored to the last (target) timestep.
 #' @keywords internal
 #' @noRd
+#' @param lead Forecast lead in WEEKS. 0 (default) reproduces the historical
+#'   concurrent mapping `X_t -> y_t` bit-for-bit: the target is anchored at the
+#'   last timestep of its own input window, so the model is never asked to
+#'   project forward. `lead = 12` trains `X_t -> y_{t+12w}`, which is what makes
+#'   a 12-week forecast a trained property rather than a side-effect of feeding
+#'   the model covariates that happen to extend into the future. Note the
+#'   returned `dates` are TARGET dates, so downstream date filtering (train
+#'   cutoffs, validation blocks) is target-anchored automatically.
 .psi_build_sequences <- function(X, y, countries, dates, timesteps = 13L,
                                  max_gap_days = 14L,
                                  country_id_lookup = NULL,
                                  region_for_country = NULL,
-                                 cw = NULL) {
+                                 cw = NULL,
+                                 lead = 0L) {
      dates <- as.Date(dates)
      uniq  <- unique(countries)
      seqs <- list(); ys <- numeric(0); cs <- character(0)
@@ -43,18 +52,24 @@
           Xi <- Xi[ord, , drop = FALSE]; yi <- yi[ord]; di <- di[ord]
           if (!is.null(cwi)) cwi <- cwi[ord]
           n <- nrow(Xi)
-          if (n < timesteps) next
+          if (n < timesteps + lead) next
           cid <- if (!is.null(country_id_lookup)) as.integer(country_id_lookup[[iso]]) else NA_integer_
           rid <- if (!is.null(region_for_country)) as.integer(region_for_country[[iso]]) else NA_integer_
-          for (i in timesteps:n) {
+          for (i in timesteps:(n - lead)) {
                sub_d <- di[(i - timesteps + 1):i]
                if (any(as.numeric(diff(sub_d)) > max_gap_days)) next
+               ti <- i + lead                      # target index (== i when lead = 0)
+               # With a lead, the input window and its target must not be
+               # separated by a data gap either: require the observed spacing to
+               # be within one max_gap_days of the nominal `lead` weeks.
+               if (lead > 0L &&
+                   as.numeric(di[ti] - di[i]) > (7 * lead + max_gap_days)) next
                seqs[[length(seqs) + 1]] <- Xi[(i - timesteps + 1):i, , drop = FALSE]
-               ys <- c(ys, yi[i]); cs <- c(cs, iso); ds <- c(ds, di[i])
+               ys <- c(ys, yi[ti]); cs <- c(cs, iso); ds <- c(ds, di[ti])
                c_ids <- c(c_ids, cid); r_ids <- c(r_ids, rid)
-               # Per-sequence confidence weight = CW at the last (target)
-               # timestep, mirroring how y is anchored at the sequence end.
-               if (!is.null(cwi)) cw_track <- c(cw_track, cwi[i])
+               # Per-sequence confidence weight is anchored at the TARGET, which
+               # is where y comes from (identical to the old behaviour at lead 0).
+               if (!is.null(cwi)) cw_track <- c(cw_track, cwi[ti])
           }
      }
      if (length(seqs) == 0) stop(".psi_build_sequences: no valid sequences built")
@@ -147,6 +162,7 @@
                             split_params   = list(),
                             use_confidence_weight = TRUE,
                             response_var   = "transmission_intensity",
+                            lead           = 0L,
                             max_gap_days   = 14L,
                             verbose        = TRUE) {
 
@@ -358,7 +374,8 @@
           region_ids  = as.integer(region_for_country[d$iso_code]),
           cw          = d$cw
      )
-     seq_params <- list(timesteps = timesteps, max_gap_days = max_gap_days)
+     seq_params <- list(timesteps = timesteps, max_gap_days = max_gap_days,
+                        lead = lead)
 
      # Prediction sequences: ALL pool countries, full date range.
      seqs_pred <- .psi_build_sequences(
@@ -369,7 +386,8 @@
           timesteps = timesteps,
           max_gap_days = max_gap_days,
           country_id_lookup  = country_to_id,
-          region_for_country = region_for_country)
+          region_for_country = region_for_country,
+          lead      = lead)
 
      # ---- Rolling-CV step grid ---------------------------------------------
      gap_weeks <- split_params$rw_gap_weeks %||% 4L
@@ -380,7 +398,13 @@
           test_months    = split_params$rw_test_months %||% 5L,
           gap_weeks      = gap_weeks,
           subsample      = split_params$rw_subsample   %||% 1L,
-          timesteps      = timesteps)
+          timesteps      = timesteps,
+          # HA-01: day-based geometry for the 12-week horizon. NULL for all four
+          # keeps the month-based path bit-identical.
+          step_days       = split_params$rw_step_days,
+          test_days       = split_params$rw_test_days,
+          min_test_days   = split_params$rw_min_test_days,
+          min_train_years = split_params$rw_min_train_years)
      if (length(rw_steps) == 0L)
           stop(".psi_build_data: 0 RW steps generated. Check step/test/gap params vs the cutoff/fit_date_start window.")
      if (verbose) {

@@ -137,11 +137,24 @@
           max_gap_days = sp$max_gap_days,
           country_id_lookup  = enc$country_to_id,
           region_for_country = enc$region_for_country,
-          cw        = if (use_cw) pd$cw[is_train] else NULL)
+          cw        = if (use_cw) pd$cw[is_train] else NULL,
+          lead      = as.integer(sp$lead %||% 0L))
 
-     is_val <- pd$dates >= step$test_start & pd$dates <= step$test_end &
+     # The validation slice must carry INPUT CONTEXT from before the block.
+     # `.psi_build_sequences()` anchors each window's target at its end, so a
+     # block shorter than `timesteps` weekly rows builds ZERO sequences from
+     # rows inside it: an 84-day (12-week) block cannot yield a single
+     # 13-timestep sequence. Widen backwards by (timesteps - 1 + lead) weeks,
+     # then keep only the sequences whose TARGET falls inside the block. The
+     # context rows are inputs only -- their targets are never scored -- which
+     # is also exactly the deployment situation, where a forecast is made from
+     # covariates the model has already seen.
+     lead_w    <- as.integer(sp$lead %||% 0L)
+     ctx_weeks <- as.integer(sp$timesteps - 1L + lead_w)
+     ctx_start <- step$test_start - 7L * ctx_weeks
+     is_val <- pd$dates >= ctx_start & pd$dates <= step$test_end &
           !is.na(pd$intensity)
-     if (sum(is_val) < sp$timesteps) {
+     if (sum(is_val) < sp$timesteps + lead_w) {
           # Allow training but skip validation (reports NA val_loss).
           return(list(X_train = seqs_tr$X, y_train = seqs_tr$y,
                       country_ids_train = seqs_tr$country_ids,
@@ -161,7 +174,31 @@
           max_gap_days = sp$max_gap_days,
           country_id_lookup  = enc$country_to_id,
           region_for_country = enc$region_for_country,
-          cw        = if (use_cw) pd$cw[is_val] else NULL)
+          cw        = if (use_cw) pd$cw[is_val] else NULL,
+          lead      = lead_w)
+
+     # Keep only sequences whose TARGET lies inside the block. Context-window
+     # targets (before test_start) were built to make the sequences possible and
+     # must not be scored.
+     keep <- seqs_val$dates >= step$test_start & seqs_val$dates <= step$test_end
+     if (!any(keep)) {
+          return(list(X_train = seqs_tr$X, y_train = seqs_tr$y,
+                      country_ids_train = seqs_tr$country_ids,
+                      region_ids_train  = seqs_tr$region_ids,
+                      confidence_weight_train = seqs_tr$cw,
+                      X_val = NULL, y_val = NULL,
+                      country_ids_val = NULL, region_ids_val = NULL,
+                      confidence_weight_val = NULL,
+                      n_train = length(seqs_tr$y), n_val = 0L))
+     }
+     seqs_val <- list(
+          X           = seqs_val$X[keep, , , drop = FALSE],
+          y           = seqs_val$y[keep],
+          countries   = seqs_val$countries[keep],
+          dates       = seqs_val$dates[keep],
+          country_ids = seqs_val$country_ids[keep],
+          region_ids  = seqs_val$region_ids[keep],
+          cw          = if (is.null(seqs_val$cw)) NULL else seqs_val$cw[keep])
 
      list(X_train = seqs_tr$X, y_train = seqs_tr$y,
           country_ids_train = seqs_tr$country_ids,
@@ -194,7 +231,8 @@
           max_gap_days = sp$max_gap_days,
           country_id_lookup  = enc$country_to_id,
           region_for_country = enc$region_for_country,
-          cw        = if (use_cw) pd$cw[is_train] else NULL)
+          cw        = if (use_cw) pd$cw[is_train] else NULL,
+          lead      = as.integer(sp$lead %||% 0L))
      list(X_train = seqs_tr$X, y_train = seqs_tr$y,
           country_ids_train = seqs_tr$country_ids,
           region_ids_train  = seqs_tr$region_ids,
