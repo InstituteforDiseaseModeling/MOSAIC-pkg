@@ -42,6 +42,11 @@ Cost: S = < 1 h dugong, M = 1-6 h, L = > 6 h or new ingestion.
 
 | id | technique | lane | cost | evidence / why |
 |---|---|---|---|---|
+| INFRA-03 | `est_suitability()` output-directory argument | swe | M | writes `data_psi_suitability.csv`, `pred_psi_suitability_day.csv`, `psi_suitability_config.json` to fixed `PATHS$MODEL_INPUT` paths, so N concurrent fits race. Hit during the A000 run (9 shards); worked around by reading observed from the canonical panel, but the race is live for anything else that fans psi fits out. |
+
+
+| id | technique | lane | cost | evidence / why |
+|---|---|---|---|---|
 | AR-04 | seed budget 10 -> 5, spend on folds | ml | S | seeds pooled by unweighted logit-median, `val_loss` discarded — marginal seed buys little |
 | AR-05 | seed screening / weighting by fold score | ml | S | seeds diverge (val_loss 0.371-0.386, best_epoch 12-20), currently equal-weighted |
 | AR-06 | torch backend | ml | M | bitwise reproducible across processes where keras diverges up to 0.98 psi; lost Tier-2 equivalence (p=0.0065) and was not better on skill (+0.006). Adopt only if reproducibility is the goal. Branch `feature/psi-torch-port`. |

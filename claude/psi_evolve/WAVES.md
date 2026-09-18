@@ -365,3 +365,102 @@ series is not, and `score_arm_driver.R` was reading it from exactly that racing 
 Same values, no race. `PSI_RESPONSE_VAR` keeps it aligned to the arm's spec.
 
 Neither defect touched the psi fits themselves — all 9 shards are running normally, 32 min in.
+
+## Wave 3 — DA-02 done: the artefact can now defend itself and be reconstructed
+
+Committed `5b7661504` (v0.90.9). Two halves of one problem.
+
+**The drop-tail guard failed open.** `.drop_filled_prediction_tail()` validated `df` but never
+`genuine_last`, so NULL, a zero-row frame, or ISO keys differing only in case each gave an all-NA
+cutoff -> `keep` all TRUE -> nothing dropped, no warning, and the caller logged "Dropped 0 rows" as
+a normal outcome. That is how 98 days x 40 countries of pure carry-forward psi reached a shipped
+artefact and, via `config_default`'s `date_stop`, the last 98 ticks of every default simulation.
+A guard against silent corruption must not itself fail silently. Now errors on a malformed
+`genuine_last`, matches ISO case-insensitively, and names any location it passes through untrimmed.
+10 assertions, one per historical fail-open mode.
+
+**The manifest had no provenance.** 18 keys and none of the source panel, the sequence/CV geometry,
+the smoothing/clamp constants, or any software version — which against lstm_v2's cross-process
+non-determinism left a psi artefact unreconstructible in principle. It is also the direct cause of
+this session's own confounded panel rebuild: "rebuild it the same way, with the fix" was not a thing
+that could be done. Added an additive `provenance` block (source_csv + md5/size/mtime; timesteps,
+lead, max_gap_days, the full rw_* grid including the new day-based knobs, n_rw_steps; smooth_span,
+ensemble_logit_eps, loss_kind, use_confidence_weight; MOSAIC/R/TF/keras3/torch versions, backend,
+host, timestamp). A second test asserts the legacy keys survive, so "additive" is enforced rather
+than asserted.
+
+### New backlog item found tonight
+
+**INFRA-03 — `est_suitability()` writes side-effect files to fixed global paths.** Every concurrent
+fit writes `data_psi_suitability.csv`, `pred_psi_suitability_day.csv` and
+`psi_suitability_config.json` to the same `PATHS$MODEL_INPUT` locations, so any parallel multi-fit
+run races. Worked around for scoring (observed now read from the canonical panel), but the race is
+still live and will bite anything else that fans psi fits out. Proper fix: `est_suitability()`
+should take an output directory instead of writing to a global one. **This also means the A000 run's
+own manifest is the last shard to finish, not a per-cutoff record** — the per-cutoff provenance
+lives in the psi cache manifest, which is written per cutoff and is safe.
+
+## Wave 3 result — A000 SCORED, and it is worse than persistence
+
+18/18 cutoffs, 9 shards in 66-82 min (~4.2 dugong-hours). Cutoff list matches the frozen grid
+exactly.
+
+```
+[A000 | selection]  S = -0.2461   (exNGA -0.1813)   n_beat = 3/16
+                    13 selection folds, 199 country-blocks
+```
+
+Only AGO (+0.61), ZMB (+0.62) and CMR (+0.12) beat persistence. Every top-10 burden country loses:
+COD -0.49, NGA -0.67, SSD -0.39, ETH -0.31, MOZ -0.06, SOM -0.07, MWI -0.14, ZWE -0.23.
+
+### The objective has a real methodological flaw — and the finding survives it
+
+psi's prediction intervals are **seed-dispersion quantiles** (how much the fit wobbles across
+random seeds). The persistence baseline's are **empirical residual quantiles** (calibrated to its
+own historical error). These measure different things, and measured over 5,952 paired cells they
+differ enormously:
+
+| | psi | persistence |
+|---|---|---|
+| median 95% interval width | 0.018 | 0.884 (**49x wider**) |
+| empirical coverage of the nominal 95% | **18.0%** | 92.4% |
+
+So psi is not being scored as a badly-calibrated forecaster — it is being scored as one with
+essentially no interval at all. WIS punishes that correctly but it means `S` conflates point
+accuracy with interval calibration, and the two arms of any future comparison could differ on
+seed count rather than on skill.
+
+**The substantive conclusion does not depend on the flaw.** On an interval-free metric psi still
+loses clearly:
+
+```
+mean |err|  psi 0.1318  vs  persistence 0.0938
+MAE-skill of psi vs persistence:  -0.405
+```
+
+**psi at a 12-week horizon is ~40% worse than carrying the last observation forward, on point
+accuracy alone.** That is consistent with, and extends, the April bake-off's 4-week result (no NN
+beat seasonal-naive or persistence there either) — and it is now measured on the frozen grid, on
+16 burden-weighted countries, with the labelling fix in place.
+
+### ESCALATION (PROTOCOL section 9): this needs a decision, and I will not enact it
+
+Changing how psi's intervals are formed changes `S`, so it is an objective change and section 5.1
+forbids an agent from enacting one. Three options:
+
+- **(a) Symmetric intervals (my recommendation).** Give psi residual-quantile intervals from its own
+  in-sample errors, built exactly as the baseline's are. Fair comparison, keeps WIS as a proper
+  scoring rule. Requires `objective_version` 3 and a re-score of A000 (cheap -- scoring is separate
+  from fitting, so no refit).
+- **(b) Make MAE-skill primary**, WIS secondary. Simplest, interval-free, but discards probabilistic
+  scoring, which is what the forecast product actually needs.
+- **(c) Keep WIS as-is** and document that `S` measures point accuracy and calibration jointly.
+  Cheapest, but every arm's `S` remains partly a function of its seed count.
+
+**Under all three the current direction is unchanged: the incumbent loses to persistence.** This
+makes gate G2 a high bar and T2 (futility -> stop the psi track, redirect to conflict covariates
+and subnational resolution) a live possibility rather than a formality.
+
+Secondary note: 16.55% of rows had zero-width intervals at `n_seeds = 3` (below the 50% error
+threshold, above the 1% warning). LBR (-1.27) and RWA (-1.33) are the worst-scoring countries and
+are exactly the low-signal, eps-clamped ones.

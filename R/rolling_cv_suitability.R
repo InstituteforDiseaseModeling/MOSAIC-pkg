@@ -107,6 +107,17 @@
      })
      steps <- Filter(Negate(is.null), steps)
 
+     # `step_days` and `subsample` are two ways to express the same thinning, and
+     # applying both MULTIPLIES them. Measured during HA-01 arm launch: with
+     # step_days = 84 and the B4 fixture's rw_subsample = 6 still in force, the
+     # effective stride became 504 days and a 12-fold grid silently became 2.
+     # When a day-based stride is given it IS the stride; subsample is ignored.
+     if (!is.null(step_days) && subsample > 1L) {
+          message(sprintf(paste0("  [rolling_cv] step_days=%d given; ignoring rw_subsample=%d ",
+                                 "(a day-based stride already expresses the thinning)"),
+                          as.integer(step_days), as.integer(subsample)))
+          subsample <- 1L
+     }
      if (subsample > 1L && length(steps) > 0L) {
           idx   <- seq.int(1L, length(steps), by = subsample)
           steps <- steps[idx]

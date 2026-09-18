@@ -1,5 +1,5 @@
 # REGISTRY — append-only experiment ledger. Never edit or delete a row; corrections are new rows with status=CORRECTION.
-# INCUMBENT: (none — A000 not yet scored; see PROTOCOL.md §10)
+# INCUMBENT: A000 (S = -0.2461 selection, objective v2) — PROVISIONAL pending the interval-symmetry decision
 # objective_version: 2   weights_sha256: 255078783c0b8bc582e5128e8f7f8d6d170ccd7d1b0867adf981f8baa5a89a81
 #
 wave	arm_id	parent	status	mode	one_change	hypothesis	predicted	S	S_delta	boot_lb	n_beat	top10_worst	spec_sha	obj_ver	dugong_h	decision	reason	timestamp
@@ -17,3 +17,6 @@ wave	arm_id	parent	status	mode	one_change	hypothesis	predicted	S	S_delta	boot_lb
 2	A000-smoke	A000	DONE	selection	2 cutoffs x 1 seed	prove the chain before paying for 18x3	?	-0.878			6			2	0.4	VOID-ARTIFACT	100% zero-width intervals at n_seeds=1; WIS scored a point forecast vs an interval baseline; guard added to scorer	2026-09-17
 2	A000	-	RUNNING	selection	incumbent psi, 18 eval cutoffs x 3 seeds	establish the incumbent S; gates all adoption	-							2		PENDING	9 shards x 16 threads on dugong; ETA ~66 min; auto-scores on completion	2026-09-17
 2	INFRA-02	-	DONE	-	fix completion watcher pattern + race-free observed series	watcher would have scored 6 of 18 cutoffs as A000; observed read from a raced file	+							2	0	APPLIED	count-based wait condition; observed now from canonical panel column	2026-09-17
+3	DA-02	-	DONE	-	fail-loud drop-tail guard + manifest provenance block	guard failed open (98d fabricated psi shipped); manifest could not reconstruct a fit	+							2	0	APPLIED	committed 5b7661504 v0.90.9; 12 new assertions; 134 pass/0 fail on touched suite	2026-09-18
+3	INFRA-03	-	OPEN	-	est_suitability writes side-effect files to fixed global paths	concurrent fits race on PATHS$MODEL_INPUT; scoring worked around, race still live	-							2	0	BACKLOG	proper fix = output-dir argument; per-cutoff psi cache manifest is safe	2026-09-18
+3	A000	-	SCORED	selection	incumbent psi v7.3 concurrent, 18 eval cutoffs x 3 seeds	establish incumbent S	-	-0.2461			3			2	4.2	INCUMBENT-PROVISIONAL	S=-0.2461 exNGA=-0.1813 n_beat=3/16 199 cells; MAE-skill -0.405 so direction robust to the interval asymmetry; interval question ESCALATED	2026-09-18

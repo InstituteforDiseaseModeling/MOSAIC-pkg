@@ -105,3 +105,21 @@ test_that("training targets never cross train_end (target-anchored by constructi
      # every training target value must exist at a date <= train_end
      expect_true(all(sl$y_train <= max(p$y[p$date <= te_train])))
 })
+
+test_that("a day-based stride is not multiplied by rw_subsample (HA-01 launch bug)", {
+     # `step_days` and `subsample` both thin the grid; applying both multiplies
+     # them. With step_days = 84 and the B4 fixture's rw_subsample = 6 still in
+     # force, the effective stride was 504 days and a 12-fold grid became 2.
+     args <- list(fit_date_start = "2015-01-01", cutoff_date = "2022-01-01",
+                  step_days = 84L, test_days = 84L, gap_weeks = 2L,
+                  min_test_days = 84L, min_train_years = 4)
+     n_ss1 <- length(do.call(MOSAIC:::.psi_make_rw_cv_steps, c(args, subsample = 1L)))
+     n_ss6 <- length(suppressMessages(
+          do.call(MOSAIC:::.psi_make_rw_cv_steps, c(args, subsample = 6L))))
+     expect_equal(n_ss1, 12L)
+     expect_equal(n_ss6, n_ss1)          # subsample must be ignored, not multiplied
+     # and the month-based path must still honour subsample
+     m1 <- length(MOSAIC:::.psi_make_rw_cv_steps("2010-01-01", "2026-10-29", subsample = 1L))
+     m5 <- length(MOSAIC:::.psi_make_rw_cv_steps("2010-01-01", "2026-10-29", subsample = 5L))
+     expect_lt(m5, m1)
+})

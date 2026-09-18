@@ -35,13 +35,29 @@ if (NSHARD > 1L) {
      if (!length(cutoffs)) { cat("shard", SHARD, "has no cutoffs; exiting\n"); quit(save = "no") }
 }
 
-# A000 = the INCUMBENT model: v7.3 features, concurrent target (lead 0),
-# production architecture. Deliberately NOT the 12-week training geometry --
-# that is what the arms vary. The evaluation grid is frozen and shared.
-spec <- list(
-  feature_set = "v7.3",
-  arch_control = list(n_seeds = NSEED, parallel_seeds = 1L, lead = 0L)
-)
+# Arm definition. A000 is the INCUMBENT: v7.3 features, concurrent target,
+# production CV geometry. Arms override only what they are testing, via env, so
+# the registered "one change" is enforced at the launch boundary rather than by
+# reading the script.
+#
+# PSI_GEOM=12wk applies the 12-week TRAINING geometry as a single registered
+# BUNDLE: 84-day window, 2-week embargo, 2014 grid start (min_train_years=4),
+# and the requested stride. These four are not independently meaningful -- an
+# 84-day window is unreachable without the min_test_days change, and a day-based
+# stride is meaningless without a day-based window -- so they are registered as
+# one change with the components enumerated, not as four.
+ac <- list(n_seeds = NSEED, parallel_seeds = 1L,
+           lead = as.integer(Sys.getenv("PSI_LEAD", "0")))
+if (Sys.getenv("PSI_GEOM", "") == "12wk") {
+  ac <- c(ac, list(
+    test_days       = 84L,
+    min_test_days   = 84L,
+    rw_gap_weeks    = 2L,
+    min_train_years = 4,
+    step_days       = as.integer(Sys.getenv("PSI_STRIDE_DAYS", "84"))))
+}
+spec <- list(feature_set = Sys.getenv("PSI_FEATURE_SET", "v7.3"), arch_control = ac)
+cat("arch_control:\n"); utils::str(ac)
 
 cat("ARM:", ARM, "| shard", SHARD, "of", NSHARD, "| cutoffs:", length(cutoffs), "| seeds:", NSEED,
     "| MOSAIC", as.character(packageVersion("MOSAIC")), "\n")
