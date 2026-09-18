@@ -1383,3 +1383,62 @@ wave-16 measurement says further autonomous iteration cannot add information:
 3. **The T2 decision is the user's**, and it is now well-evidenced in both directions.
 
 Continuing would be activity rather than progress.
+
+## Wave 18 — B-CAL2: per-country bias correction does NOT work, and this result IS interpretable
+
+The loop was restarted, so I took the one class of work the wave-16 noise floor leaves open:
+**cache-paired arms**, where `psi` and `pred_smooth` come from identical fits and the 0.070 fit-noise
+floor does not apply. B-CAL2 was the registered follow-up to B-CAL — the only identified effect in
+the ledger.
+
+**Leakage discipline held as registered in wave 7:** the choice for country *j* at cutoff *T* uses
+only dates <= *T* (the model's own information cut-off, consistent with the D1 fix); the evaluation
+block is never consulted; minimum 26 pre-cutoff weeks or the production default (corrected) stands.
+
+### The selection is unstable, which is the wave-7 caution coming true
+
+**45% of countries flip their corrected/uncorrected choice across cutoffs.** ZMB 0.56, GMB 0.61,
+RWA 0.61, MWI 0.72 — i.e. the pre-cutoff error comparison picks differently at different origins for
+nearly half the pool. That is the registered risk ("it is a selection procedure, so it can overfit
+the very folds it is chosen on") showing up as measured instability rather than as a caveat.
+
+### Scores, same cells, no fit noise
+
+| | A000 (always corrected) | B-CAL (never) | **B-CAL2 (per-country)** |
+|---|---|---|---|
+| seed | **−0.2030** (n_beat 4) | −0.2331 (4) | −0.2280 (4) |
+| residual | −0.3503 (3) | −0.2504 (5) | **−0.2360** (5) |
+
+```
+B-CAL2 - A000 :  -0.0250 (seed)   +0.1143 (residual)
+B-CAL2 - B-CAL:  +0.0050 (seed)   +0.0144 (residual)
+A3 top-10 vs A000 (seed): FAIL -- COD -0.125, MOZ -0.070, SOM -0.050, ETH -0.047
+```
+
+**B-CAL2 buys +0.005 to +0.014 over simply switching the correction off globally**, while adding a
+per-country selection procedure that is unstable in 45% of the pool, and it fails A3 under `seed`.
+**Rejected.** The mechanism is clean: the selection signal is pre-cutoff error, which does not
+generalise to the block.
+
+This closes the B-CAL follow-up at zero compute, and unlike A100/T1 the answer is trustworthy
+because cache-pairing removes fit noise entirely.
+
+### The interval mode has now flipped THREE arm verdicts. It is the top decision.
+
+| comparison | seed says | residual says |
+|---|---|---|
+| B-CAL vs A000 | correction helps (−0.030) | correction **hurts** (+0.100) |
+| AR-03 vs A100 | features help (−0.169) | features **hurt** (+0.040) |
+| **B-CAL2 vs A000** | **worse (−0.025)** | **better (+0.114)** |
+
+Three of four cache-paired comparisons **change sign** with the interval treatment. No arm verdict
+in this programme is stable until that is settled, and it cannot be settled by an agent — it is an
+objective change under section 5.1. The review's recommendation (decompose WIS, or fix residual
+mode's three defects first: the dropped earliest block, the n-dependent interval estimator, and the
+implicit bias correction inside the interval terms) is the substantive path.
+
+## Stopping again, same reasoning, now with B-CAL2 closed
+
+The registered interpretable work is exhausted: B-CAL2 is done, and everything remaining either
+needs a refit (below the 0.070 floor) or is a protocol/objective change an agent may not enact.
+Budget is not the constraint (66 of 200 dugong-hours, 18 of 30 waves) — resolution is.
