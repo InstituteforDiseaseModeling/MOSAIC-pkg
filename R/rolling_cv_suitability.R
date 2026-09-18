@@ -261,6 +261,7 @@
      if (verbose) message(sprintf("  [RW CV] %d steps", length(rw_steps)))
 
      n_steps      <- length(rw_steps)
+     fold_preds   <- list()          # CV-07: per-fold held-out predictions
      best_epochs  <- integer(n_steps)
      val_losses   <- numeric(n_steps)
      val_metrics  <- numeric(n_steps)
@@ -314,6 +315,30 @@
           best_epochs[k] <- as.integer(out$n_epochs %||% NA_integer_)
           val_losses[k]  <- as.numeric(out$val_loss   %||% NA_real_)
           val_metrics[k] <- as.numeric(out$val_metric %||% NA_real_)
+
+          # CV-07: retain this fold's HELD-OUT predictions. The fold model
+          # predicts over the whole `X_pred` grid, which `dates_pred` /
+          # `countries_pred` align to, so the fold's own out-of-sample block is a
+          # subset -- no extra forward pass. Previously all 20+ fold models were
+          # discarded and the CV emitted a single scalar (median best_epoch),
+          # which is why the pipeline has never produced a per-horizon psi skill
+          # curve or a per-country fold score. Weekly resolution: 164 folds x 40
+          # countries x 12 weeks is ~79k rows, so this is cheap to always keep.
+          if (!is.null(out$pred) && !is.null(data_bundle$dates_pred)) {
+               dp <- as.Date(data_bundle$dates_pred)
+               inblk <- dp >= step$test_start & dp <= step$test_end
+               if (any(inblk)) {
+                    fold_preds[[length(fold_preds) + 1L]] <- data.frame(
+                         fold       = step$step,
+                         train_end  = step$train_end,
+                         test_start = step$test_start,
+                         test_end   = step$test_end,
+                         iso_code   = data_bundle$countries_pred[inblk],
+                         date       = dp[inblk],
+                         pred       = as.numeric(out$pred)[inblk],
+                         stringsAsFactors = FALSE)
+               }
+          }
 
           if (verbose)
                message(sprintf("       val_loss=%.4f  best_epoch=%s  elapsed=%.2f min",
@@ -379,6 +404,10 @@
                step_minutes   = step_minutes,
                final_minutes  = final_minutes,
                n_epochs_final = n_epochs_final,
-               all_steps_failed = !any(good))
+               all_steps_failed = !any(good),
+               # CV-07: one row per (fold, country, held-out target date).
+               # NULL when no fold produced a scoreable block.
+               fold_predictions = if (length(fold_preds))
+                    do.call(rbind, fold_preds) else NULL)
      )
 }
