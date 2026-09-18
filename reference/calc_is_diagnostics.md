@@ -87,7 +87,7 @@ calc_is_diagnostics(rnorm(1000, sd = 0.5))
 #> [1] 0.1238871
 #> 
 #> $khat_status
-#> [1] "ok"
+#> [1] "good: finite IS variance"
 #> 
 #> $n_positive_ratios
 #> [1] 1000
