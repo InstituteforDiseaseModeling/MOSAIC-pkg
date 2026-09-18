@@ -60,10 +60,15 @@ about the model and do not depend on any delta analysis:**
   and countries can be pooled only by hard region membership, never by similarity;
 - tanh γ is **sign-preserving**, so a country can damp or double a trunk feature but never reverse it.
 
-Those are defects whether or not the deltas show a regional pattern. The per-country *decay-ratio*
-spread (0.083 ZWE to 1.387 MWI) is still cited as motivation but is **itself measured on a single
-fit and not yet tested against the noise null** — that check is queued and should be done before the
-spread is quoted again.
+Those are defects whether or not the deltas show a regional pattern.
+
+**And the per-country decay-ratio spread — N5's specific premise — has now been tested against the
+same null and SURVIVES it.** Computed independently on `P000` and `P000R` (same spec, disjoint seed
+block): cross-replicate **Spearman +0.926**, Pearson +0.823, with between-country SD 0.352 against
+within-country replicate SD 0.165 (ratio **2.14**). The decay ratio is a reproducible country
+property, and the shared trunk forces it to be common. Quote the spread over stable countries —
+roughly **SSD 0.05 to RWA 0.95, ~19x** — and *not* via MWI, which is the one unstable member
+(1.571 vs 0.680 across replicates, against a median cross-replicate |diff| of 0.055).
 
 | order | id | change | class | cost | status |
 |---|---|---|---|---|---|
