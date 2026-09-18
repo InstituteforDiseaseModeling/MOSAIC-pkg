@@ -411,7 +411,59 @@
           n_features       = length(bundle$features),
           features         = bundle$features,
           fit_info         = ens$fit_info,
-          rw_diagnostics   = ens$rw_diagnostics)
+          rw_diagnostics   = ens$rw_diagnostics,
+
+          # DA-02 PROVENANCE. The manifest previously recorded 18 keys and NONE
+          # of: the source panel, the sequence/CV geometry, the smoothing and
+          # clamp constants, or any software version. Combined with lstm_v2's
+          # known cross-process non-determinism that made a psi artefact
+          # unreconstructible in principle -- and it is why a "rebuild the panel
+          # the same way but with the fix" could not be done reliably. Everything
+          # needed to reproduce the fit, or to prove two artefacts are not
+          # comparable, is recorded here. Additive: no existing key changed.
+          provenance = list(
+               source_csv        = source_csv,
+               source_csv_md5    = tryCatch(unname(tools::md5sum(source_csv)),
+                                            error = function(e) NA_character_),
+               source_csv_bytes  = tryCatch(as.numeric(file.info(source_csv)$size),
+                                            error = function(e) NA_real_),
+               source_csv_mtime  = tryCatch(as.character(file.info(source_csv)$mtime),
+                                            error = function(e) NA_character_),
+               # sequence + CV geometry (what makes a fold grid reproducible)
+               timesteps         = ac$timesteps,
+               lead              = as.integer(ac$lead %||% 0L),
+               max_gap_days      = ac$max_gap_days,
+               rw_step_months    = ac$rw_step_months,
+               rw_test_months    = ac$rw_test_months,
+               rw_subsample      = ac$rw_subsample,
+               rw_gap_weeks      = ac$rw_gap_weeks,
+               rw_step_days      = ac$step_days,
+               rw_test_days      = ac$test_days,
+               rw_min_test_days  = ac$min_test_days,
+               rw_min_train_years = ac$min_train_years,
+               n_rw_steps        = length(bundle$rw_steps),
+               # post-processing constants that survive into psi
+               smooth_span       = ac$smooth_span,
+               ensemble_logit_eps = ac$ensemble_logit_eps,
+               loss_kind         = ac$loss_kind,
+               use_confidence_weight = isTRUE(ac$use_confidence_weight),
+               # software identity
+               mosaic_version    = as.character(utils::packageVersion("MOSAIC")),
+               backend           = backend,
+               r_version         = paste(R.version$major, R.version$minor, sep = "."),
+               tf_version        = tryCatch(
+                    as.character(reticulate::py_get_attr(
+                         reticulate::import("tensorflow"), "__version__")),
+                    error = function(e) NA_character_),
+               keras3_version    = tryCatch(
+                    as.character(utils::packageVersion("keras3")),
+                    error = function(e) NA_character_),
+               torch_version     = tryCatch(
+                    as.character(utils::packageVersion("torch")),
+                    error = function(e) NA_character_),
+               host              = tryCatch(unname(Sys.info()[["nodename"]]),
+                                            error = function(e) NA_character_),
+               written_at        = as.character(Sys.time())))
      p_cfg <- file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json")
      jsonlite::write_json(config_info, p_cfg, pretty = TRUE, auto_unbox = TRUE,
                           digits = NA, null = "null")

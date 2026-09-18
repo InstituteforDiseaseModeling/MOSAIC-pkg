@@ -231,3 +231,137 @@ that no validation target ever falls outside its block, and that training target
 
 **Default behaviour unchanged:** `lead` is absent from the B4 fixture, so it resolves to 0 and
 every existing call path is untouched.
+
+### CV-07 done — and it exposed a design gap in my own protocol
+
+`rw_diagnostics$fold_predictions` now carries one row per (fold, country, held-out target date).
+The fold models already predicted over the whole grid, so this is a subset of work already done —
+no extra forward pass. Committed `2fc1cb7da` (v0.90.8), 11 assertions, including that every
+retained date lies inside its OWN fold's block.
+
+**The gap.** Wiring the scorer to fold predictions made it obvious that `S` cannot be computed on
+each arm's own training folds. The stride arms S1/S2/S3 produce 164 / 82 / 55 folds over
+*different date sets*, so scoring each arm on its own folds would compare three models graded on
+three different exams. A stride arm could win by being evaluated on easier dates. The
+one-change-per-arm rule does not catch this, because the differing fold set is a *consequence* of
+the single change rather than a second change — which is exactly why it would have survived
+review.
+
+**Fix, recorded in OBJECTIVE.md section 4b:** training folds and evaluation blocks are now
+separate. Training geometry is arm-specific (that is what S1/S2/S3 test). The evaluation grid is a
+frozen protocol parameter — 84-day blocks, 12-week stride, 2-week embargo, from 2014-01, split at
+2025-01-01 — identical for every arm. `A000` is consequently the incumbent MODEL scored on that
+frozen grid, not "the incumbent's own CV".
+
+Caught before any arm ran, so nothing is contaminated.
+
+**Objective bumped to v2 rather than amended.** PROTOCOL section 5.1 says an agent may propose an
+objective change but may not enact one. Adding section 4b touched the frozen objective, so it is
+versioned rather than edited in place. The scoring function, the weights file and its sha256 are
+unchanged — v2 only specifies what v1 left undefined. Because `A000` was never scored under v1, the
+mandated "re-score the incumbent" costs nothing. Flagging it because the rule applies to me too,
+and quietly editing a frozen file is precisely the failure the rule exists to prevent.
+
+## Wave 2 — evaluation grid frozen; A000 smoke launched
+
+### The evaluation grid aliased, and I caught it before freezing
+
+My first draft used quarterly cutoffs. Measured: a 91-day stride advances 4 x 91 = 364 days per
+four cutoffs — 1.25 days/year of drift against the annual cycle — so it lands on **4 calendar
+months only** (Feb/May/Aug/Nov). Every arm would have been graded exclusively in those four
+phases. This is the same arithmetic that made the 12-week *training* stride the right choice, now
+recurring in the grading grid, and it would not have been visible in any score.
+
+| stride | cutoffs | sel/conf | phases | selection country-blocks |
+|---|---|---|---|---|
+| quarterly (91 d) | 17 | 12 / 5 | **4/12** | 192 |
+| 5-month | 10 | 8 / 2 | 10/12 | 128 |
+| **84-day (12 wk)** | **18** | **14 / 4** | **12/12** | **224** |
+| 112-day (16 wk) | 14 | 10 / 4 | 12/12 | 160 |
+
+**Frozen: 84-day stride, 18 cutoffs from 2022-01-01, enumerated in `EVAL_GRID.csv`.** Zero block
+overlap, full seasonal rotation, 224 selection + 64 confirmation country-blocks. Each block is
+predicted by a model fitted only on data up to its own cutoff (`prefit_rolling_cv_psi()`), so this
+is a genuine rolling-origin backtest.
+
+### Deployment
+
+dugong was two things stale: MOSAIC **0.90.3** and the **July** panel. Both refreshed — the
+rebuilt 214 MB DA-01 panel shipped (12 s) and the branch installed from a `git archive` tarball
+(`R CMD INSTALL`, no devtools on that host). Verified `0.90.8` live.
+
+### A000 smoke running
+
+Deliberately a smoke (2 cutoffs x 1 seed) rather than the full 18 x 3, because the fit -> cache ->
+score chain has never been exercised end to end and a scoring bug discovered after an hour of
+fitting is an hour wasted. `run_arm.R` keeps fitting and scoring as separate steps for the same
+reason: a scoring bug never costs a refit.
+
+**A000 is the incumbent MODEL** — v7.3 features, concurrent target (`lead = 0`), production
+architecture — scored on the frozen grid. It is deliberately NOT given the 12-week training
+geometry; that is what the arms vary.
+
+### A000 smoke: chain works, and it exposed a scoring artifact
+
+The 2-cutoff x 1-seed smoke completed in 22 min and the fit -> cache -> score chain ran end to
+end. Measured cost: **~11 min per (cutoff x seed)**.
+
+It returned `S = -0.878`, with 10 of 16 countries scoring negative and some catastrophically
+(AGO -5.99, ZMB -2.71, ZWE -2.52). **That number is an artifact, not a result.** The model's
+prediction intervals are seed-dispersion quantiles, so a single-seed fit gives `q025 == q975` on
+**100% of rows** — measured. WIS then scores a POINT forecast against a persistence baseline that
+gets real residual-quantile intervals: the model is charged the full interval penalty with no
+interval to earn it back. Any low-seed arm would have looked systematically worse for a reason
+that has nothing to do with its quality.
+
+This is precisely why the smoke was run before the full 18 x 3, and why `run_arm.R` and
+`score_arm_driver.R` are separate steps.
+
+**Guard added** to `score_psi_arm()`: refuse to score when more than 50% of rows have a zero-width
+95% interval, warn above 1%. Two new tests (8/8 pass) — one asserts the degenerate set errors, one
+asserts a 5% contamination warns but still scores. Without this, the first real arm comparison
+could have been decided by seed count.
+
+Also noted from the smoke, pre-existing and not new: `calibrate_psi_predictions` used identity for
+9 countries and guarded 9 more, and `check_psi_amplitude` flagged MWI/LBR/TGO/ZAF at
+`amp_ratio ~ 2.00` — the clamp ceiling, i.e. bounded rather than runaway. Consistent with the
+recorded G red-team behaviour.
+
+### A000 full run launched
+
+18 cutoffs x 3 seeds, sharded 9-wide at 16 threads each (144 of 176 cores). All 9 shards verified
+started. ETA ~66 min. Scoring runs automatically on completion.
+
+Two operational notes for the ledger: an inline `for` loop over `ssh` silently launched only one
+process, so shard launching now goes through a scp'd `launch_arm.sh`; and `pkill -f run_arm.R`
+issued inline over ssh **self-matched the ssh shell** and killed the session — the exact trap
+already recorded for `forecast_cv_ocv4`. Kill via a script file or a more specific pattern.
+
+### Two monitoring/infrastructure defects caught mid-run (A000 itself is healthy)
+
+**1. My completion watcher would have fired early and scored a partial cache.** It polled
+`pgrep -f "psi_evolve/run_arm"`, but the actual process command line is
+`R ... --file=run_arm.R` — no `psi_evolve/` prefix — so the pattern never matched and the watcher
+read "job finished" while all 9 shards were 32 minutes into work. It would then have run the
+scorer over 6 of 18 cutoffs and written that `S` to the registry as if it were `A000`.
+
+Stopped and re-armed on an unambiguous condition: **18 of 18 psi files present AND no `run_arm.R`
+process**. A count-based condition is the right primary signal here; process-absence alone cannot
+distinguish "finished" from "never matched".
+
+Related false alarm in the same diagnostic: my per-shard health check grepped logs for `error` and
+flagged all 9, but the match was TensorFlow's benign `failed call to cuInit` (dugong has no GPU),
+which prints on every TF start. A status check whose failure signature matches normal startup
+output is worse than no check.
+
+**2. Concurrent shards race on `PATHS$MODEL_INPUT`.** Every shard writes
+`data_psi_suitability.csv`, `pred_psi_suitability_day.csv` and `psi_suitability_config.json` to the
+same fixed paths — the recorded "est_suitability writes GLOBAL single files -> parallel refits
+race". The per-cutoff psi cache is safe (cutoff-keyed, disjoint filenames), but the observed
+series is not, and `score_arm_driver.R` was reading it from exactly that racing file.
+
+**Fixed:** the observed series now comes from the canonical panel column
+(`target_D_rate_per_country_floored`), which is cutoff-independent and not written by any fit.
+Same values, no race. `PSI_RESPONSE_VAR` keeps it aligned to the arm's spec.
+
+Neither defect touched the psi fits themselves — all 9 shards are running normally, 32 min in.

@@ -13,9 +13,41 @@
 # absent from `genuine_last` are passed through unchanged.
 .drop_filled_prediction_tail <- function(df, genuine_last) {
      if (is.null(df) || !all(c("iso_code", "date") %in% names(df))) return(df)
+
+     # DA-02: this guard used to FAIL OPEN. `genuine_last` was never validated, so
+     # NULL, a zero-row frame, or ISO keys differing only in case all produced an
+     # all-NA `cutoff`, hence `keep` all TRUE -- nothing dropped, no warning, and
+     # the caller logged "Dropped 0 rows" as a normal outcome. That is how 98 days
+     # x 40 countries of pure carry-forward psi reached a shipped artefact and,
+     # through it, the last 98 ticks of every default simulation. A guard against
+     # silent corruption must not itself fail silently.
+     if (is.null(genuine_last) || !is.data.frame(genuine_last) ||
+         !all(c("iso_code", "last_genuine_date") %in% names(genuine_last)) ||
+         nrow(genuine_last) == 0L) {
+          stop(".drop_filled_prediction_tail: `genuine_last` must be a non-empty data.frame ",
+               "with `iso_code` and `last_genuine_date`. Received ",
+               if (is.null(genuine_last)) "NULL" else
+                    sprintf("%s with %d row(s) and columns [%s]", class(genuine_last)[1],
+                            nrow(genuine_last), paste(names(genuine_last), collapse = ", ")),
+               ". Failing loudly: passing this through would silently retain a ",
+               "forward-filled psi tail.", call. = FALSE)
+     }
+
+     # Match on upper-cased ISO so a case difference cannot silently disable the
+     # cutoff lookup (one of the original fail-open modes).
      lg <- stats::setNames(as.Date(genuine_last$last_genuine_date),
-                           as.character(genuine_last$iso_code))
-     cutoff <- lg[as.character(df$iso_code)]
+                           toupper(as.character(genuine_last$iso_code)))
+     key    <- toupper(as.character(df$iso_code))
+     cutoff <- lg[key]
+
+     unmatched <- unique(key[is.na(cutoff)])
+     if (length(unmatched)) {
+          warning(sprintf(paste0(".drop_filled_prediction_tail: %d location(s) absent from ",
+                                 "`genuine_last` and passed through UNTRIMMED (%s). Any ",
+                                 "forward-filled tail for these is retained."),
+                          length(unmatched),
+                          paste(utils::head(unmatched, 8), collapse = ", ")), call. = FALSE)
+     }
      keep <- is.na(cutoff) | as.Date(df$date) <= cutoff
      df[keep, , drop = FALSE]
 }

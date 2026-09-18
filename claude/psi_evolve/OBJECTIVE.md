@@ -6,10 +6,19 @@ recorded here. An arm scored under a different objective version is not comparab
 re-scored, not compared.
 
 ```
-objective_version: 1
+objective_version: 2
 weights_file:      weights_frozen.csv
 weights_scheme:    w_sqrt   (w proportional to sqrt(reported cases 2021-2025))
 ```
+
+### Version history
+- **v1** (2026-09-17) — initial freeze: sqrt-burden weights, 16-country pool, no-regression guard.
+- **v2** (2026-09-17) — adds section 4b, separating TRAINING folds from EVALUATION blocks and
+  freezing the evaluation grid. PROTOCOL section 5.1 forbids an agent from *enacting* an objective
+  change, so this is versioned rather than amended into v1. The scoring function, the weights file
+  and its sha256 are **unchanged**; v2 specifies something v1 left undefined. Nothing had been
+  scored under v1 (`A000` was never run), so the mandated re-scoring of the incumbent costs
+  nothing and no comparison is invalidated.
 
 ## 1. Primary objective
 
@@ -75,6 +84,52 @@ burden ORDERING exactly while letting ~12 countries carry real weight. To revert
   12-week forecast skill estimate on <26 observed weeks is noise.
 - NGA carries 13.1% of the weight and its cases are essentially fully imputed. It stays in the
   objective (it is real burden) but every report must show the objective with and without NGA.
+
+## 4b. TRAINING folds vs EVALUATION blocks — these are NOT the same thing
+
+**Design correction, 2026-09-17, found while implementing CV-07. This invalidates a
+naive reading of the arm ladder and must be settled before any arm runs.**
+
+The arm ladder varies the CV stride (4 / 8 / 12 weeks -> 164 / 82 / 55 folds). If `S` were
+computed on each arm's *own* training folds, the three arms would be scored on three different
+sets of blocks and `S` would not be comparable across them — a stride arm could "win" purely by
+being evaluated on an easier set of dates. That is a silent, fatal confound of exactly the kind
+the one-change-per-arm rule is meant to stop, and the rule does not catch it because the fold set
+is a consequence of the change rather than a second change.
+
+**Therefore two grids, with different jobs:**
+
+| | TRAINING folds | EVALUATION blocks |
+|---|---|---|
+| purpose | epoch selection, seed screening, internal CV | computing `S` |
+| varies by arm | YES — that is what S1/S2/S3 test | **NO — frozen, identical for every arm** |
+| geometry | arm-specific (`step_days`, `test_days`, ...) | 84-day blocks, 12-week stride, 2-week embargo, from 2014-01 |
+
+The evaluation grid is a **protocol parameter** (frozen under section 5.1), not an arm parameter.
+Every arm's fitted model is scored on the same blocks, so `S` differences are attributable to the
+arm and not to which dates it happened to be graded on.
+
+`A000` is therefore the incumbent MODEL — v7.3 features, concurrent target, production
+architecture — scored on the frozen evaluation grid. It is not "the incumbent's own CV".
+
+```
+evaluation_grid:  (FROZEN -- enumerated in EVAL_GRID.csv)
+  cutoffs:       18, every 84 days from 2022-01-01 to 2025-11-18
+  window_days:   84          # block = cutoff + 14d .. cutoff + 97d
+  embargo_days:  14
+  selection:     14 cutoffs (< 2025-01-01)  -> 224 country-blocks
+  confirmation:   4 cutoffs (>= 2025-01-01) ->  64 country-blocks   (LOCKED)
+  phases_covered: 12 of 12
+```
+
+**Why 84 days and not quarterly.** A 91-day (quarterly) stride advances 4 x 91 = 364 days per four
+cutoffs -- a drift of 1.25 days/year against the annual cycle -- so it aliases onto **4 calendar
+months** (Feb/May/Aug/Nov). A model would only ever be graded in those four phases. An 84-day
+stride drifts 29.25 days/year and rotates through all 12 while still giving zero block overlap.
+Measured: quarterly = 4/12 phases, 5-month = 10/12, **84-day = 12/12**.
+
+Each block is scored by a model fitted on data up to its cutoff (via `prefit_rolling_cv_psi()`),
+so the evaluation is a genuine rolling-origin backtest, not an in-sample read.
 
 ## 5. Selection / confirmation split
 

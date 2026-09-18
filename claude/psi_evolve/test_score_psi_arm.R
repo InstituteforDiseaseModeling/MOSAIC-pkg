@@ -81,3 +81,21 @@ test_that("S excluding NGA is reported and differs when NGA is an outlier", {
   expect_true(is.finite(r$S_exNGA))
   expect_gt(r$S_exNGA, r$S)
 })
+
+test_that("a degenerate (zero-width) interval set is refused, not scored", {
+  # A single-seed fit gives q025 == q975 on every row. WIS would then charge the
+  # model the full interval penalty against a baseline that has real intervals.
+  p <- mk_pred(function(o) o)
+  p$q025 <- p$psi; p$q25 <- p$psi; p$q75 <- p$psi; p$q975 <- p$psi
+  expect_error(score_psi_arm("DEGEN", p, obs, folds, "selection", verbose = FALSE),
+               "ZERO-WIDTH")
+})
+
+test_that("a small fraction of zero-width rows warns but still scores", {
+  p <- mk_pred(function(o) o)
+  i <- seq_len(round(0.05 * nrow(p)))
+  p$q025[i] <- p$psi[i]; p$q975[i] <- p$psi[i]
+  expect_warning(r <- score_psi_arm("W", p, obs, folds, "selection", verbose = FALSE),
+                 "zero-width")
+  expect_true(is.finite(r$S))
+})

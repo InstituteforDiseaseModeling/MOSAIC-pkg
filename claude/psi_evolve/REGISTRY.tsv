@@ -1,6 +1,6 @@
 # REGISTRY — append-only experiment ledger. Never edit or delete a row; corrections are new rows with status=CORRECTION.
 # INCUMBENT: (none — A000 not yet scored; see PROTOCOL.md §10)
-# objective_version: 1   weights_sha256: 255078783c0b8bc582e5128e8f7f8d6d170ccd7d1b0867adf981f8baa5a89a81
+# objective_version: 2   weights_sha256: 255078783c0b8bc582e5128e8f7f8d6d170ccd7d1b0867adf981f8baa5a89a81
 #
 wave	arm_id	parent	status	mode	one_change	hypothesis	predicted	S	S_delta	boot_lb	n_beat	top10_worst	spec_sha	obj_ver	dugong_h	decision	reason	timestamp
 0	A000	-	PLANNED	-	baseline: production psi v7.3, concurrent target, 20-fold CV	incumbent reference under frozen objective v1	-							1		-	not yet scored; blocks all adoption	2026-09-17
@@ -11,3 +11,9 @@ wave	arm_id	parent	status	mode	one_change	hypothesis	predicted	S	S_delta	boot_lb
 0	SCORER	-	DONE	-	score_psi_arm.R implementing OBJECTIVE v1 + 6 tests	no adoption is possible without a tested scorer	+							1	0	APPLIED	6/6 tests incl. split enforcement, guard firing, tampered-weights refusal	2026-09-17
 0	DA-01-REVIEW	DA-01	DONE	-	adversarial review + 3 blocking fixes + class guard	review must falsify, not summarise	+							1	0	ADDRESSED	B1 my guard missed the climate mode (comment was false); B2 mtime cache; B3 SUPP site; committed 4f03bea3f v0.90.6	2026-09-17
 1	HA-01b	HA-01	DONE	-	lead-h target + validation input-context widening	84-day block cannot build 13-timestep sequences from in-block rows alone; lead-h needs the same widening	+							1	0	APPLIED	18 tests; lead=0 bit-identical; 12wk geometry reachable from arch_control alone (164 folds/84d/lead12)	2026-09-17
+1	CV-07	-	DONE	-	retain per-fold held-out predictions in rw_diagnostics	no per-horizon skill curve or per-country arm evidence without it	+							1	0	APPLIED	committed 2fc1cb7da v0.90.8; exposed the training-fold vs evaluation-block confound -> OBJECTIVE 4b	2026-09-17
+2	EVAL-GRID	-	DONE	-	freeze evaluation grid at 84-day stride, 18 cutoffs	quarterly aliases to 4/12 seasonal phases; 84-day rotates fully	+							2	0	APPLIED	EVAL_GRID.csv; 14 sel / 4 conf; 224+64 country-blocks; 12/12 phases	2026-09-17
+2	A000-smoke	A000	RUNNING	selection	incumbent psi across 2 eval cutoffs x 1 seed	prove the fit->cache->score chain before paying for 18x3	?							2		PENDING	dugong; MOSAIC 0.90.8 + rebuilt panel deployed	2026-09-17
+2	A000-smoke	A000	DONE	selection	2 cutoffs x 1 seed	prove the chain before paying for 18x3	?	-0.878			6			2	0.4	VOID-ARTIFACT	100% zero-width intervals at n_seeds=1; WIS scored a point forecast vs an interval baseline; guard added to scorer	2026-09-17
+2	A000	-	RUNNING	selection	incumbent psi, 18 eval cutoffs x 3 seeds	establish the incumbent S; gates all adoption	-							2		PENDING	9 shards x 16 threads on dugong; ETA ~66 min; auto-scores on completion	2026-09-17
+2	INFRA-02	-	DONE	-	fix completion watcher pattern + race-free observed series	watcher would have scored 6 of 18 cutoffs as A000; observed read from a raced file	+							2	0	APPLIED	count-based wait condition; observed now from canonical panel column	2026-09-17

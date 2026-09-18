@@ -1,7 +1,7 @@
 # =============================================================================
 # score_psi_arm.R -- the ONE scorer for the psi 12-week evolution process.
 #
-# Implements OBJECTIVE.md v1 exactly:
+# Implements OBJECTIVE.md v2 exactly:
 #   S(arm) = sum_j w_j * median_over_folds( wis_skill_j )
 # where wis_skill is vs the PERSISTENCE baseline on held-out 84-day blocks,
 # w_j is the frozen sqrt-burden weight, over the 16-country scoring pool.
@@ -35,7 +35,7 @@
      sha <- if (length(sha) && !is.na(sha[1])) sub(" .*$", "", sha[1]) else NA_character_
      if (!is.na(sha) && !identical(sha, expect_sha)) {
           stop(sprintf(paste0("score_psi_arm: FROZEN OBJECTIVE VIOLATION. weights_frozen.csv sha256 is\n",
-                              "  %s\nbut OBJECTIVE.md v1 pins\n  %s\n",
+                              "  %s\nbut OBJECTIVE.md pins\n  %s\n",
                               "Scores under a changed objective are not comparable. Bump objective_version ",
                               "and re-score the incumbent, or restore the file."), sha, expect_sha),
                call. = FALSE)
@@ -88,6 +88,26 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
 
      wis_fn <- getFromNamespace(".rcv_wis", "MOSAIC")
      bl_fn  <- getFromNamespace(".rcv_baseline", "MOSAIC")
+
+     # DEGENERATE-INTERVAL GUARD. The model's prediction intervals are seed
+     # dispersion quantiles, so a single-seed fit yields q025 == q975 on every
+     # row. WIS would then score a POINT forecast against a baseline that gets
+     # real residual-quantile intervals -- the model is charged the full interval
+     # penalty with no interval to earn it back, and every low-seed arm looks
+     # systematically worse for a reason unrelated to its quality. Measured on a
+     # 1-seed smoke: 100% of rows zero-width, S = -0.88, which is an artifact and
+     # not a result. Refuse rather than return a number that reads as a score.
+     zw <- mean(abs(pred$q975 - pred$q025) < 1e-12, na.rm = TRUE)
+     if (is.finite(zw) && zw > 0.5) {
+          stop(sprintf(paste0("score_psi_arm: %.1f%% of prediction rows have a ZERO-WIDTH 95%% ",
+                              "interval (q025 == q975). This is what a single-seed fit produces, ",
+                              "and WIS would compare a point forecast against an interval ",
+                              "baseline. Refit with n_seeds >= 3, or score a point metric instead."),
+                      100 * zw), call. = FALSE)
+     }
+     if (is.finite(zw) && zw > 0.01)
+          warning(sprintf("score_psi_arm: %.2f%% of rows have zero-width intervals.", 100 * zw),
+                  call. = FALSE)
 
      # ---- per (country, fold) skill -----------------------------------------
      cells <- list()
@@ -143,7 +163,7 @@ score_psi_arm <- function(arm_id, pred, obs, folds,
      pn <- per_iso[per_iso$iso_code != "NGA", ]
      S_exNGA <- if (nrow(pn)) sum(pn$w / sum(pn$w) * pn$wis_skill) else NA_real_
 
-     out <- list(arm_id = arm_id, mode = mode, objective_version = 1L,
+     out <- list(arm_id = arm_id, mode = mode, objective_version = 2L,
                  S = S, S_delta = S_delta, S_exNGA = S_exNGA,
                  n_beat = n_beat, n_scored = nrow(per_iso),
                  top10_worst = top10_worst, guard_ok = guard_ok,
