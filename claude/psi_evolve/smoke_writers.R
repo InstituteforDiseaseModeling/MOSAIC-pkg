@@ -46,7 +46,11 @@ SPECS <- list(
               need = "trunk", note = "N-arm trunk swap (GRU)"),
   ha02 = list(ac = list(n_seeds = 2L, epoch_select_seeds = 1L),
               need = c("epoch_select_seeds", "epoch_fixed"),
-              note = "HA-02 epoch/ensemble decoupling")
+              note = "HA-02 epoch/ensemble decoupling"),
+  n5   = list(ac = list(n_seeds = 1L, film_input = TRUE),
+              need = "film_input", note = "N5 input-FiLM (country-variability)"),
+  n6   = list(ac = list(n_seeds = 1L, gamma_scale = 2),
+              need = "gamma_scale", note = "N6 sign-permissive country gamma")
 )
 
 fail <- character(0)

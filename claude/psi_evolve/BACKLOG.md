@@ -37,6 +37,36 @@ All at the incumbent's `n_seeds`, on the frozen 9-cutoff grid. Fold counts are e
 | F7 | epoch estimator: trimmed mean / per-fold-weighted instead of `median(best_epoch)` | estimator only | as parent | +0 | 0/+ | F-select; cheap, and the median discards the fold spread entirely |
 | F8 | **fold-model ensembling** — the RW fold models enter the prediction instead of being discarded | prediction assembly | as parent | M | + | **F-ensemble** — today `n_folds` trained models are thrown away and one refit replaces them; bagging over origins is the standard answer and is free of extra fits |
 
+## PRIORITY (wave 23): country-variability capacity is now the top of the ladder
+
+**Why this is promoted above everything else.** Every arm in this programme has helped some
+countries and hurt others, and wave 22 showed the split is not idiosyncratic: `C9d`'s benefit
+separates along the **shipped `snf_k5` region map** — snf_1 (AGO, MOZ, MWI, ZWE, ZMB) weighted
+**−0.259 with every member non-positive**, snf_2 (COD, SSD, SOM, ETH, BDI, TZA, RWA, KEN) **+0.498**
+with 6 of 8 positive, Wilcoxon p = 0.045. Meanwhile the architecture audit found that country
+conditioning acts **only on the trunk's 32-dim output** while the recurrent weights are identical
+for all 40 countries — so the model structurally cannot express what actually differs. The measured
+horizon decay ratio spans **0.083 (ZWE) to 1.387 (MWI)**: a 17x spread in the one property the
+architecture forces to be common.
+
+There is also a structural consequence for the objective: **if every intervention's benefit splits
+by region, the A3 breadth guard will reject any arm that is not regionally neutral, and a single
+shared-trunk model cannot be regionally neutral.** Either the model gains regional capacity, or the
+programme is fitting the wrong object. That makes this family the highest-value work available, not
+merely the next item.
+
+| order | id | change | class | cost | status |
+|---|---|---|---|---|---|
+| **1** | **N8** | `country_balance = TRUE` | R | ~3.6 h | one flag that already exists and has never been tested; cheapest test of the whole family, and it directly explains the snf_1/snf_2 asymmetry (the trunk is fitted in proportion to data volume, so it learns snf_2's response) |
+| **2** | **N5** | `film_input = TRUE` — condition the trunk's INPUTS | R | ~3.6 h | **BUILT, TESTED, SMOKED.** Exact identity at init (verified), so the arm starts at the production model. Restores the input-FiLM branch the gauge_A port dropped |
+| **3** | **N6** | `gamma_scale = 2` — let country modulation flip a sign | R | ~3.6 h | **BUILT, TESTED, SMOKED.** tanh gamma is sign-preserving, so a covariate with opposite effects in two regimes cannot be represented |
+| **4** | **D9** | add the 17 static country covariates already in the panel | R | ~3.6 h | country identity is a bare ID embedding, so the model pools by hard region membership and never by similarity — worst exactly where data is scarcest |
+| 5 | N7 | region-specific final trunk layer / gated trunk mixture | R | M | genuinely region-specific dynamics; queued behind N5 because N5 is the cheap version of the same hypothesis |
+| 6 | AR-08 | per-region or per-regime models instead of one global fit | R | L | what the data says most directly, and how the downstream calibration already works (per-country) |
+
+All are class R, so all need the fit-noise floor `P000R` is measuring. N5/N6 are launch-ready the
+moment it lands.
+
 ## The wave-22 finding reorders the ladder
 
 C6 established that psi's out-of-sample failure is a **systematic horizon-growing level collapse**

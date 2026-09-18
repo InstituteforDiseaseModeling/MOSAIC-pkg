@@ -109,6 +109,25 @@ if (nzchar(Sys.getenv("PSI_SEED_BASE", ""))) {
   cat("REPLICATE: seed_base =", ac$seed_base, "\n")
 }
 
+# ---- Country-variability capacity (N arms N5/N6/N8) ------------------------
+# The heterogeneity that has defeated every arm splits along the snf_k5 region
+# map (snf_1 weighted -0.259, every member non-positive; snf_2 +0.498), while
+# country conditioning acts only on the trunk's OUTPUT and the recurrent weights
+# are shared by all 40 countries. These three knobs are the cheap tests.
+if (Sys.getenv("PSI_FILM_INPUT", "0") == "1") {
+  ac$film_input <- TRUE
+  cat("N5: input-FiLM ON -- the trunk's INPUTS are conditioned on country\n")
+}
+if (nzchar(Sys.getenv("PSI_GAMMA_SCALE", ""))) {
+  ac$gamma_scale <- as.numeric(Sys.getenv("PSI_GAMMA_SCALE"))
+  cat("N6: gamma_scale =", ac$gamma_scale,
+      "-- country modulation may flip sign when > 1\n")
+}
+if (Sys.getenv("PSI_COUNTRY_BALANCE", "0") == "1") {
+  ac$country_balance <- TRUE
+  cat("N8: country_balance ON -- per-country aggregate loss balancing\n")
+}
+
 # Trunk registry (N arms). Swaps ONLY the sequence encoder; FiLM conditioning,
 # head, loss and features are untouched.
 TRUNK <- Sys.getenv("PSI_TRUNK", "lstm")
@@ -164,6 +183,9 @@ if (grepl("forecast_cv_ocv4", CACHE, fixed = TRUE))
 
 cat("\n================ ARM ", ARM, " ================\n", sep = "")
 cat("geometry     :", geom_name, "| trunk:", TRUNK, "| feature_set:", FEATSET, "\n")
+cat("country caps :", "film_input", isTRUE(ac$film_input),
+    "| gamma_scale", ac$gamma_scale %||% 1,
+    "| country_balance", isTRUE(ac$country_balance), "\n")
 cat("seeds        :", NSEED, "| epoch_select:", ESK, "| lead:", ac$lead, "\n")
 cat("shard        :", SHARD, "of", NSHARD, "| MOSAIC", as.character(packageVersion("MOSAIC")), "\n")
 cat("cutoffs      :", paste(format(cutoffs), collapse = ", "), "\n")

@@ -12,6 +12,9 @@
 # Arm knobs, all read by run_arm.R:
 #   PSI_GEOM=p000|p001|F1|F2|F3|F4     inner-CV geometry preset
 #   PSI_TRUNK=lstm|gru|tcn             architecture (N arms)
+#   PSI_FILM_INPUT=1                   N5: condition the trunk's INPUTS
+#   PSI_GAMMA_SCALE=2                  N6: let country modulation flip sign
+#   PSI_COUNTRY_BALANCE=1              N8: per-country loss balancing
 #   PSI_FEATURE_SET=v7.3|v7.4          data (D arms; v7.4 = leak-free panels)
 #   PSI_EPOCH_SELECT=k                 HA-02: fold loop on k seeds, refit all
 #   PSI_SEED_BASE=1001                 REPLICATE (disjoint seed block -> floor)
@@ -23,6 +26,9 @@
 #   PSI_SEED_BASE=1001 ./launch_arm.sh P000R 9 10 18             # its replicate -> FLOOR
 #   PSI_GEOM=F1 PSI_EPOCH_SELECT=2 ./launch_arm.sh F1 9 10 18    # 677-fold inner CV
 #   PSI_TRUNK=tcn PSI_GEOM=F4 PSI_EPOCH_SELECT=2 ./launch_arm.sh N1 9 10 18
+#   PSI_COUNTRY_BALANCE=1 ./launch_arm.sh N8 9 10 18          # cheapest country arm
+#   PSI_FILM_INPUT=1 ./launch_arm.sh N5 9 10 18               # input-FiLM
+#   PSI_GAMMA_SCALE=2 ./launch_arm.sh N6 9 10 18              # sign-permissive
 set -u
 ARM=${1:-P000}; N=${2:-9}; SEEDS=${3:-10}; THREADS=${4:-18}
 cd "$HOME/psi_evolve" || exit 1
@@ -40,6 +46,9 @@ mkdir -p logs "psi_cache_${ARM}"
 for i in $(seq 0 $((N-1))); do
   env PSI_ARM="$ARM" PSI_SEEDS="$SEEDS" PSI_SHARD="$i" PSI_NSHARD="$N" \
       PSI_GEOM="${PSI_GEOM:-p000}" PSI_TRUNK="${PSI_TRUNK:-lstm}" \
+      PSI_FILM_INPUT="${PSI_FILM_INPUT:-0}" \
+      PSI_GAMMA_SCALE="${PSI_GAMMA_SCALE:-}" \
+      PSI_COUNTRY_BALANCE="${PSI_COUNTRY_BALANCE:-0}" \
       PSI_FEATURE_SET="${PSI_FEATURE_SET:-v7.3}" \
       PSI_EPOCH_SELECT="${PSI_EPOCH_SELECT:-0}" \
       PSI_LEAD="${PSI_LEAD:-0}" PSI_EXCLUDE="${PSI_EXCLUDE:-}" \

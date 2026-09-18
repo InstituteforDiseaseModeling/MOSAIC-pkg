@@ -80,7 +80,11 @@
           # and is byte-identical to the pre-registry code path.
           trunk                = "lstm",
           tcn_kernel           = 3L,
-          tcn_dilations        = c(1L, 2L, 4L)
+          tcn_dilations        = c(1L, 2L, 4L),
+          # Country-variability capacity (psi_evolve `N` arms). Both default to
+          # the production behaviour, so an unset spec is byte-identical.
+          film_input           = FALSE,   # N5: condition the trunk's INPUTS
+          gamma_scale          = 1        # N6: >1 lets country modulation flip sign
      ), hyperparams)
 
      enc <- data_bundle$encoders
@@ -208,7 +212,56 @@
      input_region  <- keras3::layer_input(shape = 1L, dtype = "int32",
                                           name = "region_id")
 
-     z <- build_trunk(input_feat)                       # (B, units_3)
+     # ---- N5: INPUT-FiLM (optional) ---------------------------------------
+     # WHY. The production model conditions only the trunk's 32-dim OUTPUT:
+     # z_r = (1+g_r)z + b_r then z_c = (1+g_c)z_r + b_c. The recurrent weights
+     # that process the 13-week sequence are IDENTICAL for all 40 countries, so
+     # no country can have its own lag structure, response timing or
+     # persistence -- and those are exactly what differ. Measured on the
+     # production grid: the horizon decay ratio spans 0.083 (ZWE) to 1.387
+     # (MWI), a 17x spread in the one property the architecture forces to be
+     # common, and every arm's benefit splits along the snf_k5 region map
+     # (snf_1 weighted -0.259 with every member non-positive, snf_2 +0.498).
+     #
+     # Conditioning the INPUTS instead lets a country reweight WHICH covariates
+     # the shared dynamics see -- country-specific effective dynamics without
+     # per-country recurrent weights. This restores the `input-FiLM` branch that
+     # the gauge_A-only port dropped (see this file's header).
+     #
+     # Zero-init the EMBEDDING, default-init the DENSE: at init the embedding is
+     # 0 so gamma_in = tanh(0) = 0 and beta_in = 0, making this an exact
+     # identity -- the arm starts at the production model. Gradients still flow,
+     # because the dense weights are nonzero. Zero-initialising BOTH would make
+     # the branch permanently dead (zero input to the dense gives a zero weight
+     # gradient, and a zero dense weight gives a zero embedding gradient); this
+     # mirrors the country-deviation FiLM below, which is built the same way.
+     feat_in <- input_feat
+     if (isTRUE(hp$film_input)) {
+          c_in <- input_country |>
+               keras3::layer_embedding(
+                    input_dim  = enc$n_countries,
+                    output_dim = as.integer(hp$country_dim),
+                    embeddings_initializer = "zeros",
+                    embeddings_regularizer = if (use_partial_pool)
+                         keras3::regularizer_l2(hp$partial_pool_lambda) else NULL,
+                    name = "film_in_country_embedding") |>
+               keras3::layer_flatten(name = "film_in_country_flat")
+          g_in <- keras3::layer_dense(c_in, units = n_features, activation = "tanh",
+                                      name = "film_in_gamma")
+          b_in <- keras3::layer_dense(c_in, units = n_features, activation = "linear",
+                                      name = "film_in_beta")
+          g_in <- keras3::layer_reshape(g_in, target_shape = c(1L, n_features),
+                                        name = "film_in_gamma_rs")
+          b_in <- keras3::layer_reshape(b_in, target_shape = c(1L, n_features),
+                                        name = "film_in_beta_rs")
+          # (B, T, F) * (B, 1, F) broadcasts over the time axis
+          feat_in <- keras3::op_add(
+               keras3::op_multiply(input_feat,
+                                   keras3::op_add(keras3::op_ones_like(g_in), g_in)),
+               b_in)
+     }
+
+     z <- build_trunk(feat_in)                          # (B, units_3)
 
      # ---- Region FiLM (skipped via frozen zero-tap when only one region) ----
      if (skip_region) {
@@ -259,8 +312,15 @@
      # tanh gamma_c bounds country deviation scaling to (1 + gamma_c) in [0, 2];
      # with zero-init c_dev the country FiLM is identity at init and departs from
      # it only where data supports it.
+     # N6: `gamma_scale` > 1 widens the country modulation beyond tanh's (0,2)
+     # multiplier so a country can REVERSE a trunk feature's sign, not merely
+     # damp or double it. At the default 1 this is the production tanh exactly.
+     # Production cannot express a covariate whose effect is opposite in two
+     # regimes: the shared trunk averages them and only beta_c can compensate.
+     .gs <- as.numeric(hp$gamma_scale %||% 1)
      gamma_c <- keras3::layer_dense(c_dev, units = film_dim,
-                                    activation = "tanh",
+                                    activation = if (.gs == 1) "tanh" else
+                                         function(x) .gs * keras3::op_tanh(x),
                                     name = "film_gamma_country")
      beta_c  <- keras3::layer_dense(c_dev, units = film_dim,
                                     activation = "linear",
