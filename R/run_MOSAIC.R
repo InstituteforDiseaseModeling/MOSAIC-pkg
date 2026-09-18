@@ -2623,6 +2623,18 @@ run_MOSAIC <- function(config,
       traj$cfr_refs <- .mosaic_compute_cfr_refs(results, traj$location_names)
       ensemble$trajectories <- traj
       .mosaic_persist_trajectory_artifact(ensemble, dirs, log_msg, log_warn)
+
+      # Text companion to the .rds above. The .rds is classified heavy by the
+      # MOSAIC-results promoter and lands store:"pending", so without this the
+      # only channels that reach the archive are reported_cases/reported_deaths
+      # via the prediction CSVs. Wrapped: a failed export must not lose a run.
+      tryCatch({
+        written <- write_trajectory_csv(traj, dirs$res_predictions,
+                                        verbose = FALSE)
+        log_msg("Saved %d 3_results/predictions/trajectories_*.csv", length(written))
+      }, error = function(e) {
+        log_warn("trajectory CSV export failed: %s", e$message)
+      })
     }
     # Stream-to-disk scratch is transient -- always clean it up.
     unlink(traj_scratch_handle$dir, recursive = TRUE, force = TRUE)
