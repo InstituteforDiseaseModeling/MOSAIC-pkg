@@ -568,6 +568,8 @@ Helper and utility functions
   : Write an R List to a YAML File
 - [`write_model_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_model_json.md)
   : Standardized JSON I/O utilities for MOSAIC model files
+- [`write_trajectory_csv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_trajectory_csv.md)
+  : Write ensemble trajectory channels to per-location CSV
 - [`use_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/use_mosaic_env.md)
   : Use MOSAIC Python Environment
 - [`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md)
@@ -1261,6 +1263,8 @@ Other exported functions and internal helpers
   : Write an R List to a YAML File
 - [`write_model_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_model_json.md)
   : Standardized JSON I/O utilities for MOSAIC model files
+- [`write_trajectory_csv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_trajectory_csv.md)
+  : Write ensemble trajectory channels to per-location CSV
 
 # Articles
 
