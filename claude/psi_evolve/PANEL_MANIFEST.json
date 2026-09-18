@@ -1,0 +1,29 @@
+{
+  "panel_id": "canonical_DA01_2026-09-17",
+  "path": "MOSAIC-data/processed/cholera/weekly/cholera_country_weekly_suitability_data.csv",
+  "sha256": "c1fb82b9c96c2c398a353419e6e0c0219bf5bf546609644d04e5026b3bb62fb1",
+  "built": "2026-09-17",
+  "built_by": "MOSAIC-pkg/claude/psi_evolve/da01_rebuild.R",
+  "mosaic_branch": "feature/psi-12wk-evolve",
+  "mosaic_base_commit": "c947820a3",
+  "build_parameters": {
+    "process_open_meteo_data": {"force": true, "climate_model": "MRI_AGCM3_2_S"},
+    "process_AI_cholera_data": {},
+    "process_cholera_surveillance_data": {"include_ai": true},
+    "compile_suitability_data": {
+      "cutoff": null, "use_epidemic_peaks": true,
+      "date_start": "2000-01-01", "date_stop": null,
+      "forecast_mode": true, "forecast_horizon": 9,
+      "include_lags": true, "include_flood_prob": true
+    }
+  },
+  "shape": {"rows": 56360, "cols": 298, "isos": 40,
+            "date_min": "2000-01-06", "date_max": "2027-02-04",
+            "duplicate_iso_date_keys": 0},
+  "differs_from_previous_panel_in": [
+    "DA-01 ISO week labelling (%G with %V) -- INTENDED",
+    "date_start 2009-01-01 -> 2000-01-06 and horizon -> 2027-02-04 -- UNINTENDED CONFOUND",
+    "v7.4 hazard columns present (emdat_cyclone_*, drought_*) -- UNINTENDED CONFOUND"
+  ],
+  "note": "The previous canonical panel had NO build manifest, so its parameters could not be matched. This file exists so that never recurs (DA-02)."
+}

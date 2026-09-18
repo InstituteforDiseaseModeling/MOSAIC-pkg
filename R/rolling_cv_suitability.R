@@ -24,36 +24,82 @@
 #' Generate the expanding-window RW step grid.
 #' @keywords internal
 #' @noRd
+#' HA-01 (2026-09-17) adds three optional overrides for the 12-week-horizon work.
+#' All default to NULL and the month-based path is bit-identical when they are.
+#'
+#' @param step_days       integer. Day-based stride; overrides `step_months`.
+#'   Month stepping cannot tile an 84-day window, and a 91-day (3-month) stride
+#'   advances 4 x 91 = 364 days per four folds -- a drift of 1.25 days/year
+#'   against the annual cycle, which aliases the validation windows onto ~4
+#'   calendar months. An 84-day stride drifts 29.25 days/year and rotates
+#'   through all 12.
+#' @param test_days       integer. Day-based validation window; overrides
+#'   `test_months`. Set 84 for a 12-week horizon.
+#' @param min_train_years numeric. Replaces the midpoint grid-start rule with
+#'   "start once this many years of training data exist". The midpoint rule
+#'   discards the first half of the span by construction: at
+#'   fit_date_start = 2010 with a 2026 cutoff it never validates before
+#'   2018-05-31, so 8 years of training data are never validated and psi over
+#'   them is extrapolative.
 .psi_make_rw_cv_steps <- function(fit_date_start, cutoff_date,
                                   step_months   = 1L,
                                   test_months   = 5L,
                                   gap_weeks     = 4L,
                                   subsample     = 1L,
                                   timesteps     = 13L,
-                                  min_test_days = NULL) {
+                                  min_test_days = NULL,
+                                  step_days     = NULL,
+                                  test_days     = NULL,
+                                  min_train_years = NULL) {
      # Test window must hold >= 1 buildable sequence per country: with weekly
      # data and `timesteps` weeks/sequence, need >= timesteps*7 + ~7 days slack.
+     #
+     # NOTE (HA-01): this floor is REAL for the concurrent-target design, not a
+     # formality. `.psi_slice_rw_step()` builds validation sequences from rows
+     # INSIDE the window only, so a window shorter than `timesteps` weekly rows
+     # yields zero sequences. Overriding `min_test_days` alone does NOT make an
+     # 84-day window work at timesteps = 13 (84 d = 12 weekly rows < 13); the
+     # validation slice must additionally be widened to carry `timesteps - 1`
+     # rows of input context from before `test_start`, scoring only targets
+     # inside the window. That slice change is required for the lead-h target
+     # anyway and is tracked separately.
+     # `min_test_days` is the INCLUSIVE day count of the window (an 84-day window
+     # runs test_start .. test_start+83). The pre-HA-01 code compared the exclusive
+     # span `test_end - test_start` against `timesteps*7 + 7`; the default below is
+     # +8 so the inclusive comparison reproduces that threshold exactly. Mixing the
+     # two silently yields ZERO folds -- it did, during HA-01 development.
      if (is.null(min_test_days)) {
-          min_test_days <- as.integer(timesteps * 7L + 7L)
+          min_test_days <- as.integer(timesteps * 7L + 8L)
      }
      fit_date_start <- as.Date(fit_date_start)
      cutoff_date    <- as.Date(cutoff_date)
-     midpoint       <- fit_date_start +
-          as.numeric(cutoff_date - fit_date_start) / 2
+     grid_start <- if (is.null(min_train_years)) {
+          fit_date_start + as.numeric(cutoff_date - fit_date_start) / 2
+     } else {
+          fit_date_start + round(365.25 * as.numeric(min_train_years))
+     }
 
-     train_ends <- seq.Date(midpoint, cutoff_date,
-                            by = sprintf("%d months", step_months))
+     train_ends <- if (is.null(step_days)) {
+          seq.Date(grid_start, cutoff_date, by = sprintf("%d months", step_months))
+     } else {
+          n <- floor(as.numeric(cutoff_date - grid_start) / as.numeric(step_days))
+          grid_start + round(seq.int(0L, max(0L, n)) * as.numeric(step_days))
+     }
      # Last train_end must allow at least one valid test day before cutoff.
      train_ends <- train_ends[train_ends + 7L * gap_weeks < cutoff_date]
 
      steps <- lapply(seq_along(train_ends), function(k) {
           train_end  <- train_ends[k]
           test_start <- train_end + 7L * gap_weeks
-          raw_end <- seq.Date(test_start, by = sprintf("%d months", test_months),
-                              length.out = 2L)[2L] - 1L
+          raw_end <- if (is.null(test_days)) {
+               seq.Date(test_start, by = sprintf("%d months", test_months),
+                        length.out = 2L)[2L] - 1L
+          } else {
+               test_start + as.integer(test_days) - 1L
+          }
           test_end <- min(raw_end, cutoff_date - 1L)
           if (test_start >= cutoff_date) return(NULL)
-          if (as.integer(test_end - test_start) < min_test_days) return(NULL)
+          if (as.integer(test_end - test_start) + 1L < min_test_days) return(NULL)
           list(step       = k,
                train_end  = train_end,
                test_start = test_start,

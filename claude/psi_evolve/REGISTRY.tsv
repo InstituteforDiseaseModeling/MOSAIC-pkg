@@ -1,0 +1,11 @@
+# REGISTRY — append-only experiment ledger. Never edit or delete a row; corrections are new rows with status=CORRECTION.
+# INCUMBENT: (none — A000 not yet scored; see PROTOCOL.md §10)
+# objective_version: 1   weights_sha256: 255078783c0b8bc582e5128e8f7f8d6d170ccd7d1b0867adf981f8baa5a89a81
+#
+wave	arm_id	parent	status	mode	one_change	hypothesis	predicted	S	S_delta	boot_lb	n_beat	top10_worst	spec_sha	obj_ver	dugong_h	decision	reason	timestamp
+0	A000	-	PLANNED	-	baseline: production psi v7.3, concurrent target, 20-fold CV	incumbent reference under frozen objective v1	-							1		-	not yet scored; blocks all adoption	2026-09-17
+0	DA-01	-	DONE	-	ISO week labelling %Y->%G at 4 sites + build-time duplicate guard	calendar-year/ISO-week pairing corrupts ENSO long lags and W01/W52 climatologies	+							1	0	APPLIED	verified 19->0 year-spanning groups on MOZ; 7 regression tests; panel rebuild running	2026-09-17
+0	INFRA-01	-	DONE	-	gitignore: track claude/psi_evolve ledger, exclude its bulk artefacts	ledger must survive sessions or the process is not persistent	+							1	0	APPLIED	claude/* + !claude/psi_evolve/; verified torch_port still ignored	2026-09-17
+0	DA-01-PANEL	DA-01	DONE	-	panel rebuilt under corrected ISO week labelling	removes 99 dup keys; ENSO34_lag36 changed on 9.04% of rows	+							1	0	APPLIED-WITH-CONFOUND	date range + v7.4 cols also changed; A000 unscored so nothing broken; panel frozen via PANEL_MANIFEST.json	2026-09-17
+0	HA-01	-	PARTIAL	-	RW grid: step_days/test_days/min_train_years + inclusive min_test_days	unblocks the 12-week geometry	+							1	0	APPLIED	backward-compat bit-identical (20 folds); 164/82/55 reproduce the plan; slice widening still required	2026-09-17
+0	SCORER	-	DONE	-	score_psi_arm.R implementing OBJECTIVE v1 + 6 tests	no adoption is possible without a tested scorer	+							1	0	APPLIED	6/6 tests incl. split enforcement, guard firing, tampered-weights refusal	2026-09-17

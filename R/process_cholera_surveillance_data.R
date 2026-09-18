@@ -215,7 +215,11 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      )
      
      # Add year, week, and month information
-     complete_time_periods$year <- as.integer(format(complete_time_periods$date_start, "%Y"))
+     # DA-01: `%G` (ISO week-based year), NOT `%Y` (calendar year), is the only
+     # valid partner for `%V`. A Monday in late December belongs to ISO week 1 of
+     # the next ISO year; pairing it with the calendar year date-stamps the row
+     # ~51 weeks early and collides it with the genuine (N, W01) row.
+     complete_time_periods$year <- as.integer(format(complete_time_periods$date_start, "%G"))
      complete_time_periods$week <- as.integer(format(complete_time_periods$date_start, "%V"))
      complete_time_periods$month <- as.integer(format(complete_time_periods$date_start, "%m"))
      

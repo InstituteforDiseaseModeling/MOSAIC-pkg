@@ -269,6 +269,34 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      message(sprintf("After merge: %d observations, columns: %s",
                      nrow(d), paste(head(names(d), 10), collapse = ", ")))
 
+     # DA-01 build-time guard. Duplicate (iso_code, year, week) keys mean an
+     # upstream processor has paired CALENDAR year with ISO week, which date-stamps
+     # the year-boundary row ~51 weeks early and collides it with the genuine W01
+     # row. Before the fix this produced 99 duplicated (iso_code, date) rows in the
+     # canonical panel, corrupting every row-based rolling window that walked over
+     # them -- ENSO34_lag36, a shipped v7.3 LSTM feature, was wrong on ~9% of rows.
+     #
+     # SCOPE OF THIS GUARD (measured, do not overstate it): all 99 duplicates came
+     # from the SURVEILLANCE grid, where two Mondays collide onto one (year, week)
+     # label -- {2001-01-01, 2001-12-31}, {2007-01-01, 2007-12-31},
+     # {2012-01-02, 2012-12-31}, {2018-01-01, 2018-12-31}, {2024-01-01, 2024-12-30}.
+     # The CLIMATE side fails differently and this guard CANNOT see it: there,
+     # group_by() collapses January and December into a SINGLE row, so the value is
+     # silently wrong but no key is duplicated. That case is caught at its source by
+     # the span assertion in process_open_meteo_data(). Two defects, two guards.
+     dup_keys <- duplicated(d[, c("iso_code", "year", "week")])
+     if (any(dup_keys)) {
+          ex <- utils::head(d[dup_keys, c("iso_code", "year", "week")], 5)
+          stop(sprintf(paste0("compile_suitability_data: %d duplicated (iso_code, year, week) keys ",
+                              "after the cases-climate merge. Usual cause: calendar-year/ISO-week ",
+                              "mislabelling upstream (use %%G with %%V, never %%Y). Also possible: two ",
+                              "parquets for the same ISO in PATHS$DATA_CLIMATE (a stale legacy file ",
+                              "beside the live one). First: %s"),
+                       sum(dup_keys),
+                       paste(sprintf("%s %d-W%02d", ex$iso_code, ex$year, ex$week), collapse = "; ")),
+               call. = FALSE)
+     }
+
 
      # Restrict the panel to ISO weeks 1-52.
      #
@@ -281,13 +309,24 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # 13 calendar weeks because the W53 row is missing).
      #
      # WHY WE DROP THEM ANYWAY:
-     # The upstream climate processor (process_open_meteo_data) labels W53
-     # rows by *calendar* year rather than ISO year, so it emits spurious
-     # (year=N+1, week=53) rows for the 1-2 January days that fall in
-     # ISO W53 of year N. Keeping W53 would pull those partial-week
-     # artifacts into the panel. Dropping all W53 is the simplest robust
-     # choice until the upstream processor is fixed; see notes/TODOs in
-     # process_open_meteo_data for the structural fix.
+     # HISTORICAL NOTE (superseded by DA-01): this filter was introduced because
+     # process_open_meteo_data labelled weeks by *calendar* year, which was believed
+     # to emit spurious (year=N+1, week=53) rows. That diagnosis was wrong in its
+     # particulars -- the real artifact was labelled week **1**, not 53, so this
+     # filter never caught it (see the duplicate-key guard above). The upstream
+     # labelling is now fixed (`%G` with `%V`), so genuine 53-week ISO years are
+     # labelled correctly and this filter now discards ~80 LEGITIMATE country-week
+     # rows from 2015 and 2020. Retained deliberately: removing it is a THREE-site
+     # change, and two of those sites are hard stops that fire immediately --
+     # R/est_suitability.R:349 and R/compile_suitability_data.R (the `53 %in% d$week`
+     # check near the end of this file), plus R/process_WHO_weekly_data.R:72-82,
+     # which folds every W53 case row into W52 with aggregate(sum). So the cases side
+     # structurally cannot emit W53 while climate and ENSO now can: dropping the
+     # filter today would yield climate+ENSO W53 rows with structurally-NA cases.
+     # All three sides currently agree; the filter just discards a coherent row.
+     # NOTE: W53 of 2026 IS inside the rebuilt panel window (2000-01-06..2027-02-04)
+     # and is being dropped -- the previous claim that the horizon ended before it is
+     # no longer true.
      # The 2026 forecast horizon ends well before W53 of 2026, so this
      # filter does not affect production forecasts today.
      d <- d %>%
