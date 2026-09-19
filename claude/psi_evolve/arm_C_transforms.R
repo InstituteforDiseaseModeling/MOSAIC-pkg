@@ -357,6 +357,29 @@ for (fl in sort(unique(B$fold))) {
 }
 B$c12b_lam[!is.finite(B$c12b_lam)] <- 0; B$c12c_lam[!is.finite(B$c12c_lam)] <- 0
 
+# ---- C13: ISOTONIC lambda curve ---------------------------------------------
+# The fitted horizon curve is non-monotone -- 0.05 0.05 0.15 0.15 0.40 0.40 0.20
+# 0.25 0.30 0.25 0.35 0.50 0.40 -- but theory says the weight on psi should rise
+# MONOTONICALLY with lead, because persistence's edge decays with lead and psi's
+# does not. The dips (0.40 at wk 5-6 down to 0.20 at wk 7) are therefore noise
+# from ~90 cells per horizon week. Imposing monotonicity via isotonic regression
+# is a one-parameter-free smoother that uses the theory instead of fitting it.
+B$c13_lam <- B$c12c_lam
+for (fl in unique(B$fold)) {
+  j <- B$fold == fl
+  wk <- sort(unique(B$wk[j])); if (length(wk) < 3L) next
+  lv <- vapply(wk, function(w) stats::median(B$c12c_lam[j & B$wk == w]), numeric(1))
+  if (all(!is.finite(lv))) next
+  fit <- stats::isoreg(wk, ifelse(is.finite(lv), lv, 0))$yf   # non-decreasing in wk
+  names(fit) <- as.character(wk)
+  # rescale per country by that country's own level, as C12c does
+  base <- vapply(wk, function(w) stats::median(B$c12c_lam[j & B$wk == w]), numeric(1))
+  mult <- ifelse(is.finite(base) & base > 0, fit / base, 1)
+  names(mult) <- as.character(wk)
+  B$c13_lam[j] <- pmin(1, pmax(0, B$c12c_lam[j] * mult[as.character(B$wk[j])]))
+}
+B$c13_lam[!is.finite(B$c13_lam)] <- 0
+
 # ---- C7b: combination weight from OUT-OF-SAMPLE history, not pre-cutoff fit --
 # C7 failed for a diagnosed reason: lambda fitted on PRE-CUTOFF error came out
 # 1.00 for 14 of 16 countries, because psi is excellent in-sample (0.273 vs
@@ -455,6 +478,7 @@ variants <- list(
   C12c_C11h = combo_all(shift_all(B, 0.5 * B$c11_sh), B$c12c_lam, B$pers),
   A2        = { z <- B; z$psi <- z$anchor; z },
   A2_C12c   = combo_all(shift_all(B, 0.5 * B$c11_sh), B$c12c_lam, B$anchor),
+  C13       = combo_all(shift_all(B, 0.5 * B$c11_sh), B$c13_lam, B$pers),
   C7b     = combo_all(B, B$c7b_lam, B$c7_clim),
   C7c     = combo_all(B, B$c7c_lam, B$c7_clim),
   C7c_C9d = combo_all(shift_all(B, B$c9d_sh), B$c7c_lam, B$c7_clim),
