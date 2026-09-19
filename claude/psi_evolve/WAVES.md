@@ -2067,3 +2067,62 @@ re-deriving the epoch per seed, 12.4 h decoupled), and it is measurably cost-neu
 - My **DESCRIPTION version bumps silently no-oped** — the sed keyed on my own previous version while
   a concurrent writer had reset it — so five commit messages claim versions the commits don't carry.
   Code unaffected; labels wrong; no longer bumping DESCRIPTION while the tree is shared.
+
+## Wave 29 — rehearsing the holdout read, and what it exposed
+
+The confirmation holdout is write-once, so before spending it I patched
+`confirm_read.R` to report per-block results and a paired sign test (same data,
+strictly more information from one shot), then **rehearsed the patched code on
+the selection blocks**, which are legal to read.
+
+The rehearsal reproduced the known pooled numbers exactly — `-3.1% / -0.5% /
++5.7%` — which certifies the patch. It also produced the wave's actual finding.
+
+### The +5.7% is real, but it is not broad-based
+
+Per-block, weeks 9-13, blend vs persistence:
+
+| block | blend | persistence | gain |
+|---|---|---|---|
+| 2024-01-01 | 0.1678 | 0.1678 | +0.0% |
+| 2024-04-01 | 0.2159 | 0.2403 | +10.2% |
+| 2024-07-01 | 0.1256 | 0.1345 | +6.6% |
+| 2024-10-01 | 0.1983 | 0.1843 | **−7.6%** |
+| 2025-01-01 | 0.1943 | 0.1877 | **−3.5%** |
+| 2025-04-01 | 0.0911 | 0.1396 | **+34.7%** |
+
+Three positive, two negative, one null, and the pooled figure is carried
+disproportionately by one block. Under the honest unit of analysis — country ×
+block, because cells within a country-block are strongly autocorrelated — the
+blend is better in 34 of 54 non-tied units, exact two-sided **p = 0.0759**.
+
+### 36 of 90 country-blocks are exact ties, and that is mechanical
+
+An exact tie means the blend equals persistence to the last digit, which happens
+only when the fitted λ is 0 throughout. It is: **176 of 439 cells (40.1%) have
+λ = 0**, and λ is severely country-heterogeneous over weeks 9-13 —
+
+```
+RWA 0.000  SSD 0.011  MWI 0.059  NGA 0.102  BDI 0.170  ZWE 0.216  COD 0.281  KEN 0.285
+ETH 0.303  AGO 0.442  ZMB 0.502  LBR 0.518  TZA 0.546  SOM 0.554  MOZ 0.661  CMR 0.725
+```
+
+So for roughly 40% of country-blocks the "improved forecast" is persistence with
+extra steps; the gain is concentrated in the countries where λ is large, and even
+there it is block-dependent.
+
+### What this changes
+
+The +5.7% stands as a correctly computed pooled selection-set estimate. It must
+not be reported as a uniform 12-week improvement. It is one-block-dominated,
+non-significant under the honest unit, and inert for 40% of country-blocks.
+
+It also predicts the holdout's behaviour: with three confirmation blocks and a
+per-block range of −7.6% to +34.7%, the confirmation point estimate is mostly a
+draw from that spread. `PREREGISTRATION_CONFIRM.md` was therefore written
+**before** the read, gating on the **sign** only and stating in advance that the
+magnitude will not reproduce and that this is not to be treated as failure.
+
+**Process note.** Rehearsing the read on legal data was worth more than the read
+itself: it certified the code *and* produced the finding, at zero cost to the
+holdout. Worth doing before any write-once measurement.

@@ -109,6 +109,7 @@ for (i in seq_len(nrow(grid))) {
   b$blend <- b$lam*b$psi + (1-b$lam)*b$pers
   m <- merge(b, obs, by=c("iso_code","date"))
   m <- m[is.finite(m$observed) & is.finite(m$pers), ]
+  m$block <- format(T0)
   if (nrow(m)) rows[[length(rows)+1L]] <- m
 }
 d <- do.call(rbind, rows); d <- d[d$wk>=1 & d$wk<=13, ]
@@ -117,7 +118,8 @@ raw <- do.call(rbind, lapply(seq_len(nrow(grid)), function(i) {
   q <- utils::read.csv(f, stringsAsFactors=FALSE); q$date <- as.Date(q$date)
   z <- q[q$iso_code %in% pool & q$date>=grid$test_start[i] & q$date<=grid$test_end[i], c("iso_code","date","psi")]
   if (!nrow(z)) return(NULL)
-  z$wk <- as.integer(floor(as.numeric(z$date-(grid$cutoff[i]+14L))/7))+1L; z }))
+  z$wk <- as.integer(floor(as.numeric(z$date-(grid$cutoff[i]+14L))/7))+1L
+  z$block <- format(grid$cutoff[i]); z }))
 raw <- merge(raw, obs, by=c("iso_code","date")); raw <- raw[raw$wk>=1 & raw$wk<=13, ]
 wm <- function(x, iso) { w <- W$w[match(iso, W$iso_code)]; sum(w*x, na.rm=TRUE)/sum(w[is.finite(x)]) }
 cat("=== CONFIRMATION (LOCKED) BLOCKS -- MAE by horizon band ===\n")
@@ -127,10 +129,38 @@ for (rg in list(1:4, 5:8, 9:13)) {
   a <- wm(abs(z$observed-z$blend), z$iso_code)
   bq <- wm(abs(z$observed-z$pers), z$iso_code)
   cq <- wm(abs(r$observed-r$psi), r$iso_code)
-  line <- sprintf("weeks %2d-%2d : blend %.4f  persistence %.4f  raw psi %.4f  -> blend vs pers %+.1f%%",
-                  min(rg), max(rg), a, bq, cq, 100*(bq-a)/bq)
+  line <- sprintf("weeks %2d-%2d : blend %.4f  persistence %.4f  raw psi %.4f  -> blend vs pers %+.1f%%  (n=%d cells)",
+                  min(rg), max(rg), a, bq, cq, 100*(bq-a)/bq, nrow(z))
   cat(line, "\n"); out <- c(out, line)
 }
+
+# --- pre-registered secondaries (PREREGISTRATION_CONFIRM.md) --------------
+# Secondary 1: per-block, weeks 9-13. One block carrying the whole effect is
+# a materially weaker result than three agreeing.
+cat("\n=== per-block, weeks 9-13 (pre-registered secondary 1) ===\n")
+z13 <- d[d$wk %in% 9:13, ]
+for (blk in sort(unique(z13$block))) {
+  zb <- z13[z13$block == blk, ]
+  ab  <- wm(abs(zb$observed-zb$blend), zb$iso_code)
+  pb  <- wm(abs(zb$observed-zb$pers),  zb$iso_code)
+  line <- sprintf("  %s : blend %.4f  persistence %.4f  -> %+.1f%%  (n=%d cells, %d isos)",
+                  blk, ab, pb, 100*(pb-ab)/pb, nrow(zb), length(unique(zb$iso_code)))
+  cat(line, "\n"); out <- c(out, line)
+}
+
+# Secondary 2: exact paired sign test over country x block units, weeks 9-13.
+# The honest unit -- cells within a country-block are strongly autocorrelated.
+u <- unique(z13[, c("iso_code","block")])
+dif <- vapply(seq_len(nrow(u)), function(i) {
+  zz <- z13[z13$iso_code==u$iso_code[i] & z13$block==u$block[i], ]
+  mean(abs(zz$observed-zz$pers)) - mean(abs(zz$observed-zz$blend))
+}, numeric(1))
+dif <- dif[is.finite(dif)]
+nw <- sum(dif > 0); nl <- sum(dif < 0)
+pv <- stats::binom.test(nw, nw+nl, 0.5)$p.value
+line <- sprintf("\n=== paired sign test, weeks 9-13 (secondary 2) ===\n  blend better in %d of %d country-block units (ties %d), exact two-sided p = %.4f\n  median paired MAE gain %+.4f",
+                nw, nw+nl, sum(dif==0), pv, stats::median(dif))
+cat(line, "\n"); out <- c(out, line)
 writeLines(c(sprintf("confirmation read performed %s", Sys.time()),
              sprintf("psi cache: %s", CACHE),
              sprintf("blocks: %s", paste(format(grid$cutoff), collapse=", ")), out), LOG)
