@@ -176,3 +176,82 @@ Like-for-like, on the final raw-ψ table over the 6 selection blocks:
 No other number in this report is affected — the headline blend results, the
 sealed-holdout figures, and the fold-ladder table were all read directly from a
 single run each.
+
+---
+
+## Addendum — does any of this track the trend, or just the level?
+
+Added after the report above, in response to the objection that **MAE can be won
+by predicting flat**: if the truth is noisy around a slowly-moving level, the
+error-minimising constant is the running median, and a model that predicts it
+scores well while carrying no information about trend. With λ = 0 in 40% of
+cells, that risk is concrete here.
+
+Four metrics a flat predictor cannot win were added (`shape_metrics.R`,
+unit-tested: constant → `sd_ratio` 0 / `dcor` undefined / `dir_acc` 0; perfect
+tracking → 1 / 1 / 1; observed + noise → 2.35 / −0.03 / 0.46).
+
+### Raw ψ: amplitude without timing
+
+| arm | MAE | sd_ratio | dcor | dir_acc | bias |
+|---|---|---|---|---|---|
+| P001 (production) | 0.2022 | 1.08 | −0.003 | 0.50 | 0.44 |
+| N8 | 0.1967 | 1.11 | 0.023 | 0.48 | 0.46 |
+| D9b | 0.1918 | 1.01 | 0.005 | 0.47 | 0.47 |
+| **persistence** | **0.1348** | **0.00** | **undef** | **0.00** | **1.00** |
+| **climatology** | 0.1782 | 1.62 | **0.097** | **0.57** | 0.73 |
+
+The arms are **not** flat — `sd_ratio` ≈ 1.0–1.2, `degen` ≈ 0.05. But `dcor` is
+0.00–0.06 and `dir_acc` 0.45–0.50, a coin flip. They match the *noise* row of
+the unit test, not the tracking row: **lifelike amplitude, random timing.**
+Persistence wins MAE precisely *by* being flat. And **week-of-year climatology
+is the best trend tracker measured** — no neural variant beat it on either
+trend metric.
+
+`R²_corr` does **not** survive differencing: N8's apparent shape advantage over
+production (0.272 → 0.321) collapses to `dir_acc` 0.48 vs 0.50. Most of
+`R²_corr` is the shared seasonal envelope inside a 13-week window.
+
+Every neural arm has `bias` 0.43–0.48 — predicting **under half** the observed
+level. That is the level-collapse diagnosis, quantified.
+
+### The blends buy MAE by flattening — explicitly
+
+| variant | MAE | sd_ratio | dcor | dir_acc | bias |
+|---|---|---|---|---|---|
+| **C12c_C11h** (headline) | **0.1511** | **0.43** | 0.162 | **0.342** | 0.93 |
+| A2 | 0.1524 | **0.015** | 0.012 | **0.188** | 1.01 |
+| C12b | 0.1530 | 0.65 | 0.073 | 0.431 | 0.86 |
+| raw N8 | 0.1967 | 1.11 | 0.023 | 0.478 | 0.46 |
+| **C7b** | 0.1851 | **0.95** | 0.099 | **0.552** | 0.63 |
+
+Sort by MAE and `sd_ratio` falls with it. The headline blend compresses
+amplitude to **43%** of observed and its directional accuracy drops to **0.342,
+below chance** — worse than the raw ψ it is built from. A2 is the limit case at
+1.5% amplitude. **The MAE leaderboard was ranking variants by how successfully
+they abandoned trend prediction.**
+
+The converse holds: `C7b` is the only blend above a coin flip on direction
+(0.552) with lifelike amplitude (0.95), and pays **+22% MAE** for it.
+
+*Unresolved:* C12c_C11h has the best `dcor` measured (0.162) while sitting below
+chance on `dir_acc`. Those normally move together. The likely reading is that it
+catches a few large moves, which drive the correlation, while its frequent small
+wobbles are anti-phase. Not isolated — treat blend `dcor` as unexplained and
+weight `dir_acc` and `sd_ratio`, which agree.
+
+*Note:* persistence MAE reads 0.1348 in the raw table and 0.1490 in the blend
+table — the two scorers use different cell filters. Compare within a table.
+
+### Revised bottom line
+
+If the objective is **minimising average error**, the blend is a real if modest
+gain. If the objective is **forecasting trend and shape**, none of these
+variants qualifies: raw ψ has amplitude with random timing, and the blends
+achieve their accuracy by discarding amplitude. The only predictor in the
+comparison with genuine directional skill is week-of-year climatology.
+
+Figures: `figures/fig1_predictions_is_oos.pdf` (observed IS + OOS with every
+predictor overlaid), `fig2_trend_vs_mae.pdf`, `fig3_metric_bars.pdf`,
+`fig4_horizon.pdf` (the blend is indistinguishable from persistence through
+week 9), `figures/metrics_table.csv`.
