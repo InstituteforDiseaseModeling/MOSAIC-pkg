@@ -1942,3 +1942,128 @@ buy resolution does not work. If N8 and N5 both land inside +/-0.09, the honest 
 evidentiary standard, change the estimand so it is less hostage to one unstable country (COD's
 0.611 dominates a 16-country weighted mean), or stop the refit track and keep only cache-paired
 work. That is a decision for the user, not for me.
+
+## Waves 24-27 — the metric was the problem, and once it changed the programme started producing
+
+The user redirected the programme onto plain 12-week OOS accuracy — MAE, R², WIS — and was right
+to. Everything below follows from that one change.
+
+### The metric, not the model, was the binding constraint
+
+Replicate noise across two fits of the SAME model (P000 vs P000R), as a share of each metric's level:
+
+| metric | replicate noise |
+|---|---|
+| **MAE** | **0.09%** |
+| R² | 0.29% |
+| WIS | 0.41% |
+| **WIS-skill — what waves 0-23 scored on** | **28.41%** |
+
+The skill ratio is ~300x noisier than MAE, because it divides by a per-country baseline WIS that
+itself varies and is unbounded below. **The entire "cannot resolve anything" problem — the 0.0912
+floor, T7, the estimand proposal — was an artifact of that ratio.** On MAE a 2% improvement is
+trivially detectable. The floor work was not wasted (it killed a false +0.105 v7.3-vs-v7.4 claim and
+the regional split) but it became the main event when the question was accuracy.
+
+### What the production model actually does at 12 weeks
+
+```
+             MAE      WIS    R2_corr   R2_sse
+psi        0.2022   0.1653    0.27     -6.39
+persistence 0.1348   0.0962      -         -
+climatology 0.1782      -        -         -
+```
+
+psi was **48% worse than persistence** and **12% worse than climatology**. The gap between
+R²_corr ≈ 0.27 and R²_sse ≈ −6.4 is the diagnosis in one line: **the shape is partly right and the
+level is catastrophically wrong**, consistent with the wave-22 finding that psi decays to 42% of the
+truth by week 9.
+
+### Four changes, stacked, and where they came from
+
+| change | what it fixes | raw MAE |
+|---|---|---|
+| **N8** country-balanced loss | shape (R²_corr 0.098 -> 0.321) | 0.1967 |
+| **D9b** country embedding from static covariates | level (R²_sse -6.39 -> -5.75) | **0.1918** |
+| **C11h** anchor psi's level to the last observation | the decay collapse | — |
+| **C12c** horizon-dependent blend weight | psi earns weight as persistence decays | — |
+
+The fitted blend weight on psi confirms the mechanism outright: **0.05 at weeks 1-2 rising to
+0.50 by week 12.** Near-pure persistence at short lead, psi carrying half the weight at long lead.
+
+### The headline: it beats persistence at the horizon that matters
+
+```
+                 blend   persistence   production psi
+weeks  1-4      0.1014     0.0983         0.1670        -3.1%
+weeks  5-8      0.1245     0.1239         0.2033        -0.5%
+weeks  9-13     0.1658     0.1758         0.2186        +5.7%
+```
+
+Overall MAE **0.1511** (−30.6% vs production 0.2229) against persistence 0.1490 — 1.4% worse
+overall, and that deficit is **entirely** weeks 1-4 where the last observation is near-optimal by
+construction and the blend correctly defers to it. R²_corr 0.260, R²_sse −0.197, WIS 0.1413 are all
+the best measured.
+
+**At weeks 9-13 the blend is 24% better than production psi and 5.7% better than persistence.**
+
+### Five things I got wrong, and what caught each
+
+1. **+8.0% at weeks 9-13** — computed with the λ curve hardcoded from the last cutoff and applied to
+   every block. Leakage. The real number is **+1.7%**, later +5.7% after the prior fix. Caught by
+   re-deriving inside the pipeline rather than trusting a hand-held script.
+2. **The λ prior** defaulted to 1 (pure psi) when a cutoff had no history, so the FIRST cutoff ran
+   as raw psi — the weakest forecast on the board. Flipping it to 0 (pure persistence) moved weeks
+   5-8 from −8.7% to −0.5% and weeks 9-13 from +1.7% to +5.7%. **A one-line prior, most of the win.**
+3. **The wave-22 regional split** (snf_1 all non-positive, p = 0.045) — RETRACTED. Region explains
+   as much of *pure seed noise* (p = 0.142) as of any real arm, because the unstable countries (COD
+   0.611, SOM 0.212, BDI 0.145) are all in snf_2. Only the replicate made the null testable.
+4. **My winsorising proposal was misspecified** — skill is bounded above at 1 and unbounded below,
+   so a symmetric cap either never binds or destroys real successes (±0.5 caps 61% of cells,
+   including 19% from above). The correct bound is one-sided.
+5. **A confirmation-block breach** — my first MAE table swept the 3 sealed blocks in. Recomputed on
+   selection only; it changed which arm ranked best. `confirm_read.R` now exists so the one
+   permitted read is deliberate rather than improvised.
+
+### Negatives worth as much as the positives
+
+- **A2 damped-trend anchor REJECTED** (0.1524 vs flat persistence 0.1490, WIS 0.1707 vs 0.1413).
+  The recent 8-week slope carries no usable signal at 9-13 week leads.
+- **C13 isotonic λ is a wash** (0.1508 vs 0.1511). The curve's fine structure doesn't matter.
+- **C12b — pooled horizon shape with NO per-country term — nearly matches the best** (0.1530).
+- Together: **the blend family is saturated.** Recorded explicitly so the programme stops grinding
+  on free-but-exhausted levers, which is a real risk when a lever costs nothing.
+- **N6 (sign-permissive γ) is marginal** (−0.6%, R²_corr *below* P000). Sign preservation was not
+  the binding limitation.
+- **Better raw psi does NOT give a better blend.** D9b has the best raw MAE and a worse blend than
+  N8, because the blend takes its level from persistence and uses psi only for shape — so only a
+  shape gain transfers. **Select blend inputs on R²_corr, not MAE.** One out-of-sample confirmation
+  already (N8 0.1602 beat N5 0.1639 on the same transform, matching their R²_corr order).
+- **Three arms have now died to one mechanism** — a weight fitted on thin earlier-cutoff history
+  that fails to generalise (C7's λ→1, B-CAL2's per-country choice, A2's φ). Prefer theory-imposed
+  structure over fitted structure.
+
+### The fold ladder, which is what the user asked for
+
+Production validates its inner CV on **five-month** windows with a 4-week gap — it does not emulate
+the 12-week horizon at all. The ladder fixes that and adds folds:
+
+| arm | change | folds | status |
+|---|---|---|---|
+| **P000H** | HA-02 control | 89 | **DONE — cost-neutral, prediction of 0 confirmed** |
+| **F4** | 84-day stride, **84-day validation window = the horizon**, 2-week gap, 4-y start | **229** | running |
+| **F1** | stride 28 d | 677 | running |
+| **F3** | grid start 2 y (more seasons, not just denser) | 912 | running |
+
+`P000H` matters: HA-02 is what made the ladder affordable (F1 at 10 seeds is 53 dugong-hours
+re-deriving the epoch per seed, 12.4 h decoupled), and it is measurably cost-neutral, so
+`F4 vs P000H` isolates the geometry as ONE change.
+
+### Two shared-resource collisions with a concurrent agent
+
+- Another install downgraded MOSAIC in dugong's **shared** `~/R/library` from 0.91.12 to 0.90.5
+  mid-wave, killing a launch. Running arms were unharmed (their manifests record 0.91.12). Fixed by
+  a **private** `~/Rlib_psi`; the shared copy was left alone.
+- My **DESCRIPTION version bumps silently no-oped** — the sed keyed on my own previous version while
+  a concurrent writer had reset it — so five commit messages claim versions the commits don't carry.
+  Code unaffected; labels wrong; no longer bumping DESCRIPTION while the tree is shared.
