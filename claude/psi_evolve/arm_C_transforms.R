@@ -202,6 +202,63 @@ for (fl in unique(B$fold)) {
     B$pers[B$fold == fl & B$iso_code == iso] <- mean(utils::tail(oi$observed, 4), na.rm = TRUE)
   }
 }
+# ---- A2: a DAMPED-TREND anchor instead of flat persistence ------------------
+# Persistence is a flat line at the last-4-week mean, and it carries 60-95% of
+# the blend's weight -- so improving the ANCHOR raises the whole product, not
+# just the psi side. A damped trend is the standard upgrade: level + a recent
+# slope that decays with lead, so it extrapolates a rising or falling epidemic
+# for a few weeks and then flattens. phi is chosen on EARLIER cutoffs only, from
+# a fixed grid, so nothing is tuned on the evaluation blocks.
+#   anchor(w) = level + slope * sum_{k=1..w} phi^k
+# phi = 0 reduces exactly to flat persistence, so the arm can only help if the
+# trend carries signal.
+PHI_GRID <- c(0, 0.5, 0.8, 0.9)
+B$trend <- 0; B$phi <- 0
+for (fl in unique(B$fold)) {
+  T0 <- grid$cutoff[match(fl, grid$block)]
+  for (iso in unique(B$iso_code[B$fold == fl])) {
+    oi <- obs[obs$iso_code == iso & obs$date <= T0, ]
+    if (nrow(oi) < 8L) next
+    oi <- oi[order(oi$date), ]
+    tl <- utils::tail(oi$observed, 8)
+    # weekly slope from an OLS fit on the last 8 observed weeks
+    B$trend[B$fold == fl & B$iso_code == iso] <-
+      unname(stats::coef(stats::lm(tl ~ seq_along(tl)))[2])
+  }
+}
+# choose phi per cutoff on earlier cutoffs' realised blocks (pooled across
+# countries: one scalar, and per-country would be ~1 block per cell)
+for (fl in sort(unique(B$fold))) {
+  gi <- match(fl, grid$block); if (gi == 1L) next
+  H <- list()
+  for (k in seq_len(gi - 1L)) {
+    Tk <- grid$cutoff[k]
+    z <- obs[obs$date >= Tk + 15L & obs$date <= min(grid$test_end[k], grid$cutoff[gi]), ]
+    if (!nrow(z)) next
+    z$wk <- as.integer(floor(as.numeric(z$date - (Tk + 14L)) / 7)) + 1L
+    z$lev <- NA_real_; z$sl <- NA_real_
+    for (iso in unique(z$iso_code)) {
+      oi <- obs[obs$iso_code == iso & obs$date <= Tk, ]
+      if (nrow(oi) < 8L) next
+      oi <- oi[order(oi$date), ]; tl <- utils::tail(oi$observed, 8)
+      z$lev[z$iso_code == iso] <- mean(utils::tail(oi$observed, 4), na.rm = TRUE)
+      z$sl[z$iso_code == iso] <- unname(stats::coef(stats::lm(tl ~ seq_along(tl)))[2])
+    }
+    H[[length(H)+1L]] <- z[is.finite(z$lev) & is.finite(z$sl), ]
+  }
+  if (!length(H)) next
+  H <- do.call(rbind, H)
+  mae <- vapply(PHI_GRID, function(ph) {
+    cum <- if (ph == 0) 0 else vapply(H$wk, function(w) sum(ph^seq_len(w)), numeric(1))
+    mean(abs(H$observed - (H$lev + H$sl * cum)), na.rm = TRUE) }, numeric(1))
+  B$phi[B$fold == fl] <- PHI_GRID[which.min(mae)]
+}
+cat("A2 damped-trend phi chosen per cutoff:\n"); print(tapply(B$phi, B$fold, max))
+B$anchor <- B$pers + B$trend * ifelse(B$phi == 0, 0,
+              vapply(seq_len(nrow(B)), function(i)
+                sum(B$phi[i]^seq_len(max(1L, B$wk[i]))), numeric(1)))
+B$anchor <- pmin(1 - 1e-4, pmax(1e-4, B$anchor))
+
 # C10 lambda: minimise MAE of the blend on EARLIER cutoffs' realised blocks
 # DEFAULT LAMBDA = 0, i.e. PURE PERSISTENCE, not pure psi.
 # This initialised to 1 (pure psi), so the first cutoff -- which has no earlier
@@ -396,6 +453,8 @@ variants <- list(
   C12b    = combo_all(B, B$c12b_lam, B$pers),
   C12c    = combo_all(B, B$c12c_lam, B$pers),
   C12c_C11h = combo_all(shift_all(B, 0.5 * B$c11_sh), B$c12c_lam, B$pers),
+  A2        = { z <- B; z$psi <- z$anchor; z },
+  A2_C12c   = combo_all(shift_all(B, 0.5 * B$c11_sh), B$c12c_lam, B$anchor),
   C7b     = combo_all(B, B$c7b_lam, B$c7_clim),
   C7c     = combo_all(B, B$c7c_lam, B$c7_clim),
   C7c_C9d = combo_all(shift_all(B, B$c9d_sh), B$c7c_lam, B$c7_clim),
