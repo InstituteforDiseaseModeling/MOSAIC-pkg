@@ -30,6 +30,7 @@ CANON <- "/home/jgiles/MOSAIC/MOSAIC-data/processed/cholera/weekly/cholera_count
 VAR   <- "target_D_rate_per_country_floored"
 MODE  <- Sys.getenv("PSI_MODE", "selection")
 source(file.path(HERE, "score_psi_arm.R"))
+source(file.path(HERE, "shape_metrics.R"))
 
 EPS <- 1e-4
 lg  <- function(p) log(pmin(1-EPS, pmax(EPS, p)) / (1 - pmin(1-EPS, pmax(EPS, p))))
@@ -541,6 +542,9 @@ acc <- function(v, nm) {
   # breach (the holdout is read once, after a selection win). Caught by P001's
   # MAE disagreeing with accuracy_table.R (0.1924 vs 0.2022).
   v <- v[v$fold %in% SEL_FOLDS, , drop = FALSE]
+  # keep `fold` for the shape metrics: a diff() spliced across a block boundary
+  # is not a real week-to-week change
+  msh <- merge(v[, c("iso_code","date","fold","psi")], obs, by = c("iso_code","date"))
   m <- merge(v[, c("iso_code","date",QC)], obs, by = c("iso_code","date"))
   m <- m[is.finite(m$observed) & is.finite(m$psi), ]
   if (!nrow(m)) return(NULL)
@@ -554,8 +558,12 @@ acc <- function(v, nm) {
                wis = mean(wis_fn(z$observed, z$psi, z$q25, z$q75, z$q025, z$q975), na.rm = TRUE),
                stringsAsFactors = FALSE) }))
   wt <- W$w_sqrt[match(per$iso_code, W$iso_code)]; wt <- wt/sum(wt)
+  wv <- stats::setNames(W$w_sqrt/sum(W$w_sqrt), W$iso_code)
+  sm <- .shape_metrics(msh, "psi", wv, "fold")
   data.frame(arm = nm, MAE = sum(wt*per$mae), R2_corr = sum(wt*per$r2, na.rm=TRUE),
              R2_sse = 1 - sum(per$sse)/sum(per$sst), WIS = sum(wt*per$wis, na.rm=TRUE),
+             bias = sm[["bias"]], sd_ratio = sm[["sd_ratio"]], dcor = sm[["dcor"]],
+             dir_acc = sm[["dir_acc"]], degen = sm[["degen"]],
              stringsAsFactors = FALSE)
 }
 W <- utils::read.csv(file.path(HERE,"weights_frozen.csv"), stringsAsFactors=FALSE)
@@ -575,6 +583,15 @@ for (a in setdiff(c("P000","P000R","N8","N5","D9b","N6"), BASE)) {
     q$fold <- grid$block[i]; rr[[length(rr)+1L]] <- q[, c("iso_code","date","fold",QC)]
   }
   if (length(rr)) variants[[a]] <- do.call(rbind, rr)
+}
+# Optional export so the plotting script can draw the SAME blend that is scored
+# here, rather than re-deriving intricate, leakage-sensitive lambda logic.
+if (nzchar(Sys.getenv("PSI_DUMP_VARIANTS"))) {
+     .dump <- Sys.getenv("PSI_DUMP_VARIANTS")
+     .keep <- intersect(c(BASE, "C12c_C11h", "C13", "C12b"), names(variants))
+     saveRDS(lapply(variants[.keep], function(v)
+                    v[v$fold %in% SEL_FOLDS, c("iso_code","date","fold","psi")]), .dump)
+     cat(sprintf("dumped variants [%s] -> %s\n", paste(.keep, collapse=", "), .dump))
 }
 accs <- do.call(rbind, lapply(names(variants), function(nm) acc(variants[[nm]], nm)))
 # baselines on the same cells
@@ -598,8 +615,13 @@ for (bn in c("persistence","seasonal")) {
   if (length(pr)) { q <- do.call(rbind, pr)
     per <- stats::aggregate(mae ~ iso_code, q, mean)
     wt <- W$w_sqrt[match(per$iso_code, W$iso_code)]; wt <- wt/sum(wt)
+    # MUST carry the same columns as acc() -- adding the shape metrics to acc()
+    # without adding them here made the two row-builders disagree and rbind
+    # failed with "numbers of columns of arguments do not match".
     bl_rows[[bn]] <- data.frame(arm=paste0("[",bn,"]"), MAE=sum(wt*per$mae),
-                                R2_corr=NA_real_, R2_sse=NA_real_, WIS=NA_real_) }
+                                R2_corr=NA_real_, R2_sse=NA_real_, WIS=NA_real_,
+                                bias=NA_real_, sd_ratio=NA_real_, dcor=NA_real_,
+                                dir_acc=NA_real_, degen=NA_real_) }
 }
 accs <- rbind(accs, do.call(rbind, bl_rows))
 cat("
