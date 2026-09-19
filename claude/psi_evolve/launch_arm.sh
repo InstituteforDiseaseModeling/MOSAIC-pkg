@@ -37,6 +37,8 @@ ARM=${1:-P000}; N=${2:-9}; SEEDS=${3:-10}; THREADS=${4:-9}
 # calibration preempts a nice-15 arm, and the arm soaks up whatever is idle.
 # Measured 2026-09-18: 18 arm processes at THREADS=9 drew 94 of 176 cores and
 # 93 GB of 1511 GB, so memory is never the constraint -- cores are.
+# The user has mandated a standing 40-core reservation for another agent's
+# MOSAIC calibrations; PSI_RESERVE_CORES enforces it at the launch boundary.
 NICE=${PSI_NICE:-15}
 cd "$HOME/psi_evolve" || exit 1
 
@@ -45,7 +47,7 @@ if [ -f STOP ]; then echo "STOP file present -- refusing to launch (PROTOCOL 6).
 
 # Concurrency cap: leave at least a quarter of the box for other users, so the
 # budget is floor(132 / n_processes) rather than floor(176 / n_processes).
-RESERVE=${PSI_RESERVE_CORES:-44}
+RESERVE=${PSI_RESERVE_CORES:-40}   # user-mandated reservation for another agent
 CAP=$(( (176 - RESERVE) / N ))
 if [ "$THREADS" -gt "$CAP" ]; then
   echo "THREADS=$THREADS exceeds floor((176-$RESERVE)/$N)=$CAP -- that would leave under"

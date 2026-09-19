@@ -241,6 +241,59 @@ for (fl in unique(B$fold)) for (iso in unique(B$iso_code[B$fold == fl])) {
   B$c11_sh[j] <- lg(B$pers[j[1]]) - stats::median(lg(B$psi[j]))
 }
 
+# ---- C12: HORIZON-DEPENDENT blend weight ------------------------------------
+# C10's lambda is per country but CONSTANT across the 12-week window. It should
+# not be: persistence is anchored on the last observation, so its edge is
+# largest at week 1 and decays with lead, while psi's (weak) climate signal does
+# not decay the same way. C7c already showed that a horizon curve POOLED across
+# countries is catastrophic (-0.874) because it forces one shape onto countries
+# where the other component is useless -- so the form here is MULTIPLICATIVE:
+# a per-country level from C10 times a pooled horizon shape, which keeps the
+# country-specific part that works and adds only one pooled degree of freedom.
+#   C12b  lambda by horizon week only (pooled) -- recorded to show why it fails
+#   C12c  lambda_country x horizon_shape       -- the intended form
+# Both estimated on EARLIER cutoffs' realised blocks only.
+B$c12b_lam <- 1; B$c12c_lam <- 1
+for (fl in sort(unique(B$fold))) {
+  gi <- match(fl, grid$block); T0 <- grid$cutoff[gi]
+  hist <- list()
+  for (k in seq_len(gi - 1L)) {
+    q <- rd(k); if (is.null(q)) next
+    Tk <- grid$cutoff[k]
+    z <- q[q$date >= Tk + 15L & q$date <= min(grid$test_end[k], T0), c("iso_code","date","psi")]
+    if (!nrow(z)) next
+    z$wk <- as.integer(floor(as.numeric(z$date - (Tk + 14L)) / 7)) + 1L
+    z$pers <- NA_real_
+    for (iso in unique(z$iso_code)) {
+      oi <- obs[obs$iso_code == iso & obs$date <= Tk, ]
+      if (nrow(oi) < 4L) next
+      oi <- oi[order(oi$date), ]
+      z$pers[z$iso_code == iso] <- mean(utils::tail(oi$observed, 4), na.rm = TRUE)
+    }
+    hist[[length(hist)+1L]] <- z
+  }
+  if (!length(hist)) next
+  H <- merge(do.call(rbind, hist), obs, by = c("iso_code","date"))
+  H <- H[is.finite(H$observed) & is.finite(H$pers) & H$iso_code %in% pool, ]
+  if (!nrow(H)) next
+  lams <- seq(0, 1, by = 0.05)
+  best <- function(d) if (nrow(d) < 10L) NA_real_ else
+    lams[which.min(vapply(lams, function(L)
+      mean(abs(d$observed - (L*d$psi + (1-L)*d$pers))), numeric(1)))]
+  # pooled horizon shape, normalised to mean 1 so it only reshapes
+  hw <- vapply(sort(unique(B$wk)), function(w) best(H[H$wk == w, ]), numeric(1))
+  names(hw) <- sort(unique(B$wk))
+  shape <- hw / mean(hw, na.rm = TRUE); shape[!is.finite(shape)] <- 1
+  j <- B$fold == fl
+  B$c12b_lam[j] <- pmin(1, pmax(0, hw[as.character(B$wk[j])]))
+  B$c12c_lam[j] <- pmin(1, pmax(0, B$c10_lam[j] * shape[as.character(B$wk[j])]))
+  if (fl == max(unique(B$fold))) {
+    cat("C12 pooled optimal lambda-on-psi by horizon week (last cutoff):\n")
+    print(round(hw, 2))
+  }
+}
+B$c12b_lam[!is.finite(B$c12b_lam)] <- 1; B$c12c_lam[!is.finite(B$c12c_lam)] <- 1
+
 # ---- C7b: combination weight from OUT-OF-SAMPLE history, not pre-cutoff fit --
 # C7 failed for a diagnosed reason: lambda fitted on PRE-CUTOFF error came out
 # 1.00 for 14 of 16 countries, because psi is excellent in-sample (0.273 vs
@@ -334,6 +387,9 @@ variants <- list(
   C11     = shift_all(B, B$c11_sh),
   C11h    = shift_all(B, 0.5 * B$c11_sh),
   C10_C11h= combo_all(shift_all(B, 0.5 * B$c11_sh), B$c10_lam, B$pers),
+  C12b    = combo_all(B, B$c12b_lam, B$pers),
+  C12c    = combo_all(B, B$c12c_lam, B$pers),
+  C12c_C11h = combo_all(shift_all(B, 0.5 * B$c11_sh), B$c12c_lam, B$pers),
   C7b     = combo_all(B, B$c7b_lam, B$c7_clim),
   C7c     = combo_all(B, B$c7c_lam, B$c7_clim),
   C7c_C9d = combo_all(shift_all(B, B$c9d_sh), B$c7c_lam, B$c7_clim),
