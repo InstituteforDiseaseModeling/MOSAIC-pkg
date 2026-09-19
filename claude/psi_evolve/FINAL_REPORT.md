@@ -68,7 +68,7 @@ Four stacked changes, in the order they contribute:
 
 | change | what it fixes | evidence |
 |---|---|---|
-| **N8** country-balanced loss | shape | R²_corr 0.098 → **0.321**, best of any arm |
+| **N8** country-balanced loss | shape | raw-ψ R²_corr **0.321**, best of any arm (production 0.272, same-pipeline refit 0.301) |
 | **D9b** country embedding initialised from static covariates | level | best raw MAE **0.1918** |
 | **C11h** half-strength level anchor to last observation | the OOS decay collapse | — |
 | **C12c** horizon-dependent blend weight | lets ψ earn weight as persistence decays (λ 0.05 → 0.50) | — |
@@ -152,3 +152,27 @@ the level anchor patches downstream rather than fixes at source.
 `target_D_rate_per_country_floored`. Confirmation blocks read exactly once, on
 2026-09-19, under `PREREGISTRATION_CONFIRM.md`; the read is recorded in
 `confirm_read_log.txt` on dugong at `/home/jgiles/psi_evolve/`.*
+
+
+---
+
+## Correction (2026-09-19, after the report was first written)
+
+An earlier draft of this report and of the session summary quoted N8's shape gain
+as "R²_corr 0.098 → 0.321". **That spliced two different measurement contexts and
+overstated the gain by roughly 3x.** The 0.098 is production ψ measured inside an
+earlier wave's *blended* `C10_C11h` cell set (where N8 scored 0.200, not 0.321);
+the 0.321 is N8 in the final *raw-ψ* accuracy table (where production scores
+0.272). Both pairs are real, but they cannot be crossed.
+
+Like-for-like, on the final raw-ψ table over the 6 selection blocks:
+
+| comparison | R²_corr |
+|---|---|
+| production P001 → **N8** | 0.272 → **0.321** (+18%) |
+| same-pipeline refit P000 → **N8** | 0.301 → **0.321** (+6.6%) |
+| earlier blended context, production → N8 | 0.098 → 0.200 |
+
+No other number in this report is affected — the headline blend results, the
+sealed-holdout figures, and the fold-ladder table were all read directly from a
+single run each.
