@@ -229,4 +229,113 @@ legend("topleft", bty="n", cex=0.76,
   lwd=c(2.4,1.8,1.6,2, if (!is.null(series$blend)) 2.6),
   lty=c(2,3,3,1, if (!is.null(series$blend)) 1))
 dev.off()
-cat("wrote 4 figures + metrics_table.csv to ", OUT, "\n", sep="")
+# ---------- fig 5: every model variation on one panel ------------------------
+# All arms overlaid, IS fit and OOS forecast as one continuous line each, with
+# the observed data as points (grey before the origin, black after). The point
+# of this figure is the SPREAD: where the arms agree, the behaviour is a
+# property of the model family rather than of any one variant.
+ARMS5 <- names(caches)
+pal <- grDevices::hcl.colors(length(ARMS5), "Dark 3")
+names(pal) <- ARMS5
+isos5 <- intersect(c("MOZ","CMR","COD","KEN","MWI","RWA"), pool)
+pdf(file.path(OUT,"fig5_all_variants.pdf"), width=15, height=10.5)
+par(mfrow=c(length(isos5), length(cti)), mar=c(2.2,2.8,1.7,0.6), mgp=c(1.5,0.45,0),
+    oma=c(4.4,2.4,3.8,0.6), cex.axis=0.72, tcl=-0.25)
+for (iso in isos5) {
+  for (k in cti) {
+    T0 <- grid$cutoff[k]; ct <- format(T0); ts <- grid$test_start[k]; te <- grid$test_end[k]
+    o <- obs[obs$iso_code==iso & obs$date >= T0-182 & obs$date <= te, ]
+    o <- o[order(o$date), ]
+    pr <- lapply(ARMS5, function(a) {
+      q <- rdpsi(caches[[a]], ct); if (is.null(q)) return(NULL)
+      q <- q[q$iso_code==iso & q$date >= T0-182 & q$date <= te, c("date","psi")]
+      if (!nrow(q)) NULL else q[order(q$date), ] })
+    names(pr) <- ARMS5
+    yy <- c(o$observed, unlist(lapply(pr, function(z) if (is.null(z)) NULL else z$psi)))
+    yy <- yy[is.finite(yy)]
+    # Axes must come from ALL available series, not from `o`: a country-cutoff
+    # with no observed rows in the window leaves o empty, and plotting a
+    # zero-length vector dies with "need finite 'xlim' values" -- which is what
+    # truncated fig5 to a 0-byte file.
+    xx <- c(o$date, unlist(lapply(pr, function(z) if (is.null(z)) NULL else z$date)))
+    xx <- as.Date(xx[is.finite(xx)], origin = "1970-01-01")
+    if (!length(yy) || !length(xx)) {
+         plot.new(); title(main=sprintf("%s | cutoff %s (no data)", iso, ct),
+                           cex.main=0.8, font.main=3, col.main="grey50"); next }
+    plot(NA, type="n", xlim=range(xx), ylim=range(0, yy), xaxt="n", xlab="", ylab="",
+         main=sprintf("%s  |  cutoff %s", iso, ct), cex.main=0.85, font.main=1)
+    axis.Date(1, at=pretty(xx, 4))
+    rect(ts, par("usr")[3], te, par("usr")[4], col="grey95", border=NA)
+    abline(v=T0, col="grey35", lty=2); box()
+    for (a in ARMS5) if (!is.null(pr[[a]]))
+      lines(pr[[a]]$date, pr[[a]]$psi, col=pal[[a]], lwd=1.25)
+    isp <- o$date <= T0
+    points(o$date[isp],  o$observed[isp],  pch=16, cex=0.5, col="grey55")
+    points(o$date[!isp], o$observed[!isp], pch=16, cex=0.62, col="black")
+  }
+}
+mtext("Every model variation: in-sample fit and out-of-sample forecast, against the data",
+      outer=TRUE, line=1.9, cex=1.05, font=2)
+mtext("points = observed (grey before the forecast origin, black after); grey panel = the 13-week window scored; dashed line = origin",
+      outer=TRUE, line=0.6, cex=0.7, col="grey30")
+mtext("transmission intensity", side=2, outer=TRUE, line=0.9, cex=0.8)
+par(fig=c(0,1,0,1), oma=c(0,0,0,0), mar=c(0,0,0,0), new=TRUE); plot.new()
+legend("bottom", legend=ARMS5, col=pal[ARMS5], lwd=1.8, ncol=min(11, length(ARMS5)),
+       bty="n", cex=0.72, seg.len=1.6)
+dev.off()
+
+# ---------- fig 6: log-log observed vs predicted, OOS, pooled over folds -----
+# Calibration across the whole dynamic range. Each arm becomes ONE line: the
+# OOS cells of all 6 folds are pooled, observed is cut into quantile bins, and
+# the median prediction in each bin is plotted against the median observed.
+# A perfectly calibrated predictor lies on the 1:1 diagonal; a line BELOW it
+# under-predicts, and a line FLATTER than 1:1 is compressing the dynamic range
+# (over-predicting the small values, under-predicting the large ones) -- which
+# is the signature of a prediction that has lost its amplitude.
+LL <- L[L$arm %in% c(names(caches), "persistence", "seasonal"), ]
+pos <- is.finite(LL$observed) & is.finite(LL$psi) & LL$observed > 0 & LL$psi > 0
+ndrop <- sum(!pos & is.finite(LL$observed) & is.finite(LL$psi))
+LLp <- LL[pos, ]
+cat(sprintf("fig6: %d of %d OOS cell-arm pairs dropped as non-positive (log scale)\n",
+            ndrop, sum(is.finite(LL$observed) & is.finite(LL$psi))))
+nb  <- 12L
+qs  <- stats::quantile(LLp$observed[LLp$arm == names(caches)[1]],
+                       probs = seq(0, 1, length.out = nb + 1L), na.rm = TRUE)
+qs  <- unique(qs); nb <- length(qs) - 1L
+binline <- function(a) {
+     z <- LLp[LLp$arm == a, ]; if (nrow(z) < 20L) return(NULL)
+     b <- cut(z$observed, breaks = qs, include.lowest = TRUE, labels = FALSE)
+     ox <- tapply(z$observed, b, stats::median)
+     py <- tapply(z$psi,      b, stats::median)
+     data.frame(x = as.numeric(ox), y = as.numeric(py))
+}
+allarms <- c(names(caches), "persistence", "seasonal")
+pal6 <- c(grDevices::hcl.colors(length(names(caches)), "Dark 3"),
+          COL[["pers"]], COL[["seas"]])
+names(pal6) <- allarms
+lw6 <- c(rep(1.6, length(names(caches))), 2.6, 2.6)
+lt6 <- c(rep(1,   length(names(caches))), 2, 3)
+names(lw6) <- names(lt6) <- allarms
+
+pdf(file.path(OUT,"fig6_loglog_obs_pred.pdf"), width=9.4, height=8)
+par(mar=c(4.4,4.4,3.8,1.2), mgp=c(2.5,0.6,0))
+rng <- range(c(LLp$observed, LLp$psi), na.rm=TRUE)
+plot(LLp$observed[LLp$arm==names(caches)[1]], LLp$psi[LLp$arm==names(caches)[1]],
+     log="xy", xlim=rng, ylim=rng, pch=16, cex=0.28,
+     col=grDevices::adjustcolor("grey45", alpha.f=0.22),
+     xlab="observed transmission intensity  (log)",
+     ylab="predicted  (log)",
+     main="Out-of-sample calibration across all CV folds", font.main=1, cex.main=1.0)
+abline(0, 1, col="black", lwd=2)
+for (a in allarms) { bl <- binline(a); if (!is.null(bl))
+     lines(bl$x, bl$y, col=pal6[[a]], lwd=lw6[[a]], lty=lt6[[a]], type="b",
+           pch=16, cex=0.55) }
+mtext(sprintf("points = the %s OOS cells (one arm, for context); lines = median prediction per observed-quantile bin, %d bins, 6 folds pooled",
+              format(sum(LLp$arm==names(caches)[1]), big.mark=","), nb),
+      side=3, line=0.35, cex=0.68, col="grey30")
+legend("topleft", legend=c("1:1 (perfect)", allarms),
+       col=c("black", pal6[allarms]), lwd=c(2, lw6[allarms]),
+       lty=c(1, lt6[allarms]), bty="n", cex=0.7, ncol=2, seg.len=1.8)
+dev.off()
+
+cat("wrote 6 figures + metrics_table.csv to ", OUT, "\n", sep="")
