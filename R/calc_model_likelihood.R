@@ -58,6 +58,43 @@
 #' @return Scalar total log-likelihood (finite), \code{-Inf} if non-finite,
 #'   or \code{NA_real_} if all locations contribute nothing.
 #' @export
+
+#' Inference-lab: temporal block length for scoring (1 = daily, stock)
+#' @keywords internal
+#' @noRd
+.inflab_block_days <- function() {
+     v <- suppressWarnings(as.integer(Sys.getenv("INFLAB_BLOCK_DAYS", "1")))
+     if (is.na(v) || v < 1L) 1L else v
+}
+
+#' Inference-lab: pool a per-time vector or matrix into fixed-day blocks
+#'
+#' Counts are SUMMED within a block; weights are MEANED, and a block is zeroed
+#' outright if ANY of its days carries zero weight. That last rule matters for
+#' held-out evaluation: without it a block straddling the cut date would pull
+#' out-of-sample days into the training likelihood.
+#' @keywords internal
+#' @noRd
+.inflab_pool <- function(x, block_days, how = c("sum", "wmean")) {
+     how <- match.arg(how)
+     if (is.null(x) || block_days <= 1L) return(x)
+     mat <- is.matrix(x)
+     m   <- if (mat) x else matrix(x, nrow = 1L)
+     nt  <- ncol(m)
+     grp <- ((seq_len(nt) - 1L) %/% block_days) + 1L
+     out <- vapply(split(seq_len(nt), grp), function(idx) {
+          apply(m[, idx, drop = FALSE], 1L, function(v) {
+               if (how == "sum") {
+                    if (all(is.na(v))) NA_real_ else sum(v, na.rm = TRUE)
+               } else {
+                    if (any(!is.na(v) & v == 0)) 0 else mean(v, na.rm = TRUE)
+               }
+          })
+     }, numeric(nrow(m)))
+     out <- matrix(as.numeric(out), nrow = nrow(m))
+     if (mat) out else as.numeric(out)
+}
+
 calc_model_likelihood <- function(obs_cases,
                                   est_cases,
                                   obs_deaths,
@@ -187,6 +224,23 @@ calc_model_likelihood <- function(obs_cases,
 
      # --- main loop ---
      ll_locations <- rep(NA_real_, n_locations)
+
+     # ---- INFERENCE LAB A5: temporal block scoring -------------------------
+     # Daily cells are treated as independent, but epidemic counts are strongly
+     # autocorrelated (measured tau ~ 92; VIF 2.4 -> 252 from daily to annual
+     # blocks). Pooling to fixed-day blocks removes most of that false precision
+     # and the day-of-week reporting artefacts the daily NB charges to the model.
+     .bd <- .inflab_block_days()
+     if (.bd > 1L) {
+          obs_cases  <- .inflab_pool(obs_cases,  .bd, "sum")
+          est_cases  <- .inflab_pool(est_cases,  .bd, "sum")
+          obs_deaths <- .inflab_pool(obs_deaths, .bd, "sum")
+          est_deaths <- .inflab_pool(est_deaths, .bd, "sum")
+          weights_time       <- .inflab_pool(weights_time,       .bd, "wmean")
+          weights_obs_cases  <- .inflab_pool(weights_obs_cases,  .bd, "wmean")
+          weights_obs_deaths <- .inflab_pool(weights_obs_deaths, .bd, "wmean")
+          n_time_steps <- ncol(obs_cases)
+     }
 
      for (j in seq_len(n_locations)) {
 
