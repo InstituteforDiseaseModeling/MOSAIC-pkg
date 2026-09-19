@@ -25,9 +25,20 @@ obs <- obs[is.finite(obs$observed) & obs$iso_code %in% pool, ]
 wis_fn <- getFromNamespace(".rcv_wis","MOSAIC"); bl_fn <- getFromNamespace(".rcv_baseline","MOSAIC")
 
 args <- commandArgs(trailingOnly=TRUE)
+# Candidate arms = the known set UNION anything named on the command line, so a
+# new ladder arm is scoreable the moment its cache exists. Previously the list
+# was hardcoded and args only FILTERED it, so asking for an unknown arm (P000H)
+# silently produced a table without it -- a wrong answer that looks like a right
+# one. Now an unnamed-but-requested arm with no cache is an explicit error.
+known <- c("P000","P000R","P000H","N5","N6","N8","D9b","F1","F2","F3","F4")
 caches <- c(P001 = PROD)
-for (a in c("P000","P000R","N8","N5","D9b","N6"))
-  if (dir.exists(file.path(HERE, paste0("psi_cache_",a)))) caches[a] <- file.path(HERE, paste0("psi_cache_",a))
+for (a in union(known, args)) {
+  d <- file.path(HERE, paste0("psi_cache_", a))
+  if (dir.exists(d)) caches[a] <- d
+}
+missing <- setdiff(args, c("P001", names(caches)))
+if (length(missing))
+  stop("accuracy_table: no psi cache for requested arm(s): ", paste(missing, collapse=", "))
 if (length(args)) caches <- caches[names(caches) %in% c("P001", args)]
 
 # restrict to cutoffs present in EVERY cache, so all arms are scored on identical cells
