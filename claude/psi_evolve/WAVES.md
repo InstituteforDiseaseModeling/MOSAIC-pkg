@@ -2325,3 +2325,46 @@ follows directly from wave 29 — the blend takes its *level* from persistence a
 uses psi only for a thin shape contribution, with λ = 0 in 40% of cells. The
 choice of psi variant is therefore nearly irrelevant to the blended product, and
 what little separation exists is not reliably predicted by any raw metric tested.
+
+## Wave 32 — the sealed read, and the end of the programme
+
+The confirmation holdout was read **once**, on 2026-09-19, against
+`PREREGISTRATION_CONFIRM.md` (written before the read, gating on the **sign**
+only). Recorded in `confirm_read_log.txt` on dugong; it must never be read again.
+
+```
+weeks  1- 4 : blend 0.1045  persistence 0.1021  raw psi 0.1418  ->  -2.3%  (n=154)
+weeks  5- 8 : blend 0.1064  persistence 0.1156  raw psi 0.1445  ->  +8.0%  (n=167)
+weeks  9-13 : blend 0.1179  persistence 0.1322  raw psi 0.2042  -> +10.8%  (n=200)
+```
+
+**Primary endpoint met: the sign replicated.** The magnitude came in larger than
+selection's +5.7% — which the pre-registration explicitly declined to read as a
+triumph, having stated up front that 226 cells cannot resolve the magnitude.
+
+**The secondaries are the real story.**
+
+| | selection | confirmation |
+|---|---|---|
+| paired sign test (country × block) | 34/54, p = 0.0759 | **16/32, p = 1.0000** |
+| median paired gain | — | **+0.0000** |
+| per-block, weeks 9-13 | +0.0, +10.2, +6.6, −7.6, −3.5, +34.7 | +10.8, **+30.7**, **−26.2** |
+
+Under the honest unit the effect is **exactly a coin flip**. Two of three blocks
+positive meets the pre-registered expectation, but the pooled gain comes from
+**magnitude in a minority of country-blocks, not consistency across them** —
+precisely the structure wave 29 found on selection.
+
+A readable mechanism for the spread: the block where the blend lost badly
+(2026-01-01) is the one where persistence was already excellent (0.0970, the
+easiest in the set). The blend helps where persistence is poor and hurts where
+it is already very good. Note also that the holdout blocks are easier overall
+(persistence 0.1322 vs 0.1758 at weeks 9-13), so the two percentages do not sit
+on a common difficulty scale.
+
+Falsification check passed: weeks 1-4 is −2.3% (selection −3.1%), i.e. the blend
+is *not* mysteriously winning at short horizon where it is mostly persistence.
+Raw ψ at 0.2042 remains far worse than both, confirming the blend machinery is
+doing the work.
+
+**Programme closed.** See `FINAL_REPORT.md`.
