@@ -2201,3 +2201,53 @@ N8 0.2177`, horizons `-3.1% / -0.5% / +5.7%`. Labels moved; no number did.
 `pkill -f "arm_C_transforms"` inside an ssh whose own command line contained that
 string self-matched and killed the shell. Already recorded for a different
 pattern; reproduced verbatim. Never inline such a `pkill` — scp a script.
+
+## Wave 30 — F1 (677 folds): the epoch collapses to a constant
+
+I predicted F1 would be null. It is **consistently slightly worse**, which is a
+better result than null because it comes with a measured mechanism.
+
+| arm | folds/cutoff | MAE | R2_corr | R2_sse | WIS | blended | wk 9-13 |
+|---|---|---|---|---|---|---|---|
+| P000H (control) | 9 | **0.1988** | 0.300 | −5.980 | 0.1631 | — | — |
+| F4 | 21 | 0.1989 | 0.297 | −6.022 | 0.1617 | 0.1515 | +5.8% |
+| **F1** | **62** | **0.2025** | 0.287 | −6.356 | 0.1641 | 0.1537 | **+4.1%** |
+| N8 (best) | 9 | 0.1967 | **0.321** | **−5.810** | 0.1619 | **0.1511** | **+5.7%** |
+
+F1 is worse than its control on **all four** metrics (+1.9% MAE). The 0.1%
+replicate floor rests on a single replicate pair, so the four-way agreement is
+the stronger evidence, not the MAE gap alone. Blended it is worse too.
+
+### Why: the inner CV's one output stops varying
+
+The inner CV controls exactly one thing — `round(median(best_epoch))` for the
+refit. The selected epoch per selection cutoff:
+
+```
+P000H   9 folds/cutoff   16  18  18  20  20  17     <- cutoff-specific
+F4     21 folds/cutoff   23  21  24  24  24  24
+F1     62 folds/cutoff   22  22  22  22  22  22     <- one constant, every cutoff
+```
+
+Taking the median over 62 heterogeneous folds instead of 9 estimates the epoch
+**more precisely while destroying the per-cutoff adaptivity** the sparse geometry
+retained. Accuracy goes flat (F4, +0.05%) then slightly negative (F1, +1.9%).
+
+So the ladder does not merely fail to help: past some fold count it actively
+removes the only adaptive signal the inner CV carried. That is a sharper answer
+to "can more IS CV folds improve 12-week OOS accuracy?" than a null would have
+been — 9 folds 0.1988, 21 folds 0.1989, 62 folds 0.2025.
+
+### The epoch table was wrong the first time
+
+My first version came from `grep -oE "epoch[^0-9]*[0-9]+" | tail -1`, which lands
+on trailing `epochs=16` **seed** lines rather than the selection statement, and a
+`tail`-truncated dump led me to attribute a P000H block to F1. Re-derived from
+the single authoritative `HA-02: per-seed epochs ... -> refitting all 10 seeds at
+N epochs` line (verified exactly one per log) and cross-checked against fold
+counts that independently identify each geometry — 124 = 2x62 for F1, 42 = 2x21
+for F4, 18 = 2x9 for P000H, since HA-02 runs the fold loop on 2 seeds.
+
+Same shape as lesson 15: a scraped table is not verified by looking plausible.
+The fold counts were the independent check that made the second version
+trustworthy.
