@@ -2159,3 +2159,45 @@ is never valid for a REGISTRY row.
 
 The positive path reproduces the numbers already on record to the last digit, so
 the gate blocks partial grids without perturbing a complete one.
+
+### Wave 29c — the `P001` row in the transforms table was never P001
+
+Reading the N8 blend regression output closely, the `N8` and `P001` rows were
+**byte-identical across all four metrics** (`0.2177 0.20004 -1.0715 0.1837`).
+Two different arms cannot agree to five significant figures on four independent
+measures.
+
+Cause: `arm_C_transforms.R` sets `variants$P001 <- B`, where `B` is whatever
+`PSI_CACHE` points at. That is correct in *default* usage — the default cache is
+the production OCV-4 psi, which genuinely is P001. But **every** arm-stacking run
+overrides `PSI_CACHE`, so in those runs the row labelled `P001` was the arm's own
+raw psi, and `vs_P001_MAE` compared each blend **against itself**. The duplicate
+appeared because the refit fold-in loop then re-read the same cache under its
+real name.
+
+**Nothing on record is wrong.** The incumbent's 0.2022 came from
+`accuracy_table.R`, which resolves P001 from the production path independently,
+and the weeks 9-13 `raw psi 0.2186` was always labelled `raw_psi`, not `P001`.
+The defect was that `-30.6` read as "30.6% better than the incumbent" when it
+meant "30.6% better than N8's own raw psi" — both true, only one as written.
+
+Fixed: the base row is labelled from the cache in use, the duplicate fold-in is
+skipped (`setdiff(..., BASE)`), and the column is `vs_base_MAE` with a note
+naming its reference.
+
+**The rename broke three things, which is the transferable part.** `variants`
+was also read *by name* at three later sites — including
+`ph(variants[["P001"]], "raw_psi")`, which feeds the MAE-by-horizon table that
+produces the headline weeks 9-13 figure. Those lookups worked only because the
+element was unconditionally named `P001`; after the rename they returned `NULL`.
+Caught by grepping for the literal `"P001"` *after* renaming rather than
+assuming the rename was self-contained. All three now resolve through `BASE`.
+
+Verified unchanged end to end: base labelled `N8`, no duplicate row, and
+`C12c_C11h 0.1511 / C13 0.1508 / C12b 0.1530 / D9b 0.2129 / N5 0.2170 /
+N8 0.2177`, horizons `-3.1% / -0.5% / +5.7%`. Labels moved; no number did.
+
+**Operational note.** One verification run died at exit 255 with no output:
+`pkill -f "arm_C_transforms"` inside an ssh whose own command line contained that
+string self-matched and killed the shell. Already recorded for a different
+pattern; reproduced verbatim. Never inline such a `pkill` — scp a script.

@@ -489,6 +489,17 @@ print(round(tapply(B$c7c_lam, B$wk, stats::median), 2))
 cat("C7b lambda (median over blocks, per country):\n")
 print(round(tapply(B$c7b_lam, B$iso_code, stats::median), 2))
 
+# The base row is whatever PSI_CACHE points at. That is P001 ONLY in default
+# usage (the production OCV-4 cache); every arm-stacking run OVERRIDES PSI_CACHE,
+# and this row was still labelled "P001" -- so `vs_P001_MAE` was really
+# "% vs this arm's OWN raw psi" while reading as "% vs the incumbent".
+BASE <- if (identical(
+              normalizePath(CACHE, mustWork = FALSE),
+              normalizePath("/home/jgiles/MOSAIC/MOSAIC-pkg/claude/forecast_cv_ocv4_q2yr/psi_cache",
+                            mustWork = FALSE))) "P001" else
+        sub("^psi_cache_", "", basename(CACHE))
+cat(sprintf("base (raw psi from PSI_CACHE) labelled: %s\n", BASE))
+
 variants <- list(
   P001    = B,
   C9d     = shift_all(B, B$c9d_sh),
@@ -513,6 +524,7 @@ variants <- list(
   C7      = combo_all(B, B$c7_lam, B$c7_clim),
   C7_C9a  = combo_all(shift_all(B, B$c9a_sh), B$c7_lam, B$c7_clim)
 )
+names(variants)[names(variants) == "P001"] <- BASE
 folds <- data.frame(fold = grid$block, train_end = grid$cutoff,
                     test_start = grid$test_start, test_end = grid$test_end)
 folds <- folds[folds$fold %in% unique(B$fold), ]
@@ -552,7 +564,7 @@ W <- utils::read.csv(file.path(HERE,"weights_frozen.csv"), stringsAsFactors=FALS
 # transforms table and accuracy_table.R used slightly different cell filters, so
 # P001's MAE differed between them (0.2229 vs 0.2022) and the two sets of arms
 # were not comparable. One table, one cell set.
-for (a in c("P000","P000R","N8","N5","D9b","N6")) {
+for (a in setdiff(c("P000","P000R","N8","N5","D9b","N6"), BASE)) {
   dr <- file.path(HERE, paste0("psi_cache_", a)); if (!dir.exists(dr)) next
   rr <- list()
   for (i in seq_len(nrow(grid))) {
@@ -593,9 +605,10 @@ accs <- rbind(accs, do.call(rbind, bl_rows))
 cat("
 === ACCURACY (burden-weighted, 12-week OOS blocks) ===
 ")
-accs$vs_P001_MAE <- round(100*(accs$MAE - accs$MAE[accs$arm=="P001"])/accs$MAE[accs$arm=="P001"], 1)
+accs$vs_base_MAE <- round(100*(accs$MAE - accs$MAE[accs$arm==BASE])/accs$MAE[accs$arm==BASE], 1)
 print(accs[order(accs$MAE), ], row.names = FALSE, digits = 4)
-cat("(MAE lower = better; vs_P001_MAE is % change, negative = improvement)
+cat(sprintf("(MAE lower = better; vs_base_MAE is %% change vs the RAW psi of %s --\n that base cache's own psi, NOT the P001 incumbent, unless base == P001.)\n", BASE))
+cat("
 
 ")
 
@@ -626,7 +639,7 @@ ph <- function(v, nm) {
 pers_v <- B; pers_v$psi <- B$pers
 lead <- if ("C12c_C11h" %in% names(variants)) "C12c_C11h" else "C10_C11h"
 phz <- rbind(ph(variants[[lead]], lead), ph(pers_v, "persistence"),
-             ph(variants[["P001"]], "raw_psi"))
+             ph(variants[[BASE]], "raw_psi"))
 cat("
 === MAE BY HORIZON (leakage-clean lambda, selection blocks) ===
 ")
@@ -658,6 +671,6 @@ for (nm in names(variants)) {
       if (isTRUE(r$beats_seasonal)) "PASS" else "FAIL",
       r$per_horizon$h1mo$S, r$per_horizon$h2mo$S, r$per_horizon$h3mo$S))
 }
-cat("\n=== delta vs P001 ===\n")
-for (nm in setdiff(names(out), "P001"))
-  cat(sprintf("%-8s dS %+.4f\n", nm, out[[nm]]$S - out[["P001"]]$S))
+cat(sprintf("\n=== delta vs %s (the base cache's own raw psi) ===\n", BASE))
+for (nm in setdiff(names(out), BASE))
+  cat(sprintf("%-8s dS %+.4f\n", nm, out[[nm]]$S - out[[BASE]]$S))
