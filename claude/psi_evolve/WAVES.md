@@ -2251,3 +2251,49 @@ for F4, 18 = 2x9 for P000H, since HA-02 runs the fold loop on 2 seeds.
 Same shape as lesson 15: a scraped table is not verified by looking plausible.
 The fold counts were the independent check that made the second version
 trustworthy.
+
+## Wave 31 — F3 closes the ladder, and retracts wave 30's mechanism
+
+**Wave 30's conclusion was wrong and is withdrawn.** I claimed there that more
+inner folds drive the refit epoch to a cutoff-invariant constant and thereby
+degrade accuracy. F3 refutes both halves.
+
+| arm | total folds | geometry | epochs across the 6 cutoffs | MAE | R2_corr |
+|---|---|---|---|---|---|
+| P000H | 89 | control | 16 18 18 20 20 17 | 0.1988 | 0.300 |
+| F4 | 229 | 84-d stride, horizon-matched window | 23 21 24 24 24 24 | 0.1989 | 0.297 |
+| F1 | 677 | 28-d stride (denser, same 4-y window) | 22 22 22 22 22 22 | 0.2025 | 0.287 |
+| **F3** | **912** | **2-y grid start (reaches further back)** | **24 22 26 24 24 23** | **0.1982** | **0.318** |
+
+F3 has **35% more folds than F1** and its epochs **vary again**, while its MAE is
+the best of the four geometries. So neither "more folds → constant epoch" nor
+"more folds → worse accuracy" survives.
+
+**Where the error came from.** I extrapolated a monotone law from three ordered
+points while the fourth was still running — having already registered a
+prediction for that fourth point, which I could simply have waited for. The
+three points were also confounded: F1 *densifies* the same 4-year window, while
+F3 *extends* the window backward. Fold count was never the single varying
+quantity across the ladder, so "fold count" was the wrong axis to draw a law on.
+
+### What the closed ladder actually shows
+
+MAE `0.1988 → 0.1989 → 0.2025 → 0.1982` across 89 → 912 folds: a 2.2% span, no
+monotone relation, and three of four within 0.35% of each other. R2_corr
+`0.300, 0.297, 0.287, 0.318` — also non-monotone.
+
+**Answer to the user's question.** Increasing IS CV folds while preserving the
+rolling-window structure and 12-week horizon emulation leaves 12-week OOS
+accuracy essentially **unchanged**. The inner-CV geometry is inert over the range
+tested. F1's −1.9% is a single unreplicated deviation that the larger F3 does not
+reproduce; it should be read as noise or as something specific to that geometry,
+not as a fold-count effect.
+
+One hint, flagged as a hypothesis and explicitly **not** claimed: the arm that
+extended history *backward* (F3) has the best shape metric of the F arms, while
+the one that merely *sampled denser* (F1) has the worst. Span of seasons may
+matter where density does not — but with four geometries and differences near the
+replicate floor, that is not established.
+
+The fold ladder is **CLOSED**. Nothing in it beats the N8 architecture change
+(R2_corr 0.321, MAE 0.1967), which remains the best psi in the programme.
