@@ -52,6 +52,29 @@ rd <- function(i) {
   p[p$iso_code %in% pool, , drop=FALSE]
 }
 
+# HARD GATE: refuse a PARTIAL selection grid. The reader below returns NULL for a
+# missing cutoff and the loop silently `next`s it, so a still-running arm would be
+# blended on whatever subset happened to be on disk WITHOUT PRINTING ANYTHING.
+# Wave 29 measured per-block gains from -7.6% to +34.7% at weeks 9-13, so a subset
+# is not a noisier version of the answer -- it is a different answer.
+.sel <- grid$cutoff[grid$split == "selection"]
+.hav <- .sel[file.exists(file.path(CACHE, sprintf("psi_%s.csv", format(.sel))))]
+cat(sprintf("selection cutoffs present in %s: %d of %d\n",
+            basename(CACHE), length(.hav), length(.sel)))
+if (length(.hav) < length(.sel)) {
+     msg <- sprintf(paste0(
+       "arm_C_transforms: PARTIAL GRID -- %d of %d selection cutoffs present in %s.\n",
+       "  missing: %s\n",
+       "  This script silently skips absent cutoffs, so blending now would report a\n",
+       "  headline computed on a SUBSET of blocks and not comparable to anything on\n",
+       "  record. Wait for the arm to finish, or set PSI_ALLOW_PARTIAL=1 for a\n",
+       "  deliberate diagnostic (never for a REGISTRY row)."),
+       length(.hav), length(.sel), basename(CACHE),
+       paste(format(setdiff(.sel, .hav)), collapse=", "))
+     if (!identical(Sys.getenv("PSI_ALLOW_PARTIAL"), "1")) stop(msg)
+     cat("*** ", msg, "\n*** PROCEEDING UNDER PSI_ALLOW_PARTIAL=1 -- DIAGNOSTIC ONLY ***\n\n", sep="")
+}
+
 blocks <- list(); pres <- list()
 for (i in seq_len(nrow(grid))) {
   p <- rd(i); if (is.null(p)) next

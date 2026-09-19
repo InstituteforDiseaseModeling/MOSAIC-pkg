@@ -49,6 +49,27 @@ cat(sprintf("arms: %s\ncommon selection cutoffs: %d of %d  (%s)\n\n",
             paste(names(caches), collapse=", "), length(common), nrow(grid),
             paste(common, collapse=" ")))
 if (!length(common)) quit(save="no")
+# HARD GATE: refuse a PARTIAL selection grid. Scoring a subset of blocks is not
+# merely less precise, it is not COMPARABLE to any number already on record --
+# wave 29 measured per-block gains from -7.6% to +34.7% at weeks 9-13, so a
+# 2-block subset can reorder the arms outright. This is the same shape as the
+# PROTOCOL 5.3 breach already committed once (an accuracy table that swept the
+# wrong blocks, disagreed at 0.1924 vs 0.2022, and changed which arm ranked
+# best). The old behaviour printed "common selection cutoffs: 2 of 6" and
+# carried on, which is easy to miss in a long table.
+if (length(common) < nrow(grid)) {
+     msg <- sprintf(paste0(
+       "accuracy_table: PARTIAL GRID -- %d of %d selection cutoffs available.\n",
+       "  missing: %s\n",
+       "  Arms still running have not written every cutoff yet. Scoring now would\n",
+       "  produce numbers that are NOT comparable to any figure on record.\n",
+       "  Wait for the full grid, or set PSI_ALLOW_PARTIAL=1 for a deliberate,\n",
+       "  clearly-labelled diagnostic (never for a REGISTRY row)."),
+       length(common), nrow(grid),
+       paste(setdiff(format(grid$cutoff), common), collapse=", "))
+     if (!identical(Sys.getenv("PSI_ALLOW_PARTIAL"), "1")) stop(msg)
+     cat("*** ", msg, "\n*** PROCEEDING UNDER PSI_ALLOW_PARTIAL=1 -- DIAGNOSTIC ONLY ***\n\n", sep="")
+}
 
 rows <- list()
 for (nm in names(caches)) {

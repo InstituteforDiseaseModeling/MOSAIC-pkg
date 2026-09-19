@@ -2126,3 +2126,36 @@ magnitude will not reproduce and that this is not to be treated as failure.
 **Process note.** Rehearsing the read on legal data was worth more than the read
 itself: it certified the code *and* produced the finding, at zero cost to the
 holdout. Worth doing before any write-once measurement.
+
+### Wave 29b — closing the partial-grid hole before the ladder lands
+
+F1 finished 2 of its 9 shards while F3 was still running, which put a **partial
+grid on disk** and exposed that neither scoring script refused one:
+
+- `accuracy_table.R` took the *intersection* of available cutoffs, printed
+  `common selection cutoffs: 2 of 6`, and carried on — scoring **every** arm on
+  the 2-block subset. Easy to miss in a long table.
+- `arm_C_transforms.R` was worse: its reader returns `NULL` for an absent cutoff
+  and the loop `next`s it, so it would have blended on whatever was on disk
+  **without printing anything at all**.
+
+This is the same shape as the PROTOCOL 5.3 breach already committed once (an
+accuracy table that swept the wrong blocks, disagreed 0.1924 vs 0.2022, and
+changed which arm ranked best). Wave 29 is what makes it urgent rather than
+cosmetic: per-block gains run **−7.6% to +34.7%**, so a subset is not a noisier
+version of the answer, it is a different answer.
+
+Both scripts now hard-`stop()` on an incomplete selection grid, naming the
+missing cutoffs, with `PSI_ALLOW_PARTIAL=1` as a labelled diagnostic escape that
+is never valid for a REGISTRY row.
+
+**Both directions tested, against live state rather than a mock:**
+
+| test | result |
+|---|---|
+| `accuracy_table.R F1` (2 of 6 present) | refuses, names the 4 missing |
+| `arm_C_transforms.R` on `psi_cache_F1` | refuses, names the 4 missing |
+| `accuracy_table.R N8` (6 of 6) | **unchanged** — N8 0.1967 / R2_corr 0.321, P001 0.2022 / 0.272 |
+
+The positive path reproduces the numbers already on record to the last digit, so
+the gate blocks partial grids without perturbing a complete one.
