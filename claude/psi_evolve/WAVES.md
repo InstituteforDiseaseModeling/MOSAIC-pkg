@@ -2297,3 +2297,31 @@ replicate floor, that is not established.
 
 The fold ladder is **CLOSED**. Nothing in it beats the N8 architecture change
 (R2_corr 0.321, MAE 0.1967), which remains the best psi in the programme.
+
+### Wave 31b — F3 blended, and the R2_corr rule demoted
+
+F3 + C12c_C11h = **0.1540** overall, **+3.9%** at weeks 9-13, against N8's
+0.1511 / +5.7%. My "+" prediction was wrong again, and the miss is informative.
+
+Blend MAE against raw R2_corr, all six arms:
+
+| arm | raw R2_corr | blended MAE |
+|---|---|---|
+| N8 | **0.321** | **0.1511** |
+| F3 | 0.318 | **0.1540 (worst)** |
+| D9b | 0.302 | 0.1528 |
+| F4 | 0.297 | **0.1515 (2nd best)** |
+| F1 | 0.287 | 0.1537 |
+
+The arm with the second-best R2_corr blends **worst**; the arm with the
+second-worst blends **second best**. The wave-27 selection rule ("judge a psi
+for blending on R2_corr, not MAE") explained the single case it was built on —
+D9b's better raw MAE but worse blend than N8 — and does not generalise. It is
+demoted from a rule to that one observation.
+
+**The robust reading.** Every reasonable psi variant blends to essentially the
+same place: **0.1511 to 0.1540**, a 1.9% span close to the replicate floor. That
+follows directly from wave 29 — the blend takes its *level* from persistence and
+uses psi only for a thin shape contribution, with λ = 0 in 40% of cells. The
+choice of psi variant is therefore nearly irrelevant to the blended product, and
+what little separation exists is not reliably predicted by any raw metric tested.
