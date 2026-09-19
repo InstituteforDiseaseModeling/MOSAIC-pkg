@@ -3,7 +3,8 @@
 # psi agent's run_arm.R / output paths on the same host.
 #
 # env: ARM_ID, N_SIMS, SEED, CORES, T_CUT, ISO, PATCH (optional R file)
-.libPaths(c("~/R/library", .libPaths()))
+LIB <- Sys.getenv("LIB", "~/R/library")
+.libPaths(c(LIB, "~/R/library", .libPaths()))
 suppressMessages(library(MOSAIC))
 
 ARM   <- Sys.getenv("ARM_ID", "baseline")
@@ -17,7 +18,7 @@ OUT   <- file.path("~/inflab", sprintf("%s_%s_n%d_s%d", ARM, ISO, N, SEED))
 
 cat(sprintf("[inflab] arm=%s iso=%s n=%d seed=%d cores=%d t_cut=%s\n",
             ARM, ISO, N, SEED, CORES, TCUT))
-cat(sprintf("[inflab] MOSAIC %s\n", as.character(packageVersion("MOSAIC"))))
+cat(sprintf("[inflab] MOSAIC %s from %s\n", as.character(packageVersion("MOSAIC")), LIB))
 
 set_root_directory("~/MOSAIC")
 config <- get_location_config(iso = ISO)
