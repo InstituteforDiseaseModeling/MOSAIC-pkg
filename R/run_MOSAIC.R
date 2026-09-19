@@ -285,7 +285,12 @@
       PATHS = PATHS,
       priors = priors,
       config = config,
-      seed = sim_id,
+      # INFERENCE LAB: draw-block offset. MOSAIC is fully deterministic given
+      # (config, priors, control, n) because the parameter-sampling seed IS the
+      # simulation index -- verified: two runs at n=10,000 give bit-identical
+      # likelihoods. Replicates therefore require disjoint DRAW BLOCKS, not
+      # "different seeds". Default 0 reproduces stock behaviour exactly.
+      seed = sim_id + .mosaic_inflab_seed_offset(),
       sample_args = sampling_args,
       verbose = FALSE,
       validate = FALSE  # Skip per-sim validation (priors guarantee valid ranges)
@@ -724,6 +729,15 @@
 #'
 #' @seealso [mosaic_control_defaults()] for building control structures
 #' @export
+#' Inference-lab draw-block offset (0 = stock behaviour)
+#' @return integer offset added to each simulation's parameter-sampling seed
+#' @keywords internal
+#' @noRd
+.mosaic_inflab_seed_offset <- function() {
+     v <- suppressWarnings(as.integer(Sys.getenv("INFLAB_SEED_OFFSET", "0")))
+     if (is.na(v)) 0L else v
+}
+
 run_MOSAIC <- function(config,
                        priors,
                        dir_output,
