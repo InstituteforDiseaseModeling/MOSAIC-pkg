@@ -1,0 +1,1 @@
+{"schema":"mosaic-inference-lab/v1","fields":["id","ts","phase","base_sha","arm_sha","tier","config","n","seeds","primary_metric","paired_mean","paired_sd","controls_ok","verdict","predicted","observed","reasoning"],"note":"one line per lifecycle event; append only"}
