@@ -40,6 +40,15 @@ ARM=${1:-P000}; N=${2:-9}; SEEDS=${3:-10}; THREADS=${4:-9}
 # The user has mandated a standing 40-core reservation for another agent's
 # MOSAIC calibrations; PSI_RESERVE_CORES enforces it at the launch boundary.
 NICE=${PSI_NICE:-15}
+# PRIVATE R LIBRARY. dugong's ~/R/library is shared, and on 2026-09-18 another
+# agent's install downgraded MOSAIC there from 0.91.12 to 0.90.5 UNDER A LIVE
+# WAVE -- killing P000H at launch with "unused arguments (step_days, test_days,
+# min_train_years)" because the older .psi_make_rw_cv_steps has no day-based
+# knobs. Arms already running were unharmed (they had loaded the newer package
+# at startup, and their manifests record mosaic_version 0.91.12), but every new
+# process was broken. Prepending a private lib makes psi arms immune to whatever
+# else is installed in the shared one; dependencies still resolve behind it.
+PSI_LIB=${PSI_LIB:-$HOME/Rlib_psi}
 cd "$HOME/psi_evolve" || exit 1
 
 # PROTOCOL section 6 kill switch: agents check for STOP before any launch.
@@ -74,6 +83,7 @@ for i in $(seq 0 $((N-1))); do
       MOSAIC_PSI_CORE_BUDGET="$THREADS" MOSAIC_PSI_TF_INTRAOP="$THREADS" \
       MOSAIC_PSI_TF_INTEROP=2 OMP_NUM_THREADS="$THREADS" \
       OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
+      R_LIBS="$PSI_LIB:$HOME/R/library" \
       nohup nice -n "$NICE" "$HOME/bin/r-mosaic-Rscript" run_arm.R \
       > "logs/${ARM}_shard${i}.log" 2>&1 &
   sleep 1
