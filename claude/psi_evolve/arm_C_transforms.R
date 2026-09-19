@@ -203,7 +203,13 @@ for (fl in unique(B$fold)) {
   }
 }
 # C10 lambda: minimise MAE of the blend on EARLIER cutoffs' realised blocks
-B$c10_lam <- 1
+# DEFAULT LAMBDA = 0, i.e. PURE PERSISTENCE, not pure psi.
+# This initialised to 1 (pure psi), so the first cutoff -- which has no earlier
+# blocks to estimate lambda from -- ran as raw psi, the weakest forecast on the
+# board. Absent evidence that psi helps, the safe prior is the STRONG baseline.
+# Measured cost of the wrong prior: the blend LOST to persistence at weeks 1-8
+# (-5.0% and -8.7%) despite winning at 9-13.
+B$c10_lam <- 0
 for (fl in sort(unique(B$fold))) {
   gi <- match(fl, grid$block); T0 <- grid$cutoff[gi]
   hist <- list()
@@ -253,7 +259,7 @@ for (fl in unique(B$fold)) for (iso in unique(B$iso_code[B$fold == fl])) {
 #   C12b  lambda by horizon week only (pooled) -- recorded to show why it fails
 #   C12c  lambda_country x horizon_shape       -- the intended form
 # Both estimated on EARLIER cutoffs' realised blocks only.
-B$c12b_lam <- 1; B$c12c_lam <- 1
+B$c12b_lam <- 0; B$c12c_lam <- 0   # same prior fix
 for (fl in sort(unique(B$fold))) {
   gi <- match(fl, grid$block); T0 <- grid$cutoff[gi]
   hist <- list()
@@ -292,7 +298,7 @@ for (fl in sort(unique(B$fold))) {
     print(round(hw, 2))
   }
 }
-B$c12b_lam[!is.finite(B$c12b_lam)] <- 1; B$c12c_lam[!is.finite(B$c12c_lam)] <- 1
+B$c12b_lam[!is.finite(B$c12b_lam)] <- 0; B$c12c_lam[!is.finite(B$c12c_lam)] <- 0
 
 # ---- C7b: combination weight from OUT-OF-SAMPLE history, not pre-cutoff fit --
 # C7 failed for a diagnosed reason: lambda fitted on PRE-CUTOFF error came out
@@ -302,7 +308,7 @@ B$c12b_lam[!is.finite(B$c12b_lam)] <- 1; B$c12c_lam[!is.finite(B$c12c_lam)] <- 1
 # have already revealed it. At cutoff T_i, choose lambda per country on the
 # realised out-of-sample blocks of cutoffs T_1..T_(i-1), truncated to dates <= T_i.
 # Leakage-clean, and it is how an operational system would learn its own decay.
-B$c7b_lam <- 1
+B$c7b_lam <- 0   # same prior fix: default to the baseline, not to psi
 for (fl in sort(unique(B$fold))) {
   gi <- match(fl, grid$block); T0 <- grid$cutoff[gi]
   hist <- list()
@@ -484,6 +490,45 @@ cat("
 accs$vs_P001_MAE <- round(100*(accs$MAE - accs$MAE[accs$arm=="P001"])/accs$MAE[accs$arm=="P001"], 1)
 print(accs[order(accs$MAE), ], row.names = FALSE, digits = 4)
 cat("(MAE lower = better; vs_P001_MAE is % change, negative = improvement)
+
+")
+
+# ---- PER-HORIZON MAE for the leading variant vs persistence ---------------
+# The headline MAE averages weeks 1-13, and persistence is near-unbeatable at
+# week 1 where the last observation IS the answer. The programme's target is the
+# 12-WEEK horizon, so the number that matters is the far end. Computed from the
+# SAME leakage-clean variants above (lambda estimated per cutoff from earlier
+# cutoffs only) -- a hand-held version of this analysis with one hardcoded
+# lambda curve applied to every block would leak the curve into the early ones.
+ph <- function(v, nm) {
+  m <- merge(v[v$fold %in% SEL_FOLDS, c("iso_code","date","fold","psi")],
+             obs, by = c("iso_code","date"))
+  m$wk <- NA_integer_
+  for (fl in unique(m$fold)) {
+    T0 <- grid$cutoff[match(fl, grid$block)]
+    j <- m$fold == fl
+    m$wk[j] <- as.integer(floor(as.numeric(m$date[j] - (T0 + 14L)) / 7)) + 1L
+  }
+  m <- m[is.finite(m$observed) & m$wk >= 1 & m$wk <= 13, ]
+  m$w <- W$w_sqrt[match(m$iso_code, W$iso_code)]
+  do.call(rbind, lapply(list(1:4, 5:8, 9:13), function(rg) {
+    z <- m[m$wk %in% rg, ]
+    data.frame(arm = nm, weeks = sprintf("%d-%d", min(rg), max(rg)),
+               MAE = sum(z$w*abs(z$observed - z$psi))/sum(z$w), n = nrow(z),
+               stringsAsFactors = FALSE) }))
+}
+pers_v <- B; pers_v$psi <- B$pers
+lead <- if ("C12c_C11h" %in% names(variants)) "C12c_C11h" else "C10_C11h"
+phz <- rbind(ph(variants[[lead]], lead), ph(pers_v, "persistence"),
+             ph(variants[["P001"]], "raw_psi"))
+cat("
+=== MAE BY HORIZON (leakage-clean lambda, selection blocks) ===
+")
+w1 <- reshape(phz[, c("arm","weeks","MAE")], idvar="weeks", timevar="arm", direction="wide")
+names(w1) <- sub("^MAE[.]", "", names(w1))
+w1$blend_vs_pers <- sprintf("%+.1f%%", 100*(w1$persistence - w1[[lead]])/w1$persistence)
+print(w1, row.names = FALSE, digits = 4)
+cat("(positive blend_vs_pers = the blend BEATS persistence at that horizon)
 
 ")
 
