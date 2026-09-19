@@ -178,6 +178,69 @@ for (fl in unique(B$fold)) {
 cat(sprintf("C9d: correction applied to %.1f%% of block rows\n",
             100 * mean(B$c9d_sh != 0)))
 
+# ---- C10/C11: use PERSISTENCE, the strongest baseline, not climatology ------
+# The accuracy diagnostics say psi has weak-but-nonzero SHAPE (R2_corr 0.10-0.20)
+# and catastrophically wrong LEVEL (R2_sse -1.25). Persistence is the mirror
+# image: it is the last 4 observed weeks held flat, so it has the level right by
+# construction and no shape at all -- and it is the best forecast on the board
+# (MAE 0.1490 vs production psi 0.2229). Every combination arm so far blended
+# psi with CLIMATOLOGY (MAE 0.1975), the weaker of the two baselines. Blending
+# with persistence has never been tried.
+#   C10  lambda*psi + (1-lambda)*persistence, lambda per country from EARLIER
+#        cutoffs' realised out-of-sample MAE (leakage-clean, as in C7b)
+#   C11  keep psi's SHAPE, take persistence's LEVEL: shift psi in logit space so
+#        its block median matches the persistence level
+#   C11h C11 at half strength
+# Persistence level uses only observations at or before the cutoff.
+B$pers <- NA_real_
+for (fl in unique(B$fold)) {
+  T0 <- grid$cutoff[match(fl, grid$block)]
+  for (iso in unique(B$iso_code[B$fold == fl])) {
+    oi <- obs[obs$iso_code == iso & obs$date <= T0, ]
+    if (nrow(oi) < 4L) next
+    oi <- oi[order(oi$date), ]
+    B$pers[B$fold == fl & B$iso_code == iso] <- mean(utils::tail(oi$observed, 4), na.rm = TRUE)
+  }
+}
+# C10 lambda: minimise MAE of the blend on EARLIER cutoffs' realised blocks
+B$c10_lam <- 1
+for (fl in sort(unique(B$fold))) {
+  gi <- match(fl, grid$block); T0 <- grid$cutoff[gi]
+  hist <- list()
+  for (k in seq_len(gi - 1L)) {
+    q <- rd(k); if (is.null(q)) next
+    Tk <- grid$cutoff[k]
+    z <- q[q$date >= Tk + 15L & q$date <= min(grid$test_end[k], T0), c("iso_code","date","psi")]
+    if (!nrow(z)) next
+    z$pers <- NA_real_
+    for (iso in unique(z$iso_code)) {
+      oi <- obs[obs$iso_code == iso & obs$date <= Tk, ]
+      if (nrow(oi) < 4L) next
+      oi <- oi[order(oi$date), ]
+      z$pers[z$iso_code == iso] <- mean(utils::tail(oi$observed, 4), na.rm = TRUE)
+    }
+    hist[[length(hist)+1L]] <- z
+  }
+  if (!length(hist)) next
+  H <- merge(do.call(rbind, hist), obs, by = c("iso_code","date"))
+  H <- H[is.finite(H$observed) & is.finite(H$pers), ]
+  lams <- seq(0, 1, by = 0.05)
+  for (iso in unique(B$iso_code[B$fold == fl])) {
+    h <- H[H$iso_code == iso, ]; if (nrow(h) < 10L) next
+    mae <- vapply(lams, function(L) mean(abs(h$observed - (L*h$psi + (1-L)*h$pers))), numeric(1))
+    B$c10_lam[B$fold == fl & B$iso_code == iso] <- lams[which.min(mae)]
+  }
+}
+cat("C10 lambda on psi (median over blocks, per country):\n")
+print(round(tapply(B$c10_lam, B$iso_code, stats::median), 2))
+# C11 shift: match psi's block median to the persistence level, in logit space
+B$c11_sh <- 0
+for (fl in unique(B$fold)) for (iso in unique(B$iso_code[B$fold == fl])) {
+  j <- which(B$fold == fl & B$iso_code == iso)
+  if (!length(j) || !is.finite(B$pers[j[1]])) next
+  B$c11_sh[j] <- lg(B$pers[j[1]]) - stats::median(lg(B$psi[j]))
+}
+
 # ---- C7b: combination weight from OUT-OF-SAMPLE history, not pre-cutoff fit --
 # C7 failed for a diagnosed reason: lambda fitted on PRE-CUTOFF error came out
 # 1.00 for 14 of 16 countries, because psi is excellent in-sample (0.273 vs
@@ -267,6 +330,10 @@ print(round(tapply(B$c7b_lam, B$iso_code, stats::median), 2))
 variants <- list(
   P001    = B,
   C9d     = shift_all(B, B$c9d_sh),
+  C10     = combo_all(B, B$c10_lam, B$pers),
+  C11     = shift_all(B, B$c11_sh),
+  C11h    = shift_all(B, 0.5 * B$c11_sh),
+  C10_C11h= combo_all(shift_all(B, 0.5 * B$c11_sh), B$c10_lam, B$pers),
   C7b     = combo_all(B, B$c7b_lam, B$c7_clim),
   C7c     = combo_all(B, B$c7c_lam, B$c7_clim),
   C7c_C9d = combo_all(shift_all(B, B$c9d_sh), B$c7c_lam, B$c7_clim),
@@ -281,6 +348,88 @@ variants <- list(
 folds <- data.frame(fold = grid$block, train_end = grid$cutoff,
                     test_start = grid$test_start, test_end = grid$test_end)
 folds <- folds[folds$fold %in% unique(B$fold), ]
+
+# ---- ACCURACY TABLE: MAE / RMSE / R2 / WIS, the units that matter ---------
+# The skill-ratio S divides by a per-country baseline and is ~300x noisier
+# across two fits of the same model than MAE is (28.41% vs 0.09%). Report the
+# direct measures so a real improvement is not buried in ratio noise.
+wis_fn <- getFromNamespace(".rcv_wis", "MOSAIC")
+SEL_FOLDS <- grid$block[grid$split == "selection"]
+acc <- function(v, nm) {
+  # SELECTION BLOCKS ONLY. The first version of this table ran over all 9
+  # blocks, which includes the 3 LOCKED confirmation blocks -- a PROTOCOL 5.3
+  # breach (the holdout is read once, after a selection win). Caught by P001's
+  # MAE disagreeing with accuracy_table.R (0.1924 vs 0.2022).
+  v <- v[v$fold %in% SEL_FOLDS, , drop = FALSE]
+  m <- merge(v[, c("iso_code","date",QC)], obs, by = c("iso_code","date"))
+  m <- m[is.finite(m$observed) & is.finite(m$psi), ]
+  if (!nrow(m)) return(NULL)
+  per <- do.call(rbind, lapply(split(m, m$iso_code), function(z) {
+    if (nrow(z) < 4) return(NULL)
+    data.frame(iso_code = z$iso_code[1],
+               mae = mean(abs(z$observed - z$psi)),
+               sse = sum((z$observed - z$psi)^2),
+               sst = sum((z$observed - mean(z$observed))^2),
+               r2  = suppressWarnings(stats::cor(z$observed, z$psi))^2,
+               wis = mean(wis_fn(z$observed, z$psi, z$q25, z$q75, z$q025, z$q975), na.rm = TRUE),
+               stringsAsFactors = FALSE) }))
+  wt <- W$w_sqrt[match(per$iso_code, W$iso_code)]; wt <- wt/sum(wt)
+  data.frame(arm = nm, MAE = sum(wt*per$mae), R2_corr = sum(wt*per$r2, na.rm=TRUE),
+             R2_sse = 1 - sum(per$sse)/sum(per$sst), WIS = sum(wt*per$wis, na.rm=TRUE),
+             stringsAsFactors = FALSE)
+}
+W <- utils::read.csv(file.path(HERE,"weights_frozen.csv"), stringsAsFactors=FALSE)
+
+# Fold the REFIT arms into the SAME table on the SAME cells. Previously the
+# transforms table and accuracy_table.R used slightly different cell filters, so
+# P001's MAE differed between them (0.2229 vs 0.2022) and the two sets of arms
+# were not comparable. One table, one cell set.
+for (a in c("P000","P000R","N8","N5","D9b","N6")) {
+  dr <- file.path(HERE, paste0("psi_cache_", a)); if (!dir.exists(dr)) next
+  rr <- list()
+  for (i in seq_len(nrow(grid))) {
+    f <- file.path(dr, sprintf("psi_%s.csv", format(grid$cutoff[i]))); if (!file.exists(f)) next
+    q <- utils::read.csv(f, stringsAsFactors = FALSE); q$date <- as.Date(q$date)
+    q <- q[q$iso_code %in% pool & q$date >= grid$test_start[i] & q$date <= grid$test_end[i], ]
+    if (!nrow(q)) next
+    q$fold <- grid$block[i]; rr[[length(rr)+1L]] <- q[, c("iso_code","date","fold",QC)]
+  }
+  if (length(rr)) variants[[a]] <- do.call(rbind, rr)
+}
+accs <- do.call(rbind, lapply(names(variants), function(nm) acc(variants[[nm]], nm)))
+# baselines on the same cells
+bl_fn <- getFromNamespace(".rcv_baseline", "MOSAIC")
+bl_rows <- list()
+for (bn in c("persistence","seasonal")) {
+  pr <- list()
+  for (fl in intersect(unique(B$fold), SEL_FOLDS)) {
+    T0 <- grid$cutoff[match(fl, grid$block)]
+    bk <- B[B$fold == fl, c("iso_code","date")]
+    for (iso in unique(bk$iso_code)) {
+      z <- bk[bk$iso_code==iso, ]
+      is_df <- obs[obs$iso_code==iso & obs$date <= T0 & is.finite(obs$observed), ]
+      if (nrow(is_df) < 8) next
+      b <- bl_fn(is_df, z$date, bn); if (!any(is.finite(b$point))) next
+      o <- merge(z, obs, by=c("iso_code","date"))
+      if (nrow(o) < 4) next
+      pr[[length(pr)+1L]] <- data.frame(iso_code=iso, mae=mean(abs(o$observed - b$point[seq_len(nrow(o))]), na.rm=TRUE))
+    }
+  }
+  if (length(pr)) { q <- do.call(rbind, pr)
+    per <- stats::aggregate(mae ~ iso_code, q, mean)
+    wt <- W$w_sqrt[match(per$iso_code, W$iso_code)]; wt <- wt/sum(wt)
+    bl_rows[[bn]] <- data.frame(arm=paste0("[",bn,"]"), MAE=sum(wt*per$mae),
+                                R2_corr=NA_real_, R2_sse=NA_real_, WIS=NA_real_) }
+}
+accs <- rbind(accs, do.call(rbind, bl_rows))
+cat("
+=== ACCURACY (burden-weighted, 12-week OOS blocks) ===
+")
+accs$vs_P001_MAE <- round(100*(accs$MAE - accs$MAE[accs$arm=="P001"])/accs$MAE[accs$arm=="P001"], 1)
+print(accs[order(accs$MAE), ], row.names = FALSE, digits = 4)
+cat("(MAE lower = better; vs_P001_MAE is % change, negative = improvement)
+
+")
 
 out <- list()
 for (nm in names(variants)) {

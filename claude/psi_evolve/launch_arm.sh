@@ -31,16 +31,30 @@
 #   PSI_FILM_INPUT=1 ./launch_arm.sh N5 9 10 18               # input-FiLM
 #   PSI_GAMMA_SCALE=2 ./launch_arm.sh N6 9 10 18              # sign-permissive
 set -u
-ARM=${1:-P000}; N=${2:-9}; SEEDS=${3:-10}; THREADS=${4:-18}
+ARM=${1:-P000}; N=${2:-9}; SEEDS=${3:-10}; THREADS=${4:-9}
+# SHARE THE BOX. dugong is also used for MOSAIC calibrations by other work, so
+# psi arms run at low priority and never claim the whole machine: a nice-0
+# calibration preempts a nice-15 arm, and the arm soaks up whatever is idle.
+# Measured 2026-09-18: 18 arm processes at THREADS=9 drew 94 of 176 cores and
+# 93 GB of 1511 GB, so memory is never the constraint -- cores are.
+NICE=${PSI_NICE:-15}
 cd "$HOME/psi_evolve" || exit 1
 
 # PROTOCOL section 6 kill switch: agents check for STOP before any launch.
 if [ -f STOP ]; then echo "STOP file present -- refusing to launch (PROTOCOL 6)."; exit 1; fi
 
-# Concurrency cap is hard: MOSAIC_PSI_CORE_BUDGET = floor(176 / n_processes).
-CAP=$(( 176 / N ))
+# Concurrency cap: leave at least a quarter of the box for other users, so the
+# budget is floor(132 / n_processes) rather than floor(176 / n_processes).
+RESERVE=${PSI_RESERVE_CORES:-44}
+CAP=$(( (176 - RESERVE) / N ))
 if [ "$THREADS" -gt "$CAP" ]; then
-  echo "THREADS=$THREADS exceeds floor(176/$N)=$CAP (PROTOCOL 6). Refusing to launch."; exit 1
+  echo "THREADS=$THREADS exceeds floor((176-$RESERVE)/$N)=$CAP -- that would leave under"
+  echo "$RESERVE cores for other work (PROTOCOL 6). Refusing to launch."; exit 1
+fi
+# Refuse to pile on if the box is already busy with someone else's work.
+OTHER=$(ps -eo pcpu,args --sort=-pcpu | grep -v "[r]un_arm.R" | awk 'NR>1 && $1>50 {c+=$1} END {printf "%.0f", c/100}')
+if [ "${OTHER:-0}" -gt 60 ]; then
+  echo "another workload is using ~${OTHER} cores; refusing to launch on top of it."; exit 1
 fi
 
 mkdir -p logs "psi_cache_${ARM}"
@@ -58,13 +72,13 @@ for i in $(seq 0 $((N-1))); do
       MOSAIC_PSI_CORE_BUDGET="$THREADS" MOSAIC_PSI_TF_INTRAOP="$THREADS" \
       MOSAIC_PSI_TF_INTEROP=2 OMP_NUM_THREADS="$THREADS" \
       OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 \
-      nohup "$HOME/bin/r-mosaic-Rscript" run_arm.R \
+      nohup nice -n "$NICE" "$HOME/bin/r-mosaic-Rscript" run_arm.R \
       > "logs/${ARM}_shard${i}.log" 2>&1 &
   sleep 1
 done
 sleep 10
 echo "ARM=$ARM shards=$N seeds=$SEEDS threads=$THREADS geom=${PSI_GEOM:-p000} trunk=${PSI_TRUNK:-lstm} feat=${PSI_FEATURE_SET:-v7.3} epoch_select=${PSI_EPOCH_SELECT:-0}"
-echo "running processes: $(pgrep -fc 'run_arm.R')"
+echo "running processes: $(pgrep -fc 'run_arm.R')  (nice $NICE, reserving >= $RESERVE cores)"
 echo
 echo "VERIFY BEFORE WALKING AWAY (wave-4 lesson): the inner-fold count printed in"
 echo "  logs/${ARM}_shard0.log must match PROTOCOL section 6's table for this geometry."

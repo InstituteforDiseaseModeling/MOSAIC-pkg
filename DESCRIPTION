@@ -1,7 +1,7 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.91.12
+Version: 0.91.13
 Date: 2026-07-09
 Authors@R: c(
           person("John R", "Giles",
@@ -123,5 +123,4 @@ Config/testthat/parallel: true
 Config/testthat/start-first: est_initial_R_parallel, optimize_ensemble_subset,
   rolling_cv_empty_val_skip, calc_model_ensemble, est_initial_E_I,
   ensemble_cluster_robust
-Config/roxygen2/version: 8.0.0
-RoxygenNote: 7.3.3
+Config/roxygen2/version: 8.1.0
