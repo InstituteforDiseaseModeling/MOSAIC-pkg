@@ -3,7 +3,8 @@
 # psi agent's run_arm.R / output paths on the same host.
 #
 # env: ARM_ID, N_SIMS, SEED, CORES, T_CUT, ISO, PATCH (optional R file)
-.libPaths(c("~/R/library", .libPaths()))
+LIB <- Sys.getenv("LIB", "~/R/library")
+.libPaths(c(LIB, "~/R/library", .libPaths()))
 suppressMessages(library(MOSAIC))
 
 ARM   <- Sys.getenv("ARM_ID", "baseline")
@@ -17,7 +18,7 @@ OUT   <- file.path("~/inflab", sprintf("%s_%s_n%d_s%d", ARM, ISO, N, SEED))
 
 cat(sprintf("[inflab] arm=%s iso=%s n=%d seed=%d cores=%d t_cut=%s\n",
             ARM, ISO, N, SEED, CORES, TCUT))
-cat(sprintf("[inflab] MOSAIC %s\n", as.character(packageVersion("MOSAIC"))))
+cat(sprintf("[inflab] MOSAIC %s from %s\n", as.character(packageVersion("MOSAIC")), LIB))
 
 set_root_directory("~/MOSAIC")
 config <- get_location_config(iso = ISO)
@@ -45,6 +46,19 @@ ctrl$sampling$sample_tau_i          <- FALSE
 ctrl$sampling$sample_mobility_gamma <- FALSE
 ctrl$sampling$sample_mobility_omega <- FALSE
 ctrl$sampling$sample_kappa          <- FALSE   # fixed at 1e6 by decision
+
+# ---- likelihood settings from the environment (control-level; no reinstall)
+lk_env <- c(nb_k_min_cases="NB_K_CASES", nb_k_min_deaths="NB_K_DEATHS",
+            weight_cases="W_CASES", weight_deaths="W_DEATHS",
+            weight_peak_timing="W_PKT", weight_peak_magnitude="W_PKM",
+            weight_cumulative_total="W_CUM", weight_wis="W_WIS")
+for (nm in names(lk_env)) {
+     v <- Sys.getenv(lk_env[[nm]], "")
+     if (nzchar(v)) {
+          ctrl$likelihood[[nm]] <- as.numeric(v)
+          cat(sprintf("[inflab] likelihood$%s = %s\n", nm, v))
+     }
+}
 
 # ---- arm-specific patch: may modify `config`, `priors`, `ctrl`, or the package
 if (nzchar(PATCH) && file.exists(PATCH)) {

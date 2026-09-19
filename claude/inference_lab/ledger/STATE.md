@@ -1,57 +1,79 @@
-# Inference lab — current state
+# Inference lab — current state (2026-09-19)
 
-**Base:** `main` @ v0.90.5 (`c947820a3`). Lab branch **`inference-lab`** cut from it.
-**Status:** queue pre-registered, nothing run yet.
+**Base:** `main` @ v0.90.5 (`c947820a3`). Lab branch `inference-lab` (+ `INFLAB_SEED_OFFSET` harness hook).
 **Standing decisions:** auto-promote within `inference-lab`, human gates `main`; resumable protocol
 (no scheduler); **inference machinery only**. See `../RESUME.md`.
 
-## Promoted stack (validated, in dependency order)
-_(empty)_
+## Arms built (all on branches, none merged toward main)
 
-## Queue — pre-registered, predictions recorded BEFORE running
+| arm | branch / sha | change | status |
+|---|---|---|---|
+| A1 | `arm/A1b` lineage, `77ec00d5d` | eps floor = max(0.5, 0.001*mean) | **RETIRED** — overcorrects, kills OOS deaths R2 (0.140 -> 0.001) |
+| **A1b** | `arm/A1b_v2` `69aa076c5` | eps floor = max(1e-4, 0.02*mean), channel-relative | **VALIDATED, 3 countries** |
+| A5 | `arm/A5` `adf370f07` | weekly block scoring (INFLAB_BLOCK_DAYS) | built, screened, not calibrated |
+| A1b+B2.2 | `arm/A1b_B22` `10da02a96` | divide mu_j derivation by (1 + mu_j_epidemic_factor) | measured; OUT of promotion scope (touches sampled params) |
+| FULL | `arm/A1b_B22` + control | + nbkC=20, pkT=0.25, cum=0.50, wis=0.50 | calibrating (3 countries, 30k) |
 
-Each row's prediction is a commitment. A wrong prediction is a result; an unrecorded one is waste.
+## Validated result — A1b at 30,000 draws, full calibration, 3 countries
 
-| id | hypothesis | predicted effect (primary = held-out WIS unless stated) | tier | depends on |
+| | R2 cases | bias cases | R2 deaths | bias deaths |
 |---|---|---|---|---|
-| **A1** | Replacing `-y*log(1e6)` with an eps-floored mean makes the LL a density again | deaths bias 3.27 -> ~1.3, cases 1.98 -> ~1.25 at identical subset; WIS improves; LL spread /8.4 | T1 | — |
-| **A5** | Weekly block scoring removes reporting artefacts and most of the VIF | signal-to-noise 6.11 -> ~43; WIS improves or holds; <=11% loss of discrimination | T1 | — |
-| **A4** | Reporting per-draw replicate SD exposes the winner's curse | no WIS change (diagnostic only); expect gap(rank1, rank2) < 2*sqrt(2)*SD on most runs | T0 | — |
-| **A3** | Common random numbers across draws differences out seed noise | `sd(log L-hat)` at fixed theta falls >=2x; between-draw ranking stabilises | T1 | — |
-| **A2** | Dispersion representing process + observation variance fixes the score noise | **115 replicates of one theta give ESS >> 10** (currently 3-13). This is the acceptance test | T1 | A1, A5 |
-| **A7** | `LL/tau-hat` composite adjustment calibrates the independence assumption | ESS 1.00 -> ~60/4,000 with A1+A5 in place | T1 | A1, A5 |
-| **C1** | A linear pre-simulation screen on theta predicts bad draws | AUC ~0.86; keeping 50% retains ~100% of the true top-0.1%; ~2x effective budget | T1 | — |
-| **B1** | Fixed-zeta fractional posterior over all retained draws | **ESS becomes Theta(n)**; CI width ratio 0.962 -> ~0.94; WIS holds or improves | T1 | A1, A2, A5 |
-| **B2** | Systematic resampling of ensemble members beats top-K | held-out WIS improves; member logL span widens toward the target distribution | T1 | B1 |
-| **B4** | Block-held-out subset selection removes the Caruana overfit | T1 gain smaller than in-sample gain (that gap IS the overfit); coverage improves | T1 | B1 |
-| **C3** | Per-location calibration identifies more parameters at lower cost | 1/10 -> ~7/10 location parameters identified; cost NEGATIVE | T2 | — |
-| **C4** | One weight-corrected proposal refit round | hit rate 0.5% -> ~3.5%; **ESS_IS still ~1.00** (predicted NOT to fix degeneracy) | T1 | A2 |
+| COD prod / **A1b** | 0.677 / **0.719** | 1.033 / **1.015** | 0.316 / **0.375** | 2.178 / **1.483** |
+| MOZ prod / **A1b** | 0.446 / **0.474** | 1.140 / **1.016** | 0.264 / 0.243 | 2.359 / **0.522** |
+| ETH prod / **A1b** | 0.797 / **0.802** | 1.230 / **1.123** | 0.368 / **0.378** | 2.870 / **1.479** |
 
-## Explicitly predicted NULL results (recording these matters as much)
-- **C4 will not fix ESS.** Already measured once; if the lab sees ESS improve, the harness is wrong.
-- **B1 alone will not fix the dimension problem.** Improvement is confined to ~5 identified
-  directions of 58. Expect marginal summaries to move little even when B1 works.
-- **Tempered-as-shipped is not a candidate.** It is 86x sharper than documented (96% of mass on one
-  draw). Superseded by B1.
+Wins R2-cases 3/3, bias-cases 3/3, bias-deaths 3/3, R2-deaths 2/3. **COD — the psi-saturated, least
+favourable country — shows the LARGEST gains.** Not an ETH artefact.
+Results: `/Users/johngiles/MOSAIC/output/inflab_multi30k/` (237 MB, 33 figures per run).
 
-## Deferred — OUT OF LAB SCOPE (measure freely, escalate with the number, never ship)
+## Key measurements (with their caveats)
 
-These came out of the review and are real, but they are epidemiological or structural commitments:
+- **MOSAIC calibration is fully deterministic** given (config, priors, control, n): `run_MOSAIC.R:288`
+  sets `seed = sim_id`. Replicates need disjoint draw BLOCKS.
+- **Draw-block instability:** 3 blocks, best logL within 4%, gave ETH R2_cases 0.797 / 0.019 / 0.371.
+- **|B| does NOT improve with size** (SUBSET-EXP): held-out WIS skill peaks at |B| ~ 25-250; shipped
+  115 is already inside the optimum. At |B| = n the weighted median becomes an all-zero forecast.
+- **The ranking statistic is the big lever** (SUBSET-EXP): replacing NB logL with normalised
+  training-window MAE gives held-out WIS skill 0.062 -> 0.424, cases bias 1.51 -> 0.99, deaths bias
+  2.19 -> 1.10, cov95 0.65 -> 0.92. Paired over 40 sub-pools, t = -6 to -37. **Larger than A1b +
+  B2.2 + shape terms combined.** ~15 lines. NOT YET TESTED beyond one country.
+- **B2.2 and weight_deaths=4 are SUBSTITUTES**, not complements: wd4 helps by +0.043 without B2.2 and
+  hurts by -0.030 with it. wd4 was compensating for the mis-levelled deaths channel.
+- **CFR (CFR-MATH):** the (1+eps) gap is live (chain residual 1.444 vs Gamma(3,6) median 1.446);
+  `mu_j_epidemic_factor` is backwards (observed CFR in flagged periods is 0.41-0.54x endemic);
+  `rho_deaths` cancels from the whole distribution -> pin it. **Deaths R2 ceiling: an oracle with
+  TRUE cases and TRUE CFR(t) reaches only 0.588** vs the model's 0.371 — judge deaths on bias, not R2.
 
-| item | evidence | why deferred |
-|---|---|---|
-| Left-truncate `zeta_ratio` at 1 | 16.3% of draws have asymptomatics shedding more than symptomatics; the code comment claims 1e-6 from a prior that does not ship | prior change |
-| Pin `rho_deaths`, `phi_2`/`omega_2`, drop `prop_S_initial` | all three provably inert (algebraic cancellation / `nu_2_jt` sums to zero / S is the simplex residual) | prior + parameter pinning |
-| Revisit `mu_j_epidemic_factor` | the v15.18 reshape was justified by "statistically UNIDENTIFIED"; that is now false and the mode moved the wrong way | prior change |
-| Deaths ~ Binomial(cases, CFR) | removes the +0.36 weekly residual double-count; makes CFR directly fitted | model structure |
-| SMC / `hmer` / IMIS | the structural fix for the proposal | new dependency (`IMIS`, `synlik` are CRAN-archived) |
+## CORRECTIONS to earlier lab claims (do not propagate the originals)
 
-## Open questions the lab should answer
-1. **Does a larger |B| predict better?** Unreadable today past 115. Rebuild at |B| in {60,115,500,2000},
-   score out-of-sample. ~30 min on dugong. **Highest-value single experiment; run it early.**
-2. Do T1 (ETH) verdicts transfer to T3 (40 locations)? Measure the transfer rate; if it is poor, the
-   ladder is wrong and the lab is optimising the wrong benchmark.
-3. What is `zeta` by held-out WIS, and how far is it from the implied `alpha ~ 2.65` observations?
+1. **"Likelihood carries zero information about R2"** — over-generalised. Measured on the top HALF of a
+   holdout-scored run. On the top 20% with full-series LL, Spearman(LL,R2) = 0.246. Discrimination is
+   weak and depends strongly on tail depth; it is not zero everywhere.
+2. **"A1b makes the likelihood 5x better at ranking bias"** — statistic artefact. `|bias-1|` caps
+   under-prediction at 1, so dead draws score near-perfect; ~50% of prior draws are dead. On the
+   symmetric `|log bias|` it is -0.84 vs -0.79, a small gain.
+3. **"Raising weight_deaths makes deaths bias worse"** (from LIKE) — falsified as a headline. wd=4 is
+   the best single setting on R2 discrimination WITHOUT B2.2. It does worsen bias discrimination, so
+   LIKE's covariance result survives on that axis only.
+4. **Screening individual draws measures the wrong object.** Production scores an ENSEMBLE of selected
+   draws; selected-draw R2 is ~0.13 where the ensemble reaches ~0.80. All screens now score the
+   ensemble median of the selected set.
 
-## Harness bugs found (must be empty before results are admissible)
-_(none yet)_
+## Harness bugs
+
+- **HB-01 (FIXED).** "Three seeds" produced bit-identical runs; MOSAIC is deterministic. The 2xSD gate
+  was non-functional (paired SD identically 0). Fixed by `INFLAB_SEED_OFFSET`.
+- **HB-02 (FIXED, my fault).** I ran `git checkout` in the SHARED read-only worktree while two agents
+  were reading it; both were affected. SUBSET-EXP's control arm silently produced A1b values
+  (`ll_base.rds` byte-identical to `ll_A1b.rds`). **Give every agent its own worktree at a pinned
+  SHA, and inject the arm's code explicitly for every arm including the control.** A control defined
+  as "whatever the default is" is not a control when the default can move.
+
+## Queue
+
+1. **FULL stack calibration** (running): A1b+B2.2+nbkC20+pkT.25+cum.50+wis.50, 3 countries, 30k.
+2. **MAE ranking statistic** — the largest untested lever. Needs T2 (MOZ/COD/NGA) before promotion.
+3. Per-country eps: MOZ overshoots to 0.522 under A1b; one relative constant may not fit every
+   country's deaths scale.
+4. A5 (weekly scoring) — screened, never calibrated; must be scored at weekly resolution to be fair.
+5. Held-out (t_cut) versions of the 3-country comparison; the 30k runs are full-data fits.
