@@ -671,7 +671,16 @@ sample_parameters <- function(
       g1_dwell <- 1 - exp(-g1)
       chain <- g1_dwell * rho / (rhod * chi)   # scalar (all globals)
 
-      mu_derived <- config_sampled$CFR_target * chain
+      # B2.2 (inference lab): the engine multiplies mu_j_baseline by
+      # (1 + mu_j_epidemic_factor) during epidemic ticks (sim_components.R:190-192),
+      # but this derivation targeted CFR_target WITHOUT that factor -- so realised
+      # CFR came out at CFR_target * (1 + eps). Measured across 19 production
+      # countries: chain residual median 1.444 [1.30, 1.66] against Gamma(3,6)'s
+      # median (1 + eps) of 1.446. Divide it back out so the derivation hits the
+      # target the engine actually realises.
+      epi_f <- config_sampled$mu_j_epidemic_factor
+      if (is.null(epi_f) || !all(is.finite(epi_f))) epi_f <- 0
+      mu_derived <- config_sampled$CFR_target * chain / (1 + epi_f)
 
       # Engine [0,1] bound (make_simulation_config L686): mu_j_baseline is a per-day
       # mortality hazard probability and the engine rejects mu > 1. The wider B2
