@@ -422,8 +422,15 @@ calc_log_likelihood_negbin <- function(observed,
      # carried +100.1% to +100.8% of the log-likelihood's between-draw variance,
      # so the median delta-AIC of ~9.6e5 described this constant rather than fit.
      # eps_j follows LIKE-01: a per-location background reporting rate.
-     eps_j <- max(0.5, 0.001 * mean(observed[is.finite(observed)], na.rm = TRUE))
-     if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 0.5
+     # A1b: eps must scale with the CHANNEL. LIKE-01's max(0.5, 0.001*mean) was
+     # calibrated on cases (mean ~30/day, so 0.5 is 2% of the signal); on deaths
+     # (ETH mean ~0.39/day) the same constant is 128% of the mean, flooring the
+     # predicted rate ABOVE the typical observed rate and destroying
+     # discrimination exactly where the deaths signal lives. Use a relative
+     # floor that reproduces ~0.5 for cases and scales down for deaths.
+     mo <- mean(observed[is.finite(observed)], na.rm = TRUE)
+     eps_j <- max(1e-4, 0.02 * mo)
+     if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 1e-4
      ll_vec <- numeric(length(observed))
 
      for (i in seq_along(observed)) {
@@ -673,8 +680,15 @@ calc_log_likelihood_poisson <- function(observed,
      # carried +100.1% to +100.8% of the log-likelihood's between-draw variance,
      # so the median delta-AIC of ~9.6e5 described this constant rather than fit.
      # eps_j follows LIKE-01: a per-location background reporting rate.
-     eps_j <- max(0.5, 0.001 * mean(observed[is.finite(observed)], na.rm = TRUE))
-     if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 0.5
+     # A1b: eps must scale with the CHANNEL. LIKE-01's max(0.5, 0.001*mean) was
+     # calibrated on cases (mean ~30/day, so 0.5 is 2% of the signal); on deaths
+     # (ETH mean ~0.39/day) the same constant is 128% of the mean, flooring the
+     # predicted rate ABOVE the typical observed rate and destroying
+     # discrimination exactly where the deaths signal lives. Use a relative
+     # floor that reproduces ~0.5 for cases and scales down for deaths.
+     mo <- mean(observed[is.finite(observed)], na.rm = TRUE)
+     eps_j <- max(1e-4, 0.02 * mo)
+     if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 1e-4
      ll_vec <- numeric(length(observed))
 
      for (i in seq_along(observed)) {
