@@ -415,26 +415,22 @@ calc_log_likelihood_negbin <- function(observed,
           k <- k_min
      }
 
-     # Compute weighted log-likelihood with proportional penalty for zero predictions
+     # Compute weighted log-likelihood. Every cell goes through the density.
+     # A1 (inference lab): epsilon-floored mean instead of a magnitude-proportional
+     # penalty for zero predictions. The old branch returned `-observed[i] *
+     # log(1e6)` -- a loss LINEAR in the observed count, not a log-density. It
+     # carried +100.1% to +100.8% of the log-likelihood's between-draw variance,
+     # so the median delta-AIC of ~9.6e5 described this constant rather than fit.
+     # eps_j follows LIKE-01: a per-location background reporting rate.
+     eps_j <- max(0.5, 0.001 * mean(observed[is.finite(observed)], na.rm = TRUE))
+     if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 0.5
      ll_vec <- numeric(length(observed))
-     
+
      for (i in seq_along(observed)) {
-          # Option 3: Proportional penalty for impossible predictions
-          if (estimated[i] <= 0 && observed[i] > 0) {
-               # Penalty scales with magnitude of failure
-               ll_vec[i] <- -observed[i] * log(1e6)  # -13.8 per observed unit
-               if (verbose && i == 1) {  # Report first occurrence
-                    message(sprintf("NegBin: Applying proportional penalty for zero prediction (obs=%d)", observed[i]))
-               }
-          } else if (estimated[i] <= 0 && observed[i] == 0) {
-               # Perfect match when both are zero
-               ll_vec[i] <- 0
-          } else {
-               # Normal NegBin calculation
-               # Unified epsilon floor (1e-10) matching Poisson path.
+          {
                # Python port: branch on k == Inf to use scipy.stats.poisson
                # instead of scipy.stats.nbinom (which doesn't handle size=Inf).
-               est_safe <- max(estimated[i], 1e-10)
+               est_safe <- max(estimated[i], eps_j)
                if (is.infinite(k)) {
                     # Poisson limit
                     ll_vec[i] <- observed[i] * log(est_safe) - est_safe - lgamma(observed[i] + 1)
@@ -670,25 +666,20 @@ calc_log_likelihood_poisson <- function(observed,
      }
 
 
-     # Compute Poisson log-likelihood with proportional penalty for zero predictions
+     # Compute Poisson log-likelihood. Every cell goes through the density.
+     # A1 (inference lab): epsilon-floored mean instead of a magnitude-proportional
+     # penalty for zero predictions. The old branch returned `-observed[i] *
+     # log(1e6)` -- a loss LINEAR in the observed count, not a log-density. It
+     # carried +100.1% to +100.8% of the log-likelihood's between-draw variance,
+     # so the median delta-AIC of ~9.6e5 described this constant rather than fit.
+     # eps_j follows LIKE-01: a per-location background reporting rate.
+     eps_j <- max(0.5, 0.001 * mean(observed[is.finite(observed)], na.rm = TRUE))
+     if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 0.5
      ll_vec <- numeric(length(observed))
-     
+
      for (i in seq_along(observed)) {
-          # Option 3: Proportional penalty for impossible predictions
-          if (estimated[i] <= 0 && observed[i] > 0) {
-               # Penalty scales with magnitude of failure
-               ll_vec[i] <- -observed[i] * log(1e6)  # -13.8 per observed unit
-               if (verbose && i == 1) {  # Report first occurrence
-                    message(sprintf("Poisson: Applying proportional penalty for zero prediction (obs=%d)", observed[i]))
-               }
-          } else if (estimated[i] <= 0 && observed[i] == 0) {
-               # Perfect match when both are zero
-               ll_vec[i] <- 0
-          } else {
-               # Normal Poisson calculation
-               est_safe <- max(estimated[i], 1e-10)
-               ll_vec[i] <- dpois(observed[i], est_safe, log = TRUE)
-          }
+          est_safe <- max(estimated[i], eps_j)
+          ll_vec[i] <- dpois(observed[i], est_safe, log = TRUE)
      }
      ll <- sum(weights * ll_vec)
 
