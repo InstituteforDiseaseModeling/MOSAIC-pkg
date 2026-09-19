@@ -89,7 +89,23 @@ GEOM <- list(
   F2 = list(step_days = 14L, test_days = 84L, min_test_days = 84L,
             rw_gap_weeks = 2L, min_train_years = 4),      # 1351 folds
   F3 = list(step_days = 28L, test_days = 84L, min_test_days = 84L,
-            rw_gap_weeks = 2L, min_train_years = 2)       # 912 folds
+            rw_gap_weeks = 2L, min_train_years = 2),      # 912 folds
+  # F5 completes the 2x2 that F4/F1/F3 imply. Matched to F4 in EVERY parameter
+  # except the grid start, so it isolates history depth at a non-overlapping
+  # stride: F1 vs F4 said denser stride HURTS (+1.8%), F3 vs F1 said an earlier
+  # start HELPS (-2.1%), and stride 84 + early start is the untested cell.
+  F5 = list(step_days = 84L, test_days = 84L, min_test_days = 84L,
+            rw_gap_weeks = 2L, min_train_years = 2),      # ~142 -> ~230 folds
+  # F6 is the user's design: test window == stride, so inner-CV test folds TILE
+  # the IS timeline without overlap (each IS observation is held out exactly
+  # once), and the grid starts at the first date with a 75/25 PER-FOLD
+  # train:test ratio -- 90d test => 270d train => min_train_years = 270/365.25.
+  # That is non-redundant AND deep (91% of the IS timeline used as inner test),
+  # which is the combination F4 (non-overlapping but shallow) and F3 (deep but
+  # 3x redundant) each miss. 60/40 was considered and rejected: it adds only
+  # 3pp of coverage while its first fold trains on ~6 sequences per country.
+  F6 = list(step_days = 90L, test_days = 90L, min_test_days = 90L,
+            rw_gap_weeks = 1L, min_train_years = 270/365.25)   # ~213 folds
 )
 geom_name <- Sys.getenv("PSI_GEOM", "p000")
 if (!geom_name %in% names(GEOM))
