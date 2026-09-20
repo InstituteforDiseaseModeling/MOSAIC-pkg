@@ -123,8 +123,17 @@ Three options, in order of preference:
 3. **Selection-only, pre-registered.** Accept that phase 2 is exploratory and
    say so. Acceptable only if no arm is proposed for production off it.
 
-**Recommendation: option 1**, decided before any arm is scored, so the new
-blocks are sealed from the start rather than carved out after seeing results.
+**DECIDED (user-approved): option 1.** Extend the outer grid with a new cutoff
+(~2026-02-15 or 2026-03-01) to create fresh sealed confirmation block(s), fixed
+BEFORE any phase-2 arm is scored.
+
+Dependency to resolve at build time: the v3-grid arms (P000/N8/D9b/T2/...) build
+from the canonical v7.3 panel, so a new cutoff is straightforward. **P001 is
+not** -- it reads a pre-built per-cutoff leak-free `panel_v74_<cutoff>.csv` from
+the OCV-4 cache, which does not exist for a new date. If regenerating that panel
+is awkward, the comparator at the new cutoff should be **P000** (the
+same-pipeline refit incumbent, MAE 0.1996) rather than P001 (0.2022), and the
+substitution must be stated in the result.
 
 ---
 

@@ -15,7 +15,13 @@ free_cores () {
     | awk 'NR>1 && $1>50 {c+=$1} END {printf "%.0f", c/100}'
 }
 
-for SPEC in "F6:PSI_GEOM=F6" "F5:PSI_GEOM=F5" "N9:PSI_COUNTRY_STATIC=frozen PSI_COUNTRY_BALANCE=1"; do
+# Tier 1 first (cheapest and decisive), then Tier 2. T2 is the lead-12 arm --
+# the one change phase 1 never tested cleanly -- and N9 is the first stacked arm
+# (D9b level + N8 shape). F5/F6 are the inner-CV geometry arms.
+for SPEC in "T2:PSI_LEAD=12" \
+            "N9:PSI_COUNTRY_STATIC=frozen PSI_COUNTRY_BALANCE=1" \
+            "F5:PSI_GEOM=F5" \
+            "F6:PSI_GEOM=F6"; do
   ARM="${SPEC%%:*}"; ENVS="${SPEC#*:}"
   [ -f STOP ] && { echo "STOP present; queue halted"; exit 1; }
   # already complete? skip
