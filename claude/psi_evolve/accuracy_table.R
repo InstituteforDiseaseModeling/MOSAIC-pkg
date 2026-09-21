@@ -30,7 +30,12 @@ args <- commandArgs(trailingOnly=TRUE)
 # was hardcoded and args only FILTERED it, so asking for an unknown arm (P000H)
 # silently produced a table without it -- a wrong answer that looks like a right
 # one. Now an unnamed-but-requested arm with no cache is an explicit error.
-known <- c("P000","P000R","P000H","N5","N6","N8","D9b","F1","F2","F3","F4")
+known <- c("P000","P000R","P000H","N5","N6","N8","D9b","F1","F2","F3","F4",
+           # phase 2/3 arms -- listed so they appear in the DEFAULT table the
+           # moment their cache exists. Args still ADD arms on top of this, and
+           # a requested arm with no cache is an explicit error (not a silent
+           # omission, which is how a wrong table once looked like a right one).
+           "F5","F6","T2","N9","ND","NT","NF1","NF4")
 caches <- c(P001 = PROD)
 for (a in union(known, args)) {
   d <- file.path(HERE, paste0("psi_cache_", a))

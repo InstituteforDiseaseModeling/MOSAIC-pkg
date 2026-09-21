@@ -44,7 +44,7 @@ test_that("every registered trunk fits and predicts through the FiLM head", {
      skip_if_not(reticulate::py_module_available("tensorflow"),
                  "TensorFlow not available in this environment")
      b <- .mk_tiny_bundle()
-     for (tk in c("lstm", "gru", "tcn")) {
+     for (tk in c("lstm", "gru", "tcn", "dlinear")) {
           hp <- utils::modifyList(.tiny_hp, list(trunk = tk))
           r <- MOSAIC:::.psi_fit_predict_lstm(b, seed = 11L, hyperparams = hp)
           expect_equal(length(as.numeric(r$pred)), dim(b$X_pred)[1],

@@ -29,7 +29,8 @@ obs <- obs[is.finite(obs$observed) & obs$iso_code %in% pool, ]
 wis_fn <- getFromNamespace(".rcv_wis","MOSAIC"); bl_fn <- getFromNamespace(".rcv_baseline","MOSAIC")
 
 args <- commandArgs(trailingOnly=TRUE)
-known <- c("P000","P000R","P000H","N5","N6","N8","D9b","F1","F3","F4")
+known <- c("P000","P000R","P000H","N5","N6","N8","D9b","F1","F3","F4",
+           "F5","F6","T2","N9","ND","NT","NF1","NF4")   # phase 2/3 arms
 caches <- c(P001 = PROD)
 for (a in union(known, args)) {
   d <- file.path(HERE, paste0("psi_cache_", a)); if (dir.exists(d)) caches[a] <- d

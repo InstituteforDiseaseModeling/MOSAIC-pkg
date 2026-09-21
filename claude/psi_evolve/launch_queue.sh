@@ -20,6 +20,8 @@ free_cores () {
 # (D9b level + N8 shape). F5/F6 are the inner-CV geometry arms.
 for SPEC in "T2:PSI_LEAD=12" \
             "N9:PSI_COUNTRY_STATIC=frozen PSI_COUNTRY_BALANCE=1" \
+            "ND:PSI_TRUNK=dlinear" \
+            "NT:PSI_TRUNK=tcn" \
             "F5:PSI_GEOM=F5" \
             "F6:PSI_GEOM=F6"; do
   ARM="${SPEC%%:*}"; ENVS="${SPEC#*:}"

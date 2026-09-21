@@ -128,9 +128,10 @@
      # production. This registry is how that comparison becomes possible without
      # also changing the FiLM conditioning, the head or the features.
      trunk_kind <- tolower(as.character(hp$trunk %||% "lstm"))
-     if (!trunk_kind %in% c("lstm", "gru", "tcn"))
+     if (!trunk_kind %in% c("lstm", "gru", "tcn", "dlinear"))
           stop(".psi_fit_predict_lstm: unknown trunk '", trunk_kind,
-               "'. Supported: 'lstm' (production), 'gru', 'tcn'.", call. = FALSE)
+               "'. Supported: 'lstm' (production), 'gru', 'tcn', 'dlinear'.",
+               call. = FALSE)
 
      build_trunk <- function(input_feat) {
           if (trunk_kind == "lstm") {
@@ -171,6 +172,39 @@
                     recurrent_dropout  = hp$rec_dropout, name = "gru3")
                x <- keras3::layer_dropout(x, rate = hp$dropout, name = "drop3")
                return(x)
+          }
+
+          if (trunk_kind == "dlinear") {
+               # DLinear (Zeng et al. 2023, arXiv:2205.13504): decompose each
+               # channel into a moving-average TREND and the REMAINDER, apply one
+               # linear map over the time axis to each, and sum. No recurrence, no
+               # attention, no nonlinearity in the encoder at all.
+               #
+               # It is here as a CONTROL, not a candidate. DLinear matching or
+               # beating the recurrent trunks would say the architecture programme
+               # is misdirected -- and this project already has a version of that
+               # signal, since a week-of-year climatology beats every LSTM variant
+               # on directional accuracy (0.57 vs 0.45-0.50). Cheap to run, and the
+               # single most informative null available.
+               k <- as.integer(hp$dlinear_kernel %||% 5L)
+               if (k %% 2L == 0L) k <- k + 1L          # odd kernel keeps it centred
+               trend <- keras3::layer_average_pooling_1d(
+                    keras3::layer_zero_padding_1d(input_feat,
+                         padding = c((k - 1L) %/% 2L, (k - 1L) %/% 2L),
+                         name = "dlin_pad"),
+                    pool_size = k, strides = 1L, name = "dlin_trend")
+               remainder <- keras3::op_subtract(input_feat, trend)
+               # linear over TIME: (B, T, F) -> (B, F, T) -> dense(T -> units_3)
+               lin <- function(z, nm) {
+                    z <- keras3::layer_permute(z, dims = c(2L, 1L), name = paste0(nm, "_perm"))
+                    z <- keras3::layer_dense(z, units = as.integer(hp$units_3),
+                                             name = paste0(nm, "_lin"))
+                    keras3::layer_flatten(z, name = paste0(nm, "_flat"))
+               }
+               z <- keras3::op_add(lin(trend, "dlin_t"), lin(remainder, "dlin_r"))
+               z <- keras3::layer_dense(z, units = as.integer(hp$units_3),
+                                        name = "dlin_proj")
+               return(keras3::layer_dropout(z, rate = hp$dropout, name = "dlin_do"))
           }
 
           # TCN: dilated CAUSAL convolutions. `padding = "causal"` is what makes
