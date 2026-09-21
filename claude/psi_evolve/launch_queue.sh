@@ -28,15 +28,15 @@ for SPEC in "T2:PSI_LEAD=12" \
   [ -f STOP ] && { echo "STOP present; queue halted"; exit 1; }
   # already complete? skip
   n=$(ls "psi_cache_${ARM}"/psi_*.csv 2>/dev/null | wc -l)
-  if [ "$n" -ge 9 ]; then echo "$(date -Is) $ARM already has $n/9 -- skipping"; continue; fi
+  if [ "$n" -ge 10 ]; then echo "$(date -Is) $ARM already has $n/10 -- skipping"; continue; fi
   echo "$(date -Is) waiting for capacity to launch $ARM (need other-workload < ${THRESH} cores)"
   while [ "$(free_cores)" -gt "$THRESH" ]; do sleep 300; done
   echo "$(date -Is) capacity available -- launching $ARM with: $ENVS"
-  env $ENVS PSI_EPOCH_SELECT=2 ./launch_arm.sh "$ARM" 9 10 12 || {
-      echo "$(date -Is) launch of $ARM refused; will retry next cycle"; sleep 600; continue; }
+  env $ENVS PSI_EPOCH_SELECT=2 ./launch_arm.sh "$ARM" 10 10 12 || {
+      echo "$(date -Is) launch of $ARM REFUSED -- skipping it (there is no outer retry loop; re-run this script to pick it up)"; continue; }
   # wait for this arm to finish before starting the next
   sleep 120
   while [ "$(pgrep -fc '[r]un_arm.R')" -gt 0 ]; do sleep 300; done
-  echo "$(date -Is) $ARM finished: $(ls psi_cache_${ARM}/psi_*.csv 2>/dev/null | wc -l)/9 cutoffs"
+  echo "$(date -Is) $ARM finished: $(ls psi_cache_${ARM}/psi_*.csv 2>/dev/null | wc -l)/10 cutoffs"
 done
 echo "$(date -Is) queue complete"

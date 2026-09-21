@@ -14,7 +14,7 @@
 #
 # env:
 #   PSI_ARM              arm id (cache dir suffix)                [A000-style id]
-#   PSI_GEOM             geometry preset: p000|p001|F1|F2|F3|F4    [p000]
+#   PSI_GEOM             geometry preset: p000|p001|F1|F2|F3|F4|F5|F6    [p000]
 #   PSI_FEATURE_SET      v7.3 | v7.4 (v7.4 -> leak-free panels)    [v7.3]
 #   PSI_TRUNK            lstm | gru | tcn   (N arms)               [lstm]
 #   PSI_SEEDS            ensemble size                             [10]
@@ -49,9 +49,16 @@ PATHS <- get_paths()
 grid <- utils::read.csv(file.path(HERE, "EVAL_GRID.csv"), stringsAsFactors = FALSE)
 grid <- grid[grid$grid == "prod", ]
 cutoffs <- as.Date(grid$cutoff)
-if (length(cutoffs) != 9L)
-     stop("EVAL_GRID.csv (grid == 'prod') must hold the 9 production cutoffs; found ",
-          length(cutoffs))
+# Block 10 (2026-04-15, split="confirmation2") was added as the phase-2/3 sealed
+# holdout, so the prod grid is now TEN cutoffs. Arms MUST be fitted at block 10
+# or confirm_read2.R can never find its psi. Derived from the grid rather than
+# re-hardcoded, because hardcoding 9 is what broke every arm when block 10
+# landed: the commit that added it audited `split ==` FILTERS and missed readers
+# that assert a row COUNT or validate the legal VALUE SET.
+.n_expected <- nrow(grid)
+if (length(cutoffs) != .n_expected || .n_expected < 9L)
+     stop("EVAL_GRID.csv (grid == 'prod') must hold at least the 9 production ",
+          "cutoffs plus any sealed blocks; found ", length(cutoffs))
 if (SMOKE) { cutoffs <- cutoffs[c(1, length(cutoffs))]; NSEED <- 1L }
 
 # Shard the cutoff list across processes. prefit_rolling_cv_psi() iterates its
@@ -152,7 +159,7 @@ if (Sys.getenv("PSI_COUNTRY_BALANCE", "0") == "1") {
 # Trunk registry (N arms). Swaps ONLY the sequence encoder; FiLM conditioning,
 # head, loss and features are untouched.
 TRUNK <- Sys.getenv("PSI_TRUNK", "lstm")
-if (!TRUNK %in% c("lstm", "gru", "tcn"))
+if (!TRUNK %in% c("lstm", "gru", "tcn", "dlinear"))
      stop("PSI_TRUNK must be lstm|gru|tcn; got '", TRUNK, "'")
 if (TRUNK != "lstm") { ac$trunk <- TRUNK; cat("N arm: trunk =", TRUNK, "\n") }
 

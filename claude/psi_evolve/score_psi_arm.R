@@ -102,8 +102,13 @@
      g <- g[g$grid == "prod", , drop = FALSE]
      for (k in c("cutoff", "h1mo_end", "h2mo_end", "test_start", "test_end"))
           g[[k]] <- as.Date(g[[k]])
-     if (!all(g$split %in% c("selection", "confirmation")))
-          stop("score_psi_arm: EVAL_GRID.csv `split` must be selection|confirmation.",
+     # "confirmation2" is block 10, the phase-2/3 sealed holdout. Omitting it here
+     # hard-stopped every call to the sanctioned scorer -- including inside
+     # arm_C_transforms.R's try(), where all 22 variants printed FAILED and no
+     # score_*.rds was written while the accuracy table above still printed
+     # plausible numbers.
+     if (!all(g$split %in% c("selection", "confirmation", "confirmation2")))
+          stop("score_psi_arm: EVAL_GRID.csv `split` must be selection|confirmation|confirmation2.",
                call. = FALSE)
      g
 }
@@ -144,7 +149,7 @@
 #'   forbids an agent from enacting an objective change. Switching the default
 #'   requires a human decision and an \code{objective_version} bump.
 score_psi_arm <- function(arm_id, pred, obs, folds,
-                          mode = c("selection", "confirmation"),
+                          mode = c("selection", "confirmation", "confirmation2"),
                           incumbent = NULL, dir = .PSI_EVOLVE_DIR, verbose = TRUE,
                           interval_mode = c("seed", "residual"),
                           psi_column = "psi",
