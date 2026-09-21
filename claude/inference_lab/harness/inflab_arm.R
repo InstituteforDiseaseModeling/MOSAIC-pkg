@@ -60,6 +60,23 @@ for (nm in names(lk_env)) {
      }
 }
 
+# ---- temporal ramp: exponential recency weighting on the NB core
+# RAMP_HL = half-life in DAYS. w_t = 0.5 ^ (days_before_cut / HL), capped at 1
+# from the cut onward. run_MOSAIC normalises to mean 1, so the LL scale is
+# preserved. NOTE (run_MOSAIC.R:327): the shape terms do NOT honour
+# weights_time -- they scan the raw series -- so the ramp acts on the NB core only.
+ramp_hl <- suppressWarnings(as.numeric(Sys.getenv("RAMP_HL", "")))
+if (!is.na(ramp_hl) && ramp_hl > 0) {
+     dts <- seq(as.Date(config$date_start), by = "day",
+                length.out = ncol(config$reported_cases))
+     ref <- if (nzchar(TCUT)) as.Date(TCUT) else max(dts)
+     age <- pmax(0, as.numeric(ref - dts))          # days BEFORE the cut
+     wt  <- 0.5 ^ (age / ramp_hl)
+     ctrl$likelihood$weights_time <- wt
+     cat(sprintf("[inflab] temporal ramp: half-life %.0f d | weight at cut %.3f, 1y before %.3f, 5y before %.4f\n",
+                 ramp_hl, 1, 0.5^(365/ramp_hl), 0.5^(1825/ramp_hl)))
+}
+
 # ---- arm-specific patch: may modify `config`, `priors`, `ctrl`, or the package
 if (nzchar(PATCH) && file.exists(PATCH)) {
      cat(sprintf("[inflab] applying patch: %s\n", PATCH))

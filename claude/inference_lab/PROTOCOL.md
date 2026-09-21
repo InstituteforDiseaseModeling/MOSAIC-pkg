@@ -169,6 +169,34 @@ explicit instruction is *"do not just switch to exact IS weights"* — ranking s
 
 ## 6. Operational hygiene
 
+### 6.0 VERIFY AFTER LAUNCH — the check that costs seconds and saves hours
+
+**After launching any batch, confirm all three before walking away:**
+
+```bash
+pgrep -fc "[i]nflab_arm.R"                                        # == expected arm count
+ps -eo etime,args --no-headers | grep "[i]nflab_arm" \
+  | awk '{print $1}' | sort -u                                    # must be ONE distinct value
+uptime                                                            # load ~= arms x cores_each
+```
+
+**More than one distinct elapsed time means more than one set is running.** That is the signature of
+a kill-then-relaunch where the `pkill` had not taken effect before the new launch. Concurrent
+calibrations write shards, `samples.parquet` and `summary.json` to the SAME paths and silently
+corrupt each other.
+
+This happened on 2026-09-21 (HB-03): four orphaned processes (reparented to systemd) ran alongside
+four real ones for ~90 minutes, load average 232 on 176 cores, all eight writing to four
+directories. A whole country's wave-3 output had to be discarded. **99% CPU is not evidence of
+health — a load average well above the core count is evidence of the opposite.**
+
+Killing also leaves PSOCK workers orphaned at PPID 1 (222 of them that day, still burning CPU after
+their masters died). Always re-check `ps -eo comm | grep -c '^R$'` after a kill, and confirm the
+survivors belong to nobody else before clearing them.
+
+Prefer `--done-marker` idempotence (`.done_<tag>` files) so a relaunch skips completed work rather
+than redoing or duplicating it.
+
 - **Never** pipe a long-running `Rscript` into `head` — R ignores SIGPIPE and the process wedges.
   Redirect to a file, read the file.
 - Every wait loop is bounded AND checks that the thing it waits for is still alive. Nine

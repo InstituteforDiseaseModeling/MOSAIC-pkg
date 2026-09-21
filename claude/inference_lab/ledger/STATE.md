@@ -77,3 +77,11 @@ Results: `/Users/johngiles/MOSAIC/output/inflab_multi30k/` (237 MB, 33 figures p
    country's deaths scale.
 4. A5 (weekly scoring) — screened, never calibrated; must be scored at weekly resolution to be fair.
 5. Held-out (t_cut) versions of the 3-country comparison; the 30k runs are full-data fits.
+
+- **HB-03 (2026-09-21, FIXED; my fault, second process-management failure).** A kill-then-relaunch
+  left FOUR orphaned arm processes (reparented to systemd) running alongside four real ones, all
+  eight writing to the SAME four output directories. Load average 232 on 176 cores was the tell; I
+  read 99% CPU as "full speed" and did not interrogate it for ~90 minutes. Wave-3 Ethiopia output
+  discarded. Cleanup also required killing 222 orphaned PSOCK workers at PPID 1.
+  **Fix: PROTOCOL 6.0 — after any launch, assert (a) expected arm count, (b) exactly ONE distinct
+  elapsed time, (c) load ~= arms x cores_each.** More than one elapsed time = duplicate sets.
