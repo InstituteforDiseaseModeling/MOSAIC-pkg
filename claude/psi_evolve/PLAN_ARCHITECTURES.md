@@ -95,6 +95,20 @@ that treats "covariates that extend past the cutoff" as a first-class input type
 rather than an accident, which is precisely the confusion at the root of the
 `lead = 0` finding. It is also the largest build.
 
+**TFT is now BUILT and smoke-passed** (`tft/tft_model.R`, arm NF1): keras3-R,
+L=52/H=12, output `(B, 12, 5)`, 74,831 params. It is standalone — it touches no
+production code and emits the standard `psi_<cutoff>.csv` contract, so every
+existing scorer works on it unchanged.
+
+**TFT is not one arm but six.** The variation set, the reasoning for each, and
+the gating live in **`tft/README.md`** — deliberately in one place rather than
+duplicated here, so the two cannot drift apart. Headline: `NF4` (H=1 vs H=12) is
+the highest-value variation because TFT at H=12 optimises the **whole 12-week
+trajectory jointly**, whereas T2's `lead=12` optimises a **single point** — and
+our failure is trajectory shape. `NF2` (honest known-future/observed-past split)
+runs regardless of whether TFT wins, because it is a **validity check on numbers
+already reported**, including the sealed-holdout +10.8%.
+
 ### Ordering and gates
 
 ```

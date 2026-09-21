@@ -57,3 +57,68 @@ iso_code, date, psi, q025, q25, q75, q975
 regime the DLinear critique targets, and why `ND` (DLinear) is queued as the
 cheap control. TFT's gates, dropout and variable selection are its defence, but
 overfitting is the thing to watch in the fold diagnostics.
+
+---
+
+# TFT variations — one build, several distinct questions
+
+The marginal cost of most variations below is **a config flag**, not new code:
+`build_tft()` already takes `n_static`, `n_past`, `n_future`, `lookback`,
+`horizon` as arguments. Only `NF2`, `NF-R` and `NF-Reg` need pipeline work.
+
+| arm | variation | question it answers | cost |
+|---|---|---|---|
+| **NF1** | baseline: L=52, H=12, all covariates known-future, statics on, global pool | does TFT help at all? | **built** |
+| **NF4** | **H = 1 vs H = 12** | does joint-trajectory training fix `dir_acc`? | flag |
+| **NF2** | honest known-future / observed-past split | is our measured skill an artifact of future covariates? | needs the split |
+| **NF-R** | target = `observed - persistence` | learn the correction rather than the level | pipeline variant |
+| **NF3** | statics off | is static context gating what helps? | flag |
+| **NF-Reg** | per-region models instead of one global fit | attacks xcorr 0.19-0.27 vs observed 0.014 | pipeline variant |
+
+Core sequence: **NF1 -> NF4 -> NF2**, with `NF-R` as the most promising of the
+"different application" ideas.
+
+## NF4 — the highest-value variation, and why it is not the same as T2
+
+This distinction was under-sold when the plan was first written and is the
+strongest single argument for TFT over a lead-fix on the existing LSTM:
+
+- **T2** (`lead = 12`) trains `X_t -> y_{t+12}` — **one point**, twelve weeks out.
+- **TFT at H = 12** trains `X_t -> (y_{t+1}, ..., y_{t+12})` — the **whole
+  trajectory, jointly**.
+
+Our failure mode is *shape over the horizon* (`dir_acc` 0.48, `dcor` 0.02). A
+loss that scores the entire 12-week path is the only thing in any proposal that
+**directly penalises getting the trajectory's shape wrong**. H=1 vs H=12 with
+everything else fixed isolates whether joint-trajectory training is the fix —
+and it is a one-argument change.
+
+## NF2 — a validity check, not a performance test
+
+Production psi consumes covariates that extend past the cutoff. In real
+deployment some of those are **forecasts, not observations**. If TFT's skill
+collapses when only genuinely-known-at-origin covariates are routed as
+known-future, then every number in this programme is optimistic — **including
+the sealed-holdout +10.8%**.
+
+That makes NF2 worth running *whatever* NF1 shows. It is the one variation not
+gated on TFT being good.
+
+## NF-R — learn the correction, not the level
+
+Phase 1 established that the blend takes its **level** from persistence and uses
+psi only for **shape**, and that psi's own level is badly wrong (bias 0.46).
+Training TFT on `observed - persistence` removes the level problem from the
+learning task entirely and asks the model for precisely the quantity the blend
+is currently hand-constructing.
+
+## Gating — scope discipline
+
+Six TFT arms on top of T2/N9/F5/F6 and ND/NT is a lot of surface, and phase 1's
+lesson is that most single changes land inside the noise floor. So:
+
+- **If NF1 does not beat the production LSTM at all**, drop NF3 and NF-Reg.
+- **NF2 still runs regardless** — it is a validity check on results already
+  reported, not a candidate for promotion.
+- NF4 runs with NF1 (same pipeline, one differing argument), so it is nearly
+  free and should not be deferred.
