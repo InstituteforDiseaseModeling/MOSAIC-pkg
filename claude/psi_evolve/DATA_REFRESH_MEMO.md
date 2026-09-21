@@ -104,6 +104,69 @@ declarable up front rather than discovered later.
 disjoint) is the methodologically clean pick; 2026-02-15 (67 cells, ~50% overlap
 with a spent block) is the better-powered but less clean one.
 
+---
+
+# REBUILT 2026-09-21 — what actually changed, and a correction
+
+Panel rebuilt with the exact production parameters (both `full_refresh.R` and
+`refresh_psi.R` agree on them), 2.7 min. Frozen copy archived at
+`..._frozen_2026-09-17.csv`. Verified with `verify_rebuild.R`.
+
+| | frozen | new |
+|---|---|---|
+| rows | 56,360 | 56,880 |
+| columns | 298 | **298 — identical** |
+| target last date | 2026-06-18 | **2026-08-13** |
+| new pool country-weeks | — | **218** |
+
+## The prediction in section 2 was WRONG, and for the wrong reason
+
+Section 2 predicted the only material movers would be **RWA (+114%) and NGA
+(+71%)** via period-normalisation of `cp99r`. What actually happened:
+
+| iso | cor(old, new) | median \|rel\| | max \|rel\| | revised case rows |
+|---|---|---|---|---|
+| **RWA** | **0.9011** | 0.003 | **30.7** | 2 of 435 |
+| **KEN** | **0.9116** | 0.027 | 1.00 | **86 of 1213** |
+| **CMR** | **0.9808** | 0.023 | 10.1 | **109 of 1244** |
+| NGA | 0.9993 | 0.089 | 2.03 | 20 of 1371 |
+| SOM, ZWE, TZA, LBR, ZMB, AGO, ETH, MWI, COD | ~1.0000 | ~0 | ~0 | 0 |
+
+**Root cause: the surveillance refresh REVISED HISTORICAL CASE COUNTS, it did not
+only append new weeks.** 109 rows changed for CMR, 86 for KEN, 20 for NGA. The
+countries with zero revisions have `cor` of exactly 1.0000, which is what
+identifies revision — not period-normalisation — as the mechanism.
+
+Population was checked and is **unchanged** (0.00% for every country), so the
+`rate` denominator is not implicated.
+
+`cp99r` still moved, but as a *consequence* of the revisions rather than of
+appending data: RWA's two revised rows are large relative to a target that sits
+near zero, which both doubles its `cp99r` and dominates its correlation.
+
+**Also a flaw in my own check:** the first version of `verify_rebuild.R` judged
+on median |rel| < 0.01 and therefore labelled RWA "unchanged" while its maximum
+relative change was 30.7x. The median cannot see a few large revisions in a
+series concentrated near zero. Fixed to decide on **correlation**, reporting the
+median and max alongside.
+
+## Consequence for re-scoring
+
+The materially-affected set is **larger than predicted and differently
+composed**: `CMR`, `KEN`, `RWA` (series changed, cor < 0.99) plus `NGA` (ordering
+kept but ~9% rescaled). Four of sixteen, not two.
+
+That weakens option (c) from section 4 — re-scoring existing caches against the
+new target — because CMR and KEN are ordinary pool members, not pre-declared
+special cases the way NGA and RWA were. Excluding four countries including two
+unremarkable ones is a real cost to the comparison.
+
+Revised recommendation: **keep the frozen panel as the scoring target for every
+phase-1/phase-2 arm already fitted**, and use the rebuilt panel only for new
+cutoffs and phase-3 arms — i.e. option (b), not (c). The two eras then never
+share a table, which is a cleaner rule than a four-country exclusion carried
+through every comparison.
+
 ## 5. Effect on the CV fold structure
 
 As anticipated: more IS data per cutoff means more inner folds. The effect on
