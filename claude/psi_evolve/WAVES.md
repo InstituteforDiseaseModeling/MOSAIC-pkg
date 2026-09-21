@@ -2368,3 +2368,53 @@ Raw ψ at 0.2042 remains far worse than both, confirming the blend machinery is
 doing the work.
 
 **Programme closed.** See `FINAL_REPORT.md`.
+
+## Wave 34 — the control that should have been run first: the blend does not need psi's timing
+
+A red-team statistician agent stalled and died without a report. The one line it
+emitted first was the most valuable output of the entire review:
+
+> *"Now the decisive missing control: does the blend machinery need psi at all?"*
+
+NC1/NC2/NC3 tested nulls against **raw** psi. Nothing had ever tested a null
+inside the **blend** — which is the product actually being promoted.
+
+Weeks 9-13, nulls substituted for psi with the lambda machinery and the C11h
+anchor untouched:
+
+| psi replaced by | MAE | vs persistence |
+|---|---|---|
+| **real N8 psi** | **0.1658** | **+5.7%** |
+| **its own per-country-block MEAN (a constant)** | **0.1653** | **+6.0%** |
+| shuffled in time | 0.1709 | +2.8% |
+| U(0,1) noise | 0.1828 | −4.0% |
+| fixed 0.5 | 0.1828 | −4.0% |
+| *persistence alone* | *0.1758* | — |
+
+The real-psi row reproduces the published headline exactly, which validates the
+reconstruction. Then a **constant matches it**, and a **time-shuffle costs 3%**
+and still beats persistence. Noise and a fixed 0.5 both fail — so psi's
+per-country **mean level** is genuinely informative, and its **week-to-week
+variation is not**.
+
+### What this does to the headline
+
+The defensible statement is no longer "the N8 psi blended with persistence
+improves 12-week MAE by 5.7%". It is:
+
+> A per-country level offset extracted from psi, blended with persistence,
+> improves pooled 12-week MAE by ~6%. The suitability model's temporal signal
+> contributes nothing measurable at that horizon.
+
+This converges with every other line of evidence — `dir_acc` at chance, `dcor`
+≈ 0, λ = 0 in 40% of cells, the blend winning by flattening to `sd_ratio` 0.43.
+It is the sharpest form of the same finding: **a 12-week forecast that a constant
+reproduces is not a forecast.**
+
+### Process note
+
+This control costs minutes and is decisive. It was not run in phase 1, and the
+programme spent ~30 arms and a sealed holdout on a quantity a constant
+reproduces. A null-substitution control belongs *before* the first architecture
+arm, not after the final report — and it should be run on the **product being
+promoted**, not only on its inputs.
