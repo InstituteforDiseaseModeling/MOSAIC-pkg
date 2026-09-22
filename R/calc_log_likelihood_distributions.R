@@ -321,7 +321,7 @@ calc_log_likelihood_gamma <- function(observed,
 
 
 ###############################################################################
-## calc_log_likelihood_negbin.R  (patched: adds k_min)
+## calc_log_likelihood_negbin.R
 ###############################################################################
 
 #' Calculate log-likelihood for Negative Binomial-distributed count data
@@ -333,8 +333,9 @@ calc_log_likelihood_gamma <- function(observed,
 #' @param observed Integer vector of observed non-negative counts (e.g., cases, deaths).
 #' @param estimated Numeric vector of expected values from the model (same length as \code{observed}).
 #' @param k Numeric scalar; dispersion parameter. If \code{NULL}, it is estimated via method of moments.
-#' @param k_min Numeric scalar; minimum dispersion floor applied when \code{k} is finite
-#'   (either supplied or estimated). Default \code{3}. If \code{k = Inf} (Poisson limit),
+#' @param k_min Deprecated and ignored; retained only so existing calls do not
+#'   error. Dispersion is estimated by \code{\link{est_nb_dispersion}} and
+#'   arrives already bounded. If \code{k = Inf} (Poisson limit),
 #'   no flooring is applied.
 #' @param weights Optional numeric vector of non-negative weights, same length as \code{observed}.
 #'                Default is \code{NULL}, which sets all weights to 1.
@@ -342,14 +343,14 @@ calc_log_likelihood_gamma <- function(observed,
 #'
 #' @details
 #' If \code{k} is not supplied, it is estimated as \eqn{k = \bar{x}^2 / (s^2 - \bar{x})} from
-#' \code{observed}. When this estimate is finite, it is constrained to be at least \code{k_min}.
+#' \code{observed}.
 #' If \eqn{s^2 \le \bar{x}}, the function uses the Poisson limit (\code{k = Inf}).
 #'
 #' @return A scalar representing the total log-likelihood (numeric).
 #' @export
 #'
 #' @examples
-#' # Default k_min = 3
+#' # k is used as supplied
 #' calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
 #' # Provide k but allow flooring if too small
 #' calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5), k = 1.2)
@@ -358,7 +359,7 @@ calc_log_likelihood_gamma <- function(observed,
 calc_log_likelihood_negbin <- function(observed,
                                        estimated,
                                        k       = NULL,
-                                       k_min   = 3,
+                                       k_min   = NULL,
                                        weights = NULL,
                                        verbose = TRUE) {
 
@@ -410,9 +411,9 @@ calc_log_likelihood_negbin <- function(observed,
      }
 
      # Apply minimum k floor when k is finite
-     if (is.finite(k) && k < k_min) {
-          if (verbose) message(sprintf("k = %.3f < k_min = %.3f; using k_min.", k, k_min))
-          k <- k_min
+     if (!is.null(k_min)) {
+          warning("`k_min` is deprecated and ignored; dispersion now arrives pre-bounded from est_nb_dispersion().",
+                  call. = FALSE)
      }
 
      # Compute weighted log-likelihood with proportional penalty for zero predictions

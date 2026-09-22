@@ -106,16 +106,18 @@ testthat::test_that("defaults to Poisson (k=Inf) when variance <= mean", {
      expect_equal(ll_nb, ll_pois, tolerance = 1e-8)
 })
 
-# 8. Provided k is floored to k_min when too small
-testthat::test_that("uses k_min floor when provided k is too small", {
+# 8. k_min is retired: k is used exactly as supplied, and passing k_min warns.
+testthat::test_that("k is used as supplied; k_min is deprecated and ignored", {
      obs <- c(0, 1, 2)
      est <- c(1, 1, 1)
-     # k=1 < k_min=3 (default), so function floors to k_min and messages about it
-     expect_message(
-          ll <- MOSAIC::calc_log_likelihood_negbin(obs, est, k = 1, verbose = TRUE),
-          "k_min"
-     )
-     expect_true(is.finite(ll))
+     ll_k1 <- MOSAIC::calc_log_likelihood_negbin(obs, est, k = 1, verbose = FALSE)
+     ll_k3 <- MOSAIC::calc_log_likelihood_negbin(obs, est, k = 3, verbose = FALSE)
+     expect_true(is.finite(ll_k1))
+     # under the old floor these were identical; k = 1 must now be honoured
+     expect_false(isTRUE(all.equal(ll_k1, ll_k3)))
+     expect_warning(
+          MOSAIC::calc_log_likelihood_negbin(obs, est, k = 1, k_min = 3, verbose = FALSE),
+          "deprecated")
 })
 
 # 9. Correct NB log-likelihood calculation

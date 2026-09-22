@@ -435,6 +435,29 @@
     }
   }
 
+  # RETIRED (v0.92.0): nb_k_min_cases / nb_k_min_deaths.
+  #
+  # These were a floor on a marginal method-of-moments dispersion estimate that
+  # was mis-specified for a non-stationary series, so the floor bound in 27 of 28
+  # estimable locations and was in practice the dispersion parameter itself.
+  # Dispersion is now estimated per location by est_nb_dispersion(). A floor
+  # would silently override that estimate, which is exactly the failure mode
+  # being removed, so the setting is rejected rather than migrated.
+  #
+  # Detection MUST key off the user's ORIGINAL `control` (lesson #13): the merge
+  # above has already populated `def`, so a test against `def` can never fire.
+  .retired_nbk <- intersect(c("nb_k_min_cases", "nb_k_min_deaths"),
+                            names(control[["likelihood"]]))
+  if (length(.retired_nbk)) {
+    warning(sprintf(
+      paste0("control$likelihood$%s is RETIRED and has been ignored. NB dispersion is now ",
+             "estimated per location from the weekly observations by est_nb_dispersion(). ",
+             "To set the dispersion explicitly, use control$likelihood$nb_k_cases / ",
+             "nb_k_deaths, which REPLACE the estimate (scalar or one value per location)."),
+      paste(.retired_nbk, collapse = " and ")), call. = FALSE)
+    for (nm in .retired_nbk) def$likelihood[[nm]] <- NULL
+  }
+
   # BACKWARD COMPATIBILITY: renamed control parameters (v0.22.16; fixed v0.37.1).
   #
   # Detection MUST key off the user's ORIGINAL `control`, not the merged `def`.
@@ -1314,7 +1337,7 @@
 #' produces (e.g. the v0.22.20-21 N_obs shape-term normalization) so that resume
 #' refuses to pool shards scored by an incompatible likelihood implementation.
 #' @noRd
-.mosaic_likelihood_impl_version <- function() "R/v0.22.21"
+.mosaic_likelihood_impl_version <- function() "R/v0.92.0"
 
 #' Likelihood-Value Provenance Descriptor
 #'
@@ -1398,7 +1421,7 @@
   # incomparable. control.json nests the full control under $control (plus a
   # per-run timestamp), so compare the relevant sub-objects rather than
   # byte-comparing the whole file:
-  #   - control$likelihood        : weights/sigmas/k_min -> the scoring target
+  #   - control$likelihood        : weights/sigmas -> the scoring target
   #   - control$sampling          : which of the ~301 params are sampled; changing
   #                                 it shifts the RNG stream so sample_parameters(
   #                                 seed = sim_id) yields different draws per id

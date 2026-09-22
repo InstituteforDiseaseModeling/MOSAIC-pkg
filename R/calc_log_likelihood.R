@@ -30,7 +30,7 @@
 #'   \itemize{
 #'     \item \code{mean_precision} (for \code{\link{calc_log_likelihood_beta}})
 #'     \item \code{trials} (for \code{\link{calc_log_likelihood_binomial}})
-#'     \item \code{k}, \code{k_min} (for \code{\link{calc_log_likelihood_negbin}})
+#'     \item \code{k} (for \code{\link{calc_log_likelihood_negbin}})
 #'     \item \code{verbose} (common to all distributions)
 #'   }
 #'

@@ -1,3 +1,56 @@
+# MOSAIC 0.92.0
+
+## NB dispersion is now estimated, not floored
+
+`calc_model_likelihood()` previously estimated the negative-binomial dispersion
+`k` with a marginal method-of-moments form, `k = m^2/(v - m)`, computed across
+the whole observation series. By the law of total variance that estimates
+`Var(mu)` -- the epidemic signal -- rather than the observation dispersion the
+surrounding comment claimed it measured. Consequently the `nb_k_min_*` floor
+bound in **27 of 28** estimable locations for cases and 17 of 20 for deaths, so
+the shipped "estimator" returned the constant 3 almost everywhere. On synthetic
+data with a known `k = 4`, the old form returns 1.10; the new one returns 3.88.
+
+**New:** `est_nb_dispersion()` estimates `k` per location by conditional maximum
+likelihood (`MASS::glm.nb`) at the data's native **weekly** reporting cadence,
+honouring the per-observation `reported_*_weight` confidence weights. The mean is
+modelled with a spline trend plus seasonal harmonics, following the
+Farrington/Noufaily convention used by the `surveillance` package.
+
+* **Weekly aggregation** with the reporting-week boundary **detected** per
+  location, not assumed. All 40 current locations report Monday-Sunday; the
+  estimate is invariant to the config's start weekday.
+* **Computed once per calibration**, not inside the likelihood. `k` depends only
+  on the observations, so the previous code recomputed an identical value roughly
+  7.2 million times per 40-location, 30,000-simulation run.
+* **Edge cases are explicit.** All-zero and otherwise uninformative series, and
+  a dispersion running to the Poisson boundary, resolve to `k = Inf` (Poisson).
+  A six-rung mean-model ladder handles IRLS failures on series with long zero
+  runs. Every location resolves to a finite `k` or Poisson -- never `NA`.
+* **Cross-location shrinkage** toward a mean-dispersion trend (DESeq2-style, with
+  a no-shrink escape) stabilises sparse locations.
+* Diagnostics are written to `2_calibration/diagnostics/nb_dispersion.csv` and
+  summarised in `summary.json`, including the **bound-bind rate** -- in a
+  well-specified fit the hard bounds should rarely bind.
+
+## Breaking changes
+
+* `control$likelihood$nb_k_min_cases` / `nb_k_min_deaths` are **retired**. Setting
+  either now warns and is ignored. To set the dispersion explicitly use
+  `control$likelihood$nb_k_cases` / `nb_k_deaths`, which **replace** the estimate
+  (scalar or one value per location) rather than silently flooring it.
+* `calc_model_likelihood()` gains `nb_k_cases` / `nb_k_deaths` (scalar or
+  length-`n_locations`) in place of `nb_k_min_cases` / `nb_k_min_deaths`. Passing
+  a vector previously either collapsed to `max()` without warning or errored.
+* `calc_log_likelihood_negbin()`'s `k_min` is deprecated and ignored.
+* `check_overdispersion()` and the internal `.nb_size_from_obs_weighted()` are
+  removed; both are superseded by `est_nb_dispersion()`.
+* **All calibration results change.** Every likelihood value moves, so previous
+  runs are not comparable. The likelihood-provenance string used by the resume
+  guard is bumped accordingly, so resuming a pre-0.92.0 run stops with an
+  actionable error rather than silently mixing two scoring rules.
+* New dependencies: `MASS`, `splines`.
+
 # MOSAIC 0.83.0
 
 ## Every PSOCK cluster now clamps to the connection budget

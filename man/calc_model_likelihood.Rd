@@ -16,8 +16,8 @@ calc_model_likelihood(
   weights_obs_cases = NULL,
   weights_obs_deaths = NULL,
   config = NULL,
-  nb_k_min_cases = 3,
-  nb_k_min_deaths = 3,
+  nb_k_cases = NULL,
+  nb_k_deaths = NULL,
   verbose = FALSE,
   weight_peak_timing = 0,
   weight_peak_magnitude = 0,
@@ -54,9 +54,14 @@ path. Only the NB cases/deaths terms are weighted; shape terms are not (v1).}
 
 \item{config}{Optional simulation config list (location_name, date_start, date_stop).}
 
-\item{nb_k_min_cases}{Minimum NB dispersion floor for cases. Default \code{3}.}
+\item{nb_k_cases}{NB dispersion for the cases channel: a scalar applied to
+every location, or a vector with one entry per location. \code{Inf} selects
+the Poisson limit. When \code{NULL} (default) the dispersion is estimated
+from \code{obs_cases} via \code{\link{est_nb_dispersion}}; in
+\code{run_MOSAIC()} it is precomputed once and supplied here.}
 
-\item{nb_k_min_deaths}{Minimum NB dispersion floor for deaths. Default \code{3}.}
+\item{nb_k_deaths}{NB dispersion for the deaths channel; see
+\code{nb_k_cases}.}
 
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 
@@ -86,7 +91,7 @@ or \code{NA_real_} if all locations contribute nothing.
 \description{
 Scores model fits against observed data using a Negative Binomial (NB)
 time-series log-likelihood per location and outcome (cases, deaths) with
-a weighted MoM dispersion estimate and a \code{k_min} floor.
+a per-location NB dispersion estimated by \code{\link{est_nb_dispersion}}.
 }
 \details{
 Optional shape terms are enabled by setting their weight > 0: peak timing

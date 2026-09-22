@@ -8,7 +8,7 @@ calc_log_likelihood_negbin(
   observed,
   estimated,
   k = NULL,
-  k_min = 3,
+  k_min = NULL,
   weights = NULL,
   verbose = TRUE
 )
@@ -20,8 +20,9 @@ calc_log_likelihood_negbin(
 
 \item{k}{Numeric scalar; dispersion parameter. If \code{NULL}, it is estimated via method of moments.}
 
-\item{k_min}{Numeric scalar; minimum dispersion floor applied when \code{k} is finite
-(either supplied or estimated). Default \code{3}. If \code{k = Inf} (Poisson limit),
+\item{k_min}{Deprecated and ignored; retained only so existing calls do not
+error. Dispersion is estimated by \code{\link{est_nb_dispersion}} and
+arrives already bounded. If \code{k = Inf} (Poisson limit),
 no flooring is applied.}
 
 \item{weights}{Optional numeric vector of non-negative weights, same length as \code{observed}.
@@ -39,11 +40,11 @@ weighted.
 }
 \details{
 If \code{k} is not supplied, it is estimated as \eqn{k = \bar{x}^2 / (s^2 - \bar{x})} from
-\code{observed}. When this estimate is finite, it is constrained to be at least \code{k_min}.
+\code{observed}.
 If \eqn{s^2 \le \bar{x}}, the function uses the Poisson limit (\code{k = Inf}).
 }
 \examples{
-# Default k_min = 3
+# k is used as supplied
 calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
 # Provide k but allow flooring if too small
 calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5), k = 1.2)

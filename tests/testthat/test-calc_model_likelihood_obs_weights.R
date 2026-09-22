@@ -83,13 +83,16 @@ testthat::test_that("weighted NB LL equals sum(w_eff * NB log-density) by hand",
      zd    <- matrix(0, 1, 4)
      wobs  <- matrix(c(1, 0.5, 1, 1), nrow = 1)
 
-     # Reconstruct the effective weight + k exactly as the scorer does.
+     # Reconstruct the effective weight exactly as the scorer does. The
+     # dispersion is supplied explicitly so this test isolates the WEIGHTING
+     # mechanics from how k happens to be estimated.
+     k     <- 3
      w_eff <- MOSAIC:::.weights_obs_effective(rep(1, 4), wobs[1, ], obs_c[1, ], est_c[1, ])
-     k     <- MOSAIC:::.nb_size_from_obs_weighted(obs_c[1, ], w_eff, k_min = 3)
      ll_vec   <- vapply(1:4, function(i) .nb_logdens(obs_c[1, i], est_c[1, i], k), numeric(1))
      expected <- sum(w_eff * ll_vec)   # deaths all-zero-data contribute 0
 
-     ll <- MOSAIC::calc_model_likelihood(obs_c, est_c, zd, zd, weights_obs_cases = wobs)
+     ll <- MOSAIC::calc_model_likelihood(obs_c, est_c, zd, zd, weights_obs_cases = wobs,
+                                         nb_k_cases = k, nb_k_deaths = k)
      expect_equal(ll, expected, tolerance = 1e-10)
 })
 

@@ -436,8 +436,8 @@
             # behavior change.
             weights_obs_cases  = .wobs_cases_lik,
             weights_obs_deaths = .wobs_deaths_lik,
-            nb_k_min_cases = likelihood_settings$nb_k_min_cases,
-            nb_k_min_deaths = likelihood_settings$nb_k_min_deaths,
+            nb_k_cases  = likelihood_settings$.nb_k_cases_resolved,
+            nb_k_deaths = likelihood_settings$.nb_k_deaths_resolved,
             weight_cases = likelihood_settings$weight_cases,
             weight_deaths = likelihood_settings$weight_deaths,
             weight_peak_timing = likelihood_settings$weight_peak_timing,
@@ -1119,6 +1119,41 @@ run_MOSAIC <- function(config,
             control$likelihood$.score_window_resolved$idx_deaths,
             control$likelihood$.score_window_resolved$n_time)
   }
+
+  # Estimate the per-location NB dispersion ONCE per calibration. k is a property
+  # of the OBSERVATIONS alone, so it is identical for every simulation; the
+  # former code recomputed it inside every likelihood call (~7.2M redundant
+  # evaluations for a 40-location, 30,000-simulation run). Stashed in a private
+  # slot alongside .weights_time_resolved, so it reaches every PSOCK worker via
+  # the existing clusterExport of likelihood_settings.
+  # Resolved AFTER .score_window_resolved so the dispersion is estimated on the
+  # SAME window the likelihood scores. burn_in_days defaults to 30, so scoring
+  # otherwise starts at step 31 while k was estimated from step 1 -- the
+  # "k-coherence" property the previous implementation documented and held.
+  .nb_disp <- .mosaic_resolve_nb_dispersion(config, control,
+                                            score_window = control$likelihood$.score_window_resolved)
+  control$likelihood$.nb_k_cases_resolved  <- .nb_disp$cases$k
+  control$likelihood$.nb_k_deaths_resolved <- .nb_disp$deaths$k
+  control$likelihood$.nb_dispersion_table  <- .nb_disp$table
+  log_msg("NB dispersion (weekly, conditional ML): cases median k = %s, deaths median k = %s | Poisson: %d cases, %d deaths of %d locations",
+          .nb_disp$cases$summary, .nb_disp$deaths$summary,
+          sum(is.infinite(.nb_disp$cases$k)), sum(is.infinite(.nb_disp$deaths$k)),
+          length(.nb_disp$cases$k))
+  # Bound-bind rate is a standing fit diagnostic: in a well-specified fit the
+  # bounds should rarely bind. The retired k_min floor bound in 27 of 28
+  # estimable locations, which was the defect rather than a setting.
+  .nb_bind <- sum(.nb_disp$table$status %in% "clamped_lower_bound", na.rm = TRUE)
+  .nb_noest <- sum(grepl("^no_estimate", .nb_disp$table$status), na.rm = TRUE)
+  if (.nb_bind > 0 || .nb_noest > 0)
+    log_msg("NB dispersion: %d clamped at a hard bound, %d with no own estimate (borrowed), of %d location-channels -- see 2_calibration/diagnostics/nb_dispersion.csv",
+            .nb_bind, .nb_noest, nrow(.nb_disp$table))
+  tryCatch({
+    if (!dir.exists(dirs$cal_diag)) dir.create(dirs$cal_diag, recursive = TRUE, showWarnings = FALSE)
+    utils::write.csv(.nb_disp$table,
+                     file.path(dirs$cal_diag, "nb_dispersion.csv"), row.names = FALSE)
+  }, error = function(e)
+    log_msg("WARNING: could not write nb_dispersion.csv: %s", conditionMessage(e)))
+
 
   # Resolve per-location (cross-location) influence weights. When the caller did
   # NOT supply weights_location, derive a data-driven default that down-weights
@@ -3123,6 +3158,7 @@ run_MOSAIC <- function(config,
   # Summary JSON (machine-readable run summary)
   log_msg("Writing summary...")
   summary_obj <- .mosaic_write_summary_json(dirs, state, start_time, config,
+    nb_dispersion = control$likelihood$.nb_dispersion_table,
                                              r2_cases_ensemble = r2_cases_ensemble,
                                              r2_deaths_ensemble = r2_deaths_ensemble,
                                              bias_ratio_cases_ensemble = bias_ratio_cases_ensemble,
@@ -3584,8 +3620,6 @@ mosaic_control_defaults <- function(calibration = NULL,
     # === Time/location weighting ===
     weights_time = NULL,             # Numeric vector of per-timestep weights (NULL = uniform)
     weights_location = NULL,         # Numeric vector of per-location weights (NULL = uniform)
-    nb_k_min_cases = 3,              # Minimum NB dispersion floor (cases)
-    nb_k_min_deaths = 3,             # Minimum NB dispersion floor (deaths)
 
     # === Per-channel scored window (burn-in + deaths-era start) ===
     # Run-time only; config_default stays the clean [date_start, date_stop]
