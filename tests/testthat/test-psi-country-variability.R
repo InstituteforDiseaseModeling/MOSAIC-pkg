@@ -107,9 +107,81 @@ test_that("N5 and N6 compose, and compose with a non-default trunk", {
      m
 }
 
-test_that("country_static defaults to NULL, so production is unchanged", {
+test_that("D9b and N8 are PROMOTED: the resolved production spec has them ON", {
      ac <- MOSAIC:::.psi_load_arch_control(NULL)
-     expect_null(ac$country_static)
+     expect_identical(ac$country_static, "auto")
+     expect_true(isTRUE(ac$country_balance))
+})
+
+test_that("the promotion OVERRIDES the fixture, which still pins the B4 value", {
+     # This is the whole reason the promotion lives in .psi_load_arch_control()
+     # and not in a downstream `%||%`: the B4 fixture sets country_balance
+     # EXPLICITLY to false, so a null-coalesce never fires and the promotion
+     # would be silently inert on the production path (lessons 1 and 6). Guard
+     # the mechanism, not just the outcome -- if someone edits the fixture
+     # instead, this test says so.
+     f <- system.file("fixtures", "B4_rolling_cv_spec.yml", package = "MOSAIC")
+     skip_if(!nzchar(f) || !file.exists(f), "B4 fixture not installed")
+     fixture <- yaml::read_yaml(f)
+     expect_false(isTRUE(fixture$country_balance))      # fixture unchanged
+     expect_true(isTRUE(MOSAIC:::.psi_load_arch_control(NULL)$country_balance))
+})
+
+test_that("an explicit arch_control still beats the promoted default", {
+     ac <- MOSAIC:::.psi_load_arch_control(list(country_balance = FALSE))
+     expect_false(isTRUE(ac$country_balance))
+})
+
+test_that("country_static = 'off' survives modifyList where NULL does not", {
+     # utils::modifyList DELETES a NULL element, so `country_static = NULL` is
+     # indistinguishable from not setting it and falls back to the promoted
+     # default. "off" is the value that actually opts out.
+     ac_null <- MOSAIC:::.psi_load_arch_control(list(country_static = NULL))
+     expect_null(ac_null$country_static)
+     ac_off <- MOSAIC:::.psi_load_arch_control(list(country_static = "off"))
+     expect_identical(ac_off$country_static, "off")
+})
+
+test_that("D9b is applied BY DEFAULT when the bundle carries the static matrix", {
+     # No country_static hyperparam is passed: the promoted default must reach
+     # the embedding and freeze it at the supplied covariates.
+     skip_on_cran(); skip_if_not_installed("keras3")
+     skip_if_not(reticulate::py_module_available("tensorflow"), "TensorFlow unavailable")
+     set.seed(5)
+     M <- .cv_static()
+     b <- .cv_bundle(); b$encoders$country_static <- M
+     hp <- utils::modifyList(.cv_hp, list(n_epochs_fixed = 2L))
+     hp$country_static <- NULL                # ensure the caller does not set it
+     # The fallback message fires ONLY when the default is not applied, so its
+     # absence here is the discriminator against the degradation test above.
+     expect_no_message(
+          r <- MOSAIC:::.psi_fit_predict_lstm(b, seed = 11L, hyperparams = hp),
+          message = "D9b not applied")
+     expect_true(all(is.finite(as.numeric(r$pred))))
+})
+
+test_that("an unknown country_static mode is rejected", {
+     skip_on_cran(); skip_if_not_installed("keras3")
+     skip_if_not(reticulate::py_module_available("tensorflow"), "TensorFlow unavailable")
+     b <- .cv_bundle()
+     expect_error(
+          MOSAIC:::.psi_fit_predict_lstm(b, seed = 11L,
+               hyperparams = utils::modifyList(.cv_hp, list(country_static = "nonsense"))),
+          "country_static must be one of")
+})
+
+test_that("country_static = 'auto' DEGRADES when the matrix is absent", {
+     # The promotion must not break callers holding an older bundle: 'auto' is
+     # the default, so it has to fall back rather than abort. An explicit
+     # 'frozen' on the same bundle still errors (next test).
+     skip_on_cran(); skip_if_not_installed("keras3")
+     skip_if_not(reticulate::py_module_available("tensorflow"), "TensorFlow unavailable")
+     b <- .cv_bundle()                        # encoders carry no country_static
+     hp <- utils::modifyList(.cv_hp, list(country_static = "auto", n_epochs_fixed = 2L))
+     expect_message(
+          r <- MOSAIC:::.psi_fit_predict_lstm(b, seed = 11L, hyperparams = hp),
+          "D9b not applied")
+     expect_true(all(is.finite(as.numeric(r$pred))))
 })
 
 test_that("requesting country_static without the matrix fails loudly", {

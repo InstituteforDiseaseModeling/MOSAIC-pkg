@@ -156,10 +156,20 @@
           stop(".psi_load_arch_control: B4 fixture not found (expected inst/fixtures/B4_rolling_cv_spec.yml)",
                call. = FALSE)
      fixture <- yaml::read_yaml(f)
-     # Production defaults = fixture + the two sanctioned divergences + the
+     # Production defaults = fixture + the sanctioned divergences + the
      # parallel_seeds execution knob (NOT in the fixture; does not change results).
+     #
+     # country_static / country_balance are the psi_evolve D9b + N8 promotions.
+     # They MUST be applied here rather than left to a `%||%` downstream: the B4
+     # fixture pins `country_balance: false` EXPLICITLY, so a null-coalesce never
+     # fires and the promotion would be silently inert on the production path --
+     # the orphaned-change failure this package keeps hitting (lessons 1 and 6).
+     # The fixture itself stays untouched so it remains a faithful record of the
+     # B4 architecture; the divergence from it is declared here, in one place.
      prod <- utils::modifyList(fixture, list(n_seeds = 5L, region_map = "snf_k5",
-                                             parallel_seeds = 1L))
+                                             parallel_seeds = 1L,
+                                             country_static = "auto",
+                                             country_balance = TRUE))
      ac <- if (is.null(arch_control)) prod else utils::modifyList(prod, arch_control)
      int_fields <- c("units_1", "units_2", "units_3", "batch_size", "epochs",
                      "patience", "country_dim", "timesteps", "n_seeds",
@@ -305,16 +315,20 @@
           country_dim = ac$country_dim, partial_pool_lambda = ac$partial_pool_lambda,
           region_l2 = ac$region_l2, sample_weights = ac$sample_weights,
           balance_R = ac$balance_R, loss_kind = ac$loss_kind,
-          country_balance = isTRUE(ac$country_balance),
+          country_balance = isTRUE(ac$country_balance %||% TRUE),
           # Trunk registry (psi_evolve `N` arms). Defaults to the production LSTM;
           # `gru`/`tcn` swap ONLY the sequence encoder, leaving the FiLM
           # conditioning, the head, the loss and the features identical, so an
           # architecture arm is a single registered change.
           trunk = ac$trunk %||% "lstm",
           tcn_kernel = ac$tcn_kernel, tcn_dilations = ac$tcn_dilations,
-          # Country-variability capacity (N5/N6). Defaults reproduce production.
+          # Country-variability capacity. N5/N6 default OFF (production); D9b
+          # and N8 are PROMOTED and default ON -- `%||%` so the fixture's silence
+          # resolves to the promoted default rather than to NULL/FALSE, which
+          # would have overridden .psi_fit_predict_lstm()'s own defaults and made
+          # the promotion inert on this, the production path.
           film_input = isTRUE(ac$film_input), gamma_scale = ac$gamma_scale %||% 1,
-          country_static = ac$country_static,
+          country_static = ac$country_static %||% "auto",
           # Loss internals — passive under bce + balanced_uniform (the B4/production
           # config), but threaded so an arch_control research override (mse_logit /
           # linear / quadratic) is honored rather than silently ignored. Values
@@ -494,9 +508,14 @@
                tcn_kernel        = if (identical(ac$trunk, "tcn")) ac$tcn_kernel else NULL,
                # WHERE the country conditioning acts, and how wide it may be.
                # Two psi files with different values here are not comparable.
+               # RESOLVED values, not the raw arch_control: D9b/N8 are promoted
+               # defaults, so the fixture is silent about them and recording
+               # `ac$...` would have written NULL/absent into the manifest of an
+               # artefact that was in fact built WITH them.
                film_input        = isTRUE(ac$film_input),
                gamma_scale       = ac$gamma_scale %||% 1,
-               country_static    = ac$country_static,
+               country_static    = ac$country_static %||% "auto",
+               country_balance   = isTRUE(ac$country_balance %||% TRUE),
                # HA-02 epoch provenance: which seeds chose the epoch, and which
                # epoch every ensemble member was refitted at.
                epoch_select_seeds = if (ha02$active) ha02$k else NULL,

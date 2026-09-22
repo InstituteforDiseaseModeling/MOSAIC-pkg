@@ -274,6 +274,12 @@
           }
           if (verbose) message(sprintf("  Using response_var='%s' (pre-computed [0,1] target)",
                                        response_var))
+          # LEAK-FREEDOM IS INHERITED, NOT ENFORCED HERE. Unlike the "intensity"
+          # branch above, which re-derives its anchor from d$date <= cutoff_date,
+          # these columns arrive already normalised by compile_suitability_data().
+          # Their anchor is leak-free only if that build passed
+          # `target_anchor_stop` -- which .rcv_build_leakfree_panel_v74() does and
+          # the canonical panel build deliberately does not.
           raw <- as.numeric(d[[response_var]])
           if (any(raw < 0 | raw > 1, na.rm = TRUE)) {
                warning(sprintf("  response_var '%s' had values outside [0,1]; clamping",

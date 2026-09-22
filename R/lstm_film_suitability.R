@@ -81,11 +81,33 @@
           trunk                = "lstm",
           tcn_kernel           = 3L,
           tcn_dilations        = c(1L, 2L, 4L),
-          # Country-variability capacity (psi_evolve `N` arms). Both default to
-          # the production behaviour, so an unset spec is byte-identical.
+          # Country-variability capacity (psi_evolve `N`/`D` arms).
           film_input           = FALSE,   # N5: condition the trunk's INPUTS
           gamma_scale          = 1,       # N6: >1 lets country modulation flip sign
-          country_static       = NULL     # D9b: "frozen" | "trainable" | NULL
+          # PROMOTED FROM psi_evolve (see the caveat below): D9b initialises the
+          # country embedding from the static country covariates, N8 balances
+          # the loss per country. On the 6 psi_evolve selection blocks, against
+          # the same-pipeline incumbent (MAE 0.2002, R2_corr 0.301):
+          #   D9b  MAE 0.1925 (-3.9%), the only arm with sd_ratio ~= 1.00
+          #   N8   R2_corr 0.321 (+6.6%); moved cross-country correlation
+          #        0.268 -> 0.189 (observed 0.014)
+          # CAVEAT, recorded here so it is not lost: BOTH SCORE WORSE THAN THE
+          # INCUMBENT ON DIRECTIONAL ACCURACY (0.472 and 0.478 vs 0.493, all
+          # below the 0.50 coin flip), and both FAIL the pre-registered phase-2
+          # promotion gate (claude/psi_evolve/promote_gate.R returns 1 of 6
+          # blocks for each). They are enabled on the level/shape evidence at
+          # the user's explicit direction; the trend evidence does not support
+          # them. Set country_static = "off" / country_balance = FALSE to revert
+          # to the pre-promotion behaviour exactly.
+          # "auto" = the promoted default: behave as "frozen" when the bundle
+          # carries the static covariates, and DEGRADE to the zero-initialised
+          # embedding when it does not. "frozen"/"trainable" are explicit
+          # requests and still hard-error on a bundle that cannot satisfy them.
+          # A distinguishable default value is what makes that distinction
+          # survive the arch_control plumbing, which always names the argument
+          # and so destroys any "was it user-set?" signal (lesson 13).
+          country_static       = "auto",  # D9b: "auto"|"frozen"|"trainable"|NULL
+          country_balance      = TRUE     # N8: per-country loss balancing
      ), hyperparams)
 
      enc <- data_bundle$encoders
@@ -351,20 +373,41 @@
      # at init; gradient still flows into the dense because its input is
      # nonzero. Zeroing both, or neither, breaks one of the two properties.
      .cs_mode <- hp$country_static
+     if (!is.null(.cs_mode) && !.cs_mode %in% c("auto", "frozen", "trainable", "off"))
+          stop(".psi_fit_predict_lstm: country_static must be one of 'auto', ",
+               "'frozen', 'trainable', 'off' or NULL; got '", .cs_mode, "'.",
+               call. = FALSE)
+     # "off" is the OPT-OUT, and it has to be a value rather than NULL: callers
+     # reach this through utils::modifyList(), which DELETES a NULL element, so
+     # `country_static = NULL` in an arch_control is indistinguishable from not
+     # setting it and would fall straight back to the promoted default.
+     if (identical(.cs_mode, "off")) .cs_mode <- NULL
      .cs <- if (!is.null(.cs_mode) && !is.null(enc$country_static) &&
                 nrow(enc$country_static) == enc$n_countries) enc$country_static else NULL
-     if (!is.null(.cs_mode) && is.null(.cs))
-          stop(".psi_fit_predict_lstm: country_static = '", .cs_mode,
-               "' requested but encoders$country_static is absent or the wrong shape.",
-               call. = FALSE)
+     if (!is.null(.cs_mode) && is.null(.cs)) {
+          # D9b is ON BY DEFAULT ("auto"), so a bundle built without the static
+          # country covariates must DEGRADE rather than abort -- otherwise
+          # promoting a default breaks every caller holding an older panel.
+          # An EXPLICIT 'frozen'/'trainable' still hard-errors: asking for D9b
+          # by name and silently not getting it is what this stop() is for.
+          if (!identical(.cs_mode, "auto"))
+               stop(".psi_fit_predict_lstm: country_static = '", .cs_mode,
+                    "' requested but encoders$country_static is absent or the wrong shape.",
+                    call. = FALSE)
+          message(".psi_fit_predict_lstm: country_static = 'auto' but ",
+                  "encoders$country_static is absent or the wrong shape; using the ",
+                  "zero-initialised country embedding (D9b not applied).")
+          .cs_mode <- NULL
+     }
+     # 'auto' is frozen whenever it is applied at all.
+     .cs_frozen <- .cs_mode %in% c("auto", "frozen")
      if (!is.null(.cs)) {
           country_dev_layer <- keras3::layer_embedding(
                input_dim                = enc$n_countries,
                output_dim               = ncol(.cs),
                weights                  = list(.cs),
-               trainable                = !identical(.cs_mode, "frozen"),
-               embeddings_regularizer   = if (use_partial_pool &&
-                                              !identical(.cs_mode, "frozen"))
+               trainable                = !.cs_frozen,
+               embeddings_regularizer   = if (use_partial_pool && !.cs_frozen)
                     keras3::regularizer_l2(hp$partial_pool_lambda) else NULL,
                name = "country_deviation_embedding")
           .film_c_init <- "zeros"

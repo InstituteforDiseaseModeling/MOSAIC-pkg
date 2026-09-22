@@ -337,10 +337,11 @@ prefit_rolling_cv_psi <- function(PATHS,
 
      # Compile settings mirror the canonical panel build (model/LAUNCH.R) so the
      # leak-free panel is column-identical to the canonical one EXCEPT for the
-     # two intentional divergences that make it leak-free AND window-aligned:
+     # three intentional divergences that make it leak-free AND window-aligned:
      #
-     #   date_start     -> compile_date_start  (LSTM-window alignment, not 2000)
-     #   gam_train_stop -> cutoff              (leak-free hazard GAMs)
+     #   date_start         -> compile_date_start (LSTM-window alignment, not 2000)
+     #   gam_train_stop     -> cutoff             (leak-free hazard GAMs)
+     #   target_anchor_stop -> cutoff             (leak-free target normalisation)
      #
      # WINDOW ALIGNMENT (the hard requirement): the hazard-prob MAGNITUDES the
      # LSTM ingests dilute when the GAM-fit window is wider than the LSTM train
@@ -353,7 +354,8 @@ prefit_rolling_cv_psi <- function(PATHS,
      # rows > T so est_suitability() can PREDICT the OOS forecast window. Those
      # future rows carry leak-free hazard probs (GAM fit <= T predicts every row)
      # -- truncating the panel at T would break the prediction window, not just
-     # the fit window.
+     # the fit window. Keeping those rows is what made target_anchor_stop
+     # necessary: they were in the panel, so they were in the p99 anchors.
      compile_suitability_data(
           PATHS              = PATHS_c,   # write redirected to scratch (non-destructive)
           cutoff             = NULL,
@@ -364,7 +366,15 @@ prefit_rolling_cv_psi <- function(PATHS,
           forecast_horizon   = 9,
           include_lags       = TRUE,
           include_flood_prob = TRUE,
-          gam_train_stop     = cutoff)
+          gam_train_stop     = cutoff,
+          # TARGET-side leakage hygiene, and the reason date_stop can stay NULL
+          # above without reintroducing a leak. The response variables are
+          # normalised by per-country/global p99 anchors; computed over the whole
+          # panel they would be derived from the post-cutoff rows this panel
+          # deliberately keeps for prediction, making the target at time t depend
+          # on data after t. Bounding the ANCHOR at the cutoff leaves every row
+          # with a target but scales them all on information available at T.
+          target_anchor_stop = cutoff)
 
      produced <- file.path(scratch, "cholera_country_weekly_suitability_data.csv")
      if (!file.exists(produced))
@@ -442,7 +452,12 @@ prefit_rolling_cv_psi <- function(PATHS,
      if (v74$active)
           key$v74_panel <- list(leakfree = TRUE,
                                 compile_date_start = v74$compile_date_start,
-                                gam_train_stop     = as.character(as.Date(cutoff)))
+                                gam_train_stop     = as.character(as.Date(cutoff)),
+                                # Must be in the key: a v7.4 panel cached BEFORE
+                                # the target anchors were bounded holds a
+                                # different target and would otherwise be
+                                # silently reused under an unchanged hash.
+                                target_anchor_stop = as.character(as.Date(cutoff)))
      .rcv_obj_hash(key)
 }
 

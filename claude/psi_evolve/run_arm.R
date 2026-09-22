@@ -146,6 +146,14 @@ if (nzchar(Sys.getenv("PSI_GAMMA_SCALE", ""))) {
   cat("N6: gamma_scale =", ac$gamma_scale,
       "-- country modulation may flip sign when > 1\n")
 }
+# PIN THE PRE-PROMOTION BASELINE. D9b (country_static) and N8 (country_balance)
+# were promoted to production DEFAULTS, so an arm that says nothing about them
+# would now silently be D9b+N8 -- every control arm would stop being a control,
+# and nothing run after the promotion would be comparable to the caches built
+# before it. The harness therefore pins both OFF and turns them on only by
+# request, which is what every psi_cache_* on disk was built under.
+ac$country_static  <- "off"
+ac$country_balance <- FALSE
 if (nzchar(Sys.getenv("PSI_COUNTRY_STATIC", ""))) {
   ac$country_static <- Sys.getenv("PSI_COUNTRY_STATIC")   # "frozen" | "trainable"
   cat("D9b: country embedding initialised from static covariates (",
