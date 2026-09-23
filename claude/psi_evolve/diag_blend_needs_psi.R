@@ -16,7 +16,21 @@ suppressMessages(library(MOSAIC))
 HERE  <- "/home/jgiles/psi_evolve"
 CANON <- "/home/jgiles/MOSAIC/MOSAIC-data/processed/cholera/weekly/cholera_country_weekly_suitability_data.csv"
 VAR   <- "target_D_rate_per_country_floored"
-CACHE <- Sys.getenv("PSI_CACHE", file.path(HERE, "psi_cache_N8"))
+# usage: Rscript diag_blend_needs_psi.R [ARM]     (or PSI_CACHE=<dir>)
+#
+# PROMOTED TO A GATE (2026-09-23). This started as a one-off diagnostic for N8
+# and is now run on EVERY arm, because the thing it measures is the thing the
+# programme kept failing to check: whether psi's TIME VARIATION contributes
+# anything, as opposed to its per-country LEVEL. On N8 it did not -- replacing
+# psi with its own per-country-block mean matched the real thing at weeks 9-13
+# (0.1653 vs 0.1658). An arm that cannot beat its own constant has not earned a
+# promotion no matter what it does to MAE.
+.arg  <- commandArgs(TRUE)
+ARM   <- if (length(.arg) && nzchar(.arg[1])) .arg[1] else NA_character_
+CACHE <- if (!is.na(ARM)) file.path(HERE, paste0("psi_cache_", ARM)) else
+              Sys.getenv("PSI_CACHE", file.path(HERE, "psi_cache_N8"))
+if (is.na(ARM)) ARM <- sub("^psi_cache_", "", basename(CACHE))
+if (!dir.exists(CACHE)) stop("no such cache: ", CACHE)
 set.seed(11)
 
 grid <- utils::read.csv(file.path(HERE,"EVAL_GRID.csv"), stringsAsFactors=FALSE)
@@ -111,11 +125,14 @@ wm <- function(x, iso) { w <- W$w[match(iso, W$iso_code)]
 cat(sprintf("cache: %s\n\n", basename(CACHE)))
 cat(sprintf("%-10s %9s %9s %9s %9s %8s\n","psi is","overall","wk1-4","wk5-8","wk9-13","mean lam"))
 cat(strrep("-",62),"\n")
+far <- c(real=NA_real_, shuffle=NA_real_, constant=NA_real_,
+         noise=NA_real_, flat_mid=NA_real_)
 for (mode in c("real","shuffle","constant","noise","flat_mid")) {
   d <- build(mode)
   o <- wm(abs(d$observed-d$blend), d$iso_code)
   bands <- vapply(list(1:4,5:8,9:13), function(rg) {
     z <- d[d$wk %in% rg,]; wm(abs(z$observed-z$blend), z$iso_code) }, numeric(1))
+  far[mode] <- bands[3]                      # weeks 9-13, the horizon we forecast
   cat(sprintf("%-10s %9.4f %9.4f %9.4f %9.4f %8.3f\n", mode, o, bands[1], bands[2], bands[3],
               mean(d$lam, na.rm=TRUE)))
 }
@@ -125,3 +142,43 @@ cat(sprintf("\npersistence alone: overall %.4f | wk9-13 %.4f\n",
     { z <- dp[dp$wk %in% 9:13,]; wm(abs(z$observed-z$pers), z$iso_code) }))
 cat("\nIf the NULL rows match 'real', the blend does not need psi and the\n")
 cat("headline is a property of persistence + the lambda machinery.\n")
+
+# ---- THE GATE ---------------------------------------------------------------
+# Decisive statistic: how much the REAL psi beats its own per-country-block
+# MEAN at weeks 9-13. The mean preserves psi's level and destroys its timing,
+# so the difference is what the time variation is worth.
+#
+# THRESHOLD, MEASURED NOT ASSUMED (2026-09-23). This gate first shipped with a
+# 0.5% threshold borrowed from PLAN_PHASE2's MAE rule. Running it over all ten
+# existing arms showed that was far too tight: P000 scored +2.39% and P000R --
+# its own REPLICATE, identical code, disjoint seed block -- scored -0.19%. The
+# pair disagrees by 2.57pp and the verdict flips, so 2.57pp is the measured
+# replicate floor OF THIS STATISTIC. It is ~25x the 0.1% replicate floor on
+# MAE, because the gain is a small difference between two noisy quantities.
+# The between-arm spread over ten arms was only 3.6pp (-1.23% to +2.39%), so
+# the replicate pair alone accounts for most of the observed range: at this
+# budget NO arm's timing contribution is resolvable. A threshold below the
+# replicate floor manufactures PASSes, which is what the 0.5% version did for
+# D9b (+0.51%), N6 (+0.71%), P000H (+0.75%) and F4 (+0.84%).
+#
+# To resolve a real effect, raise the budget (more seeds, or average the gain
+# over several disjoint seed blocks) -- do not lower this number.
+GATE_FLOOR <- 0.0257
+gain <- (far[["constant"]] - far[["real"]]) / far[["constant"]]
+verdict <- if (!is.finite(gain)) "INDETERMINATE" else
+           if (gain >  GATE_FLOOR) "PASS" else
+           if (gain < -GATE_FLOOR) "FAIL (constant is BETTER)" else
+                "FAIL (within replicate noise)"
+cat(sprintf("\n---- TIMING GATE ----\narm %s: real %.4f vs its own constant %.4f at wk9-13\n",
+            ARM, far[["real"]], far[["constant"]]))
+cat(sprintf("psi's TIME VARIATION is worth %+.2f%% (replicate floor %.2f%%)  ->  %s\n",
+            100*gain, 100*GATE_FLOOR, verdict))
+out <- file.path(HERE, "null_gate_results.tsv")
+if (!file.exists(out))
+     cat("arm\treal_wk913\tconstant_wk913\tshuffle_wk913\tnoise_wk913\tflat_mid_wk913\ttiming_gain\tverdict\ttimestamp\n",
+         file = out)
+cat(sprintf("%s\t%.5f\t%.5f\t%.5f\t%.5f\t%.5f\t%.5f\t%s\t%s\n", ARM,
+            far[["real"]], far[["constant"]], far[["shuffle"]], far[["noise"]],
+            far[["flat_mid"]], gain, verdict, format(Sys.time(), "%Y-%m-%dT%H:%M:%S")),
+    file = out, append = TRUE)
+cat(sprintf("appended to %s\n", out))
