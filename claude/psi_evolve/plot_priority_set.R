@@ -15,90 +15,13 @@
 # usage: Rscript plot_priority_set.R
 # =============================================================================
 suppressMessages(library(MOSAIC))
-HERE  <- "/home/jgiles/psi_evolve"
-CANON <- "/home/jgiles/MOSAIC/MOSAIC-data/processed/cholera/weekly/cholera_country_weekly_suitability_data.csv"
-VAR   <- "target_D_rate_per_country_floored"
-OUT   <- file.path(HERE, "figures"); dir.create(OUT, showWarnings = FALSE)
-
-grid <- utils::read.csv(file.path(HERE,"EVAL_GRID.csv"), stringsAsFactors=FALSE)
-grid <- grid[grid$grid=="prod" & grid$split=="selection", ]
-for (k in c("cutoff","test_start","test_end")) grid[[k]] <- as.Date(grid[[k]])
-W <- utils::read.csv(file.path(HERE,"weights_frozen.csv"), stringsAsFactors=FALSE)
-W$w <- W$w_sqrt/sum(W$w_sqrt); pool <- W$iso_code
-wts <- stats::setNames(W$w, W$iso_code)
-obs <- utils::read.csv(CANON, stringsAsFactors=FALSE)[,c("iso_code","date",VAR)]
-names(obs)[3] <- "observed"; obs$date <- as.Date(obs$date)
-obs <- obs[is.finite(obs$observed) & obs$iso_code %in% pool, ]
-bl_fn <- getFromNamespace(".rcv_baseline","MOSAIC")
-
-# Priority set, ordered worst -> best on MAE so the legend reads as a ranking.
-ARMS <- c("P000E","T2","N9","ND")
-ACOL <- c(P000E="#6A6A6A", T2="#E08214", N9="#2166AC", ND="#B5123B")
-ALAB <- c(P000E="P000E  baseline (LSTM)  MAE 0.2045",
-          T2   ="T2     lead = 12        MAE 0.2021",
-          N9   ="N9     D9b + N8         MAE 0.1983",
-          ND   ="ND     DLinear          MAE 0.1772")
-AWD  <- c(P000E=1.4, T2=1.4, N9=1.4, ND=2.4)
-BCOL <- c(obs="grey15", pers="#4393C3", seas="#F2A900")
-
-for (a in ARMS) if (!dir.exists(file.path(HERE, paste0("psi_cache_", a))))
-     stop("missing cache for priority arm ", a)
-
-rdpsi <- function(arm, ct) {
-     f <- file.path(HERE, paste0("psi_cache_", arm), sprintf("psi_%s.csv", ct))
-     if (!file.exists(f)) return(NULL)
-     p <- utils::read.csv(f, stringsAsFactors=FALSE); p$date <- as.Date(p$date); p
-}
-
-# One panel: observed IS+OOS with every priority arm overlaid.
-panel <- function(iso, k, lookback = 364L, show_main = TRUE) {
-     T0 <- grid$cutoff[k]; ct <- format(T0)
-     ts <- grid$test_start[k]; te <- grid$test_end[k]
-     o  <- obs[obs$iso_code==iso & obs$date >= T0-lookback & obs$date <= te, ]
-     o  <- o[order(o$date), ]
-     oo <- o[o$date >= ts, ]
-     isdf <- obs[obs$iso_code==iso & obs$date <= T0, ]
-     bp <- if (nrow(isdf) >= 8 && nrow(oo)) bl_fn(isdf, oo$date, "persistence") else NULL
-     bs <- if (nrow(isdf) >= 8 && nrow(oo)) bl_fn(isdf, oo$date, "seasonal")    else NULL
-     pl <- lapply(ARMS, function(a) {
-          p <- rdpsi(a, ct); if (is.null(p)) return(NULL)
-          q <- p[p$iso_code==iso & p$date >= T0-lookback & p$date <= te, ]
-          if (!nrow(q)) NULL else q[order(q$date), ]
-     })
-     names(pl) <- ARMS
-     # Derive axes from EVERY series, not just the observed one: a country-cutoff
-     # with no observations gave an empty o$date and "need finite 'xlim' values".
-     xs <- c(o$date, unlist(lapply(pl, function(q) q$date)), oo$date)
-     yy <- c(o$observed, unlist(lapply(pl, function(q) q$psi)),
-             if (!is.null(bp)) bp$point, if (!is.null(bs)) bs$point)
-     xs <- xs[is.finite(xs)]; yy <- yy[is.finite(yy)]
-     if (!length(xs) || !length(yy)) { plot.new(); return(invisible()) }
-     plot(range(as.Date(xs, origin="1970-01-01")), range(0, yy), type="n",
-          xlab="", ylab="", xaxt="n",
-          main=if (show_main) sprintf("%s  |  cutoff %s", iso, ct) else "",
-          cex.main=0.82, font.main=1)
-     axis.Date(1, at=pretty(as.Date(xs, origin="1970-01-01"), 4), cex.axis=0.68)
-     rect(ts, par("usr")[3], te, par("usr")[4], col="grey94", border=NA)
-     abline(v=T0, col="grey35", lty=2)
-     box()
-     if (!is.null(bs)) lines(oo$date, bs$point, col=BCOL["seas"], lwd=1.4, lty=3)
-     if (!is.null(bp)) lines(oo$date, bp$point, col=BCOL["pers"], lwd=1.8, lty=2)
-     for (a in ARMS) if (!is.null(pl[[a]]))
-          lines(pl[[a]]$date, pl[[a]]$psi, col=ACOL[a], lwd=AWD[a])
-     lines(o$date, o$observed, col=BCOL["obs"], lwd=1.9)
-     points(oo$date, oo$observed, col=BCOL["obs"], pch=16, cex=0.5)
-     invisible()
-}
-
-draw_legend <- function() {
-     par(fig=c(0,1,0,1), oma=c(0,0,0,0), mar=c(0,0,0,0), new=TRUE); plot.new()
-     legend("bottom",
-            legend=c("observed", ALAB[ARMS], "persistence", "climatology"),
-            col=c(BCOL["obs"], ACOL[ARMS], BCOL["pers"], BCOL["seas"]),
-            lwd=c(1.9, AWD[ARMS], 1.8, 1.4),
-            lty=c(1, rep(1, length(ARMS)), 2, 3),
-            ncol=4, bty="n", cex=0.72, text.font=c(1,rep(1,4),1,1))
-}
+# Shared loading + the one panel drawer. Two copies of a plotting routine is
+# exactly the drift this repo keeps paying for (lesson 11).
+source("/home/jgiles/psi_evolve/psi_plot_common.R")
+panel <- function(iso, k, lookback = 364L)
+     psi_panel(iso, k, lookback = lookback,
+               title_extra = sprintf("  |  cutoff %s", format(grid$cutoff[k])))
+draw_legend <- function() psi_legend(ncol = min(6, length(ARMS) + 3))
 
 # ---- fig 7: 6 countries x 3 cutoffs ----------------------------------------
 # Countries span the lambda range measured in wave 29: CMR/MOZ (psi earns real
