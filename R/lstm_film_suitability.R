@@ -220,11 +220,28 @@
                # zero-padding drags the trend at both edges toward the global
                # feature mean. "edge" is the paper's behaviour.
                pad_mode <- match.arg(as.character(hp$dlinear_pad %||% "zero"),
-                                     c("zero", "edge"))
-               padded <- if (identical(pad_mode, "edge")) {
+                                     c("zero", "edge", "symmetric"))
+               padded <- if (p == 0L) {
+                    input_feat
+               } else if (identical(pad_mode, "edge")) {
+                    # True edge replication, built from crops rather than
+                    # keras3::op_pad(mode = "edge"): the TensorFlow backend
+                    # accepts only CONSTANT / REFLECT / SYMMETRIC and raises
+                    # `Value of argument mode expected to be one of ...` on
+                    # "edge". Cropping to a single timestep and concatenating it
+                    # p times is exact, and layer_cropping_1d is the same idiom
+                    # the TCN branch below already relies on.
+                    first <- keras3::layer_cropping_1d(input_feat,
+                         cropping = c(0L, timesteps - 1L), name = "dlin_first")
+                    last  <- keras3::layer_cropping_1d(input_feat,
+                         cropping = c(timesteps - 1L, 0L), name = "dlin_last")
+                    keras3::op_concatenate(
+                         c(rep(list(first), p), list(input_feat), rep(list(last), p)),
+                         axis = 2L)
+               } else if (identical(pad_mode, "symmetric")) {
                     keras3::op_pad(input_feat,
                                    pad_width = list(c(0L, 0L), c(p, p), c(0L, 0L)),
-                                   mode = "edge")
+                                   mode = "symmetric")
                } else {
                     keras3::layer_zero_padding_1d(input_feat, padding = c(p, p),
                                                   name = "dlin_pad")
