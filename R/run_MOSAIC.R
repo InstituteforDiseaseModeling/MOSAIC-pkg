@@ -2623,6 +2623,18 @@ run_MOSAIC <- function(config,
       traj$cfr_refs <- .mosaic_compute_cfr_refs(results, traj$location_names)
       ensemble$trajectories <- traj
       .mosaic_persist_trajectory_artifact(ensemble, dirs, log_msg, log_warn)
+
+      # Text companion to the .rds above. The .rds is classified heavy by the
+      # MOSAIC-results promoter and lands store:"pending", so without this the
+      # only channels that reach the archive are reported_cases/reported_deaths
+      # via the prediction CSVs. Wrapped: a failed export must not lose a run.
+      tryCatch({
+        written <- write_trajectory_csv(traj, dirs$res_predictions,
+                                        verbose = FALSE)
+        log_msg("Saved %d 3_results/predictions/trajectories_*.csv", length(written))
+      }, error = function(e) {
+        log_warn("trajectory CSV export failed: %s", e$message)
+      })
     }
     # Stream-to-disk scratch is transient -- always clean it up.
     unlink(traj_scratch_handle$dir, recursive = TRUE, force = TRUE)
@@ -3273,7 +3285,7 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{sample_mu_j}: Sample recovery rate (default: TRUE)
 #'     \item \code{sample_iota}: Sample importation rate (default: TRUE)
 #'     \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
-#'     \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: TRUE)
+#'     \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: FALSE, PINNED)
 #'     \item \code{sample_alpha_2}: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
 #'   }
@@ -3501,7 +3513,9 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_mobility_omega = TRUE,    # Mobility rate
 
     # Transmission mixing exponents
-    sample_alpha_1 = TRUE,           # Within-metapop population mixing exponent (sampled)
+    sample_alpha_1 = FALSE,          # Within-metapop population mixing exponent: PINNED by default (collinear with beta_j0_tot endemically and
+                                      # with coupling at invasion; posterior moved 0.057 prior SD
+                                      # over 250k draws, inside the 0.146 null)
     sample_alpha_2 = FALSE,          # Frequency-dependence degree: PINNED by default (weakly identified; psi absorbs the signal)
     sample_omega_1 = TRUE,           # Waning rate (1 dose)
     sample_omega_2 = TRUE,           # Waning rate (2 doses)

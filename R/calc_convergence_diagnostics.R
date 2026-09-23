@@ -37,6 +37,9 @@
 #' @param temperature Numeric temperature parameter used for weight scaling
 #'   (default 1, for documentation purposes)
 #' @param verbose Logical indicating whether to print diagnostic messages
+#' @param is_diagnostics Optional list of pre-computed diagnostics with
+#'   elements `best` and `all`, supplied instead of recomputing them from
+#'   the draws. `NULL` (default) computes them internally.
 #'   (default TRUE)
 #'
 #' @return A list with the following structure:

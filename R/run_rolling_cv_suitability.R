@@ -181,7 +181,7 @@
                      "lead", "step_days", "test_days", "min_test_days",
                      # HA-02 (epoch/ensemble decoupling) + the TCN trunk's kernel.
                      # Absent from the fixture -> NULL -> historical behaviour.
-                     "epoch_select_seeds", "tcn_kernel")
+                     "epoch_select_seeds", "tcn_kernel", "dlinear_kernel")
      for (k in int_fields) if (!is.null(ac[[k]]) && !is.na(ac[[k]]))
           ac[[k]] <- as.integer(round(as.numeric(ac[[k]])))
      # Warn (once, before any worker spawns) if parallel_seeds risks OOM on this
@@ -322,6 +322,15 @@
           # architecture arm is a single registered change.
           trunk = ac$trunk %||% "lstm",
           tcn_kernel = ac$tcn_kernel, tcn_dilations = ac$tcn_dilations,
+          # DLinear knobs. dlinear_kernel was READ by .psi_fit_predict_lstm but
+          # never passed here, so the trunk's single most obvious control was
+          # unreachable and permanently pinned at its default of 5 -- the same
+          # orphaned-wiring failure as lessons 1 and 6, and it silently made a
+          # kernel sweep impossible. All four now thread through.
+          dlinear_kernel     = ac$dlinear_kernel,
+          dlinear_pad        = ac$dlinear_pad,
+          dlinear_l2         = ac$dlinear_l2,
+          dlinear_individual = isTRUE(ac$dlinear_individual),
           # Country-variability capacity. N5/N6 default OFF (production); D9b
           # and N8 are PROMOTED and default ON -- `%||%` so the fixture's silence
           # resolves to the promoted default rather than to NULL/FALSE, which
@@ -506,6 +515,12 @@
                # the registry there was no field that could say so.
                trunk             = ac$trunk %||% "lstm",
                tcn_kernel        = if (identical(ac$trunk, "tcn")) ac$tcn_kernel else NULL,
+               # Two dlinear psi files with different kernel/padding/L2 are not
+               # comparable, so the manifest has to carry them.
+               dlinear_kernel     = if (identical(ac$trunk, "dlinear")) ac$dlinear_kernel %||% 5L else NULL,
+               dlinear_pad        = if (identical(ac$trunk, "dlinear")) ac$dlinear_pad %||% "zero" else NULL,
+               dlinear_l2         = if (identical(ac$trunk, "dlinear")) ac$dlinear_l2 %||% 0 else NULL,
+               dlinear_individual = if (identical(ac$trunk, "dlinear")) isTRUE(ac$dlinear_individual) else NULL,
                # WHERE the country conditioning acts, and how wide it may be.
                # Two psi files with different values here are not comparable.
                # RESOLVED values, not the raw arch_control: D9b/N8 are promoted

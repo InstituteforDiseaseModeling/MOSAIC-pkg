@@ -210,22 +210,56 @@
                # single most informative null available.
                k <- as.integer(hp$dlinear_kernel %||% 5L)
                if (k %% 2L == 0L) k <- k + 1L          # odd kernel keeps it centred
+               p <- (k - 1L) %/% 2L
+               # PADDING MODE. Zeros were the original choice and are what the
+               # scored `ND` cache was built with, so "zero" stays the default
+               # and that arm remains reproducible. But zeros are wrong: Zeng et
+               # al. replicate the END VALUES, and the bias falls hardest on the
+               # LAST timestep -- which is the window's forecast anchor, the one
+               # position the head cares about most. Features are z-scored, so
+               # zero-padding drags the trend at both edges toward the global
+               # feature mean. "edge" is the paper's behaviour.
+               pad_mode <- match.arg(as.character(hp$dlinear_pad %||% "zero"),
+                                     c("zero", "edge"))
+               padded <- if (identical(pad_mode, "edge")) {
+                    keras3::op_pad(input_feat,
+                                   pad_width = list(c(0L, 0L), c(p, p), c(0L, 0L)),
+                                   mode = "edge")
+               } else {
+                    keras3::layer_zero_padding_1d(input_feat, padding = c(p, p),
+                                                  name = "dlin_pad")
+               }
                trend <- keras3::layer_average_pooling_1d(
-                    keras3::layer_zero_padding_1d(input_feat,
-                         padding = c((k - 1L) %/% 2L, (k - 1L) %/% 2L),
-                         name = "dlin_pad"),
-                    pool_size = k, strides = 1L, name = "dlin_trend")
+                    padded, pool_size = k, strides = 1L, name = "dlin_trend")
                remainder <- keras3::op_subtract(input_feat, trend)
-               # linear over TIME: (B, T, F) -> (B, F, T) -> dense(T -> units_3)
+               # WEIGHT DECAY. Every sibling trunk (lstm/gru/tcn) regularises its
+               # kernels with hp$l2; dlinear was the only one that did not, which
+               # makes it the only trunk whose capacity is unpenalised. Default 0
+               # reproduces the scored `ND`; set dlinear_l2 to match the siblings.
+               dl2 <- as.numeric(hp$dlinear_l2 %||% 0)
+               reg <- function() if (dl2 > 0) keras3::regularizer_l2(dl2) else NULL
+               # linear over TIME: (B, T, F) -> (B, F, T) -> dense(T -> units_3).
+               # One SHARED map across all features (the paper's plain DLinear);
+               # dlinear_individual gives each feature its own (DLinear-I).
+               indiv <- isTRUE(hp$dlinear_individual)
                lin <- function(z, nm) {
                     z <- keras3::layer_permute(z, dims = c(2L, 1L), name = paste0(nm, "_perm"))
-                    z <- keras3::layer_dense(z, units = as.integer(hp$units_3),
-                                             name = paste0(nm, "_lin"))
+                    if (indiv) {
+                         # per-feature weights: (B, F, T) -> (B, F, units_3) with a
+                         # separate T x units_3 matrix for each of the F channels.
+                         z <- keras3::layer_einsum_dense(z, equation = "bft,ftu->bfu",
+                              output_shape = c(n_features, as.integer(hp$units_3)),
+                              kernel_regularizer = reg(), name = paste0(nm, "_lini"))
+                    } else {
+                         z <- keras3::layer_dense(z, units = as.integer(hp$units_3),
+                                                  kernel_regularizer = reg(),
+                                                  name = paste0(nm, "_lin"))
+                    }
                     keras3::layer_flatten(z, name = paste0(nm, "_flat"))
                }
                z <- keras3::op_add(lin(trend, "dlin_t"), lin(remainder, "dlin_r"))
                z <- keras3::layer_dense(z, units = as.integer(hp$units_3),
-                                        name = "dlin_proj")
+                                        kernel_regularizer = reg(), name = "dlin_proj")
                return(keras3::layer_dropout(z, rate = hp$dropout, name = "dlin_do"))
           }
 

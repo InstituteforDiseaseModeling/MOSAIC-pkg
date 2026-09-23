@@ -23,8 +23,7 @@ process_WB_urban_population_data <- function(PATHS) {
 
      # Read raw data
      raw <- utils::read.csv(
-          file.path(PATHS$DATA_RAW, 'world_bank', 'urban_population',
-                    'API_SP.URB.TOTL.IN.ZS_DS2_en_csv_v2_86733.csv'),
+          .wb_newest_raw(PATHS, "urban_population", "SP.URB.TOTL.IN.ZS"),
           stringsAsFactors = FALSE, skip = 4
      )
 

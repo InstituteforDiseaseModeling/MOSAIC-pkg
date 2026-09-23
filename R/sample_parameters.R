@@ -13,7 +13,7 @@
 #'   Each element should be named as \code{sample_[parameter]} with a logical value.
 #'   Available options include:
 #'   \itemize{
-#'     \item sample_alpha_1: Population mixing within metapops (default TRUE)
+#'     \item sample_alpha_1: Population mixing within metapops (default FALSE; PINNED, see Details)
 #'     \item sample_alpha_2: Degree of frequency driven transmission (default FALSE; pinned, weakly identified)
 #'     \item sample_decay_days_short: Minimum V. cholerae survival (default TRUE)
 #'     \item sample_decay_days_spread: Spread between min and max V. cholerae
@@ -133,7 +133,11 @@ sample_parameters <- function(
   # Define all possible sampling parameters with defaults
   default_sample_args <- list(
     # Global parameter sampling controls (21 parameters)
-    sample_alpha_1 = TRUE,
+    sample_alpha_1 = FALSE,  # PINNED by default: per-location alpha_1 is collinear with
+    # log(beta_j0_tot) in the endemic regime and with any coupling multiplier at
+    # invasion, so 40 free draws buy nothing -- the 250k-draw continental posterior
+    # moved it 0.057 prior SD, inside the 0.146 random-subset null. Set TRUE only
+    # for a deliberate mixing-exponent experiment.
     sample_alpha_2 = FALSE,  # PINNED by default (weakly identified; psi absorbs the signal)
     sample_decay_days_short = TRUE,
     sample_decay_days_spread = TRUE,

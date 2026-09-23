@@ -168,8 +168,24 @@ if (Sys.getenv("PSI_COUNTRY_BALANCE", "0") == "1") {
 # head, loss and features are untouched.
 TRUNK <- Sys.getenv("PSI_TRUNK", "lstm")
 if (!TRUNK %in% c("lstm", "gru", "tcn", "dlinear"))
-     stop("PSI_TRUNK must be lstm|gru|tcn; got '", TRUNK, "'")
+     stop("PSI_TRUNK must be lstm|gru|tcn|dlinear; got '", TRUNK, "'")
 if (TRUNK != "lstm") { ac$trunk <- TRUNK; cat("N arm: trunk =", TRUNK, "\n") }
+
+# DLinear refinement knobs. Defaults reproduce the scored `ND` cache exactly,
+# so every one of these is an explicit, single-change variant.
+if (identical(TRUNK, "dlinear")) {
+  if (nzchar(Sys.getenv("PSI_DLIN_KERNEL", "")))
+       ac$dlinear_kernel <- as.integer(Sys.getenv("PSI_DLIN_KERNEL"))
+  if (nzchar(Sys.getenv("PSI_DLIN_PAD", "")))
+       ac$dlinear_pad <- Sys.getenv("PSI_DLIN_PAD")          # "zero" | "edge"
+  if (nzchar(Sys.getenv("PSI_DLIN_L2", "")))
+       ac$dlinear_l2 <- as.numeric(Sys.getenv("PSI_DLIN_L2"))
+  if (Sys.getenv("PSI_DLIN_INDIVIDUAL", "0") == "1")
+       ac$dlinear_individual <- TRUE
+  cat(sprintf("DLinear: kernel=%s pad=%s l2=%s individual=%s\n",
+              ac$dlinear_kernel %||% 5L, ac$dlinear_pad %||% "zero",
+              ac$dlinear_l2 %||% 0, isTRUE(ac$dlinear_individual)))
+}
 
 # HA-02: run the fold loop on k seeds, refit all n_seeds at the pooled epoch.
 # This is what makes the high-fold F arms affordable at the production seed

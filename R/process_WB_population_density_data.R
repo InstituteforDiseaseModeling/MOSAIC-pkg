@@ -22,7 +22,7 @@ process_WB_population_density_data <- function(PATHS) {
 
      # Read raw data
      raw <- utils::read.csv(
-          file.path(PATHS$DATA_RAW, 'world_bank', 'population_density', 'API_EN.POP.DNST_DS2_en_csv_v2_85433.csv'),
+          .wb_newest_raw(PATHS, "population_density", "EN.POP.DNST"),
           stringsAsFactors = FALSE, skip = 4
      )
 
