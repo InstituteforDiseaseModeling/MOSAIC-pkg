@@ -9,8 +9,14 @@
 # method-of-moments form and floored at 3; it is now estimated per location by
 # est_nb_dispersion() and passed in. The expected values below are therefore
 # pinned at an EXPLICIT k and were verified against an independent hand
-# computation, sum(dnbinom(obs, mu = est, size = k, log = TRUE)) over both
-# channels -- they are derived, not merely recorded.
+# computation over both channels -- they are derived, not merely recorded. The
+# hand computation floors the mean at the same channel-relative eps the
+# likelihood uses (A1b): eps = max(1e-4, 0.02 * mean(observed)), applied per
+# location row.
+.ref_eps <- function(v) max(1e-4, 0.02 * mean(v[is.finite(v)], na.rm = TRUE))
+.ref_hand <- function(O, E, k) sum(vapply(seq_len(nrow(O)), function(r)
+     sum(stats::dnbinom(O[r, ], mu = pmax(E[r, ], .ref_eps(O[r, ])), size = k, log = TRUE)),
+     numeric(1)))
 .REF_K <- 3
 
 ref_obs_c <- matrix(c(10,20,30,40,50,60,70,80,90,100,
@@ -23,10 +29,9 @@ ref_est_d <- round(ref_est_c * 0.05)
 test_that("reference: core NB only produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
                                       nb_k_cases = .REF_K, nb_k_deaths = .REF_K)
-  expect_equal(ll, -107.24009351, tolerance = 1e-4)
+  expect_equal(ll, -107.29186947, tolerance = 1e-4)
   # independent hand computation of the same quantity
-  hand <- sum(stats::dnbinom(ref_obs_c, mu = pmax(ref_est_c, 1e-10), size = .REF_K, log = TRUE)) +
-          sum(stats::dnbinom(ref_obs_d, mu = pmax(ref_est_d, 1e-10), size = .REF_K, log = TRUE))
+  hand <- .ref_hand(ref_obs_c, ref_est_c, .REF_K) + .ref_hand(ref_obs_d, ref_est_d, .REF_K)
   expect_equal(ll, hand, tolerance = 1e-6)
 })
 
@@ -34,22 +39,21 @@ test_that("reference: core NB + cumulative produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
                                       nb_k_cases = .REF_K, nb_k_deaths = .REF_K,
                                       weight_cumulative_total = 0.25)
-  expect_equal(ll, -108.77099366, tolerance = 1e-4)
+  expect_equal(ll, -108.82276963, tolerance = 1e-4)
 })
 
 test_that("reference: core NB + WIS produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
                                       nb_k_cases = .REF_K, nb_k_deaths = .REF_K,
                                       weight_wis = 0.10)
-  expect_equal(ll, -109.38549351, tolerance = 1e-4)
+  expect_equal(ll, -109.43726947, tolerance = 1e-4)
 })
 
 test_that("reference: perfect match (obs == est) produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_obs_c, ref_obs_d, ref_obs_d,
                                       nb_k_cases = .REF_K, nb_k_deaths = .REF_K)
-  expect_equal(ll, -105.97890716, tolerance = 1e-4)
-  hand <- sum(stats::dnbinom(ref_obs_c, mu = pmax(ref_obs_c, 1e-10), size = .REF_K, log = TRUE)) +
-          sum(stats::dnbinom(ref_obs_d, mu = pmax(ref_obs_d, 1e-10), size = .REF_K, log = TRUE))
+  expect_equal(ll, -106.08420287, tolerance = 1e-4)
+  hand <- .ref_hand(ref_obs_c, ref_obs_c, .REF_K) + .ref_hand(ref_obs_d, ref_obs_d, .REF_K)
   expect_equal(ll, hand, tolerance = 1e-6)
 })
 

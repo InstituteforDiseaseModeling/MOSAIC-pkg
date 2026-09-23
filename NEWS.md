@@ -1,3 +1,37 @@
+# MOSAIC 0.93.0
+
+## The likelihood scores every cell by its density (arm A1b)
+
+`calc_log_likelihood_negbin()` and `calc_log_likelihood_poisson()` special-cased
+a zero prediction against a positive observation with
+`ll <- -observed[i] * log(1e6)` -- a loss **linear in the observed count**, not a
+log-density, and a zero-vs-zero cell with a flat `ll <- 0`. The linear term
+carried essentially all of the log-likelihood's between-draw variance, so the
+ensemble's delta-AIC ranking described that constant rather than model fit.
+
+Every cell now goes through the density with the mean floored at
+`eps = max(1e-4, 0.02 * mean(observed))`. The floor is **channel-relative**: a
+fixed absolute floor calibrated on cases (mean ~30/day) sits far above the
+typical deaths rate (ETH ~0.4/day), which would flatten the predicted rate above
+the observations and destroy discrimination exactly where the deaths signal is.
+
+Validated across ETH, MOZ and COD at a 6-month holdout: held-out cases MAE falls
+from 26.4 to 19.7 pooled, and deaths MAE from 1.07 to 0.59, with bias moving
+toward 1 on both channels.
+
+## Note on the two changes in 0.92.0-0.93.0
+
+The conditional dispersion estimator (0.92.0) and the epsilon-floored density
+(0.93.0) were measured together in a 2x2 factorial at a 6-month holdout. A1b
+improves held-out skill on both channels. The estimated dispersion is
+consistently *below* the retired floor of 3 (ETH 1.78 cases, MOZ 0.43, COD 0.98),
+which flattens the likelihood; on that experiment it degraded held-out MAE, most
+sharply for MOZ. Both are retained: the estimator is the statistically correct
+observation model, and the sharpness it removes is a separate concern that
+belongs in an explicit temperature rather than in the dispersion. Set
+`control$likelihood$nb_k_cases` / `nb_k_deaths` to override the estimate if a
+sharper kernel is wanted for a given run.
+
 # MOSAIC 0.92.0
 
 ## NB dispersion is now estimated, not floored
