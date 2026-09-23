@@ -175,8 +175,18 @@ if (TRUNK != "lstm") { ac$trunk <- TRUNK; cat("N arm: trunk =", TRUNK, "\n") }
 # This is what makes the high-fold F arms affordable at the production seed
 # count (F1 at 10 seeds: 53 h -> 12.4 h).
 ESK <- as.integer(Sys.getenv("PSI_EPOCH_SELECT", "0"))
-if (ESK > 0L) { ac$epoch_select_seeds <- ESK
-  cat("HA-02: epoch selected from", ESK, "seed(s), all", NSEED, "refit at it\n") }
+if (ESK > 0L) {
+  # Clamp to the seed count. est_suitability hard-errors when
+  # epoch_select_seeds > n_seeds, and PSI_SMOKE forces NSEED to 1 -- so a smoke
+  # run of any arm the wave launches with PSI_EPOCH_SELECT=2 died on a config
+  # conflict rather than on anything about the arm.
+  ac$epoch_select_seeds <- min(ESK, NSEED)
+  if (ac$epoch_select_seeds < ESK)
+       cat("HA-02: epoch_select clamped", ESK, "->", ac$epoch_select_seeds,
+           "to match n_seeds\n")
+  cat("HA-02: epoch selected from", ac$epoch_select_seeds, "seed(s), all",
+      NSEED, "refit at it\n")
+}
 
 # AR-03-style feature restriction.
 if (nzchar(Sys.getenv("PSI_EXCLUDE", ""))) {

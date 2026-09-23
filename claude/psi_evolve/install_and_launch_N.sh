@@ -11,7 +11,13 @@ cd "$HOME" && rm -rf mosaic_build && mkdir -p mosaic_build && cd mosaic_build
 git clone -q --depth 1 --branch feature/psi-12wk-evolve \
   https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg.git
 cd MOSAIC-pkg && git rev-parse --short HEAD && grep '^Version:' DESCRIPTION
-cd .. && R CMD INSTALL --no-multiarch --no-docs -l "$HOME/R/library" MOSAIC-pkg 2>&1 | tail -3
+# NOTE (2026-09-23): this installed into the SHARED ~/R/library, which is NOT
+# the library launch_arm.sh loads from ($HOME/Rlib_psi is prepended). So this
+# script's "installed:" line could report a version no arm was actually using,
+# and it wrote to a library another agent shares. Fixed to the private lib;
+# use install_mosaic.sh for a plain install+verify.
+cd .. && R_LIBS="$HOME/Rlib_psi:$HOME/R/library" \
+  R CMD INSTALL --no-multiarch --no-docs -l "$HOME/Rlib_psi" MOSAIC-pkg 2>&1 | tail -3
 "$HOME/bin/r-mosaic-Rscript" -e '
 cat("installed:", as.character(packageVersion("MOSAIC")), "\n")
 ac <- MOSAIC:::.psi_load_arch_control(list(film_input=TRUE, country_balance=TRUE))
