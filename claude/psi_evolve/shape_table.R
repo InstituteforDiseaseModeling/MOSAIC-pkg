@@ -30,7 +30,12 @@ wis_fn <- getFromNamespace(".rcv_wis","MOSAIC"); bl_fn <- getFromNamespace(".rcv
 
 args <- commandArgs(trailingOnly=TRUE)
 known <- c("P000","P000R","P000H","N5","N6","N8","D9b","F1","F3","F4",
-           "F5","F6","T2","N9","ND","NT","NF1","NF4")   # phase 2/3 arms
+           "F5","F6","T2","N9","ND","NT","NF1","NF4",
+           # P000E is the re-baseline forced by the epoch fix
+           # (.psi_epoch_from_history). Rows ABOVE it were fitted at
+           # best + patience; P000E, T2, N9 and ND were fitted at best. Only
+           # arms on the same side of that line are directly comparable.
+           "P000E")
 caches <- c(P001 = PROD)
 for (a in union(known, args)) {
   d <- file.path(HERE, paste0("psi_cache_", a)); if (dir.exists(d)) caches[a] <- d

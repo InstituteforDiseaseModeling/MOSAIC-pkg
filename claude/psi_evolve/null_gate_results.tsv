@@ -14,3 +14,6 @@ P000H	0.16680	0.16805	0.17064	0.18279	0.18276	0.00746	PASS	2026-09-23T11:47:45
 # identical code, disjoint seed blocks). Under that floor EVERY arm in this table
 # FAILS, including the four the 0.5% threshold passed (D9b, N6, P000H, F4).
 ND	0.17619	0.17505	0.17326	0.18279	0.18276	-0.00648	FAIL (within replicate noise)	2026-09-23T11:51:38
+T2	0.17046	0.16859	0.17613	0.18279	0.18276	-0.01109	FAIL (within replicate noise)	2026-09-23T14:04:36
+P000E	0.16497	0.16789	0.17047	0.18279	0.18276	0.01734	FAIL (within replicate noise)	2026-09-23T14:04:37
+N9	0.16697	0.16614	0.17009	0.18279	0.18276	-0.00504	FAIL (within replicate noise)	2026-09-23T14:04:40
