@@ -29,19 +29,28 @@ bl_fn <- getFromNamespace(".rcv_baseline","MOSAIC")
 # ND-wave arms are included automatically once their cache is complete, so the
 # same script serves before and after that wave lands.
 .ALL <- c(P000E="#6A6A6A", T2="#E08214", N9="#2166AC", ND="#B5123B",
-          NDe="#D6604D", NDr="#7B3294", NDk9="#1B7837", NDi="#01665E")
-.LBL <- c(P000E="P000E  LSTM baseline", T2="T2  lead = 12", N9="N9  D9b + N8",
+          NDe="#D6604D", NDr="#7B3294", NDk9="#1B7837", NDi="#01665E", NDeR="#F4A582")
+.LBL <- c(P000E="P000E  LSTM baseline (production arch)", T2="T2  lead = 12", N9="N9  D9b + N8",
           ND  ="ND  DLinear",           NDe="NDe  + edge padding",
           NDr ="NDr  + L2",             NDk9="NDk9  + kernel 9",
-          NDi ="NDi  DLinear-I")
+          NDi ="NDi  DLinear-I", NDeR="NDeR  NDe replicate")
 .complete <- function(a) {
      d <- file.path(HERE, paste0("psi_cache_", a))
      dir.exists(d) && length(list.files(d, "^psi_.*\\.csv$")) >= nrow(grid)
 }
-ARMS <- names(.ALL)[vapply(names(.ALL), .complete, logical(1))]
-if (!length(ARMS)) stop("psi_plot_common: no arm has a complete cache")
+# Nine arms on one panel is unreadable, so the drawn set is selectable:
+#   PSI_PLOT_ARMS="P000E,ND,NDe"   restrict explicitly
+#   PSI_PLOT_ARMS="all"            every complete cache
+# Default is the DECISIVE set -- the production baseline, plain DLinear, and
+# the edge-padding fix -- which is what the ND ladder turns on.
+.avail <- names(.ALL)[vapply(names(.ALL), .complete, logical(1))]
+.req <- Sys.getenv("PSI_PLOT_ARMS", "P000E,ND,NDe")
+ARMS <- if (identical(.req, "all")) .avail else
+     intersect(trimws(strsplit(.req, ",")[[1]]), .avail)
+if (!length(ARMS)) stop("psi_plot_common: none of '", .req, "' has a complete cache; ",
+                        "available: ", paste(.avail, collapse=", "))
 ACOL <- .ALL[ARMS]; ALAB <- .LBL[ARMS]
-AWD  <- stats::setNames(ifelse(ARMS %in% c("ND","NDe","NDr","NDk9","NDi"), 2.1, 1.3), ARMS)
+AWD  <- stats::setNames(ifelse(ARMS %in% c("ND","NDe","NDr","NDk9","NDi","NDeR"), 2.1, 1.3), ARMS)
 BCOL <- c(obs="grey15", pers="#4393C3", seas="#F2A900")
 
 rdpsi <- function(arm, ct) {

@@ -35,7 +35,9 @@ known <- c("P000","P000R","P000H","N5","N6","N8","D9b","F1","F3","F4",
            # (.psi_epoch_from_history). Rows ABOVE it were fitted at
            # best + patience; P000E, T2, N9 and ND were fitted at best. Only
            # arms on the same side of that line are directly comparable.
-           "P000E")
+           "P000E",
+           # ND refinement wave: edge padding -> +L2 -> +kernel 9 -> DLinear-I
+           "NDe","NDr","NDk9","NDi","NDeR")
 caches <- c(P001 = PROD)
 for (a in union(known, args)) {
   d <- file.path(HERE, paste0("psi_cache_", a)); if (dir.exists(d)) caches[a] <- d

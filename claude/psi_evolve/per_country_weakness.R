@@ -25,7 +25,13 @@ names(obs)[3] <- "observed"; obs$date <- as.Date(obs$date)
 obs <- obs[is.finite(obs$observed) & obs$iso_code %in% pool, ]
 bl_fn <- getFromNamespace(".rcv_baseline","MOSAIC")
 
-ARMS <- c("P000E","N9","ND")
+# Auto-include any corrected-epoch arm with a complete cache, so the ND wave
+# joins without an edit. P000E stays the comparator: it is the production
+# architecture under the same epoch code as everything else here.
+ARMS <- Filter(function(a) {
+     d <- file.path(HERE, paste0("psi_cache_", a))
+     dir.exists(d) && length(list.files(d, "^psi_.*\\.csv$")) >= nrow(grid)
+}, c("P000E","T2","N9","ND","NDe","NDr","NDk9","NDi","NDeR"))
 rd <- function(arm, ct) {
      f <- file.path(HERE, paste0("psi_cache_", arm), sprintf("psi_%s.csv", ct))
      if (!file.exists(f)) return(NULL)
@@ -65,10 +71,9 @@ out <- do.call(rbind, lapply(isos, function(iso) {
      r <- lapply(c(ARMS,"persistence"), function(a) stat(D[D$arm==a & D$iso_code==iso, ]))
      names(r) <- c(ARMS,"persistence")
      data.frame(iso = iso, w = unname(wts[iso]),
-                mae_P000E = r$P000E[["mae"]], mae_N9 = r$N9[["mae"]],
-                mae_ND = r$ND[["mae"]], mae_pers = r$persistence[["mae"]],
-                sdr_P000E = r$P000E[["sdr"]], sdr_ND = r$ND[["sdr"]],
-                dacc_P000E = r$P000E[["dacc"]], dacc_ND = r$ND[["dacc"]],
+                mae_P000E = r$P000E[["mae"]], mae_ND = r$ND[["mae"]],
+                mae_NDe = r$NDe[["mae"]], mae_pers = r$persistence[["mae"]],
+                sdr_P000E = r$P000E[["sdr"]], sdr_NDe = r$NDe[["sdr"]],
                 stringsAsFactors = FALSE)
 }))
 # "Weakest" = the biggest BURDEN-WEIGHTED excess of the production architecture
@@ -76,24 +81,28 @@ out <- do.call(rbind, lapply(isos, function(iso) {
 # tiny-burden countries nobody forecasts for.
 out$excess     <- out$mae_P000E - out$mae_pers
 out$w_excess   <- out$w * out$excess
-out$ND_vs_prod <- (out$mae_ND - out$mae_P000E) / out$mae_P000E
+out$ND_vs_prod  <- (out$mae_ND  - out$mae_P000E) / out$mae_P000E
+out$NDe_vs_prod <- (out$mae_NDe - out$mae_P000E) / out$mae_P000E
 out <- out[order(-out$w_excess), ]
 
 cat("\nWHERE PRODUCTION IS WEAKEST  (ranked by burden-weighted excess over persistence)\n")
-cat(sprintf("%-5s %6s | %8s %8s %8s %8s | %8s | %8s %8s | %7s %7s\n",
-            "iso","weight","P000E","N9","ND","persist","w*excess","sdrP","sdrND","daccP","daccND"))
-cat(strrep("-", 108), "\n")
+cat(sprintf("%-5s %6s | %8s %8s %8s %8s | %8s\n",
+            "iso","weight","P000E","ND","NDe","persist","w*excess"))
+cat(strrep("-", 66), "\n")
 for (i in seq_len(nrow(out))) with(out[i,], cat(sprintf(
-   "%-5s %6.3f | %8.4f %8.4f %8.4f %8.4f | %8.5f | %8.2f %8.2f | %7.2f %7.2f\n",
-   iso, w, mae_P000E, mae_N9, mae_ND, mae_pers, w_excess, sdr_P000E, sdr_ND,
-   dacc_P000E, dacc_ND)))
+   "%-5s %6.3f | %8.4f %8.4f %8.4f %8.4f | %8.5f\n",
+   iso, w, mae_P000E, mae_ND, mae_NDe, mae_pers, w_excess)))
 
-cat("\nND vs the production architecture, per country (negative = ND better):\n")
-o2 <- out[order(out$ND_vs_prod), c("iso","w","mae_P000E","mae_ND","ND_vs_prod")]
+cat("\nNDe vs the production architecture, per country (negative = NDe better):\n")
+o2 <- out[order(out$NDe_vs_prod), c("iso","w","mae_P000E","mae_NDe","NDe_vs_prod","mae_pers")]
 for (i in seq_len(nrow(o2))) with(o2[i,], cat(sprintf(
-   "  %-5s w=%.3f  %.4f -> %.4f   %+6.1f%%\n", iso, w, mae_P000E, mae_ND, 100*ND_vs_prod)))
-cat(sprintf("\nND is WORSE than production in %d of %d countries (%.0f%% of burden weight).\n",
-            sum(out$ND_vs_prod > 0, na.rm=TRUE), nrow(out),
-            100*sum(out$w[out$ND_vs_prod > 0], na.rm=TRUE)))
+   "  %-5s w=%.3f  %.4f -> %.4f   %+7.1f%%   %s\n", iso, w, mae_P000E, mae_NDe,
+   100*NDe_vs_prod, if (mae_NDe < mae_pers) "BEATS persistence" else "")))
+for (nm in c("ND","NDe")) {
+  v <- out[[paste0(nm, "_vs_prod")]]
+  cat(sprintf("%s is WORSE than production in %d of %d countries (%.0f%% of burden weight); beats persistence in %d.\n",
+              nm, sum(v > 0, na.rm=TRUE), nrow(out), 100*sum(out$w[v > 0], na.rm=TRUE),
+              sum(out[[paste0("mae_", nm)]] < out$mae_pers, na.rm=TRUE)))
+}
 utils::write.csv(out, file.path(HERE, "per_country_weakness.csv"), row.names=FALSE)
 cat("wrote per_country_weakness.csv\n")
