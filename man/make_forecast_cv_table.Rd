@@ -20,7 +20,7 @@ make_forecast_cv_table(
 \arguments{
 \item{cells}{Scored cells: \code{evaluate_rolling_cv(...)$cells}, or a path to
 a \code{scores_cells.parquet}/\code{.csv}. Must carry \code{iso_code,
-  cutoff_date, metric, model, window} and skill/bias columns.}
+cutoff_date, metric, model, window} and skill/bias columns.}
 
 \item{model}{Model to tabulate (default \code{"ensemble_opt"}).}
 

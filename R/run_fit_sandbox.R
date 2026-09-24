@@ -142,6 +142,10 @@ run_fit_sandbox <- function(config,
     r2_deaths   = calc_model_R2(obs_deaths, pred_deaths, method = "corr"),
     bias_cases  = calc_bias_ratio(obs_cases,  pred_cases),
     bias_deaths = calc_bias_ratio(obs_deaths, pred_deaths),
+    # Named pair c(baseline, epidemic): the two regime endpoints that bracket
+    # the realized period-mixed CFR. A single blended scalar was what the old
+    # (wrong) local copy of the algebra produced; the canonical helper is
+    # regime-conditional and there is no defensible single number here.
     cfr_implied  = .fit_cfr_implied(config, loc_idx),
     cfr_observed = if (sum(obs_cases, na.rm = TRUE) > 0)
       sum(obs_deaths, na.rm = TRUE) / sum(obs_cases, na.rm = TRUE) else NA_real_
@@ -190,19 +194,59 @@ run_fit_sandbox <- function(config,
   m
 }
 
-# Implied CFR from config reporting-chain parameters (NA if any piece missing).
-# mu_j_baseline is per-location; average it over the aggregated locations.
+# Implied surveillance CFR from the config's reporting-chain parameters, as the
+# pair of regime endpoints (endemic / epidemic) that bracket the realized,
+# period-mixed CFR. Returns c(baseline = NA, epidemic = NA) if any piece is missing.
+#
+# DELEGATES to .mosaic_add_implied_cfr_columns() (R/calc_implied_cfr.R) rather
+# than re-deriving the algebra. Until v0.93.0 this helper carried its own copy of
+# the PRE-v0.88.0 identity -- it omitted the incidence-dwell divisor
+# (1 - exp(-gamma_1)), understating the CFR ~10.5x at the shipped gamma_1 = 0.1,
+# and it used the 0.5*(chi_endemic + chi_epidemic) blend that B2.1
+# (sample_parameters.R:670) retired in favour of chi_epidemic. Both defects were
+# fixed in the canonical helper and missed here: textbook CLAUDE.md Lesson #11.
+# Keeping a second copy is what caused that, so there is no second copy now.
+#
+# The canonical helper is sample-frame shaped (one row per posterior draw, one
+# column pair per iso), so a config is adapted into a one-row frame with a
+# synthetic iso label per selected location; synthetic labels avoid collisions
+# when config$location_name has duplicates. mu_j_baseline and
+# mu_j_epidemic_factor are per-location, so each selected location gets its own
+# column pair and the resulting per-location CFRs are averaged -- which is what
+# aggregating the series across `locations` implies.
 .fit_cfr_implied <- function(config, loc_idx = NULL) {
+  na_pair <- c(baseline = NA_real_, epidemic = NA_real_)
+
   mu  <- config[["mu_j_baseline"]]
-  rd  <- config[["rho_deaths"]]
-  rho <- config[["rho"]]
-  ce  <- config[["chi_endemic"]]; cp <- config[["chi_epidemic"]]
-  if (is.null(mu) || is.null(rd) || is.null(rho) || is.null(ce) || is.null(cp)) return(NA_real_)
-  mu <- as.numeric(mu)
-  if (!is.null(loc_idx)) { sel <- loc_idx[loc_idx >= 1L & loc_idx <= length(mu)]; if (length(sel)) mu <- mu[sel] }
-  mu_bar <- mean(mu, na.rm = TRUE)
-  chi <- 0.5 * (as.numeric(ce)[1] + as.numeric(cp)[1])
-  rho1 <- as.numeric(rho)[1]
-  if (!is.finite(rho1) || rho1 == 0 || !is.finite(mu_bar)) return(NA_real_)
-  mu_bar * as.numeric(rd)[1] * chi / rho1
+  eps <- config[["mu_j_epidemic_factor"]]
+  globals <- list(rho         = config[["rho"]],
+                  rho_deaths  = config[["rho_deaths"]],
+                  chi_endemic = config[["chi_endemic"]],
+                  chi_epidemic = config[["chi_epidemic"]],
+                  gamma_1     = config[["gamma_1"]])
+  if (is.null(mu) || is.null(eps) || any(vapply(globals, is.null, logical(1)))) return(na_pair)
+
+  mu  <- as.numeric(mu)
+  eps <- as.numeric(eps)
+  if (length(eps) == 1L) eps <- rep(eps, length(mu))
+  if (length(eps) != length(mu)) return(na_pair)
+
+  sel <- if (is.null(loc_idx)) seq_along(mu) else loc_idx[loc_idx >= 1L & loc_idx <= length(mu)]
+  if (!length(sel)) return(na_pair)
+
+  isos <- paste0("L", seq_along(sel))
+  frame <- as.data.frame(lapply(globals, function(x) as.numeric(x)[1]))
+  for (k in seq_along(sel)) {
+    frame[[paste0("mu_j_baseline_",        isos[k])]] <- mu[sel[k]]
+    frame[[paste0("mu_j_epidemic_factor_", isos[k])]] <- eps[sel[k]]
+  }
+
+  out <- .mosaic_add_implied_cfr_columns(frame, iso_codes = isos, verbose = FALSE)
+
+  pick <- function(prefix) {
+    cols <- paste0(prefix, isos)
+    if (!all(cols %in% names(out))) return(NA_real_)
+    mean(vapply(cols, function(cn) as.numeric(out[[cn]])[1], numeric(1)), na.rm = TRUE)
+  }
+  c(baseline = pick("cfr_baseline_"), epidemic = pick("cfr_epidemic_"))
 }

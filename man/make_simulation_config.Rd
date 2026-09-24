@@ -185,18 +185,19 @@ model parameters.
 a \emph{rate}, not a period -- prior median ~0.71/day. The engine uses
 \code{iota * E} as the flow out of E.}
 
-\item{gamma_1}{Symptomatic shedding-duration rate \code{I_sym -> R} (numeric
->= 0, per day; "severe / symptomatic" branch).}
+\item{gamma_1}{Symptomatic shedding-duration rate \code{I_sym -> R} (numeric= 0, per day; "severe / symptomatic" branch).}
 
-\item{gamma_2}{Asymptomatic shedding-duration rate \code{I_asym -> R} (numeric
->= 0, per day; "mild / asymptomatic" branch).}
+\item{gamma_2}{Asymptomatic shedding-duration rate \code{I_asym -> R} (numeric= 0, per day; "mild / asymptomatic" branch).}
 
-\item{epsilon}{Natural-infection immunity waning rate \code{R -> S} (numeric
->= 0, per day). Distinct from vaccine waning (\code{omega_1}, \code{omega_2}).}
+\item{epsilon}{Natural-infection immunity waning rate \code{R -> S} (numeric= 0, per day). Distinct from vaccine waning (omega_1, omega_2).}
 
-\item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to
-length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
-If mu_j_baseline is provided with other IFR parameters, mu_jt can be generated using calc_deaths_from_infections().}
+\item{mu_jt}{\strong{Deprecated and ignored.} Retained only so that configs written
+before v0.94.0 (which carry a \code{mu_jt} field) can still be replayed through
+\code{do.call(make_simulation_config, config)} without an "unused argument"
+error. Any value supplied is silently dropped and is \strong{not} returned in
+the config. The engine never read this matrix: \code{run_simulation()} derives
+the per-tick mortality hazard itself from \code{mu_j_baseline}, \code{mu_j_slope}
+and \code{mu_j_epidemic_factor} (\code{R/sim_components.R}).}
 
 \item{mu_j_baseline}{Baseline infection fatality ratio for threshold-dependent IFR model.
 Numeric vector of length(location_name). Values must be in [0, 1].}
@@ -232,8 +233,11 @@ case reporting and IFR threshold models. Numeric scalar or length-n vector in [0
 in days (non-negative integer). \emph{Not} infection-to-report --
 incubation is handled separately by the E compartment and \code{iota}.}
 
-\item{delta_reporting_deaths}{Symptom-onset-to-death-report delay in days
-(non-negative integer).
+\item{delta_reporting_deaths}{Death-event-to-death-report delay in days
+(non-negative integer). The engine reads \code{disease_deaths} at
+\code{tick - delta_reporting_deaths} and thins by \code{rho_deaths}
+(\code{R/sim_components.R}), so this is a post-mortem reporting lag only:
+the onset-to-death interval is implicit in \code{gamma_1^-1}, \emph{not} here.
 \subsection{Spatial model}{
 
 Location coordinates and the gravity-model mobility parameters governing
@@ -389,7 +393,7 @@ make_simulation_config(
      gamma_1 = 0.2,
      gamma_2 = 0.25,
      epsilon = 0.05,
-     mu_jt = matrix(0.01, nrow = 2, ncol = 31),
+     mu_j_baseline = c(0.01, 0.01),
      rho = 0.9,
      sigma = 0.5,
      beta_j0_hum = c(0.05, 0.03),

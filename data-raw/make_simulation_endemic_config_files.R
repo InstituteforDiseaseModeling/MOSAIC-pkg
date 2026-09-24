@@ -69,7 +69,6 @@ d_rate <- 0.00004        # deaths ≈ 1.5 % yr‑¹
 
 b_jt <- matrix(b_rate,  n_loc, T_len, dimnames = list(j, t))
 d_jt <- matrix(d_rate, n_loc, T_len, dimnames = list(j, t))
-mu_jt <- matrix(0.01,  n_loc, T_len, dimnames = list(j, t))   # IFR
 
 nu_1_jt <- nu_2_jt <- matrix(0, n_loc, T_len, dimnames = list(j, t))
 
@@ -157,8 +156,7 @@ sim_args <- list(
      gamma_1          = 0.20,
      gamma_2          = 0.10,
      epsilon          = 0.0005,
-     mu_jt            = mu_jt,
-     mu_j_baseline        = setNames(rep(0.01, n_loc), j),  # aligned with mu_jt baseline
+     mu_j_baseline        = setNames(rep(0.01, n_loc), j),  # per-day IFR hazard; engine builds its own mu_jt
      mu_j_slope           = setNames(rep(0,    n_loc), j),  # no temporal trend (toy)
      mu_j_epidemic_factor = setNames(rep(0,    n_loc), j),  # no epidemic IFR bump (toy)
      chi_endemic      = 0.5,       # PPV during endemic periods
@@ -167,8 +165,8 @@ sim_args <- list(
      rho              = 0.52,
      rho_deaths       = 0.42,      # Death detection rate (laser-cholera#49; mean of informative Beta(36.95, 51.02))
      sigma            = 0.24,
-     delta_reporting_cases  = 0,   # Infection-to-case reporting delay (days)
-     delta_reporting_deaths = 5,   # Infection-to-death reporting delay (days)
+     delta_reporting_cases  = 0,   # Symptom-onset-to-case reporting delay (days)
+     delta_reporting_deaths = 5,   # Death-event-to-death-report delay (days; post-mortem lag, onset-to-death is in gamma_1^-1)
      longitude        = longitude,
      latitude         = latitude,
      mobility_omega   = mobility_omega,

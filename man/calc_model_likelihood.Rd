@@ -18,6 +18,8 @@ calc_model_likelihood(
   config = NULL,
   nb_k_cases = NULL,
   nb_k_deaths = NULL,
+  eps_rel_cases = 0.02,
+  eps_rel_deaths = 0.25,
   verbose = FALSE,
   weight_peak_timing = 0,
   weight_peak_magnitude = 0,
@@ -62,6 +64,19 @@ from \code{obs_cases} via \code{\link{est_nb_dispersion}}; in
 
 \item{nb_k_deaths}{NB dispersion for the deaths channel; see
 \code{nb_k_cases}.}
+
+\item{eps_rel_cases, eps_rel_deaths}{Positive scalars. Within each location the
+predicted mean is floored at \code{max(1e-4, eps_rel * mean(obs))} before the
+NB density is evaluated, separately per channel. The floor is not cosmetic:
+production scores a SINGLE stochastic realisation, so a low-count series is
+full of cells where the realisation is 0 against a positive observation, and
+the size of the floor is what the likelihood pays for such a cell. Too small a
+floor makes zeros ruinous and the optimum moves to a draw that over-predicts
+the level (a Jensen gap: \code{E_seed[LL(est)]} peaks well above
+\code{LL(E_seed[est])}). Cases default \code{0.02}; deaths default
+\code{0.25}, sized by sweep so the deaths level at the likelihood optimum is
+unbiased. Cases are far less exposed (13.6\\% of scored deaths cells predict
+zero against a positive observation, versus 1.7\\% of cases cells).}
 
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 

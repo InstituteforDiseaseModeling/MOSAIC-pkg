@@ -168,7 +168,6 @@ build_regime_config <- function(date_start, date_stop,
   # Demography / IFR (held constant across settings)
   b_jt    <- matrix(0.00005, N_LOC, T_len, dimnames = list(J, t))
   d_jt    <- matrix(0.00004, N_LOC, T_len, dimnames = list(J, t))
-  mu_jt   <- matrix(0.01,    N_LOC, T_len, dimnames = list(J, t))
   nu_1_jt <- nu_2_jt <- matrix(0, N_LOC, T_len, dimnames = list(J, t))
 
   # Transmission: split total beta into human + environmental shares so the
@@ -196,7 +195,7 @@ build_regime_config <- function(date_start, date_stop,
     b_jt = b_jt, d_jt = d_jt, nu_1_jt = nu_1_jt, nu_2_jt = nu_2_jt,
     phi_1 = 0.64, phi_2 = 0.85, omega_1 = omega_1, omega_2 = omega_2,
     nu_jt_sources = c("S", "E", "Isym", "Iasym", "R"), iota = 1 / 1.4,
-    gamma_1 = 0.2, gamma_2 = 0.1, epsilon = epsilon, mu_jt = mu_jt,
+    gamma_1 = 0.2, gamma_2 = 0.1, epsilon = epsilon,
     mu_j_baseline = setNames(rep(0.01, N_LOC), J),
     mu_j_slope = setNames(rep(0, N_LOC), J),
     mu_j_epidemic_factor = setNames(rep(0, N_LOC), J),

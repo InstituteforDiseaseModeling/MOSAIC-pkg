@@ -9,14 +9,19 @@
 # method-of-moments form and floored at 3; it is now estimated per location by
 # est_nb_dispersion() and passed in. The expected values below are therefore
 # pinned at an EXPLICIT k and were verified against an independent hand
-# computation over both channels -- they are derived, not merely recorded. The
-# hand computation floors the mean at the same channel-relative eps the
-# likelihood uses (A1b): eps = max(1e-4, 0.02 * mean(observed)), applied per
-# location row.
-.ref_eps <- function(v) max(1e-4, 0.02 * mean(v[is.finite(v)], na.rm = TRUE))
-.ref_hand <- function(O, E, k) sum(vapply(seq_len(nrow(O)), function(r)
-     sum(stats::dnbinom(O[r, ], mu = pmax(E[r, ], .ref_eps(O[r, ])), size = k, log = TRUE)),
+# computation over both channels -- they are derived, not merely recorded.
+#
+# RE-BASELINED AGAIN (R1). The eps floor is now PER CHANNEL: cases keep
+# eps_rel = 0.02, deaths move to 0.25. The deaths fixture's second location has
+# zero-prediction cells, so its block shifts and the three values below moved by
+# 0.57-1.12 nats. This is the intended value change, not drift: the hand
+# computation carries the per-channel eps and reproduces each value exactly.
+.ref_eps <- function(v, rel) max(1e-4, rel * mean(v[is.finite(v)], na.rm = TRUE))
+.ref_hand <- function(O, E, k, rel) sum(vapply(seq_len(nrow(O)), function(r)
+     sum(stats::dnbinom(O[r, ], mu = pmax(E[r, ], .ref_eps(O[r, ], rel)), size = k, log = TRUE)),
      numeric(1)))
+.REF_EPS_C <- 0.02      # shipped cases default
+.REF_EPS_D <- 0.25      # shipped deaths default (R1 sweep)
 .REF_K <- 3
 
 ref_obs_c <- matrix(c(10,20,30,40,50,60,70,80,90,100,
@@ -29,31 +34,40 @@ ref_est_d <- round(ref_est_c * 0.05)
 test_that("reference: core NB only produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
                                       nb_k_cases = .REF_K, nb_k_deaths = .REF_K)
-  expect_equal(ll, -107.29186947, tolerance = 1e-4)
+  expect_equal(ll, -107.85723783, tolerance = 1e-4)
   # independent hand computation of the same quantity
-  hand <- .ref_hand(ref_obs_c, ref_est_c, .REF_K) + .ref_hand(ref_obs_d, ref_est_d, .REF_K)
+  hand <- .ref_hand(ref_obs_c, ref_est_c, .REF_K, .REF_EPS_C) +
+          .ref_hand(ref_obs_d, ref_est_d, .REF_K, .REF_EPS_D)
   expect_equal(ll, hand, tolerance = 1e-6)
+
+  # the value is channel-asymmetric: the old symmetric 0.02/0.02 baseline
+  # (-107.29186947) must NOT be reproducible at the shipped defaults
+  expect_equal(MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
+                                             nb_k_cases = .REF_K, nb_k_deaths = .REF_K,
+                                             eps_rel_deaths = 0.02),
+               -107.29186947, tolerance = 1e-4)
 })
 
 test_that("reference: core NB + cumulative produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
                                       nb_k_cases = .REF_K, nb_k_deaths = .REF_K,
                                       weight_cumulative_total = 0.25)
-  expect_equal(ll, -108.82276963, tolerance = 1e-4)
+  expect_equal(ll, -109.38813798, tolerance = 1e-4)
 })
 
 test_that("reference: core NB + WIS produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
                                       nb_k_cases = .REF_K, nb_k_deaths = .REF_K,
                                       weight_wis = 0.10)
-  expect_equal(ll, -109.43726947, tolerance = 1e-4)
+  expect_equal(ll, -110.00263783, tolerance = 1e-4)
 })
 
 test_that("reference: perfect match (obs == est) produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_obs_c, ref_obs_d, ref_obs_d,
                                       nb_k_cases = .REF_K, nb_k_deaths = .REF_K)
-  expect_equal(ll, -106.08420287, tolerance = 1e-4)
-  hand <- .ref_hand(ref_obs_c, ref_obs_c, .REF_K) + .ref_hand(ref_obs_d, ref_obs_d, .REF_K)
+  expect_equal(ll, -107.20487400, tolerance = 1e-4)
+  hand <- .ref_hand(ref_obs_c, ref_obs_c, .REF_K, .REF_EPS_C) +
+          .ref_hand(ref_obs_d, ref_obs_d, .REF_K, .REF_EPS_D)
   expect_equal(ll, hand, tolerance = 1e-6)
 })
 

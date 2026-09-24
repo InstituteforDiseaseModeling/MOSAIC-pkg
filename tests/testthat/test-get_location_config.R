@@ -190,7 +190,11 @@ test_that("get_location_config correctly subsets time-varying parameters", {
      eth_idx <- which(config_default$location_name == "ETH")
      
      # Check time-varying parameters (matrices)
-     time_params <- c("b_jt", "d_jt", "nu_1_jt", "nu_2_jt", "mu_jt", "psi_jt",
+     # mu_jt was dropped from the config schema in config_default v4.8 (the
+     # engine builds its own per-tick mortality hazard from mu_j_baseline /
+     # mu_j_slope / mu_j_epidemic_factor). Leaving it listed here would silently
+     # become a no-op once the .rda is rebuilt, since the loop skips absent fields.
+     time_params <- c("b_jt", "d_jt", "nu_1_jt", "nu_2_jt", "psi_jt",
                      "reported_cases", "reported_deaths")
      
      for (param in time_params) {

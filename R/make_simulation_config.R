@@ -86,9 +86,13 @@
 #'        >= 0, per day; "mild / asymptomatic" branch).
 #' @param epsilon Natural-infection immunity waning rate `R -> S` (numeric
 #'        >= 0, per day). Distinct from vaccine waning (`omega_1`, `omega_2`).
-#' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to
-#'        length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
-#'        If mu_j_baseline is provided with other IFR parameters, mu_jt can be generated using calc_deaths_from_infections().
+#' @param mu_jt **Deprecated and ignored.** Retained only so that configs written
+#'        before v0.94.0 (which carry a `mu_jt` field) can still be replayed through
+#'        `do.call(make_simulation_config, config)` without an "unused argument"
+#'        error. Any value supplied is silently dropped and is **not** returned in
+#'        the config. The engine never read this matrix: `run_simulation()` derives
+#'        the per-tick mortality hazard itself from `mu_j_baseline`, `mu_j_slope`
+#'        and `mu_j_epidemic_factor` (`R/sim_components.R`).
 #' @param mu_j_baseline Baseline infection fatality ratio for threshold-dependent IFR model.
 #'        Numeric vector of length(location_name). Values must be in \[0, 1\].
 #' @param mu_j_slope Temporal trend in baseline IFR (proportion change over simulation period).
@@ -113,8 +117,11 @@
 #' @param delta_reporting_cases Symptom-onset-to-surveillance reporting delay
 #'        in days (non-negative integer). *Not* infection-to-report --
 #'        incubation is handled separately by the E compartment and `iota`.
-#' @param delta_reporting_deaths Symptom-onset-to-death-report delay in days
-#'        (non-negative integer).
+#' @param delta_reporting_deaths Death-event-to-death-report delay in days
+#'        (non-negative integer). The engine reads `disease_deaths` at
+#'        `tick - delta_reporting_deaths` and thins by `rho_deaths`
+#'        (`R/sim_components.R`), so this is a post-mortem reporting lag only:
+#'        the onset-to-death interval is implicit in `gamma_1^-1`, *not* here.
 #'
 #' ## Spatial model
 #' Location coordinates and the gravity-model mobility parameters governing
@@ -228,7 +235,7 @@
 #'      gamma_1 = 0.2,
 #'      gamma_2 = 0.25,
 #'      epsilon = 0.05,
-#'      mu_jt = matrix(0.01, nrow = 2, ncol = 31),
+#'      mu_j_baseline = c(0.01, 0.01),
 #'      rho = 0.9,
 #'      sigma = 0.5,
 #'      beta_j0_hum = c(0.05, 0.03),
@@ -301,7 +308,7 @@ make_simulation_config <- function(output_file_path = NULL,
                               gamma_1 = NULL,
                               gamma_2 = NULL,
                               epsilon = NULL,
-                              mu_jt = NULL,
+                              mu_jt = NULL,  # DEPRECATED + IGNORED: legacy-config tolerance only (see @param)
                               mu_j_baseline = NULL,  # Baseline IFR for threshold-dependent model
                               mu_j_slope = NULL,  # Temporal trend in IFR
                               mu_j_epidemic_factor = NULL,  # Proportional increase during epidemics
@@ -310,12 +317,12 @@ make_simulation_config <- function(output_file_path = NULL,
                               rho = NULL,
                               rho_deaths = NULL,  # Death detection rate (laser-cholera#49)
                               sigma = NULL,
-                              # Case reporting parameters for calc_cases_from_infections()
+                              # Case reporting parameters (surveillance PPV, regime-dependent)
                               chi_endemic = NULL,
                               chi_epidemic = NULL,
                               epidemic_threshold = NULL,  # Used for both case reporting and IFR threshold models
-                              delta_reporting_cases = NULL,  # Infection-to-case reporting delay
-                              delta_reporting_deaths = NULL,  # Infection-to-death reporting delay
+                              delta_reporting_cases = NULL,  # Symptom-onset-to-case reporting delay
+                              delta_reporting_deaths = NULL,  # Death-event-to-death-report delay (post-mortem lag; onset-to-death is in gamma_1^-1)
 
                               # Spatial model
                               longitude = NULL,
@@ -676,71 +683,41 @@ make_simulation_config <- function(output_file_path = NULL,
           stop("epsilon must be a numeric scalar greater than or equal to zero.")
      }
 
-     # Handle mu_j_baseline and related parameters for threshold-dependent IFR
-     # If mu_jt is not provided directly, generate it from mu_j_baseline if available
-     if (is.null(mu_jt) && !is.null(mu_j_baseline)) {
-          # Validate mu_j_baseline
-          if (!is.numeric(mu_j_baseline) || length(mu_j_baseline) != length(location_name)) {
-               stop("mu_j_baseline must be a numeric vector with length equal to location_name.")
+     # Threshold-dependent IFR parameters. The engine consumes mu_j_baseline,
+     # mu_j_slope and mu_j_epidemic_factor directly and builds its own per-tick
+     # mortality hazard (R/sim_components.R); it never reads a pre-materialised
+     # [nL x nT] mu_jt matrix, so no such matrix is generated or returned here.
+     # `mu_jt` survives in the signature purely as legacy-config tolerance and is
+     # dropped silently (see @param mu_jt).
+     # Length rule: SCALAR or per-location, matching the engine. `.sim_patch_vector()`
+     # (R/sim_params.R) broadcasts a length-1 mu_j_* to every patch, so demanding
+     # length(location_name) here would reject configs the engine accepts.
+     if (!is.null(mu_j_baseline)) {
+          if (!is.numeric(mu_j_baseline) ||
+              !(length(mu_j_baseline) %in% c(1L, length(location_name)))) {
+               stop("mu_j_baseline must be a numeric scalar or a vector with length equal to location_name.")
           }
           if (any(mu_j_baseline < 0 | mu_j_baseline > 1)) {
                stop("All values in mu_j_baseline must be between 0 and 1.")
           }
+     }
 
-          # Initialize mu_j_slope if not provided
-          if (is.null(mu_j_slope)) {
-               mu_j_slope <- rep(0, length(location_name))
+     if (!is.null(mu_j_slope)) {
+          if (!is.numeric(mu_j_slope) ||
+              !(length(mu_j_slope) %in% c(1L, length(location_name)))) {
+               stop("mu_j_slope must be a numeric scalar or a vector with length equal to location_name.")
           }
+     }
 
-          # Validate mu_j_slope
-          if (!is.numeric(mu_j_slope) || length(mu_j_slope) != length(location_name)) {
-               stop("mu_j_slope must be a numeric vector with length equal to location_name.")
-          }
-
-          # Initialize mu_j_epidemic_factor if not provided
-          if (is.null(mu_j_epidemic_factor)) {
-               mu_j_epidemic_factor <- rep(0, length(location_name))  # No epidemic effect by default
-          }
-
-          # Validate mu_j_epidemic_factor
-          if (!is.numeric(mu_j_epidemic_factor) || length(mu_j_epidemic_factor) != length(location_name)) {
-               stop("mu_j_epidemic_factor must be a numeric vector with length equal to location_name.")
+     if (!is.null(mu_j_epidemic_factor)) {
+          if (!is.numeric(mu_j_epidemic_factor) ||
+              !(length(mu_j_epidemic_factor) %in% c(1L, length(location_name)))) {
+               stop("mu_j_epidemic_factor must be a numeric scalar or a vector with length equal to location_name.")
           }
           if (any(mu_j_epidemic_factor < -1)) {
                stop("All values in mu_j_epidemic_factor must be greater than or equal to -1.")
           }
-
-          # Generate mu_jt from mu_j_baseline and mu_j_slope (epidemic factor applied at runtime)
-          n_days <- length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))
-          mu_jt <- matrix(NA, nrow = length(location_name), ncol = n_days)
-
-          for (j in 1:length(location_name)) {
-               # Create time-varying mu with optional slope
-               # mu_jt[j,t] = mu_j_baseline[j] * (1 + mu_j_slope[j] * (t - 1) / n_days)
-               # This creates a multiplicative trend from mu_j_baseline[j] at t=1
-               time_factor <- (seq_len(n_days) - 1) / max(1, n_days - 1)
-               mu_jt[j, ] <- mu_j_baseline[j] * (1 + mu_j_slope[j] * time_factor)
-
-               # Ensure values stay within [0, 1]
-               mu_jt[j, ] <- pmax(0, pmin(1, mu_jt[j, ]))
-          }
      }
-
-     # Ensure mu_jt follows required structure (n_locations x time_steps) and values are in [0,1].
-     # mu_jt is required - either provided directly or generated from mu_j_baseline
-     if (is.null(mu_jt)) {
-          stop("mu_jt must be provided directly or mu_j_baseline must be provided to generate it.")
-     }
-     if (!is.matrix(mu_jt) || nrow(mu_jt) != length(location_name) ||
-         ncol(mu_jt) != length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))) {
-          stop("mu_jt must be a numeric matrix with rows equal to length(location_name) and columns equal to the daily sequence from date_start to date_stop.")
-     }
-     if (any(mu_jt < 0 | mu_jt > 1)) {
-          stop("All values in mu_jt must be between 0 and 1.")
-     }
-
-     # Add mu_jt to params after validation
-     params$mu_jt <- mu_jt
 
      # Observation Processes validation.
      if (!is.numeric(rho) || rho < 0 || rho > 1) {

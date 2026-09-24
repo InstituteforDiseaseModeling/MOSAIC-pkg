@@ -1,3 +1,55 @@
+# MOSAIC (development version)
+
+## The epsilon floor is sized per channel (CFR restructure R1)
+
+0.93.0 put the eps-floored density in place but applied **one constant, 0.02, to
+both channels**. That is the right fraction for cases and roughly 12x too small
+for deaths. Because production scores a **single stochastic realisation** per
+draw, a low-count deaths series is mostly structural zeros; each zero-against-a-
+positive-observation cell is scored at `log NB(y | eps)`, so too small a floor
+makes those cells ruinous and the likelihood optimum moves onto draws that
+**over-predict the deaths level by ~2.5x**. This is a scoring-rule (Jensen)
+artifact -- `E_seed[LL(est)]` peaks far above `LL(E_seed[est])` -- not a CFR
+misspecification: the NB scale-MLE on the mean path is unbiased for every `k`.
+
+`calc_log_likelihood_negbin()` and `calc_log_likelihood_poisson()` gain an
+`eps_rel` argument (default `0.02`, so every existing call is unchanged), and
+`calc_model_likelihood()` gains `eps_rel_cases` (0.02) and `eps_rel_deaths`
+(**0.25**), exposed as `control$likelihood$eps_rel_cases` /
+`eps_rel_deaths`.
+
+**How 0.25 was chosen.** A profile over a multiplicative scale on
+`mu_j_baseline`, on four contrasting countries (ETH, COD high-burden, MOZ,
+KEN degenerate-sparse), 4 accepted base draws x 3 seed groups x 12 stochastic
+replicates each, with a **real 365-day holdout** masked out of the likelihood.
+Every eps arm re-scores the identical cached simulation pool, so the arms are
+exactly paired. Per-block median deaths bias at the likelihood optimum:
+
+| `eps_rel_deaths` | 0.02 | 0.05 | 0.10 | 0.15 | 0.20 | **0.25** | 0.30 | 0.40 | 0.50 |
+|---|---|---|---|---|---|---|---|---|---|
+| in-sample bias  | 2.34 | 2.12 | 1.74 | 1.33 | 1.12 | **0.97** | 0.87 | 0.50 | 0.35 |
+| held-out bias   | 1.43 | 1.40 | 1.39 | 1.29 | 1.20 | **1.11** | 1.10 | 0.98 | 0.80 |
+
+0.25 minimises `|log bias_in| + |log bias_out|` both pooled over all four
+countries and pooled over the three where the mechanism operates. **0.5 is past
+the crossing** (in-sample bias 0.35, a 3x under-prediction) and is not used.
+
+**Cross-check.** Replicate-averaging -- scoring the mean of `n` realisations at
+the *unchanged* 0.02 floor -- moves the same pooled in-sample bias 2.51 (n=1) ->
+1.20 (n=6) -> 1.10 (n=24), landing where the eps route lands. The two
+independent routes agree, as the Jensen diagnosis requires.
+
+**Known limit.** On a very sparse deaths channel (KEN: 0.07 deaths/day, every
+non-zero day equal to 1) `eps_rel` is inert -- the floor never binds -- and the
+bias there is not eps-mediated. Replicate-averaging does move KEN. The eps fix
+is the cheap 90% of the problem, not all of it.
+
+The pinned values in `test-calc_model_likelihood_reference.R` shift by
+0.57-1.12 nats; each is re-derived from an independent hand computation
+carrying the per-channel eps. `.mosaic_likelihood_impl_version()` is bumped so
+resume refuses to pool shards scored under the old floor (it was **not** bumped
+at 0.93.0, which also changed likelihood values).
+
 # MOSAIC 0.93.0
 
 ## The likelihood scores every cell by its density (arm A1b)

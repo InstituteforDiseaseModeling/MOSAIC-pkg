@@ -34,7 +34,8 @@ List containing:
 \itemize{
 \item model: Fitted GAM model object
 \item predictions: Data frame with CFR estimates for all countries and years
-\item country_effects: Estimated country-specific deviations
+\item country_effects: Country random intercepts (one row per country in
+the model, columns \code{iso_code}, \code{country}, \code{random_effect})
 \item temporal_trend: Population-average temporal trend
 \item validation: Cross-validation results for recent years
 \item summary: Summary statistics and model fit metrics
@@ -55,6 +56,12 @@ The function fits a hierarchical GAM model with the following structure:
 \item Binomial likelihood with logit link for proper handling of rates
 \item Predictions extended to current year based on Sys.Date()
 }
+
+The country factor is keyed on \code{iso_code}, not on the country-name
+string, so an ISO that appears under more than one spelling in the WHO annual
+file still gets exactly one factor level. Countries absent from the training
+filter receive the population-average prediction, with every country-indexed
+smooth (random intercept and factor smooth) excluded.
 
 Model outputs include:
 \itemize{

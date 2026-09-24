@@ -20,7 +20,8 @@ make_test_config <- function() {
     reported_cases  = matrix(round(seas), nrow = 1),
     reported_deaths = matrix(round(seas * 0.01), nrow = 1),
     beta_j0_hum = 3e-6, beta_j0_env = 2e-6,
-    mu_j_baseline = 0.02, rho_deaths = 0.6, rho = 0.2,
+    mu_j_baseline = 0.02, mu_j_epidemic_factor = 0.5,
+    rho_deaths = 0.6, rho = 0.2, gamma_1 = 0.1,
     chi_endemic = 0.5, chi_epidemic = 0.9, epidemic_threshold = 30,
     .seas = seas
   )
@@ -59,12 +60,78 @@ test_that("predictions use the standard ensemble format and both metrics", {
   expect_setequal(unique(res$predictions$metric), c("Suspected Cases", "Deaths"))
 })
 
-test_that("implied CFR follows mu * rho_deaths * chi / rho", {
+# The sandbox must not carry its own copy of the implied-CFR algebra. Until
+# v0.93.0 .fit_cfr_implied() was the PRE-v0.88.0 identity: no (1 - exp(-gamma_1))
+# dwell divisor (~10.5x understatement at gamma_1 = 0.1) and the retired
+# 0.5*(chi_endemic + chi_epidemic) blend. These three tests pin the delegation
+# itself, not a restatement of the formula -- a restatement is exactly what
+# drifted last time (CLAUDE.md Lesson #11).
+test_that("implied CFR delegates to .mosaic_add_implied_cfr_columns, not a local copy", {
   cfg <- make_test_config()
   res <- run_fit_sandbox(cfg, .sim_runner = stub_runner)
-  chi <- 0.5 * (cfg$chi_endemic + cfg$chi_epidemic)
-  expect_equal(res$metrics$cfr_implied,
-               cfg$mu_j_baseline * cfg$rho_deaths * chi / cfg$rho, tolerance = 1e-8)
+
+  canonical <- MOSAIC:::.mosaic_add_implied_cfr_columns(
+    data.frame(rho = cfg$rho, rho_deaths = cfg$rho_deaths,
+               chi_endemic = cfg$chi_endemic, chi_epidemic = cfg$chi_epidemic,
+               gamma_1 = cfg$gamma_1,
+               mu_j_baseline_L1 = cfg$mu_j_baseline,
+               mu_j_epidemic_factor_L1 = cfg$mu_j_epidemic_factor),
+    iso_codes = "L1", verbose = FALSE
+  )
+
+  expect_named(res$metrics$cfr_implied, c("baseline", "epidemic"))
+  expect_equal(unname(res$metrics$cfr_implied["baseline"]),
+               canonical$cfr_baseline_L1, tolerance = 1e-12)
+  expect_equal(unname(res$metrics$cfr_implied["epidemic"]),
+               canonical$cfr_epidemic_L1, tolerance = 1e-12)
+})
+
+test_that("implied CFR carries the incidence-dwell divisor the old local copy omitted", {
+  cfg <- make_test_config()
+  res <- run_fit_sandbox(cfg, .sim_runner = stub_runner)
+
+  dwell <- 1 - exp(-cfg$gamma_1)
+  expect_equal(unname(res$metrics$cfr_implied["baseline"]),
+               cfg$mu_j_baseline * cfg$rho_deaths * cfg$chi_endemic / (cfg$rho * dwell),
+               tolerance = 1e-12)
+
+  # And it is NOT the retired blend-without-dwell value. At gamma_1 = 0.1 the old
+  # number was ~10.5x too small; assert the gap rather than just the new value, so
+  # a silent reversion cannot pass.
+  old_wrong <- cfg$mu_j_baseline * cfg$rho_deaths *
+    (0.5 * (cfg$chi_endemic + cfg$chi_epidemic)) / cfg$rho
+  expect_gt(unname(res$metrics$cfr_implied["baseline"]) / old_wrong, 5)
+})
+
+test_that("implied CFR averages mu over the selected locations only", {
+  cfg <- make_test_config()
+  cfg$mu_j_baseline <- c(0.01, 0.03, 0.05)
+  cfg$mu_j_epidemic_factor <- c(0, 0, 0)
+  seas <- cfg$.seas
+  cfg$reported_cases  <- matrix(rep(round(seas), each = 3), nrow = 3)
+  cfg$reported_deaths <- matrix(rep(round(seas * 0.01), each = 3), nrow = 3)
+  runner3 <- function(config, seed, quiet) list(results = list(
+    reported_cases  = matrix(rep(seas, each = 3), nrow = 3),
+    reported_deaths = matrix(rep(0.01 * seas, each = 3), nrow = 3)))
+
+  dwell <- 1 - exp(-cfg$gamma_1)
+  cfr_of <- function(mu) mu * cfg$rho_deaths * cfg$chi_endemic / (cfg$rho * dwell)
+
+  res_all <- run_fit_sandbox(cfg, .sim_runner = runner3)
+  expect_equal(unname(res_all$metrics$cfr_implied["baseline"]),
+               mean(cfr_of(c(0.01, 0.03, 0.05))), tolerance = 1e-12)
+
+  res_one <- run_fit_sandbox(cfg, locations = 2L, .sim_runner = runner3)
+  expect_equal(unname(res_one$metrics$cfr_implied["baseline"]),
+               cfr_of(0.03), tolerance = 1e-12)
+})
+
+test_that("implied CFR is NA when gamma_1 is absent, never the dwell-free value", {
+  cfg <- make_test_config()
+  cfg$gamma_1 <- NULL
+  res <- run_fit_sandbox(cfg, .sim_runner = stub_runner)
+  expect_true(all(is.na(res$metrics$cfr_implied)))
+  expect_named(res$metrics$cfr_implied, c("baseline", "epidemic"))
 })
 
 test_that("merged scorecard exposes the five dimensions", {

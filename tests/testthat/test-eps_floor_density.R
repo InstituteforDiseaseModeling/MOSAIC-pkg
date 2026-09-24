@@ -5,7 +5,11 @@
 # observed count, not a log-density. It carried essentially all of the
 # log-likelihood's between-draw variance, so the ensemble's delta-AIC described
 # that constant rather than model fit. Every cell now goes through the density
-# with the mean floored at eps = max(1e-4, 0.02 * mean(observed)).
+# with the mean floored at eps = max(1e-4, eps_rel * mean(observed)).
+#
+# This file pins the LEAF default, eps_rel = 0.02, which is unchanged. The
+# per-channel sizing (cases 0.02, deaths 0.25) lives one level up in
+# calc_model_likelihood() and is tested in test-eps_rel_channel.R.
 
 .eps_of <- function(obs) max(1e-4, 0.02 * mean(obs[is.finite(obs)], na.rm = TRUE))
 

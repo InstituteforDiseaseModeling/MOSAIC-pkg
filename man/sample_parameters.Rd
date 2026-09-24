@@ -49,6 +49,17 @@ survival; decay_days_long is derived as short + spread (default TRUE)
 \item sample_chi_endemic: PPV among suspected cases during endemic periods (default TRUE)
 \item sample_chi_epidemic: PPV among suspected cases during epidemic periods (default TRUE)
 \item sample_rho: Care-seeking rate (default TRUE)
+\item sample_rho_deaths: Surveillance capture rate of true cholera deaths
+(default FALSE; PINNED at \code{config_default$rho_deaths} = 0.42). Under
+the B2 derivation \code{mu_j_baseline} is proportional to
+\code{1 / rho_deaths} while the engine thins \code{disease_deaths} by
+\code{rho_deaths}, so the parameter cancels from the deaths mean
+identically and carries no likelihood information (Fisher information is
+exactly zero to O(mu^2)). Sweeping it over 0.25-0.65 \emph{with} the
+derivation moves realized deaths 0.3-1.3 percent (n = 48 seeds/arm,
+5 national medoids), against 6-27 percent for either half-change alone.
+The Beta(36.95, 51.02) prior is retained in \code{priors_default} as the
+literature record and for sensitivity runs; set TRUE to re-enable the draw.
 \item sample_sigma: Symptomatic fraction (default TRUE)
 \item sample_zeta_1: Symptomatic shedding rate (default TRUE)
 \item sample_zeta_ratio: Symptomatic-to-asymptomatic shedding ratio (default TRUE)
@@ -75,8 +86,19 @@ sampled location parameter. Under a legacy priors object (no
 \item sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)
 \item sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)
 \item sample_epidemic_threshold: Location-specific epidemic activation threshold (default TRUE)
-\item sample_delta_reporting_cases: Infection-to-case reporting delay in days (default TRUE)
-\item sample_delta_reporting_deaths: Infection-to-death reporting delay in days (default TRUE)
+\item sample_delta_reporting_cases: Symptom-onset-to-case reporting delay in days (default TRUE)
+\item sample_delta_reporting_deaths: Death-event-to-death-report delay in
+days (default FALSE; PINNED at
+\code{config_default$delta_reporting_deaths} = 5). The engine reads
+\code{disease_deaths} at \code{tick - delta_reporting_deaths} and thins by
+\code{rho_deaths}, so this is a post-mortem reporting lag only; the
+onset-to-death interval is implicit in \code{gamma_1^-1}. There is no
+observational anchor to calibrate against, because deaths and cases are
+reported on the same WHO bulletin row (weekly cross-correlation peaks at
+lag 0 in 11 of 15 countries) and the posterior beats a resampling null in
+only 6 of 27 countries. 5 days is the rounded prior median/mean of the
+retained TruncNorm(4, 3, \link{1, 14}) and the midpoint of the 3-7 day IDSR
+death-to-report window that anchors it. Set TRUE to re-enable the draw.
 \item sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
 \item sample_psi_star_b: Suitability calibration scale/offset (default TRUE)
 \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)

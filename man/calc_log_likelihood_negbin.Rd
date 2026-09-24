@@ -10,6 +10,7 @@ calc_log_likelihood_negbin(
   k = NULL,
   k_min = NULL,
   weights = NULL,
+  eps_rel = 0.02,
   verbose = TRUE
 )
 }
@@ -27,6 +28,13 @@ no flooring is applied.}
 
 \item{weights}{Optional numeric vector of non-negative weights, same length as \code{observed}.
 Default is \code{NULL}, which sets all weights to 1.}
+
+\item{eps_rel}{Positive scalar; the predicted mean of every cell is floored at
+\code{max(1e-4, eps_rel * mean(observed))} before the density is evaluated.
+Default \code{0.02}. This floor is the only thing standing between a zero
+prediction and \code{log(0)}, and its SIZE sets how hard a spurious zero is
+punished, so it is channel-specific: see \code{\link{calc_model_likelihood}}
+(\code{eps_rel_cases} / \code{eps_rel_deaths}).}
 
 \item{verbose}{Logical; if \code{TRUE}, prints diagnostics including the (floored) dispersion and total log-likelihood.}
 }

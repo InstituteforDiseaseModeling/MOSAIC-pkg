@@ -116,8 +116,8 @@ convert_config_to_dataframe <- function(config) {
           "epidemic_threshold", # Added: Epidemic activation threshold
           "chi_endemic",        # Added: PPV during endemic periods
           "chi_epidemic",       # Added: PPV during epidemic periods
-          "delta_reporting_cases",  # Added: Case reporting delay
-          "delta_reporting_deaths", # Added: Death reporting delay
+          "delta_reporting_cases",  # Symptom-onset-to-case reporting delay
+          "delta_reporting_deaths", # Death-event-to-death-report delay (post-mortem lag; onset-to-death is in gamma_1^-1)
           "psi_star_a",         # Added: psi_star calibration parameters
           "psi_star_b",
           "psi_star_z",

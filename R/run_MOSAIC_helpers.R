@@ -1337,7 +1337,11 @@
 #' produces (e.g. the v0.22.20-21 N_obs shape-term normalization) so that resume
 #' refuses to pool shards scored by an incompatible likelihood implementation.
 #' @noRd
-.mosaic_likelihood_impl_version <- function() "R/v0.92.0"
+#' @note v0.93.0 replaced the `-y*log(1e6)` zero penalty with an eps-floored
+#'   density -- a change in likelihood VALUES -- but left this string at
+#'   "R/v0.92.0", so a resume could have pooled v0.92 and v0.93 shards. The
+#'   per-channel `eps_rel` change re-bumps it and closes that window too.
+.mosaic_likelihood_impl_version <- function() "R/v0.93.0+eps_rel"
 
 #' Likelihood-Value Provenance Descriptor
 #'

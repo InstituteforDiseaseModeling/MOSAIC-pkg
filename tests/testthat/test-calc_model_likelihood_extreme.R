@@ -29,7 +29,15 @@ test_that("extreme under-prediction produces very negative but finite LL", {
   expect_true(ll < -10000)  # Proportional penalty: very negative
 })
 
-test_that("zero prediction with nonzero observed uses proportional penalty", {
+test_that("a zero prediction against a large observation is heavily penalised", {
+  # RE-BASELINED. The old assertion was `ll < -1000` with the comment
+  # "-obs * log(1e6) penalty" -- it pinned the MAGNITUDE of a rule that v0.93.0
+  # retired (that branch was a loss linear in the observed count, not a
+  # log-density). The absolute threshold then became a function of the eps
+  # floor: at the per-channel defaults (cases 0.02, deaths 0.25 of mean(obs))
+  # the same inputs score ~-772, which is still a severe penalty. Pin the
+  # PROPERTY -- a zero prediction must be far worse than a perfect one, and
+  # a bigger eps must soften it -- not the retired constant.
   obs <- matrix(c(0, 100, 0, 50), nrow = 1)
   est <- matrix(c(0, 0, 0, 0), nrow = 1)
 
@@ -37,8 +45,21 @@ test_that("zero prediction with nonzero observed uses proportional penalty", {
     obs_cases = obs, est_cases = est,
     obs_deaths = obs, est_deaths = est
   )
+  perfect <- MOSAIC::calc_model_likelihood(
+    obs_cases = obs, est_cases = obs,
+    obs_deaths = obs, est_deaths = obs
+  )
   expect_true(is.finite(ll))
-  expect_true(ll < -1000)  # -obs * log(1e6) penalty
+  expect_lt(ll, -500)
+  expect_lt(ll, perfect - 500)
+
+  # the penalty is the eps floor, so a larger floor must make it less severe
+  softer <- MOSAIC::calc_model_likelihood(
+    obs_cases = obs, est_cases = est,
+    obs_deaths = obs, est_deaths = est,
+    eps_rel_cases = 0.50, eps_rel_deaths = 0.50
+  )
+  expect_gt(softer, ll)
 })
 
 test_that("non-finite LL returns -Inf", {

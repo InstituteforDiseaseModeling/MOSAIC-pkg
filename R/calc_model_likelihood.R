@@ -46,6 +46,18 @@
 #'   \code{run_MOSAIC()} it is precomputed once and supplied here.
 #' @param nb_k_deaths NB dispersion for the deaths channel; see
 #'   \code{nb_k_cases}.
+#' @param eps_rel_cases,eps_rel_deaths Positive scalars. Within each location the
+#'   predicted mean is floored at \code{max(1e-4, eps_rel * mean(obs))} before the
+#'   NB density is evaluated, separately per channel. The floor is not cosmetic:
+#'   production scores a SINGLE stochastic realisation, so a low-count series is
+#'   full of cells where the realisation is 0 against a positive observation, and
+#'   the size of the floor is what the likelihood pays for such a cell. Too small a
+#'   floor makes zeros ruinous and the optimum moves to a draw that over-predicts
+#'   the level (a Jensen gap: \code{E_seed[LL(est)]} peaks well above
+#'   \code{LL(E_seed[est])}). Cases default \code{0.02}; deaths default
+#'   \code{0.25}, sized by sweep so the deaths level at the likelihood optimum is
+#'   unbiased. Cases are far less exposed (13.6\% of scored deaths cells predict
+#'   zero against a positive observation, versus 1.7\% of cases cells).
 #' @param verbose If \code{TRUE}, prints component summaries per location.
 #' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms
 #'   (T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
@@ -76,6 +88,8 @@ calc_model_likelihood <- function(obs_cases,
                                   config           = NULL,
                                   nb_k_cases       = NULL,
                                   nb_k_deaths      = NULL,
+                                  eps_rel_cases    = 0.02,
+                                  eps_rel_deaths   = 0.25,
                                   verbose          = FALSE,
                                   # ---- shape term weights (0 = OFF; 0.25 = 25% of NB core) ----
                                   weight_peak_timing       = 0,
@@ -114,6 +128,15 @@ calc_model_likelihood <- function(obs_cases,
      if (is.null(weights_time))     weights_time     <- rep(1, n_time_steps)
      if (is.null(weight_cases))     weight_cases     <- 1
      if (is.null(weight_deaths))    weight_deaths    <- 1
+
+     # Per-channel epsilon floor. NULL means "caller did not set it", which for a
+     # scoring knob must resolve to the documented default rather than being
+     # dropped -- run_MOSAIC() forwards control$likelihood entries that may be
+     # absent from an older control list. Anything else non-usable is an error.
+     if (is.null(eps_rel_cases))  eps_rel_cases  <- 0.02
+     if (is.null(eps_rel_deaths)) eps_rel_deaths <- 0.25
+     eps_rel_cases  <- .check_eps_rel(eps_rel_cases)
+     eps_rel_deaths <- .check_eps_rel(eps_rel_deaths)
 
      if (length(weights_location) != n_locations) stop("weights_location must match n_locations.")
 
@@ -294,6 +317,7 @@ calc_model_likelihood <- function(obs_cases,
                family    = "negbin",
                weights   = w_eff_c,
                k         = k_c,
+               eps_rel   = eps_rel_cases,
                verbose   = FALSE
           ) else 0
 
@@ -303,6 +327,7 @@ calc_model_likelihood <- function(obs_cases,
                family    = "negbin",
                weights   = w_eff_d,
                k         = k_d,
+               eps_rel   = eps_rel_deaths,
                verbose   = FALSE
           ) else 0
 

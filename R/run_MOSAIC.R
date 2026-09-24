@@ -438,6 +438,8 @@
             weights_obs_deaths = .wobs_deaths_lik,
             nb_k_cases  = likelihood_settings$.nb_k_cases_resolved,
             nb_k_deaths = likelihood_settings$.nb_k_deaths_resolved,
+            eps_rel_cases  = likelihood_settings$eps_rel_cases,
+            eps_rel_deaths = likelihood_settings$eps_rel_deaths,
             weight_cases = likelihood_settings$weight_cases,
             weight_deaths = likelihood_settings$weight_deaths,
             weight_peak_timing = likelihood_settings$weight_peak_timing,
@@ -3561,9 +3563,9 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_kappa                  = FALSE,             # Overdispersion parameter
     sample_chi_endemic = TRUE,       # PPV among suspected cases (endemic)
     sample_chi_epidemic = TRUE,      # PPV among suspected cases (epidemic)
-    sample_rho_deaths = TRUE,        # Death detection rate (laser-cholera#49)
-    sample_delta_reporting_cases = TRUE,  # Infection-to-case reporting delay
-    sample_delta_reporting_deaths = TRUE, # Infection-to-death reporting delay
+    sample_rho_deaths = FALSE,       # Death detection rate: PINNED at 0.42 (cancels identically under the B2 mu_j_baseline derivation; zero Fisher information)
+    sample_delta_reporting_cases = TRUE,  # Symptom-onset-to-case reporting delay
+    sample_delta_reporting_deaths = FALSE, # Death-event-to-death-report delay: PINNED at 5 days (no observational anchor; deaths and cases share the WHO bulletin row)
 
     # Environmental decay (v0.27.0: decay_days_long is derived = short + spread)
     sample_decay_days_short = TRUE,  # Short-term environmental decay
@@ -3612,6 +3614,19 @@ mosaic_control_defaults <- function(calibration = NULL,
     weight_peak_magnitude = 0,       # T-normalized; default OFF
     weight_cumulative_total = 0,     # T-normalized (/end_idx in helper); default OFF
     weight_wis = 0,                  # T-normalized; default OFF (try 0.10 for regularization)
+
+    # === Per-channel epsilon floor on the predicted mean ===
+    # The NB density is evaluated at max(1e-4, eps_rel * mean(obs)) per location
+    # and channel. Production scores ONE stochastic realisation, so a low-count
+    # series is mostly structural zeros and the floor sets the price of a zero
+    # prediction against a positive observation. Too small a floor makes zeros
+    # ruinous and the likelihood optimum shifts onto draws that over-predict the
+    # LEVEL (a Jensen gap, not a CFR misspecification). Deaths need a much larger
+    # fraction than cases: 13.6% of scored deaths cells predict zero against a
+    # positive observation versus 1.7% of cases cells. 0.25 for deaths is the
+    # swept value at which the deaths level at the likelihood optimum is unbiased.
+    eps_rel_cases = 0.02,            # Relative floor, cases channel
+    eps_rel_deaths = 0.25,           # Relative floor, deaths channel (swept; bias -> 1.0)
 
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in time steps)

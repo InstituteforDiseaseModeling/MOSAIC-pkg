@@ -1,3 +1,22 @@
+#' Validate the relative epsilon floor used by the count likelihoods
+#'
+#' A silently-ignored or silently-defaulted `eps_rel` would reproduce this
+#' package's most-repeated bug (CLAUDE.md lesson #13), so an unusable value is a
+#' hard error rather than a fallback to 0.02.
+#'
+#' @param eps_rel Candidate value.
+#' @return The validated scalar.
+#' @noRd
+.check_eps_rel <- function(eps_rel) {
+     if (is.null(eps_rel) || length(eps_rel) != 1L || !is.numeric(eps_rel) ||
+         !is.finite(eps_rel) || eps_rel <= 0) {
+          stop("`eps_rel` must be a single finite positive number (fraction of mean(observed)).",
+               call. = FALSE)
+     }
+     as.numeric(eps_rel)
+}
+
+
 ###############################################################################
 ## calc_log_likelihood_beta.R
 ###############################################################################
@@ -339,6 +358,12 @@ calc_log_likelihood_gamma <- function(observed,
 #'   no flooring is applied.
 #' @param weights Optional numeric vector of non-negative weights, same length as \code{observed}.
 #'                Default is \code{NULL}, which sets all weights to 1.
+#' @param eps_rel Positive scalar; the predicted mean of every cell is floored at
+#'   \code{max(1e-4, eps_rel * mean(observed))} before the density is evaluated.
+#'   Default \code{0.02}. This floor is the only thing standing between a zero
+#'   prediction and \code{log(0)}, and its SIZE sets how hard a spurious zero is
+#'   punished, so it is channel-specific: see \code{\link{calc_model_likelihood}}
+#'   (\code{eps_rel_cases} / \code{eps_rel_deaths}).
 #' @param verbose Logical; if \code{TRUE}, prints diagnostics including the (floored) dispersion and total log-likelihood.
 #'
 #' @details
@@ -361,7 +386,10 @@ calc_log_likelihood_negbin <- function(observed,
                                        k       = NULL,
                                        k_min   = NULL,
                                        weights = NULL,
+                                       eps_rel = 0.02,
                                        verbose = TRUE) {
+
+     eps_rel <- .check_eps_rel(eps_rel)
 
      if (length(observed) != length(estimated)) {
           stop("Lengths of observed and estimated must match.")
@@ -429,8 +457,12 @@ calc_log_likelihood_negbin <- function(observed,
      # predicted rate ABOVE the typical observed rate and destroying
      # discrimination exactly where the deaths signal lives. Use a relative
      # floor that reproduces ~0.5 for cases and scales down for deaths.
+     # R1: `eps_rel` is a per-CHANNEL knob, not a constant -- the 0.02 that is
+     # right for cases is ~12x too small for a low-count deaths series, where a
+     # single stochastic realisation is mostly structural zeros and the Jensen
+     # gap between E_seed[LL(est)] and LL(E_seed[est]) drives the level upward.
      mo <- mean(observed[is.finite(observed)], na.rm = TRUE)
-     eps_j <- max(1e-4, 0.02 * mo)
+     eps_j <- max(1e-4, eps_rel * mo)
      if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 1e-4
      ll_vec <- numeric(length(observed))
 
@@ -586,6 +618,9 @@ calc_log_likelihood_normal <- function(observed,
 #' @param zero_buffer Logical; if \code{TRUE} (default), rounds observed values to integers and
 #'                    adds small buffer to avoid zero estimates. If \code{FALSE}, enforces
 #'                    strict integer requirements.
+#' @param eps_rel Positive scalar; the predicted mean of every cell is floored at
+#'   \code{max(1e-4, eps_rel * mean(observed))} before the density is evaluated.
+#'   Default \code{0.02}. See \code{\link{calc_log_likelihood_negbin}}.
 #' @param verbose Logical; if \code{TRUE}, prints diagnostics and total log-likelihood.
 #'
 #' @details
@@ -604,7 +639,10 @@ calc_log_likelihood_poisson <- function(observed,
                                         estimated,
                                         weights = NULL,
                                         zero_buffer = TRUE,
+                                        eps_rel = 0.02,
                                         verbose = TRUE) {
+
+     eps_rel <- .check_eps_rel(eps_rel)
 
      if (length(observed) != length(estimated)) {
           stop("Lengths of observed and estimated must match.")
@@ -685,8 +723,9 @@ calc_log_likelihood_poisson <- function(observed,
      # predicted rate ABOVE the typical observed rate and destroying
      # discrimination exactly where the deaths signal lives. Use a relative
      # floor that reproduces ~0.5 for cases and scales down for deaths.
+     # R1: `eps_rel` is a per-CHANNEL knob; see calc_log_likelihood_negbin().
      mo <- mean(observed[is.finite(observed)], na.rm = TRUE)
-     eps_j <- max(1e-4, 0.02 * mo)
+     eps_j <- max(1e-4, eps_rel * mo)
      if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 1e-4
      ll_vec <- numeric(length(observed))
 

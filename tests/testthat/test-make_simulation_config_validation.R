@@ -108,3 +108,106 @@ test_that("make_simulation_config rejects an out-of-range alpha_1 (scalar and ve
   expect_error(do.call(MOSAIC::make_simulation_config, av),
                "alpha_1 must be numeric in \\(0, 1\\]")
 })
+
+# ---------------------------------------------------------------------------
+# mu_j_* are DUAL-MODE for the same reason alpha_1 is: .sim_patch_vector()
+# (R/sim_params.R) broadcasts a length-1 mu_j_baseline / mu_j_slope /
+# mu_j_epidemic_factor across every patch. Before the v4.8 mu_jt removal these
+# length checks lived inside the (dead-on-the-shipped-path) mu_jt generation
+# block and demanded length-nL; re-homing them must not make the validator
+# stricter than the engine it validates, or a saved scalar config stops loading.
+# ---------------------------------------------------------------------------
+test_that("make_simulation_config accepts SCALAR mu_j_* (engine broadcasts them)", {
+  args <- .valid_sim_args()
+  args$mu_j_baseline        <- 0.002
+  args$mu_j_slope           <- 0
+  args$mu_j_epidemic_factor <- 0.5
+  cfg <- do.call(MOSAIC::make_simulation_config, args)
+  expect_equal(cfg$mu_j_baseline, 0.002)
+  expect_equal(cfg$mu_j_slope, 0)
+  expect_equal(cfg$mu_j_epidemic_factor, 0.5)
+})
+
+test_that("make_simulation_config accepts length-nL mu_j_* (per-location form)", {
+  args <- .valid_sim_args()
+  nL <- length(args$location_name)
+  expect_equal(length(args$mu_j_baseline), nL)  # the shipped default is per-location
+  cfg <- do.call(MOSAIC::make_simulation_config, args)
+  expect_equal(length(cfg$mu_j_baseline), nL)
+  expect_equal(length(cfg$mu_j_slope), nL)
+  expect_equal(length(cfg$mu_j_epidemic_factor), nL)
+})
+
+test_that("a SCALAR mu_j_baseline broadcasts to the same simulation as its length-nL form", {
+  # The broadcast is the engine's job; assert it end-to-end so relaxing the
+  # validator cannot quietly diverge from what run_simulation() actually does.
+  cfg_vec <- MOSAIC::config_simulation_epidemic
+  nL <- length(cfg_vec$location_name)
+  cfg_vec$mu_j_baseline        <- rep(0.01, nL)
+  cfg_vec$mu_j_slope           <- rep(0,    nL)
+  cfg_vec$mu_j_epidemic_factor <- rep(0.5,  nL)
+
+  cfg_sca <- cfg_vec
+  cfg_sca$mu_j_baseline        <- 0.01
+  cfg_sca$mu_j_slope           <- 0
+  cfg_sca$mu_j_epidemic_factor <- 0.5
+
+  expect_identical(
+    MOSAIC::run_simulation(cfg_sca, seed = 1L)$results,
+    MOSAIC::run_simulation(cfg_vec, seed = 1L)$results
+  )
+})
+
+test_that("make_simulation_config rejects a wrong-length mu_j_* vector", {
+  nL <- length(.valid_sim_args()$location_name)
+
+  a1 <- .valid_sim_args(); a1$mu_j_baseline <- rep(0.002, nL - 1L)
+  expect_error(do.call(MOSAIC::make_simulation_config, a1),
+               "mu_j_baseline must be a numeric scalar or a vector")
+
+  a2 <- .valid_sim_args(); a2$mu_j_slope <- rep(0, 2L)
+  expect_error(do.call(MOSAIC::make_simulation_config, a2),
+               "mu_j_slope must be a numeric scalar or a vector")
+
+  a3 <- .valid_sim_args(); a3$mu_j_epidemic_factor <- rep(0.5, nL + 1L)
+  expect_error(do.call(MOSAIC::make_simulation_config, a3),
+               "mu_j_epidemic_factor must be a numeric scalar or a vector")
+})
+
+test_that("make_simulation_config still range-checks mu_j_* (scalar and vector)", {
+  a1 <- .valid_sim_args(); a1$mu_j_baseline <- 1.5
+  expect_error(do.call(MOSAIC::make_simulation_config, a1),
+               "mu_j_baseline must be between 0 and 1")
+
+  a2 <- .valid_sim_args(); a2$mu_j_baseline[1] <- -0.1
+  expect_error(do.call(MOSAIC::make_simulation_config, a2),
+               "mu_j_baseline must be between 0 and 1")
+
+  a3 <- .valid_sim_args(); a3$mu_j_epidemic_factor <- -2
+  expect_error(do.call(MOSAIC::make_simulation_config, a3),
+               "mu_j_epidemic_factor must be greater than or equal to -1")
+})
+
+# ---------------------------------------------------------------------------
+# mu_jt legacy tolerance (v4.8). The [nL x nT] mu_jt matrix is no longer built,
+# validated or returned, but every config saved before the removal carries one
+# and is replayed via do.call(make_simulation_config, config). The formal is
+# retained, deprecated and ignored, so that replay neither errors nor warns.
+# ---------------------------------------------------------------------------
+test_that("a legacy config carrying mu_jt is accepted silently and mu_jt is dropped", {
+  args <- .valid_sim_args()
+  nT <- length(seq.Date(as.Date(args$date_start), as.Date(args$date_stop), by = "day"))
+  args$mu_jt <- matrix(0.01, nrow = length(args$location_name), ncol = nT)
+
+  expect_silent(cfg <- suppressMessages(do.call(MOSAIC::make_simulation_config, args)))
+  expect_null(cfg$mu_jt)
+
+  # A garbage mu_jt must be ignored just as thoroughly -- it is never read.
+  bad <- .valid_sim_args(); bad$mu_jt <- "not a matrix"
+  expect_silent(cfg_bad <- suppressMessages(do.call(MOSAIC::make_simulation_config, bad)))
+  expect_null(cfg_bad$mu_jt)
+
+  # And the result must not depend on whether mu_jt was supplied at all.
+  cfg_none <- suppressMessages(do.call(MOSAIC::make_simulation_config, .valid_sim_args()))
+  expect_identical(cfg, cfg_none)
+})
