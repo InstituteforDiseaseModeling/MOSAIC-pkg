@@ -49,8 +49,9 @@
 #'   from the R_eff output (set to \code{NA} in the table). \code{NULL} (default)
 #'   reads \code{control$likelihood$burn_in_days} from
 #'   \code{1_inputs/control.json}; if that is \code{0} or absent it defaults to
-#'   \code{30} days. Applied on both paths: early R reflects the reservoir
-#'   filling from empty rather than the epidemic.
+#'   \code{30} days. An explicit \code{0} disables the burn-in. Applied on both
+#'   paths: early R reflects the reservoir filling from empty rather than the
+#'   epidemic.
 #' @param infectiousness_floor Numeric scalar \eqn{\ge 0}. Passed to
 #'   \code{\link{calc_Reff}}; minimum generation-weighted past infectiousness
 #'   required to report \eqn{R_t} (guards the initial-condition seed spike and
@@ -467,18 +468,26 @@ add_reproductive_numbers <- function(output_dir,
 }
 
 #' Resolve the burn-in: argument > control$likelihood$burn_in_days > 30 days
+#'
+#' An explicit \code{burn_in_days} (including \code{0}, no burn-in) is honoured.
+#' Only when it is \code{NULL} is \code{control.json} read, and a calibration
+#' burn-in of 0 or absent there falls back to 30 days.
 #' @keywords internal
 #' @noRd
 .add_reff_burn_in <- function(output_dir, burn_in_days = NULL, verbose = TRUE) {
-  bid <- burn_in_days
-  if (is.null(bid)) {
-    ctl_path <- file.path(output_dir, "1_inputs", "control.json")
-    bid <- if (file.exists(ctl_path)) tryCatch({
-      ctl <- jsonlite::fromJSON(ctl_path)
-      control <- if (!is.null(ctl$control)) ctl$control else ctl
-      as.integer(control$likelihood$burn_in_days)
-    }, error = function(e) NA_integer_) else NA_integer_
+  if (!is.null(burn_in_days)) {
+    bid <- suppressWarnings(as.integer(burn_in_days))
+    if (length(bid) != 1L || is.na(bid) || bid < 0L)
+      stop("add_reproductive_numbers: `burn_in_days` must be NULL or a single ",
+           "integer >= 0.", call. = FALSE)
+    return(bid)
   }
+  ctl_path <- file.path(output_dir, "1_inputs", "control.json")
+  bid <- if (file.exists(ctl_path)) tryCatch({
+    ctl <- jsonlite::fromJSON(ctl_path)
+    control <- if (!is.null(ctl$control)) ctl$control else ctl
+    as.integer(control$likelihood$burn_in_days)
+  }, error = function(e) NA_integer_) else NA_integer_
   bid <- suppressWarnings(as.integer(bid))
   if (length(bid) != 1L || is.na(bid) || bid <= 0L) {
     if (verbose) message("  burn_in_days resolved to 0/absent; defaulting to 30 days.")
@@ -492,6 +501,7 @@ add_reproductive_numbers <- function(output_dir,
 #' @keywords internal
 #' @noRd
 .add_reff_mask_burn_in <- function(reff, bid) {
+  attr(reff, "burn_in_days") <- bid
   if (bid < 1L) return(reff)
   cols <- c("central", grep("^q[0-9.]+$", names(reff), value = TRUE))
   cm <- attr(reff, "central_matrix"); rc <- attr(reff, "route_central")
@@ -501,6 +511,5 @@ add_reproductive_numbers <- function(output_dir,
     m[, seq_len(min(bid, ncol(m)))] <- NA_real_; m })
   attr(reff, "central_matrix") <- cm
   attr(reff, "route_central")  <- rc
-  attr(reff, "burn_in_days")   <- bid
   reff
 }

@@ -85,7 +85,11 @@ applies one).
 surveillance-derived R_eff computed the same way); it is not an invasion
 threshold. The renewal assumes transmission is linear in infectiousness; the
 human FOI uses \eqn{I^{\alpha_1}} and the environmental dose saturates, so both
-route values are trajectory descriptors, not per-contact constants.
+route values are trajectory descriptors, not per-contact constants. The
+renewal is per location: infectious people arriving through mobility
+(\code{tau_i}, \code{pi_ij}) drive the destination's human force of infection
+but are not in its \eqn{\Lambda^{hum}}, so in multi-location runs imported
+spread is credited to the destination's R_hum.
 
 \strong{Central on this path is a calendar-date descriptor.} The renewal on
 weighted-median incidence is phase-smoothed across members and reads closer

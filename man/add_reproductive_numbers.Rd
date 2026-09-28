@@ -36,8 +36,9 @@ per-member lines, otherwise NA).}
 from the R_eff output (set to \code{NA} in the table). \code{NULL} (default)
 reads \code{control$likelihood$burn_in_days} from
 \code{1_inputs/control.json}; if that is \code{0} or absent it defaults to
-\code{30} days. Applied on both paths: early R reflects the reservoir
-filling from empty rather than the epidemic.}
+\code{30} days. An explicit \code{0} disables the burn-in. Applied on both
+paths: early R reflects the reservoir filling from empty rather than the
+epidemic.}
 
 \item{infectiousness_floor}{Numeric scalar \eqn{\ge 0}. Passed to
 \code{\link{calc_Reff}}; minimum generation-weighted past infectiousness

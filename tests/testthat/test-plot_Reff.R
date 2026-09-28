@@ -230,6 +230,23 @@ test_that("plot_Reff stacks R_hum on top of R_env and tops out at R_eff", {
   expect_match(p$labels$caption, "stacked")
 })
 
+test_that("plot_Reff keeps the stack where a silent route is NA but the total is defined", {
+  # calc_Reff() reports the total (as the other route) when a route is below the
+  # floor with no infections of its own; the plot must not blank those days.
+  reff <- add_routes(make_reff_df(locs = "MOZ", ci = FALSE, peak = FALSE),
+                     f_env = 1)
+  silent <- reff$estimand == "R_hum" & reff$t %in% 30:40
+  reff$central[silent] <- NA_real_
+  p <- plot_Reff(reff, smooth_days = 1L)
+  built <- ggplot2::ggplot_build(p)
+  line_idx <- which(vapply(p$layers, function(l) inherits(l$geom, "GeomLine"),
+                           logical(1)))
+  ln <- built$data[[line_idx[length(line_idx)]]]
+  src <- reff[reff$estimand == "R_eff" & is.finite(reff$central), ]
+  expect_equal(sum(is.finite(ln$y)), nrow(src))
+  expect_equal(unname(ln$y[is.finite(ln$y)]), src$central, tolerance = 1e-8)
+})
+
 test_that("plot_Reff draws the total alone when routes = FALSE or absent", {
   reff <- add_routes(make_reff_df(ci = FALSE))
   p <- plot_Reff(reff, routes = FALSE)

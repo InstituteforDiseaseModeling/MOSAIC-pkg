@@ -113,11 +113,18 @@ plot_Reff <- function(reff,
     d <- d[seq.int(first_ok[1L], nrow(d)), , drop = FALSE]
     d$central_smooth <- .reff_roll_mean(d$central, sd_k)
     if (has_routes) {
-      # Smooth both components over the SAME days, or the NA-skipping means
-      # use different day sets and the stack stops summing to the total.
-      raw_both <- is.finite(d$R_env) & is.finite(d$R_hum)
-      env_s <- .reff_roll_mean(ifelse(raw_both, d$R_env, NA_real_), sd_k)
-      hum_s <- .reff_roll_mean(ifelse(raw_both, d$R_hum, NA_real_), sd_k)
+      # Stack on every day the total is defined. calc_Reff() defines the total
+      # when a route below the floor has no infections of its own, and counts
+      # that route as 0, so the same 0 is used here and the stack still sums to
+      # the total. Both components are smoothed over the SAME days, or the
+      # NA-skipping means use different day sets and the stack stops summing.
+      raw_tot <- is.finite(d$central)
+      env_s <- .reff_roll_mean(ifelse(raw_tot,
+                                      ifelse(is.finite(d$R_env), d$R_env, 0),
+                                      NA_real_), sd_k)
+      hum_s <- .reff_roll_mean(ifelse(raw_tot,
+                                      ifelse(is.finite(d$R_hum), d$R_hum, 0),
+                                      NA_real_), sd_k)
       both  <- is.finite(env_s) & is.finite(hum_s)
       d$env_top <- ifelse(both, env_s, NA_real_)
       d$tot_top <- ifelse(both, env_s + hum_s, NA_real_)

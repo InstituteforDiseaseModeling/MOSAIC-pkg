@@ -208,6 +208,15 @@ test_that("add_reproductive_numbers applies the burn-in on the direct path", {
   # Absent control.json and argument -> 30-day default.
   st2 <- add_reproductive_numbers(d, plots = FALSE, verbose = FALSE)
   expect_equal(attr(readRDS(st2$rds), "burn_in_days"), 30L)
+  # An explicit 0 disables the burn-in rather than falling back to 30.
+  st0 <- add_reproductive_numbers(d, plots = FALSE, burn_in_days = 0L, verbose = FALSE)
+  ro0 <- readRDS(st0$rds)
+  expect_equal(attr(ro0, "burn_in_days"), 0L)
+  ref <- calc_Reff(readRDS(file.path(d, "2_calibration", "trajectories_ensemble.rds")),
+                   .reff_demo()$cfg, verbose = FALSE)
+  expect_equal(ro0$central, ref$central)
+  expect_error(add_reproductive_numbers(d, plots = FALSE, burn_in_days = -1L,
+                                        verbose = FALSE), "burn_in_days")
 })
 
 test_that("overwrite = FALSE recomputes an older total-only table", {

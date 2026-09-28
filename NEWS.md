@@ -1,4 +1,4 @@
-# MOSAIC 0.92.0
+# MOSAIC 0.92.1
 
 ## R_eff is now decomposed by route: R_eff = R_hum + R_env
 
@@ -13,15 +13,18 @@ The environmental term is **instantaneous** (Cori: "if conditions stayed as they
   - needs the `incidence_human`/`incidence_env` channels (plus `E`/`Isym`/`Iasym` for the initial stocks) and the config's `zeta_*`, `psi_jt` and `decay_*`;
   - checks that the config's locations and start date match the trajectories;
   - caps decay rates above 1, which occur when `decay_days_short < 1` day;
-  - `max_days` is removed.
+  - `max_days` is removed;
+  - the caveat now states that the renewal is per location, so in multi-location runs imported human-route spread is credited to the destination.
 - `add_reproductive_numbers()`:
   - builds the kernel from `2_calibration/best_model/config_medoid.json`, not the input config of prior centres, falling back with a warning; attribute `config_source` records which;
   - applies the burn-in on both paths;
   - re-simulated members use their own kernel, engine `delta_jt` and initial stocks;
   - `peak_Rt` gains an `estimand` column, and cell quantiles need half the member weight defined;
-  - `overwrite = FALSE` no longer keeps an older total-only table.
+  - `overwrite = FALSE` no longer keeps an older total-only table;
+  - an explicit `burn_in_days = 0` now disables the burn-in (it used to become 30), and a negative value is an error.
 - `plot_Reff()`:
   - stacks R_hum on top of an R_env area, and both are smoothed over the same days;
+  - the stack is drawn on every day the total is defined; a silent route counts as 0, as it does in `calc_Reff()`;
   - the new `routes` argument is last, so existing positional calls are unchanged.
 - The internal `.mosaic_generation_time_pmf()` is removed. `get_generation_time_distribution()` is unchanged.
 

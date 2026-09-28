@@ -37,7 +37,10 @@
 # a first-principles invasion threshold. The renewal assumes transmission is
 # linear in infectiousness; the human FOI uses I^alpha_1 and the environmental
 # dose saturates at W/N ~ kappa, so both R are trajectory descriptors, not
-# per-contact constants.
+# per-contact constants. The renewal is per location: infectious people arriving
+# through mobility (tau_i, pi_ij) drive the destination's human FOI but are not
+# in its Lambda_hum, so in multi-location runs imported spread is credited to
+# the destination's R_hum.
 # -----------------------------------------------------------------------------
 
 .MOSAIC_REFF_ESTIMANDS <- c("R_eff", "R_hum", "R_env")
@@ -157,7 +160,8 @@
 #' are real sources of infection that no recorded incidence explains, so they
 #' are propagated through the same filters and included in both Lambdas. The
 #' engine starts the reservoir empty, so they reach W only by shedding; result
-#' index 1 already holds their first day of it.
+#' index 1 already holds their first day of it, approximated from the
+#' result-index-1 stocks (the engine sheds from the unrecorded seed row).
 #'
 #' @param incidence Numeric vector of total infection incidence (NA treated 0).
 #' @param delta Numeric vector (same length) of daily decay rates delta_jt;
@@ -216,7 +220,9 @@
   I_hat <- Is + Ia
   S_w <- kern$w1 * kern$sigma / kern$p1 + kern$w2 * (1 - kern$sigma) / kern$p2
   # The engine starts the reservoir empty, but result index 1 is state row 2, so
-  # W[1] already holds one day of shedding from the initial infectious people.
+  # W[1] already holds one day of shedding. The engine sheds it from the state-row-1
+  # stocks, which the results do not carry; the result-index-1 stocks stand in
+  # for them. The difference is one day of shedding and is gone after burn-in.
   Wn <- reservoir(kern$w1 * Is + kern$w2 * Ia, kern$w1 * is0 + kern$w2 * ia0)
   out <- list(Lambda_hum = lag1(I_hat) / kern$D_h,
               Lambda_env = lag1(Wn) * delta / S_w,
@@ -414,7 +420,11 @@
 #' surveillance-derived R_eff computed the same way); it is not an invasion
 #' threshold. The renewal assumes transmission is linear in infectiousness; the
 #' human FOI uses \eqn{I^{\alpha_1}} and the environmental dose saturates, so both
-#' route values are trajectory descriptors, not per-contact constants.
+#' route values are trajectory descriptors, not per-contact constants. The
+#' renewal is per location: infectious people arriving through mobility
+#' (\code{tau_i}, \code{pi_ij}) drive the destination's human force of infection
+#' but are not in its \eqn{\Lambda^{hum}}, so in multi-location runs imported
+#' spread is credited to the destination's R_hum.
 #'
 #' @param ensemble A \code{mosaic_trajectories} artifact
 #'   (\code{2_calibration/trajectories_ensemble.rds}) or a \code{mosaic_ensemble}
