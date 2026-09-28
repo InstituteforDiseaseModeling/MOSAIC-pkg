@@ -23,9 +23,10 @@
 #' MEDOID trajectory's R_t (a coherent member, preserving peak timing and
 #' height); on the direct path it is the renewal on weighted-median incidence.
 #' The daily series is noisy, so each component is shown as a centered
-#' \code{smooth_days} rolling mean, taken over the days on which both
-#' components are defined so the smoothed stack still sums to the smoothed
-#' total, with the raw daily total as a faint background line.
+#' \code{smooth_days} rolling mean, taken over the days on which the total is
+#' defined (a silent route counts as 0 there, as in \code{calc_Reff()}) so the
+#' smoothed stack still sums to the smoothed total, with the raw daily total as
+#' a faint background line.
 #'
 #' \strong{Faint band.} When populated, the \code{q2.5}-\code{q97.5} total-R band
 #' is the per-calendar-date range across members. Member peaks are
@@ -199,7 +200,10 @@ plot_Reff <- function(reff,
   subtitle <- NULL
   pk <- .reff_peak_table(peak_Rt, locs)
   if (!is.null(pk) && nrow(pk) > 0L) {
-    pk$label <- sprintf("Peak R_eff (per-member): %.2f [%.2f, %.2f]",
+    pw <- attr(reff, "peak_Rt_window")
+    pk$label <- sprintf("Peak %sR_eff (per-member): %.2f [%.2f, %.2f]",
+                        if (is.numeric(pw) && length(pw) == 1L && pw > 1)
+                          paste0(pw, "-day ") else "",
                         pk$q50, pk$q2.5, pk$q97.5)
     if (n_loc == 1L) {
       subtitle <- pk$label[match(locs[1L], pk$location)]

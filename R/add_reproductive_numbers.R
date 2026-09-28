@@ -334,7 +334,8 @@ add_reproductive_numbers <- function(output_dir,
 #'     phase-misaligned so the per-day median regresses toward 1.}
 #' }
 #' The explosivity statistic -- the posterior-weighted quantiles of each member's
-#' TIME-MAX R_t (post-burn-in, floor-gated) -- is carried in attribute
+#' TIME-MAX of its 7-day Cori R_t (post-burn-in, floor-gated) -- is carried in
+#' attribute \code{"peak_Rt_window"} (7) and attribute
 #' \code{"peak_Rt"} (a per-location x estimand \code{data.frame} with
 #' \code{location}, \code{estimand}, \code{q2.5}/\code{q50}/\code{q97.5}, and
 #' \code{n_members}; schema pinned with \code{plot_Reff()}).
@@ -447,6 +448,7 @@ add_reproductive_numbers <- function(output_dir,
   attr(out, "band_definition")    <-
     "per_calendar_day_cross_member_weighted_quantiles"
   attr(out, "peak_Rt")          <- res$peak_Rt
+  attr(out, "peak_Rt_window")   <- res$peak_window
   attr(out, "medoid_member")    <- res$medoid_member
   attr(out, "burn_in_days")     <- bid
   attr(out, "gate_rel_err_pct") <- res$gate_rel_err_pct

@@ -734,12 +734,24 @@
   )
 }
 
+#' Significant digits for run-input JSON
+#'
+#' 17 significant digits round-trip every double exactly. jsonlite's
+#' \code{digits = NA} writes 15, which changes values by ~1e-15 relative; that is
+#' enough to change a member re-simulated from \code{1_inputs/config.json} and
+#' \code{priors.json} (integer rounding and binomial draws amplify it), so a
+#' post-hoc reconstruction such as the R_eff re-simulation would not reproduce
+#' the calibration members.
+#' @noRd
+.MOSAIC_JSON_DIGITS <- I(17)
+
 #' Write JSON with Atomic Rename (NFS-Safe)
 #' @noRd
 .mosaic_write_json <- function(obj, path, io) {
   # Define write function
   write_func <- function(data, file) {
-    jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+    jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE,
+                         digits = .MOSAIC_JSON_DIGITS)
   }
 
   # Use NFS-safe atomic write
@@ -1350,6 +1362,8 @@
 #' new draws, so a mismatch is a hard error. Comparison uses the same serializer
 #' that wrote the files (byte-exact for identical inputs); if serialization
 #' cannot be performed the check downgrades to a warning rather than blocking.
+#' Run directories written before v0.92.2 hold 15-significant-digit JSON, so a
+#' persisted file matching the incoming object at either precision passes.
 #'
 #' Also guards the transmission engine: resuming a run directory created before
 #' MOSAIC v0.68.0 is a hard error, because its shards came from the Python
@@ -1361,11 +1375,15 @@
 #'
 #' @noRd
 .mosaic_resume_check_inputs <- function(dirs, config, priors, control = NULL) {
-  serialize_obj <- function(obj) {
+  # digits = NA (15 significant) by default: the control sub-objects are
+  # compared after parsing control.json back, and at 15 digits a pre-v0.92.2
+  # file and a current one serialise identically while real changes still
+  # differ. config/priors are compared as raw file text, at both precisions.
+  serialize_obj <- function(obj, digits = NA) {
     tmp <- tempfile(fileext = ".json")
     on.exit(unlink(tmp), add = TRUE)
     ok <- tryCatch({
-      jsonlite::write_json(obj, tmp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+      jsonlite::write_json(obj, tmp, pretty = TRUE, auto_unbox = TRUE, digits = digits)
       TRUE
     }, error = function(e) FALSE)
     if (!ok) return(NA_character_)
@@ -1373,7 +1391,7 @@
   }
   check_one <- function(obj, file, label) {
     if (!file.exists(file)) return(invisible())
-    incoming  <- serialize_obj(obj)
+    incoming  <- serialize_obj(obj, .MOSAIC_JSON_DIGITS)
     persisted <- tryCatch(paste(readLines(file, warn = FALSE), collapse = "\n"),
                           error = function(e) NA_character_)
     if (is.na(incoming) || is.na(persisted)) {
@@ -1381,7 +1399,8 @@
                       label), call. = FALSE)
       return(invisible())
     }
-    if (!identical(incoming, persisted)) {
+    if (!identical(incoming, persisted) &&
+        !identical(serialize_obj(obj), persisted)) {
       stop(sprintf(paste0("resume: supplied %s differs from 1_inputs/%s.json. Changing %s ",
                           "alters the sampling/likelihood target, making the existing shards ",
                           "incomparable to new draws. Resume with identical %s, or start a ",
