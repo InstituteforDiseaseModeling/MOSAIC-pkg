@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_Reff.R
 \name{plot_Reff}
 \alias{plot_Reff}
-\title{Plot Cori effective reproductive number (R_eff) over time}
+\title{Plot the route-decomposed effective reproductive number over time}
 \usage{
 plot_Reff(
   reff,
@@ -10,93 +10,68 @@ plot_Reff(
   smooth_days = 14L,
   title = NULL,
   ncol = NULL,
-  base_size = 12
+  base_size = 12,
+  routes = TRUE
 )
 }
 \arguments{
-\item{reff}{A \code{reproductive_numbers} \code{data.frame} from
-\code{\link{calc_Reff}} with columns \code{location}, \code{date}, \code{t},
-\code{estimand}, \code{central} (the medoid trajectory R_t), and the
-per-calendar-date quantile columns (\code{q2.5}, \code{q25}, \code{q50},
-\code{q75}, \code{q97.5}). The \code{peak_Rt}, \code{central_definition},
-\code{band_definition} and \code{ci_source} attributes (when present) drive
-the annotation and caption. Leading warm-up rows with a non-finite
-\code{central} are dropped per location so no gap artifact is plotted.}
+\item{reff}{A \code{reproductive_numbers} data.frame with columns
+\code{location}, \code{date}, \code{central}, optionally \code{estimand}
+and the quantile columns. Leading rows with a non-finite total are dropped
+per location.}
 
-\item{show_iqr}{Logical. Draw the inner 50\\% (\code{q25}-\code{q75}) band in
-addition to the faint 95\\% band. Default \code{FALSE} (the plot shows the
-medoid line and the faint 95\\% cross-member band only). Retained for
-back-compatibility.}
+\item{show_iqr}{Logical. Also draw the inner 50\\% (\code{q25}-\code{q75})
+total-R band. Default \code{FALSE}.}
 
-\item{smooth_days}{Integer. Centered rolling-mean window (in days) applied to
-the medoid \code{central} line for display. The daily Cori R_t on a single
-trajectory is very noisy; smoothing yields a readable trend while the raw
-daily series is kept as a faint background and the true per-member daily
-peak is reported in the annotation. Default \code{14}; set \code{1} to plot
-the raw daily line only.}
+\item{smooth_days}{Integer. Centered rolling-mean window (days) for the
+displayed series; \code{1} plots the raw daily values. Default \code{14}.}
 
-\item{title}{Character or \code{NULL}. Plot title. \code{NULL} (default) uses
-\code{"Effective reproductive number"} for multi-location input and
-\code{"Effective reproductive number: <LOC>"} for a single location.}
+\item{title}{Character or \code{NULL} for the default title.}
 
-\item{ncol}{Integer. Number of facet columns for multi-location input.
-\code{NULL} (default) uses \code{min(3, n_locations)}.}
+\item{ncol}{Integer facet columns for multi-location input (\code{NULL}:
+\code{min(3, n_locations)}).}
 
-\item{base_size}{Numeric. Base font size passed to \code{\link{theme_mosaic}}.
-Default \code{12}.}
+\item{base_size}{Numeric base font size for \code{\link{theme_mosaic}}.}
+
+\item{routes}{Logical. Stack \code{R_env} and \code{R_hum} under the total
+when present. Default \code{TRUE}.}
 }
 \value{
-A \code{ggplot} object (not printed or saved). The driver
-\code{\link{add_reproductive_numbers}} is responsible for saving it.
+A \code{ggplot} object (not printed or saved).
 }
 \description{
-Renders the per-location, time-varying Cori (2013) instantaneous
-\strong{infection} effective reproductive number \eqn{R_{jt}} produced by
-\code{\link{calc_Reff}}. The headline line is the \strong{medoid trajectory}
-R_t (\code{central}) drawn as a bold purple line over date, with a horizontal
-reference line at \eqn{R_{\mathrm{eff}} = 1}. Because the medoid is a single
-coherent member trajectory it preserves the timing and height of the
-epidemic's R_t peak (typically 2-3.3), unlike a per-calendar-day cross-member
-median which flattens phase-misaligned peaks toward 1.
+Renders the per-location R_eff(t) produced by \code{\link{calc_Reff}} or
+\code{\link{add_reproductive_numbers}}. When the input carries the route
+components (\code{estimand} \code{"R_hum"} and \code{"R_env"}) and
+\code{routes = TRUE}, the environmental reproductive number is drawn as a
+filled area from zero and the human-to-human contribution is stacked on top of
+it, so the upper edge is the total \eqn{R_{eff} = R_{env} + R_{hum}} (purple
+line) and the height of the orange band is how much human transmission adds.
+A dashed reference line marks \eqn{R_{eff} = 1}. Without route rows (older
+artifacts) the total alone is drawn.
 }
 \details{
-\strong{Faint posterior band.} The 95\\% ribbon (\code{q2.5}-\code{q97.5}) is
-the per-calendar-date posterior range \emph{across members} and is rendered
-faintly. The caption makes explicit that this band does \emph{not} represent
-the epidemic's peak R_t (member peaks are phase-misaligned in calendar time);
-that explosivity statistic is shown by the medoid line and the per-member peak
-R_t annotation. The inner 50\\% band (\code{q25}-\code{q75}) is drawn only when
-\code{show_iqr = TRUE} and those columns are populated.
+\strong{Headline series.} On the re-simulation path \code{central} is the
+MEDOID trajectory's R_t (a coherent member, preserving peak timing and
+height); on the direct path it is the renewal on weighted-median incidence.
+The daily series is noisy, so each component is shown as a centered
+\code{smooth_days} rolling mean, taken over the days on which both
+components are defined so the smoothed stack still sums to the smoothed
+total, with the raw daily total as a faint background line.
 
-\strong{Per-member peak R_t annotation.} When the input carries an
-\code{attr(reff, "peak_Rt")} data.frame (per-location posterior-weighted
-\code{q2.5}/\code{q50}/\code{q97.5} of each member's time-max R_t), the plot
-annotates it: for a single location in the subtitle, for multi-location input
-as a per-facet in-panel label. Older artifacts that lack the attribute are
-handled gracefully (the annotation is simply omitted).
-
-\strong{Graceful CI handling.} If the quantile columns are absent or all
-\code{NA} (e.g. an older artifact with strided trajectory lines, attr
-\code{ci_source = "unavailable_strided_lines"}), the band is omitted (medoid
-line only) and the caption notes the missing CI. The function never errors
-when the band or peak annotation is missing.
+\strong{Faint band.} When populated, the \code{q2.5}-\code{q97.5} total-R band
+is the per-calendar-date range across members. Member peaks are
+phase-misaligned, so it does not show the epidemic's peak R_t; the per-member
+peak statistic (attr \code{peak_Rt}) is annotated instead.
 }
 \examples{
 \dontrun{
 tr  <- readRDS("2_calibration/trajectories_ensemble.rds")
 cfg <- jsonlite::fromJSON("1_inputs/config.json")
-reff <- calc_Reff(tr, cfg)
-p <- plot_Reff(reff)
-print(p)
+print(plot_Reff(calc_Reff(tr, cfg)))
 }
 
 }
-\references{
-Cori A, Ferguson NM, Fraser C, Cauchemez S (2013). A new framework
-and software to estimate time-varying reproduction numbers during epidemics.
-American Journal of Epidemiology 178(9):1505-1512.
-}
 \seealso{
-\code{\link{calc_Reff}} to compute the series;
-\code{\link{add_reproductive_numbers}} to apply both to an output directory.
+\code{\link{calc_Reff}}, \code{\link{add_reproductive_numbers}}.
 }

@@ -1,3 +1,41 @@
+# MOSAIC 0.92.1
+
+## R_eff is now decomposed by route: R_eff = R_hum + R_env
+
+`calc_Reff()` used to divide total infection incidence by one generation-interval kernel: latent plus infectious period, moment-matched to a Gamma. That timing describes the human route only. Environmental transmission also passes through shedding and 16-200 days of survival in the reservoir, and it carries 99.4-99.9% of infections in every post-v0.89.0 calibration checked (MOZ, COD, ETH). With a ~3-5 day kernel applied to a ~30-200 day process, the old estimator compressed R strongly toward 1. The kernel's human part also used the mean infectious duration where the renewal needs the transmission-weighted mean infectious age.
+
+Each route now has its own numerator (`incidence_human`, `incidence_env`) and its own infectiousness. Both are driven by total incidence, because every infection is infectious through both routes, and R_eff is their sum. The kernels are derived from the engine's own daily transition probabilities and phase order.
+
+The environmental term is **instantaneous** (Cori: "if conditions stayed as they are at t"). The reservoir is rebuilt from the actual past decay path, and one infection's lifetime reservoir contribution is valued at today's `delta_jt`. Nothing after t enters, so truncating a series (e.g. at a forecast cut-off) leaves earlier values unchanged. People latent or infectious on the first day are included in both infectiousness terms, so no initial-condition mask is needed.
+
+- `calc_Reff()`:
+  - returns rows for `estimand` `"R_eff"`, `"R_hum"` and `"R_env"`;
+  - needs the `incidence_human`/`incidence_env` channels (plus `E`/`Isym`/`Iasym` for the initial stocks) and the config's `zeta_*`, `psi_jt` and `decay_*`;
+  - checks that the config's locations and start date match the trajectories;
+  - caps decay rates above 1, which occur when `decay_days_short < 1` day;
+  - `max_days` is removed;
+  - the caveat now states that the renewal is per location, so in multi-location runs imported human-route spread is credited to the destination.
+- `add_reproductive_numbers()`:
+  - builds the kernel from `2_calibration/best_model/config_medoid.json`, not the input config of prior centres, falling back with a warning; attribute `config_source` records which;
+  - applies the burn-in on both paths;
+  - re-simulated members use their own kernel, engine `delta_jt` and initial stocks;
+  - `peak_Rt` gains an `estimand` column, and cell quantiles need half the member weight defined;
+  - `overwrite = FALSE` no longer keeps an older total-only table;
+  - an explicit `burn_in_days = 0` now disables the burn-in (it used to become 30), and a negative value is an error.
+- `plot_Reff()`:
+  - stacks R_hum on top of an R_env area, and both are smoothed over the same days;
+  - the stack is drawn on every day the total is defined; a silent route counts as 0, as it does in `calc_Reff()`;
+  - the new `routes` argument is last, so existing positional calls are unchanged.
+- The internal `.mosaic_generation_time_pmf()` is removed. `get_generation_time_distribution()` is unchanged.
+
+Tests check against the engine rather than against the code's own algebra:
+- R_hum and R_env recover the engine's true instantaneous R in single-route linear runs, with median ratios 0.99 and 0.94.
+- I and W rebuilt from incidence track the simulated stocks and align best at zero lag.
+- Truncation invariance, and a brute-force check of the frozen-at-t definition.
+- The re-simulation path is exercised end to end through the real engine.
+
+On the post-v0.89.0 MOZ medoid, the 14-day-mean R_eff has an interquartile range of 0.54-1.71 and a p95 of 3.1; the old estimator gave 0.96-1.09 and 1.19. Old and new R_eff files are not comparable.
+
 # MOSAIC 0.83.0
 
 ## Every PSOCK cluster now clamps to the connection budget
