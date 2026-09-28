@@ -1,14 +1,16 @@
-# Add Cori R_eff to an existing MOSAIC model output directory
+# Add route-decomposed Cori R_eff to an existing MOSAIC model output directory
 
-Post-hoc driver that applies the Cori (2013) effective reproductive
-number reduction
-([`calc_Reff`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md))
-to a **single** MOSAIC model output directory laid out by
+Post-hoc driver that applies the route-decomposed Cori (2013) effective
+reproductive number reduction
+([`calc_Reff`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md):
+\\R\_{eff} = R\_{hum} + R\_{env}\\) to a **single** MOSAIC model output
+directory laid out by
 [`run_MOSAIC`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md).
 It loads the captured ensemble trajectories
 (`2_calibration/trajectories_ensemble.rds`) and the medoid config
-(`1_inputs/config.json`), computes the per-location R_eff series, writes
-the tidy `reproductive_numbers` table to
+(`2_calibration/best_model/config_medoid.json`, falling back to
+`1_inputs/config.json` with a warning), computes the per-location R_eff
+series, writes the tidy `reproductive_numbers` table to
 `3_results/posterior/reproductive_numbers.csv` (and `.rds`), and
 optionally renders
 [`plot_Reff`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_Reff.md)
@@ -42,12 +44,12 @@ add_reproductive_numbers(
   Logical. When `TRUE`, build a proper posterior credible interval by
   **re-simulating** the saved posterior ensemble
   (`2_calibration/ensemble_candidate.rds`) and computing R_eff per
-  member, then weighted quantiles (median + 95\\ S-\>E infection
-  `incidence` channel that the persisted trajectory artifact does not
-  retain at a daily grid. A faithfulness gate confirms the re-sim
+  member, then weighted quantiles (median + 95\\ route incidence, stock
+  and decay-rate channels that the persisted trajectory artifact does
+  not retain at a daily grid. A faithfulness gate confirms the re-sim
   reproduces the saved `cases_array` before any CI is written. When
   `FALSE` (default) the cheap point-estimate path is used (renewal on
-  the medoid weighted-median incidence from `trajectories_ensemble.rds`;
+  the weighted-median route incidence from `trajectories_ensemble.rds`;
   CI columns are populated only if the artifact carries
   daily-consecutive per-member lines, otherwise NA).
 
@@ -56,8 +58,9 @@ add_reproductive_numbers(
   Integer or `NULL`. Number of leading days to exclude from the R_eff
   output (set to `NA` in the table). `NULL` (default) reads
   `control$likelihood$burn_in_days` from `1_inputs/control.json`; if
-  that is `0` or absent it defaults to `30` days. Only consumed on the
-  `recompute_ci = TRUE` path.
+  that is `0` or absent it defaults to `30` days. An explicit `0`
+  disables the burn-in. Applied on both paths: early R reflects the
+  reservoir filling from empty rather than the epidemic.
 
 - infectiousness_floor:
 
@@ -76,8 +79,9 @@ add_reproductive_numbers(
 
 - overwrite:
 
-  Logical. If `FALSE` and the output CSV already exists, skip
-  recomputation and return a `"skipped_exists"` status. Default `TRUE`.
+  Logical. If `FALSE` and a route-decomposed output CSV already exists,
+  skip recomputation and return a `"skipped_exists"` status (an older
+  total-only CSV is always recomputed). Default `TRUE`.
 
 - verbose:
 
@@ -104,7 +108,8 @@ Invisibly, a one-row `data.frame` status with columns:
 - status:
 
   One of `"ok"`, `"skipped_exists"`, `"skipped_missing_trajectories"`,
-  `"skipped_missing_config"`, `"skipped_no_incidence"`, or `"error"`.
+  `"skipped_missing_config"`, `"skipped_no_incidence"` (no route
+  incidence channels), or `"error"`.
 
 - n_locations:
 
@@ -134,7 +139,7 @@ Invisibly, a one-row `data.frame` status with columns:
 ## Details
 
 **Robust by design.** Missing files, a trajectory artifact without the
-`incidence` channel, or a
+`incidence_human`/`incidence_env` channels, or a
 [`calc_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
 error are handled by skipping with an informative message/warning and
 returning a status row; the function does not crash. It is therefore

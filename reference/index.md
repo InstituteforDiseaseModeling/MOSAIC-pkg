@@ -146,7 +146,7 @@ Estimation and fitting functions
 Calculation functions
 
 - [`calc_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
-  : Cori effective reproductive number (R_eff) from ensemble
+  : Route-decomposed Cori effective reproductive number from ensemble
   trajectories
 - [`calc_affine_normalization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_affine_normalization.md)
   : Affine Normalization of a Numeric Vector (Zero-Centered Min-Max
@@ -231,7 +231,8 @@ Calculation functions
 - [`calc_weighted_mode()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weighted_mode.md)
   : Weighted mode estimation using kernel density
 - [`add_reproductive_numbers()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md)
-  : Add Cori R_eff to an existing MOSAIC model output directory
+  : Add route-decomposed Cori R_eff to an existing MOSAIC model output
+  directory
 
 ## Data Processing
 
@@ -306,7 +307,7 @@ Plotting functions
 - [`plot_ENSO_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_ENSO_data.md)
   : Plot ENSO and IOD Data
 - [`plot_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_Reff.md)
-  : Plot Cori effective reproductive number (R_eff) over time
+  : Plot the route-decomposed effective reproductive number over time
 - [`plot_africa_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_africa_map.md)
   : Plot Africa Map with Cholera Outbreak Countries
 - [`plot_cases_binary()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_cases_binary.md)
@@ -582,7 +583,8 @@ Other exported functions and internal helpers
   : v7.4 LSTM covariate feature set (v7.3 + lean cyclone/drought hazard
   channels)
 - [`add_reproductive_numbers()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md)
-  : Add Cori R_eff to an existing MOSAIC model output directory
+  : Add route-decomposed Cori R_eff to an existing MOSAIC model output
+  directory
 - [`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md)
   : Attach MOSAIC Python Environment
 - [`backfill_weekly_case_gaps()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/backfill_weekly_case_gaps.md)
@@ -590,7 +592,7 @@ Other exported functions and internal helpers
 - [`batch_clean_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/batch_clean_json.md)
   : Batch clean multiple JSON files
 - [`calc_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
-  : Cori effective reproductive number (R_eff) from ensemble
+  : Route-decomposed Cori effective reproductive number from ensemble
   trajectories
 - [`calc_affine_normalization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_affine_normalization.md)
   : Affine Normalization of a Numeric Vector (Zero-Centered Min-Max
@@ -962,7 +964,7 @@ Other exported functions and internal helpers
 - [`plot_ENSO_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_ENSO_data.md)
   : Plot ENSO and IOD Data
 - [`plot_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_Reff.md)
-  : Plot Cori effective reproductive number (R_eff) over time
+  : Plot the route-decomposed effective reproductive number over time
 - [`plot_africa_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_africa_map.md)
   : Plot Africa Map with Cholera Outbreak Countries
 - [`plot_cases_binary()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_cases_binary.md)

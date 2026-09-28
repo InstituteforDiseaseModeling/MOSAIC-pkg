@@ -1,14 +1,17 @@
-# Plot Cori effective reproductive number (R_eff) over time
+# Plot the route-decomposed effective reproductive number over time
 
-Renders the per-location, time-varying Cori (2013) instantaneous
-**infection** effective reproductive number \\R\_{jt}\\ produced by
-[`calc_Reff`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md).
-The headline line is the **medoid trajectory** R_t (`central`) drawn as
-a bold purple line over date, with a horizontal reference line at
-\\R\_{\mathrm{eff}} = 1\\. Because the medoid is a single coherent
-member trajectory it preserves the timing and height of the epidemic's
-R_t peak (typically 2-3.3), unlike a per-calendar-day cross-member
-median which flattens phase-misaligned peaks toward 1.
+Renders the per-location R_eff(t) produced by
+[`calc_Reff`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
+or
+[`add_reproductive_numbers`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md).
+When the input carries the route components (`estimand` `"R_hum"` and
+`"R_env"`) and `routes = TRUE`, the environmental reproductive number is
+drawn as a filled area from zero and the human-to-human contribution is
+stacked on top of it, so the upper edge is the total \\R\_{eff} =
+R\_{env} + R\_{hum}\\ (purple line) and the height of the orange band is
+how much human transmission adds. A dashed reference line marks
+\\R\_{eff} = 1\\. Without route rows (older artifacts) the total alone
+is drawn.
 
 ## Usage
 
@@ -19,7 +22,8 @@ plot_Reff(
   smooth_days = 14L,
   title = NULL,
   ncol = NULL,
-  base_size = 12
+  base_size = 12,
+  routes = TRUE
 )
 ```
 
@@ -27,87 +31,61 @@ plot_Reff(
 
 - reff:
 
-  A `reproductive_numbers` `data.frame` from
-  [`calc_Reff`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
-  with columns `location`, `date`, `t`, `estimand`, `central` (the
-  medoid trajectory R_t), and the per-calendar-date quantile columns
-  (`q2.5`, `q25`, `q50`, `q75`, `q97.5`). The `peak_Rt`,
-  `central_definition`, `band_definition` and `ci_source` attributes
-  (when present) drive the annotation and caption. Leading warm-up rows
-  with a non-finite `central` are dropped per location so no gap
-  artifact is plotted.
+  A `reproductive_numbers` data.frame with columns `location`, `date`,
+  `central`, optionally `estimand` and the quantile columns. Leading
+  rows with a non-finite total are dropped per location.
 
 - show_iqr:
 
-  Logical. Draw the inner 50\\ addition to the faint 95\\ medoid line
-  and the faint 95\\ back-compatibility.
+  Logical. Also draw the inner 50\\ total-R band. Default `FALSE`.
 
 - smooth_days:
 
-  Integer. Centered rolling-mean window (in days) applied to the medoid
-  `central` line for display. The daily Cori R_t on a single trajectory
-  is very noisy; smoothing yields a readable trend while the raw daily
-  series is kept as a faint background and the true per-member daily
-  peak is reported in the annotation. Default `14`; set `1` to plot the
-  raw daily line only.
+  Integer. Centered rolling-mean window (days) for the displayed series;
+  `1` plots the raw daily values. Default `14`.
 
 - title:
 
-  Character or `NULL`. Plot title. `NULL` (default) uses
-  `"Effective reproductive number"` for multi-location input and
-  `"Effective reproductive number: <LOC>"` for a single location.
+  Character or `NULL` for the default title.
 
 - ncol:
 
-  Integer. Number of facet columns for multi-location input. `NULL`
-  (default) uses `min(3, n_locations)`.
+  Integer facet columns for multi-location input (`NULL`:
+  `min(3, n_locations)`).
 
 - base_size:
 
-  Numeric. Base font size passed to
+  Numeric base font size for
   [`theme_mosaic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/theme_mosaic.md).
-  Default `12`.
+
+- routes:
+
+  Logical. Stack `R_env` and `R_hum` under the total when present.
+  Default `TRUE`.
 
 ## Value
 
-A `ggplot` object (not printed or saved). The driver
-[`add_reproductive_numbers`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md)
-is responsible for saving it.
+A `ggplot` object (not printed or saved).
 
 ## Details
 
-**Faint posterior band.** The 95\\ the per-calendar-date posterior range
-*across members* and is rendered faintly. The caption makes explicit
-that this band does *not* represent the epidemic's peak R_t (member
-peaks are phase-misaligned in calendar time); that explosivity statistic
-is shown by the medoid line and the per-member peak R_t annotation. The
-inner 50\\ `show_iqr = TRUE` and those columns are populated.
+**Headline series.** On the re-simulation path `central` is the MEDOID
+trajectory's R_t (a coherent member, preserving peak timing and height);
+on the direct path it is the renewal on weighted-median incidence. The
+daily series is noisy, so each component is shown as a centered
+`smooth_days` rolling mean, taken over the days on which both components
+are defined so the smoothed stack still sums to the smoothed total, with
+the raw daily total as a faint background line.
 
-**Per-member peak R_t annotation.** When the input carries an
-`attr(reff, "peak_Rt")` data.frame (per-location posterior-weighted
-`q2.5`/`q50`/`q97.5` of each member's time-max R_t), the plot annotates
-it: for a single location in the subtitle, for multi-location input as a
-per-facet in-panel label. Older artifacts that lack the attribute are
-handled gracefully (the annotation is simply omitted).
-
-**Graceful CI handling.** If the quantile columns are absent or all `NA`
-(e.g. an older artifact with strided trajectory lines, attr
-`ci_source = "unavailable_strided_lines"`), the band is omitted (medoid
-line only) and the caption notes the missing CI. The function never
-errors when the band or peak annotation is missing.
-
-## References
-
-Cori A, Ferguson NM, Fraser C, Cauchemez S (2013). A new framework and
-software to estimate time-varying reproduction numbers during epidemics.
-American Journal of Epidemiology 178(9):1505-1512.
+**Faint band.** When populated, the `q2.5`-`q97.5` total-R band is the
+per-calendar-date range across members. Member peaks are
+phase-misaligned, so it does not show the epidemic's peak R_t; the
+per-member peak statistic (attr `peak_Rt`) is annotated instead.
 
 ## See also
 
-[`calc_Reff`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
-to compute the series;
-[`add_reproductive_numbers`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md)
-to apply both to an output directory.
+[`calc_Reff`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md),
+[`add_reproductive_numbers`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md).
 
 ## Examples
 
@@ -115,8 +93,6 @@ to apply both to an output directory.
 if (FALSE) { # \dontrun{
 tr  <- readRDS("2_calibration/trajectories_ensemble.rds")
 cfg <- jsonlite::fromJSON("1_inputs/config.json")
-reff <- calc_Reff(tr, cfg)
-p <- plot_Reff(reff)
-print(p)
+print(plot_Reff(calc_Reff(tr, cfg)))
 } # }
 ```
