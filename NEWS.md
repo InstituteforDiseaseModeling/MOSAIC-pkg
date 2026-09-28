@@ -1,3 +1,24 @@
+# MOSAIC 0.92.0
+
+## R_eff is now decomposed by route: R_eff = R_hum + R_env
+
+`calc_Reff()` used to divide total infection incidence by one generation-interval kernel: latent period plus infectious period, moment-matched to a Gamma. That timing describes only the human route. Environmental transmission, which carries 99.8-99.9% of infections in every post-v0.89.0 calibration checked, also passes through shedding and survival in the reservoir. Survival alone lasts 16-200 days, depending on suitability. With a ~3-5 day kernel applied to a ~30-200 day process, any growth rate reads as R close to 1. The kernel's human part also used the duration-weighted mean infectious period where the renewal needs the transmission-weighted mean infectious age.
+
+Each route now has its own numerator (`incidence_human`, `incidence_env`) and its own infectiousness. Both denominators are driven by total incidence, because every infection is infectious through both routes. The kernels are derived from the engine's own daily transition probabilities and phase order rather than moment-matched. The environmental denominator is computed exactly under the time-varying, psi-dependent decay rate `delta_jt` by a linear reservoir filter: each cohort is weighted by the inverse of its expected lifetime reservoir contribution, so there is no T x T kernel and no truncated tail. Initial-condition infectious people and reservoir cells are masked out: each route is reported only once the stock rebuilt from incidence explains 95% of the simulated stock (`ic_tolerance`).
+
+- `calc_Reff()` returns rows for `estimand` `"R_eff"`, `"R_hum"` and `"R_env"`. It needs the `incidence_human`/`incidence_env` trajectory channels plus `zeta_1`, `zeta_2`, `psi_jt`, `decay_*` and `theta_j` in the config. `max_days` is removed (no kernel is truncated); `ic_tolerance` is added.
+- `add_reproductive_numbers()` gains `ic_tolerance`. On the `recompute_ci = TRUE` path, each re-simulated member uses its own kernel, its own engine `delta_jt` and its own stocks. `peak_Rt` gains an `estimand` column.
+- `plot_Reff()` stacks R_hum on top of an R_env area, so the upper edge is the total. `routes = FALSE` draws the total alone.
+- The internal `.mosaic_generation_time_pmf()` is removed. The legacy `get_generation_time_distribution()` CSV writer is unchanged.
+
+Validation (`tests/testthat/test-reproductive_numbers.R`):
+- The time-varying environmental denominator matches a brute-force per-cohort sum to 1e-6.
+- I and W rebuilt from incidence alone track the engine's simulated stocks: correlation > 0.99, median ratio within 5%.
+- R_eff equals R_hum + R_env exactly.
+- Route plateaus match the discrete Euler-Lotka values.
+
+On the post-v0.89.0 MOZ medoid, the 14-day-mean R_eff now spans 0.55-1.65 (interquartile range) with p95 3.2, against 0.96-1.09 and 1.19 before. Old R_eff files are not comparable with new ones.
+
 # MOSAIC 0.83.0
 
 ## Every PSOCK cluster now clamps to the connection budget

@@ -2,137 +2,98 @@
 % Please edit documentation in R/calc_Reff.R
 \name{calc_Reff}
 \alias{calc_Reff}
-\title{Cori effective reproductive number (R_eff) from ensemble trajectories}
+\title{Route-decomposed Cori effective reproductive number from ensemble trajectories}
 \usage{
 calc_Reff(
   ensemble,
   config,
-  max_days = 56L,
   weights = NULL,
   probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
   infectiousness_floor = 1,
+  ic_tolerance = 0.95,
   verbose = TRUE
 )
 }
 \arguments{
-\item{ensemble}{Either a \code{mosaic_trajectories} artifact (the object
-\code{calc_model_ensemble()} attaches as \code{$trajectories} and
-\code{.mosaic_persist_trajectory_artifact()} writes to
-\code{2_calibration/trajectories_ensemble.rds}) OR a \code{mosaic_ensemble}
-carrying that artifact in its \code{$trajectories} field. It must provide the
-weighted-median \code{incidence} channel (\code{summary$incidence$median}, an
-\eqn{nL \times T} matrix); the per-member \code{lines} are used for the
-posterior credible interval when they are daily-consecutive.}
+\item{ensemble}{A \code{mosaic_trajectories} artifact
+(\code{2_calibration/trajectories_ensemble.rds}) or a \code{mosaic_ensemble}
+carrying one in \code{$trajectories}. Must provide weighted-median
+\code{incidence_human} and \code{incidence_env} channels; \code{Isym},
+\code{Iasym} and \code{W} enable the initial-condition mask.}
 
-\item{config}{The medoid \code{config} list. Reads only the kernel timing
-parameters \code{iota}, \code{gamma_1}, \code{gamma_2}, \code{sigma} (scalars).}
+\item{config}{The medoid \code{config} list: kernel parameters \code{iota},
+\code{gamma_1}, \code{gamma_2}, \code{sigma}, \code{zeta_1}, \code{zeta_2},
+plus the fields the engine needs to rebuild \eqn{\delta_{jt}} (\code{psi_jt},
+\code{decay_*}) and \code{theta_j}.}
 
-\item{max_days}{Integer. Generation-interval kernel truncation horizon (days).
-Default \code{56L}.}
+\item{weights}{Optional per-member weights for the posterior reduction,
+indexed by member id. \code{NULL} (default) uses the weights in \code{lines}.}
 
-\item{weights}{Optional numeric vector of per-member weights for the posterior
-reduction. \code{NULL} (default) uses the member weights carried in the
-trajectory \code{lines}.}
+\item{probs}{Credible-interval quantile probabilities.}
 
-\item{probs}{Numeric vector of credible-interval quantile probabilities.
-Default \code{c(0.025, 0.25, 0.5, 0.75, 0.975)}.}
+\item{infectiousness_floor}{Numeric scalar \eqn{\ge 0}. Minimum route
+infectiousness (effective past infections) required to report that route's
+R at a step. Default \code{1}; \code{0} is the pure Cori convention.}
 
-\item{infectiousness_floor}{Numeric scalar \eqn{\ge 0}. Minimum
-generation-weighted past infectiousness (effective past infections) required
-to report \eqn{R_{t}} at a step; below it the cell is \code{NA}. Guards
-initial-condition seed spikes (which otherwise yield \eqn{R \approx 10^{3}})
-and deep inter-epidemic troughs (\eqn{R \approx 0.01}). Default \code{1}.
-Applied identically to the central (medoid) series and to every per-member
-posterior series. Set \code{0} for the pure Cori convention.}
+\item{ic_tolerance}{Fraction in (0, 1] for the initial-condition mask.
+Default \code{0.95}.}
 
-\item{verbose}{Logical; emit progress messages. Default \code{TRUE}.}
+\item{verbose}{Logical; emit progress messages.}
 }
 \value{
-A tidy long \code{data.frame} (\code{reproductive_numbers} schema) with
-columns \code{location}, \code{date}, \code{t}, \code{estimand}
-(\code{"R_eff"}), \code{central} (\strong{this direct path}: renewal on the
-weighted-MEDIAN incidence -- see the caveat below), and one column per
-requested quantile (\code{q2.5}, \code{q25}, \code{q50}, \code{q75},
-\code{q97.5}, ...) from the posterior reduction over members via
-\code{\link{weighted_quantiles}}. The wide \eqn{nL \times T} central matrix
-is attached as attribute \code{"central_matrix"}. Provenance attributes:
-\code{kernel} (\code{"moment_matched"}), \code{series}
-(\code{"infection_incidence"}), \code{kernel_params}, \code{ci_source}, and
+A tidy long \code{data.frame} (\code{reproductive_numbers} schema):
+\code{location}, \code{date}, \code{t}, \code{estimand} (\code{"R_eff"},
+\code{"R_hum"}, \code{"R_env"}), \code{central} (renewal on the
+weighted-median route incidences) and one column per quantile. Attributes:
+\code{central_matrix} (R_eff, nL x T), \code{route_central} (list of R_hum
+and R_env matrices), \code{ic_start}, \code{env_share}, \code{kernel}
+(\code{"route_exact"}), \code{kernel_params}, \code{ci_source},
 \code{caveat}.
 }
 \description{
 Computes the per-location, time-varying Cori (2013) instantaneous
-\strong{infection} effective reproductive number \eqn{R^{\mathrm{cori}}_{jt}}
+\strong{infection} reproductive number split by transmission route,
+\eqn{R^{\mathrm{eff}}_{jt} = R^{\mathrm{hum}}_{jt} + R^{\mathrm{env}}_{jt}},
 by an analytic reduction over the ensemble trajectories the run already
-captured (no extra simulation). The renewal numerator and denominator both use
-the realised \strong{infection-incidence} flow (the captured \code{incidence}
-channel = \code{incidence_human + incidence_env}, recorded at the S->E moment),
-with the two infectious classes counted at \strong{equal weight}. Heterogeneity
-in infectiousness over the course of infection is carried by the moment-matched
-generation-interval kernel \eqn{g} (see \code{.mosaic_generation_time_pmf}),
-not by any weight on the incidence input. There is therefore no \code{numerator}
-or shedding-weight argument, and the function never reads \code{Isym}/\code{Iasym}
-or \code{zeta_*}.
+captured (no extra simulation).
 }
 \details{
-\strong{Caveat (model descriptor, not an invasion threshold).} Because this is
-computed on \emph{simulated} incidence, it describes the model trajectory and
-is directly comparable to a surveillance-derived R_eff computed the same way;
-it is \emph{not} an independent first-principles basic reproductive number.
+\strong{Estimand.} Each route's numerator is its own infection incidence
+(\code{incidence_human}, \code{incidence_env}); both denominators are driven
+by total incidence, because every infection is infectious through both
+routes. \eqn{\Lambda^{hum}} propagates past infections through the latent and
+infectious states (symptomatic and asymptomatic at equal weight, as in the
+human force of infection). \eqn{\Lambda^{env}} additionally routes their
+shedding (weighted by \code{zeta_1}, \code{zeta_2}) through the reservoir at
+the \eqn{\psi}-dependent decay rate \eqn{\delta_{jt}}, so the environmental
+generation interval (tens to hundreds of days) and its seasonal variation are
+represented exactly. Both kernels are derived from the engine's own daily
+transition probabilities and phase order. WASH (\code{theta_j}), the absolute
+shedding scale, \code{kappa} and the transmission rates cancel from the
+kernels and live in the R values.
 
-\strong{Estimand limitation (two-clock generation interval).} The kernel
-\eqn{g} is the \strong{two-clock} (latent + infectious, human-route)
-generation interval, \eqn{\mathcal{G} = 1/\iota + 1/\gamma_{\mathrm{eff}}}. The
-documented \strong{three-clock} extension that adds an environmental-survival
-delay \eqn{1/\delta_{jt}} (04-model-description.Rmd, "Generation-time
-distribution (latent + infectious + environmental delay)") is deliberately
-\emph{excluded} here. Consequently, in waterborne-dominated locations where the
-environmental pathway carries much of the transmission, this estimator uses a
-shorter mean generation time than the true infection-to-infection interval and
-is therefore a \strong{lower-mean-\eqn{\mathcal{G}} approximation}: it will read
-slightly closer to 1 (less extreme in either direction) than a three-clock
-kernel would. The pooled \code{incidence} series itself does include both the
-human and environmental S->E routes; only the kernel timing is two-clock.
+\strong{Initial conditions.} Initial infectious people and reservoir cells
+cause infections that no recorded incidence explains. When the artifact
+carries the \code{Isym}, \code{Iasym} and \code{W} channels, each route is set
+to \code{NA} until the stock reconstructed from incidence reaches
+\code{ic_tolerance} of the simulated stock (attribute \code{"ic_start"}).
 
-\strong{Central definition differs from the production (re-simulation) path.}
-This cheap direct path sets \code{central} = the renewal estimator applied to
-\code{summary$incidence$median} (the full daily weighted-MEDIAN incidence). The
-\strong{production} path used by \code{\link{add_reproductive_numbers}(
-recompute_ci = TRUE)} (\code{.mosaic_reff_resim_ci()}) instead sets
-\code{central} = the \strong{MEDOID trajectory's R_t} (a single coherent
-member's series) because the per-day cross-member median -- and, equivalently,
-the renewal on the median incidence -- is FLATTENED toward 1 by phase
-misalignment of member peaks and does NOT represent the epidemic's peak R_t.
-On this direct path the same caveat applies: the weighted-median incidence is a
-phase-smoothed series, so its renewal \code{central} is a calendar-date
-descriptor, not the coherent peak R_t. Use the re-simulation path
-(\code{recompute_ci = TRUE}) for the phase-coherent headline and the
-\code{peak_Rt} explosivity statistic.
+\strong{Caveat.} This describes the simulated trajectory (comparable to a
+surveillance-derived R_eff computed the same way); it is not an invasion
+threshold. The renewal assumes transmission is linear in infectiousness; the
+human FOI uses \eqn{I^{\alpha_1}} and the environmental dose saturates, so both
+route values are trajectory descriptors, not per-contact constants.
 
-\strong{Posterior credible interval.} Each retained member's daily R_eff series
-is reconstructed from the per-member \code{incidence} \code{lines} and the
-kernel, then reduced per \code{(location, t)} cell with
-\code{\link{weighted_quantiles}} (weight applied \emph{once}; never
-\code{sample(prob = w)}). This requires daily-consecutive lines; the persisted
-artifact thins \code{lines} on a stride (default every 7 days), on which a
-daily renewal convolution is undefined. When \code{lines} are \emph{not}
-daily-consecutive the quantile columns are returned as \code{NA} with
-\code{ci_source = "unavailable_strided_lines"} and a warning, rather than
-fabricating a CI from sub-daily data. The kernel is held fixed at the medoid
-config across members (the thinned lines do not carry per-member kernel draws;
-documented approximation, plan section G.2).
+\strong{Central on this path is a calendar-date descriptor.} The renewal on
+weighted-median incidence is phase-smoothed across members and reads closer
+to 1 than any coherent trajectory. \code{\link{add_reproductive_numbers}(
+recompute_ci = TRUE)} reports the MEDOID trajectory's R_t and the per-member
+peak statistic instead.
 
-\strong{The posterior CI is currently unavailable on production-default
-artifacts.} The trajectory-capture grid in \code{calc_model_ensemble()} writes
-\code{lines} on a stride that does not yield a daily-consecutive run, so the
-\code{unavailable_strided_lines} path is taken in production and only the
-\code{central} (medoid) series is populated. This is \strong{not} fixable by
-merely re-capturing with a finer stride from the caller: the builder grid
-formula yields an empty-or-still-strided set at every stride setting, so the
-daily-consecutive precondition is unreachable until the capture grid itself is
-changed. Restoring a usable posterior CI requires a \strong{Phase-2 fix to the
-trajectory-capture grid} in \code{calc_model_ensemble()}; do not expect a
-\code{line_stride = 1} re-capture to enable it.
+\strong{Posterior CI.} Needs daily-consecutive per-member \code{lines} for
+both route channels; production artifacts thin \code{lines} on a stride, so
+the quantile columns are \code{NA} there (\code{ci_source =
+"unavailable_strided_lines"}). Use the re-simulation path for a CI.
 }
 \references{
 Cori A, Ferguson NM, Fraser C, Cauchemez S (2013). A new framework
@@ -140,5 +101,5 @@ and software to estimate time-varying reproduction numbers during epidemics.
 American Journal of Epidemiology 178(9):1505-1512.
 }
 \seealso{
-\code{\link{weighted_quantiles}}
+\code{\link{weighted_quantiles}}, \code{\link{plot_Reff}}
 }

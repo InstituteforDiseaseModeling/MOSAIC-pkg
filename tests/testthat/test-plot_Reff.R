@@ -119,7 +119,7 @@ test_that("plot_Reff annotates the per-member peak R_t when peak_Rt is set", {
   p <- plot_Reff(reff_single)
   # Single location -> peak annotation in the subtitle.
   expect_false(is.null(p$labels$subtitle))
-  expect_match(p$labels$subtitle, "Peak R_t \\(per-member\\)")
+  expect_match(p$labels$subtitle, "Peak R_eff \\(per-member\\)")
   expect_match(p$labels$subtitle, "2.80")
   expect_match(p$labels$subtitle, "\\[2.10, 3.40\\]")
 
@@ -190,16 +190,64 @@ test_that("plot_Reff honors show_iqr = FALSE (only 95% band)", {
   expect_equal(n_ribbon(p_noiqr), 1L)
 })
 
-test_that("plot_Reff median line is purple (#762A83)", {
+test_that("plot_Reff total line is purple (#762A83)", {
   reff <- make_reff_df(ci = TRUE)
   p <- plot_Reff(reff)
-  line_layers <- Filter(function(l) inherits(l$geom, "GeomLine"), p$layers)
-  expect_true(length(line_layers) >= 1L)
-  cols <- vapply(line_layers, function(l) {
-    cc <- l$aes_params$colour
-    if (is.null(cc)) NA_character_ else as.character(cc)
-  }, character(1))
+  built <- ggplot2::ggplot_build(p)
+  line_idx <- which(vapply(p$layers,
+    function(l) inherits(l$geom, "GeomLine"), logical(1)))
+  cols <- unique(unlist(lapply(line_idx, function(k) toupper(built$data[[k]]$colour))))
   expect_true("#762A83" %in% cols)
+})
+
+# -----------------------------------------------------------------------------
+# Route stacking: R_env area from 0, R_hum stacked on top, total = their sum
+# -----------------------------------------------------------------------------
+add_routes <- function(reff, f_env = 0.7) {
+  e <- reff; e$estimand <- "R_env"; e$central <- f_env * reff$central
+  h <- reff; h$estimand <- "R_hum"; h$central <- (1 - f_env) * reff$central
+  for (q in c("q2.5", "q25", "q50", "q75", "q97.5")) e[[q]] <- h[[q]] <- NA_real_
+  out <- rbind(reff, h, e)
+  for (a in c("ci_source", "peak_Rt")) attr(out, a) <- attr(reff, a)
+  out
+}
+
+test_that("plot_Reff stacks R_hum on top of R_env and tops out at R_eff", {
+  reff <- add_routes(make_reff_df(locs = "MOZ", ci = FALSE, peak = TRUE))
+  p <- plot_Reff(reff, smooth_days = 1L)
+  built <- ggplot2::ggplot_build(p)
+  rib_idx <- which(vapply(p$layers, function(l) inherits(l$geom, "GeomRibbon"),
+                          logical(1)))
+  expect_length(rib_idx, 2L)
+  env <- built$data[[rib_idx[1]]]; hum <- built$data[[rib_idx[2]]]
+  env <- env[is.finite(env$ymax), ]; hum <- hum[is.finite(hum$ymax), ]
+  src <- reff[reff$estimand == "R_eff" & is.finite(reff$central), ]
+  expect_equal(unname(env$ymin), rep(0, nrow(env)))
+  expect_equal(unname(env$ymax), 0.7 * src$central, tolerance = 1e-8)
+  expect_equal(unname(hum$ymin), unname(env$ymax), tolerance = 1e-8)
+  expect_equal(unname(hum$ymax), src$central, tolerance = 1e-8)
+  expect_true(all(c("#009988", "#EE7733") %in% toupper(c(env$fill, hum$fill))))
+  expect_match(p$labels$caption, "stacked")
+})
+
+test_that("plot_Reff draws the total alone when routes = FALSE or absent", {
+  reff <- add_routes(make_reff_df(ci = FALSE))
+  p <- plot_Reff(reff, routes = FALSE)
+  expect_false(any(vapply(p$layers, function(l) inherits(l$geom, "GeomRibbon"),
+                          logical(1))))
+  p2 <- plot_Reff(make_reff_df(ci = FALSE))
+  expect_false(any(vapply(p2$layers, function(l) inherits(l$geom, "GeomRibbon"),
+                          logical(1))))
+})
+
+test_that("plot_Reff reads the R_eff rows of an estimand-keyed peak_Rt", {
+  reff <- add_routes(make_reff_df(locs = "MOZ", ci = FALSE, peak = FALSE))
+  attr(reff, "peak_Rt") <- data.frame(
+    location = "MOZ", estimand = c("R_eff", "R_hum", "R_env"),
+    q2.5 = c(2, 0.1, 1.5), q50 = c(3, 0.2, 2.5), q97.5 = c(4, 0.3, 3.5),
+    n_members = 10L, stringsAsFactors = FALSE)
+  p <- plot_Reff(reff)
+  expect_match(p$labels$subtitle, "3.00 \\[2.00, 4.00\\]")
 })
 
 test_that("plot_Reff validates input", {

@@ -26,37 +26,62 @@ test_that("the member worker runs from an explicitly passed context", {
   # The replacement asserts the thing that actually matters: given a context,
   # the worker RUNS. A worker that cannot run from a passed context fails here.
   ctx <- list(base_config = NULL, priors = NULL, sampling = NULL, paths = NULL,
-              seeds = 1L, max_days = 3L, floor = 1, nL = 1L, Tn = 2L)
+              seeds = 1L, floor = 1, ic_tolerance = 0.95, nL = 1L, Tn = 2L)
 
   # sample_parameters is mocked, so this exercises the worker's own plumbing --
   # context unpacking, config rebuild from the seed, and the result shape --
   # without the engine.
+  one <- matrix(c(1, 2), 1, 2)
   local_mocked_bindings(
-    sample_parameters = function(...) list(iota = 1, gamma_1 = 1, gamma_2 = 1, sigma = 1),
+    sample_parameters = function(...) list(theta_j = 0, zeta_1 = 1, zeta_2 = 1),
     .mosaic_clamp_transmission_params = function(cfg) cfg,
-    .mosaic_generation_time_pmf = function(...) c(0.5, 0.5),
+    .mosaic_reff_config_kernel = function(cfg) list(),
     run_simulation = function(...) list(results = list(
-      incidence = matrix(c(1, 2), 1, 2), reported_cases = matrix(c(1, 2), 1, 2))),
+      incidence = one, incidence_human = one * 0, incidence_env = one,
+      delta_jt = one / 10, W = one, Isym = one, Iasym = one,
+      reported_cases = one)),
     .mosaic_reff_to_mat = function(x, nL, Tn) matrix(as.numeric(x), nL, Tn),
-    .cori_reff = function(inc, g, infectiousness_floor = 1) rep(1.0, length(inc)),
+    .mosaic_reff_routes = function(inc_hum, inc_env, ...)
+      list(R_eff = rep(1, length(inc_env)), R_hum = rep(0, length(inc_env)),
+           R_env = rep(1, length(inc_env)), ic_start = c(hum = 0L, env = 0L)),
     .package = "MOSAIC"
   )
 
   r <- MOSAIC:::.mosaic_reff_resim_member(
-    list(p = 1L, s = 1L, saved = matrix(c(1, 2), 1, 2)), ctx = ctx)
+    list(p = 1L, s = 1L, saved = one), ctx = ctx)
 
   expect_null(r$error)          # the point: it RAN
   expect_identical(r$p, 1L)
   expect_identical(r$s, 1L)
-  expect_length(r$reff, 1L)     # one per location
-  expect_length(r$reff[[1L]], 2L)
+  expect_named(r$reff, c("R_eff", "R_hum", "R_env"))
+  expect_length(r$reff$R_eff, 1L)     # one per location
+  expect_length(r$reff$R_eff[[1L]], 2L)
+})
+
+test_that("the member worker refuses a member whose route incidences do not add up", {
+  ctx <- list(base_config = NULL, priors = NULL, sampling = NULL, paths = NULL,
+              seeds = 1L, floor = 1, ic_tolerance = 0.95, nL = 1L, Tn = 2L)
+  one <- matrix(c(1, 2), 1, 2)
+  local_mocked_bindings(
+    sample_parameters = function(...) list(theta_j = 0, zeta_1 = 1, zeta_2 = 1),
+    .mosaic_clamp_transmission_params = function(cfg) cfg,
+    .mosaic_reff_config_kernel = function(cfg) list(),
+    run_simulation = function(...) list(results = list(
+      incidence = one * 3, incidence_human = one, incidence_env = one,
+      delta_jt = one / 10, W = one, Isym = one, Iasym = one,
+      reported_cases = one)),
+    .mosaic_reff_to_mat = function(x, nL, Tn) matrix(as.numeric(x), nL, Tn),
+    .package = "MOSAIC"
+  )
+  r <- MOSAIC:::.mosaic_reff_resim_member(list(p = 1L, s = 1L, saved = one), ctx = ctx)
+  expect_match(r$error, "incidence_human \\+ incidence_env")
 })
 
 test_that("a genuinely broken member is reported, not thrown", {
   # Error capture still matters -- one bad member must not kill the batch --
   # but it is asserted on a REAL failure, not on the absence of setup.
   ctx <- list(base_config = NULL, priors = NULL, sampling = NULL, paths = NULL,
-              seeds = 1L, max_days = 3L, floor = 1, nL = 1L, Tn = 2L)
+              seeds = 1L, floor = 1, ic_tolerance = 0.95, nL = 1L, Tn = 2L)
   local_mocked_bindings(
     sample_parameters = function(...) stop("engine exploded"),
     .package = "MOSAIC"

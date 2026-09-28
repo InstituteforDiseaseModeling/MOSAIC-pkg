@@ -7,49 +7,58 @@
 # gracefully. Does NOT depend on the real model tree.
 
 # -----------------------------------------------------------------------------
-# Helpers: write a minimal MOSAIC output directory
+# Helpers: write a minimal MOSAIC output directory from one engine run of the
+# packaged demo config (route incidence + stocks, and a config the engine can
+# rebuild delta_jt from).
 # -----------------------------------------------------------------------------
-write_traj_rds <- function(path, inc_med, lines = NULL,
-                           date_start = "2023-01-01", drop_incidence = FALSE) {
-  nL <- nrow(inc_med); Tn <- ncol(inc_med)
-  loc_names <- if (nL == 1L) "MOZ" else paste0("LOC", seq_len(nL))
-  if (is.null(lines))
-    lines <- data.frame(member_id = integer(0), weight = numeric(0),
-                        location = character(0), channel = character(0),
-                        t = integer(0), value = numeric(0),
-                        stringsAsFactors = FALSE)
-  summary <- list(incidence = list(median = inc_med))
-  if (drop_incidence) summary$incidence <- NULL
+.reff_demo <- local({
+  cache <- NULL
+  function() {
+    if (is.null(cache)) {
+      cfg <- MOSAIC::config_simulation_epidemic
+      cfg$zeta_1 <- 1e6; cfg$zeta_2 <- 2e5
+      r <- run_simulation(config = cfg, seed = 7L, quiet = TRUE)$results
+      cache <<- list(cfg = cfg, r = r)
+    }
+    cache
+  }
+})
+
+write_traj_rds <- function(path, drop_incidence = FALSE) {
+  d <- .reff_demo(); r <- d$r
+  nL <- nrow(r$incidence); Tn <- ncol(r$incidence)
+  ch <- c("incidence", "incidence_human", "incidence_env", "W", "Isym", "Iasym")
+  summary <- stats::setNames(lapply(ch, function(x)
+    list(median = matrix(as.numeric(r[[x]]), nL, Tn))), ch)
+  if (drop_incidence) summary[c("incidence_human", "incidence_env")] <- NULL
   traj <- structure(list(
     schema         = "mosaic_trajectories",
-    channels       = "incidence",
-    location_names = loc_names,
+    channels       = ch,
+    location_names = d$cfg$location_name,
     n_locations    = nL,
     n_time_points  = Tn,
-    date_start     = date_start,
-    date_stop      = as.character(as.Date(date_start) + Tn - 1L),
+    date_start     = d$cfg$date_start,
+    date_stop      = d$cfg$date_stop,
     summary        = summary,
-    lines          = lines
+    lines          = data.frame(member_id = integer(0), weight = numeric(0),
+                                location = character(0), channel = character(0),
+                                t = integer(0), value = numeric(0),
+                                stringsAsFactors = FALSE)
   ), class = "mosaic_trajectories")
   saveRDS(traj, path)
 }
 
-write_config_json <- function(path,
-                              cfg = list(iota = 1 / 1.4, gamma_1 = 0.1,
-                                         gamma_2 = 0.5, sigma = 0.25)) {
-  jsonlite::write_json(cfg, path, auto_unbox = TRUE)
+write_config_json <- function(path) {
+  jsonlite::write_json(.reff_demo()$cfg, path, auto_unbox = TRUE, digits = NA)
 }
 
 # Build a complete tiny output dir; returns the dir path.
-make_output_dir <- function(root, inc_med = NULL, drop_incidence = FALSE,
-                            write_config = TRUE) {
-  if (is.null(inc_med))
-    inc_med <- matrix(exp(0.03 * seq_len(60)), nrow = 1)
+make_output_dir <- function(root, drop_incidence = FALSE, write_config = TRUE) {
   dir.create(file.path(root, "1_inputs"), recursive = TRUE, showWarnings = FALSE)
   dir.create(file.path(root, "2_calibration"), recursive = TRUE, showWarnings = FALSE)
   dir.create(file.path(root, "3_results"), recursive = TRUE, showWarnings = FALSE)
   write_traj_rds(file.path(root, "2_calibration", "trajectories_ensemble.rds"),
-                 inc_med, drop_incidence = drop_incidence)
+                 drop_incidence = drop_incidence)
   if (write_config)
     write_config_json(file.path(root, "1_inputs", "config.json"))
   root
@@ -65,7 +74,7 @@ test_that("add_reproductive_numbers writes csv/rds + plot and returns ok status"
   expect_s3_class(st, "data.frame")
   expect_equal(nrow(st), 1L)
   expect_equal(st$status, "ok")
-  expect_equal(st$n_locations, 1L)
+  expect_equal(st$n_locations, 3L)
   # Production-default strided/empty lines -> CI unavailable.
   expect_false(isTRUE(st$ci_available))
 
@@ -78,7 +87,7 @@ test_that("add_reproductive_numbers writes csv/rds + plot and returns ok status"
   # CSV has the reproductive_numbers schema.
   tab <- utils::read.csv(csv, stringsAsFactors = FALSE)
   expect_true(all(c("location", "date", "t", "estimand", "central") %in% names(tab)))
-  expect_equal(unique(tab$estimand), "R_eff")
+  expect_setequal(unique(tab$estimand), c("R_eff", "R_hum", "R_env"))
 
   # RDS round-trips the class.
   ro <- readRDS(rds)
@@ -103,7 +112,7 @@ test_that("add_reproductive_numbers can skip plotting", {
                                     "reproductive_number")))
 })
 
-test_that("add_reproductive_numbers skips a missing-incidence artifact gracefully", {
+test_that("add_reproductive_numbers skips an artifact without route incidence gracefully", {
   d <- file.path(tempdir(), paste0("reff_noinc_", as.integer(runif(1, 1, 1e6))))
   make_output_dir(d, drop_incidence = TRUE)
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
