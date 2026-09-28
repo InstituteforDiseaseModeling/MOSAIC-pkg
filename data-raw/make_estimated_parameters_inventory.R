@@ -450,7 +450,7 @@ spatial_params <- data.frame(
 
 # Disease-specific parameters
 #
-# Includes 4 SAMPLED params (mu_j_baseline, mu_j_slope, mu_j_epidemic_factor,
+# Includes 3 SAMPLED params (mu_j_baseline, mu_j_epidemic_factor,
 # epidemic_threshold) plus 4 DERIVED policy-relevant CFR transformations
 # (cfr_baseline, cfr_epidemic, cfr_clinical_baseline, cfr_clinical_epidemic).
 # The derived CFRs are computed per posterior sample by
@@ -465,25 +465,22 @@ spatial_params <- data.frame(
 # clinicians use against treatment-center benchmarks and the WHO 1%
 # outbreak-response threshold.
 #
-# All four are evaluated at simulation tick 0 (i.e. with the temporal
-# slope contribution at 1.0). Under the default Normal(0, 0.05) prior on
-# mu_j_slope the implied 95% multiplier range is [0.90, 1.10] at the
-# simulation midpoint, so the intercept CFRs are good proxies for the
-# average endemic / epidemic CFR over the calibration window. For
-# applications sensitive to slow CFR drift, recompute CFR per tick from
-# the predictions matrices instead.
+# All four are constant over the simulation window: mu_jt carries no
+# time-varying term other than the epidemic flag, so the endemic and
+# epidemic CFRs below are exact rather than tick-0 approximations. (Before
+# MOSAIC v0.95.0 a linear-in-time mu_j_slope factor made them tick-0
+# intercepts; that term was removed in CFR restructure R3.)
 #
 # Inventory `order` is overwritten dynamically below at the .cur_order
 # accumulation step (see "REORGANIZE LOCATION-SPECIFIC PARAMETERS" section).
 # The static `order` values here are placeholders — keeping them only so
 # data.frame() has the right column type.
 disease_params <- data.frame(
-  parameter_name = c("mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor", "epidemic_threshold",
+  parameter_name = c("mu_j_baseline", "mu_j_epidemic_factor", "epidemic_threshold",
                      "cfr_baseline", "cfr_epidemic",
                      "cfr_clinical_baseline", "cfr_clinical_epidemic"),
   display_name = c(
     "Baseline IFR",
-    "Temporal IFR Trend",
     "Epidemic IFR Multiplier",
     "Epidemic Threshold",
     "Implied Reported CFR (Endemic)",
@@ -493,15 +490,14 @@ disease_params <- data.frame(
   ),
   description = c(
     "Baseline location-specific infection fatality ratio",
-    "Temporal trend in IFR (change per year)",
     "Multiplier applied to IFR during epidemic periods",
     "Case incidence threshold for epidemic period classification",
-    "DERIVED: Implied reported CFR under endemic regime, per posterior sample. cfr_baseline = mu_j_baseline * rho_deaths * chi_endemic / rho (laser-cholera v0.13+ steady-state identity, evaluated at slope=0).",
+    "DERIVED: Implied reported CFR under endemic regime, per posterior sample. cfr_baseline = mu_j_baseline * rho_deaths * chi_endemic / rho (laser-cholera v0.13+ steady-state identity).",
     "DERIVED: Implied reported CFR under epidemic regime, per posterior sample. cfr_epidemic = mu_j_baseline * (1 + mu_j_epidemic_factor) * rho_deaths * chi_epidemic / rho.",
     "DERIVED: Probability a symptomatic individual dies of cholera over their expected symptomatic period, under endemic regime. 1 - exp(-mu_j_baseline / gamma_1). Comparable to treatment-center per-case CFR and the WHO 1% outbreak-response threshold.",
     "DERIVED: Per-symptomatic-episode death probability under epidemic regime. 1 - exp(-mu_j_baseline * (1 + mu_j_epidemic_factor) / gamma_1)."
   ),
-  units = c("proportion", "per year", "dimensionless", "cases/100k/week",
+  units = c("proportion", "dimensionless", "cases/100k/week",
             "proportion", "proportion", "proportion", "proportion"),
   # mu_j_epidemic_factor prior is Gamma(1,2) in make_priors_default.R — corrected from lognormal (v0.14.35)
   # epidemic_threshold: Truncnorm with per-location proportional bounds (v0.28.0, was Lognormal).
@@ -511,12 +507,12 @@ disease_params <- data.frame(
   #   as beta from sample quantiles (bounded [0,1] domain, right-skewed).
   #   update_priors_from_posteriors will skip them during staged merges via the
   #   "not in original priors" guard.
-  distribution = c("gamma", "normal", "gamma", "truncnorm",
+  distribution = c("gamma", "gamma", "truncnorm",
                    "beta", "beta", "beta", "beta"),
-  posterior_distribution = c("gamma", "normal", "gamma", "truncnorm",
+  posterior_distribution = c("gamma", "gamma", "truncnorm",
                              "beta", "beta", "beta", "beta"),
-  posterior_lower = rep(NA_real_, 8),
-  posterior_upper = rep(NA_real_, 8),
+  posterior_lower = rep(NA_real_, 7),
+  posterior_upper = rep(NA_real_, 7),
   scale = "location",
   category = "disease",
   order = NA_integer_,           # OVERWRITTEN BELOW (.cur_order accumulator)
@@ -590,7 +586,7 @@ calibration_params$order_category <- "04"
 
 # Other parameters: disease (mu_j_*, cfr_*), mobility (tau_i), spatial (theta_j)
 other_params <- rbind(
-  disease_params,    # mu_j_baseline, mu_j_slope, mu_j_epidemic_factor, epidemic_threshold, cfr_baseline, cfr_epidemic
+  disease_params,    # mu_j_baseline, mu_j_epidemic_factor, epidemic_threshold, cfr_baseline, cfr_epidemic
   spatial_params     # tau_i, theta_j
 )
 n_disease <- nrow(disease_params)

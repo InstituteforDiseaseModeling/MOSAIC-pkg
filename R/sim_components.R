@@ -186,9 +186,16 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
           rep(0L, state$.npatches)
      }
 
-     t_factor <- tick / par$nticks        # 0 <= t_factor <= 1
+     # Two multiplicative components: a per-patch baseline and an epidemic
+     # escalation. A third, linear-in-time factor `(1 + mu_j_slope * tick/nticks)`
+     # was removed in v0.95.0 (CFR restructure R3) -- the trend it encoded is not
+     # estimable from the deaths series (~74,000 deaths are needed for posterior
+     # shrinkage 0.5; the largest shipped series is COD at 4,139 and all 40
+     # locations pooled hold ~15,600), it double-counted the `s(year)` term
+     # already inside CFR_target, and the literature carries no secular cholera
+     # CFR trend (WHO's Yemen-excluded series is flat at 1.7/1.4/1.5% for
+     # 2017/2019/2020). `tick` is no longer read here as a result.
      mu_jt <- par$mu_j_baseline *
-              (1 + par$mu_j_slope * t_factor) *
               (1 + par$mu_j_epidemic_factor * epidemic_flag)
 
      dd <- .sim_binom(ctl, "infectious/disease_deaths", is_next, -expm1(-mu_jt))

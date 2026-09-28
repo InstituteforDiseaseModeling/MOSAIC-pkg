@@ -162,10 +162,12 @@ sim_params <- function(config, components = SIM_PIPELINE) {
           par$delta_reporting_deaths <- .sim_lag(config$delta_reporting_deaths,
                                                  "delta_reporting_deaths")
 
-          for (nm in c("mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor")) {
+          # mu_j_slope was dropped in v0.95.0 (CFR restructure R3); the engine no
+          # longer carries a linear-in-time mortality trend, so a `mu_j_slope`
+          # field on an older config is ignored rather than validated.
+          for (nm in c("mu_j_baseline", "mu_j_epidemic_factor")) {
                par[[nm]] <- .sim_patch_vector(config[[nm]], nm, par$npatches)
           }
-          # mu_j_slope is the one mu term the engine puts no sign constraint on.
           if (any(par$mu_j_baseline < 0)) {
                stop("`mu_j_baseline` is negative at patch(es) ",
                     .sim_fmt(which(par$mu_j_baseline < 0)), ".", call. = FALSE)

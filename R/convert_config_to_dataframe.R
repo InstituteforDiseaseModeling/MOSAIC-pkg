@@ -111,7 +111,6 @@ convert_config_to_dataframe <- function(config) {
           "decay_shape_2",
           "CFR_target",         # B2: per-country target reported CFR
           "mu_j_baseline",      # Added: Baseline location-specific IFR
-          "mu_j_slope",         # Added: Temporal IFR trend
           "mu_j_epidemic_factor", # Added: Epidemic IFR multiplier
           "epidemic_threshold", # Added: Epidemic activation threshold
           "chi_endemic",        # Added: PPV during endemic periods
@@ -160,7 +159,7 @@ convert_config_to_dataframe <- function(config) {
                "tau_i", "theta_j",
                "a_1", "a_2", "b_1", "b_2",
                "CFR_target",
-               "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
+               "mu_j_baseline", "mu_j_epidemic_factor",
                "epidemic_threshold",
                "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"
           )

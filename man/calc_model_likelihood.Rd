@@ -75,8 +75,9 @@ floor makes zeros ruinous and the optimum moves to a draw that over-predicts
 the level (a Jensen gap: \code{E_seed[LL(est)]} peaks well above
 \code{LL(E_seed[est])}). Cases default \code{0.02}; deaths default
 \code{0.25}, sized by sweep so the deaths level at the likelihood optimum is
-unbiased. Cases are far less exposed (13.6\\% of scored deaths cells predict
-zero against a positive observation, versus 1.7\\% of cases cells).}
+unbiased. Cases are far less exposed: 13.6 percent of scored deaths cells
+predict zero against a positive observation, versus 1.7 percent of cases
+cells.}
 
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 

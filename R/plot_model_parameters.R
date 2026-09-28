@@ -139,7 +139,6 @@ plot_model_parameters <- function(results,
           "tau_i", "theta_j",                             # Mobility rate
           "a_1_j", "a_2_j", "b_1_j", "b_2_j",            # Seasonal parameters
           "mu_j_baseline",                                # Baseline mortality hazard (CFR)
-          "mu_j_slope",                                   # Temporal CFR trend
           "mu_j_epidemic_factor",                         # Epidemic-period CFR multiplier
           "epidemic_threshold",                           # Epidemic regime activation
           "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"  # psi_star calibration

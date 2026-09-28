@@ -56,8 +56,9 @@
 #'   the level (a Jensen gap: \code{E_seed[LL(est)]} peaks well above
 #'   \code{LL(E_seed[est])}). Cases default \code{0.02}; deaths default
 #'   \code{0.25}, sized by sweep so the deaths level at the likelihood optimum is
-#'   unbiased. Cases are far less exposed (13.6\% of scored deaths cells predict
-#'   zero against a positive observation, versus 1.7\% of cases cells).
+#'   unbiased. Cases are far less exposed: 13.6 percent of scored deaths cells
+#'   predict zero against a positive observation, versus 1.7 percent of cases
+#'   cells.
 #' @param verbose If \code{TRUE}, prints component summaries per location.
 #' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms
 #'   (T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
@@ -72,6 +73,18 @@
 #' @param wis_quantiles Quantiles for WIS if enabled.
 #' @param cumulative_timepoints Fractions for cumulative progression.
 #'
+# NOTE (v0.95.0): the two percentages just above are SPELLED OUT on purpose.
+# A percent sign written as a backslash-escape inside a roxygen comment is
+# re-escaped by roxygen2 into a double backslash in the generated .Rd, which the
+# Rd parser reads as a literal backslash followed by a COMMENT -- everything
+# after it on that line is silently discarded. Here that line also carried the
+# closing brace of its argument entry, so the arguments block never closed: the
+# generated Rd lost its description, every later argument became an unknown
+# macro, and R CMD check reported it as four separate items (install WARNING,
+# Rd files WARNING, Rd cross-references WARNING, Rd contents NOTE) plus nine
+# spuriously "undocumented" arguments. The same escape appears in ~20 other
+# roxygen blocks in this package; it is merely latent there because no closing
+# brace shares the line, but it still truncates the rendered text.
 #' @return Scalar total log-likelihood (finite), \code{-Inf} if non-finite,
 #'   or \code{NA_real_} if all locations contribute nothing.
 #' @export

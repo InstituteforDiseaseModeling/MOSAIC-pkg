@@ -3584,7 +3584,6 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_tau_i = TRUE,             # Travel/diffusion probability
     sample_theta_j = TRUE,           # WASH coverage
     sample_mu_j_baseline = TRUE,     # Baseline location-specific IFR
-    sample_mu_j_slope = TRUE,        # Temporal IFR trend
     sample_mu_j_epidemic_factor = TRUE, # Epidemic IFR multiplier
     sample_epidemic_threshold = TRUE, # Epidemic activation threshold
 

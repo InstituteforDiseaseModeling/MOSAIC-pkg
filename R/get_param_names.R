@@ -123,7 +123,6 @@ get_param_names <- function(object) {
         "decay_shape_2",
         "CFR_target",         # B2: per-country target reported CFR (drives mu_j_baseline derivation)
         "mu_j_baseline",      # Baseline per-symptomatic mortality hazard (B2: derived from CFR_target * chain)
-        "mu_j_slope",         # Temporal CFR trend
         "mu_j_epidemic_factor", # Epidemic-period CFR multiplier
         "epidemic_threshold", # Epidemic regime activation threshold
         "delta_reporting_cases",
@@ -147,7 +146,6 @@ get_param_names <- function(object) {
         "a_1", "a_2", "b_1", "b_2",
         "CFR_target",                    # B2: per-country target reported CFR
         "mu_j_baseline",                 # Baseline mortality hazard (B2: derived from CFR_target * chain)
-        "mu_j_slope",                    # Temporal CFR trend
         "mu_j_epidemic_factor",          # Epidemic-period CFR multiplier
         "epidemic_threshold",            # Per-location epidemic regime activation
         "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"  # psi_star calibration parameters

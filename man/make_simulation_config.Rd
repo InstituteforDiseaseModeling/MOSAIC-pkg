@@ -196,14 +196,20 @@ before v0.94.0 (which carry a \code{mu_jt} field) can still be replayed through
 \code{do.call(make_simulation_config, config)} without an "unused argument"
 error. Any value supplied is silently dropped and is \strong{not} returned in
 the config. The engine never read this matrix: \code{run_simulation()} derives
-the per-tick mortality hazard itself from \code{mu_j_baseline}, \code{mu_j_slope}
-and \code{mu_j_epidemic_factor} (\code{R/sim_components.R}).}
+the per-tick mortality hazard itself from \code{mu_j_baseline} and
+\code{mu_j_epidemic_factor} (\code{R/sim_components.R}).}
 
 \item{mu_j_baseline}{Baseline infection fatality ratio for threshold-dependent IFR model.
 Numeric vector of length(location_name). Values must be in [0, 1].}
 
-\item{mu_j_slope}{Temporal trend in baseline IFR (proportion change over simulation period).
-Numeric vector of length(location_name). Default is 0 (no temporal trend).}
+\item{mu_j_slope}{\strong{Deprecated and ignored.} The linear-in-time mortality trend
+\code{(1 + mu_j_slope * tick/nticks)} was removed from the engine in v0.95.0
+(CFR restructure R3): it is not estimable from the deaths series, it
+double-counted the \code{s(year)} term already inside \code{CFR_target}, and no
+secular trend in cholera CFR is documented. Retained only so that configs
+written before v0.95.0 can still be replayed through
+\code{do.call(make_simulation_config, config)}; any value supplied is silently
+dropped and is \strong{not} returned in the config.}
 
 \item{mu_j_epidemic_factor}{Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50\% increase).
 Numeric vector of length(location_name). Must be >= 0.

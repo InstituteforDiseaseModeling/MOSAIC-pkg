@@ -161,8 +161,6 @@
 #' Disease-mortality:
 #' \itemize{
 #'   \item \code{mu_j_baseline} -- Per-iso baseline CFR rate (Gamma).
-#'   \item \code{mu_j_slope} -- Per-iso slope coupling CFR to outbreak
-#'     intensity (Gamma).
 #'   \item \code{mu_j_epidemic_factor} -- Per-iso multiplier applied to
 #'     `mu_j_baseline` once epidemic phase is detected (Gamma).
 #' }

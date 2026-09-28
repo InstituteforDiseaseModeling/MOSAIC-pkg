@@ -1,5 +1,70 @@
 # MOSAIC (development version)
 
+## mu_j_slope is removed (CFR restructure R3)
+
+The per-location `N(0, 0.05)` prior on a linear-in-time trend in baseline IFR is
+deleted, along with the engine term it fed: `run_simulation()` no longer
+multiplies the mortality hazard by `(1 + mu_j_slope * tick/nticks)`, so `mu_jt`
+is now two multiplicative components (per-patch baseline x epidemic escalation)
+rather than three. 40 sampled dimensions go away. No other prior moves.
+
+Four independent lines of evidence agree. It is **not estimable**: posterior
+shrinkage 0.5 would need ~74,300 deaths in one country, the largest shipped
+series is COD at 4,139, and all 40 locations pooled hold ~15,600; measured
+posterior/prior SD on a 50,000-draw reference run is 0.969, i.e. the posterior
+IS the prior. It is **not in the data**: 3 of 21 countries show a significant
+weekly CFR trend and the signs are mixed, the between-country spread of the
+implied trend is 7.3x wider than the prior, and in COD the weekly and annual
+trends have opposite signs. It is **not in the literature**: WHO's own
+Yemen-excluded global series is flat (1.7 / 1.4 / 1.5% for 2017 / 2019 / 2020).
+And it is **double-counted**: `est_CFR_hierarchical()` already fits an `s(year)`
+smooth, so the temporal component of country CFR is inside `CFR_target`.
+
+**Shipped artifacts are bit-identical.** `config_default` has carried
+`mu_j_slope = 0` for every location since the field existed, so `(1 + 0*t) == 1`
+exactly. Verified over 26 scenarios / 722 result-channel digests in both engine
+modes (`rng` and `replay`), at 40 and 1 patches, including the 1,398-tick
+full-length oracle fixture: 25/26 bit-identical, the one difference being a
+deliberate non-zero-slope sentinel that confirms the harness was not blind. The
+golden fixtures therefore did NOT need regenerating -- which matters, because
+they are frozen recordings of the read-only Python engine and could not have
+been regenerated here. `make_simulation_config()` keeps a deprecated, ignored
+`mu_j_slope` formal so pre-v0.95.0 configs on disk still replay.
+
+**A correction to the evidence base.** The pre-registered claim that this term
+"injects +/-30% of uncontrolled deaths level per draw" is NOT reproduced. That
+figure came from a sweep running the slope out to about +/-1.2, which is 24
+prior SD. Measured inside the actual `N(0, 0.05)` 95% interval (+/-0.098), total
+deaths move only +/-4% (`log(deaths ratio) = 0.403 * slope`; the death-weighted
+mean `t_factor` is 0.40). The identifiability report's further prediction that
+the deaths-bias IQR would narrow by >=20% is also falsified (measured -2.6% to
++1.6%, i.e. noise). Removal is justified as deleting dead weight -- 40 sampled
+dimensions carrying ~0.01 nats -- not as removing a large level injection.
+
+Pinning was verified inert before removal (5 national medoids x 24 parameter
+draws x 8 seeds/arm, arms paired at the PARAMETER level because `rbinom`
+rejection sampling desynchronises the RNG stream): deaths ratio geomean 1.0034,
+95% CI [0.9991, 1.0077], sd(log) 0.0239 -- smaller than the 0.0331 Monte-Carlo
+noise floor of the same comparison. Cases pooled ratio 1.0000.
+
+## R CMD check regressions from R6/R1/R2 are fixed
+
+A paired `devtools::check()` at the branch base and at v0.94.0 showed the latter
+had added 5 warnings and 1 note. All traced to two causes, both now fixed: a
+malformed roxygen block in `calc_model_likelihood.R` (bare `\item`s outside any
+container, cascading into the install / Rd files / Rd cross-references warnings
+and the Rd contents note, plus 9 undocumented arguments), and non-ASCII
+characters in shipped description strings. Also fixed: the spurious
+`sample_parameters.Rd` "missing link `1, 14`" from `[1, 14]` parsing as an Rd
+link, and a genuinely missing `@param is_diagnostics`.
+
+Note for contributors: the CLAUDE.md check baseline of `0E/3W/2N` is wrong --
+the real base is `0E/2W/4N` -- and `R CMD check .` cannot pass on this package
+at all, because `Authors@R` is only expanded at build time, so a source-directory
+check always reports `1 ERROR: Required fields missing or empty 'Author'
+'Maintainer'`. Use `devtools::check()`.
+
+
 ## The epsilon floor is sized per channel (CFR restructure R1)
 
 0.93.0 put the eps-floored density in place but applied **one constant, 0.02, to

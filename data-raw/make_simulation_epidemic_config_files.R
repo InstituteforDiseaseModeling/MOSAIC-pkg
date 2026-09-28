@@ -131,7 +131,6 @@ sim_args <- list(
      gamma_2          = 0.1,
      epsilon          = 0.0003,
      mu_j_baseline        = setNames(rep(0.01, n_loc), j),  # per-day IFR hazard; engine builds its own mu_jt
-     mu_j_slope           = setNames(rep(0,    n_loc), j),  # no temporal trend (toy)
      mu_j_epidemic_factor = setNames(rep(0,    n_loc), j),  # no epidemic IFR bump (toy)
      chi_endemic      = 0.5,       # PPV during endemic periods
      chi_epidemic     = 0.75,      # PPV during epidemic periods

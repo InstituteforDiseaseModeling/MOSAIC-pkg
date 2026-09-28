@@ -31,7 +31,6 @@ mini_config <- function(npatches = 3L, nticks = 5L, ...) {
     chi_endemic = 1, chi_epidemic = 1,
     delta_reporting_cases = 0L, delta_reporting_deaths = 0L,
     mu_j_baseline = rep(1e-3, npatches),
-    mu_j_slope = rep(0, npatches),
     mu_j_epidemic_factor = rep(0, npatches),
     epidemic_threshold = rep(0.01, npatches),
     omega_1 = 1 / 730, omega_2 = 1 / 1095,              # Vaccinated

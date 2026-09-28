@@ -83,7 +83,6 @@ independent draw; \code{mu_j_baseline} is no longer an independently
 sampled location parameter. Under a legacy priors object (no
 \code{CFR_target} prior) it gates the old independent mu_j_baseline draw.
 (default TRUE)
-\item sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)
 \item sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)
 \item sample_epidemic_threshold: Location-specific epidemic activation threshold (default TRUE)
 \item sample_delta_reporting_cases: Symptom-onset-to-case reporting delay in days (default TRUE)
@@ -97,8 +96,9 @@ observational anchor to calibrate against, because deaths and cases are
 reported on the same WHO bulletin row (weekly cross-correlation peaks at
 lag 0 in 11 of 15 countries) and the posterior beats a resampling null in
 only 6 of 27 countries. 5 days is the rounded prior median/mean of the
-retained TruncNorm(4, 3, \link{1, 14}) and the midpoint of the 3-7 day IDSR
-death-to-report window that anchors it. Set TRUE to re-enable the draw.
+retained TruncNorm(4, 3) truncated to 1-14 days, and the midpoint of
+the 3-7 day IDSR death-to-report window that anchors it. Set TRUE to
+re-enable the draw.
 \item sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
 \item sample_psi_star_b: Suitability calibration scale/offset (default TRUE)
 \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)

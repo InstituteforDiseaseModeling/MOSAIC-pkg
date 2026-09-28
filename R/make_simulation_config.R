@@ -91,12 +91,18 @@
 #'        `do.call(make_simulation_config, config)` without an "unused argument"
 #'        error. Any value supplied is silently dropped and is **not** returned in
 #'        the config. The engine never read this matrix: `run_simulation()` derives
-#'        the per-tick mortality hazard itself from `mu_j_baseline`, `mu_j_slope`
-#'        and `mu_j_epidemic_factor` (`R/sim_components.R`).
+#'        the per-tick mortality hazard itself from `mu_j_baseline` and
+#'        `mu_j_epidemic_factor` (`R/sim_components.R`).
+#' @param mu_j_slope **Deprecated and ignored.** The linear-in-time mortality trend
+#'        `(1 + mu_j_slope * tick/nticks)` was removed from the engine in v0.95.0
+#'        (CFR restructure R3): it is not estimable from the deaths series, it
+#'        double-counted the `s(year)` term already inside `CFR_target`, and no
+#'        secular trend in cholera CFR is documented. Retained only so that configs
+#'        written before v0.95.0 can still be replayed through
+#'        `do.call(make_simulation_config, config)`; any value supplied is silently
+#'        dropped and is **not** returned in the config.
 #' @param mu_j_baseline Baseline infection fatality ratio for threshold-dependent IFR model.
 #'        Numeric vector of length(location_name). Values must be in \[0, 1\].
-#' @param mu_j_slope Temporal trend in baseline IFR (proportion change over simulation period).
-#'        Numeric vector of length(location_name). Default is 0 (no temporal trend).
 #' @param mu_j_epidemic_factor Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50% increase).
 #'        Numeric vector of length(location_name). Must be >= 0.
 #'
@@ -310,7 +316,7 @@ make_simulation_config <- function(output_file_path = NULL,
                               epsilon = NULL,
                               mu_jt = NULL,  # DEPRECATED + IGNORED: legacy-config tolerance only (see @param)
                               mu_j_baseline = NULL,  # Baseline IFR for threshold-dependent model
-                              mu_j_slope = NULL,  # Temporal trend in IFR
+                              mu_j_slope = NULL,  # DEPRECATED + IGNORED: legacy-config tolerance only (see @param)
                               mu_j_epidemic_factor = NULL,  # Proportional increase during epidemics
 
                               # Observation Processes
@@ -487,9 +493,6 @@ make_simulation_config <- function(output_file_path = NULL,
      # Add optional IFR parameters if provided
      if (!is.null(mu_j_baseline)) {
           params$mu_j_baseline <- mu_j_baseline
-     }
-     if (!is.null(mu_j_slope)) {
-          params$mu_j_slope <- mu_j_slope
      }
      if (!is.null(mu_j_epidemic_factor)) {
           params$mu_j_epidemic_factor <- mu_j_epidemic_factor
@@ -683,12 +686,12 @@ make_simulation_config <- function(output_file_path = NULL,
           stop("epsilon must be a numeric scalar greater than or equal to zero.")
      }
 
-     # Threshold-dependent IFR parameters. The engine consumes mu_j_baseline,
-     # mu_j_slope and mu_j_epidemic_factor directly and builds its own per-tick
-     # mortality hazard (R/sim_components.R); it never reads a pre-materialised
-     # [nL x nT] mu_jt matrix, so no such matrix is generated or returned here.
-     # `mu_jt` survives in the signature purely as legacy-config tolerance and is
-     # dropped silently (see @param mu_jt).
+     # Threshold-dependent IFR parameters. The engine consumes mu_j_baseline and
+     # mu_j_epidemic_factor directly and builds its own per-tick mortality hazard
+     # (R/sim_components.R); it never reads a pre-materialised [nL x nT] mu_jt
+     # matrix, so no such matrix is generated or returned here. `mu_jt` and
+     # `mu_j_slope` survive in the signature purely as legacy-config tolerance and
+     # are dropped silently (see @param mu_jt, @param mu_j_slope).
      # Length rule: SCALAR or per-location, matching the engine. `.sim_patch_vector()`
      # (R/sim_params.R) broadcasts a length-1 mu_j_* to every patch, so demanding
      # length(location_name) here would reject configs the engine accepts.
@@ -699,13 +702,6 @@ make_simulation_config <- function(output_file_path = NULL,
           }
           if (any(mu_j_baseline < 0 | mu_j_baseline > 1)) {
                stop("All values in mu_j_baseline must be between 0 and 1.")
-          }
-     }
-
-     if (!is.null(mu_j_slope)) {
-          if (!is.numeric(mu_j_slope) ||
-              !(length(mu_j_slope) %in% c(1L, length(location_name)))) {
-               stop("mu_j_slope must be a numeric scalar or a vector with length equal to location_name.")
           }
      }
 

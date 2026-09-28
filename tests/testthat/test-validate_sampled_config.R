@@ -33,7 +33,7 @@ library(MOSAIC)
     tau_i = rep(0.5, nL), theta_j = rep(0.5, nL),
     a_1_j = rep(0.5, nL), a_2_j = rep(0.5, nL),
     b_1_j = rep(0.5, nL), b_2_j = rep(0.5, nL),
-    mu_j_baseline = rep(1e-3, nL), mu_j_slope = rep(0, nL),
+    mu_j_baseline = rep(1e-3, nL),
     mu_j_epidemic_factor = rep(2, nL), epidemic_threshold = rep(1e-5, nL),
     # dual-mode alpha_1 — default to per-location vector
     alpha_1 = rep(0.27, nL)

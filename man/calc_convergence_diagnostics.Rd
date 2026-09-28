@@ -75,6 +75,11 @@ workflow.}
 \item{temperature}{Numeric temperature parameter used for weight scaling
 (default 1, for documentation purposes)}
 
+\item{is_diagnostics}{Optional list of exact importance-sampling diagnostics
+from \code{\link{calc_is_diagnostics}}, with elements \code{best} and
+\code{all}. Reported under \code{$importance_sampling} but never gated:
+these are untruncated-weight quantities, unlike the gated ESS_B.}
+
 \item{verbose}{Logical indicating whether to print diagnostic messages
 (default TRUE)}
 }
