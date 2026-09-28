@@ -22,9 +22,12 @@
 # The kernels are DERIVED from the engine's own daily transition probabilities
 # and phase order (R/sim_components.R: Exposed -> Infectious -> HumanToHuman ->
 # EnvToHuman -> Environmental), not transcribed from continuous-time moments.
-# Because delta_jt varies with psi, the environmental kernel differs by infection
-# cohort; Lambda_env is computed EXACTLY by a linear reservoir filter (see
-# .mosaic_reff_infectiousness) instead of a T x T kernel matrix.
+# The estimate is INSTANTANEOUS: the reservoir is rebuilt from the actual past
+# decay path and one infection's lifetime reservoir contribution is valued at
+# today's delta_jt (Cori: "if conditions stayed as at t"). An earlier draft
+# normalized each cohort by its lifetime contribution under the FUTURE decay
+# path, which made R_env[t] depend on delta months after t (see
+# .mosaic_reff_infectiousness).
 #
 # Canonical theory: MOSAIC-docs/04-model-description.Rmd, "The effective
 # reproductive number" (eq:R, eq:I-star and the route-decomposition equations).
@@ -76,7 +79,8 @@
 #' engine's discrete-time transitions: after entering E on day 0 it progresses
 #' with probability \code{1 - exp(-iota)} per day, splits symptomatic with
 #' probability \code{sigma}, and recovers with \code{1 - exp(-gamma_k)} per day.
-#' Mortality is ignored (a <1\% correction on the infectious dwell).
+#' Mortality is ignored: it shortens the symptomatic dwell by up to ~10-15\% at
+#' high CFR but moves the kernel means by under 0.2 day.
 #'
 #' @param iota,gamma_1,gamma_2 Positive scalar daily rates.
 #' @param sigma Scalar in \[0, 1\], symptomatic proportion.
@@ -102,24 +106,25 @@
   chk(sigma, "sigma", strict = FALSE)
   if (sigma > 1) stop(".mosaic_reff_route_kernel: `sigma` must be <= 1", call. = FALSE)
   chk(zeta_1, "zeta_1", strict = FALSE); chk(zeta_2, "zeta_2", strict = FALSE)
-  if (zeta_1 + zeta_2 <= 0)
-    stop(".mosaic_reff_route_kernel: zeta_1 + zeta_2 must be > 0 ",
-         "(the environmental route needs shedding).", call. = FALSE)
+  if (sigma * zeta_1 + (1 - sigma) * zeta_2 <= 0)
+    stop(".mosaic_reff_route_kernel: sigma * zeta_1 + (1 - sigma) * zeta_2 ",
+         "must be > 0 (the environmental route needs shedding).", call. = FALSE)
 
   # The engine's per-tick probabilities (sim_params.R: *_prob <- -expm1(-rate)).
   p_i <- -expm1(-iota); p1 <- -expm1(-gamma_1); p2 <- -expm1(-gamma_2)
 
   # Cohort recursion in the engine's order: on each day the E stock progresses
   # into I and the I stock recovers; arrivals are not recovered on arrival.
-  Ps <- Pa <- numeric(0)
+  K <- min(1e5, ceiling(log(tail) / log1p(-min(p_i, p1, p2))) + 1L)
+  Ps <- Pa <- numeric(K)
   e <- 1; is <- 0; ia <- 0
-  repeat {
+  for (k in seq_len(K)) {
     prog <- p_i * e
     is <- is * (1 - p1) + sigma * prog
     ia <- ia * (1 - p2) + (1 - sigma) * prog
     e  <- e - prog
-    Ps <- c(Ps, is); Pa <- c(Pa, ia)
-    if (e + is + ia < tail || length(Ps) > 1e5) break
+    Ps[k] <- is; Pa[k] <- ia
+    if (e + is + ia < tail) { Ps <- Ps[seq_len(k)]; Pa <- Pa[seq_len(k)]; break }
   }
 
   w1 <- zeta_1 / (zeta_1 + zeta_2)
@@ -131,86 +136,94 @@
 
 #' Route infectiousness Lambda_hum / Lambda_env from an incidence series
 #'
-#' Exact mean-field propagation of past infections through the engine's
+#' Mean-field propagation of past infections through the engine's
 #' latent/infectious states and the environmental reservoir, on the engine's
 #' daily grid (result index t: an infection recorded at t is infectious from
 #' t + 1 and drives new infections from t + 2; the reservoir at t drives
 #' environmental infections at t + 1 and decays at \code{delta[t + 1]}).
 #'
-#' \strong{Environmental normalization.} Each infection cohort u is weighted by
-#' \eqn{1/C(u)}, its expected lifetime reservoir contribution
-#' \eqn{C(u) = \sum_{k} (w_1 P^{s}_k + w_2 P^{a}_k)\, r(u + k + 1)}, where
-#' \eqn{r(n) = 1 + (1 - \delta_{n+1})\, r(n + 1)} is the expected residence of a
-#' cell present at n (closed beyond the series with \eqn{1/\delta_T}). Feeding
-#' \eqn{I_u / C(u)} through the reservoir recursion then yields
-#' \eqn{\Lambda^{env}_t = \sum_u I_u\, g^{env}_u(t - u)} exactly, with each
-#' cohort's time-varying profile summing to 1.
+#' \strong{Instantaneous (frozen-at-t) normalization.} Cori's instantaneous R is
+#' the number of secondary infections one infection would cause if conditions
+#' stayed as they are at t. For the human route the infectivity profile does not
+#' depend on t, so \eqn{\Lambda^{hum}_t = \hat I_{t-1} / D_h}. For the
+#' environmental route the reservoir \eqn{\hat W} is built from the actual past
+#' decay path, and one infection's lifetime reservoir contribution is evaluated
+#' at today's decay rate: \eqn{S_w / \delta_t}, with \eqn{S_w = \sum_k (w_1
+#' P^s_k + w_2 P^a_k)} its expected shedding. So \eqn{\Lambda^{env}_t = \hat
+#' W_{t-1}\, \delta_t / S_w}. Nothing after t is used, and at constant decay this
+#' equals convolution with the environmental generation-interval kernel.
+#'
+#' \strong{Initial conditions.} People already latent or infectious at the start
+#' are real sources of infection that no recorded incidence explains, so they
+#' are propagated through the same filters and included in both Lambdas. The
+#' engine starts the reservoir empty, so they reach W only by shedding; result
+#' index 1 already holds their first day of it.
 #'
 #' @param incidence Numeric vector of total infection incidence (NA treated 0).
-#' @param delta Numeric vector (same length) of daily decay rates delta_jt.
+#' @param delta Numeric vector (same length) of daily decay rates delta_jt;
+#'   values above 1 are capped at 1 (the engine clamps decay to the stock).
 #' @param kern Output of \code{.mosaic_reff_route_kernel()}.
+#' @param init Optional \code{c(E, Isym, Iasym)} initial stocks at result
+#'   index 1, excluding that day's new infections.
 #' @param shed_abs Optional length-2 numeric \code{(1 - theta) * c(zeta_1,
 #'   zeta_2)}; when given, also returns the absolute reconstructed reservoir.
-#' @return List: \code{Lambda_hum}, \code{Lambda_env}, \code{C_env},
-#'   \code{I_hat} (reconstructed Isym + Iasym from incidence alone) and, when
-#'   \code{shed_abs} is given, \code{W_hat} (reconstructed reservoir, cells).
+#' @return List: \code{Lambda_hum}, \code{Lambda_env}, \code{I_hat}
+#'   (reconstructed Isym + Iasym) and, when \code{shed_abs} is given,
+#'   \code{W_hat} (reconstructed reservoir, cells).
 #' @keywords internal
 #' @noRd
-.mosaic_reff_infectiousness <- function(incidence, delta, kern, shed_abs = NULL) {
+.mosaic_reff_infectiousness <- function(incidence, delta, kern, init = NULL,
+                                        shed_abs = NULL) {
   Tn <- length(incidence)
   if (length(delta) != Tn)
     stop(".mosaic_reff_infectiousness: delta must match incidence length")
-  if (any(!is.finite(delta)) || any(delta <= 0) || any(delta > 1))
-    stop(".mosaic_reff_infectiousness: delta must be finite in (0, 1]")
-  x <- as.numeric(incidence); x[!is.finite(x)] <- 0
+  if (any(!is.finite(delta)) || any(delta <= 0))
+    stop(".mosaic_reff_infectiousness: delta must be finite and > 0")
   if (Tn == 0L)
     return(list(Lambda_hum = numeric(0), Lambda_env = numeric(0),
-                C_env = numeric(0), I_hat = numeric(0), W_hat = numeric(0)))
-
-  # E/I state propagation is linear and time-invariant, so it is a recursive
-  # filter. Arrivals into I at t come from the E stock at t - 1.
-  states <- function(input) {
-    E  <- as.numeric(stats::filter(input, 1 - kern$p_i, method = "recursive"))
-    fl <- c(0, E[-Tn]) * kern$p_i
-    Is <- as.numeric(stats::filter(kern$sigma * fl, 1 - kern$p1, method = "recursive"))
-    Ia <- as.numeric(stats::filter((1 - kern$sigma) * fl, 1 - kern$p2,
-                                   method = "recursive"))
-    list(Is = Is, Ia = Ia)
+                I_hat = numeric(0), W_hat = numeric(0)))
+  delta <- pmin(as.numeric(delta), 1)
+  x <- as.numeric(incidence); x[!is.finite(x)] <- 0
+  e0 <- 0; is0 <- 0; ia0 <- 0
+  if (!is.null(init)) {
+    init <- pmax(0, as.numeric(init)); init[!is.finite(init)] <- 0
+    e0 <- init[1L]; is0 <- init[2L]; ia0 <- init[3L]
   }
-  # Reservoir recursion with the time-varying decay: W[t+1] = W[t](1 - delta[t+1])
-  # + shedding from I[t] (sim_phase_environmental).
-  reservoir <- function(shed) {
+
+  # E/I propagation is linear and time-invariant, so it is a recursive filter.
+  # Arrivals into I at t come from the E stock at t - 1; initial stocks enter
+  # as the first element of each filter's input.
+  x[1L] <- x[1L] + e0
+  E  <- as.numeric(stats::filter(x, 1 - kern$p_i, method = "recursive"))
+  fl <- c(0, E[-Tn]) * kern$p_i
+  in_s <- kern$sigma * fl;       in_s[1L] <- in_s[1L] + is0
+  in_a <- (1 - kern$sigma) * fl; in_a[1L] <- in_a[1L] + ia0
+  Is <- as.numeric(stats::filter(in_s, 1 - kern$p1, method = "recursive"))
+  Ia <- as.numeric(stats::filter(in_a, 1 - kern$p2, method = "recursive"))
+
+  # Reservoir with the time-varying decay: W[t+1] = W[t](1 - delta[t+1]) +
+  # shedding from I[t] (sim_phase_environmental). Linear with a time-varying
+  # coefficient, so a loop rather than a filter.
+  reservoir <- function(shed, w1_init) {
     W <- numeric(Tn)
+    W[1L] <- w1_init
     if (Tn >= 2L) for (t in seq_len(Tn - 1L))
       W[t + 1L] <- W[t] * (1 - delta[t + 1L]) + shed[t]
     W
   }
   lag1 <- function(v) c(0, v[-Tn])
 
-  st <- states(x)
-  I_hat <- st$Is + st$Ia
-  Lambda_hum <- lag1(I_hat) / kern$D_h
-
-  # Expected residence r(n); beyond the series the last delta is held.
-  K  <- length(kern$Ps)
-  dT <- delta[Tn]
-  rr <- numeric(Tn + K + 2L)
-  rr[(Tn + 1L):length(rr)] <- 1 / dT
-  d_next <- c(delta[-1L], dT)
-  for (n in Tn:1L) rr[n] <- 1 + (1 - d_next[n]) * rr[n + 1L]
-  s_k <- kern$w1 * kern$Ps + kern$w2 * kern$Pa
-  C_env <- numeric(Tn)
-  u <- seq_len(Tn)
-  for (k in seq_len(K)) C_env <- C_env + s_k[k] * rr[u + k + 1L]
-
-  st_env <- states(x / C_env)
-  Wn <- reservoir(kern$w1 * st_env$Is + kern$w2 * st_env$Ia)
-  Lambda_env <- lag1(Wn)
-
-  out <- list(Lambda_hum = Lambda_hum, Lambda_env = Lambda_env,
-              C_env = C_env, I_hat = I_hat)
+  I_hat <- Is + Ia
+  S_w <- kern$w1 * kern$sigma / kern$p1 + kern$w2 * (1 - kern$sigma) / kern$p2
+  # The engine starts the reservoir empty, but result index 1 is state row 2, so
+  # W[1] already holds one day of shedding from the initial infectious people.
+  Wn <- reservoir(kern$w1 * Is + kern$w2 * Ia, kern$w1 * is0 + kern$w2 * ia0)
+  out <- list(Lambda_hum = lag1(I_hat) / kern$D_h,
+              Lambda_env = lag1(Wn) * delta / S_w,
+              I_hat = I_hat)
   if (!is.null(shed_abs))
-    out$W_hat <- reservoir(shed_abs[1L] * st$Is + shed_abs[2L] * st$Ia)
+    out$W_hat <- reservoir(shed_abs[1L] * Is + shed_abs[2L] * Ia,
+                           shed_abs[1L] * is0 + shed_abs[2L] * ia0)
   out
 }
 
@@ -221,14 +234,16 @@
 #' through \code{.mosaic_reff_infectiousness()} at a constant \code{delta}.
 #'
 #' @param kern Output of \code{.mosaic_reff_route_kernel()}.
-#' @param delta Constant daily decay rate in (0, 1].
+#' @param delta Constant daily decay rate (capped at 1).
 #' @param tail Mass left untabulated in the environmental tail.
 #' @return List with \code{hum} and \code{env} pmfs (element L = lag L days)
 #'   and their means \code{mean_hum}, \code{mean_env}.
 #' @keywords internal
 #' @noRd
 .mosaic_reff_kernel_pmf <- function(kern, delta, tail = 1e-6) {
-  horizon <- length(kern$Ps) + ceiling(log(tail) / log1p(-min(delta, 1 - 1e-12))) + 2L
+  delta <- min(delta, 1)
+  horizon <- length(kern$Ps) +
+    (if (delta < 1) ceiling(log(tail) / log1p(-delta)) else 0L) + 2L
   imp <- c(1, numeric(horizon))
   lam <- .mosaic_reff_infectiousness(imp, rep(delta, horizon + 1L), kern)
   hum <- lam$Lambda_hum[-1L]; env <- lam$Lambda_env[-1L]
@@ -238,78 +253,49 @@
        mean_env = sum(lags * env) / sum(env))
 }
 
-#' First day after which the incidence history explains the stock
+#' Initial latent/infectious stocks from simulated stocks at result index 1
 #'
-#' Initial-condition infectious people and reservoir cells drive infections that
-#' no recorded incidence explains, inflating R until they wash out. Returns the
-#' first index s at which the stock reconstructed from incidence reaches
-#' \code{tol} of the simulated stock; R is defined from s + 1.
-#'
-#' @param hat Reconstructed stock from incidence alone.
-#' @param obs Simulated stock (same length), or \code{NULL} for no mask.
-#' @param tol Fraction in (0, 1].
-#' @param rescale Logical. Divide \code{hat} by the median \code{hat/obs} ratio
-#'   over the second half of the series first. Used when \code{obs} is an
-#'   ensemble median and \code{hat} is built from the medoid kernel: members'
-#'   differing parameters (notably the shedding scale) put the two on different
-#'   scales, so only a departure from their steady relation marks the
-#'   initial-condition transient.
-#' @return Integer index (0 when no mask applies; \code{length(hat)} when the
-#'   stock is never explained).
+#' @param E1,Is1,Ia1 Simulated E, Isym, Iasym at result index 1 (\code{NULL}
+#'   when the channel is unavailable, treated as 0).
+#' @param inc1 Total infections recorded at result index 1 (already in E1).
+#' @return \code{c(E, Isym, Iasym)}.
 #' @keywords internal
 #' @noRd
-.mosaic_reff_ic_start <- function(hat, obs, tol = 0.95, rescale = FALSE) {
-  if (is.null(obs)) return(0L)
-  if (isTRUE(rescale)) {
-    late <- seq.int(ceiling(length(hat) / 2), length(hat))
-    ratio <- hat[late] / obs[late]
-    ratio <- ratio[is.finite(ratio) & ratio > 0]
-    if (length(ratio)) hat <- hat / stats::median(ratio)
-  }
-  ok <- !is.finite(obs) | obs <= 0 | (is.finite(hat) & hat >= tol * obs)
-  s <- which(ok)
-  if (length(s) == 0L) length(hat) else as.integer(s[1L])
+.mosaic_reff_init <- function(E1, Is1, Ia1, inc1) {
+  v <- function(x) if (is.null(x) || !is.finite(x)) 0 else as.numeric(x)
+  c(max(0, v(E1) - v(inc1)), v(Is1), v(Ia1))
 }
 
 #' Route-decomposed R for one location series
+#'
+#' A route is reported where its infectiousness is at least
+#' \code{infectiousness_floor}. A route below the floor with no infections of
+#' its own contributes 0 to the total rather than blanking it (otherwise a
+#' near-silent route would hide the other one); with infections it leaves the
+#' total undefined.
 #'
 #' @param inc_hum,inc_env Route incidence vectors (their sum is the source
 #'   series).
 #' @param delta Daily decay rates (same length).
 #' @param kern Output of \code{.mosaic_reff_route_kernel()}.
-#' @param infectiousness_floor Passed to \code{.cori_reff()} per route.
-#' @param stocks Optional list with simulated \code{I} (Isym + Iasym) and
-#'   \code{W} vectors for the initial-condition mask; \code{NULL} disables it.
-#' @param shed_abs \code{(1 - theta) * c(zeta_1, zeta_2)}, needed with
-#'   \code{stocks$W}.
-#' @param ic_tolerance Passed to \code{.mosaic_reff_ic_start()}.
-#' @param ic_start Optional precomputed \code{c(hum, env)} mask starts
-#'   (overrides \code{stocks}).
-#' @param ic_rescale Passed to \code{.mosaic_reff_ic_start()} as \code{rescale}.
-#' @return List with \code{R_eff}, \code{R_hum}, \code{R_env} and the applied
-#'   \code{ic_start}.
+#' @param infectiousness_floor Minimum route infectiousness (effective
+#'   infectious infections) required to report that route.
+#' @param init Optional initial stocks from \code{.mosaic_reff_init()}.
+#' @return List with \code{R_eff}, \code{R_hum}, \code{R_env}.
 #' @keywords internal
 #' @noRd
 .mosaic_reff_routes <- function(inc_hum, inc_env, delta, kern,
-                                infectiousness_floor = 1, stocks = NULL,
-                                shed_abs = NULL, ic_tolerance = 0.95,
-                                ic_start = NULL, ic_rescale = FALSE) {
+                                infectiousness_floor = 1, init = NULL) {
   inc_hum <- as.numeric(inc_hum); inc_env <- as.numeric(inc_env)
-  inc <- inc_hum + inc_env
-  lam <- .mosaic_reff_infectiousness(inc, as.numeric(delta), kern,
-                                     shed_abs = if (!is.null(stocks$W)) shed_abs)
+  lam <- .mosaic_reff_infectiousness(inc_hum + inc_env, as.numeric(delta), kern,
+                                     init = init)
   R_hum <- .cori_reff(inc_hum, lam$Lambda_hum, infectiousness_floor)
   R_env <- .cori_reff(inc_env, lam$Lambda_env, infectiousness_floor)
-  if (is.null(ic_start)) {
-    ic_start <- c(
-      hum = .mosaic_reff_ic_start(lam$I_hat, stocks$I, ic_tolerance, ic_rescale),
-      env = if (!is.null(stocks$W))
-        .mosaic_reff_ic_start(lam$W_hat, stocks$W, ic_tolerance, ic_rescale) else 0L)
-  }
-  Tn <- length(inc)
-  if (ic_start[["hum"]] > 0L) R_hum[seq_len(min(Tn, ic_start[["hum"]]))] <- NA_real_
-  if (ic_start[["env"]] > 0L) R_env[seq_len(min(Tn, ic_start[["env"]]))] <- NA_real_
-  list(R_eff = R_hum + R_env, R_hum = R_hum, R_env = R_env, ic_start = ic_start)
+  part <- function(R, num) ifelse(is.finite(R), R,
+                                  ifelse(is.finite(num) & num == 0, 0, NA_real_))
+  tot <- part(R_hum, inc_hum) + part(R_env, inc_env)
+  tot[!is.finite(R_hum) & !is.finite(R_env)] <- NA_real_
+  list(R_eff = tot, R_hum = R_hum, R_env = R_env)
 }
 
 #' Build the route kernel from a (medoid or member) config
@@ -329,15 +315,25 @@
 #' Decay-rate matrix delta_jt [nL x Tn] from a config, via the engine itself
 #' @keywords internal
 #' @noRd
-.mosaic_reff_config_delta <- function(config, nL, Tn) {
+.mosaic_reff_config_delta <- function(config, nL, Tn, location_names = NULL,
+                                      date_start = NULL) {
+  if (!is.null(location_names) && !is.null(config$location_name) &&
+      !identical(as.character(location_names), as.character(config$location_name)))
+    stop("calc_Reff: config location_name (", paste(config$location_name, collapse = ","),
+         ") does not match the trajectory locations (",
+         paste(location_names, collapse = ","), ").", call. = FALSE)
+  if (!is.null(date_start) && !is.null(config$date_start) &&
+      !isTRUE(as.Date(date_start) == as.Date(config$date_start)))
+    stop("calc_Reff: config date_start ", config$date_start, " does not match ",
+         "the trajectory date_start ", date_start, ".", call. = FALSE)
   par <- tryCatch(sim_params(config), error = function(e)
     stop("calc_Reff: could not rebuild delta_jt from config (",
          conditionMessage(e), ").", call. = FALSE))
-  d <- t(sim_delta_jt(par))
+  d <- t(if (!is.null(par$delta_jt)) par$delta_jt else sim_delta_jt(par))
   if (nrow(d) != nL || ncol(d) < Tn)
     stop("calc_Reff: config delta_jt is [", nrow(d), "x", ncol(d),
          "], trajectories need [", nL, "x", Tn, "].", call. = FALSE)
-  d[, seq_len(Tn), drop = FALSE]
+  pmin(d[, seq_len(Tn), drop = FALSE], 1)
 }
 
 #' Summary provenance for a route kernel
@@ -394,22 +390,25 @@
 #' routes. \eqn{\Lambda^{hum}} propagates past infections through the latent and
 #' infectious states (symptomatic and asymptomatic at equal weight, as in the
 #' human force of infection). \eqn{\Lambda^{env}} additionally routes their
-#' shedding (weighted by \code{zeta_1}, \code{zeta_2}) through the reservoir at
-#' the \eqn{\psi}-dependent decay rate \eqn{\delta_{jt}}, so the environmental
-#' generation interval (tens to hundreds of days) and its seasonal variation are
-#' represented exactly. Both kernels are derived from the engine's own daily
-#' transition probabilities and phase order. WASH (\code{theta_j}), the absolute
+#' shedding (weighted by \code{zeta_1}, \code{zeta_2}) through the reservoir,
+#' which decays at the \eqn{\psi}-dependent rate \eqn{\delta_{jt}}, so the
+#' environmental generation interval (tens to hundreds of days) and its seasonal
+#' variation are represented. Both kernels are derived from the engine's own
+#' daily transition probabilities and phase order. The estimate is
+#' \strong{instantaneous}: the reservoir is built from the actual past decay path
+#' and one infection's lifetime reservoir contribution is evaluated at today's
+#' \eqn{\delta_{jt}} (secondary infections per infection if conditions stayed as
+#' they are at t). Nothing after t enters, so truncating the series does not
+#' change earlier values. WASH (\code{theta_j}), the absolute
 #' shedding scale, \code{kappa} and the transmission rates cancel from the
 #' kernels and live in the R values.
 #'
-#' \strong{Initial conditions.} Initial infectious people and reservoir cells
-#' cause infections that no recorded incidence explains. When the artifact
-#' carries the \code{Isym}, \code{Iasym} and \code{W} channels, each route is set
-#' to \code{NA} until the stock reconstructed from incidence reaches
-#' \code{ic_tolerance} of the simulated stock (attribute \code{"ic_start"}). On
-#' this weighted-median path the reconstruction is first rescaled to the stocks'
-#' late-series relation, because members' parameters differ from the medoid's;
-#' the re-simulation path compares each member with its own stocks exactly.
+#' \strong{Initial conditions.} People already latent or infectious at the start
+#' (the \code{E}, \code{Isym}, \code{Iasym} stocks on the first day) are included
+#' in both infectiousness terms, so the series is defined from the start. R in
+#' roughly the first \eqn{1/\delta} days still reflects the reservoir filling
+#' from empty and is best read after a burn-in (\code{add_reproductive_numbers()}
+#' applies one).
 #'
 #' \strong{Caveat.} This describes the simulated trajectory (comparable to a
 #' surveillance-derived R_eff computed the same way); it is not an invasion
@@ -420,20 +419,19 @@
 #' @param ensemble A \code{mosaic_trajectories} artifact
 #'   (\code{2_calibration/trajectories_ensemble.rds}) or a \code{mosaic_ensemble}
 #'   carrying one in \code{$trajectories}. Must provide weighted-median
-#'   \code{incidence_human} and \code{incidence_env} channels; \code{Isym},
-#'   \code{Iasym} and \code{W} enable the initial-condition mask.
+#'   \code{incidence_human} and \code{incidence_env} channels; \code{E},
+#'   \code{Isym} and \code{Iasym} supply the initial infectious stocks.
 #' @param config The medoid \code{config} list: kernel parameters \code{iota},
 #'   \code{gamma_1}, \code{gamma_2}, \code{sigma}, \code{zeta_1}, \code{zeta_2},
 #'   plus the fields the engine needs to rebuild \eqn{\delta_{jt}} (\code{psi_jt},
-#'   \code{decay_*}) and \code{theta_j}.
+#'   \code{decay_*}).
 #' @param weights Optional per-member weights for the posterior reduction,
 #'   indexed by member id. \code{NULL} (default) uses the weights in \code{lines}.
 #' @param probs Credible-interval quantile probabilities.
 #' @param infectiousness_floor Numeric scalar \eqn{\ge 0}. Minimum route
 #'   infectiousness (effective past infections) required to report that route's
-#'   R at a step. Default \code{1}; \code{0} is the pure Cori convention.
-#' @param ic_tolerance Fraction in (0, 1] for the initial-condition mask.
-#'   Default \code{0.95}.
+#'   R at a step (a route below it with no infections of its own contributes 0
+#'   to the total). Default \code{1}; \code{0} is the pure Cori convention.
 #' @param verbose Logical; emit progress messages.
 #'
 #' @return A tidy long \code{data.frame} (\code{reproductive_numbers} schema):
@@ -441,8 +439,8 @@
 #'   \code{"R_hum"}, \code{"R_env"}), \code{central} (renewal on the
 #'   weighted-median route incidences) and one column per quantile. Attributes:
 #'   \code{central_matrix} (R_eff, nL x T), \code{route_central} (list of R_hum
-#'   and R_env matrices), \code{ic_start}, \code{env_share}, \code{kernel}
-#'   (\code{"route_exact"}), \code{kernel_params}, \code{ci_source},
+#'   and R_env matrices), \code{env_share}, \code{kernel}
+#'   (\code{"route_instantaneous"}), \code{kernel_params}, \code{ci_source},
 #'   \code{caveat}.
 #'
 #' @details
@@ -453,9 +451,11 @@
 #' peak statistic instead.
 #'
 #' \strong{Posterior CI.} Needs daily-consecutive per-member \code{lines} for
-#' both route channels; production artifacts thin \code{lines} on a stride, so
-#' the quantile columns are \code{NA} there (\code{ci_source =
-#' "unavailable_strided_lines"}). Use the re-simulation path for a CI.
+#' both route channels starting on day 1; production artifacts thin \code{lines}
+#' on a stride, so the quantile columns are \code{NA} there (\code{ci_source =
+#' "unavailable_strided_lines"}). Use the re-simulation path for a CI. A cell's
+#' quantiles are reported only when members holding at least half the weight are
+#' defined there.
 #'
 #' @references Cori A, Ferguson NM, Fraser C, Cauchemez S (2013). A new framework
 #'   and software to estimate time-varying reproduction numbers during epidemics.
@@ -468,7 +468,6 @@ calc_Reff <- function(ensemble,
                       weights  = NULL,
                       probs    = c(0.025, 0.25, 0.5, 0.75, 0.975),
                       infectiousness_floor = 1,
-                      ic_tolerance = 0.95,
                       verbose  = TRUE) {
 
   caveat <- paste0("Route-decomposed Cori R_eff (R_hum + R_env) computed on ",
@@ -493,9 +492,6 @@ calc_Reff <- function(ensemble,
   if (!is.numeric(infectiousness_floor) || length(infectiousness_floor) != 1L ||
       !is.finite(infectiousness_floor) || infectiousness_floor < 0)
     stop("calc_Reff: `infectiousness_floor` must be a single finite scalar >= 0.")
-  if (!is.numeric(ic_tolerance) || length(ic_tolerance) != 1L ||
-      !is.finite(ic_tolerance) || ic_tolerance <= 0 || ic_tolerance > 1)
-    stop("calc_Reff: `ic_tolerance` must be a single number in (0, 1].")
 
   loc_names <- traj$location_names
   nL <- traj$n_locations
@@ -514,25 +510,21 @@ calc_Reff <- function(ensemble,
     m
   }
   inc_h <- med("incidence_human"); inc_e <- med("incidence_env")
-  W_m <- med("W", FALSE); Is_m <- med("Isym", FALSE); Ia_m <- med("Iasym", FALSE)
-  have_stocks <- !is.null(W_m) && !is.null(Is_m) && !is.null(Ia_m)
+  E_m <- med("E", FALSE); Is_m <- med("Isym", FALSE); Ia_m <- med("Iasym", FALSE)
+  first <- function(m, i) if (is.null(m)) NULL else m[i, 1L]
+  init <- lapply(seq_len(nL), function(i)
+    .mosaic_reff_init(first(E_m, i), first(Is_m, i), first(Ia_m, i),
+                      inc_h[i, 1L] + inc_e[i, 1L]))
 
   kern  <- .mosaic_reff_config_kernel(config)
-  delta <- .mosaic_reff_config_delta(config, nL, Tn)
-  theta <- rep_len(as.numeric(if (is.null(config$theta_j)) 0 else config$theta_j), nL)
-  zeta  <- c(as.numeric(config$zeta_1)[1L], as.numeric(config$zeta_2)[1L])
+  delta <- .mosaic_reff_config_delta(config, nL, Tn, loc_names, traj$date_start)
 
   central <- stats::setNames(lapply(.MOSAIC_REFF_ESTIMANDS, function(e)
     matrix(NA_real_, nL, Tn)), .MOSAIC_REFF_ESTIMANDS)
-  ic_start <- matrix(0L, nL, 2L, dimnames = list(NULL, c("hum", "env")))
   for (i in seq_len(nL)) {
-    stocks <- if (have_stocks) list(I = Is_m[i, ] + Ia_m[i, ], W = W_m[i, ])
     rr <- .mosaic_reff_routes(inc_h[i, ], inc_e[i, ], delta[i, ], kern,
-                              infectiousness_floor, stocks = stocks,
-                              shed_abs = (1 - theta[i]) * zeta,
-                              ic_tolerance = ic_tolerance, ic_rescale = TRUE)
+                              infectiousness_floor, init = init[[i]])
     for (e in .MOSAIC_REFF_ESTIMANDS) central[[e]][i, ] <- rr[[e]]
-    ic_start[i, ] <- rr$ic_start
   }
 
   d0    <- tryCatch(as.Date(traj$date_start), error = function(e) NA)
@@ -553,7 +545,13 @@ calc_Reff <- function(ensemble,
               "credible-interval columns returned as NA.")
   } else {
     t_present <- sort(unique(route_lines$t))
-    if (!(length(t_present) >= 2L && all(diff(t_present) == 1L))) {
+    if (length(t_present) >= 2L && all(diff(t_present) == 1L) && t_present[1L] != 1L) {
+      ci_source <- "unavailable_lines_not_from_start"
+      warning("calc_Reff: per-member `lines` start on day ", t_present[1L],
+              "; the environmental generation interval spans months, so R ",
+              "cannot be rebuilt without the earlier history. Returning the ",
+              "point estimate with NA credible-interval columns.", call. = FALSE)
+    } else if (!(length(t_present) >= 2L && all(diff(t_present) == 1L))) {
       ci_source <- "unavailable_strided_lines"
       warning("calc_Reff: per-member trajectory `lines` are time-strided ",
               "(stride != 1 day), on which the daily renewal is undefined; ",
@@ -565,7 +563,7 @@ calc_Reff <- function(ensemble,
         route_lines = route_lines, kern = kern, delta = delta,
         loc_names = loc_names, t_present = t_present, nL = nL, Tn = Tn,
         probs = probs, weights = weights,
-        infectiousness_floor = infectiousness_floor, ic_start = ic_start)
+        infectiousness_floor = infectiousness_floor, init = init)
     }
   }
 
@@ -575,14 +573,10 @@ calc_Reff <- function(ensemble,
   attr(out, "route_central")  <- central[c("R_hum", "R_env")]
   attr(out, "location_names") <- loc_names
   attr(out, "dates")          <- dates
-  attr(out, "ic_start")       <- data.frame(location = loc_names,
-                                            hum = ic_start[, "hum"],
-                                            env = ic_start[, "env"],
-                                            stringsAsFactors = FALSE)
   attr(out, "env_share")      <- stats::setNames(ifelse(tot > 0,
                                                  rowSums(inc_e, na.rm = TRUE) / tot,
                                                  NA_real_), loc_names)
-  attr(out, "kernel")         <- "route_exact"
+  attr(out, "kernel")         <- "route_instantaneous"
   attr(out, "series")         <- "infection_incidence"
   attr(out, "kernel_params")  <- .mosaic_reff_kernel_params(config, kern, delta)
   attr(out, "probs")          <- probs
@@ -610,7 +604,7 @@ calc_Reff <- function(ensemble,
 #'
 #' One (param, stoch) member: rebuild its config from its seed, simulate, and
 #' return its per-location route-decomposed R series (with its OWN kernel,
-#' decay rates and initial-condition mask) plus the faithfulness diagnostics.
+#' engine decay rates and initial stocks) plus the faithfulness diagnostics.
 #'
 #' Defined at FILE scope so \code{parLapplyLB} ships only the task, not the
 #' calling frame. The heavy inputs come from the worker's global environment,
@@ -644,7 +638,7 @@ calc_Reff <- function(ensemble,
     res <- model$results
     mat <- function(ch) MOSAIC:::.mosaic_reff_to_mat(res[[ch]], nL, Tn)
     inc_h <- mat("incidence_human"); inc_e <- mat("incidence_env")
-    delta <- mat("delta_jt"); W <- mat("W"); I <- mat("Isym") + mat("Iasym")
+    delta <- mat("delta_jt"); E <- mat("E"); Is <- mat("Isym"); Ia <- mat("Iasym")
     rc_m  <- mat("reported_cases")
     inc_m <- mat("incidence")
     if (any(abs(inc_m - inc_h - inc_e) > 0, na.rm = TRUE))
@@ -660,20 +654,20 @@ calc_Reff <- function(ensemble,
       cc   <- suppressWarnings(stats::cor(rv[ok], sv[ok]))
       mx   <- max(abs(rv[ok] - sv[ok]))
     }
-    theta <- rep_len(as.numeric(cfg$theta_j), nL)
-    zeta  <- c(as.numeric(cfg$zeta_1)[1L], as.numeric(cfg$zeta_2)[1L])
     reff <- stats::setNames(lapply(MOSAIC:::.MOSAIC_REFF_ESTIMANDS, function(e)
       vector("list", nL)), MOSAIC:::.MOSAIC_REFF_ESTIMANDS)
     for (i in seq_len(nL)) {
-      rr <- MOSAIC:::.mosaic_reff_routes(
-        inc_h[i, ], inc_e[i, ], delta[i, ], kern, ctx$floor,
-        stocks = list(I = I[i, ], W = W[i, ]),
-        shed_abs = (1 - theta[i]) * zeta, ic_tolerance = ctx$ic_tolerance)
+      init <- MOSAIC:::.mosaic_reff_init(E[i, 1L], Is[i, 1L], Ia[i, 1L],
+                                         inc_m[i, 1L])
+      rr <- MOSAIC:::.mosaic_reff_routes(inc_h[i, ], inc_e[i, ], delta[i, ],
+                                         kern, ctx$floor, init = init)
       for (e in names(reff)) reff[[e]][[i]] <- rr[[e]]
     }
+    kp <- vapply(c("iota", "gamma_1", "gamma_2", "sigma", "zeta_1", "zeta_2"),
+                 function(nm) as.numeric(cfg[[nm]])[1L], numeric(1))
 
     list(p = p, s = s, reff = reff, re = re, cc = cc,
-         ssum = ssum, rsum = rsum, max_abs = mx)
+         ssum = ssum, rsum = rsum, max_abs = mx, kernel_params = kp)
   }, error = function(e) list(p = task$p, s = task$s, error = conditionMessage(e)))
 }
 
@@ -704,7 +698,6 @@ calc_Reff <- function(ensemble,
 #' @param PATHS \code{get_paths()} result.
 #' @param probs Quantile probabilities.
 #' @param infectiousness_floor Passed to \code{.cori_reff}.
-#' @param ic_tolerance Initial-condition mask tolerance.
 #' @param burn_in_days Leading days NA-masked before the per-member time-max.
 #' @param cases_central_method Central method used to select the medoid.
 #' @param gate_rel_tol,gate_frac,gate_cor_min Faithfulness-gate thresholds:
@@ -723,7 +716,6 @@ calc_Reff <- function(ensemble,
                                   PATHS,
                                   probs = c(0.025, 0.5, 0.975),
                                   infectiousness_floor = 1,
-                                  ic_tolerance = 0.95,
                                   burn_in_days = 0L,
                                   cases_central_method = "median",
                                   gate_rel_tol = 0.05, gate_frac = 0.95,
@@ -785,7 +777,7 @@ calc_Reff <- function(ensemble,
   ctx <- list(base_config = base_config, priors = priors,
               sampling = sampling_args, paths = PATHS,
               seeds = parameter_seeds, floor = infectiousness_floor,
-              ic_tolerance = ic_tolerance, nL = nL, Tn = Tn)
+              nL = nL, Tn = Tn)
 
   use_cl <- !is.null(cl) && inherits(cl, "cluster") && length(cl) > 1L && n_members > 1L
   if (use_cl) {
@@ -808,14 +800,18 @@ calc_Reff <- function(ensemble,
     stop(sprintf(".mosaic_reff_resim_ci: %d of %d members failed to re-simulate; first: %s",
                  sum(failed), n_members, res[[which(failed)[1]]]$error), call. = FALSE)
 
+  rm(tasks)
+  member_kp <- vector("list", n_members)
   for (m in seq_len(n_members)) {
     r <- res[[m]]
     re_vec[m] <- r$re; cc_vec[m] <- r$cc
     ssum_v[m] <- r$ssum; rsum_v[m] <- r$rsum
     max_abs   <- max(max_abs, r$max_abs)
+    member_kp[[m]] <- r$kernel_params
     for (e in ests) for (i in seq_len(nL)) reff_loc[[e]][[i]][m, ] <- r$reff[[e]][[i]]
+    res[m] <- list(NULL)   # free as we go: the gathered list is as large as reff_loc
   }
-  rm(res, tasks); gc(FALSE)
+  rm(res); gc(FALSE)
 
   if (verbose)
     message(sprintf("    members done: %d/%d | rel_err med=%.4f p%.0f=%.4f | cor med=%.4f",
@@ -868,10 +864,8 @@ calc_Reff <- function(ensemble,
   # Calendar-date envelope per estimand.
   qmats <- stats::setNames(lapply(ests, function(e) {
     q <- array(NA_real_, dim = c(nL, Tn, length(probs)))
-    for (i in seq_len(nL)) {
-      M <- reff_loc[[e]][[i]]
-      for (t in seq_len(Tn)) q[i, t, ] <- weighted_quantiles(M[, t], member_w, probs)
-    }
+    for (i in seq_len(nL))
+      q[i, , ] <- .mosaic_reff_cell_quantiles(reff_loc[[e]][[i]], member_w, probs)
     q
   }), ests)
 
@@ -935,13 +929,7 @@ calc_Reff <- function(ensemble,
        gate_cor_min = cor_min, gate_max_abs_diff = max_abs,
        gate_n_outliers = n_outliers, gate_frac = gate_frac,
        n_members = n_members,
-       kernel_params = c(
-         iota    = as.numeric(base_config$iota)[1],
-         gamma_1 = as.numeric(base_config$gamma_1)[1],
-         gamma_2 = as.numeric(base_config$gamma_2)[1],
-         sigma   = as.numeric(base_config$sigma)[1],
-         zeta_1  = as.numeric(base_config$zeta_1)[1],
-         zeta_2  = as.numeric(base_config$zeta_2)[1]))
+       kernel_params = if (!is.na(m_medoid)) member_kp[[m_medoid]] else NULL)
 }
 
 #' Select the medoid re-simulated member (run_MOSAIC criterion)
@@ -1016,54 +1004,82 @@ calc_Reff <- function(ensemble,
   matrix(NA_real_, nL, Tn)
 }
 
+#' Per-cell weighted quantiles over members, requiring enough defined weight
+#'
+#' \code{weighted_quantiles()} drops members that are \code{NA} in a cell, so a
+#' cell's band would otherwise describe whichever members happen to be defined
+#' that day. Cells where the defined members hold less than \code{min_weight}
+#' of the total weight are returned as \code{NA}.
+#'
+#' @param M Members x time matrix.
+#' @param w Member weights.
+#' @param probs Quantile probabilities.
+#' @param min_weight Minimum defined weight fraction.
+#' @return Time x length(probs) matrix.
+#' @keywords internal
+#' @noRd
+.mosaic_reff_cell_quantiles <- function(M, w, probs, min_weight = 0.5) {
+  Tn <- ncol(M)
+  out <- matrix(NA_real_, Tn, length(probs))
+  w_ok <- is.finite(w) & w > 0
+  tot <- sum(w[w_ok])
+  if (tot <= 0) return(out)
+  for (t in seq_len(Tn)) {
+    def <- is.finite(M[, t]) & w_ok
+    if (sum(w[def]) >= min_weight * tot)
+      out[t, ] <- weighted_quantiles(M[def, t], w[def], probs)
+  }
+  out
+}
+
 #' Per-member posterior reduction of route R via weighted_quantiles
 #'
 #' Reconstructs each member's daily route R series from its daily-consecutive
-#' \code{incidence_human} / \code{incidence_env} \code{lines}, then reduces per
-#' (location, t) cell with \code{\link{weighted_quantiles}}. The kernel, decay
-#' rates and initial-condition mask are held at the medoid config (the lines do
-#' not carry per-member parameters or stocks).
+#' \code{incidence_human} / \code{incidence_env} \code{lines} (starting on day
+#' 1), then reduces per (location, t) cell with
+#' \code{.mosaic_reff_cell_quantiles()}. The kernel, decay rates and initial
+#' stocks are held at the medoid config and the weighted-median stocks (the
+#' lines do not carry per-member parameters or stocks). A member with a missing
+#' day is dropped at that location rather than having the gap read as zero
+#' infections.
 #'
 #' @param weights Optional per-member weights indexed by \strong{member id}
 #'   (named: by name; unnamed: by id value), never by position -- the member set
 #'   can differ across locations. \code{NULL} uses each member's carried weight.
-#' @param ic_start nL x 2 matrix (hum, env) of mask starts from the central pass.
+#' @param init List (per location) of initial stocks from the central pass.
 #' @keywords internal
 #' @noRd
 .mosaic_reff_member_quantiles <- function(route_lines, kern, delta, loc_names,
                                           t_present, nL, Tn, probs,
                                           weights = NULL,
                                           infectiousness_floor = 1,
-                                          ic_start = NULL) {
+                                          init = NULL) {
   ests <- .MOSAIC_REFF_ESTIMANDS
   qmats <- stats::setNames(lapply(ests, function(e)
     array(NA_real_, dim = c(nL, Tn, length(probs)))), ests)
-  t_min <- min(t_present); t_max <- max(t_present)
-  n_present <- t_max - t_min + 1L
-  cols <- t_min:t_max
+  t_max <- max(t_present)
+  cols <- seq_len(t_max)
   w_named <- !is.null(weights) && !is.null(names(weights))
   for (i in seq_len(nL)) {
     li <- route_lines[route_lines$location == loc_names[i], , drop = FALSE]
     if (nrow(li) == 0L) next
     members <- unique(li$member_id)
     mats <- stats::setNames(lapply(ests, function(e)
-      matrix(NA_real_, length(members), n_present)), ests)
-    mw <- numeric(length(members))
-    ics <- c(hum = 0L, env = 0L)
-    if (!is.null(ic_start))
-      ics[] <- pmax(0L, as.integer(ic_start[i, c("hum", "env")]) - (t_min - 1L))
+      matrix(NA_real_, length(members), t_max)), ests)
+    mw <- rep(NA_real_, length(members))
     for (mi in seq_along(members)) {
       id <- members[mi]
       mm <- li[li$member_id == id, , drop = FALSE]
       dense <- function(ch) {
-        v <- rep(NA_real_, n_present)
+        v <- rep(NA_real_, t_max)
         r <- mm[mm$channel == ch, , drop = FALSE]
-        v[r$t - t_min + 1L] <- r$value
+        v[r$t] <- r$value
         v
       }
-      rr <- .mosaic_reff_routes(dense("incidence_human"), dense("incidence_env"),
-                                delta[i, cols], kern, infectiousness_floor,
-                                ic_start = ics)
+      ih <- dense("incidence_human"); ie <- dense("incidence_env")
+      if (anyNA(ih) || anyNA(ie)) next
+      rr <- .mosaic_reff_routes(ih, ie, delta[i, cols], kern, infectiousness_floor,
+                                init = if (!is.null(init)) init[[i]])
       for (e in ests) mats[[e]][mi, ] <- rr[[e]]
       w <- if (!is.null(weights)) {
         if (w_named) weights[as.character(id)] else weights[id]
@@ -1072,8 +1088,8 @@ calc_Reff <- function(ensemble,
       }
       mw[mi] <- if (length(w) && is.finite(w[1])) w[1] else NA_real_
     }
-    for (e in ests) for (k in seq_len(n_present))
-      qmats[[e]][i, t_min + k - 1L, ] <- weighted_quantiles(mats[[e]][, k], mw, probs)
+    for (e in ests)
+      qmats[[e]][i, cols, ] <- .mosaic_reff_cell_quantiles(mats[[e]], mw, probs)
   }
   qmats
 }

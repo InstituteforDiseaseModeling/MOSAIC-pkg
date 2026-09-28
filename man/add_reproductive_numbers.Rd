@@ -9,7 +9,6 @@ add_reproductive_numbers(
   recompute_ci = FALSE,
   burn_in_days = NULL,
   infectiousness_floor = 1,
-  ic_tolerance = 0.95,
   plots = TRUE,
   overwrite = TRUE,
   verbose = TRUE,
@@ -25,9 +24,9 @@ directory that contains \code{1_inputs/}, \code{2_calibration/}, and
 credible interval by \strong{re-simulating} the saved posterior ensemble
 (\code{2_calibration/ensemble_candidate.rds}) and computing R_eff per member,
 then weighted quantiles (median + 95\\% interval). This captures the daily
-route incidence, reservoir and decay-rate channels that the persisted
-trajectory artifact does not retain at a daily grid. A faithfulness gate confirms the
-re-sim reproduces the saved \code{cases_array} before any CI is written.
+route incidence, stock and decay-rate channels that the persisted
+trajectory artifact does not retain at a daily grid. A faithfulness gate
+confirms the re-sim reproduces the saved \code{cases_array} before any CI is written.
 When \code{FALSE} (default) the cheap point-estimate path is used (renewal on
 the weighted-median route incidence from \code{trajectories_ensemble.rds};
 CI columns are populated only if the artifact carries daily-consecutive
@@ -37,23 +36,20 @@ per-member lines, otherwise NA).}
 from the R_eff output (set to \code{NA} in the table). \code{NULL} (default)
 reads \code{control$likelihood$burn_in_days} from
 \code{1_inputs/control.json}; if that is \code{0} or absent it defaults to
-\code{30} days. Only consumed on the \code{recompute_ci = TRUE} path.}
+\code{30} days. Applied on both paths: early R reflects the reservoir
+filling from empty rather than the epidemic.}
 
 \item{infectiousness_floor}{Numeric scalar \eqn{\ge 0}. Passed to
 \code{\link{calc_Reff}}; minimum generation-weighted past infectiousness
 required to report \eqn{R_t} (guards the initial-condition seed spike and
 deep inter-epidemic troughs). Default \code{1}.}
 
-\item{ic_tolerance}{Fraction in (0, 1]. Passed to \code{\link{calc_Reff}}:
-each route is masked until the stock reconstructed from incidence explains
-this fraction of the simulated stock. Default \code{0.95}.}
-
 \item{plots}{Logical. Render and save \code{\link{plot_Reff}} (PNG + PDF) to
 \code{3_results/figures/reproductive_number/}. Default \code{TRUE}.}
 
-\item{overwrite}{Logical. If \code{FALSE} and the output CSV already exists,
-skip recomputation and return a \code{"skipped_exists"} status. Default
-\code{TRUE}.}
+\item{overwrite}{Logical. If \code{FALSE} and a route-decomposed output CSV
+already exists, skip recomputation and return a \code{"skipped_exists"}
+status (an older total-only CSV is always recomputed). Default \code{TRUE}.}
 
 \item{verbose}{Logical. Emit progress messages. Default \code{TRUE}.}
 
@@ -86,7 +82,9 @@ reproductive number reduction (\code{\link{calc_Reff}}: \eqn{R_{eff} =
 R_{hum} + R_{env}}) to a \strong{single} MOSAIC model output
 directory laid out by \code{\link{run_MOSAIC}}. It loads the captured ensemble
 trajectories (\code{2_calibration/trajectories_ensemble.rds}) and the medoid
-config (\code{1_inputs/config.json}), computes the per-location R_eff series,
+config (\code{2_calibration/best_model/config_medoid.json}, falling back to
+\code{1_inputs/config.json} with a warning), computes the per-location R_eff
+series,
 writes the tidy \code{reproductive_numbers} table to
 \code{3_results/posterior/reproductive_numbers.csv} (and \code{.rds}), and
 optionally renders \code{\link{plot_Reff}} to
@@ -94,8 +92,8 @@ optionally renders \code{\link{plot_Reff}} to
 }
 \details{
 \strong{Robust by design.} Missing files, a trajectory artifact without the
-\code{incidence_human}/\code{incidence_env} channels, or a \code{calc_Reff()} error are handled by
-skipping with an informative message/warning and returning a status row; the
+\code{incidence_human}/\code{incidence_env} channels, or a \code{calc_Reff()}
+error are handled by skipping with an informative message/warning and returning a status row; the
 function does not crash. It is therefore safe to map over the full per-ISO
 model tree.
 }

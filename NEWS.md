@@ -2,22 +2,36 @@
 
 ## R_eff is now decomposed by route: R_eff = R_hum + R_env
 
-`calc_Reff()` used to divide total infection incidence by one generation-interval kernel: latent period plus infectious period, moment-matched to a Gamma. That timing describes only the human route. Environmental transmission, which carries 99.8-99.9% of infections in every post-v0.89.0 calibration checked, also passes through shedding and survival in the reservoir. Survival alone lasts 16-200 days, depending on suitability. With a ~3-5 day kernel applied to a ~30-200 day process, any growth rate reads as R close to 1. The kernel's human part also used the duration-weighted mean infectious period where the renewal needs the transmission-weighted mean infectious age.
+`calc_Reff()` used to divide total infection incidence by one generation-interval kernel: latent plus infectious period, moment-matched to a Gamma. That timing describes the human route only. Environmental transmission also passes through shedding and 16-200 days of survival in the reservoir, and it carries 99.4-99.9% of infections in every post-v0.89.0 calibration checked (MOZ, COD, ETH). With a ~3-5 day kernel applied to a ~30-200 day process, the old estimator compressed R strongly toward 1. The kernel's human part also used the mean infectious duration where the renewal needs the transmission-weighted mean infectious age.
 
-Each route now has its own numerator (`incidence_human`, `incidence_env`) and its own infectiousness. Both denominators are driven by total incidence, because every infection is infectious through both routes. The kernels are derived from the engine's own daily transition probabilities and phase order rather than moment-matched. The environmental denominator is computed exactly under the time-varying, psi-dependent decay rate `delta_jt` by a linear reservoir filter: each cohort is weighted by the inverse of its expected lifetime reservoir contribution, so there is no T x T kernel and no truncated tail. Initial-condition infectious people and reservoir cells are masked out: each route is reported only once the stock rebuilt from incidence explains 95% of the simulated stock (`ic_tolerance`).
+Each route now has its own numerator (`incidence_human`, `incidence_env`) and its own infectiousness. Both are driven by total incidence, because every infection is infectious through both routes, and R_eff is their sum. The kernels are derived from the engine's own daily transition probabilities and phase order.
 
-- `calc_Reff()` returns rows for `estimand` `"R_eff"`, `"R_hum"` and `"R_env"`. It needs the `incidence_human`/`incidence_env` trajectory channels plus `zeta_1`, `zeta_2`, `psi_jt`, `decay_*` and `theta_j` in the config. `max_days` is removed (no kernel is truncated); `ic_tolerance` is added.
-- `add_reproductive_numbers()` gains `ic_tolerance`. On the `recompute_ci = TRUE` path, each re-simulated member uses its own kernel, its own engine `delta_jt` and its own stocks. `peak_Rt` gains an `estimand` column.
-- `plot_Reff()` stacks R_hum on top of an R_env area, so the upper edge is the total. `routes = FALSE` draws the total alone.
-- The internal `.mosaic_generation_time_pmf()` is removed. The legacy `get_generation_time_distribution()` CSV writer is unchanged.
+The environmental term is **instantaneous** (Cori: "if conditions stayed as they are at t"). The reservoir is rebuilt from the actual past decay path, and one infection's lifetime reservoir contribution is valued at today's `delta_jt`. Nothing after t enters, so truncating a series (e.g. at a forecast cut-off) leaves earlier values unchanged. People latent or infectious on the first day are included in both infectiousness terms, so no initial-condition mask is needed.
 
-Validation (`tests/testthat/test-reproductive_numbers.R`):
-- The time-varying environmental denominator matches a brute-force per-cohort sum to 1e-6.
-- I and W rebuilt from incidence alone track the engine's simulated stocks: correlation > 0.99, median ratio within 5%.
-- R_eff equals R_hum + R_env exactly.
-- Route plateaus match the discrete Euler-Lotka values.
+- `calc_Reff()`:
+  - returns rows for `estimand` `"R_eff"`, `"R_hum"` and `"R_env"`;
+  - needs the `incidence_human`/`incidence_env` channels (plus `E`/`Isym`/`Iasym` for the initial stocks) and the config's `zeta_*`, `psi_jt` and `decay_*`;
+  - checks that the config's locations and start date match the trajectories;
+  - caps decay rates above 1, which occur when `decay_days_short < 1` day;
+  - `max_days` is removed.
+- `add_reproductive_numbers()`:
+  - builds the kernel from `2_calibration/best_model/config_medoid.json`, not the input config of prior centres, falling back with a warning; attribute `config_source` records which;
+  - applies the burn-in on both paths;
+  - re-simulated members use their own kernel, engine `delta_jt` and initial stocks;
+  - `peak_Rt` gains an `estimand` column, and cell quantiles need half the member weight defined;
+  - `overwrite = FALSE` no longer keeps an older total-only table.
+- `plot_Reff()`:
+  - stacks R_hum on top of an R_env area, and both are smoothed over the same days;
+  - the new `routes` argument is last, so existing positional calls are unchanged.
+- The internal `.mosaic_generation_time_pmf()` is removed. `get_generation_time_distribution()` is unchanged.
 
-On the post-v0.89.0 MOZ medoid, the 14-day-mean R_eff now spans 0.55-1.65 (interquartile range) with p95 3.2, against 0.96-1.09 and 1.19 before. Old R_eff files are not comparable with new ones.
+Tests check against the engine rather than against the code's own algebra:
+- R_hum and R_env recover the engine's true instantaneous R in single-route linear runs, with median ratios 0.99 and 0.94.
+- I and W rebuilt from incidence track the simulated stocks and align best at zero lag.
+- Truncation invariance, and a brute-force check of the frozen-at-t definition.
+- The re-simulation path is exercised end to end through the real engine.
+
+On the post-v0.89.0 MOZ medoid, the 14-day-mean R_eff has an interquartile range of 0.54-1.71 and a p95 of 3.1; the old estimator gave 0.96-1.09 and 1.19. Old and new R_eff files are not comparable.
 
 # MOSAIC 0.83.0
 

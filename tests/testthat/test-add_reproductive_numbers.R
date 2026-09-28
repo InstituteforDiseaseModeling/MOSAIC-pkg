@@ -27,7 +27,7 @@
 write_traj_rds <- function(path, drop_incidence = FALSE) {
   d <- .reff_demo(); r <- d$r
   nL <- nrow(r$incidence); Tn <- ncol(r$incidence)
-  ch <- c("incidence", "incidence_human", "incidence_env", "W", "Isym", "Iasym")
+  ch <- c("incidence", "incidence_human", "incidence_env", "E", "Isym", "Iasym")
   summary <- stats::setNames(lapply(ch, function(x)
     list(median = matrix(as.numeric(r[[x]]), nL, Tn))), ch)
   if (drop_incidence) summary[c("incidence_human", "incidence_env")] <- NULL
@@ -48,12 +48,13 @@ write_traj_rds <- function(path, drop_incidence = FALSE) {
   saveRDS(traj, path)
 }
 
-write_config_json <- function(path) {
-  jsonlite::write_json(.reff_demo()$cfg, path, auto_unbox = TRUE, digits = NA)
+write_config_json <- function(path, cfg = .reff_demo()$cfg) {
+  jsonlite::write_json(cfg, path, auto_unbox = TRUE, digits = NA)
 }
 
 # Build a complete tiny output dir; returns the dir path.
-make_output_dir <- function(root, drop_incidence = FALSE, write_config = TRUE) {
+make_output_dir <- function(root, drop_incidence = FALSE, write_config = TRUE,
+                            write_medoid = TRUE) {
   dir.create(file.path(root, "1_inputs"), recursive = TRUE, showWarnings = FALSE)
   dir.create(file.path(root, "2_calibration"), recursive = TRUE, showWarnings = FALSE)
   dir.create(file.path(root, "3_results"), recursive = TRUE, showWarnings = FALSE)
@@ -61,6 +62,10 @@ make_output_dir <- function(root, drop_incidence = FALSE, write_config = TRUE) {
                  drop_incidence = drop_incidence)
   if (write_config)
     write_config_json(file.path(root, "1_inputs", "config.json"))
+  if (write_medoid) {
+    dir.create(file.path(root, "2_calibration", "best_model"), showWarnings = FALSE)
+    write_config_json(file.path(root, "2_calibration", "best_model", "config_medoid.json"))
+  }
   root
 }
 
@@ -161,4 +166,59 @@ test_that("add_reproductive_numbers errors when output_dir does not exist", {
   expect_warning(st <- add_reproductive_numbers(
     file.path(tempdir(), "definitely_not_here_reff"), verbose = FALSE))
   expect_equal(st$status, "error")
+})
+
+test_that("add_reproductive_numbers uses the medoid config and records it", {
+  d <- file.path(tempdir(), paste0("reff_med_", as.integer(runif(1, 1, 1e6))))
+  make_output_dir(d)
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  # A base config with different decay makes the two choices distinguishable.
+  base <- .reff_demo()$cfg; base$decay_days_long <- base$decay_days_long * 3
+  write_config_json(file.path(d, "1_inputs", "config.json"), base)
+
+  st <- add_reproductive_numbers(d, plots = FALSE, verbose = FALSE)
+  ro <- readRDS(st$rds)
+  expect_equal(attr(ro, "config_source"), "2_calibration/best_model/config_medoid.json")
+  ref <- calc_Reff(readRDS(file.path(d, "2_calibration", "trajectories_ensemble.rds")),
+                   .reff_demo()$cfg, verbose = FALSE)
+  late <- ro$t > attr(ro, "burn_in_days")
+  expect_equal(ro$central[late], ref$central[late])
+})
+
+test_that("add_reproductive_numbers falls back to the input config with a warning", {
+  d <- file.path(tempdir(), paste0("reff_nomed_", as.integer(runif(1, 1, 1e6))))
+  make_output_dir(d, write_medoid = FALSE)
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  expect_warning(st <- add_reproductive_numbers(d, plots = FALSE, verbose = FALSE),
+                 "config_medoid")
+  expect_equal(st$status, "ok")
+  expect_equal(attr(readRDS(st$rds), "config_source"), "1_inputs/config.json")
+})
+
+test_that("add_reproductive_numbers applies the burn-in on the direct path", {
+  d <- file.path(tempdir(), paste0("reff_burn_", as.integer(runif(1, 1, 1e6))))
+  make_output_dir(d)
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  st <- add_reproductive_numbers(d, plots = FALSE, burn_in_days = 40L, verbose = FALSE)
+  ro <- readRDS(st$rds)
+  expect_equal(attr(ro, "burn_in_days"), 40L)
+  expect_true(all(is.na(ro$central[ro$t <= 40])))
+  expect_true(any(is.finite(ro$central[ro$t > 40])))
+  expect_true(all(is.na(attr(ro, "central_matrix")[, 1:40])))
+  # Absent control.json and argument -> 30-day default.
+  st2 <- add_reproductive_numbers(d, plots = FALSE, verbose = FALSE)
+  expect_equal(attr(readRDS(st2$rds), "burn_in_days"), 30L)
+})
+
+test_that("overwrite = FALSE recomputes an older total-only table", {
+  d <- file.path(tempdir(), paste0("reff_old_", as.integer(runif(1, 1, 1e6))))
+  make_output_dir(d)
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  post <- file.path(d, "3_results", "posterior")
+  dir.create(post, recursive = TRUE, showWarnings = FALSE)
+  utils::write.csv(data.frame(location = "FOO", date = "2020-01-01", t = 1,
+                              estimand = "R_eff", central = 1),
+                   file.path(post, "reproductive_numbers.csv"), row.names = FALSE)
+  st <- add_reproductive_numbers(d, plots = FALSE, overwrite = FALSE, verbose = FALSE)
+  expect_equal(st$status, "ok")
 })

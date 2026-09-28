@@ -26,7 +26,7 @@ test_that("the member worker runs from an explicitly passed context", {
   # The replacement asserts the thing that actually matters: given a context,
   # the worker RUNS. A worker that cannot run from a passed context fails here.
   ctx <- list(base_config = NULL, priors = NULL, sampling = NULL, paths = NULL,
-              seeds = 1L, floor = 1, ic_tolerance = 0.95, nL = 1L, Tn = 2L)
+              seeds = 1L, floor = 1, nL = 1L, Tn = 2L)
 
   # sample_parameters is mocked, so this exercises the worker's own plumbing --
   # context unpacking, config rebuild from the seed, and the result shape --
@@ -38,12 +38,12 @@ test_that("the member worker runs from an explicitly passed context", {
     .mosaic_reff_config_kernel = function(cfg) list(),
     run_simulation = function(...) list(results = list(
       incidence = one, incidence_human = one * 0, incidence_env = one,
-      delta_jt = one / 10, W = one, Isym = one, Iasym = one,
+      delta_jt = one / 10, E = one, Isym = one, Iasym = one,
       reported_cases = one)),
     .mosaic_reff_to_mat = function(x, nL, Tn) matrix(as.numeric(x), nL, Tn),
     .mosaic_reff_routes = function(inc_hum, inc_env, ...)
       list(R_eff = rep(1, length(inc_env)), R_hum = rep(0, length(inc_env)),
-           R_env = rep(1, length(inc_env)), ic_start = c(hum = 0L, env = 0L)),
+           R_env = rep(1, length(inc_env))),
     .package = "MOSAIC"
   )
 
@@ -60,7 +60,7 @@ test_that("the member worker runs from an explicitly passed context", {
 
 test_that("the member worker refuses a member whose route incidences do not add up", {
   ctx <- list(base_config = NULL, priors = NULL, sampling = NULL, paths = NULL,
-              seeds = 1L, floor = 1, ic_tolerance = 0.95, nL = 1L, Tn = 2L)
+              seeds = 1L, floor = 1, nL = 1L, Tn = 2L)
   one <- matrix(c(1, 2), 1, 2)
   local_mocked_bindings(
     sample_parameters = function(...) list(theta_j = 0, zeta_1 = 1, zeta_2 = 1),
@@ -68,7 +68,7 @@ test_that("the member worker refuses a member whose route incidences do not add 
     .mosaic_reff_config_kernel = function(cfg) list(),
     run_simulation = function(...) list(results = list(
       incidence = one * 3, incidence_human = one, incidence_env = one,
-      delta_jt = one / 10, W = one, Isym = one, Iasym = one,
+      delta_jt = one / 10, E = one, Isym = one, Iasym = one,
       reported_cases = one)),
     .mosaic_reff_to_mat = function(x, nL, Tn) matrix(as.numeric(x), nL, Tn),
     .package = "MOSAIC"
@@ -81,7 +81,7 @@ test_that("a genuinely broken member is reported, not thrown", {
   # Error capture still matters -- one bad member must not kill the batch --
   # but it is asserted on a REAL failure, not on the absence of setup.
   ctx <- list(base_config = NULL, priors = NULL, sampling = NULL, paths = NULL,
-              seeds = 1L, floor = 1, ic_tolerance = 0.95, nL = 1L, Tn = 2L)
+              seeds = 1L, floor = 1, nL = 1L, Tn = 2L)
   local_mocked_bindings(
     sample_parameters = function(...) stop("engine exploded"),
     .package = "MOSAIC"

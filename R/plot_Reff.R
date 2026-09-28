@@ -23,8 +23,9 @@
 #' MEDOID trajectory's R_t (a coherent member, preserving peak timing and
 #' height); on the direct path it is the renewal on weighted-median incidence.
 #' The daily series is noisy, so each component is shown as a centered
-#' \code{smooth_days} rolling mean (stacking stays exact because the mean is
-#' linear), with the raw daily total as a faint background line.
+#' \code{smooth_days} rolling mean, taken over the days on which both
+#' components are defined so the smoothed stack still sums to the smoothed
+#' total, with the raw daily total as a faint background line.
 #'
 #' \strong{Faint band.} When populated, the \code{q2.5}-\code{q97.5} total-R band
 #' is the per-calendar-date range across members. Member peaks are
@@ -35,8 +36,6 @@
 #'   \code{location}, \code{date}, \code{central}, optionally \code{estimand}
 #'   and the quantile columns. Leading rows with a non-finite total are dropped
 #'   per location.
-#' @param routes Logical. Stack \code{R_env} and \code{R_hum} under the total
-#'   when present. Default \code{TRUE}.
 #' @param show_iqr Logical. Also draw the inner 50\% (\code{q25}-\code{q75})
 #'   total-R band. Default \code{FALSE}.
 #' @param smooth_days Integer. Centered rolling-mean window (days) for the
@@ -45,6 +44,8 @@
 #' @param ncol Integer facet columns for multi-location input (\code{NULL}:
 #'   \code{min(3, n_locations)}).
 #' @param base_size Numeric base font size for \code{\link{theme_mosaic}}.
+#' @param routes Logical. Stack \code{R_env} and \code{R_hum} under the total
+#'   when present. Default \code{TRUE}.
 #'
 #' @return A \code{ggplot} object (not printed or saved).
 #'
@@ -62,12 +63,12 @@
 #'   facet_wrap scale_x_date scale_y_continuous labs scale_fill_manual
 #'   scale_colour_manual guides guide_legend
 plot_Reff <- function(reff,
-                      routes      = TRUE,
                       show_iqr    = FALSE,
                       smooth_days = 14L,
                       title       = NULL,
                       ncol        = NULL,
-                      base_size   = 12) {
+                      base_size   = 12,
+                      routes      = TRUE) {
 
   if (!is.data.frame(reff))
     stop("plot_Reff: `reff` must be a data.frame from calc_Reff().")
@@ -112,8 +113,11 @@ plot_Reff <- function(reff,
     d <- d[seq.int(first_ok[1L], nrow(d)), , drop = FALSE]
     d$central_smooth <- .reff_roll_mean(d$central, sd_k)
     if (has_routes) {
-      env_s <- .reff_roll_mean(d$R_env, sd_k)
-      hum_s <- .reff_roll_mean(d$R_hum, sd_k)
+      # Smooth both components over the SAME days, or the NA-skipping means
+      # use different day sets and the stack stops summing to the total.
+      raw_both <- is.finite(d$R_env) & is.finite(d$R_hum)
+      env_s <- .reff_roll_mean(ifelse(raw_both, d$R_env, NA_real_), sd_k)
+      hum_s <- .reff_roll_mean(ifelse(raw_both, d$R_hum, NA_real_), sd_k)
       both  <- is.finite(env_s) & is.finite(hum_s)
       d$env_top <- ifelse(both, env_s, NA_real_)
       d$tot_top <- ifelse(both, env_s + hum_s, NA_real_)
@@ -248,12 +252,6 @@ plot_Reff <- function(reff,
 }
 
 # -----------------------------------------------------------------------------
-# Internal: normalize the `peak_Rt` attribute into a per-location data.frame
-# with finite q2.5/q50/q97.5 rows for the locations being plotted. Returns NULL
-# when the attribute is absent, malformed, or has no usable rows (so the caller
-# omits the annotation rather than erroring).
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 # Centered, NA-aware rolling mean (window k days). Each point averages the finite
 # values in [i - (k-1)/2, i + (k-1)/2]; positions with no finite neighbour stay
 # NA so genuine gaps are preserved. k <= 1 returns x unchanged.
@@ -276,6 +274,12 @@ plot_Reff <- function(reff,
   out
 }
 
+# -----------------------------------------------------------------------------
+# Internal: normalize the `peak_Rt` attribute into a per-location data.frame
+# with finite q2.5/q50/q97.5 rows (total R_eff) for the locations being
+# plotted. Returns NULL when the attribute is absent, malformed, or has no
+# usable rows (so the caller omits the annotation rather than erroring).
+# -----------------------------------------------------------------------------
 .reff_peak_table <- function(peak_Rt, locs) {
   if (is.null(peak_Rt) || !is.data.frame(peak_Rt) || nrow(peak_Rt) == 0L)
     return(NULL)

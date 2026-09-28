@@ -10,7 +10,6 @@ calc_Reff(
   weights = NULL,
   probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
   infectiousness_floor = 1,
-  ic_tolerance = 0.95,
   verbose = TRUE
 )
 }
@@ -18,13 +17,13 @@ calc_Reff(
 \item{ensemble}{A \code{mosaic_trajectories} artifact
 (\code{2_calibration/trajectories_ensemble.rds}) or a \code{mosaic_ensemble}
 carrying one in \code{$trajectories}. Must provide weighted-median
-\code{incidence_human} and \code{incidence_env} channels; \code{Isym},
-\code{Iasym} and \code{W} enable the initial-condition mask.}
+\code{incidence_human} and \code{incidence_env} channels; \code{E},
+\code{Isym} and \code{Iasym} supply the initial infectious stocks.}
 
 \item{config}{The medoid \code{config} list: kernel parameters \code{iota},
 \code{gamma_1}, \code{gamma_2}, \code{sigma}, \code{zeta_1}, \code{zeta_2},
 plus the fields the engine needs to rebuild \eqn{\delta_{jt}} (\code{psi_jt},
-\code{decay_*}) and \code{theta_j}.}
+\code{decay_*}).}
 
 \item{weights}{Optional per-member weights for the posterior reduction,
 indexed by member id. \code{NULL} (default) uses the weights in \code{lines}.}
@@ -33,10 +32,8 @@ indexed by member id. \code{NULL} (default) uses the weights in \code{lines}.}
 
 \item{infectiousness_floor}{Numeric scalar \eqn{\ge 0}. Minimum route
 infectiousness (effective past infections) required to report that route's
-R at a step. Default \code{1}; \code{0} is the pure Cori convention.}
-
-\item{ic_tolerance}{Fraction in (0, 1] for the initial-condition mask.
-Default \code{0.95}.}
+R at a step (a route below it with no infections of its own contributes 0
+to the total). Default \code{1}; \code{0} is the pure Cori convention.}
 
 \item{verbose}{Logical; emit progress messages.}
 }
@@ -46,8 +43,8 @@ A tidy long \code{data.frame} (\code{reproductive_numbers} schema):
 \code{"R_hum"}, \code{"R_env"}), \code{central} (renewal on the
 weighted-median route incidences) and one column per quantile. Attributes:
 \code{central_matrix} (R_eff, nL x T), \code{route_central} (list of R_hum
-and R_env matrices), \code{ic_start}, \code{env_share}, \code{kernel}
-(\code{"route_exact"}), \code{kernel_params}, \code{ci_source},
+and R_env matrices), \code{env_share}, \code{kernel}
+(\code{"route_instantaneous"}), \code{kernel_params}, \code{ci_source},
 \code{caveat}.
 }
 \description{
@@ -64,19 +61,25 @@ by total incidence, because every infection is infectious through both
 routes. \eqn{\Lambda^{hum}} propagates past infections through the latent and
 infectious states (symptomatic and asymptomatic at equal weight, as in the
 human force of infection). \eqn{\Lambda^{env}} additionally routes their
-shedding (weighted by \code{zeta_1}, \code{zeta_2}) through the reservoir at
-the \eqn{\psi}-dependent decay rate \eqn{\delta_{jt}}, so the environmental
-generation interval (tens to hundreds of days) and its seasonal variation are
-represented exactly. Both kernels are derived from the engine's own daily
-transition probabilities and phase order. WASH (\code{theta_j}), the absolute
+shedding (weighted by \code{zeta_1}, \code{zeta_2}) through the reservoir,
+which decays at the \eqn{\psi}-dependent rate \eqn{\delta_{jt}}, so the
+environmental generation interval (tens to hundreds of days) and its seasonal
+variation are represented. Both kernels are derived from the engine's own
+daily transition probabilities and phase order. The estimate is
+\strong{instantaneous}: the reservoir is built from the actual past decay path
+and one infection's lifetime reservoir contribution is evaluated at today's
+\eqn{\delta_{jt}} (secondary infections per infection if conditions stayed as
+they are at t). Nothing after t enters, so truncating the series does not
+change earlier values. WASH (\code{theta_j}), the absolute
 shedding scale, \code{kappa} and the transmission rates cancel from the
 kernels and live in the R values.
 
-\strong{Initial conditions.} Initial infectious people and reservoir cells
-cause infections that no recorded incidence explains. When the artifact
-carries the \code{Isym}, \code{Iasym} and \code{W} channels, each route is set
-to \code{NA} until the stock reconstructed from incidence reaches
-\code{ic_tolerance} of the simulated stock (attribute \code{"ic_start"}).
+\strong{Initial conditions.} People already latent or infectious at the start
+(the \code{E}, \code{Isym}, \code{Iasym} stocks on the first day) are included
+in both infectiousness terms, so the series is defined from the start. R in
+roughly the first \eqn{1/\delta} days still reflects the reservoir filling
+from empty and is best read after a burn-in (\code{add_reproductive_numbers()}
+applies one).
 
 \strong{Caveat.} This describes the simulated trajectory (comparable to a
 surveillance-derived R_eff computed the same way); it is not an invasion
@@ -91,9 +94,11 @@ recompute_ci = TRUE)} reports the MEDOID trajectory's R_t and the per-member
 peak statistic instead.
 
 \strong{Posterior CI.} Needs daily-consecutive per-member \code{lines} for
-both route channels; production artifacts thin \code{lines} on a stride, so
-the quantile columns are \code{NA} there (\code{ci_source =
-"unavailable_strided_lines"}). Use the re-simulation path for a CI.
+both route channels starting on day 1; production artifacts thin \code{lines}
+on a stride, so the quantile columns are \code{NA} there (\code{ci_source =
+"unavailable_strided_lines"}). Use the re-simulation path for a CI. A cell's
+quantiles are reported only when members holding at least half the weight are
+defined there.
 }
 \references{
 Cori A, Ferguson NM, Fraser C, Cauchemez S (2013). A new framework

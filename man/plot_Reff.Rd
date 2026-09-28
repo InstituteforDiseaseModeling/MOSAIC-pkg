@@ -6,12 +6,12 @@
 \usage{
 plot_Reff(
   reff,
-  routes = TRUE,
   show_iqr = FALSE,
   smooth_days = 14L,
   title = NULL,
   ncol = NULL,
-  base_size = 12
+  base_size = 12,
+  routes = TRUE
 )
 }
 \arguments{
@@ -19,9 +19,6 @@ plot_Reff(
 \code{location}, \code{date}, \code{central}, optionally \code{estimand}
 and the quantile columns. Leading rows with a non-finite total are dropped
 per location.}
-
-\item{routes}{Logical. Stack \code{R_env} and \code{R_hum} under the total
-when present. Default \code{TRUE}.}
 
 \item{show_iqr}{Logical. Also draw the inner 50\\% (\code{q25}-\code{q75})
 total-R band. Default \code{FALSE}.}
@@ -35,6 +32,9 @@ displayed series; \code{1} plots the raw daily values. Default \code{14}.}
 \code{min(3, n_locations)}).}
 
 \item{base_size}{Numeric base font size for \code{\link{theme_mosaic}}.}
+
+\item{routes}{Logical. Stack \code{R_env} and \code{R_hum} under the total
+when present. Default \code{TRUE}.}
 }
 \value{
 A \code{ggplot} object (not printed or saved).
@@ -55,8 +55,9 @@ artifacts) the total alone is drawn.
 MEDOID trajectory's R_t (a coherent member, preserving peak timing and
 height); on the direct path it is the renewal on weighted-median incidence.
 The daily series is noisy, so each component is shown as a centered
-\code{smooth_days} rolling mean (stacking stays exact because the mean is
-linear), with the raw daily total as a faint background line.
+\code{smooth_days} rolling mean, taken over the days on which both
+components are defined so the smoothed stack still sums to the smoothed
+total, with the raw daily total as a faint background line.
 
 \strong{Faint band.} When populated, the \code{q2.5}-\code{q97.5} total-R band
 is the per-calendar-date range across members. Member peaks are

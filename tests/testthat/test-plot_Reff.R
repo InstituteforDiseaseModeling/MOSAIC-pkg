@@ -256,3 +256,19 @@ test_that("plot_Reff validates input", {
   empty <- make_reff_df(ci = TRUE)[0, ]
   expect_error(plot_Reff(empty), "zero rows")
 })
+
+test_that("smoothed stack sums to the smoothed total when route NA patterns differ", {
+  reff <- add_routes(make_reff_df(locs = "MOZ", ci = FALSE, peak = FALSE, n_warmup_na = 0L))
+  gap <- reff$estimand == "R_hum" & reff$t %in% c(20:23, 40)
+  reff$central[gap] <- NA_real_
+  reff$central[reff$estimand == "R_eff" & reff$t %in% c(20:23, 40)] <- NA_real_
+  p <- plot_Reff(reff, smooth_days = 7L)
+  built <- ggplot2::ggplot_build(p)
+  rib_idx <- which(vapply(p$layers, function(l) inherits(l$geom, "GeomRibbon"), logical(1)))
+  hum <- built$data[[rib_idx[2]]]
+  src <- reff[reff$estimand == "R_eff", ]
+  both <- is.finite(src$central)
+  expect_equal(unname(hum$ymax[is.finite(hum$ymax)]),
+               MOSAIC:::.reff_roll_mean(ifelse(both, src$central, NA), 7L)[is.finite(hum$ymax)],
+               tolerance = 1e-10)
+})
