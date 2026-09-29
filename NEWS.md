@@ -1,3 +1,9 @@
+# MOSAIC 0.99.4
+
+## Declare the data pipeline's optional packages (v0.99.4)
+
+`get_travel_time_matrix()` uses gdistance and malariaAtlas, and `rake_mobility_od_to_tau()` uses mipfp, each behind `requireNamespace()`. They were never declared, so R CMD check raised a WARNING on every run; they are now in Suggests. `mosaic_run_suffix()` calls `utils::str()` explicitly, clearing the matching NOTE.
+
 # MOSAIC 0.99.3
 
 ## The human-R recovery test pools seeds (v0.99.3)
