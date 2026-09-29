@@ -1,5 +1,16 @@
 # MOSAIC (development version)
 
+## est_CFR_hierarchical() documents the weak identification of tau (v0.97.3)
+
+Documentation only. `?est_CFR_hierarchical` now states that the between-country
+SD `tau` is weakly identified: the per-country factor smooth carries its own
+intercept, so the fit can put the between-country spread in either term (about
+0.003 on the full 1970-2025 data, 0.31 through 2024). Per-country estimates are
+unaffected, and every MOSAIC location is in the WHO annual data, so no MOSAIC
+prior depends on `tau`. The help page also describes the exclusion of
+in-progress years and the per-country carry-forward of forecast years, both
+added in v0.97.0.
+
 ## The CFR's year deviations are yearly levels, not an interpolated curve (v0.97.2)
 
 v0.97.0 interpolated the integrated CFR's year deviations linearly between

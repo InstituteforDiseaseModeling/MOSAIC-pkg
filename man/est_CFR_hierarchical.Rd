@@ -102,8 +102,20 @@ is \eqn{\sqrt{se^2 + \sigma^2}}, where \eqn{se} is the estimation error of
 global curve with \eqn{\tau^2} added. These are \emph{predictive} widths for a
 single year, not the confidence interval of the mean.
 
-\strong{Forecast years.} Years after the last year in the data are filled by
-\code{forecast_method}. The rolling-origin check compares both rules and
+\eqn{\tau} is weakly identified: the factor smooth \eqn{g_j} carries its own
+per-country intercept, so the fit can put the between-country spread in
+either term (full data 1970-2025: \eqn{\tau \approx 0.003}; through 2024:
+0.31). The per-country estimates are unaffected, but the width given to a
+location absent from the fit then understates between-country variation.
+Every MOSAIC location is in the WHO annual data, so no MOSAIC prior relies on it.
+
+\strong{In-progress years and forecast years.} A calendar year still in
+progress when its dashboard snapshot was taken is excluded (its deaths lag its
+cases). Under \code{"carry_forward"} the global trend is held after the last
+year in the data and each country's own trend after that country's last year,
+and \code{is_forecast} marks years past the country's own last year. The
+rolling-origin check compares both forecast rules, scoring each held-out
+country-year's observed deaths against their predictive distribution, and
 records the result in \code{summary$validation}.
 }
 \examples{
