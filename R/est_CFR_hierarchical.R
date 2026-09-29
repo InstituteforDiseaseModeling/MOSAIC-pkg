@@ -372,6 +372,14 @@ est_CFR_hierarchical <- function(
         if (!seen) X[, c_iso] <- 0
         mu <- as.numeric(X %*% stats::coef(m))
         se <- sqrt(pmax(rowSums((X %*% m$Vp) * X), 0))
+        # Carried-forward years share one design row, but a BLAS may sum
+        # identical rows in different orders (last-bit differences on OpenBLAS),
+        # so copy the first occurrence to keep them exactly flat.
+        if (cf) {
+            key <- paste(y_g, y_c)
+            first <- match(key, key)
+            mu <- mu[first]; se <- se[first]
+        }
         extra <- if (seen || global) 0 else fit$tau^2
         sd_pred <- sqrt(se^2 + extra + (if (global) 0 else fit$sigma^2))
         data.frame(iso_code = iso, year = years, logit_mean = mu, logit_sd = sd_pred,

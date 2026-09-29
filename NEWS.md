@@ -1,3 +1,9 @@
+# MOSAIC 0.99.9
+
+## Carried-forward CFR years are exactly flat on every BLAS (v0.99.9)
+
+Under `forecast_method = "carry_forward"`, `est_CFR_hierarchical()` gives every year after the last data year the same design row, but OpenBLAS can sum identical rows in different orders, so their `logit_mean` differed in the last bit on Linux and the as-of `mu_jt` was not exactly flat (a CI-only test failure). Those years now copy the first occurrence. On macOS the values were already identical, so no data object changes.
+
 # MOSAIC 0.99.8
 
 Merges #127's 0.93.2 fix. `calc_Reff.R` keeps the v0.96.0 mortality caveat, which never had the escaped percents.
