@@ -59,6 +59,8 @@ utils::globalVariables(c(
      "weight", "weight_label", "Weighted_Mean_WASH", "wind_speed_10m_mean", "window_label",
      "x", "y", "ymax", "ymin", "zeta_1",
      "zeta_1_hi", "zeta_1_lo", "zeta_2", "zeta_2_hi", "zeta_2_lo",
-     "zeta_ratio"
+     "zeta_ratio",
+     # plot_mobility_fused() ggplot2 aes() columns
+     "air", "dest", "fused", "panel", "tau_daily", "xend", "yend"
 ))
 
