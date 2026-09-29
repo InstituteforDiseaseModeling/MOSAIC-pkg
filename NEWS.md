@@ -1,3 +1,10 @@
+# MOSAIC 0.99.6
+
+## R CMD check hygiene (v0.99.6)
+
+- `test-psi-manifest-provenance.R` read `R/` source before checking it exists, so it errored under R CMD check (where `R/` is absent) instead of skipping. CI never saw it because CI runs `testthat::test_local()` from source.
+- `cfr_pred`, `deviation` (`plot_CFR_hierarchical()`) and `.dp` (`impute_drought_probability()`) are declared in `globals.R`.
+
 # MOSAIC 0.99.5
 
 ## Merge the R_eff post-merge fixes (v0.99.5)
