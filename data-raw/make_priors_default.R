@@ -272,8 +272,18 @@ priors_default$parameters_global$kappa <- list(
 )
 
 
-# load param_gravity_model.csv and get gamma distributions that have mode equal to the values in the .csv
-param_gravity <- read.csv(file.path(PATHS$MODEL_INPUT, "param_gravity_model.csv"))
+# Gravity kernel: prefer the BLEND fit (air + raked overland), matching what
+# data-raw/make_config_default.R writes into config_default$mobility_gamma /
+# $mobility_omega. These Gammas are MODE-matched (shape = mode*rate + 1), so the
+# config point estimate is the prior MODE, not its mean (mean = mode + 1/rate).
+# Leaving this on the air-only file left the prior mode at the air values
+# (1.3622 / 0.6164) while the config shipped the blend (1.8997 / 0.6271).
+# NOTE tau_i deliberately does NOT follow the blend here -- it is overland-only
+# (see the tau_overland_file block below). Kernel = blend, departure = overland.
+.grav_f <- file.path(PATHS$MODEL_INPUT, "param_gravity_model_blend.csv")
+if (!file.exists(.grav_f)) .grav_f <- file.path(PATHS$MODEL_INPUT, "param_gravity_model.csv")
+message("priors gravity source: ", basename(.grav_f))
+param_gravity <- read.csv(.grav_f)
 mobility_gamma_mode <- param_gravity$parameter_value[param_gravity$variable_name == "mobility_gamma"]
 mobility_omega_mode <- param_gravity$parameter_value[param_gravity$variable_name == "mobility_omega"]
 
@@ -853,8 +863,43 @@ priors_default$parameters_location$tau_i <- list(
 )
 
 # Load tau parameters from file
+# Overland departure prior (lognormal, evidence-anchored) takes precedence.
+# NOTE tau_uncertainty_factor is deliberately NOT applied to it: that factor
+# exists to widen a Beta fitted to huge OAG counts, and the overland prior's
+# width is specified directly as a 95% span. Applying both would be double
+# counting, and the Beta route's 0.001 factor is what puts the prior mode at
+# ZERO departure for 31 of 40 countries.
+tau_overland_file <- file.path(PATHS$MODEL_INPUT, "param_tau_departure_overland.csv")
+tau_used_overland <- FALSE
+if (file.exists(tau_overland_file)) {
+     tau_ov <- read.csv(tau_overland_file, stringsAsFactors = FALSE)
+     if (all(c("iso_code", "meanlog", "sdlog") %in% names(tau_ov)) &&
+         !all(is.na(tau_ov$meanlog))) {
+          n_set <- 0L
+          for (iso in j) {
+               r <- tau_ov[tau_ov$iso_code == iso, , drop = FALSE]
+               if (nrow(r) == 1L && is.finite(r$meanlog) && is.finite(r$sdlog)) {
+                    priors_default$parameters_location$tau_i$location[[iso]] <- list(
+                         distribution = "lognormal",
+                         parameters = list(meanlog = r$meanlog, sdlog = r$sdlog)
+                    )
+                    n_set <- n_set + 1L
+               }
+          }
+          if (n_set == length(j)) {
+               tau_used_overland <- TRUE
+               message(sprintf("tau_i: overland LOGNORMAL prior for %d locations (median %.3g/day, 95%% span %.0fx)",
+                               n_set, stats::median(exp(tau_ov$meanlog)),
+                               stats::median(tau_ov$ci_hi / tau_ov$ci_lo)))
+          } else {
+               warning("Overland tau covered ", n_set, " of ", length(j),
+                       " locations; falling back to the air-derived Beta prior.")
+          }
+     }
+}
+
 tau_param_file <- file.path(PATHS$MODEL_INPUT, "param_tau_departure.csv")
-if (file.exists(tau_param_file)) {
+if (!tau_used_overland && file.exists(tau_param_file)) {
      param_tau <- read.csv(tau_param_file)
 
      # Extract beta parameters for each location
@@ -908,7 +953,11 @@ if (file.exists(tau_param_file)) {
           }
      }
 
-} else {
+} else if (!tau_used_overland) {
+     # NB the !tau_used_overland guard must be on BOTH branches. Putting it
+     # only on the `if` sends control into this `else` when the overland
+     # prior succeeded, silently overwriting all 40 lognormals with Beta
+     # defaults -- the message reports success and the object says otherwise.
      warning("tau parameter file not found. Using default values.")
      # Set default values for all locations with uncertainty adjustment
      for (iso in j) {

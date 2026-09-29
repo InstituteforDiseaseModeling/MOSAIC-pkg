@@ -420,12 +420,34 @@ b2 <- b2[match(j, names(b2))]
 
 
 message("Get departure probability of each location (tau_j)")
-tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_tau_departure.csv'))
-tmp <- tmp[tmp$i %in% j,]
-tmp <- tmp[tmp$parameter_name =='mean',]
-sel <- match(j, tmp$i)
-tau_i <- tmp$parameter_value[sel]
-names(tau_i) <- tmp$i[sel]
+# OVERLAND ONLY (user decision, 2026-09-18): tau_i is the evidence-anchored
+# overland departure probability from est_overland_tau_prior() -- the SAME
+# object data-raw/make_priors_default.R centres the tau_i lognormal prior on.
+# Sourcing both from param_tau_departure_overland.csv makes config_default$tau_i
+# identical to the prior median for all 40 locations. Sourcing tau_i from the
+# additive blend instead put the config ~18% above its own prior median (up to
+# 2.2x for air-dominated NAM/GAB/BWA).
+# The gravity kernel (mobility_gamma/mobility_omega) DELIBERATELY stays on the
+# BLEND fit -- see the gravity block below. Do not "make them consistent".
+# Ordered fallbacks: overland -> additive blend -> air-only.
+.tau_ov <- file.path(PATHS$MODEL_INPUT, 'param_tau_departure_overland.csv')
+if (file.exists(.tau_ov)) {
+     message("config tau_i source: ", basename(.tau_ov))
+     tmp <- read.csv(.tau_ov, stringsAsFactors = FALSE)
+     tau_i <- tmp$tau_daily[match(j, tmp$iso_code)]
+     names(tau_i) <- j
+} else {
+     .tau_f <- file.path(PATHS$MODEL_INPUT, 'param_tau_departure_blend.csv')
+     if (!file.exists(.tau_f)) .tau_f <- file.path(PATHS$MODEL_INPUT, 'param_tau_departure.csv')
+     message("config tau_i source: ", basename(.tau_f))
+     tmp <- read.csv(.tau_f)
+     tmp <- tmp[tmp$i %in% j,]
+     tmp <- tmp[tmp$parameter_name =='mean',]
+     sel <- match(j, tmp$i)
+     tau_i <- tmp$parameter_value[sel]
+     names(tau_i) <- tmp$i[sel]
+}
+stopifnot(length(tau_i) == length(j), all(is.finite(tau_i)), all(tau_i > 0 & tau_i < 1))
 
 message("Gravity model parameters")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "mobility_lon_lat.csv"))
@@ -438,7 +460,10 @@ lat <- tmp$lat
 names(lat) <- tmp$iso3
 latitude <- lat[match(j, names(lat))]
 
-tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "mobility_gravity_params.csv"), row.names=1)
+.grav_f <- file.path(PATHS$MODEL_INPUT, "mobility_gravity_params_blend.csv")
+if (!file.exists(.grav_f)) .grav_f <- file.path(PATHS$MODEL_INPUT, "mobility_gravity_params.csv")
+message("config gravity source: ", basename(.grav_f))
+tmp <- read.csv(.grav_f, row.names=1)
 mobility_omega <- tmp['omega', 'mean']
 mobility_gamma <- tmp['gamma', 'mean']
 
