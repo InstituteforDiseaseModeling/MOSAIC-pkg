@@ -1,3 +1,7 @@
+# MOSAIC 0.99.8
+
+Merges #127's 0.93.2 fix. `calc_Reff.R` keeps the v0.96.0 mortality caveat, which never had the escaped percents.
+
 # MOSAIC 0.99.7
 
 ## Pre-merge review fixes (v0.99.7)
@@ -549,6 +553,10 @@ Farrington/Noufaily convention used by the `surveillance` package.
   guard is bumped accordingly, so resuming a pre-0.92.0 run stops with an
   actionable error rather than silently mixing two scoring rules.
 * New dependencies: `MASS`, `splines`.
+# MOSAIC 0.93.2
+
+- The `calc_Reff()` kernel caveat no longer hand-escapes its percent signs, which main's roxygen guard (`test-mobility-od.R`) rejects.
+
 # MOSAIC 0.93.1
 
 ## Post-merge review of the route-decomposed R_eff
