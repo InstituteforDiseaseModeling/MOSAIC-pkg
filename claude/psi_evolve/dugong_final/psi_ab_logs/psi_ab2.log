@@ -1,0 +1,149 @@
+[2026-09-28 13:58:51] pre-flight OK
+[2026-09-28 13:58:56] START 72 cells, 4-wide, 43 cores/cell
+  cell: prod:COD:2024-10-01
+  cell: prod:COD:2025-04-01
+  cell: prod:COD:2025-10-01
+  cell: prod:ETH:2024-10-01
+  cell: prod:ETH:2025-04-01
+  cell: prod:ETH:2025-10-01
+  cell: prod:MOZ:2024-10-01
+  cell: prod:MOZ:2025-04-01
+  cell: prod:MOZ:2025-10-01
+  cell: prod:NGA:2024-10-01
+  cell: prod:NGA:2025-04-01
+  cell: prod:NGA:2025-10-01
+  cell: nd:COD:2024-10-01
+  cell: nd:COD:2025-04-01
+  cell: nd:COD:2025-10-01
+  cell: nd:ETH:2024-10-01
+  cell: nd:ETH:2025-04-01
+  cell: nd:ETH:2025-10-01
+  cell: nd:MOZ:2024-10-01
+  cell: nd:MOZ:2025-04-01
+  cell: nd:MOZ:2025-10-01
+  cell: nd:NGA:2024-10-01
+  cell: nd:NGA:2025-04-01
+  cell: nd:NGA:2025-10-01
+  cell: nd_rep:COD:2024-10-01
+  cell: nd_rep:COD:2025-04-01
+  cell: nd_rep:COD:2025-10-01
+  cell: nd_rep:ETH:2024-10-01
+  cell: nd_rep:ETH:2025-04-01
+  cell: nd_rep:ETH:2025-10-01
+  cell: nd_rep:MOZ:2024-10-01
+  cell: nd_rep:MOZ:2025-04-01
+  cell: nd_rep:MOZ:2025-10-01
+  cell: nd_rep:NGA:2024-10-01
+  cell: nd_rep:NGA:2025-04-01
+  cell: nd_rep:NGA:2025-10-01
+  cell: p000:COD:2024-10-01
+  cell: p000:COD:2025-04-01
+  cell: p000:COD:2025-10-01
+  cell: p000:ETH:2024-10-01
+  cell: p000:ETH:2025-04-01
+  cell: p000:ETH:2025-10-01
+  cell: p000:MOZ:2024-10-01
+  cell: p000:MOZ:2025-04-01
+  cell: p000:MOZ:2025-10-01
+  cell: p000:NGA:2024-10-01
+  cell: p000:NGA:2025-04-01
+  cell: p000:NGA:2025-10-01
+  cell: p000r:COD:2024-10-01
+  cell: p000r:COD:2025-04-01
+  cell: p000r:COD:2025-10-01
+  cell: p000r:ETH:2024-10-01
+  cell: p000r:ETH:2025-04-01
+  cell: p000r:ETH:2025-10-01
+  cell: p000r:MOZ:2024-10-01
+  cell: p000r:MOZ:2025-04-01
+  cell: p000r:MOZ:2025-10-01
+  cell: p000r:NGA:2024-10-01
+  cell: p000r:NGA:2025-04-01
+  cell: p000r:NGA:2025-10-01
+  cell: n9:COD:2024-10-01
+  cell: n9:COD:2025-04-01
+  cell: n9:COD:2025-10-01
+  cell: n9:ETH:2024-10-01
+  cell: n9:ETH:2025-04-01
+  cell: n9:ETH:2025-10-01
+  cell: n9:MOZ:2024-10-01
+  cell: n9:MOZ:2025-04-01
+  cell: n9:MOZ:2025-10-01
+  cell: n9:NGA:2024-10-01
+  cell: n9:NGA:2025-04-01
+  cell: n9:NGA:2025-10-01
+[2026-09-28 13:58:56] launch prod / COD @ 2024-10-01
+[2026-09-28 13:58:56] launch prod / COD @ 2025-04-01
+[2026-09-28 13:58:56] launch prod / COD @ 2025-10-01
+[2026-09-28 13:58:56] launch prod / ETH @ 2024-10-01
+[2026-09-28 13:59:02] launch prod / ETH @ 2025-04-01
+[2026-09-28 13:59:02] launch prod / ETH @ 2025-10-01
+[2026-09-28 13:59:02] launch prod / MOZ @ 2024-10-01
+[2026-09-28 13:59:02] launch prod / MOZ @ 2025-04-01
+[2026-09-28 13:59:08] launch prod / MOZ @ 2025-10-01
+[2026-09-28 13:59:08] launch prod / NGA @ 2024-10-01
+[2026-09-28 13:59:08] launch prod / NGA @ 2025-04-01
+[2026-09-28 13:59:08] launch prod / NGA @ 2025-10-01
+[2026-09-28 13:59:14] launch nd / COD @ 2024-10-01
+[2026-09-28 13:59:14] launch nd / COD @ 2025-04-01
+[2026-09-28 13:59:14] launch nd / COD @ 2025-10-01
+[2026-09-28 13:59:14] launch nd / ETH @ 2024-10-01
+[2026-09-28 13:59:20] launch nd / ETH @ 2025-04-01
+[2026-09-28 13:59:20] launch nd / ETH @ 2025-10-01
+[2026-09-28 13:59:20] launch nd / MOZ @ 2024-10-01
+[2026-09-28 13:59:20] launch nd / MOZ @ 2025-04-01
+[2026-09-28 13:59:26] launch nd / MOZ @ 2025-10-01
+[2026-09-28 13:59:26] launch nd / NGA @ 2024-10-01
+[2026-09-28 13:59:26] launch nd / NGA @ 2025-04-01
+[2026-09-28 13:59:26] launch nd / NGA @ 2025-10-01
+[2026-09-28 13:59:32] launch nd_rep / COD @ 2024-10-01
+[2026-09-28 13:59:32] launch nd_rep / COD @ 2025-04-01
+[2026-09-28 13:59:32] launch nd_rep / COD @ 2025-10-01
+[2026-09-28 13:59:32] launch nd_rep / ETH @ 2024-10-01
+[2026-09-28 13:59:38] launch nd_rep / ETH @ 2025-04-01
+[2026-09-28 13:59:38] launch nd_rep / ETH @ 2025-10-01
+[2026-09-28 13:59:38] launch nd_rep / MOZ @ 2024-10-01
+[2026-09-28 13:59:39] launch nd_rep / MOZ @ 2025-04-01
+[2026-09-28 13:59:44] launch nd_rep / MOZ @ 2025-10-01
+[2026-09-28 13:59:44] launch nd_rep / NGA @ 2024-10-01
+[2026-09-28 13:59:44] launch nd_rep / NGA @ 2025-04-01
+[2026-09-28 13:59:45] launch nd_rep / NGA @ 2025-10-01
+[2026-09-28 13:59:50] launch p000 / COD @ 2024-10-01
+[2026-09-28 13:59:50] launch p000 / COD @ 2025-04-01
+[2026-09-28 13:59:51] launch p000 / COD @ 2025-10-01
+[2026-09-28 13:59:51] launch p000 / ETH @ 2024-10-01
+[2026-09-28 14:24:10] launch p000 / ETH @ 2025-04-01
+[2026-09-28 14:24:15] launch p000 / ETH @ 2025-10-01
+[2026-09-28 14:24:28] launch p000 / MOZ @ 2024-10-01
+[2026-09-28 14:24:35] launch p000 / MOZ @ 2025-04-01
+[2026-09-28 14:48:14] launch p000 / MOZ @ 2025-10-01
+[2026-09-28 14:48:16] launch p000 / NGA @ 2024-10-01
+[2026-09-28 14:48:20] launch p000 / NGA @ 2025-04-01
+[2026-09-28 14:48:26] launch p000 / NGA @ 2025-10-01
+[2026-09-28 15:12:07] launch p000r / COD @ 2024-10-01
+[2026-09-28 15:12:14] launch p000r / COD @ 2025-04-01
+[2026-09-28 15:12:28] launch p000r / COD @ 2025-10-01
+[2026-09-28 15:12:34] launch p000r / ETH @ 2024-10-01
+[2026-09-28 15:36:32] launch p000r / ETH @ 2025-04-01
+[2026-09-28 15:36:35] launch p000r / ETH @ 2025-10-01
+[2026-09-28 15:37:13] launch p000r / MOZ @ 2024-10-01
+[2026-09-28 15:37:27] launch p000r / MOZ @ 2025-04-01
+[2026-09-28 16:00:21] launch p000r / MOZ @ 2025-10-01
+[2026-09-28 16:00:37] launch p000r / NGA @ 2024-10-01
+[2026-09-28 16:00:49] launch p000r / NGA @ 2025-04-01
+[2026-09-28 16:01:10] launch p000r / NGA @ 2025-10-01
+[2026-09-28 16:24:12] launch n9 / COD @ 2024-10-01
+[2026-09-28 16:24:29] launch n9 / COD @ 2025-04-01
+[2026-09-28 16:24:43] launch n9 / COD @ 2025-10-01
+[2026-09-28 16:25:44] launch n9 / ETH @ 2024-10-01
+[2026-09-28 16:48:36] launch n9 / ETH @ 2025-04-01
+[2026-09-28 16:49:00] launch n9 / ETH @ 2025-10-01
+[2026-09-28 16:49:22] launch n9 / MOZ @ 2024-10-01
+[2026-09-28 16:49:40] launch n9 / MOZ @ 2025-04-01
+[2026-09-28 17:12:55] launch n9 / MOZ @ 2025-10-01
+[2026-09-28 17:12:59] launch n9 / NGA @ 2024-10-01
+[2026-09-28 17:13:00] launch n9 / NGA @ 2025-04-01
+[2026-09-28 17:13:17] launch n9 / NGA @ 2025-10-01
+[2026-09-28 17:37:22] all cells done.
+[2026-09-28 17:37:22] predictions.parquet present: 72 / 72
+NEXT: pull out/ to the laptop and run claude/psi_ab/score.R there.

@@ -1,0 +1,17 @@
+root_directory set to:
+/home/jgiles/MOSAIC
+Retrieve with getOption('root_directory')
+=============================================================
+psi_ab -- 3-arm psi trunk A/B screen
+=============================================================
+MOSAIC       : 0.90.5
+arms         : prod, nd, nd_rep, p000, p000r, n9
+units        : COD, ETH, MOZ, NGA
+cutoffs      : 2024-10-01, 2025-04-01, 2025-10-01  (IS history 6.75/7.25/7.75 yr)
+config       : 2018-01-01 -> 2027-02-04 (3321 ticks, 40 locations)
+calibration  : FIXED n_simulations=5000 x n_iterations=3 (exact CRN)
+grid         : 6 arms x 4 units x 3 cutoffs = 72 cells
+this process : arm=nd unit=MOZ cutoff=2025-04-01 cores=43
+out          : /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out
+psi caches verified: all arms resolve all cutoffs.
+[skip] nd / MOZ @ 2025-04-01 already complete

@@ -1,0 +1,13 @@
+confirmation read performed 2026-09-19 06:14:45.272112
+psi cache: /home/jgiles/psi_evolve/psi_cache_N8
+blocks: 2025-07-01, 2025-10-01, 2026-01-01
+weeks  1- 4 : blend 0.1045  persistence 0.1021  raw psi 0.1418  -> blend vs pers -2.3%  (n=154 cells)
+weeks  5- 8 : blend 0.1064  persistence 0.1156  raw psi 0.1445  -> blend vs pers +8.0%  (n=167 cells)
+weeks  9-13 : blend 0.1179  persistence 0.1322  raw psi 0.2042  -> blend vs pers +10.8%  (n=200 cells)
+  2025-07-01 : blend 0.1267  persistence 0.1421  -> +10.8%  (n=70 cells, 14 isos)
+  2025-10-01 : blend 0.1054  persistence 0.1520  -> +30.7%  (n=70 cells, 14 isos)
+  2026-01-01 : blend 0.1223  persistence 0.0970  -> -26.2%  (n=60 cells, 12 isos)
+
+=== paired sign test, weeks 9-13 (secondary 2) ===
+  blend better in 16 of 32 country-block units (ties 8), exact two-sided p = 1.0000
+  median paired MAE gain +0.0000

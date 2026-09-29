@@ -1,0 +1,77 @@
+[2026-09-28 10:13:06] pre-flight OK
+[2026-09-28 10:13:11] START 36 cells, 4-wide, 43 cores/cell
+  cell: prod:COD:2024-10-01
+  cell: prod:COD:2025-04-01
+  cell: prod:COD:2025-10-01
+  cell: prod:ETH:2024-10-01
+  cell: prod:ETH:2025-04-01
+  cell: prod:ETH:2025-10-01
+  cell: prod:MOZ:2024-10-01
+  cell: prod:MOZ:2025-04-01
+  cell: prod:MOZ:2025-10-01
+  cell: prod:NGA:2024-10-01
+  cell: prod:NGA:2025-04-01
+  cell: prod:NGA:2025-10-01
+  cell: nd:COD:2024-10-01
+  cell: nd:COD:2025-04-01
+  cell: nd:COD:2025-10-01
+  cell: nd:ETH:2024-10-01
+  cell: nd:ETH:2025-04-01
+  cell: nd:ETH:2025-10-01
+  cell: nd:MOZ:2024-10-01
+  cell: nd:MOZ:2025-04-01
+  cell: nd:MOZ:2025-10-01
+  cell: nd:NGA:2024-10-01
+  cell: nd:NGA:2025-04-01
+  cell: nd:NGA:2025-10-01
+  cell: nd_rep:COD:2024-10-01
+  cell: nd_rep:COD:2025-04-01
+  cell: nd_rep:COD:2025-10-01
+  cell: nd_rep:ETH:2024-10-01
+  cell: nd_rep:ETH:2025-04-01
+  cell: nd_rep:ETH:2025-10-01
+  cell: nd_rep:MOZ:2024-10-01
+  cell: nd_rep:MOZ:2025-04-01
+  cell: nd_rep:MOZ:2025-10-01
+  cell: nd_rep:NGA:2024-10-01
+  cell: nd_rep:NGA:2025-04-01
+  cell: nd_rep:NGA:2025-10-01
+[2026-09-28 10:13:11] launch prod / COD @ 2024-10-01
+[2026-09-28 10:13:11] launch prod / COD @ 2025-04-01
+[2026-09-28 10:13:11] launch prod / COD @ 2025-10-01
+[2026-09-28 10:13:11] launch prod / ETH @ 2024-10-01
+[2026-09-28 10:37:27] launch prod / ETH @ 2025-04-01
+[2026-09-28 10:37:29] launch prod / ETH @ 2025-10-01
+[2026-09-28 10:37:52] launch prod / MOZ @ 2024-10-01
+[2026-09-28 10:37:57] launch prod / MOZ @ 2025-04-01
+[2026-09-28 11:01:22] launch prod / MOZ @ 2025-10-01
+[2026-09-28 11:01:28] launch prod / NGA @ 2024-10-01
+[2026-09-28 11:01:29] launch prod / NGA @ 2025-04-01
+[2026-09-28 11:01:40] launch prod / NGA @ 2025-10-01
+[2026-09-28 11:02:14] launch nd / COD @ 2024-10-01
+[2026-09-28 11:25:14] launch nd / COD @ 2025-04-01
+[2026-09-28 11:25:19] launch nd / COD @ 2025-10-01
+[2026-09-28 11:25:38] launch nd / ETH @ 2024-10-01
+[2026-09-28 11:26:33] launch nd / ETH @ 2025-04-01
+[2026-09-28 11:49:27] launch nd / ETH @ 2025-10-01
+[2026-09-28 11:49:31] launch nd / MOZ @ 2024-10-01
+[2026-09-28 11:49:54] launch nd / MOZ @ 2025-04-01
+[2026-09-28 11:50:06] launch nd / MOZ @ 2025-10-01
+[2026-09-28 12:12:58] launch nd / NGA @ 2024-10-01
+[2026-09-28 12:13:13] launch nd / NGA @ 2025-04-01
+[2026-09-28 12:13:23] launch nd / NGA @ 2025-10-01
+[2026-09-28 12:13:40] launch nd_rep / COD @ 2024-10-01
+[2026-09-28 12:37:21] launch nd_rep / COD @ 2025-04-01
+[2026-09-28 12:37:36] launch nd_rep / COD @ 2025-10-01
+[2026-09-28 12:37:40] launch nd_rep / ETH @ 2024-10-01
+[2026-09-28 12:38:13] launch nd_rep / ETH @ 2025-04-01
+[2026-09-28 13:01:40] launch nd_rep / ETH @ 2025-10-01
+[2026-09-28 13:01:49] launch nd_rep / MOZ @ 2024-10-01
+[2026-09-28 13:01:59] launch nd_rep / MOZ @ 2025-04-01
+[2026-09-28 13:02:42] launch nd_rep / MOZ @ 2025-10-01
+[2026-09-28 13:25:21] launch nd_rep / NGA @ 2024-10-01
+[2026-09-28 13:25:38] launch nd_rep / NGA @ 2025-04-01
+[2026-09-28 13:25:41] launch nd_rep / NGA @ 2025-10-01
+[2026-09-28 13:46:31] all cells done.
+[2026-09-28 13:46:31] predictions.parquet present: 36 / 36
+NEXT: pull out/ to the laptop and run claude/psi_ab/score.R there.

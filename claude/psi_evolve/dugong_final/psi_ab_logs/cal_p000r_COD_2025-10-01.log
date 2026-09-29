@@ -1,0 +1,168 @@
+root_directory set to:
+/home/jgiles/MOSAIC
+Retrieve with getOption('root_directory')
+=============================================================
+psi_ab -- 3-arm psi trunk A/B screen
+=============================================================
+MOSAIC       : 0.90.5
+arms         : prod, nd, nd_rep, p000, p000r, n9
+units        : COD, ETH, MOZ, NGA
+cutoffs      : 2024-10-01, 2025-04-01, 2025-10-01  (IS history 6.75/7.25/7.75 yr)
+config       : 2018-01-01 -> 2027-02-04 (3321 ticks, 40 locations)
+calibration  : FIXED n_simulations=5000 x n_iterations=3 (exact CRN)
+grid         : 6 arms x 4 units x 3 cutoffs = 72 cells
+this process : arm=p000r unit=COD cutoff=2025-10-01 cores=43
+out          : /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out
+psi caches verified: all arms resolve all cutoffs.
+[2026-09-28 15:12:36] START p000r / COD @ 2025-10-01
+[1/1] cutoff_2025-10-01  (IS 2018-01-01 -> 2025-10-01 | OOS to 2026-01-15)
+[2026-09-28T15:12:39-0700] Using user-provided config for: COD
+[2026-09-28T15:12:39-0700] Using user-provided priors
+
+── Python Environment Status ───────────────────────────────────────────────────
+ℹ No Python environment is currently attached to this R session.
+✔ MOSAIC Python environment exists at /home/jgiles/.virtualenvs/r-mosaic
+To use it: `MOSAIC::use_mosaic_env()`
+[2026-09-28T15:12:39-0700] Starting MOSAIC calibration
+root_directory set to:
+/home/jgiles/MOSAIC
+Retrieve with getOption('root_directory')
+[2026-09-28T15:12:39-0700] [LOG_DESTINATION] stdout=true file=/home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01/run.log
+[2026-09-28T15:12:39-0700]   Saved 1_inputs/environment.json
+[2026-09-28T15:12:39-0700] Writing setup files...
+[2026-09-28T15:12:39-0700]   Saved control.json
+[2026-09-28T15:12:39-0700]   Saved priors.json
+[2026-09-28T15:12:39-0700]   Saved config.json
+[2026-09-28T15:12:39-0700] Parameters: 44 sampled (of 50 estimable, 60 total) | Locations: COD
+[2026-09-28T15:12:39-0700] Scored window: cases from step 31, deaths from step 31 (of 3322) -- unscored head omitted
+[2026-09-28T15:12:39-0700] Connection budget OK: 43 workers requested, 509 of 512 connections free
+Creating PSOCK cluster with 43 cores...
+Cluster ready (43 workers)
+[2026-09-28T15:12:54-0700] Created PSOCK cluster with 43 cores
+[2026-09-28T15:12:55-0700] Starting simulation (mode: fixed)
+[2026-09-28T15:12:55-0700] [FIXED MODE] Running exactly 5000 simulations
+[2026-09-28T15:12:55-0700] Running 5000 simulations (1-5000)
+  |                                                                              |                                                                      |   0%  |                                                                              |                                                                      |   1%  |                                                                              |█                                                                     |   1%  |                                                                              |█                                                                     |   2%  |                                                                              |██                                                                    |   2%  |                                                                              |██                                                                    |   3%  |                                                                              |███                                                                   |   4%  |                                                                              |███                                                                   |   5%  |                                                                              |████                                                                  |   5%  |                                                                              |████                                                                  |   6%  |                                                                              |█████                                                                 |   7%  |                                                                              |█████                                                                 |   8%  |                                                                              |██████                                                                |   8%  |                                                                              |██████                                                                |   9%  |                                                                              |███████                                                               |  10%  |                                                                              |████████                                                              |  11%  |                                                                              |████████                                                              |  12%  |                                                                              |█████████                                                             |  13%  |                                                                              |██████████                                                            |  14%  |                                                                              |███████████                                                           |  15%  |                                                                              |███████████                                                           |  16%  |                                                                              |████████████                                                          |  17%  |                                                                              |█████████████                                                         |  18%  |                                                                              |█████████████                                                         |  19%  |                                                                              |██████████████                                                        |  20%  |                                                                              |███████████████                                                       |  21%  |                                                                              |███████████████                                                       |  22%  |                                                                              |████████████████                                                      |  23%  |                                                                              |█████████████████                                                     |  24%  |                                                                              |█████████████████                                                     |  25%  |                                                                              |██████████████████                                                    |  25%  |                                                                              |██████████████████                                                    |  26%  |                                                                              |███████████████████                                                   |  27%  |                                                                              |███████████████████                                                   |  28%  |                                                                              |████████████████████                                                  |  28%  |                                                                              |████████████████████                                                  |  29%  |                                                                              |█████████████████████                                                 |  29%  |                                                                              |█████████████████████                                                 |  30%  |                                                                              |█████████████████████                                                 |  31%  |                                                                              |██████████████████████                                                |  31%  |                                                                              |██████████████████████                                                |  32%  |                                                                              |███████████████████████                                               |  32%  |                                                                              |███████████████████████                                               |  33%  |                                                                              |███████████████████████                                               |  34%  |                                                                              |████████████████████████                                              |  34%  |                                                                              |████████████████████████                                              |  35%  |                                                                              |█████████████████████████                                             |  35%  |                                                                              |█████████████████████████                                             |  36%  |                                                                              |██████████████████████████                                            |  37%  |                                                                              |██████████████████████████                                            |  38%  |                                                                              |███████████████████████████                                           |  38%  |                                                                              |███████████████████████████                                           |  39%  |                                                                              |████████████████████████████                                          |  39%  |                                                                              |████████████████████████████                                          |  40%  |                                                                              |█████████████████████████████                                         |  41%  |                                                                              |█████████████████████████████                                         |  42%  |                                                                              |██████████████████████████████                                        |  42%  |                                                                              |██████████████████████████████                                        |  43%  |                                                                              |███████████████████████████████                                       |  44%  |                                                                              |███████████████████████████████                                       |  45%  |                                                                              |████████████████████████████████                                      |  45%  |                                                                              |████████████████████████████████                                      |  46%  |                                                                              |█████████████████████████████████                                     |  47%  |                                                                              |██████████████████████████████████                                    |  48%  |                                                                              |██████████████████████████████████                                    |  49%  |                                                                              |███████████████████████████████████                                   |  50%  |                                                                              |████████████████████████████████████                                  |  51%  |                                                                              |████████████████████████████████████                                  |  52%  |                                                                              |█████████████████████████████████████                                 |  53%  |                                                                              |██████████████████████████████████████                                |  54%  |                                                                              |██████████████████████████████████████                                |  55%  |                                                                              |███████████████████████████████████████                               |  55%  |                                                                              |███████████████████████████████████████                               |  56%  |                                                                              |████████████████████████████████████████                              |  57%  |                                                                              |████████████████████████████████████████                              |  58%  |                                                                              |█████████████████████████████████████████                             |  58%  |                                                                              |█████████████████████████████████████████                             |  59%  |                                                                              |██████████████████████████████████████████                            |  60%  |                                                                              |██████████████████████████████████████████                            |  61%  |                                                                              |███████████████████████████████████████████                           |  61%  |                                                                              |███████████████████████████████████████████                           |  62%  |                                                                              |████████████████████████████████████████████                          |  62%  |                                                                              |████████████████████████████████████████████                          |  63%  |                                                                              |█████████████████████████████████████████████                         |  64%  |                                                                              |█████████████████████████████████████████████                         |  65%  |                                                                              |██████████████████████████████████████████████                        |  65%  |                                                                              |██████████████████████████████████████████████                        |  66%  |                                                                              |███████████████████████████████████████████████                       |  66%  |                                                                              |███████████████████████████████████████████████                       |  67%  |                                                                              |███████████████████████████████████████████████                       |  68%  |                                                                              |████████████████████████████████████████████████                      |  68%  |                                                                              |████████████████████████████████████████████████                      |  69%  |                                                                              |█████████████████████████████████████████████████                     |  69%  |                                                                              |█████████████████████████████████████████████████                     |  70%  |                                                                              |█████████████████████████████████████████████████                     |  71%  |                                                                              |██████████████████████████████████████████████████                    |  71%  |                                                                              |██████████████████████████████████████████████████                    |  72%  |                                                                              |███████████████████████████████████████████████████                   |  72%  |                                                                              |███████████████████████████████████████████████████                   |  73%  |                                                                              |████████████████████████████████████████████████████                  |  74%  |                                                                              |████████████████████████████████████████████████████                  |  75%  |                                                                              |█████████████████████████████████████████████████████                 |  75%  |                                                                              |█████████████████████████████████████████████████████                 |  76%  |                                                                              |██████████████████████████████████████████████████████                |  77%  |                                                                              |███████████████████████████████████████████████████████               |  78%  |                                                                              |███████████████████████████████████████████████████████               |  79%  |                                                                              |████████████████████████████████████████████████████████              |  80%  |                                                                              |█████████████████████████████████████████████████████████             |  81%  |                                                                              |█████████████████████████████████████████████████████████             |  82%  |                                                                              |██████████████████████████████████████████████████████████            |  83%  |                                                                              |███████████████████████████████████████████████████████████           |  84%  |                                                                              |███████████████████████████████████████████████████████████           |  85%  |                                                                              |████████████████████████████████████████████████████████████          |  86%  |                                                                              |█████████████████████████████████████████████████████████████         |  87%  |                                                                              |██████████████████████████████████████████████████████████████        |  88%  |                                                                              |██████████████████████████████████████████████████████████████        |  89%  |                                                                              |███████████████████████████████████████████████████████████████       |  90%  |                                                                              |████████████████████████████████████████████████████████████████      |  91%  |                                                                              |████████████████████████████████████████████████████████████████      |  92%  |                                                                              |█████████████████████████████████████████████████████████████████     |  92%  |                                                                              |█████████████████████████████████████████████████████████████████     |  93%  |                                                                              |██████████████████████████████████████████████████████████████████    |  94%  |                                                                              |██████████████████████████████████████████████████████████████████    |  95%  |                                                                              |███████████████████████████████████████████████████████████████████   |  95%  |                                                                              |███████████████████████████████████████████████████████████████████   |  96%  |                                                                              |████████████████████████████████████████████████████████████████████  |  97%  |                                                                              |████████████████████████████████████████████████████████████████████  |  98%  |                                                                              |█████████████████████████████████████████████████████████████████████ |  98%  |                                                                              |█████████████████████████████████████████████████████████████████████ |  99%  |                                                                              |██████████████████████████████████████████████████████████████████████|  99%  |                                                                              |██████████████████████████████████████████████████████████████████████| 100%
+[2026-09-28T15:26:17-0700] Fixed batch complete: 5000/5000 successful (100.0%) in 13.4 minutes
+[2026-09-28T15:26:17-0700] Combining simulation files
+[2026-09-28T15:26:17-0700] Loading 173 simulation files (6.4 MB on disk)
+[2026-09-28T15:26:17-0700] Method: streaming
+[2026-09-28T15:26:18-0700] Loaded 5000 rows × 65 columns in 0.3 seconds
+[2026-09-28T15:26:18-0700] Results in memory: 2.5 MB
+[2026-09-28T15:26:18-0700] Adding index columns to results matrix...
+[2026-09-28T15:26:18-0700]   Outlier detection (Tukey lower fence only, multiplier = 1.5):
+[2026-09-28T15:26:18-0700]     - Lower threshold: -5565810.6 | Outliers: 0 (0.0%)
+[2026-09-28T15:26:18-0700] Adding implied-CFR derived columns to samples...
+  Warning (COD): 5/5000 cfr_clinical_epidemic samples > 0.5 — biologically extreme, audit gamma_1 / mu posteriors
+  Added 4 implied-CFR columns (cfr_baseline, cfr_epidemic, cfr_clinical_baseline, cfr_clinical_epidemic) for 1 locations
+[2026-09-28T15:26:18-0700]   Cleaned up 173 individual simulation files
+[2026-09-28T15:26:18-0700]   Combined simulations saved: samples.parquet
+[2026-09-28T15:26:18-0700] Calculating parameter ESS
+[2026-09-28T15:26:18-0700] Saved /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01/2_calibration/diagnostics/parameter_ess.csv
+[2026-09-28T15:26:18-0700] Optimizing subset selection (testing up to 30 tiers with grid search)...
+[2026-09-28T15:26:18-0700]   Testing tier 'tier_1' (ESS_B=100, A=0.70, CVw=1.00)...
+[2026-09-28T15:26:18-0700]     ✓ Tier 'tier_1' converged at n=115 (2.3% of retained)
+[2026-09-28T15:26:18-0700]   Subset selection weights (scheme = saturated, effective range = 4.0):
+[2026-09-28T15:26:18-0700]     Actual delta AIC range: 9417.3
+[2026-09-28T15:26:18-0700]     Temperature: 0.5000
+[2026-09-28T15:26:18-0700]   Exact IS diagnostics (untruncated -- not used for the gate):
+[2026-09-28T15:26:18-0700]     ESS_IS (best subset): 1.00 of 115 draws
+[2026-09-28T15:26:18-0700]     ESS_IS (all draws):   1.00 of 5000 draws
+[2026-09-28T15:26:18-0700]     Pareto k-hat (all draws): 62.550 [unreliable: k-hat >= 0.7, IS estimates have unbounded variance]
+[2026-09-28T15:26:18-0700] [WARN] Exact importance-sampling ESS is 1.00: the untruncated posterior is effectively a point mass. ESS_B = 107.5 above is computed on truncated weights and does NOT contradict this.
+[2026-09-28T15:26:18-0700] 
+Final subset (tier_1): 2.3% (n=115) | ESS_B=107.5, A=0.986, CVw=0.562, T=0.5000
+[2026-09-28T15:26:18-0700] 
+✓ Post-hoc optimization succeeded with tier_1 criteria
+[2026-09-28T15:26:18-0700]   → Using 2.3% of simulations (115 total)
+[2026-09-28T15:26:18-0700] Calculating weights for 5000 simulations...
+[2026-09-28T15:26:18-0700]   Computing adaptive Gibbs weights (all valid: n=5000)...
+[2026-09-28T15:26:18-0700]     ESS (all): 3084.1
+[2026-09-28T15:26:18-0700]   Computing Akaike weights (retained subset: n=5000)...
+[2026-09-28T15:26:18-0700]   Computing Akaike weights (best subset: n=115)...
+[2026-09-28T15:26:18-0700]     ESS (best): 107.5
+[2026-09-28T15:26:18-0700] Weight calculation complete
+[2026-09-28T15:26:19-0700] Saved /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01/2_calibration/diagnostics/subset_selection_summary.csv
+[2026-09-28T15:26:19-0700] Saved /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01/2_calibration/samples.parquet
+[2026-09-28T15:26:19-0700] Calculating convergence diagnostics
+========================================
+Convergence Diagnostics Summary
+========================================
+
+Counts:
+  Total simulations: 5,000
+  Successful: 5,000 (100%)
+  Retained: 5,000 (100%)
+  Best subset: 115 (2.3%)
+
+Subset Selection:
+  Convergence tier: tier_1
+  Percentile used: 2.3% (target <= 20%) - PASS
+
+Best Subset Metrics:
+  Size (B) - Lower: 115 (target >= 100) - PASS
+  Size (B) - Upper: 115 (target <= 1000 = 20%) - PASS
+  ESS_B: 107.5 (target >= 100) - PASS
+  A_B: 0.986 (target >= 0.7) - PASS
+  CVw_B: 0.562 (target <= 1) - PASS
+
+Parameter Coverage:
+  Parameters meeting ESS target: 17/44 (38.6%)
+  Target: >= 95% - FAIL
+
+----------------------------------------
+Overall Status: FAIL
+----------------------------------------
+[2026-09-28T15:26:19-0700] Saved /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01/2_calibration/diagnostics/convergence_results.parquet
+[2026-09-28T15:26:19-0700] Saved /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01/2_calibration/diagnostics/convergence_diagnostics.json
+[2026-09-28T15:26:19-0700] Ensemble central tendency: cases=median, deaths=median
+[2026-09-28T15:26:19-0700] Computing weighted posterior ensemble (115 param sets x 50 stochastic)...
+[2026-09-28T15:34:43-0700] Saved 2_calibration/ensemble_candidate.rds
+[2026-09-28T15:34:43-0700] Saved 2_calibration/spatial_hazard_ensemble.rds
+[2026-09-28T15:34:43-0700] Saved 2_calibration/coupling_ensemble.rds
+[2026-09-28T15:34:43-0700] Saved 2_calibration/pi_ij_ensemble.rds
+[2026-09-28T15:34:43-0700] Running post-ensemble subset optimization...
+[2026-09-28T15:35:55-0700] Subset optimization (wis): tier 115 -> optimized 113 (score -1.1444 -> -1.1399)
+[2026-09-28T15:35:55-0700]   _opt columns written to samples.parquet (113 sims selected)
+[2026-09-28T15:35:55-0700] Saved 2_calibration/ensemble_optimized.rds
+[2026-09-28T15:35:55-0700] Saved 2_calibration/subset_opt.rds
+[2026-09-28T15:35:55-0700] Saved 3_results/figures/diagnostics/optimization_diagnostics.csv
+[2026-09-28T15:35:55-0700]   Convergence metrics on the subset ACTUALLY USED (reported, not gated):
+[2026-09-28T15:35:55-0700]     ESS_B(used, n=113) = 98.71   vs   ESS_B(scored tier, n=115) = 107.48
+[2026-09-28T15:35:55-0700]     A(used) = 0.9714 | CVw(used) = 0.5500 | exact IS ESS(used) = 1.00
+[2026-09-28T15:35:55-0700] [WARN] The gate PASSED on the tier subset (ESS_B = 107.48 >= 100) but the subset the posterior actually uses has ESS_B = 98.71, below the same target. The convergence verdict describes draws this run does not use.
+[2026-09-28T15:36:03-0700] Medoid: param set 1 of 113 (seed=2417, MAE=0.1035)
+[2026-09-28T15:36:03-0700] Active subset source: optimized (is_best_subset_opt / weight_best_opt)
+[2026-09-28T15:36:03-0700] Calculating posterior quantiles
+[2026-09-28T15:36:03-0700] Saved /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01/2_calibration/posterior/posterior_quantiles.csv
+[2026-09-28T15:36:03-0700] Calculating posterior distributions
+  Warning: Mode outside CI for zeta_ratio (mode=4e-04, CI=[0.0153,2624657.254]), using median instead
+  Warning: Mode outside CI for zeta_2 (mode=30893.747, CI=[230313.5506,26971744394293.9]), using median instead
+[2026-09-28T15:36:03-0700] Saved /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01/2_calibration/posterior/posteriors.json
+Registered S3 method overwritten by 'sensitivity':
+  method    from 
+  print.src dplyr
+[2026-09-28T15:36:04-0700] Running posterior predictive checks
+[2026-09-28T15:36:04-0700] Saved /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01/2_calibration/best_model/config_medoid.json
+[2026-09-28T15:36:04-0700] Building medoid model stochastic ensemble (100 reruns, source=local-parallel)...
+[2026-09-28T15:36:23-0700] Saved 2_calibration/medoid_ensemble.rds
+[2026-09-28T15:36:23-0700] Medoid model R² (1 params x 100 stoch): cases = 0.6350 (bias=1.15), deaths = 0.1842 (bias=2.45)
+[2026-09-28T15:36:23-0700] Ensemble R² (113 params x 50 stoch, source=optimized): cases = 0.6636 (bias=1.09), deaths = 0.2313 (bias=2.34)
+[2026-09-28T15:36:24-0700] Implied CFR (COD): predicted = 3.820% [1.740%, 9.676%]; observed = 1.760%  (members=5650)
+[2026-09-28T15:36:24-0700] Saved 3_results/figures/diagnostics/model_fit_windows.csv
+[2026-09-28T15:36:24-0700] Windowed fit: R2_cases [full=0.664, last_30obs=0.006] | Bias [full=1.09, last_30obs=1.00]
+[2026-09-28T15:36:24-0700] Calibration complete: 1 batches, 5000 simulations, 23.49 min
+[2026-09-28T15:36:24-0700] Writing parameter estimates...
+[2026-09-28T15:36:24-0700]   Saved 3_results/posterior/parameter_estimates.csv
+[2026-09-28T15:36:24-0700] Writing summary...
+[2026-09-28T15:36:24-0700]   Saved 3_results/summary.json
+[2026-09-28T15:36:24-0700] === Run Summary ===
+[2026-09-28T15:36:24-0700]   Location: COD (2018-01-01 to 2027-02-04)
+[2026-09-28T15:36:24-0700]   Converged: NO
+[2026-09-28T15:36:24-0700]   R2 ensemble:   cases = 0.6636 (bias=1.09) | deaths = 0.2313 (bias=2.34)
+[2026-09-28T15:36:24-0700]   ESS: 17/44 params (39%) above target 500 (min: 50.3, median: 474.2)
+[2026-09-28T15:36:24-0700]   Sims: 5,000 total, 5,000 retained, 113 best subset
+[2026-09-28T15:36:24-0700] ===================
+[2026-09-28T15:36:24-0700] [RUN_SUMMARY] status=completed_unconverged converged=NO outputs_ok=YES runtime_min=23.49 r2_cases_ensemble=0.6636 r2_deaths_ensemble=0.2313 sims_total=5000 sims_retained=5000 sims_best_subset=113 sims_best_subset_tier=115 ess_pct_above_target=38.6 resumed=NO dir_output=/home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01/runs/cutoff_2025-10-01
+Done: 1/1 cutoffs succeeded. Artifact: /home/jgiles/MOSAIC/MOSAIC-pkg/claude/psi_ab/out/per_arm/p000r/per_unit/COD/cutoff_2025-10-01
+[2026-09-28 15:37:27] DONE  p000r / COD @ 2025-10-01  (24.9 min)
