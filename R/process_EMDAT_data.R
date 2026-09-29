@@ -75,7 +75,7 @@
 #' precipitation/anomaly covariates.
 #'
 #' @importFrom readxl read_excel
-#' @importFrom utils write.csv
+#' @importFrom utils write.csv read.csv
 #' @importFrom glue glue
 #' @importFrom lubridate floor_date ceiling_date
 #' @export
@@ -90,31 +90,54 @@ process_EMDAT_data <- function(PATHS) {
           stop("Raw EM-DAT directory not found: ", PATHS$DATA_EMDAT_RAW)
      }
 
-     # Locate the newest public extract
+     # Locate the newest public extract. Two shapes are accepted and mixed
+     # freely in the same directory:
+     #   *.xlsx -- a manual portal export (sheet "EM-DAT Data")
+     #   *.csv  -- an API pull written by download_EMDAT_data()
      candidates <- list.files(
           PATHS$DATA_EMDAT_RAW,
-          pattern = "^public_emdat_.*\\.xlsx$",
+          pattern = "^public_emdat_.*\\.(xlsx|csv)$",
           full.names = TRUE,
           recursive = FALSE,
           ignore.case = TRUE
      )
      if (length(candidates) == 0) {
-          stop("No 'public_emdat_*.xlsx' files found in: ", PATHS$DATA_EMDAT_RAW)
+          stop("No 'public_emdat_*.xlsx' or 'public_emdat_*.csv' files found in: ",
+               PATHS$DATA_EMDAT_RAW,
+               "\n  Fetch one with download_EMDAT_data(PATHS) (needs EMDAT_API_KEY),",
+               "\n  or download a portal extract manually -- see raw/EMDAT/README.md.")
      }
      # Prefer the filename-encoded request date; fall back to mtime
-     fname_dates <- regmatches(
-          candidates,
-          regexpr("[0-9]{4}-[0-9]{2}-[0-9]{2}", candidates)
-     )
-     have_date <- nchar(fname_dates) == 10
-     order_keys <- ifelse(have_date,
-                          as.character(fname_dates),
-                          format(file.info(candidates)$mtime, "%Y-%m-%d"))
-     src_file <- candidates[order(order_keys, decreasing = TRUE)][1]
+     # NB regmatches() returns ONLY matching elements, so building the key
+     # from it directly yields a vector shorter than `candidates` and the
+     # resulting index is a wrong-length permutation -- a dateless file could
+     # win. Match on basename (not the full path, which may contain a date)
+     # and keep the vector aligned.
+     src_file <- .rank_raw_candidates(candidates)[1L]
      message("  Reading: ", basename(src_file))
 
-     d_all <- readxl::read_excel(src_file, sheet = "EM-DAT Data")
+     d_all <- if (grepl("\\.csv$", src_file, ignore.case = TRUE)) {
+          utils::read.csv(src_file, stringsAsFactors = FALSE, check.names = FALSE)
+     } else {
+          readxl::read_excel(src_file, sheet = "EM-DAT Data")
+     }
      message(glue::glue("  {nrow(d_all)} events in extract"))
+
+     # Fail loudly on a schema mismatch rather than silently emitting an empty
+     # panel: a renamed or missing column would otherwise sail through the
+     # filters below and produce a valid-looking all-zero series.
+     .emdat_required <- c("ISO", "Disaster Type", "Disaster Subtype",
+                          "Start Year", "Start Month", "Start Day",
+                          "End Year", "End Month", "End Day",
+                          "Total Affected", "Total Deaths")
+     .emdat_missing <- setdiff(.emdat_required, names(d_all))
+     if (length(.emdat_missing)) {
+          stop("EM-DAT extract is missing required column(s): ",
+               paste(.emdat_missing, collapse = ", "),
+               "\n  Source: ", basename(src_file),
+               "\n  If this came from download_EMDAT_data(), the API field mapping",
+               "\n  may need updating -- see ?download_EMDAT_data.", call. = FALSE)
+     }
 
      # MOSAIC AFRO country filter (package data)
      iso_keep <- get("iso_codes_mosaic", envir = asNamespace("MOSAIC"))
