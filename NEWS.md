@@ -1,3 +1,14 @@
+# MOSAIC 0.99.3
+
+## The human-R recovery test pools seeds (v0.99.3)
+
+`test-reproductive_numbers.R` compared one realization's median R_hum ratio with
+a 5% tolerance. That ratio scatters by about +/-5% seed to seed (0.91-1.08 at
+the epidemic fixture), and the merged engine's fatal-onset draws change the
+realization, so seed 3 fell outside it (0.909). The check now pools 8 seeds
+(median ratio 0.98). The route kernel ignores the fatal onsets that never enter
+Isym; at this config (p_fatal 3.3%) that moves the ratio by about -0.5%.
+
 # MOSAIC 0.99.2
 
 ## The CFR v2.1 line merges into main (v0.99.2)
