@@ -402,9 +402,9 @@
     if (!is.null(model)) {
       likelihood <- tryCatch({
         obs_cases <- params_sim$reported_cases
-        est_cases <- model$results$reported_cases  # v0.11.1: reported_cases = Isym*rho/chi (comparable to surveillance data)
+        est_cases <- model$results$reported_cases    # rho/chi-thinned onsets, the surveillance scale
         obs_deaths <- params_sim$reported_deaths
-        est_deaths <- model$results$reported_deaths  # v0.13.0: reported_deaths = round(disease_deaths * rho_deaths) (comparable to surveillance data)
+        est_deaths <- model$results$reported_deaths  # engine deaths at the PRIOR mu_jt; the deaths core below integrates the CFR out
 
         if (!is.null(obs_cases) && !is.null(est_cases) &&
             !is.null(obs_deaths) && !is.null(est_deaths)) {
@@ -425,9 +425,14 @@
 
           # Deaths core: the reported CFR integrated out of this path. Computed on
           # the full (unsliced) results; the resolver applied the same slice.
+          # Skipped (zeros) when deaths carry no weight.
           .ll_d_core <- if (!is.null(likelihood_settings$.deaths_integration)) {
-            .mosaic_deaths_ll_integrated(likelihood_settings$.deaths_integration,
-                                         model$results, params_sim)$ll
+            if (isTRUE(likelihood_settings$weight_deaths == 0)) {
+              rep(0, likelihood_settings$.deaths_integration$setup$nL)
+            } else {
+              .mosaic_deaths_ll_integrated(likelihood_settings$.deaths_integration,
+                                           model$results, params_sim)$ll
+            }
           } else NULL
 
           calc_model_likelihood(
@@ -2858,24 +2863,10 @@ run_MOSAIC <- function(config,
         NULL
       }
     )
-    if (!is.null(config_medoid)) {
-      # The reported CFR is integrated out, not sampled, so the sampled config
-      # still carries the prior mu_jt. Shift it to the run's posterior CFR so a
-      # re-simulation of config_medoid.json (rolling-CV projections, scenarios)
-      # draws deaths at the calibrated level rather than the prior's.
-      if (!is.null(cfr_posterior_run)) {
-        config_medoid <- tryCatch(.mosaic_apply_cfr_posterior(config_medoid, cfr_posterior_run),
-          error = function(e) {
-            log_warn("medoid config keeps the prior mu_jt: %s", conditionMessage(e))
-            config_medoid
-          })
-      }
-      config_medoid_file <- file.path(dirs$cal_best_model, "config_medoid.json")
-      jsonlite::write_json(config_medoid, config_medoid_file,
-                           pretty = TRUE, auto_unbox = TRUE, digits = NA)
-      log_msg("Saved %s", config_medoid_file)
-    }
   }
+  # The medoid's own posterior reported CFR, from its stochastic ensemble below.
+  # config_medoid.json is written after that ensemble, so it can carry it.
+  medoid_cfr_posterior <- NULL
 
   # ---------------------------------------------------------------------------
   # Medoid stochastic ensemble
@@ -2926,6 +2917,7 @@ run_MOSAIC <- function(config,
       )
 
       if (!is.null(medoid_ensemble)) {
+        medoid_cfr_posterior <- medoid_ensemble$cfr_posterior
         # Persist the medoid ensemble object (Phase 1a / G3) unconditionally so
         # render_MOSAIC_figures() can reconstruct the medoid prediction plot
         # from disk without re-simulating (invariant P5). The posterior ensemble
@@ -2981,6 +2973,14 @@ run_MOSAIC <- function(config,
     log_warn("medoid model block failed: %s", e$message)
   })
 
+  # config_medoid.json, carrying the medoid's own posterior reported CFR
+  # (.mosaic_write_config_medoid()).
+  if (!is.null(config_medoid)) {
+    config_medoid <- .mosaic_write_config_medoid(
+      config_medoid, medoid_cfr_posterior, cfr_posterior_run,
+      file.path(dirs$cal_best_model, "config_medoid.json"), log_msg, log_warn)
+  }
+
   # ===========================================================================
   # ENSEMBLE METRICS, WINDOWED FIT, AND PREDICTIVE PLOTS
   # ===========================================================================
@@ -3034,9 +3034,9 @@ run_MOSAIC <- function(config,
     # Period-weighted implied CFR per location (posterior distribution from
     # ensemble members: sum simulated reported_deaths / sum simulated
     # reported_cases over the calibration window, per (param_set, stoch)).
-    # Surfaces in summary.json:cfr_implied alongside the algebraic
-    # cfr_baseline_<iso>/cfr_epidemic_<iso> derived parameter posteriors
-    # in 2_calibration/posterior/posteriors.json.
+    # Surfaces in summary.json:cfr_implied, alongside the posterior reported CFR
+    # by location and year in 3_results/posterior/cfr_posterior.csv (the
+    # calibrated mu_jt, which these realized period CFRs approach at epidemic PPV).
     cfr_implied <- tryCatch(
          .mosaic_calc_cfr_period_implied(
               cases_array     = ensemble$cases_array,
@@ -3044,7 +3044,10 @@ run_MOSAIC <- function(config,
               obs_cases       = ensemble$obs_cases,
               obs_deaths      = ensemble$obs_deaths,
               location_names  = ensemble$location_names %||% iso_code,
-              envelope_quantiles = c(0.025, 0.5, 0.975)
+              envelope_quantiles = c(0.025, 0.5, 0.975),
+              member_weights  = ensemble$parameter_weights,
+              score_idx       = max(ensemble$artifact_mask$score_idx_cases %||% 1L,
+                                    ensemble$artifact_mask$score_idx_deaths %||% 1L)
          ),
          error = function(e) {
               log_warn("implied-CFR computation failed: %s", e$message)
@@ -3665,8 +3668,12 @@ mosaic_control_defaults <- function(calibration = NULL,
     # fraction than cases: 13.6% of scored deaths cells predict zero against a
     # positive observation versus 1.7% of cases cells. 0.25 for deaths is the
     # swept value at which the deaths level at the likelihood optimum is unbiased.
-    eps_rel_cases = 0.02,            # Relative floor, cases channel
-    eps_rel_deaths = 0.25,           # Relative floor, deaths channel (swept; bias -> 1.0)
+    # Since v0.96.0 run_MOSAIC() scores deaths with the reported CFR integrated
+    # out (quasi-Poisson, weekly), so eps_rel_deaths applies only to a standalone
+    # calc_model_likelihood() call without ll_deaths_core; the integrated score
+    # uses eps_rel_cases as its weekly background, the same relative floor as cases.
+    eps_rel_cases = 0.02,            # Relative floor, cases channel (and the integrated deaths background)
+    eps_rel_deaths = 0.25,           # Relative floor, standalone NB deaths scoring only (not read by run_MOSAIC)
 
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in time steps)

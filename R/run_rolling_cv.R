@@ -212,18 +212,21 @@ run_rolling_cv <- function(PATHS,
                                                est_suitability_spec))
      }
 
-     dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
-     runs_dir <- file.path(dir_output, "runs")
-     dir.create(runs_dir, showWarnings = FALSE)
-
      # WHO annual data for the per-cutoff reported-CFR refit (one GAM per
      # distinct last data year, shared by the cutoffs in the same calendar year).
+     # Checked before anything is written: without it no cutoff can be built.
+     if (!requireNamespace("mgcv", quietly = TRUE))
+          stop("run_rolling_cv() refits the reported CFR per cutoff with mgcv; install it.")
      who_annual_path <- file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual.csv")
-     if (!file.exists(who_annual_path))
+     if (is.null(PATHS$DATA_WHO_ANNUAL) || !file.exists(who_annual_path))
           stop("WHO annual data not found at ", who_annual_path,
                "; run_rolling_cv() refits the reported CFR per cutoff from it.")
      who_annual <- utils::read.csv(who_annual_path, stringsAsFactors = FALSE)
      cfr_asof <- list()
+
+     dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+     runs_dir <- file.path(dir_output, "runs")
+     dir.create(runs_dir, showWarnings = FALSE)
 
      run_records  <- vector("list", length(cutoffs))
      pred_tables  <- vector("list", length(cutoffs))

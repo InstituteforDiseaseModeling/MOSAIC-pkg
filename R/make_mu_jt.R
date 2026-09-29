@@ -2,7 +2,7 @@
 #'
 #' @description
 #' Expands per-location, per-year reported case fatality ratios (from
-#' \code{\link{est_CFR_hierarchical}}) into the [location x day] matrix the
+#' \code{\link{est_CFR_hierarchical}}) into the \[location x day\] matrix the
 #' engine reads as \code{config$mu_jt}. Values are interpolated linearly on the
 #' logit scale between mid-year points, and held flat before the first and after
 #' the last estimated year.
@@ -22,6 +22,14 @@
 #' @details Days past the last estimated year carry that year's value forward,
 #'   so a simulation window that runs beyond the WHO annual record is filled
 #'   with the most recent estimate rather than an extrapolated trend.
+#'
+#'   The values are the GAM's logit-scale centres, i.e. the median of each year's
+#'   reported-CFR distribution, not its mean. That is the exact prior centre for
+#'   the integrated deaths likelihood (whose year deviations have mean zero on the
+#'   logit scale). A simulation that draws deaths directly at \code{mu_jt} -- a
+#'   scenario run or a prior-predictive check -- runs 5-10% below WHO-annual
+#'   deaths (2018-25); the logit-normal mean would over-predict, because annual
+#'   CFR is lower in high-case years.
 #'
 #' @seealso \code{\link{est_CFR_hierarchical}}
 #' @examples
@@ -103,8 +111,8 @@ make_mu_jt <- function(cfr_estimates, location_name, date_start, date_stop,
 #' @param location_name Character vector of ISO codes to include.
 #' @param sd_year Positive scalar: the GAM country-year SD (sigma).
 #' @param tau Scalar: the GAM between-country SD (reference only).
-#' @param sd_product Positive scalar: persistent WHO-annual vs weekly-surveillance
-#'   product mismatch on the logit scale.
+#' @param sd_product Positive scalar: residual error of the GAM centre against the
+#'   observed reported CFR in a calibration window, on the logit scale.
 #' @param year_min Integer: first year kept.
 #' @return A list with \code{description}, \code{sd_year}, \code{sd_product},
 #'   \code{tau} and \code{location} (one list of \code{year}, \code{logit_mean},
@@ -128,8 +136,10 @@ make_mu_jt <- function(cfr_estimates, location_name, date_start, date_stop,
                "Centres (logit_mean) are the est_CFR_hierarchical() WHO-annual GAM estimates that config$mu_jt ",
                "is built from; logit_se is the SE of the country-trend mean. The CFR is logit mu0_jt + a_j + delta_{j,y}, ",
                "with a_j ~ N(0, sd_product^2 + mean logit_se^2) and delta_{j,y} ~ N(0, sd_year^2). ",
-               "sd_year is the GAM country-year SD; sd_product (0.3) covers the WHO-annual vs weekly-surveillance ",
-               "product mismatch (sd(log ratio) 0.261 over 17 dense countries, 2023+). Not sampled."),
+               "sd_year is the GAM country-year SD; sd_product (0.3) is the residual error of the GAM centre against ",
+               "the observed reported CFR in the calibration window (sd(log) 0.19-0.32 over the 15-17 countries with ",
+               ">= 50 deaths, 2023-26; the WHO-annual and weekly surveillance products agree to sd(log) 0.03). ",
+               "Not sampled."),
           sd_year    = unname(sd_year),
           sd_product = sd_product,
           tau        = unname(tau),

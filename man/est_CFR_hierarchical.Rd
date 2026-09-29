@@ -49,7 +49,7 @@ A list of class \code{cfr_hierarchical_model}:
 \item \code{model}: the fitted \code{bam} object;
 \item \code{predictions}: one row per MOSAIC location and year with
 \code{cfr_estimate} (median), predictive \code{cfr_lower}/\code{cfr_upper}
-(95\\%), \code{cfr_se} (logit-scale estimation error), \code{logit_mean},
+(95\%), \code{cfr_se} (logit-scale estimation error), \code{logit_mean},
 \code{logit_sd} (predictive), \code{is_forecast}, \code{pooled} (location
 absent from the fit), \code{n_country_years};
 \item \code{country_effects}: the country random intercepts;
@@ -68,7 +68,7 @@ Fits a hierarchical binomial GAM to every country-year in the WHO annual
 cholera record and returns a per-country, per-year estimate of the reported
 case fatality ratio (CFR, reported deaths per reported suspected case). The
 estimates are the prior for the engine's time-varying \code{mu_jt}: they are
-expanded to a daily \link{location x day} matrix by \code{\link{make_mu_jt}} and
+expanded to a daily [location x day] matrix by \code{\link{make_mu_jt}} and
 carry the widths used by the calibration's integrated deaths likelihood.
 }
 \details{

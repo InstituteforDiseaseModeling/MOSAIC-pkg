@@ -177,8 +177,8 @@ source compartments.
 first doses proportionally from all listed compartments.
 \subsection{Infection dynamics}{
 
-Transition rates between SEIR compartments and the infection-fatality-ratio
-model parameters.
+Transition rates between SEIR compartments and the reported case fatality
+ratio \code{mu_jt}.
 }}
 
 \item{iota}{Incubation rate \code{E -> I} (numeric > 0, per day). Note this is
@@ -199,8 +199,11 @@ scalar. Values in [0, 1). The returned config always carries the full
 matrix. The engine converts it each tick to the probability that a new
 symptomatic onset is fatal, \code{mu_jt * rho / (rho_deaths * chi_epidemic)},
 so reported deaths over reported cases equal \code{mu_jt} on epidemic-PPV
-ticks. Build it from WHO annual data with \code{est_CFR_hierarchical()} and
-\code{make_mu_jt()}.}
+ticks. On endemic-PPV ticks the reported CFR is
+\code{mu_jt * chi_endemic / chi_epidemic}, so in an endemic-dominated location
+the calibrated \code{mu_jt} (and true deaths with it) can exceed the observed
+CFR by up to \code{chi_epidemic / chi_endemic}. Build it from WHO annual data
+with \code{est_CFR_hierarchical()} and \code{make_mu_jt()}.}
 
 \item{mu_j_baseline}{\strong{Removed in v0.96.0.} The pre-v0.96.0 baseline daily
 mortality hazard. Supplying it marks the input as a config written for

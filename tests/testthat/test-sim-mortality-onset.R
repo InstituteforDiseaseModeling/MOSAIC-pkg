@@ -82,6 +82,22 @@ test_that("realized reported CFR matches mu_jt when the case PPV does not switch
   expect_equal(d / cs, 0.15, tolerance = 0.08)
 })
 
+test_that("reported CFR is mu_jt at forced epidemic PPV and mu_jt*chi_end/chi_epi at forced endemic PPV", {
+  # The conversion p = mu_jt * rho / (rho_deaths * chi_epidemic) must use the
+  # EPIDEMIC PPV: fixtures with chi_endemic == chi_epidemic cannot tell (the
+  # fixture loosening that hid this axis twice). Threshold 0 forces every tick
+  # epidemic; threshold 1 forces every tick endemic.
+  base <- .onset_cfg(mu = 0.15, chi_endemic = 0.5, chi_epidemic = 0.75)
+  ratio <- function(thr) {
+    cfg <- base; cfg$epidemic_threshold <- thr
+    d <- 0; cs <- 0
+    for (s in 1:4) { r <- .run(cfg, seed = s); d <- d + sum(r$reported_deaths); cs <- cs + sum(r$reported_cases) }
+    d / cs
+  }
+  expect_equal(ratio(0), 0.15, tolerance = 0.08)
+  expect_equal(ratio(1), 0.15 * 0.5 / 0.75, tolerance = 0.08)
+})
+
 test_that("a step in mu_jt takes effect at the onset tick it is indexed by", {
   cfg <- .onset_cfg(mu = 0)
   nT <- ncol(cfg$mu_jt); D <- 150L

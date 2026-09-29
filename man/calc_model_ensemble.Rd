@@ -161,6 +161,13 @@ timestep), and \code{$score_idx_cases}/\code{$score_idx_deaths} (integer,
 1-based per-channel scored-window start; columns before are dropped). The
 central/quantile/array fields above are RAW (unmasked); this spec is the
 contract scoring sites use to drop artifact positions.}
+\item{cfr_posterior}{When \code{deaths_integration} is supplied: a data frame
+with one row per location and calendar year -- \code{location},
+\code{year}, \code{cfr_median}, \code{cfr_lower}, \code{cfr_upper} (the
+weighted median and 95\% interval over members of each member's mean daily
+reported CFR in that year) and \code{prior_cfr} (the prior \code{mu_jt}'s
+mean over the same days). Conditional on each member's modelled cases.
+\code{NULL} otherwise.}
 }
 }
 \description{

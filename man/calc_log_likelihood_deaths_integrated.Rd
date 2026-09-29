@@ -8,24 +8,23 @@ calc_log_likelihood_deaths_integrated(
   obs_deaths,
   exposure,
   base_logit,
-  year,
   dates,
   sd_shift,
   sd_year,
-  k = Inf,
+  onset_dates = dates,
+  dispersion = 1,
+  background_rel = 0.02,
   weights = NULL,
   week_offset = NULL,
   years = NULL
 )
 }
 \arguments{
-\item{obs_deaths}{Matrix \link{locations x days} (or vector, one location) of observed reported deaths.}
+\item{obs_deaths}{Matrix [locations x days] (or vector, one location) of observed reported deaths.}
 
-\item{exposure}{Matrix of the same shape: expected reported deaths per unit reported CFR on each day, \code{(rho / chi_epidemic) * onsets} at the onset day.}
+\item{exposure}{Matrix of the same shape: expected reported deaths per unit reported CFR on each day, \code{(rho / chi_epidemic) * onsets} at the onset day. Must be finite and non-negative.}
 
 \item{base_logit}{Matrix of the same shape: logit of the prior \code{mu_jt} at the onset day.}
-
-\item{year}{Integer vector, one per day: calendar year of the onset day (selects the year deviation).}
 
 \item{dates}{Date vector, one per day: the reporting day (defines the weekly blocks).}
 
@@ -33,21 +32,25 @@ calc_log_likelihood_deaths_integrated(
 
 \item{sd_year}{Numeric scalar: prior SD of each year deviation \eqn{\delta_{j,y}} (logit scale).}
 
-\item{k}{Numeric, length 1 or one per location: weekly negative-binomial dispersion (\code{Inf} for Poisson).}
+\item{onset_dates}{Date vector, one per day: the onset day of the deaths reported that day, which positions the year deviations (default \code{dates}).}
 
-\item{weights}{Optional matrix of per-day scoring weights (0 or \code{NA} = not scored); defaults to 1 wherever \code{obs_deaths} is finite.}
+\item{dispersion}{Numeric, length 1 or one per location: the quasi-Poisson dispersion \eqn{\phi_j > 0} (1 = Poisson).}
+
+\item{background_rel}{Numeric scalar >= 0: the additive background on each week's expected deaths, as a fraction of the location's mean scored weekly deaths (floored at 1e-4).}
+
+\item{weights}{Optional matrix of per-day scoring weights (0 or \code{NA} = not scored); defaults to 1 wherever \code{obs_deaths} is finite. Used as given (not renormalised).}
 
 \item{week_offset}{Optional integer, length 1 or one per location, 0-6 days from Monday for the reporting-week boundary; detected from \code{obs_deaths} when \code{NULL}.}
 
-\item{years}{Optional integer vector of the years to carry deviations for (default: every year in \code{year}); years without scored weeks keep their prior.}
+\item{years}{Optional integer vector of the years that carry deviations (default: every year of \code{onset_dates}); years without scored weeks keep their prior.}
 }
 \value{
 A list with \code{ll} (marginal log-likelihood per location),
-\code{theta} (matrix \link{locations x (1 + years)}: the offset \code{a} and the
+\code{theta} (matrix [locations x (1 + years)]: the offset \code{a} and the
 year deviations at the mode), \code{theta_sd} (their Laplace posterior SDs),
 \code{vcov} (list of Laplace covariance matrices), \code{converged}
-(logical per location), \code{n_weeks} (scored weeks per location) and
-\code{years}.
+(logical per location), \code{n_weeks} (scored weeks per location),
+\code{years}, \code{dispersion} and \code{background} (per location).
 }
 \description{
 Scores observed deaths against a simulated path with the reported case
@@ -55,18 +58,32 @@ fatality ratio (CFR) integrated out analytically. Given a path, expected
 reported deaths on each day are the CFR times a known exposure, so the CFR's
 level can be solved for per path rather than sampled. The CFR is modelled as
 the time-varying prior \code{mu_jt} shifted on the logit scale by a
-location-level offset and a deviation per calendar year:
+location-level offset and a smooth deviation built from one value per
+calendar year:
 \deqn{\mathrm{logit}\,\mu_{jt} = \mathrm{logit}\,\mu^{0}_{jt} + a_j +
-  \delta_{j,y(t)},\qquad a_j \sim N(0, s_j^2),\quad \delta_{j,y} \sim N(0, \sigma_y^2).}
-Deaths are aggregated to complete reporting weeks and scored with a negative
-binomial. For each location the offsets are fitted by Newton's method and the
-marginal likelihood is the Laplace approximation at the mode.
+  \sum_y B_y(t)\,\delta_{j,y},\qquad a_j \sim N(0, s_j^2),\quad
+  \delta_{j,y} \sim N(0, \sigma_y^2),}
+where \eqn{B_y(t)} interpolates linearly between 1 July anchors and is held
+flat before the first and after the last -- the rule \code{make_mu_jt()} uses
+for \eqn{\mu^0} -- so the CFR has no step at a year boundary.
+
+Deaths are aggregated to reporting weeks and scored with a quasi-Poisson
+likelihood: the Poisson log-likelihood divided by a per-location dispersion
+\eqn{\phi_j}, with a small additive background on each week's expected deaths.
+The quasi-Poisson score for the CFR level is the Poisson score, so given the
+path the fitted CFR reproduces the observed deaths totals (a negative binomial
+score would weight low-count weeks far above the peak and bias the level);
+\eqn{\phi_j} tempers the likelihood for deaths that scatter more than Poisson.
+For each location the offsets are fitted by Newton's method and the marginal
+likelihood is the Laplace approximation at the mode.
 }
 \details{
-A week is scored only when all seven days are finite and carry positive
-weight; its weight is the mean daily weight. There is no floor on the
-expected deaths other than a numerical guard (1e-10), which binds only in a
-week where the path has no onsets at all -- a genuine misfit.
+A reporting week is scored when every one of its days inside the data is
+finite and carries positive weight, so a week cut by the start or end of the
+data is scored on the days it has. Its weight is the mean weight of its days.
+The background is the same relative floor the cases channel applies to a cell
+whose prediction is zero, so a week with no onsets but observed deaths costs a
+bounded, data-scaled amount rather than an arbitrary constant.
 }
 \examples{
 dates <- seq(as.Date("2024-01-01"), by = "day", length.out = 140)
@@ -74,9 +91,9 @@ set.seed(1)
 expo <- rpois(140, 400) * 0.423 / 0.75
 obs <- rpois(140, 0.02 * expo)
 fit <- calc_log_likelihood_deaths_integrated(
-     obs, expo, base_logit = rep(qlogis(0.015), 140),
-     year = rep(2024L, 140), dates = dates, sd_shift = 0.5, sd_year = 0.7, k = Inf)
-plogis(qlogis(0.015) + fit$theta[1, 1])   # recovered reported CFR, ~0.02
+     obs, expo, base_logit = rep(qlogis(0.015), 140), dates = dates,
+     sd_shift = 0.5, sd_year = 0.7)
+plogis(qlogis(0.015) + sum(fit$theta[1, ]))   # recovered reported CFR, ~0.02
 }
 \seealso{
 \code{\link{calc_model_likelihood}}, \code{\link{est_CFR_hierarchical}}

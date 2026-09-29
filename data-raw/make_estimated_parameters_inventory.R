@@ -15,6 +15,14 @@ library(dplyr)
 # Set up paths
 MOSAIC::set_root_directory("~/MOSAIC")
 PATHS <- MOSAIC::get_paths()
+# As in make_config_default.R: MODEL_INPUT lives inside MOSAIC-pkg, so under a
+# git worktree get_paths() points it at the canonical checkout. Write into the
+# tree this script runs from.
+.pkg_here <- normalizePath(getwd(), mustWork = TRUE)
+if (!file.exists(file.path(.pkg_here, "DESCRIPTION"))) {
+     stop("Run this script from the MOSAIC-pkg root: no DESCRIPTION in ", .pkg_here)
+}
+PATHS$MODEL_INPUT <- file.path(.pkg_here, "model", "input")
 
 # Load existing data objects to extract information
 data("config_default", package = "MOSAIC")
@@ -79,11 +87,10 @@ global_params <- data.frame(
     "omega_1",
     "omega_2",
     "epsilon",
-    # Surveillance (6 params)
+    # Surveillance (5 params)
     "chi_endemic",
     "chi_epidemic",
     "delta_reporting_cases",
-    "delta_reporting_deaths",
     "rho",
     "rho_deaths",
     # Mobility (2 params)
@@ -119,7 +126,6 @@ global_params <- data.frame(
     "PPV in Endemic Periods",
     "PPV in Epidemic Periods",
     "Case Reporting Delay",
-    "Death Reporting Delay",
     "Care-Seeking Probability",
     "Death Detection Rate",
     # Mobility
@@ -154,8 +160,7 @@ global_params <- data.frame(
     # Surveillance
     "Positive predictive value of suspected cholera cases in endemic periods",
     "Positive predictive value of suspected cholera cases in epidemic periods",
-    "Days from infection to case report in surveillance data",
-    "Days from death event to death report in surveillance data (laser-cholera v0.13+: NOT symptom-onset-to-report; symptom-onset-to-death is in gamma_1^-1)",
+    "Days from symptom onset to case report in surveillance data; since MOSAIC v0.96.0 deaths are reported on the same lag",
     "Probability a symptomatic infection is reported as a suspected case",
     "Probability a true cholera death is captured by surveillance (informative prior derived from SSA meta-analysis: Routh 2017, Shikanga 2009, Bwire 2013)",
     # Mobility
@@ -173,8 +178,8 @@ global_params <- data.frame(
     "per day (rate)", "proportion", "per day (rate)", "per day (rate)",
     # Immunity - reordered
     "proportion", "proportion", "per day (rate)", "per day (rate)", "per day (rate)",
-    # Surveillance (6 params)
-    "proportion", "proportion", "days", "days", "proportion", "proportion",
+    # Surveillance (5 params)
+    "proportion", "proportion", "days", "proportion", "proportion",
     # Mobility
     "dimensionless", "dimensionless"
   ),
@@ -195,9 +200,9 @@ global_params <- data.frame(
     "lognormal", "beta", "lognormal", "lognormal",
     # Immunity - reordered
     "beta", "beta", "gamma", "gamma", "lognormal",
-    # Surveillance (6 params)
-    # chi_endemic, chi_epidemic: Beta; delta_reporting_*: TruncNorm prior ([0,7],[0,14]); rho: Beta; rho_deaths: Beta
-    "beta", "beta", "truncnorm", "truncnorm", "beta", "beta",
+    # Surveillance (5 params)
+    # chi_endemic, chi_epidemic: Beta; delta_reporting_cases: TruncNorm prior ([0,7]); rho: Beta; rho_deaths: Beta
+    "beta", "beta", "truncnorm", "beta", "beta",
     # Mobility
     "gamma", "gamma"
   ),
@@ -212,12 +217,12 @@ global_params <- data.frame(
     "disease", "disease", "disease", "disease",
     # Immunity - reordered
     "immunity", "immunity", "immunity", "immunity", "immunity",
-    # Surveillance (6 params)
-    "surveillance", "surveillance", "surveillance", "surveillance", "surveillance", "surveillance",
+    # Surveillance (5 params)
+    "surveillance", "surveillance", "surveillance", "surveillance", "surveillance",
     # Mobility
     "mobility", "mobility"
   ),
-  order = 1:28,
+  order = 1:27,
   order_scale = "01",
   order_category = c(
     # Transmission (01)
@@ -228,8 +233,8 @@ global_params <- data.frame(
     "03", "03", "03", "03",
     # Immunity (04)
     "04", "04", "04", "04", "04",
-    # Surveillance (05): chi_endemic, chi_epidemic, delta_reporting_cases, delta_reporting_deaths, rho, rho_deaths
-    "05", "05", "05", "05", "05", "05",
+    # Surveillance (05): chi_endemic, chi_epidemic, delta_reporting_cases, rho, rho_deaths
+    "05", "05", "05", "05", "05",
     # Mobility (06)
     "06", "06"
   ),
@@ -243,8 +248,8 @@ global_params <- data.frame(
     "01", "02", "03", "04",
     # Immunity (phi_1, phi_2, omega_1, omega_2, epsilon)
     "01", "02", "03", "04", "05",
-    # Surveillance (chi_endemic, chi_epidemic, delta_reporting_cases, delta_reporting_deaths, rho, rho_deaths)
-    "01", "02", "03", "04", "05", "06",
+    # Surveillance (chi_endemic, chi_epidemic, delta_reporting_cases, rho, rho_deaths)
+    "01", "02", "03", "04", "05",
     # Mobility
     "01", "02"
   ),
@@ -264,7 +269,7 @@ global_params <- data.frame(
 #     result and serves as a fallback when priors are not provided.
 #
 # posterior_lower / posterior_upper supply hard truncation bounds passed to
-# fit_truncnorm_from_ci() for bounded integer parameters (delta_reporting_*).
+# fit_truncnorm_from_ci() for the bounded integer parameter delta_reporting_cases.
 global_params$posterior_distribution <- c(
   # Transmission: beta prior → beta posterior
   "beta", "beta",
@@ -282,9 +287,9 @@ global_params$posterior_distribution <- c(
   "lognormal", "beta", "lognormal", "lognormal",
   # Immunity: unchanged
   "beta", "beta", "gamma", "gamma", "lognormal",
-  # Surveillance: chi_endemic/epidemic unchanged; delta_reporting_* uniform → truncnorm
+  # Surveillance: chi_endemic/epidemic unchanged; delta_reporting_cases uniform → truncnorm
   #   posterior with hard bounds enforcing the integer support; rho unchanged; rho_deaths Beta→Beta
-  "beta", "beta", "truncnorm", "truncnorm", "beta", "beta",
+  "beta", "beta", "truncnorm", "beta", "beta",
   # Mobility: unchanged
   "gamma", "gamma"
 )
@@ -295,7 +300,7 @@ global_params$posterior_lower <- c(
   NA, NA, 1.01, NA, NA, NA, NA, NA, NA,
   NA, NA, NA, NA,                        # disease
   NA, NA, NA, NA, NA,                    # immunity
-  NA, NA, 0, 1, NA, NA,                  # surveillance (cases lower = 0, deaths lower = 1; rho/rho_deaths NA)
+  NA, NA, 0, NA, NA,                     # surveillance (delta_reporting_cases lower = 0; rho/rho_deaths NA)
   NA, NA                                 # mobility
 )
 global_params$posterior_upper <- c(
@@ -304,7 +309,7 @@ global_params$posterior_upper <- c(
   NA, NA, 425, NA, NA, NA, NA, NA, NA,
   NA, NA, NA, NA,                        # disease
   NA, NA, NA, NA, NA,                    # immunity
-  NA, NA, 7, 14, NA, NA,                 # surveillance (delta_reporting_cases=7, _deaths=14; rho/rho_deaths NA)
+  NA, NA, 7, NA, NA,                     # surveillance (delta_reporting_cases = 7; rho/rho_deaths NA)
   NA, NA                                 # mobility
 )
 
@@ -448,74 +453,29 @@ spatial_params <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Disease-specific parameters
+# Location-specific observation parameter (MOSAIC v0.96.0). epidemic_threshold is
+# the Isym/N point prevalence at which the case-reporting PPV switches from
+# chi_endemic to chi_epidemic; it no longer touches mortality. The v0.96.0
+# mortality model has no sampled location parameters (mu_jt is integrated out of
+# the deaths likelihood), so mu_j_baseline, mu_j_epidemic_factor and the four
+# derived cfr_* rows are gone. `order`, `order_category` and `order_parameter` are
+# overwritten below by the .cur_order accumulator.
 #
-# Includes 3 SAMPLED params (mu_j_baseline, mu_j_epidemic_factor,
-# epidemic_threshold) plus 4 DERIVED policy-relevant CFR transformations
-# (cfr_baseline, cfr_epidemic, cfr_clinical_baseline, cfr_clinical_epidemic).
-# The derived CFRs are computed per posterior sample by
-# .mosaic_add_implied_cfr_columns() inside run_MOSAIC() right before
-# samples.parquet is written, then their posteriors are fit at runtime from
-# the sample quantiles. Same pattern as decay_days_long / zeta_2 (DERIVED).
-#
-# Surveillance CFRs (cfr_baseline / cfr_epidemic) are deaths-among-
-# reported-cases under endemic vs epidemic regime — matches the WHO/IDSR
-# "annual CFR" definition. Clinical CFRs (cfr_clinical_*) are the
-# per-symptomatic-episode death probabilities (1 - exp(-mu_eff / gamma_1))
-# clinicians use against treatment-center benchmarks and the WHO 1%
-# outbreak-response threshold.
-#
-# All four are constant over the simulation window: mu_jt carries no
-# time-varying term other than the epidemic flag, so the endemic and
-# epidemic CFRs below are exact rather than tick-0 approximations. (Before
-# MOSAIC v0.95.0 a linear-in-time mu_j_slope factor made them tick-0
-# intercepts; that term was removed in CFR restructure R3.)
-#
-# Inventory `order` is overwritten dynamically below at the .cur_order
-# accumulation step (see "REORGANIZE LOCATION-SPECIFIC PARAMETERS" section).
-# The static `order` values here are placeholders — keeping them only so
-# data.frame() has the right column type.
-disease_params <- data.frame(
-  parameter_name = c("mu_j_baseline", "mu_j_epidemic_factor", "epidemic_threshold",
-                     "cfr_baseline", "cfr_epidemic",
-                     "cfr_clinical_baseline", "cfr_clinical_epidemic"),
-  display_name = c(
-    "Baseline IFR",
-    "Epidemic IFR Multiplier",
-    "Epidemic Threshold",
-    "Implied Reported CFR (Endemic)",
-    "Implied Reported CFR (Epidemic)",
-    "Implied Per-Episode CFR (Endemic)",
-    "Implied Per-Episode CFR (Epidemic)"
-  ),
-  description = c(
-    "Baseline location-specific infection fatality ratio",
-    "Multiplier applied to IFR during epidemic periods",
-    "Case incidence threshold for epidemic period classification",
-    "DERIVED: Implied reported CFR under endemic regime, per posterior sample. cfr_baseline = mu_j_baseline * rho_deaths * chi_endemic / rho (laser-cholera v0.13+ steady-state identity).",
-    "DERIVED: Implied reported CFR under epidemic regime, per posterior sample. cfr_epidemic = mu_j_baseline * (1 + mu_j_epidemic_factor) * rho_deaths * chi_epidemic / rho.",
-    "DERIVED: Probability a symptomatic individual dies of cholera over their expected symptomatic period, under endemic regime. 1 - exp(-mu_j_baseline / gamma_1). Comparable to treatment-center per-case CFR and the WHO 1% outbreak-response threshold.",
-    "DERIVED: Per-symptomatic-episode death probability under epidemic regime. 1 - exp(-mu_j_baseline * (1 + mu_j_epidemic_factor) / gamma_1)."
-  ),
-  units = c("proportion", "dimensionless", "cases/100k/week",
-            "proportion", "proportion", "proportion", "proportion"),
-  # mu_j_epidemic_factor prior is Gamma(1,2) in make_priors_default.R — corrected from lognormal (v0.14.35)
-  # epidemic_threshold: Truncnorm with per-location proportional bounds (v0.28.0, was Lognormal).
-  #   Bounds a/b are read from the prior template per location at fit time
-  #   (calc_model_posterior_distributions.R:398-411), so posterior_lower/upper stay NA.
-  # cfr_baseline / cfr_epidemic / cfr_clinical_*: DERIVED — no priors, posterior fit
-  #   as beta from sample quantiles (bounded [0,1] domain, right-skewed).
-  #   update_priors_from_posteriors will skip them during staged merges via the
-  #   "not in original priors" guard.
-  distribution = c("gamma", "gamma", "truncnorm",
-                   "beta", "beta", "beta", "beta"),
-  posterior_distribution = c("gamma", "gamma", "truncnorm",
-                             "beta", "beta", "beta", "beta"),
-  posterior_lower = rep(NA_real_, 7),
-  posterior_upper = rep(NA_real_, 7),
+# epidemic_threshold: Truncnorm with per-location proportional bounds (v0.28.0).
+#   Bounds a/b are read from the prior template per location at fit time
+#   (calc_model_posterior_distributions.R), so posterior_lower/upper stay NA.
+threshold_params <- data.frame(
+  parameter_name = "epidemic_threshold",
+  display_name = "Epidemic PPV Threshold",
+  description = "Isym/N point prevalence at which the case-reporting PPV switches from chi_endemic to chi_epidemic",
+  units = "proportion (Isym/N)",
+  distribution = "truncnorm",
+  posterior_distribution = "truncnorm",
+  posterior_lower = NA_real_,
+  posterior_upper = NA_real_,
   scale = "location",
-  category = "disease",
-  order = NA_integer_,           # OVERWRITTEN BELOW (.cur_order accumulator)
+  category = "surveillance",
+  order = NA_integer_,            # OVERWRITTEN BELOW (.cur_order accumulator)
   order_scale = "02",
   order_category = "06",          # OVERWRITTEN BELOW
   order_parameter = NA_character_, # OVERWRITTEN BELOW
@@ -560,7 +520,7 @@ calibration_params <- data.frame(
 # initial_conditions, transmission, seasonality, environmental, other (mobility, spatial, disease)
 #
 # All order ranges are computed dynamically from group sizes so adding /
-# removing rows from any group (e.g. rho_deaths, cfr_baseline / cfr_epidemic)
+# removing rows from any group (e.g. rho_deaths, the retired mu_j_* / cfr_* rows)
 # doesn't require updating downstream constants.
 .cur_order <- nrow(global_params)
 
@@ -584,19 +544,19 @@ calibration_params$order <- (.cur_order + 1):(.cur_order + nrow(calibration_para
 calibration_params$order_category <- "04"
 .cur_order <- .cur_order + nrow(calibration_params)
 
-# Other parameters: disease (mu_j_*, cfr_*), mobility (tau_i), spatial (theta_j)
+# Other parameters: surveillance (epidemic_threshold), mobility (tau_i), spatial (theta_j)
 other_params <- rbind(
-  disease_params,    # mu_j_baseline, mu_j_epidemic_factor, epidemic_threshold, cfr_baseline, cfr_epidemic
+  threshold_params,  # epidemic_threshold
   spatial_params     # tau_i, theta_j
 )
-n_disease <- nrow(disease_params)
+n_threshold <- nrow(threshold_params)
 n_spatial <- nrow(spatial_params)
-other_params$order <- (.cur_order + 1):(.cur_order + n_disease + n_spatial)
+other_params$order <- (.cur_order + 1):(.cur_order + n_threshold + n_spatial)
 other_params$order_category <- c(
-  rep("05", n_disease),  # disease params
+  rep("05", n_threshold),  # epidemic_threshold
   rep("05", n_spatial)   # tau_i, theta_j
 )
-other_params$order_parameter <- sprintf("%02d", seq_len(n_disease + n_spatial))
+other_params$order_parameter <- sprintf("%02d", seq_len(n_threshold + n_spatial))
 
 # =============================================================================
 # 5. COMBINE ALL PARAMETER GROUPS
@@ -694,7 +654,7 @@ rownames(estimated_parameters) <- NULL
 # =============================================================================
 
 attr(estimated_parameters, "creation_date") <- Sys.Date()
-attr(estimated_parameters, "version") <- "1.1.0"
+attr(estimated_parameters, "version") <- "1.2.0"
 attr(estimated_parameters, "description") <- paste(
   "Comprehensive parameter inventory for MOSAIC cholera transmission model.",
   "Includes metadata, categorization, and distribution information for all model parameters."

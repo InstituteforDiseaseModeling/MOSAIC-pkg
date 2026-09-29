@@ -43,7 +43,7 @@ The function creates a multi-page PDF containing:
 \itemize{
 \item Page 1: Overview plot with temporal trend and data summary
 \item Following pages: Faceted plots of country-specific CFR trends
-\item Each panel shows observed CFR (points) and model predictions (lines with CI)
+\item Each panel shows observed CFR (points) and model predictions (lines with 95\% predictive intervals for one year's CFR)
 \item Color coding indicates data quality and model fit
 }
 }

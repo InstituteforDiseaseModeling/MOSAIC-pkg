@@ -64,8 +64,10 @@
 #'   integrated out (\code{calc_log_likelihood_deaths_integrated()$ll}). When
 #'   supplied it replaces the negative-binomial deaths core, so
 #'   \code{eps_rel_deaths} and \code{nb_k_deaths} are not used for the core;
-#'   \code{run_MOSAIC()} always supplies it. The deaths shape terms, when
-#'   enabled, still read \code{est_deaths}.
+#'   \code{run_MOSAIC()} always supplies it. The level-dependent deaths shape
+#'   terms (peak magnitude, cumulative, WIS) are then dropped, with a warning,
+#'   because \code{est_deaths} is drawn at the prior CFR; deaths peak timing,
+#'   which does not depend on the level, is kept.
 #' @param verbose If \code{TRUE}, prints component summaries per location.
 #' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms
 #'   (T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
@@ -163,6 +165,14 @@ calc_model_likelihood <- function(obs_cases,
      if (!is.null(ll_deaths_core) &&
          (!is.numeric(ll_deaths_core) || length(ll_deaths_core) != n_locations))
           stop("ll_deaths_core must be a numeric vector with one value per location.")
+     if (!is.null(ll_deaths_core) &&
+         (weight_peak_magnitude > 0 || weight_cumulative_total > 0 || weight_wis > 0)) {
+          .mosaic_warn_once("deaths_shape_terms_integrated", paste0(
+               "With the reported CFR integrated out of the deaths likelihood, the deaths ",
+               "components of the peak-magnitude, cumulative and WIS shape terms are dropped: ",
+               "they would score the engine's deaths at the prior mu_jt and put the prior CFR ",
+               "level back into selection. The cases components and deaths peak timing are kept."))
+     }
 
      # NB dispersion. Accepts a scalar (recycled) or one value per location, the
      # same contract as weights_location. k depends only on the OBSERVATIONS, so
@@ -435,6 +445,15 @@ calc_model_likelihood <- function(obs_cases,
           #     + (N_obs/N_quantiles)  * w_wis * (wc * wis_c + wd * wis_d)
           #
           # NOTE: weight_cases/weight_deaths apply multiplicatively to EVERY component.
+
+          # With the reported CFR integrated out (ll_deaths_core), the deaths the
+          # engine drew are at the PRIOR mu_jt, so any level-dependent deaths
+          # shape term (peak magnitude, cumulative, WIS) would put the prior CFR
+          # level back into selection. Those deaths components are dropped;
+          # deaths peak timing is level-free and stays.
+          if (!is.null(ll_deaths_core)) {
+               ll_peak_mag_d <- 0; ll_cum_tot_d <- 0; ll_wis_deaths <- 0
+          }
 
           # N_obs: count of timesteps with at least one finite observation
           N_obs <- sum(is.finite(obs_c) | is.finite(obs_d))

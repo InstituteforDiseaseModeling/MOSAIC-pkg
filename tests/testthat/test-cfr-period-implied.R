@@ -71,3 +71,26 @@ test_that("period CFR handles 3D array via auto-expand to 4D", {
   # Each member has CFR = 1/50, 2/100, 3/150 = 0.02 uniformly
   expect_equal(res$ETH$predicted_median, 0.02, tolerance = 1e-10)
 })
+
+test_that("period CFR uses only the scored observed window and the member weights", {
+  # 1 location, 12 steps: steps 1-2 are burn-in, steps 11-12 are the unobserved
+  # forecast tail. Member 1 has CFR 0.01 in the window, member 2 0.05; both put
+  # a huge death count in the tail, which must not count.
+  cases  <- array(100, dim = c(1, 12, 2, 1))
+  deaths <- array(0,   dim = c(1, 12, 2, 1))
+  deaths[1, 3:10, 1, 1] <- 1; deaths[1, 3:10, 2, 1] <- 5
+  deaths[1, 11:12, , 1] <- 1000; deaths[1, 1:2, , 1] <- 1000
+  obs_c <- matrix(c(rep(100, 10), NA, NA), 1)
+  obs_d <- matrix(c(rep(2, 10), NA, NA), 1)
+  res <- MOSAIC:::.mosaic_calc_cfr_period_implied(cases, deaths, obs_c, obs_d, "AAA",
+                                                  member_weights = c(0.9, 0.1), score_idx = 3L)
+  expect_equal(res$AAA$observed, 0.02)
+  expect_equal(res$AAA$observed_total_cases, 800)
+  expect_equal(res$AAA$predicted_mean, 0.9 * 0.01 + 0.1 * 0.05)
+  # Same weighted-quantile rule as the ensemble predictions.
+  expect_equal(res$AAA$predicted_median, MOSAIC::weighted_quantiles(c(0.01, 0.05), c(0.9, 0.1), 0.5))
+  expect_equal(res$AAA$predicted_total_deaths, MOSAIC::weighted_quantiles(c(8, 40), c(0.9, 0.1), 0.5))
+  expect_lt(res$AAA$predicted_total_deaths, 40)   # the burn-in and tail deaths are excluded
+  expect_error(MOSAIC:::.mosaic_calc_cfr_period_implied(cases, deaths, obs_c, obs_d, "AAA",
+                                                        member_weights = 1), "one value per parameter set")
+})

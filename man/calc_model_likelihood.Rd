@@ -85,8 +85,10 @@ deaths log-likelihood computed with the reported case fatality ratio
 integrated out (\code{calc_log_likelihood_deaths_integrated()$ll}). When
 supplied it replaces the negative-binomial deaths core, so
 \code{eps_rel_deaths} and \code{nb_k_deaths} are not used for the core;
-\code{run_MOSAIC()} always supplies it. The deaths shape terms, when
-enabled, still read \code{est_deaths}.}
+\code{run_MOSAIC()} always supplies it. The level-dependent deaths shape
+terms (peak magnitude, cumulative, WIS) are then dropped, with a warning,
+because \code{est_deaths} is drawn at the prior CFR; deaths peak timing,
+which does not depend on the level, is kept.}
 
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 

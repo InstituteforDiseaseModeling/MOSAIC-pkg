@@ -93,6 +93,19 @@ test_that("implied CFR averages mu_jt over the selected locations and days only"
   expect_equal(unname(res_one$metrics$cfr_implied["reported"]), 0.03, tolerance = 1e-12)
 })
 
+test_that("implied CFR weights mu_jt by the observed cases, as an observed CFR does", {
+  cfg <- make_test_config()
+  nT <- ncol(cfg$reported_cases)
+  cfg$mu_jt <- matrix(c(rep(0.01, nT / 2), rep(0.05, nT / 2)), nrow = 1)
+  cfg$reported_cases <- matrix(c(rep(1, nT / 2), rep(9, nT / 2)), nrow = 1)
+  res <- run_fit_sandbox(cfg, .sim_runner = stub_runner)
+  expect_equal(unname(res$metrics$cfr_implied["reported"]), (0.01 * 1 + 0.05 * 9) / 10, tolerance = 1e-12)
+  # Days with no observed cases (the forecast tail) carry no weight.
+  cfg$reported_cases[1, (nT / 2 + 1):nT] <- NA
+  res2 <- run_fit_sandbox(cfg, .sim_runner = stub_runner)
+  expect_equal(unname(res2$metrics$cfr_implied["reported"]), 0.01, tolerance = 1e-12)
+})
+
 test_that("implied CFR is NA when a reporting parameter or mu_jt is missing", {
   cfg <- make_test_config(); cfg$chi_epidemic <- NULL
   res <- run_fit_sandbox(cfg, .sim_runner = stub_runner)
@@ -162,4 +175,24 @@ test_that("the sandbox calls its runner with arguments run_simulation() accepts"
   # And the default runner really is run_simulation(), so the check above is about
   # the function production uses rather than an unrelated signature.
   expect_identical(formals(run_fit_sandbox)$.sim_runner, quote(run_simulation))
+})
+
+test_that("a scalar mu_jt override keeps the matrix shape, and retired mortality overrides warn", {
+  cfg <- make_test_config()
+  nT <- ncol(cfg$reported_cases)
+  cfg$location_name <- c("TST", "TS2")
+  cfg$mu_jt <- matrix(0.02, 2, nT)
+  cfg$reported_cases <- matrix(rep(round(cfg$.seas), each = 2), nrow = 2)
+  cfg$reported_deaths <- matrix(rep(round(cfg$.seas * 0.01), each = 2), nrow = 2)
+  seen <- NULL
+  runner2 <- function(config, seed, quiet) {
+    seen <<- config$mu_jt
+    list(results = list(reported_cases = matrix(rep(cfg$.seas, each = 2), nrow = 2),
+                        reported_deaths = matrix(rep(0.01 * cfg$.seas, each = 2), nrow = 2)))
+  }
+  res <- run_fit_sandbox(cfg, params = list(mu_jt = 0.05), .sim_runner = runner2)
+  expect_identical(dim(seen), c(2L, nT))
+  expect_true(all(seen == 0.05))
+  expect_warning(run_fit_sandbox(cfg, params = list(mu_j_baseline = 0.1), .sim_runner = runner2),
+                 "removed from the model in v0.96.0")
 })

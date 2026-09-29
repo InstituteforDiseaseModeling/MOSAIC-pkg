@@ -252,7 +252,7 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   cfr_file <- file.path(dir_output, "3_results", "posterior", "cfr_posterior.csv")
   expect_true(file.exists(cfr_file))
   cfr <- utils::read.csv(cfr_file, stringsAsFactors = FALSE)
-  expect_true(all(c("location", "year", "cfr_median", "cfr_lower", "cfr_upper", "prior_median")
+  expect_true(all(c("location", "year", "cfr_median", "cfr_lower", "cfr_upper", "prior_cfr")
                   %in% names(cfr)))
   win_years <- seq(as.integer(format(as.Date(config$date_start), "%Y")),
                    as.integer(format(as.Date(config$date_stop), "%Y")))
@@ -261,14 +261,18 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   expect_true(all(is.finite(cfr$cfr_median) & cfr$cfr_median > 0 & cfr$cfr_median < 1))
   expect_true(all(cfr$cfr_lower <= cfr$cfr_median & cfr$cfr_median <= cfr$cfr_upper))
 
-  # (9) config_medoid.json carries the calibrated reported CFR (the config's
-  # prior mu_jt shifted to cfr_posterior), so re-simulating it reproduces the
-  # calibrated deaths level; the integration setup is saved for post-hoc reruns.
+  # (9) config_medoid.json carries the MEDOID's posterior reported CFR (the
+  # config's prior mu_jt shifted to the medoid ensemble's cfr_posterior), so
+  # re-simulating it reproduces the medoid predictions' deaths level; the
+  # integration setup is saved for post-hoc reruns.
   med_file <- file.path(dir_output, "2_calibration", "best_model", "config_medoid.json")
   expect_true(file.exists(med_file))
   med <- MOSAIC::read_json_to_list(med_file)
+  med_ens <- readRDS(file.path(dir_output, "2_calibration", "medoid_ensemble.rds"))
+  expect_false(is.null(med_ens$cfr_posterior))
   expect_equal(unname(as.matrix(med$mu_jt)),
-               unname(MOSAIC:::.mosaic_apply_cfr_posterior(config, cfr)$mu_jt), tolerance = 1e-8)
+               unname(MOSAIC:::.mosaic_apply_cfr_posterior(config, med_ens$cfr_posterior)$mu_jt),
+               tolerance = 1e-8)
   expect_false(isTRUE(all.equal(unname(as.matrix(med$mu_jt)), unname(config$mu_jt))))
   di_file <- file.path(dir_output, "2_calibration", "deaths_integration.rds")
   expect_true(file.exists(di_file))

@@ -57,7 +57,7 @@ dev specialist.
   marginals piling against a bound or drifting outside the plausible range, (c) impossible values,
   (d) collapse onto an implausible region. A **good fit does NOT clear this check** — implausible
   values under a good R² signal overfitting, non-identifiability, or compensation between
-  correlated parameters (cf. `mu_j_baseline`↔`rho_deaths`, Lesson #12). Never recommend a
+  correlated parameters (cf. `beta_j0_tot`↔`alpha_1`). Never recommend a
   parameter target outside its plausible range to buy fit. Escalate biology/prior-range issues to
   `disease-modeler`; identifiability/likelihood-shape issues to `statistician`.
 - **Output shape (v0.39):** `run_MOSAIC()` produces only the posterior **ensemble** and the
@@ -65,12 +65,14 @@ dev specialist.
   carries no best `r2_cases`/`bias_ratio_cases`; read the `*_ensemble` metrics (+ the dual
   `*_ensemble_mean`/`*_ensemble_median` cross-walk and `central_method_*` provenance). The
   top-likelihood draw is still flagged by `is_best_model` in `samples.parquet` for parameter audits.
-- **R²/bias:** computed from the ensemble **central series** vs observed — the weighted **mean** by
-  default since v0.38 (`central_method`; set `"median"` to reproduce pre-0.38). On sparse deaths the
-  mean-based **deaths bias reads ~2×** by design — the unmasked implied-CFR property (accepted as
-  admissible, memory `project_mu_j_baseline_already_fixed`), **not** a fit defect to chase with a
-  lever. `summary.json:cfr_implied` is computed from raw member arrays and is central-method-
-  invariant. Distinguish a timing/shape miss from a level miss before recommending a lever.
+- **R²/bias:** computed from the ensemble **central series** vs observed (`central_method`, median
+  by default). Since v0.96.0 the reported CFR is integrated out per path and ensemble deaths are
+  redrawn from its posterior GIVEN THE OBSERVED DEATHS, so the in-sample deaths bias/R² are fitted
+  quantities (optimistic by construction; judge deaths skill out of sample) and a per-year deaths
+  miss usually means that year's case path is off -- read `3_results/posterior/cfr_posterior.csv`
+  (the calibrated reported CFR by year, conditional on the members' cases) beside the cases fit.
+  `summary.json:cfr_implied` is the members' realized period CFR over the scored window.
+  Distinguish a timing/shape miss from a level miss before recommending a lever.
 
 ## Active diagnosis — the diagnose-fit workflow
 Your core method (the preloaded **diagnose-fit** skill) is to manipulate the deterministic model,

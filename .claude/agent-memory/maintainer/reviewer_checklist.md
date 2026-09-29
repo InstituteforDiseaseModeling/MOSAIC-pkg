@@ -35,3 +35,29 @@ references, flag missing regression test (e.g. 979f066e CV fix had none).
 
 **Build/runtime separation:** model/ is .Rbuildignore'd -> large CSVs there are
 repo-bloat, not build breakage. Don't conflate.
+
+**Removing a parameter from the model** (learned on CFR v2.1, v0.96): the sibling
+set is larger than the config/sampler/convert lists. Also check
+`data-raw/make_estimated_parameters_inventory.R` + `data/estimated_parameters.rda`
++ `R/estimated_parameters-data.R` row counts + `R/priors_default.R` section counts +
+`.claude/skills` lever advice + the MOSAIC-docs spec + country-repo config builders.
+Consumers of estimated_parameters all intersect with sample columns, so stale rows
+fail SILENTLY (empty plot panels), never loudly.
+
+**Mutation-test the wiring, not just the helpers.** Green unit tests on a helper say
+nothing about whether run_MOSAIC calls it: on v0.96.1, replacing the worker's
+integrated-deaths call with `if (FALSE)` left the WHOLE suite green (incl. the opt-in
+integration test). Harness recipe: `git archive` HEAD to /tmp, apply one fixed-string
+mutation per copy, `load_all` + `test_file`/`test_dir` with `TESTTHAT_PARALLEL=false`.
+Opt-in tests (`MOSAIC_RUN_INTEGRATION=1`) never run in CI -- a fix guarded only by
+one is unguarded.
+
+**Fixture-loosening recurs:** identity tests that set `chi_endemic == chi_epidemic`
+collapse the one axis the chi choice acts on (seen in v0.93 roundtrip tests AND v0.96
+onset tests). Demand a chi-asymmetric arm (force epidemic PPV with
+`epidemic_threshold = 0`, endemic with `= 1`).
+
+**Two cheap check traps:** roxygen markdown turns `[a x b]` into `\link{a x b}` (Rd
+cross-ref WARNING) -- escape as `\[a x b\]`; a NEWS.md `##` heading containing
+" v2.1" makes R's news parser treat level-2 headings as versions (NOTE, and
+`news()` reports the package as version 2.1).

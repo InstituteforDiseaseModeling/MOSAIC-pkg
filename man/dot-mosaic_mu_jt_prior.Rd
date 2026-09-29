@@ -23,8 +23,8 @@
 
 \item{tau}{Scalar: the GAM between-country SD (reference only).}
 
-\item{sd_product}{Positive scalar: persistent WHO-annual vs weekly-surveillance
-product mismatch on the logit scale.}
+\item{sd_product}{Positive scalar: residual error of the GAM centre against the
+observed reported CFR in a calibration window, on the logit scale.}
 
 \item{year_min}{Integer: first year kept.}
 }

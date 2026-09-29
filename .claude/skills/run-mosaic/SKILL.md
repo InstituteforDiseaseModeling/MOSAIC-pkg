@@ -64,11 +64,13 @@ psi-refit memory.
 `MOSAIC::priors_default` carries per-country priors. **Always check the live version + inline
 version-note in `data-raw/make_priors_default.R` before trusting a center — do not transcribe
 numbers here.** Key levers (semantics, not values):
-- **Deaths / CFR level → `CFR_target`, NOT `mu_j_baseline`.** `mu_j_baseline` is *derived* at sample
-  time from `CFR_target` (see `?sample_parameters` / the version-note); pinning `mu_j_baseline`
-  directly is silently overwritten when `sample_mu_j_baseline=TRUE` (the default) — set it FALSE to
-  keep the config value. Toggle the deaths chain with `sample_CFR_target` / `sample_mu_j_baseline`. The
-  v0.13 `rho_deaths` factor is already baked in — do not re-apply it.
+- **Deaths / CFR level → `config$mu_jt` (MOSAIC >= v0.96.0), not a sampled prior.** The reported CFR
+  is a location x day matrix built by `make_mu_jt()` from `est_CFR_hierarchical()`; calibration
+  integrates it out per simulated path around that centre (priors `mu_jt` block: `sd_year`,
+  `sd_product`), and the calibrated value is `3_results/posterior/cfr_posterior.csv` (also written into
+  `config_medoid.json`). `mu_j_baseline` / `CFR_target` / `mu_j_epidemic_factor` /
+  `delta_reporting_deaths` and their `sample_*` flags are retired (warn and ignored). `rho_deaths`
+  cancels from reported deaths (it sets only true deaths).
 - **`alpha_1`** is a per-location sampled prior (shared informative Beta) that emulates hierarchical
   shrinkage to starve the `alpha_1 ↔ beta_j0_tot` degeneracy — sampled by default; check the
   version-note for the current center.

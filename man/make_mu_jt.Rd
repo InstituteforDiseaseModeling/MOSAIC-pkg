@@ -31,7 +31,7 @@ per day from \code{date_start} to \code{date_stop}; every value in (0, 1).
 }
 \description{
 Expands per-location, per-year reported case fatality ratios (from
-\code{\link{est_CFR_hierarchical}}) into the \link{location x day} matrix the
+\code{\link{est_CFR_hierarchical}}) into the [location x day] matrix the
 engine reads as \code{config$mu_jt}. Values are interpolated linearly on the
 logit scale between mid-year points, and held flat before the first and after
 the last estimated year.
@@ -40,6 +40,14 @@ the last estimated year.
 Days past the last estimated year carry that year's value forward,
 so a simulation window that runs beyond the WHO annual record is filled
 with the most recent estimate rather than an extrapolated trend.
+
+The values are the GAM's logit-scale centres, i.e. the median of each year's
+reported-CFR distribution, not its mean. That is the exact prior centre for
+the integrated deaths likelihood (whose year deviations have mean zero on the
+logit scale). A simulation that draws deaths directly at \code{mu_jt} -- a
+scenario run or a prior-predictive check -- runs 5-10\% below WHO-annual
+deaths (2018-25); the logit-normal mean would over-predict, because annual
+CFR is lower in high-case years.
 }
 \examples{
 est <- data.frame(iso_code = rep(c("AAA", "BBB"), each = 3),

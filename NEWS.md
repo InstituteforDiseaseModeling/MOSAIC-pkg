@@ -1,5 +1,78 @@
 # MOSAIC (development version)
 
+## CFR-v2.1 red-team fixes: a total-preserving deaths score and a corrected prior (v0.97.0)
+
+A line-by-line red-team review of v0.96.1 (engine, likelihood, prior, completeness
+and an end-to-end calibration), then fixes.
+
+- **The integrated deaths score under-predicted deaths.** The negative-binomial
+  score for the CFR level, Σ(D − m)/(k + m) = 0, weights low-count weeks about
+  1/k and peak weeks about 1/m. So whenever a path's weekly shape differed from
+  the data (always), the fitted CFR tracked the low weeks, not the totals.
+  - On ZMB the redrawn deaths came out at 0.6-0.8× observed, and the posterior
+    CFR at half the observed CFR.
+  - The score is now **quasi-Poisson**. The Poisson score preserves totals, so
+    given the path the fitted CFR reproduces observed deaths.
+  - The Poisson log-likelihood is divided by a per-location dispersion φ ≥ 1,
+    estimated from observed weekly deaths regressed on observed cases with
+    year effects.
+  - Implied/observed deaths moved: ZMB 0.74 → 1.00, MOZ 1.09 → 0.95; NGA, COD
+    and ETH stayed at 1.00.
+- **A week with no onsets but observed deaths** used to cost ~23 log-likelihood
+  per death through an arbitrary 1e-10 floor. It now carries an additive
+  background of `eps_rel_cases` × the location's mean scored weekly deaths, the
+  same relative floor as a cases cell with zero prediction.
+- **Smooth year deviations.** The CFR's year deviations interpolate between 1 July
+  anchors (the rule `make_mu_jt()` uses for the prior), so the CFR and the
+  redrawn deaths no longer step on 1 January. Forecast years ease back to the
+  calibrated location level over half a year.
+- **Deaths weighting and windows:**
+  - deaths confidence weights are mass-preserving, like cases;
+  - a reporting week cut by the edge of the scored window is scored on its own
+    days (MWI lost 20% of its scored deaths to the leading partial week);
+  - convergence is judged on the gradient when the line search stalls.
+- **Deaths shape terms.** When the CFR is integrated out, the level-dependent
+  deaths shape terms (peak magnitude, cumulative, WIS) are dropped with a
+  warning: they scored engine deaths drawn at the prior `mu_jt`.
+- **`config_medoid.json`** now carries the medoid's own posterior CFR, from the
+  medoid ensemble. The ensemble's posterior is only the fallback. With the
+  ensemble's, a re-simulation over-predicted the medoid's deaths by 7-12%.
+- **`summary.json` `cfr_implied`** now uses the scored observed window for both
+  predicted and observed totals, and weights the members. Before, predicted
+  totals included the burn-in and the forecast tail, and members were unweighted.
+- **The CFR prior (`est_CFR_hierarchical()`):**
+  - a calendar year still in progress at its dashboard snapshot is excluded;
+  - each country's trend is held at that country's own last WHO-annual year
+    instead of being extrapolated (SOM, BFA, LBR, BEN end in 2022);
+  - the out-of-sample coverage check now scores the observed count against its
+    predictive distribution: 0.95, previously understated as 0.83-0.86;
+  - `config_default` v5.1 and `priors_default` v16.1 rebuild `mu_jt` from it,
+    and nothing else changes (34 of 40 locations move more than 5% in 2026);
+  - `sd_product` is re-described as the centre's residual error against the
+    observed CFR. It is not a product mismatch: the two products agree to
+    sd(log) 0.03.
+- **Displays:**
+  - the trajectory CFR(t) and mass-balance panels use weighted mean series (a
+    ratio of medians showed CFR 0 in sparse countries, and mass balance
+    drifting by 1.6%);
+  - prediction captions total the same days as their bias;
+  - the true-deaths channel is labelled as reported / `rho_deaths`.
+- **Data and docs:**
+  - `estimated_parameters` drops the retired mortality rows (46 rows);
+  - the `priors_default` roxygen matches v16;
+  - the `Installation.Rmd` chunks carry `eval = FALSE` (`R CMD check` executed
+    its installs);
+  - `run_rolling_cv()` checks for mgcv and the WHO annual file before writing
+    anything.
+- **New tests:**
+  - the calibration worker uses the integrated deaths score;
+  - `config_medoid.json` gets the medoid's own CFR;
+  - the fatality conversion uses `chi_epidemic` (threshold-forced arms);
+  - totals are preserved under the redraw;
+  - year boundaries are continuous;
+  - in-progress-year exclusion and per-country carry-forward in the prior.
+- **Resume.** The likelihood version is now `R/v0.97.0+deaths_quasipoisson`.
+
 ## Calibrated CFR outside the calibration loop; leak-free rolling CV (v0.96.1)
 
 - **`config_medoid.json` carries the calibrated reported CFR.** Because the CFR
@@ -29,7 +102,7 @@
   `data-raw/make_priors_default.R` and rolling CV use. Only the block's
   description text changed.
 
-## CFR v2.1: deaths decided at onset from a time-varying reported CFR (v0.96.0)
+## CFR-v2.1: deaths decided at onset from a time-varying reported CFR (v0.96.0)
 
 **Engine.** Each symptomatic onset is fatal with probability
 `mu_jt * rho / (rho_deaths * chi_epidemic)`, drawn at onset (new rng-only draw

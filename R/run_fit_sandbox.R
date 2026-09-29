@@ -65,15 +65,26 @@ run_fit_sandbox <- function(config,
   # ---- Apply overrides -----------------------------------------------------
   applied <- list()
   for (nm in names(params)) {
+    if (nm %in% .MOSAIC_REMOVED_MORTALITY_PARAMS) {
+      # Retired in v0.96.0: a legacy config may still carry it, but the engine
+      # reads its CFR_target (or mu_jt), so an override would silently do nothing.
+      warning(sprintf(paste0("run_fit_sandbox: '%s' was removed from the model in v0.96.0 - ",
+                             "skipping; override `mu_jt` (the reported CFR) instead"), nm))
+      next
+    }
     if (!nm %in% names(config)) {
       warning(sprintf("run_fit_sandbox: '%s' not in config - skipping", nm))
       next
     }
     old_val <- config[[nm]]
     new_val <- params[[nm]]
-    # Broadcast a scalar override onto a per-location (vector) parameter so the
-    # engine's length == n_locations assertion still holds (the engine hard-asserts this).
-    if (length(old_val) > 1L && length(new_val) == 1L) new_val <- rep(new_val, length(old_val))
+    # Broadcast a scalar override onto a per-location (vector) or per-location x
+    # day (matrix) parameter so the engine's shape checks still hold; a matrix
+    # keeps its dimensions.
+    if (length(old_val) > 1L && length(new_val) == 1L) {
+      new_val <- if (is.matrix(old_val)) array(new_val, dim = dim(old_val), dimnames = dimnames(old_val))
+                 else rep(new_val, length(old_val))
+    }
     config[[nm]] <- new_val
     applied[[nm]] <- list(old = old_val, new = new_val)
   }
@@ -192,13 +203,15 @@ run_fit_sandbox <- function(config,
   m
 }
 
-# The config's reported CFR over the simulation window, and the per-onset
-# fatality probability the engine derives from it. Since v0.96.0 the reported CFR
-# is a model input, `mu_jt` (location x day), so there is nothing to back out of
-# a hazard: `reported` is its mean over the selected locations and days, and
-# `symptomatic` is `reported * rho / (rho_deaths * chi_epidemic)`, the
-# probability that a symptomatic onset is fatal. Returns NAs when a piece is
-# missing.
+# The config's reported CFR over the observed window, and the per-onset fatality
+# probability the engine derives from it. Since v0.96.0 the reported CFR is a
+# model input, `mu_jt` (location x day), so there is nothing to back out of a
+# hazard. `reported` is its mean over the selected locations, weighted by the
+# observed reported cases on each day -- the same weighting as an observed CFR
+# (sum of deaths / sum of cases), so the two are directly comparable -- and
+# falls back to the plain mean when no cases are observed. `symptomatic` is
+# `reported * rho / (rho_deaths * chi_epidemic)`, the probability that a
+# symptomatic onset is fatal. Returns NAs when a piece is missing.
 .fit_cfr_implied <- function(config, loc_idx = NULL) {
   na_pair <- c(reported = NA_real_, symptomatic = NA_real_)
   nL <- length(config$location_name)
@@ -209,7 +222,14 @@ run_fit_sandbox <- function(config,
   if (is.null(mu)) return(na_pair)
   sel <- if (is.null(loc_idx)) seq_len(nL) else loc_idx[loc_idx >= 1L & loc_idx <= nL]
   if (!length(sel)) return(na_pair)
-  reported <- mean(mu[sel, , drop = FALSE])
+  w <- config$reported_cases
+  if (!is.null(w) && !is.matrix(w) && nL == 1L && length(w) == nT) w <- matrix(w, nrow = 1L)
+  w <- if (is.matrix(w) && identical(dim(w), c(nL, nT))) w[sel, , drop = FALSE] else NULL
+  m <- mu[sel, , drop = FALSE]
+  reported <- if (!is.null(w) && any(is.finite(w) & w > 0)) {
+    ok <- is.finite(w) & w > 0
+    sum(m[ok] * w[ok]) / sum(w[ok])
+  } else mean(m)
   c(reported = reported,
     symptomatic = if (config$rho_deaths > 0)
       reported * config$rho / (config$rho_deaths * config$chi_epidemic) else NA_real_)

@@ -268,7 +268,7 @@ test_that(".mosaic_compute_cfr_refs returns the posterior CFR by year in config 
                      cfr_median = c(0.03, 0.025, 0.02, 0.9),
                      cfr_lower = c(0.02, 0.015, 0.01, 0.8),
                      cfr_upper = c(0.04, 0.035, 0.03, 0.95),
-                     prior_median = 0.02)
+                     prior_cfr = 0.02)
   refs <- MOSAIC:::.mosaic_compute_cfr_refs(post, c("AAA", "BBB"))
   expect_identical(names(refs), c("location", "year", "cfr_median", "cfr_lower", "cfr_upper"))
   expect_identical(refs$location, c("AAA", "AAA", "BBB"))   # config order; CCC dropped

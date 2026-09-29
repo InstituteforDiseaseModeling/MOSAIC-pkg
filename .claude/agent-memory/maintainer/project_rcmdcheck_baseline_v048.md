@@ -1,9 +1,27 @@
 ---
 name: rcmdcheck-baseline-v048
-description: R CMD check baseline for MOSAIC (v0.48.x and v0.55.7 update) — which ERRORs/WARNINGs/NOTEs are EXPECTED/pre-existing so future audits can tell new from baseline
+description: R CMD check baseline for MOSAIC (v0.48.x, v0.55.7, v0.95.0) — expected ERRORs/WARNINGs/NOTEs, plus the vignette-code hazard (check EXECUTES Installation.Rmd install code) — always use --ignore-vignettes
 metadata:
   type: project
 ---
+
+## HAZARD (found 2026-09-28): never run R CMD check without `--ignore-vignettes`
+
+`DESCRIPTION` now has `VignetteBuilder: knitr`, and `vignettes/Installation.Rmd` sets
+`eval = FALSE` only via `knitr::opts_chunk$set()` inside its setup chunk. `purl` never
+runs that chunk, so "checking running R code from vignettes" EXECUTES every chunk:
+`remotes::install_github(...)` (into the Rcheck lib), `install_dependencies()` (ran a
+real `conda install --prefix ~/.virtualenvs/r-mosaic` -- no-op that time because all
+pins were satisfied), `devtools::install("~/MOSAIC/MOSAIC-pkg")`, `install.packages("rjags")`,
+and `install_dependencies(force = TRUE)` (would rebuild the shared Python env). I
+killed it at `devtools::install`; env and user library verified unchanged. The same
+applies to the CLAUDE.md-recommended `R CMD check .`. Use
+`R CMD check --no-manual --ignore-vignettes` until the vignette chunks get chunk-level
+`eval = FALSE` (or move to vignettes/articles/, which is Rbuildignored).
+Baseline v0.95.0 with `--no-manual --ignore-vignettes --no-tests`: **0E/0W/2N**
+(`:::` self-calls; no-visible-binding `.dp`/`.run_sim_worker*`); tests OK separately.
+v0.96.1 added +1W (Rd `[location x day]` links) +1N (NEWS "CFR v2.1" heading).
+Build from `git archive <sha>` copies (avoids the `.git` hidden-files NOTE).
 
 ## UPDATE v0.55.7 (2026-06-26, plain `R CMD check`, --no-manual --no-vignettes)
 

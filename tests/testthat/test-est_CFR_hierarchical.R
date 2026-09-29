@@ -28,7 +28,9 @@ skip_if_not_installed("mgcv")
   dir.create(file.path(d, "who")); dir.create(file.path(d, "input"))
   utils::write.csv(who, file.path(d, "who", "who_afro_annual.csv"), row.names = FALSE)
   paths <- list(DATA_WHO_ANNUAL = file.path(d, "who"), MODEL_INPUT = file.path(d, "input"))
-  res <- est_CFR_hierarchical(paths, validate = FALSE, save_diagnostics = FALSE, verbose = FALSE, ...)
+  args <- utils::modifyList(list(PATHS = paths, validate = FALSE, save_diagnostics = FALSE,
+                                 verbose = FALSE), list(...))
+  res <- do.call(est_CFR_hierarchical, args)
   list(res = res, dir = file.path(d, "input"))
 }
 
@@ -85,4 +87,43 @@ test_that("the parameter table distinguishes the point value from the logit-norm
 test_that("population_weighted is deprecated and ignored", {
   expect_warning(w <- .run_est(.synthetic_who(), population_weighted = TRUE), "deprecated and ignored")
   expect_equal(w$res$predictions$logit_mean, .shared()$res$predictions$logit_mean)
+})
+
+test_that("an in-progress year is excluded and an early-ending country is held at its own last year", {
+  who <- .synthetic_who(seed = 2)
+  early <- MOSAIC::iso_codes_mosaic[2]
+  who <- who[!(who$iso_code == early & who$year > 2015), ]          # data end in 2015
+  who$source <- "dashboard_annual"
+  who$source[who$year == 2024 & who$iso_code != "AFRO"] <- "dashboard_snapshot_2024-05-01"   # partial year
+  out <- .run_est(who, validate = TRUE)
+  expect_identical(out$res$summary$last_data_year, 2023L)          # 2024 rows dropped
+  p <- out$res$predictions
+  q <- p[p$iso_code == early, ]
+  expect_true(all(q$is_forecast == (q$year > 2015)))
+  # Its own trend is frozen at 2015 (a constant offset from the global curve,
+  # which a country absent from the data follows) while the global curve runs
+  # on to the global last year; after that everything is flat.
+  glob <- p[p$iso_code == MOSAIC::iso_codes_mosaic[20], ]
+  expect_true(all(glob$pooled))
+  off <- q$logit_mean - glob$logit_mean
+  expect_equal(off[q$year > 2015], rep(off[q$year == 2015], sum(q$year > 2015)), tolerance = 1e-8)
+  expect_equal(diff(q$logit_mean[q$year >= 2023]), rep(0, sum(q$year > 2023)), tolerance = 1e-10)
+  other <- p[p$iso_code == MOSAIC::iso_codes_mosaic[1], ]
+  expect_true(all(other$is_forecast == (other$year > 2023)))
+  # The validation block reports both forecast rules with a proper coverage.
+  v <- out$res$validation$summary
+  expect_setequal(v$method, c("carry_forward", "project"))
+  expect_true(all(v$coverage95 >= 0 & v$coverage95 <= 1))
+})
+
+test_that("forecast_method = 'project' extends the trend where carry_forward holds it", {
+  who <- .synthetic_who(seed = 3)
+  a <- MOSAIC:::.cfr_estimate(who, forecast_years = 3L, forecast_method = "carry_forward")
+  b <- MOSAIC:::.cfr_estimate(who, forecast_years = 3L, forecast_method = "project")
+  iso <- MOSAIC::iso_codes_mosaic[1]
+  pa <- a$predictions[a$predictions$iso_code == iso, ]
+  pb <- b$predictions[b$predictions$iso_code == iso, ]
+  expect_equal(pa$logit_mean[pa$year <= 2024], pb$logit_mean[pb$year <= 2024], tolerance = 1e-10)
+  expect_false(isTRUE(all.equal(pa$logit_mean[pa$year > 2024], pb$logit_mean[pb$year > 2024])))
+  expect_equal(diff(pa$logit_mean[pa$year >= 2024]), rep(0, 3), tolerance = 1e-10)
 })

@@ -19,7 +19,7 @@
 #' \itemize{
 #'   \item Page 1: Overview plot with temporal trend and data summary
 #'   \item Following pages: Faceted plots of country-specific CFR trends
-#'   \item Each panel shows observed CFR (points) and model predictions (lines with CI)
+#'   \item Each panel shows observed CFR (points) and model predictions (lines with 95% predictive intervals for one year's CFR)
 #'   \item Color coding indicates data quality and model fit
 #' }
 #'
@@ -265,7 +265,7 @@ plot_CFR_hierarchical <- function(
             # Labels
             ggplot2::labs(
                 title = sprintf("Country-Specific CFR Trends (Page %d of %d)", page, n_pages),
-                subtitle = "Model predictions (blue line with 95% CI) vs. observed data (purple points)",
+                subtitle = "Model predictions (blue line with 95% predictive interval) vs. observed data (purple points)",
                 x = "Year",
                 y = "Case Fatality Rate (%)",
                 caption = if(page == n_pages) "Point size indicates number of reported cases" else ""

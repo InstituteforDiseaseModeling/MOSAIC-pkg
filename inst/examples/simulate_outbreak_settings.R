@@ -165,7 +165,7 @@ build_regime_config <- function(date_start, date_stop,
   R_j  <- as.integer(N_J - S_j - V1_j - V2_j - E_j - I_j)
   if (any(R_j < 0)) stop("Initial S + V1 + I exceed N for at least one patch; lower S_prop/V1_prop.")
 
-  # Demography / IFR (held constant across settings)
+  # Demography (held constant across settings)
   b_jt    <- matrix(0.00005, N_LOC, T_len, dimnames = list(J, t))
   d_jt    <- matrix(0.00004, N_LOC, T_len, dimnames = list(J, t))
   nu_1_jt <- nu_2_jt <- matrix(0, N_LOC, T_len, dimnames = list(J, t))

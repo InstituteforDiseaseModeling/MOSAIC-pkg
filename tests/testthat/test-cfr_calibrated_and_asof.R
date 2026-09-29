@@ -10,34 +10,41 @@
 #     and its prior per cutoff from WHO annual years <= year(T) - 1 only.
 # =============================================================================
 
+# A posterior whose yearly targets are the yearly mean CFR of the prior shifted by
+# `shift * i` on the logit scale for location i (so the exact answer is known).
 .post_for <- function(cfg, shift = log(2)) {
-  mu <- MOSAIC:::.mosaic_config_mu_jt(cfg, length(cfg$location_name), ncol(cfg$mu_jt))
+  nT <- as.integer(as.Date(cfg$date_stop) - as.Date(cfg$date_start)) + 1L
+  mu <- MOSAIC:::.mosaic_config_mu_jt(cfg, length(cfg$location_name), nT)
   d <- seq(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")
-  yrs <- sort(unique(as.integer(format(d, "%Y"))))
+  yr <- format(d, "%Y"); yrs <- sort(unique(as.integer(yr)))
   do.call(rbind, lapply(seq_along(cfg$location_name), function(i) do.call(rbind, lapply(yrs, function(y) {
-    pm <- plogis(mean(qlogis(mu[i, format(d, "%Y") == y])))
-    data.frame(location = cfg$location_name[i], year = y, prior_median = pm,
-               cfr_median = plogis(qlogis(pm) + shift * i), cfr_lower = NA, cfr_upper = NA)
+    sel <- yr == y
+    data.frame(location = cfg$location_name[i], year = y,
+               prior_cfr = mean(mu[i, sel]),
+               cfr_median = mean(plogis(qlogis(mu[i, sel]) + shift * i)), cfr_lower = NA, cfr_upper = NA)
   }))))
 }
 
-test_that("the posterior shift moves each location-year on the logit scale and keeps the shape", {
+test_that("a uniform posterior shift is recovered exactly and keeps the prior's shape", {
   cfg <- MOSAIC::get_location_config(MOSAIC::config_default, iso = c("MOZ", "MWI"))
-  post <- .post_for(cfg, shift = 0.4)
-  out <- MOSAIC:::.mosaic_apply_cfr_posterior(cfg, post)
+  out <- MOSAIC:::.mosaic_apply_cfr_posterior(cfg, .post_for(cfg, shift = 0.4))
   expect_identical(dim(out$mu_jt), dim(cfg$mu_jt))
-  expect_equal(qlogis(out$mu_jt[1, ]) - qlogis(cfg$mu_jt[1, ]), rep(0.4, ncol(cfg$mu_jt)), tolerance = 1e-10)
-  expect_equal(qlogis(out$mu_jt[2, ]) - qlogis(cfg$mu_jt[2, ]), rep(0.8, ncol(cfg$mu_jt)), tolerance = 1e-10)
-  # A year-specific shift applies to that year only.
-  post2 <- post; post2$cfr_median[post2$location == "MOZ" & post2$year == 2024] <-
-    plogis(qlogis(post2$prior_median[post2$location == "MOZ" & post2$year == 2024]) - 1)
-  out2 <- MOSAIC:::.mosaic_apply_cfr_posterior(cfg, post2)
-  yr <- format(seq(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day"), "%Y")
-  expect_equal(unique(round(qlogis(out2$mu_jt[1, yr == "2024"]) - qlogis(cfg$mu_jt[1, yr == "2024"]), 10)), -1)
-  expect_equal(unique(round(qlogis(out2$mu_jt[1, yr == "2025"]) - qlogis(cfg$mu_jt[1, yr == "2025"]), 10)), 0.4)
-  # A location or year the posterior does not cover keeps the prior.
-  out3 <- MOSAIC:::.mosaic_apply_cfr_posterior(cfg, post[post$location == "MOZ", ])
-  expect_identical(out3$mu_jt[2, ], cfg$mu_jt[2, ])
+  expect_equal(qlogis(out$mu_jt[1, ]) - qlogis(cfg$mu_jt[1, ]), rep(0.4, ncol(cfg$mu_jt)), tolerance = 1e-6)
+  expect_equal(qlogis(out$mu_jt[2, ]) - qlogis(cfg$mu_jt[2, ]), rep(0.8, ncol(cfg$mu_jt)), tolerance = 1e-6)
+})
+
+test_that("a change in one year's posterior moves that year's mean and stays continuous", {
+  cfg <- MOSAIC::get_location_config(MOSAIC::config_default, iso = "MOZ")
+  post <- .post_for(cfg, shift = 0)
+  post$cfr_median[post$year == 2024] <- post$cfr_median[post$year == 2024] * 2
+  out <- MOSAIC:::.mosaic_apply_cfr_posterior(cfg, post)
+  d <- seq(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")
+  got <- tapply(out$mu_jt[1, ], format(d, "%Y"), mean)
+  expect_equal(unname(as.numeric(got)), post$cfr_median, tolerance = 1e-8)
+  expect_lt(max(abs(diff(qlogis(out$mu_jt[1, ])))), 0.02)
+  # The shift peaks inside 2024 and fades towards the neighbouring anchors.
+  sh <- qlogis(out$mu_jt[1, ]) - qlogis(cfg$mu_jt[1, ])
+  expect_gt(max(sh[format(d, "%Y") == "2024"]), max(abs(sh[format(d, "%Y") == "2026"])))
 })
 
 test_that("a re-simulation of the shifted config realizes the posterior CFR", {
@@ -46,7 +53,7 @@ test_that("a re-simulation of the shifted config realizes the posterior CFR", {
   post <- .post_for(cfg, shift = 0)
   post$cfr_median <- 0.08
   out <- MOSAIC:::.mosaic_apply_cfr_posterior(cfg, post)
-  expect_true(all(abs(out$mu_jt - 0.08) < 1e-12))
+  expect_true(all(abs(out$mu_jt - 0.08) < 1e-9))
   d <- 0; cs <- 0
   for (s in 1:3) {
     r <- MOSAIC::run_simulation(out, seed = s, quiet = TRUE)$results
@@ -116,4 +123,30 @@ test_that("the as-of mu_jt is flat after the last usable year's 1 July and drops
   L <- pri$location[[cfg$location_name]]
   expect_equal(qlogis(out$mu_jt[1, match(as.Date("2023-07-01"), dates)]),
                L$logit_mean[L$year == 2023], tolerance = 1e-10)
+})
+
+test_that("config_medoid.json gets the medoid's own posterior, else the run's, else the prior", {
+  cfg <- MOSAIC::get_location_config(MOSAIC::config_default, iso = "MOZ")
+  post_run <- .post_for(cfg, shift = 0.3)
+  post_med <- .post_for(cfg, shift = -0.2)
+  f <- withr::local_tempfile(fileext = ".json")
+
+  out <- MOSAIC:::.mosaic_write_config_medoid(cfg, post_med, post_run, f)
+  expect_true(file.exists(f))
+  back <- MOSAIC::read_json_to_list(f)
+  expect_equal(unname(as.matrix(back$mu_jt)), unname(out$mu_jt), tolerance = 1e-12)
+  expect_equal(qlogis(out$mu_jt[1, ]) - qlogis(cfg$mu_jt[1, ]), rep(-0.2, ncol(cfg$mu_jt)), tolerance = 1e-6)
+
+  out_run <- MOSAIC:::.mosaic_write_config_medoid(cfg, NULL, post_run, f)
+  expect_equal(qlogis(out_run$mu_jt[1, ]) - qlogis(cfg$mu_jt[1, ]), rep(0.3, ncol(cfg$mu_jt)), tolerance = 1e-6)
+
+  out_none <- MOSAIC:::.mosaic_write_config_medoid(cfg, NULL, NULL, f)
+  expect_identical(out_none$mu_jt, cfg$mu_jt)
+
+  bad <- post_med; bad$cfr_median <- 0.9          # infeasible: refused, prior kept
+  warned <- character(0)
+  out_bad <- MOSAIC:::.mosaic_write_config_medoid(cfg, bad, post_run, f,
+                                                  log_warn = function(...) warned <<- c(warned, sprintf(...)))
+  expect_identical(out_bad$mu_jt, cfg$mu_jt)
+  expect_match(warned, "keeps the prior mu_jt")
 })

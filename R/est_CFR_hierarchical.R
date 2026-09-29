@@ -5,7 +5,7 @@
 #' cholera record and returns a per-country, per-year estimate of the reported
 #' case fatality ratio (CFR, reported deaths per reported suspected case). The
 #' estimates are the prior for the engine's time-varying \code{mu_jt}: they are
-#' expanded to a daily [location x day] matrix by \code{\link{make_mu_jt}} and
+#' expanded to a daily \[location x day\] matrix by \code{\link{make_mu_jt}} and
 #' carry the widths used by the calibration's integrated deaths likelihood.
 #'
 #' @param PATHS List of paths from \code{\link{get_paths}}; reads
@@ -62,7 +62,7 @@
 #'   \item \code{model}: the fitted \code{bam} object;
 #'   \item \code{predictions}: one row per MOSAIC location and year with
 #'     \code{cfr_estimate} (median), predictive \code{cfr_lower}/\code{cfr_upper}
-#'     (95\%), \code{cfr_se} (logit-scale estimation error), \code{logit_mean},
+#'     (95%), \code{cfr_se} (logit-scale estimation error), \code{logit_mean},
 #'     \code{logit_sd} (predictive), \code{is_forecast}, \code{pooled} (location
 #'     absent from the fit), \code{n_country_years};
 #'   \item \code{country_effects}: the country random intercepts;
@@ -274,17 +274,36 @@ est_CFR_hierarchical <- function(
 # Country-years that enter the fit: every country in the file except the AFRO
 # aggregate, with finite counts and at least `min_cases` cases. Deaths are capped
 # at cases (a handful of source rows report more deaths than cases).
+#
+# A calendar year still in progress when its dashboard snapshot was taken is
+# excluded. Its total is incomplete and its deaths lag its cases (NAM 2026:
+# 0 deaths in 213 cases; RWA 2026: 0 in 321), and the same weeks are scored by
+# the calibration's deaths likelihood, so fitting them here would count them
+# twice. The fs trend is not shielded by s(obs) at the boundary: NGA's partial
+# 2026 row alone (408 deaths in 65,910 cases) moves NGA's 2026 centre from
+# 2.78% to 2.15%.
 .cfr_model_data <- function(who_data, min_cases) {
     if (!"iso_code" %in% names(who_data)) stop("WHO annual data has no iso_code column.")
     d <- who_data[who_data$country != "AFRO Region" & who_data$iso_code != "AFRO" &
                   !is.na(who_data$iso_code) & nzchar(who_data$iso_code) &
                   is.finite(who_data$cases_total) & is.finite(who_data$deaths_total) &
                   who_data$cases_total >= max(1, min_cases), , drop = FALSE]
+    if ("source" %in% names(d)) d <- d[!.cfr_in_progress(d), , drop = FALSE]
     d$deaths_total <- pmin(d$deaths_total, d$cases_total)
     d$survivors <- d$cases_total - d$deaths_total
     d$iso <- factor(d$iso_code)
     d$obs <- factor(seq_len(nrow(d)))
     d
+}
+
+# TRUE for rows taken from a dated dashboard snapshot before the row's calendar
+# year ended (process_WHO_annual_data() records the snapshot in `source`).
+.cfr_in_progress <- function(d) {
+    pat <- "snapshot_([0-9]{4}-[0-9]{2}-[0-9]{2})"
+    hit <- grepl(pat, d$source)
+    snap <- rep(as.Date(NA), nrow(d))
+    snap[hit] <- as.Date(sub(paste0(".*", pat, ".*"), "\\1", d$source[hit]))
+    !is.na(snap) & snap < as.Date(paste0(d$year, "-12-31"))
 }
 
 .cfr_fit_gam <- function(d, k_year, k_trend, include_country_trends) {
@@ -309,29 +328,45 @@ est_CFR_hierarchical <- function(
 # excluded (they are the year-to-year noise that sigma describes). A location
 # absent from the fit gets the population-average curve plus tau^2. Years after
 # `last_data_year` follow `forecast_method`.
+#
+# Under "carry_forward" the global smooth is held after the global last data
+# year and a country's own trend after that COUNTRY's last data year, and
+# `is_forecast` marks years past the country's own last year. Evaluating the
+# m = 2 trend beyond a country's data extrapolates it linearly: SOM (last WHO
+# AFRO year 2022) drifted from 0.76% to 0.62% by 2026, GNB (2014) by -34%.
 .cfr_predict <- function(fit, isos, years, last_data_year, forecast_method, global = FALSE) {
     m <- fit$model
     known <- levels(fit$data$iso)
     obs1 <- levels(fit$data$obs)[1]
-    country_labels <- vapply(m$smooth, function(s) s$label, character(1))[
-        vapply(m$smooth, function(s) "iso" %in% s$term, logical(1))]
-    eval_years <- if (forecast_method == "carry_forward") pmin(years, last_data_year) else years
+    cols <- function(keep) unlist(lapply(m$smooth[vapply(m$smooth, keep, logical(1))],
+                                         function(s) s$first.para:s$last.para))
+    c_iso   <- cols(function(s) "iso" %in% s$term)
+    c_trend <- cols(function(s) all(c("year", "iso") %in% s$term))
+    c_obs   <- cols(function(s) identical(s$term, "obs"))
+    last_by_iso <- tapply(fit$data$year, as.character(fit$data$iso), max)
+    cf <- forecast_method == "carry_forward"
     out <- lapply(isos, function(iso) {
         seen <- !global && iso %in% known
-        nd <- data.frame(year = eval_years,
-                         iso = factor(if (seen) iso else known[1], levels = known),
-                         obs = factor(obs1, levels = levels(fit$data$obs)))
-        excl <- c("s(obs)", if (!seen) country_labels)
-        p <- stats::predict(m, newdata = nd, type = "link", se.fit = TRUE, exclude = excl)
+        last_c <- if (seen) unname(last_by_iso[iso]) else last_data_year
+        nd <- function(yy) data.frame(year = yy,
+                                      iso = factor(if (seen) iso else known[1], levels = known),
+                                      obs = factor(obs1, levels = levels(fit$data$obs)))
+        y_g <- if (cf) pmin(years, last_data_year) else years
+        y_c <- if (cf) pmin(years, last_c) else years
+        X <- stats::predict(m, newdata = nd(y_g), type = "lpmatrix")
+        if (length(c_trend) && any(y_c != y_g))
+            X[, c_trend] <- stats::predict(m, newdata = nd(y_c), type = "lpmatrix")[, c_trend]
+        X[, c_obs] <- 0
+        if (!seen) X[, c_iso] <- 0
+        mu <- as.numeric(X %*% stats::coef(m))
+        se <- sqrt(pmax(rowSums((X %*% m$Vp) * X), 0))
         extra <- if (seen || global) 0 else fit$tau^2
-        mu <- as.numeric(p$fit)
-        se <- as.numeric(p$se.fit)
         sd_pred <- sqrt(se^2 + extra + (if (global) 0 else fit$sigma^2))
         data.frame(iso_code = iso, year = years, logit_mean = mu, logit_sd = sd_pred,
                    cfr_se = se, cfr_estimate = stats::plogis(mu),
                    cfr_lower = stats::plogis(mu - 1.96 * sd_pred),
                    cfr_upper = stats::plogis(mu + 1.96 * sd_pred),
-                   is_forecast = years > last_data_year, pooled = !seen,
+                   is_forecast = years > last_c, pooled = !seen,
                    n_country_years = sum(fit$data$iso_code == iso),
                    stringsAsFactors = FALSE)
     })
@@ -414,10 +449,17 @@ est_CFR_hierarchical <- function(
                 p <- p[match(te$iso_code, p$iso_code), ]
                 lpd <- mapply(.cfr_lpd, te$deaths_total, te$cases_total, p$logit_mean, p$logit_sd)
                 obs_logit <- stats::qlogis(pmax(te$deaths_total, 0.5) / te$cases_total)
+                # Coverage of the OBSERVED count by its predictive distribution:
+                # binomial deaths given cases, mixed over the logit-normal CFR.
+                # Comparing the noisy empirical logit with the latent CFR's
+                # interval instead understated coverage (0.83-0.86 vs 0.94).
+                pr <- stats::plogis(p$logit_mean + outer(p$logit_sd, stats::qnorm(stats::ppoints(400))))
+                lo_tail <- rowMeans(stats::pbinom(te$deaths_total - 1, te$cases_total, pr))
+                hi_tail <- rowMeans(stats::pbinom(te$deaths_total, te$cases_total, pr))
                 rows[[length(rows) + 1L]] <- data.frame(
                     origin = Y, horizon = h, method = meth, iso_code = te$iso_code,
                     deaths = te$deaths_total, lpd = lpd,
-                    covered95 = abs(obs_logit - p$logit_mean) <= 1.96 * p$logit_sd,
+                    covered95 = lo_tail < 0.975 & hi_tail > 0.025,
                     abs_logit_err = abs(obs_logit - p$logit_mean), stringsAsFactors = FALSE)
             }
         }

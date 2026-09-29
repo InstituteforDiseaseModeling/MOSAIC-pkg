@@ -82,7 +82,7 @@ sample_initial_conditions is TRUE. (default FALSE)
 If NULL, all parameters are sampled (default behavior).
 
 The reported case fatality ratio \code{mu_jt} is not sampled. It is a
-\link{location x day} matrix carried by the config, and calibration integrates
+[location x day] matrix carried by the config, and calibration integrates
 its level and year-to-year deviations out of the deaths likelihood
 analytically (\code{\link{calc_log_likelihood_deaths_integrated}}). The
 flags \code{sample_CFR_target}, \code{sample_mu_j_baseline},

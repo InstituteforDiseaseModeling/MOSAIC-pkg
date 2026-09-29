@@ -541,12 +541,12 @@ plot_model_ensemble <- function(ensemble,
             collapse = " and "
           ), " confidence intervals | Central: cases=", central_method[["cases"]],
           ", deaths=", central_method[["deaths"]], "\n",
-          "Cases: Obs = ", format(round(sum(obs_c, na.rm = TRUE)), big.mark = ","),
-          ", Pred = ",     format(round(sum(pred_c, na.rm = TRUE)), big.mark = ","),
+          "Cases: Obs = ", format(round(.paired_total(obs_c, pred_c)[["obs"]]), big.mark = ","),
+          ", Pred = ",     format(round(.paired_total(obs_c, pred_c)[["pred"]]), big.mark = ","),
           ", R\u00b2 = ", ifelse(is.na(r2_c), "NA", r2_c),
           ", Bias = ",    ifelse(is.na(bias_c), "NA", bias_c),
-          " | Deaths: Obs = ", format(round(sum(obs_d, na.rm = TRUE)), big.mark = ","),
-          ", Pred = ",         format(round(sum(pred_d, na.rm = TRUE)), big.mark = ","),
+          " | Deaths: Obs = ", format(round(.paired_total(obs_d, pred_d)[["obs"]]), big.mark = ","),
+          ", Pred = ",         format(round(.paired_total(obs_d, pred_d)[["pred"]]), big.mark = ","),
           ", R\u00b2 = ", ifelse(is.na(r2_d), "NA", r2_d),
           ", Bias = ",    ifelse(is.na(bias_d), "NA", bias_d)
         )
@@ -615,8 +615,8 @@ plot_model_ensemble <- function(ensemble,
                  " stochastic | ", n_successful, " successful sims")
         },
         caption  = paste0(
-          "Total: Obs = ",    format(round(sum(obs_cases, na.rm = TRUE)), big.mark = ","),
-          ", Pred = ",         format(round(sum(cases_central, na.rm = TRUE)), big.mark = ","),
+          "Total: Obs = ",    format(round(.paired_total(all_obs_c, all_pred_c)[["obs"]]), big.mark = ","),
+          ", Pred = ",         format(round(.paired_total(all_obs_c, all_pred_c)[["pred"]]), big.mark = ","),
           ", R\u00b2 = ", ifelse(is.na(r2_c_all), "NA", r2_c_all),
           ", Bias = ",    ifelse(is.na(bias_c_all), "NA", bias_c_all),
           " (central: ", central_method[["cases"]], ")",
@@ -684,8 +684,8 @@ plot_model_ensemble <- function(ensemble,
                  " stochastic | ", n_successful, " successful sims")
         },
         caption  = paste0(
-          "Total: Obs = ",    format(round(sum(obs_deaths, na.rm = TRUE)), big.mark = ","),
-          ", Pred = ",         format(round(sum(deaths_central, na.rm = TRUE)), big.mark = ","),
+          "Total: Obs = ",    format(round(.paired_total(all_obs_d, all_pred_d)[["obs"]]), big.mark = ","),
+          ", Pred = ",         format(round(.paired_total(all_obs_d, all_pred_d)[["pred"]]), big.mark = ","),
           ", R\u00b2 = ", ifelse(is.na(r2_d_all), "NA", r2_d_all),
           ", Bias = ",    ifelse(is.na(bias_d_all), "NA", bias_d_all),
           " (central: ", central_method[["deaths"]], ")",
@@ -716,4 +716,15 @@ plot_model_ensemble <- function(ensemble,
 
   if (verbose) message("plot_model_ensemble complete.")
   invisible(plot_list)
+}
+
+
+# Observed and predicted totals over the SAME cells -- those where both are
+# finite -- so a caption's "Obs", "Pred" and "Bias" describe one window. Summing
+# each series over its own non-missing cells put the unobserved forecast tail in
+# "Pred" and the unscored head in "Obs".
+.paired_total <- function(obs, pred) {
+  obs <- as.numeric(obs); pred <- as.numeric(pred)
+  ok <- is.finite(obs) & is.finite(pred)
+  c(obs = sum(obs[ok]), pred = sum(pred[ok]))
 }

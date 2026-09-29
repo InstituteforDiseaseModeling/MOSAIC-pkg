@@ -37,7 +37,8 @@
   "Lambda", "Psi", "beta_jt_human", "beta_jt_env",
   # incidence & infection flows
   "incidence", "incidence_human", "incidence_env", "new_symptomatic",
-  # burden channel (disease_deaths = true burden, before death reporting)
+  # true deaths (disease_deaths: fatal onsets before death reporting; reported
+  # deaths / rho_deaths, so they rest on the pinned rho_deaths assumption)
   "disease_deaths"
 )
 
@@ -400,6 +401,13 @@
 #'     1-based per-channel scored-window start; columns before are dropped). The
 #'     central/quantile/array fields above are RAW (unmasked); this spec is the
 #'     contract scoring sites use to drop artifact positions.}
+#'   \item{cfr_posterior}{When \code{deaths_integration} is supplied: a data frame
+#'     with one row per location and calendar year -- \code{location},
+#'     \code{year}, \code{cfr_median}, \code{cfr_lower}, \code{cfr_upper} (the
+#'     weighted median and 95% interval over members of each member's mean daily
+#'     reported CFR in that year) and \code{prior_cfr} (the prior \code{mu_jt}'s
+#'     mean over the same days). Conditional on each member's modelled cases.
+#'     \code{NULL} otherwise.}
 #' }
 #'
 #' @seealso \code{\link{plot_model_ensemble}} to render plots from this object.
@@ -580,6 +588,14 @@ calc_model_ensemble <- function(config,
 
   n_locations   <- length(location_names)
   n_time_points <- if (is.matrix(obs_cases)) ncol(obs_cases) else length(obs_cases)
+  if (!is.null(deaths_integration) &&
+      (!identical(as.integer(deaths_integration$setup$nL), as.integer(n_locations)) ||
+       !identical(as.integer(deaths_integration$n_time), as.integer(n_time_points))))
+    stop(sprintf(paste0("deaths_integration was resolved for %d location(s) x %d days, but these ",
+                        "configs have %d x %d; pass the deaths_integration.rds of the run these ",
+                        "configs come from."),
+                 deaths_integration$setup$nL, deaths_integration$n_time, n_locations, n_time_points),
+         call. = FALSE)
   total_sims    <- n_param_sets * n_simulations_per_config
 
   if (verbose) {
@@ -969,11 +985,21 @@ calc_model_ensemble <- function(config,
   cases_stats  <- calculate_overall_stats(cases_array)
   deaths_stats <- calculate_overall_stats(deaths_array)
 
-  # Posterior reported CFR by location and year, from the per-member draws the
-  # post-hoc death redraw made (member weights shared equally across its
-  # stochastic runs, as for the predictions). NULL when deaths were not redrawn.
+  # Posterior reported CFR by location and year -- each member's mean daily CFR
+  # over the year, from the post-hoc death redraw (member weights shared equally
+  # across its stochastic runs, as for the predictions) -- beside the prior's
+  # yearly mean CFR on the same footing. It is conditional on each member's
+  # modelled cases: a year whose cases a member over-predicts gets a lower CFR, so
+  # read it with the cases fit. NULL when deaths were not redrawn.
   cfr_posterior <- NULL
   if (!is.null(deaths_integration)) {
+    n_infeasible <- sum(vapply(results_list, function(r)
+      if (isTRUE(r$success) && !is.null(r$cfr_infeasible)) as.numeric(r$cfr_infeasible) else 0, numeric(1)))
+    if (n_infeasible > 0)
+      warning(sprintf(paste0("%d member-location(s) needed a reported CFR the reporting parameters ",
+                             "cannot produce (per-onset fatality >= 1: the path has far too few onsets ",
+                             "for the observed deaths); they keep the engine's deaths at the prior mu_jt."),
+                      as.integer(n_infeasible)), call. = FALSE)
     yrs <- deaths_integration$years
     cfr_arr <- array(NA_real_, dim = c(n_locations, length(yrs), n_param_sets, n_simulations_per_config))
     for (result in results_list) {
@@ -990,7 +1016,7 @@ calc_model_ensemble <- function(config,
       r <- r + 1L
       rows[[r]] <- data.frame(location = location_names[i], year = yrs[y],
                               cfr_median = q[1], cfr_lower = q[2], cfr_upper = q[3],
-                              prior_median = stats::plogis(mean(deaths_integration$base_logit_full[
+                              prior_cfr = mean(stats::plogis(deaths_integration$base_logit_full[
                                 i, deaths_integration$year_full == yrs[y]])),
                               stringsAsFactors = FALSE)
     }
@@ -1269,6 +1295,11 @@ calc_model_ensemble <- function(config,
   summary_list[["reported_deaths"]] <- list(median = rd$median)
   thin_store[["reported_deaths"]]   <- rd$thin
 
+  # The mass-balance check needs the compartments' weighted MEANS: each member
+  # balances exactly, and a mean of balanced members balances too, while a sum of
+  # per-compartment medians does not (it drifted by up to 1.6%).
+  mb_comp <- c("S", "E", "Isym", "Iasym", "R", "V1", "V2")
+  mean_store <- list()
   for (ch in present_ch) {
     con <- file(file.path(chan_dir, paste0("c_", ch)), "rb")
     arr <- array(NA_real_, dim = c(n_locations, n_time_points, n_disp, n_stoch))
@@ -1280,6 +1311,7 @@ calc_model_ensemble <- function(config,
     r <- reduce_arr(arr)
     summary_list[[ch]] <- list(median = r$median)
     thin_store[[ch]]   <- r$thin
+    if (ch %in% c(mb_comp, "N")) mean_store[[ch]] <- reduce_arr(arr, "mean")$median
     rm(arr)
   }
   unlink(chan_dir, recursive = TRUE, force = TRUE)
@@ -1294,17 +1326,18 @@ calc_model_ensemble <- function(config,
     thin_store[["I_total"]] <- thin_store[["Isym"]] + ia_thn
   }
 
-  # mass_balance = (S+E+Isym+Iasym+R+V1+V2)/N -- POINT series, ratio of medians
-  mb_comp <- c("S", "E", "Isym", "Iasym", "R", "V1", "V2")
-  if (all(vapply(mb_comp, function(c) !is.null(.med(c)), logical(1))) &&
-      !is.null(.med("N"))) {
-    num <- Reduce(`+`, lapply(mb_comp, .med))
-    den <- .med("N"); den[den == 0] <- NA_real_
+  # mass_balance = (S+E+Isym+Iasym+R+V1+V2)/N -- POINT series, ratio of the
+  # compartments' weighted means (exactly 1 when every member balances).
+  if (all(vapply(c(mb_comp, "N"), function(c) !is.null(mean_store[[c]]), logical(1)))) {
+    num <- Reduce(`+`, mean_store[mb_comp])
+    den <- mean_store[["N"]]; den[den == 0] <- NA_real_
     summary_list[["mass_balance"]] <- list(median = num / den)
   }
 
-  # CFR(t) = rolling(reported_deaths,W)/rolling(reported_cases,W) from medians;
-  # W = min(28, n_time) so short series don't error.
+  # CFR(t) = rolling(reported_deaths,W)/rolling(reported_cases,W) of the weighted
+  # MEAN series; W = min(28, n_time) so short series don't error. A ratio of
+  # median series is 0 wherever the median daily death count is 0, which is most
+  # days in a sparse-deaths country, so it cannot show the reported CFR.
   if (!is.null(.med("reported_cases")) && !is.null(.med("reported_deaths"))) {
     roll_w <- min(28L, n_time_points)
     roll28 <- function(M) {
@@ -1313,7 +1346,8 @@ calc_model_ensemble <- function(config,
         out[i, ] <- as.numeric(stats::filter(M[i, ], rep(1, roll_w), sides = 1))
       out
     }
-    rc28 <- roll28(.med("reported_cases")); rd28 <- roll28(.med("reported_deaths"))
+    rc28 <- roll28(reduce_arr(cases_array,  "mean")$median)
+    rd28 <- roll28(reduce_arr(deaths_array, "mean")$median)
     cfr <- rd28 / rc28
     cfr[!is.finite(cfr) | rc28 <= 5] <- NA_real_
     summary_list[["CFR"]] <- list(median = cfr)

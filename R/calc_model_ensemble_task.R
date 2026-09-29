@@ -63,13 +63,18 @@
     # posterior given this path (the integration calibration scored with),
     # before any channel is harvested below, so predictions, trajectories and
     # forecast years all carry it.
+    # The population compartments keep the engine's own fatal draws (at the
+    # prior mu_jt; they remove a fraction of a percent of Isym), so in the
+    # trajectory channels N balances against the engine's deaths, not these.
     cfr_year <- NULL
+    cfr_infeasible <- 0L
     if (!is.null(deaths_integration)) {
       ph <- .mosaic_posthoc_deaths(deaths_integration, model$results, param_config,
                                    seed = param_config$seed + 7919L)
       model$results$reported_deaths <- ph$reported_deaths
       model$results$disease_deaths  <- ph$disease_deaths
       cfr_year <- ph$cfr_year
+      cfr_infeasible <- ph$n_infeasible
     }
     # Extract the engine's spatial-structure arrays (J x T hazard, J x J
     # coupling, J x J pi_ij) BEFORE the model is discarded below (F1). These
@@ -88,6 +93,7 @@
                    coupling       = cpl,
                    pi_ij          = pij,
                    cfr_year       = cfr_year,
+                   cfr_infeasible = cfr_infeasible,
                    success = TRUE)
     # Trajectory channels (comprehensive internal-state capture). Harvested
     # here, where model$results is in hand, at zero marginal sim cost --

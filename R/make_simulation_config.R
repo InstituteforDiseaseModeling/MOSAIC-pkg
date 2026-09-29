@@ -74,8 +74,8 @@
 #'        first doses proportionally from all listed compartments.
 #'
 #' ## Infection dynamics
-#' Transition rates between SEIR compartments and the infection-fatality-ratio
-#' model parameters.
+#' Transition rates between SEIR compartments and the reported case fatality
+#' ratio `mu_jt`.
 #'
 #' @param iota Incubation rate `E -> I` (numeric > 0, per day). Note this is
 #'        a *rate*, not a period -- prior median ~0.71/day. The engine uses
@@ -94,8 +94,11 @@
 #'        matrix. The engine converts it each tick to the probability that a new
 #'        symptomatic onset is fatal, `mu_jt * rho / (rho_deaths * chi_epidemic)`,
 #'        so reported deaths over reported cases equal `mu_jt` on epidemic-PPV
-#'        ticks. Build it from WHO annual data with `est_CFR_hierarchical()` and
-#'        `make_mu_jt()`.
+#'        ticks. On endemic-PPV ticks the reported CFR is
+#'        `mu_jt * chi_endemic / chi_epidemic`, so in an endemic-dominated location
+#'        the calibrated `mu_jt` (and true deaths with it) can exceed the observed
+#'        CFR by up to `chi_epidemic / chi_endemic`. Build it from WHO annual data
+#'        with `est_CFR_hierarchical()` and `make_mu_jt()`.
 #' @param mu_j_slope **Deprecated and ignored.** The linear-in-time mortality trend
 #'        `(1 + mu_j_slope * tick/nticks)` was removed from the engine in v0.95.0
 #'        (CFR restructure R3): it is not estimable from the deaths series, it
@@ -331,7 +334,7 @@ make_simulation_config <- function(output_file_path = NULL,
                               # Case reporting parameters (surveillance PPV, regime-dependent)
                               chi_endemic = NULL,
                               chi_epidemic = NULL,
-                              epidemic_threshold = NULL,  # Used for both case reporting and IFR threshold models
+                              epidemic_threshold = NULL,  # Isym/N threshold for the case-reporting PPV switch
                               delta_reporting_cases = NULL,  # Symptom-onset-to-case reporting delay
                               delta_reporting_deaths = NULL,  # DEPRECATED + IGNORED: deaths are reported on the case lag (v0.96.0)
 

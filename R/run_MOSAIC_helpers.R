@@ -122,6 +122,45 @@
   out
 }
 
+#' Write config_medoid.json with the medoid's posterior reported CFR
+#'
+#' The reported CFR is integrated out, not sampled, so the sampled medoid config
+#' still carries the prior \code{mu_jt}. It is shifted to the medoid's OWN
+#' posterior CFR (\code{medoid_cfr_posterior}, from the medoid ensemble's post-hoc
+#' CFR draws), so a re-simulation of the file -- rolling-CV projections,
+#' scenarios -- reproduces the medoid predictions' deaths level. The run-level
+#' posterior is the fallback when the medoid ensemble failed; it is not the
+#' default because the medoid's conditional CFR differs from the ensemble's by the
+#' medoid path's own case misfit. With neither, or when the shift is refused
+#' (a posterior CFR no per-onset probability can produce), the prior is written.
+#'
+#' @param config_medoid The sampled medoid config.
+#' @param medoid_cfr_posterior,run_cfr_posterior \code{cfr_posterior} data frames, or \code{NULL}.
+#' @param path Output file.
+#' @param log_msg,log_warn Logging functions.
+#' @return The config written (invisibly the same object the file holds).
+#' @noRd
+.mosaic_write_config_medoid <- function(config_medoid, medoid_cfr_posterior, run_cfr_posterior,
+                                        path, log_msg = function(...) invisible(NULL),
+                                        log_warn = function(...) invisible(NULL)) {
+  post <- if (!is.null(medoid_cfr_posterior)) medoid_cfr_posterior else run_cfr_posterior
+  source_lbl <- if (!is.null(medoid_cfr_posterior)) "medoid" else if (!is.null(run_cfr_posterior)) "run" else "none"
+  if (!is.null(post)) {
+    config_medoid <- tryCatch(.mosaic_apply_cfr_posterior(config_medoid, post),
+      error = function(e) {
+        log_warn("medoid config keeps the prior mu_jt: %s", conditionMessage(e))
+        source_lbl <<- "none"
+        config_medoid
+      })
+  }
+  tryCatch({
+    jsonlite::write_json(config_medoid, path, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+    log_msg("Saved %s (reported CFR: %s)", path,
+            switch(source_lbl, medoid = "medoid posterior", run = "run posterior", "prior"))
+  }, error = function(e) log_warn("config_medoid.json write failed: %s", conditionMessage(e)))
+  config_medoid
+}
+
 #' Persist the compact trajectory artifact for the "trajectories" figure group
 #'
 #' Writes the \code{mosaic_trajectories} object carried on a
@@ -1332,8 +1371,11 @@
 #'   per-channel `eps_rel` change re-bumps it and closes that window too.
 #'   v0.96.0 scores deaths with the reported CFR integrated out
 #'   (\code{calc_log_likelihood_deaths_integrated()}), weekly, instead of the
-#'   eps-floored daily negative binomial on one realisation.
-.mosaic_likelihood_impl_version <- function() "R/v0.96.0+deaths_integrated"
+#'   eps-floored daily negative binomial on one realisation. v0.97.0 changes that
+#'   score from a negative binomial to quasi-Poisson with a per-location
+#'   dispersion and an additive background, smooths the year deviations, scores
+#'   edge weeks and makes the deaths confidence weights mass-preserving.
+.mosaic_likelihood_impl_version <- function() "R/v0.97.0+deaths_quasipoisson"
 
 #' Likelihood-Value Provenance Descriptor
 #'
