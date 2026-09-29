@@ -20,7 +20,7 @@ plot_Reff(
 and the quantile columns. Leading rows with a non-finite total are dropped
 per location.}
 
-\item{show_iqr}{Logical. Also draw the inner 50\\% (\code{q25}-\code{q75})
+\item{show_iqr}{Logical. Also draw the inner 50\% (\code{q25}-\code{q75})
 total-R band. Default \code{FALSE}.}
 
 \item{smooth_days}{Integer. Centered rolling-mean window (days) for the

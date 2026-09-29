@@ -19,7 +19,7 @@
 #' "sustained" requirement (a single dry week does not qualify) and the
 #' rolling mean is the standard meteorological way to distinguish a drought
 #' \emph{spell} from short-term dryness. On the production panel this yields
-#' ~15\% positive weeks across 38 countries and recovers the known
+#' ~15% positive weeks across 38 countries and recovers the known
 #' meteorological droughts (Southern Africa 2015-16 El Nino & 2018-19, Horn
 #' of Africa 2016-17, the 2023-24 El Nino) -- NOT the smeared multi-year mess
 #' the EM-DAT drought type produces.

@@ -36,7 +36,7 @@
 #'   \code{location}, \code{date}, \code{central}, optionally \code{estimand}
 #'   and the quantile columns. Leading rows with a non-finite total are dropped
 #'   per location.
-#' @param show_iqr Logical. Also draw the inner 50\% (\code{q25}-\code{q75})
+#' @param show_iqr Logical. Also draw the inner 50% (\code{q25}-\code{q75})
 #'   total-R band. Default \code{FALSE}.
 #' @param smooth_days Integer. Centered rolling-mean window (days) for the
 #'   displayed series; \code{1} plots the raw daily values. Default \code{14}.

@@ -32,7 +32,7 @@
 #'     1 = frequency-dependent transmission; 0 = density-dependent. A single
 #'     global scalar (`alpha_1` is now per-location -- see below).
 #'   \item \code{kappa} -- Half-saturation V. cholerae concentration at which
-#'     the environmental dose-response is 50\% (Lognormal; *not* a carrying
+#'     the environmental dose-response is 50% (Lognormal; *not* a carrying
 #'     capacity).
 #' }
 #'
@@ -53,10 +53,10 @@
 #'   \item \code{iota} -- Incubation rate `E -> I` (Lognormal; *rate*, not
 #'     period). Prior median ~0.71/day.
 #'   \item \code{gamma_1} -- Symptomatic shedding-duration rate `I_1 -> R`
-#'     (Lognormal). Prior median 0.1/day (~10-day shedding); 95\% CI
+#'     (Lognormal). Prior median 0.1/day (~10-day shedding); 95% CI
 #'     ~3.75 - 26.6 days.
 #'   \item \code{gamma_2} -- Asymptomatic shedding-duration rate `I_2 -> R`
-#'     (Lognormal). Prior median 0.5/day (~2-day shedding); 95\% CI
+#'     (Lognormal). Prior median 0.5/day (~2-day shedding); 95% CI
 #'     ~0.91 - 4.39 days.
 #'   \item \code{epsilon} -- Natural-infection immunity waning rate `R -> S`
 #'     (Lognormal). Prior mean 3.9e-4/day -> ~7-yr immunity (King et al. 2008
