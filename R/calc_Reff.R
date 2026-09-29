@@ -82,7 +82,7 @@
 #' engine's discrete-time transitions: after entering E on day 0 it progresses
 #' with probability \code{1 - exp(-iota)} per day, splits symptomatic with
 #' probability \code{sigma}, and recovers with \code{1 - exp(-gamma_k)} per day.
-#' Mortality is ignored: it shortens the symptomatic dwell by up to ~10-15\% at
+#' Mortality is ignored: it shortens the symptomatic dwell by up to ~10-15% at
 #' high CFR but moves the kernel means by under 0.2 day.
 #'
 #' @param iota,gamma_1,gamma_2 Positive scalar daily rates.

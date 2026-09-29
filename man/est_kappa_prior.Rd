@@ -29,7 +29,7 @@ environmental dose-response half-saturation constant \eqn{\kappa} used in the
 MOSAIC environmental force-of-infection term:
 \deqn{\lambda_W \propto W / (\kappa + W)}
 where \eqn{W} is the environmental bacterial concentration and \eqn{\kappa}
-is the concentration (CFU) at which the probability of infection is 50\\%.
+is the concentration (CFU) at which the probability of infection is 50\%.
 }
 \details{
 The function assembles a literature table of ID50 estimates spanning direct

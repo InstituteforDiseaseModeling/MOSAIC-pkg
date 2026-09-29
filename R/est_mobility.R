@@ -27,9 +27,85 @@
 #' @importFrom glue glue
 #' @importFrom cowplot plot_grid
 #' @importFrom utils read.csv write.csv
+#' @param od_source Which origin-destination matrix drives the DIFFUSION fit.
+#'   \describe{
+#'     \item{\code{"air"}}{(default) OAG flight counts -- the historical
+#'       behaviour, byte-identical to previous runs.}
+#'     \item{\code{"fused"}}{The four-source overland structure from
+#'       \code{\link{process_mobility_od_data}} (UN DESA stock + Abel-Cohen
+#'       flows + Meta SCI + contiguity). Row-normalised and unit-free, so
+#'       \code{tau_i} is still fit on the air matrix.}
+#'     \item{\code{"blend"}}{\strong{Recommended.} The additive sum of the
+#'       air flight matrix and the raked overland matrix, both daily person
+#'       flows. Yields additive \code{tau_i} and a single gamma/omega pair
+#'       describing the combined kernel -- the only form \code{config_default}
+#'       can represent. Retains the long-range air links that pure overland
+#'       replacement destroys.}
+#'     \item{\code{"fused_raked"}}{The fused structure IPF-raked to
+#'       evidence-based daily departure margins by
+#'       \code{\link{rake_mobility_od_to_tau}}. Carries amplitude, so
+#'       \code{tau_i} is fit on it.}
+#'   }
+#' @param distance_metric Distance units for the gravity kernel.
+#'   \describe{
+#'     \item{\code{"great_circle"}}{(default) Centroid-to-centroid great-circle
+#'       distance. \strong{Note the stored units are not kilometres}:
+#'       \code{get_distance_matrix()} already returns km (spherical, R = 6371)
+#'       and the historical code then multiplies by 111.35, the planar
+#'       degrees-to-km factor. \code{mobility_D.csv} is therefore km x 111.35.
+#'       Harmless for the fit -- the constant cancels in the row-normalised
+#'       \code{pi} and \code{gamma} is scale-free in a power model -- but the
+#'       artifact's units are wrong and it is retained only for continuity
+#'       with the shipped \code{gamma}.}
+#'     \item{\code{"travel_time"}}{Overland least-cost travel time in HOURS
+#'       from \code{\link{get_travel_time_matrix}} (MAP motorized friction
+#'       surface). This is what the MOSAIC-OCV E3 work fit gamma on.}
+#'   }
+#'   \strong{gamma is not comparable across metrics} -- it is a decay exponent
+#'   on whatever units D carries, so a travel-time gamma cannot be read against
+#'   a kilometre gamma. Compare only within a metric.
+#' @param fused_count_scale Integer scale applied to the row-normalised fused
+#'   structure so \code{mobility::mobility()} receives counts. Default 1e5.
+#'   The absolute scale does not move gamma/omega (verified in the MOSAIC-OCV
+#'   E3 Route-2 work); it only affects the kernel-mix term.
+#' @param suffix Filename suffix for outputs. Defaults to \code{"_fused"} when
+#'   \code{od_source = "fused"} and/or \code{"_tt"} for travel-time, and
+#'   \code{""} otherwise, so a non-default run cannot silently overwrite the
+#'   production air/great-circle connectivity.
+#'
+#' @section Structure vs amplitude (important):
+#' Under \code{od_source = "fused"} the departure process \code{tau_i} is
+#' \strong{still fit on the OAG flight matrix}, not on the fused structure.
+#' This is deliberate. The fused matrix is row-normalised and unit-free, and
+#' its dominant input (UN DESA) is a decades-accumulated migrant \emph{stock};
+#' dividing such a matrix by population does not yield a departure rate. The
+#' MOSAIC-OCV E3 investigation measured a ~700x inflation from exactly that
+#' error. So the fused pathway supplies kernel \strong{structure}
+#' (gamma, omega, pi) only; \strong{amplitude} continues to come from real
+#' flow counts. A defensible overland amplitude needs separate evidence
+#' (border throughput / IOM DTM), which this function does not attempt.
+#'
 #' @export
 
-est_mobility <- function(PATHS) {
+est_mobility <- function(PATHS,
+                         od_source         = c("air", "fused", "fused_raked", "blend"),
+                         distance_metric   = c("great_circle", "travel_time"),
+                         fused_count_scale = 1e5,
+                         suffix            = NULL) {
+
+     od_source       <- match.arg(od_source)
+     distance_metric <- match.arg(distance_metric)
+     if (is.null(suffix)) {
+          suffix <- paste0(switch(od_source, air = "", fused = "_fused",
+                                  fused_raked = "_fused_raked", blend = "_blend"),
+                           if (distance_metric == "travel_time") "_tt" else "")
+     }
+     .mosaic_check_suffix(suffix,
+                          is_default = identical(od_source, "air") &&
+                                       identical(distance_metric, "great_circle"))
+
+     .out <- function(f) .mosaic_suffix_path(file.path(PATHS$MODEL_INPUT, f), suffix)
+
 
      # Check for optional mobility package
      if (!requireNamespace("mobility", quietly = TRUE)) {
@@ -60,9 +136,86 @@ est_mobility <- function(PATHS) {
      data_flights <- data_flights[data_flights$origin_iso3 %in% MOSAIC::iso_codes_mosaic,]
      data_flights <- data_flights[data_flights$destination_iso3 %in% MOSAIC::iso_codes_mosaic,]
 
-     M <- mobility::get_mob_matrix(orig=data_flights$origin_iso3,
-                                   dest=data_flights$destination_iso3,
-                                   value=data_flights$count)
+     M_air <- mobility::get_mob_matrix(orig=data_flights$origin_iso3,
+                                       dest=data_flights$destination_iso3,
+                                       value=data_flights$count)
+
+     # M_air always drives the DEPARTURE fit (real flow counts). Only the
+     # DIFFUSION fit switches source -- see the "Structure vs amplitude"
+     # section in the roxygen above.
+     if (identical(od_source, "blend")) {
+
+          f_raked <- file.path(PATHS$DATA_PROCESSED, "mobility", "M_fused_raked.csv")
+          if (!file.exists(f_raked)) {
+               stop("Raked OD matrix not found: ", f_raked,
+                    "\n  Build it with rake_mobility_od_to_tau(PATHS).", call. = FALSE)
+          }
+          message("Using ADDITIVE BLEND: air flights + raked overland")
+          Mr <- as.matrix(utils::read.csv(f_raked, row.names = 1, check.names = FALSE))
+          colnames(Mr) <- gsub("^X", "", colnames(Mr))
+          keep  <- intersect(rownames(M_air), rownames(Mr))
+          M_air <- M_air[keep, keep, drop = FALSE]
+          Mr    <- Mr[keep, keep, drop = FALSE]
+
+          # Both sides are DAILY person-flows -- OAG is a mean-daily count and
+          # the rake targets tau_daily * N -- so they add directly, no scaling
+          # constant. This makes tau additive by construction (the row sums
+          # are air + overland departures) and gives a SINGLE gamma/omega pair
+          # describing the mixture, which is all config_default can carry.
+          # Keeping the air channel matters: it carries the long-range,
+          # non-adjacent links that are the only route by which a distant
+          # country can be seeded.
+          M <- M_air + Mr
+          storage.mode(M) <- "double"
+          M <- round(M); storage.mode(M) <- "integer"
+          names(dimnames(M)) <- c("origin", "destination")
+
+     } else if (identical(od_source, "fused_raked")) {
+
+          f_raked <- file.path(PATHS$DATA_PROCESSED, "mobility", "M_fused_raked.csv")
+          if (!file.exists(f_raked)) {
+               stop("Raked OD matrix not found: ", f_raked,
+                    "\n  Build it with rake_mobility_od_to_tau(PATHS).", call. = FALSE)
+          }
+          message("Using IPF-RAKED fused OD (carries evidence-based amplitude)")
+          Mr <- as.matrix(utils::read.csv(f_raked, row.names = 1, check.names = FALSE))
+          colnames(Mr) <- gsub("^X", "", colnames(Mr))
+          keep <- intersect(rownames(M_air), rownames(Mr))
+          Mr <- Mr[keep, keep, drop = FALSE]
+          # raked cells are daily person-flows; mobility() wants counts
+          M <- round(Mr)
+          storage.mode(M) <- "integer"
+          names(dimnames(M)) <- c("origin", "destination")
+          M_air <- M_air[keep, keep, drop = FALSE]
+
+     } else if (identical(od_source, "fused")) {
+          f_fused <- file.path(PATHS$DATA_PROCESSED, "mobility", "M_structure_fused.csv")
+          if (!file.exists(f_fused)) {
+               stop("Fused OD structure not found: ", f_fused,
+                    "\n  Build it with:  download_mobility_od_sources(PATHS)",
+                    "\n              then  process_mobility_od_data(PATHS)", call. = FALSE)
+          }
+          message("Using FUSED overland OD structure for the diffusion fit")
+          Mf <- as.matrix(utils::read.csv(f_fused, row.names = 1, check.names = FALSE))
+          colnames(Mf) <- gsub("^X", "", colnames(Mf))
+
+          keep <- intersect(rownames(M_air), rownames(Mf))
+          if (length(keep) < 2L) stop("Fused structure shares <2 ISO codes with the air matrix.",
+                                      call. = FALSE)
+          if (length(keep) < nrow(M_air)) {
+               warning("Fused structure covers ", length(keep), " of ", nrow(M_air),
+                       " air-matrix countries; restricting to the intersection.",
+                       call. = FALSE)
+          }
+          Mf <- Mf[keep, keep, drop = FALSE]
+          # mobility::mobility() expects counts
+          M <- round(Mf * fused_count_scale)
+          storage.mode(M) <- "integer"
+          names(dimnames(M)) <- c("origin", "destination")
+          M_air <- M_air[keep, keep, drop = FALSE]
+     } else {
+          M <- M_air
+     }
 
 
 
@@ -79,10 +232,34 @@ est_mobility <- function(PATHS) {
      row.names(data_centroids) <- NULL
      head(data_centroids)
 
-     D <- get_distance_matrix(x=data_centroids$lon,
-                              y=data_centroids$lat,
-                              id=data_centroids$iso3)
-     D <- D*111.35  # Convert decimal degrees to kilometers
+     if (identical(distance_metric, "travel_time")) {
+
+          message("Using OVERLAND LEAST-COST TRAVEL TIME (hours) as distance")
+          D <- MOSAIC::get_travel_time_matrix(PATHS,
+                                              iso_codes = data_centroids$iso3,
+                                              verbose   = TRUE)
+          D <- D[data_centroids$iso3, data_centroids$iso3, drop = FALSE]
+
+          # gamma is estimated on whatever distance units D carries. An
+          # unreachable pair (island / disconnected landmass) is Inf, which the
+          # gravity likelihood cannot consume; substitute a finite upper bound
+          # so those pairs are merely very distant rather than fatal.
+          if (any(!is.finite(D))) {
+               cap <- max(D[is.finite(D)], na.rm = TRUE) * 1.5
+               n_cap <- sum(!is.finite(D))
+               warning(n_cap, " unreachable pair(s) capped at ", round(cap, 1),
+                       " h (1.5x the largest finite travel time).", call. = FALSE)
+               D[!is.finite(D)] <- cap
+          }
+          names(dimnames(D)) <- c("origin", "destination")
+
+     } else {
+
+          D <- get_distance_matrix(x=data_centroids$lon,
+                                   y=data_centroids$lat,
+                                   id=data_centroids$iso3)
+          D <- D*111.35  # Convert decimal degrees to kilometers
+     }
 
 
      #--------------------------------------------------------------------------
@@ -124,12 +301,17 @@ est_mobility <- function(PATHS) {
      #--------------------------------------------------------------------------
 
      message("Fitting departure process: travel probability (tau_j)")
-     diagonal <- diag(M)
+     # ALWAYS the air matrix: a row-normalised structure has no departure
+     # amplitude, and DESA stock / population is not a rate.
+     # "fused_raked" carries evidence-based daily person-flows, so tau is fit
+     # on it. Bare "fused" is unit-free, so tau stays on the air matrix.
+     M_tau <- if (od_source %in% c("fused_raked", "blend")) M else M_air
+     diagonal <- diag(M_tau)
      diagonal[is.na(diagonal)] <- 0
 
-     trips_total <- apply(M, 1, function(x) sum(x, na.rm = TRUE))
+     trips_total <- apply(M_tau, 1, function(x) sum(x, na.rm = TRUE))
      y <- as.integer(trips_total - diagonal)
-     names(y) <- names(diag(M))
+     names(y) <- names(diag(M_tau))
 
      y <- y[match(names(N), names(y))]
 
@@ -191,14 +373,14 @@ est_mobility <- function(PATHS) {
      #--------------------------------------------------------------------------
 
      message("Writing mobility model matrices to file: M, D, N, tau, pi")
-     utils::write.csv(data_centroids, file.path(PATHS$MODEL_INPUT, "mobility_lon_lat.csv"), row.names = FALSE)
-     utils::write.csv(M, file.path(PATHS$MODEL_INPUT, "mobility_M.csv"), row.names = TRUE)
-     utils::write.csv(D, file.path(PATHS$MODEL_INPUT, "mobility_D.csv"), row.names = TRUE)
-     utils::write.csv(N, file.path(PATHS$MODEL_INPUT, "mobility_N.csv"), row.names = TRUE)
-     utils::write.csv(mod_travel_prob_summary, file.path(PATHS$MODEL_INPUT, "mobility_travel_prob_params.csv"), row.names = TRUE)
-     utils::write.csv(mod_mobility_summary, file.path(PATHS$MODEL_INPUT, "mobility_gravity_params.csv"), row.names = TRUE)
-     utils::write.csv(tau_vec, file.path(PATHS$MODEL_INPUT, "mobility_tau.csv"), row.names = TRUE)
-     utils::write.csv(pi_mat, file.path(PATHS$MODEL_INPUT, "mobility_pi.csv"), row.names = TRUE)
+     utils::write.csv(data_centroids, .out("mobility_lon_lat.csv"), row.names = FALSE)
+     utils::write.csv(M, .out("mobility_M.csv"), row.names = TRUE)
+     utils::write.csv(D, .out("mobility_D.csv"), row.names = TRUE)
+     utils::write.csv(N, .out("mobility_N.csv"), row.names = TRUE)
+     utils::write.csv(mod_travel_prob_summary, .out("mobility_travel_prob_params.csv"), row.names = TRUE)
+     utils::write.csv(mod_mobility_summary, .out("mobility_gravity_params.csv"), row.names = TRUE)
+     utils::write.csv(tau_vec, .out("mobility_tau.csv"), row.names = TRUE)
+     utils::write.csv(pi_mat, .out("mobility_pi.csv"), row.names = TRUE)
 
 
      message("Writing standard format parameter data frames")
@@ -223,7 +405,7 @@ est_mobility <- function(PATHS) {
      param_df <- rbind(param_df_point, param_df_stoch)
      param_df <- param_df[order(param_df$i),]
 
-     utils::write.csv(param_df, file.path(PATHS$MODEL_INPUT, "param_tau_departure.csv"), row.names = FALSE)
+     utils::write.csv(param_df, .out("param_tau_departure.csv"), row.names = FALSE)
 
      tmp <- melt(pi_mat)
 
@@ -237,7 +419,7 @@ est_mobility <- function(PATHS) {
           parameter_value = tmp$value
      )
 
-     utils::write.csv(param_df, file.path(PATHS$MODEL_INPUT, "param_pi_diffusion.csv"), row.names = FALSE)
+     utils::write.csv(param_df, .out("param_pi_diffusion.csv"), row.names = FALSE)
 
 
      param_df <- rbind(
@@ -257,7 +439,7 @@ est_mobility <- function(PATHS) {
           )
      )
 
-     utils::write.csv(param_df, file.path(PATHS$MODEL_INPUT, "param_gravity_model.csv"), row.names = FALSE)
+     utils::write.csv(param_df, .out("param_gravity_model.csv"), row.names = FALSE)
 
      message("Matrices and parameter estimates saved here:")
      message(PATHS$MODEL_INPUT)

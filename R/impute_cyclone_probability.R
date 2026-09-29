@@ -66,7 +66,7 @@
 #' }
 #'
 #' The active fraction is very low (~74 weeks out of ~35k country-weeks,
-#' ~0.2\%). The country random effect \code{s(iso_code_f, bs = "re")}
+#' ~0.2%). The country random effect \code{s(iso_code_f, bs = "re")}
 #' concentrates predicted probability on the historically cyclone-exposed
 #' coastal countries (MOZ, MWI, ZWE, MDG-adjacent belt) and keeps landlocked
 #' / non-cyclone countries near zero. A region-conditional wind smooth

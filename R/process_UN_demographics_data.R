@@ -47,14 +47,12 @@ process_UN_demographics_data <- function(PATHS) {
 
      message("Loading raw UN World Prospects demographic data...")
 
-     path_pop <- file.path(PATHS$DATA_RAW, "demographics/UN_world_population_prospects_1967_2100_population_size.csv")
-     path_birth <- file.path(PATHS$DATA_RAW, "demographics/UN_world_population_prospects_1967_2100_birth_rate.csv")
-     path_death <- file.path(PATHS$DATA_RAW, "demographics/UN_world_population_prospects_1967_2100_death_rate.csv")
-
-     # Check if files exist
-     if (!file.exists(path_pop) || !file.exists(path_birth) || !file.exists(path_death)) {
-          stop("Error: One or more required data files are missing.")
-     }
+     # Newest raw file per measure: a hand-downloaded Data-Portal export and an
+     # API pull from download_UN_WPP_data() coexist; the newest wins. Each
+     # resolver errors informatively if nothing matches.
+     path_pop   <- .wpp_newest_raw(PATHS, "population_size")
+     path_birth <- .wpp_newest_raw(PATHS, "birth_rate")
+     path_death <- .wpp_newest_raw(PATHS, "death_rate")
 
      d_population <- read.csv(path_pop, stringsAsFactors = FALSE)
      d_birth_rate <- read.csv(path_birth, stringsAsFactors = FALSE)

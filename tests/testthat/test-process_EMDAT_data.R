@@ -145,7 +145,7 @@ testthat::test_that("errors if no public_emdat_*.xlsx is found", {
      file.remove(list.files(PATHS$DATA_EMDAT_RAW, full.names = TRUE))
      testthat::expect_error(
           MOSAIC::process_EMDAT_data(PATHS),
-          "No 'public_emdat_\\*\\.xlsx' files found"
+          "No 'public_emdat_\\*\\.xlsx' or 'public_emdat_\\*\\.csv' files found"
      )
 })
 

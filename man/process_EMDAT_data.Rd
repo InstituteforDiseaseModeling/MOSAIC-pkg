@@ -50,8 +50,8 @@ country-week panels of hazard-occurrence covariates:
 \details{
 The flood label is unchanged (\code{Disaster Type == "Flood"}). The
 cyclone label is a SEPARATE series built from \code{Disaster Type ==
-"Storm"} restricted to \code{Disaster Subtype \%in\% c("Tropical
-cyclone", "Storm surge")} -- the crisply-dated, water-producing storm
+"Storm"} restricted to
+\verb{Disaster Subtype \%in\% c("Tropical cyclone", "Storm surge")} -- the crisply-dated, water-producing storm
 events (49 events / ~74 active weeks in the 2026-05 extract). Storm
 (General), Severe weather, Lightning/Thunderstorms, Tornado, Hail, and
 Blizzard/Winter storm are deliberately EXCLUDED: they are not reliably

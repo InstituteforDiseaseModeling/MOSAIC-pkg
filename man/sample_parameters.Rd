@@ -28,7 +28,7 @@ sample_parameters(
 Each element should be named as \code{sample_[parameter]} with a logical value.
 Available options include:
 \itemize{
-\item sample_alpha_1: Population mixing within metapops (default TRUE)
+\item sample_alpha_1: Population mixing within metapops (default FALSE; PINNED, see Details)
 \item sample_alpha_2: Degree of frequency driven transmission (default FALSE; pinned, weakly identified)
 \item sample_decay_days_short: Minimum V. cholerae survival (default TRUE)
 \item sample_decay_days_spread: Spread between min and max V. cholerae

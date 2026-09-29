@@ -385,14 +385,14 @@ mosaic_pal_diverging <- function(n,
 #' Generate Graduated Uncertainty Colors from a Base Color
 #'
 #' Produces progressively lighter/desaturated variants of the base color for
-#' layered credible interval ribbons. The standard levels are 50\%, 75\%, 95\%.
+#' layered credible interval ribbons. The standard levels are 50%, 75%, 95%.
 #'
 #' Uncertainty is never a standalone color. It is always derived from the
 #' point estimate color.
 #'
 #' @param base_color Hex color for the point estimate (default: MOSAIC blue).
 #' @param n_levels Number of uncertainty levels (default 3).
-#' @param labels Character vector of level names. Default: \code{c("50\%", "75\%", "95\%")}.
+#' @param labels Character vector of level names. Default: `c("50%", "75%", "95%")`.
 #'
 #' @return Named character vector of hex color codes for ribbon fills.
 #'
