@@ -142,10 +142,8 @@ run_fit_sandbox <- function(config,
     r2_deaths   = calc_model_R2(obs_deaths, pred_deaths, method = "corr"),
     bias_cases  = calc_bias_ratio(obs_cases,  pred_cases),
     bias_deaths = calc_bias_ratio(obs_deaths, pred_deaths),
-    # Named pair c(baseline, epidemic): the two regime endpoints that bracket
-    # the realized period-mixed CFR. A single blended scalar was what the old
-    # (wrong) local copy of the algebra produced; the canonical helper is
-    # regime-conditional and there is no defensible single number here.
+    # Named pair c(reported, symptomatic): the config's window-mean reported
+    # CFR (mu_jt) and the per-onset fatality probability it implies.
     cfr_implied  = .fit_cfr_implied(config, loc_idx),
     cfr_observed = if (sum(obs_cases, na.rm = TRUE) > 0)
       sum(obs_deaths, na.rm = TRUE) / sum(obs_cases, na.rm = TRUE) else NA_real_
@@ -194,59 +192,25 @@ run_fit_sandbox <- function(config,
   m
 }
 
-# Implied surveillance CFR from the config's reporting-chain parameters, as the
-# pair of regime endpoints (endemic / epidemic) that bracket the realized,
-# period-mixed CFR. Returns c(baseline = NA, epidemic = NA) if any piece is missing.
-#
-# DELEGATES to .mosaic_add_implied_cfr_columns() (R/calc_implied_cfr.R) rather
-# than re-deriving the algebra. Until v0.93.0 this helper carried its own copy of
-# the PRE-v0.88.0 identity -- it omitted the incidence-dwell divisor
-# (1 - exp(-gamma_1)), understating the CFR ~10.5x at the shipped gamma_1 = 0.1,
-# and it used the 0.5*(chi_endemic + chi_epidemic) blend that B2.1
-# (sample_parameters.R:670) retired in favour of chi_epidemic. Both defects were
-# fixed in the canonical helper and missed here: textbook CLAUDE.md Lesson #11.
-# Keeping a second copy is what caused that, so there is no second copy now.
-#
-# The canonical helper is sample-frame shaped (one row per posterior draw, one
-# column pair per iso), so a config is adapted into a one-row frame with a
-# synthetic iso label per selected location; synthetic labels avoid collisions
-# when config$location_name has duplicates. mu_j_baseline and
-# mu_j_epidemic_factor are per-location, so each selected location gets its own
-# column pair and the resulting per-location CFRs are averaged -- which is what
-# aggregating the series across `locations` implies.
+# The config's reported CFR over the simulation window, and the per-onset
+# fatality probability the engine derives from it. Since v0.96.0 the reported CFR
+# is a model input, `mu_jt` (location x day), so there is nothing to back out of
+# a hazard: `reported` is its mean over the selected locations and days, and
+# `symptomatic` is `reported * rho / (rho_deaths * chi_epidemic)`, the
+# probability that a symptomatic onset is fatal. Returns NAs when a piece is
+# missing.
 .fit_cfr_implied <- function(config, loc_idx = NULL) {
-  na_pair <- c(baseline = NA_real_, epidemic = NA_real_)
-
-  mu  <- config[["mu_j_baseline"]]
-  eps <- config[["mu_j_epidemic_factor"]]
-  globals <- list(rho         = config[["rho"]],
-                  rho_deaths  = config[["rho_deaths"]],
-                  chi_endemic = config[["chi_endemic"]],
-                  chi_epidemic = config[["chi_epidemic"]],
-                  gamma_1     = config[["gamma_1"]])
-  if (is.null(mu) || is.null(eps) || any(vapply(globals, is.null, logical(1)))) return(na_pair)
-
-  mu  <- as.numeric(mu)
-  eps <- as.numeric(eps)
-  if (length(eps) == 1L) eps <- rep(eps, length(mu))
-  if (length(eps) != length(mu)) return(na_pair)
-
-  sel <- if (is.null(loc_idx)) seq_along(mu) else loc_idx[loc_idx >= 1L & loc_idx <= length(mu)]
+  na_pair <- c(reported = NA_real_, symptomatic = NA_real_)
+  nL <- length(config$location_name)
+  nT <- as.integer(as.Date(config$date_stop) - as.Date(config$date_start)) + 1L
+  if (!nL || is.na(nT) || is.null(config$rho) || is.null(config$rho_deaths) ||
+      is.null(config$chi_epidemic)) return(na_pair)
+  mu <- tryCatch(.mosaic_config_mu_jt(config, nL, nT), error = function(e) NULL)
+  if (is.null(mu)) return(na_pair)
+  sel <- if (is.null(loc_idx)) seq_len(nL) else loc_idx[loc_idx >= 1L & loc_idx <= nL]
   if (!length(sel)) return(na_pair)
-
-  isos <- paste0("L", seq_along(sel))
-  frame <- as.data.frame(lapply(globals, function(x) as.numeric(x)[1]))
-  for (k in seq_along(sel)) {
-    frame[[paste0("mu_j_baseline_",        isos[k])]] <- mu[sel[k]]
-    frame[[paste0("mu_j_epidemic_factor_", isos[k])]] <- eps[sel[k]]
-  }
-
-  out <- .mosaic_add_implied_cfr_columns(frame, iso_codes = isos, verbose = FALSE)
-
-  pick <- function(prefix) {
-    cols <- paste0(prefix, isos)
-    if (!all(cols %in% names(out))) return(NA_real_)
-    mean(vapply(cols, function(cn) as.numeric(out[[cn]])[1], numeric(1)), na.rm = TRUE)
-  }
-  c(baseline = pick("cfr_baseline_"), epidemic = pick("cfr_epidemic_"))
+  reported <- mean(mu[sel, , drop = FALSE])
+  c(reported = reported,
+    symptomatic = if (config$rho_deaths > 0)
+      reported * config$rho / (config$rho_deaths * config$chi_epidemic) else NA_real_)
 }

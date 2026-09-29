@@ -2,88 +2,117 @@
 % Please edit documentation in R/est_CFR_hierarchical.R
 \name{est_CFR_hierarchical}
 \alias{est_CFR_hierarchical}
-\title{Estimate Case Fatality Rate using Hierarchical GAM with Time Series Splines}
+\title{Estimate the time-varying reported case fatality ratio (mu_jt) from WHO annual data}
 \usage{
 est_CFR_hierarchical(
   PATHS,
-  min_cases = 20,
+  min_cases = 1,
   k_year = 12,
+  k_trend = 10,
   include_country_trends = TRUE,
+  forecast_years = 3L,
+  forecast_method = c("carry_forward", "project"),
+  validate = TRUE,
   population_weighted = FALSE,
   save_diagnostics = TRUE,
   verbose = TRUE
 )
 }
 \arguments{
-\item{PATHS}{List containing paths to data directories, typically from get_paths()}
+\item{PATHS}{List of paths from \code{\link{get_paths}}; reads
+\code{PATHS$DATA_WHO_ANNUAL/who_afro_annual.csv} and writes to
+\code{PATHS$MODEL_INPUT}.}
 
-\item{min_cases}{Integer, minimum number of cases required to include observation (default 20)}
+\item{min_cases}{Integer; a country-year enters the fit only with at least this many reported cases (default 1).}
 
-\item{k_year}{Integer, number of basis functions for year spline (default 12)}
+\item{k_year}{Integer; basis dimension of the global temporal smooth (default 12).}
 
-\item{include_country_trends}{Logical, whether to include country-specific temporal trends (default TRUE)}
+\item{k_trend}{Integer; basis dimension of each country's trend smooth (default 10).}
 
-\item{population_weighted}{Logical, whether to weight observations by population size from UN data (default FALSE)}
+\item{include_country_trends}{Logical; include country-specific trend smooths (default TRUE).}
 
-\item{save_diagnostics}{Logical, whether to save diagnostic plots (default TRUE)}
+\item{forecast_years}{Integer; number of years past the last data year to supply estimates for (default 3).}
 
-\item{verbose}{Logical, whether to print progress messages (default TRUE)}
+\item{forecast_method}{One of \code{"carry_forward"} (default: every year after the last data year repeats that year's estimate) or \code{"project"} (evaluate the fitted smooths beyond the data).}
+
+\item{validate}{Logical; run the rolling-origin out-of-sample check (default TRUE).}
+
+\item{population_weighted}{Deprecated and ignored (the former branch counted cases twice).}
+
+\item{save_diagnostics}{Logical; write \code{cfr_model_diagnostics.pdf} to \code{PATHS$MODEL_INPUT} (default TRUE).}
+
+\item{verbose}{Logical; print progress messages (default TRUE).}
 }
 \value{
-List containing:
+A list of class \code{cfr_hierarchical_model}:
 \itemize{
-\item model: Fitted GAM model object
-\item predictions: Data frame with CFR estimates for all countries and years
-\item country_effects: Country random intercepts (one row per country in
-the model, columns \code{iso_code}, \code{country}, \code{random_effect})
-\item temporal_trend: Population-average temporal trend
-\item validation: Cross-validation results for recent years
-\item summary: Summary statistics and model fit metrics
+\item \code{model}: the fitted \code{bam} object;
+\item \code{predictions}: one row per MOSAIC location and year with
+\code{cfr_estimate} (median), predictive \code{cfr_lower}/\code{cfr_upper}
+(95\\%), \code{cfr_se} (logit-scale estimation error), \code{logit_mean},
+\code{logit_sd} (predictive), \code{is_forecast}, \code{pooled} (location
+absent from the fit), \code{n_country_years};
+\item \code{country_effects}: the country random intercepts;
+\item \code{temporal_trend}: the population-average curve;
+\item \code{validation}: rolling-origin results, or \code{NULL};
+\item \code{summary}: fit statistics, \code{tau}, \code{sigma} and settings.
 }
+Files written to \code{PATHS$MODEL_INPUT}: \code{param_mu_disease_mortality.csv}
+(MOSAIC parameter format; per location-year \code{point} median,
+\code{beta} shapes and \code{logitnormal} mean/sd), \code{cfr_hierarchical_estimates.csv},
+\code{cfr_temporal_trend.csv}, \code{cfr_country_effects.csv} and
+\code{cfr_model_summary.rds}.
 }
 \description{
-Fits a hierarchical generalized additive model (GAM) to estimate case fatality rates (CFR)
-across African countries and time periods. The model uses smooth splines for temporal trends
-with country-specific random effects, handling missingness by borrowing strength across
-countries and years. Results are saved to MODEL_INPUT directory for use in MOSAIC simulations.
+Fits a hierarchical binomial GAM to every country-year in the WHO annual
+cholera record and returns a per-country, per-year estimate of the reported
+case fatality ratio (CFR, reported deaths per reported suspected case). The
+estimates are the prior for the engine's time-varying \code{mu_jt}: they are
+expanded to a daily \link{location x day} matrix by \code{\link{make_mu_jt}} and
+carry the widths used by the calibration's integrated deaths likelihood.
 }
 \details{
-The function fits a hierarchical GAM model with the following structure:
-\itemize{
-\item Global temporal trend using thin-plate splines
-\item Country-specific random intercepts
-\item Optional country-specific smooth deviations from global trend
-\item Binomial likelihood with logit link for proper handling of rates
-\item Predictions extended to current year based on Sys.Date()
-}
+\strong{Model.} For country \eqn{j} in year \eqn{y}, with \eqn{D_{jy}}
+deaths out of \eqn{C_{jy}} cases,
+\deqn{D_{jy} \sim \mathrm{Binomial}(C_{jy}, p_{jy}),\quad
+  \mathrm{logit}\, p_{jy} = f(y) + u_j + g_j(y) + e_{jy},}
+where \eqn{f} is a global smooth trend, \eqn{u_j \sim N(0, \tau^2)} a country
+random intercept, \eqn{g_j} a country-specific penalised trend (a factor
+smooth, shrunk toward the global curve), and \eqn{e_{jy} \sim N(0,
+\sigma^2)} a country-year random effect. Fitted by fREML with
+\code{mgcv::bam()}.
 
-The country factor is keyed on \code{iso_code}, not on the country-name
-string, so an ISO that appears under more than one spelling in the WHO annual
-file still gets exactly one factor level. Countries absent from the training
-filter receive the population-average prediction, with every country-indexed
-smooth (random intercept and factor smooth) excluded.
+The country-year term \eqn{e_{jy}} is what makes the hierarchy work. Annual
+CFR varies far more between years than a binomial allows (Pearson dispersion
+~29 without it); with no term to absorb that, the country trends soak up the
+year-to-year noise, the country intercepts carry no information, and
+countries with little data receive an extrapolated per-country curve. With it,
+countries with few observations shrink toward the global curve.
 
-Model outputs include:
-\itemize{
-\item Point estimates and 95\% confidence intervals for all country-years
-\item Country-specific random effects quantifying systematic differences
-\item Smooth temporal trends showing CFR evolution over time
-\item Model diagnostics and validation metrics
-}
+\strong{Data.} Every country-year in the WHO annual file, 1970 onward, for
+every country in the file (not only MOSAIC locations): the extra countries
+inform the global curve and the between-country spread. Held-out testing
+(fit through 2022, predict 2023-25) favoured using all years with country
+trends over discarding the pre-2000 record.
+
+\strong{Estimates and widths.} The point estimate for a country-year
+excludes \eqn{e_{jy}}. Its predictive standard deviation on the logit scale
+is \eqn{\sqrt{se^2 + \sigma^2}}, where \eqn{se} is the estimation error of
+\eqn{f + u_j + g_j}; a MOSAIC location absent from the fit receives the
+global curve with \eqn{\tau^2} added. These are \emph{predictive} widths for a
+single year, not the confidence interval of the mean.
+
+\strong{Forecast years.} Years after the last year in the data are filled by
+\code{forecast_method}. The rolling-origin check compares both rules and
+records the result in \code{summary$validation}.
 }
 \examples{
 \dontrun{
-# Standard usage
 PATHS <- get_paths()
-cfr_model <- est_CFR_hierarchical(PATHS)
-
-# Custom settings for smoother trends
-cfr_model <- est_CFR_hierarchical(
-  PATHS,
-  min_cases = 50,
-  k_year = 8,
-  include_country_trends = FALSE
-)
+fit <- est_CFR_hierarchical(PATHS)
+head(fit$predictions)
 }
-
+}
+\seealso{
+\code{\link{make_mu_jt}}
 }

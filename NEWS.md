@@ -1,5 +1,56 @@
 # MOSAIC (development version)
 
+## CFR v2.1: deaths decided at onset from a time-varying reported CFR (v0.96.0)
+
+**Engine.** Each symptomatic onset is fatal with probability
+`mu_jt * rho / (rho_deaths * chi_epidemic)`, drawn at onset (new rng-only draw
+site `infectious/fatal_onsets`), and fatal onsets never enter Isym. Deaths are
+reported on the case lag, so a death is reported in the same tick as its case.
+`mu_jt` is the reported CFR by location and day, and it replaces
+`mu_j_baseline`, `mu_j_epidemic_factor`, `CFR_target` and
+`delta_reporting_deaths`. At epidemic PPV, expected reported deaths / expected
+reported cases = `mu_jt` exactly. Replay mode keeps the laser-cholera daily
+hazard verbatim for parity. `disease_deaths` now lands one results column after
+the onsets that produced them.
+
+**Deaths likelihood.** `run_MOSAIC()` integrates the reported CFR out of each
+simulated path instead of sampling it. The CFR is `logit mu0_jt + a_j +
+delta_{j,year}`, the deaths are scored with a weekly negative binomial, and a
+Laplace step solves for the offsets
+(`calc_log_likelihood_deaths_integrated()`). The `eps_rel_deaths` floor does not
+apply to this score. The ensemble redraws each member's deaths from the CFR's
+conditional posterior, and writes `3_results/posterior/cfr_posterior.csv`
+(reported CFR by location and year). The `cfr_*` implied-CFR columns in
+`samples.parquet` are removed.
+
+**Prior.** `est_CFR_hierarchical()` is rewritten as a binomial GAM on all
+WHO-annual years. It has a global trend, country intercepts, per-country drift
+(`fs`, k = 10, m = 2) and a country-year random effect. Its widths are
+predictive, and nothing is clamped. `make_mu_jt()` expands the estimates to the
+daily matrix.
+
+**Data objects.**
+- `config_default` v5.0 carries `mu_jt`.
+- `priors_default` v16.0 carries a top-level `mu_jt` block (per-year centres and
+  SEs, `sd_year` 0.70, `sd_product` 0.3). The `CFR_target`,
+  `mu_j_epidemic_factor` and `delta_reporting_deaths` priors are removed.
+- The toy simulation configs use a constant 2% reported CFR.
+- Both defaults were built as v0.95.0 plus these deltas only, not as a full
+  rebuild.
+
+**Legacy configs.** A config carrying `mu_j_baseline`, `mu_j_epidemic_factor`,
+`CFR_target` or `mu_j` is handled the same way by the engine and the likelihood,
+through one resolver:
+- its `CFR_target` becomes a constant `mu_jt`, with a warning;
+- its dead `mu_jt` matrix is ignored;
+- without a `CFR_target` it is refused.
+
+`make_simulation_config()` refuses such configs outright. The retired
+`sample_*` flags and priors warn and are ignored.
+
+**Resume.** The likelihood version is now `R/v0.96.0+deaths_integrated`, so a
+resume refuses to pool shards across this change.
+
 ## mu_j_slope is removed (CFR restructure R3)
 
 The per-location `N(0, 0.05)` prior on a linear-in-time trend in baseline IFR is

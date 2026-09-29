@@ -13,6 +13,8 @@
 #'     \item All metadata (unchanged)
 #'     \item All global parameters (unchanged)
 #'     \item Location-specific parameters filtered to only the requested location(s)
+#'     \item The reported-CFR prior block \code{mu_jt} (when present), its
+#'       per-location table filtered the same way
 #'   }
 #'
 #' @details
@@ -21,6 +23,7 @@
 #'   \item \code{metadata}: Copied unchanged
 #'   \item \code{parameters_global}: All global parameters preserved
 #'   \item \code{parameters_location}: Filtered to include only the specified ISO codes
+#'   \item \code{mu_jt}: Global widths kept; per-location table filtered
 #' }
 #'
 #' The function validates that all requested locations exist in the priors before
@@ -193,6 +196,17 @@ get_location_priors <- function(iso, priors = NULL) {
     }
   }
   
+  # The reported-CFR prior (priors_default v16.0+) is its own top-level block:
+  # global widths plus a per-location table. Keep the widths, filter the table
+  # in the same canonical order as the location parameters above.
+  if (!is.null(priors$mu_jt)) {
+    mj <- priors$mu_jt
+    if (!is.null(mj$location)) {
+      mj$location <- mj$location[intersect(names(mj$location), iso)]
+    }
+    priors_filtered$mu_jt <- mj
+  }
+
   # ============================================================================
   # Validate output
   # ============================================================================

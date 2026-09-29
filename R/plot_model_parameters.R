@@ -138,9 +138,7 @@ plot_model_parameters <- function(results,
           "beta_j0_env", "beta_j0_hum", "beta_j0_tot",    # Transmission rates
           "tau_i", "theta_j",                             # Mobility rate
           "a_1_j", "a_2_j", "b_1_j", "b_2_j",            # Seasonal parameters
-          "mu_j_baseline",                                # Baseline mortality hazard (CFR)
-          "mu_j_epidemic_factor",                         # Epidemic-period CFR multiplier
-          "epidemic_threshold",                           # Epidemic regime activation
+          "epidemic_threshold",                           # Case-reporting PPV switch threshold
           "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"  # psi_star calibration
      )
 

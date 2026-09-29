@@ -8,14 +8,12 @@
 #' per member. The distribution over members gives the posterior on
 #' period-weighted CFR per country.
 #'
-#' This complements the algebraic implied CFR derived in
-#' \code{.mosaic_add_implied_cfr_columns()}, which uses sampled
-#' microparameter values directly via the steady-state identity. The
-#' period CFR here is what the engine actually produced when fitting the
-#' surveillance data, including time-varying chi switching and the
-#' epidemic-period multiplier on mu_jt; the algebraic CFR is the
-#' steady-state limit at the posterior parameter means under a clean
-#' regime split (endemic vs epidemic).
+#' This complements the posterior reported CFR by year
+#' (\code{calc_model_ensemble()$cfr_posterior}), which is the calibrated
+#' \code{mu_jt} itself. The period CFR here is what the members actually
+#' produced over the window, so it also carries the case-reporting PPV switch
+#' (reported CFR falls to \code{mu_jt * chi_endemic / chi_epidemic} on
+#' endemic-PPV ticks) and the realised timing of cases and deaths.
 #'
 #' @param cases_array 4-D numeric array of simulated reported cases with
 #'   dimensions \code{[n_locations, n_time, n_param_sets, n_stoch_per]}.

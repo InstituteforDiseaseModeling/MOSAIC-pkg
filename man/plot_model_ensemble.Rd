@@ -67,7 +67,7 @@ and the rendered lines. Default \code{2L}. This masks the initial-condition
 warm-up transient (seeded E/I progressing into new_symptomatic before the
 SEIR dynamics settle), which is visually dominant for low-count countries.
 DISPLAY ONLY (raw arrays untouched). The legitimate leading
-reporting-lag zeros in Deaths (from \code{delta_reporting_deaths}) are REAL
+reporting-lag zeros in Deaths (from \code{delta_reporting_cases}, the lag deaths share with cases) are REAL
 and are NOT masked by this argument. Set to \code{0L} to disable.}
 
 \item{score_idx_cases, score_idx_deaths}{Integer (1-based). Per-channel scored

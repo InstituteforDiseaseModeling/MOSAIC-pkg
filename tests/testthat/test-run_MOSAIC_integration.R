@@ -45,7 +45,6 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   config$metadata          <- NULL
   config$zeta_ratio        <- NULL
   config$decay_days_spread <- NULL
-  config$CFR_target        <- NULL   # B2 (v4.5): injected tracking field, not a signature arg
   config$reported_cases_weight  <- NULL
   config$reported_deaths_weight <- NULL
   config$output_file_path  <- NULL
@@ -104,8 +103,14 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
     cases[]  <- pmax(0, round(cases))
     deaths[] <- pmax(0, round(deaths))
 
+    # Symptomatic onsets consistent with the cases (reported = rho/chi * onsets):
+    # the integrated deaths likelihood and the ensemble's post-hoc death redraw
+    # both take the path's onsets as their exposure.
+    onsets <- round(cases * config$chi_epidemic / config$rho)
+
     list(params = config,
-         results = list(reported_cases = cases, reported_deaths = deaths),
+         results = list(reported_cases = cases, reported_deaths = deaths,
+                        new_symptomatic = onsets),
          seed = as.integer(seed_val))
   }
 
@@ -148,9 +153,8 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   # ---- run ------------------------------------------------------------------
   # suppressWarnings: driving the REAL pipeline on synthetic simulation output emits
   # expected, data-driven warnings that are orthogonal to the orchestration flow
-  # under test -- e.g. "biologically extreme cfr_clinical_epidemic" from the
-  # implied-CFR step (the fake counts are not epidemiologically calibrated) and
-  # arrow's "set_io_thread_count() with num_threads < 2" note from run_MOSAIC's
+  # under test -- e.g. fit-quality warnings on the synthetic counts (they are
+  # not epidemiologically calibrated) and arrow's "set_io_thread_count() with num_threads < 2" note from run_MOSAIC's
   # thread pinning. Errors still propagate and fail the test.
   result <- suppressWarnings(run_MOSAIC(
     config     = config,
@@ -242,4 +246,18 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
                   %in% names(summ)))
   expect_equal(summ$central_method_cases,  "median")
   expect_equal(summ$central_method_deaths, "median")
+
+  # (8) Integrated deaths likelihood (v0.96.0): the posterior reported CFR by
+  # location and year, from the ensemble members' post-hoc CFR draws.
+  cfr_file <- file.path(dir_output, "3_results", "posterior", "cfr_posterior.csv")
+  expect_true(file.exists(cfr_file))
+  cfr <- utils::read.csv(cfr_file, stringsAsFactors = FALSE)
+  expect_true(all(c("location", "year", "cfr_median", "cfr_lower", "cfr_upper", "prior_median")
+                  %in% names(cfr)))
+  win_years <- seq(as.integer(format(as.Date(config$date_start), "%Y")),
+                   as.integer(format(as.Date(config$date_stop), "%Y")))
+  expect_equal(nrow(cfr), n_loc * length(win_years))
+  expect_setequal(unique(cfr$location), config$location_name)
+  expect_true(all(is.finite(cfr$cfr_median) & cfr$cfr_median > 0 & cfr$cfr_median < 1))
+  expect_true(all(cfr$cfr_lower <= cfr$cfr_median & cfr$cfr_median <= cfr$cfr_upper))
 })

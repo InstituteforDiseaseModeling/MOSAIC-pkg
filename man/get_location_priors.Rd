@@ -18,6 +18,8 @@ A priors list object with the same structure as the input, containing:
 \item All metadata (unchanged)
 \item All global parameters (unchanged)
 \item Location-specific parameters filtered to only the requested location(s)
+\item The reported-CFR prior block \code{mu_jt} (when present), its
+per-location table filtered the same way
 }
 }
 \description{
@@ -31,6 +33,7 @@ This function preserves the exact structure of the priors object:
 \item \code{metadata}: Copied unchanged
 \item \code{parameters_global}: All global parameters preserved
 \item \code{parameters_location}: Filtered to include only the specified ISO codes
+\item \code{mu_jt}: Global widths kept; per-location table filtered
 }
 
 The function validates that all requested locations exist in the priors before

@@ -116,7 +116,8 @@
   #   as a drop-to-zero. Cases write at [tick+1] and are fine.
   # Artifact 2 (n_cases_warmup_mask): the first ~1-2 reported cases steps are an
   #   IC warm-up transient. The legitimate leading reporting-lag zeros in Deaths
-  #   (delta_reporting_deaths) are REAL and are deliberately NOT masked.
+  #   (delta_reporting_cases; deaths are reported on the case lag) are REAL and
+  #   are deliberately NOT masked.
 
   n_cases_warmup_mask <- as.integer(n_cases_warmup_mask)
   if (length(n_cases_warmup_mask) != 1L || is.na(n_cases_warmup_mask) ||
@@ -258,7 +259,7 @@
 #'   warm-up transient (seeded E/I progressing into new_symptomatic before the
 #'   SEIR dynamics settle), which is visually dominant for low-count countries.
 #'   DISPLAY ONLY (raw arrays untouched). The legitimate leading
-#'   reporting-lag zeros in Deaths (from \code{delta_reporting_deaths}) are REAL
+#'   reporting-lag zeros in Deaths (from \code{delta_reporting_cases}, the lag deaths share with cases) are REAL
 #'   and are NOT masked by this argument. Set to \code{0L} to disable.
 #' @param score_idx_cases,score_idx_deaths Integer (1-based). Per-channel scored
 #'   time-window START index (burn-in / deaths-era start). Leading timesteps

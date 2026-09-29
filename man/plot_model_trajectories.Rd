@@ -63,9 +63,9 @@ use the conventional weighted \emph{median}.
 and the \emph{optimized} subset (\code{is_best_subset_opt} /
 \code{weight_best_opt}) when \code{control$predictions$optimize_subset = TRUE}.
 Channels are captured at sim time (stream-to-disk) and reduced over the
-optimized members with NO re-simulation. The CFR(t) panel carries dashed
-endemic/epidemic regime reference lines when \code{trajectories$cfr_refs} is
-present.
+optimized members with NO re-simulation. The CFR(t) panel carries a dashed
+step line at the posterior median reported CFR for each year when
+\code{trajectories$cfr_refs} is present.
 }
 \seealso{
 \code{\link{render_MOSAIC_figures}}, \code{\link{plot_model_ensemble}}.

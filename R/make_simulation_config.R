@@ -86,13 +86,16 @@
 #'        >= 0, per day; "mild / asymptomatic" branch).
 #' @param epsilon Natural-infection immunity waning rate `R -> S` (numeric
 #'        >= 0, per day). Distinct from vaccine waning (`omega_1`, `omega_2`).
-#' @param mu_jt **Deprecated and ignored.** Retained only so that configs written
-#'        before v0.94.0 (which carry a `mu_jt` field) can still be replayed through
-#'        `do.call(make_simulation_config, config)` without an "unused argument"
-#'        error. Any value supplied is silently dropped and is **not** returned in
-#'        the config. The engine never read this matrix: `run_simulation()` derives
-#'        the per-tick mortality hazard itself from `mu_j_baseline` and
-#'        `mu_j_epidemic_factor` (`R/sim_components.R`).
+#' @param mu_jt Reported case fatality ratio (reported deaths per reported
+#'        suspected case) by location and day: a matrix with rows equal to
+#'        length(location_name) and columns equal to the daily sequence from
+#'        date_start to date_stop, a per-location vector (constant in time) or a
+#'        scalar. Values in \[0, 1). The returned config always carries the full
+#'        matrix. The engine converts it each tick to the probability that a new
+#'        symptomatic onset is fatal, `mu_jt * rho / (rho_deaths * chi_epidemic)`,
+#'        so reported deaths over reported cases equal `mu_jt` on epidemic-PPV
+#'        ticks. Build it from WHO annual data with `est_CFR_hierarchical()` and
+#'        `make_mu_jt()`.
 #' @param mu_j_slope **Deprecated and ignored.** The linear-in-time mortality trend
 #'        `(1 + mu_j_slope * tick/nticks)` was removed from the engine in v0.95.0
 #'        (CFR restructure R3): it is not estimable from the deaths series, it
@@ -101,10 +104,13 @@
 #'        written before v0.95.0 can still be replayed through
 #'        `do.call(make_simulation_config, config)`; any value supplied is silently
 #'        dropped and is **not** returned in the config.
-#' @param mu_j_baseline Baseline infection fatality ratio for threshold-dependent IFR model.
-#'        Numeric vector of length(location_name). Values must be in \[0, 1\].
-#' @param mu_j_epidemic_factor Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50% increase).
-#'        Numeric vector of length(location_name). Must be >= 0.
+#' @param mu_j_baseline **Removed in v0.96.0.** The pre-v0.96.0 baseline daily
+#'        mortality hazard. Supplying it marks the input as a config written for
+#'        the retired mortality model, whose `mu_jt` field was never read by any
+#'        engine, so the call is refused rather than silently reinterpreting that
+#'        matrix. Retained in the signature so the refusal names the problem.
+#' @param mu_j_epidemic_factor **Removed in v0.96.0.** The pre-v0.96.0 epidemic
+#'        mortality multiplier; treated exactly like `mu_j_baseline`.
 #'
 #' ## Observation Processes
 #' Surveillance-cascade parameters mapping true infections and deaths to
@@ -114,20 +120,19 @@
 #'        presents to surveillance (numeric in \[0, 1\]). *Not* a reporting
 #'        fraction and *not* sigma -- this is the upstream care-seeking
 #'        step of the surveillance cascade.
-#' @param rho_deaths Death detection rate: probability a true cholera death is captured by surveillance (numeric in \[0, 1\] or NULL). Consumed by the engine to produce reported_deaths (originally laser-cholera#49; the pure-R engine implements the same rule).
+#' @param rho_deaths Death detection rate: probability a true cholera death is captured by surveillance (numeric in (0, 1]). The engine thins true deaths by it to produce reported_deaths, and divides by it when converting the reported CFR `mu_jt` to a per-onset fatality probability, so it sets true deaths without moving reported deaths.
 #' @param sigma Proportion of infections that are symptomatic (numeric in \[0, 1\]).
 #' @param chi_endemic Positive predictive value among suspected cases during endemic periods (numeric in (0, 1]).
 #' @param chi_epidemic Positive predictive value among suspected cases during epidemic periods (numeric in (0, 1]).
-#' @param epidemic_threshold Isym/N point prevalence threshold for epidemic regime activation. Used for both
-#'        case reporting and IFR threshold models. Numeric scalar or length-n vector in \[0, 1\].
+#' @param epidemic_threshold Isym/N point prevalence threshold that switches the case-reporting PPV
+#'        between `chi_endemic` and `chi_epidemic`. Numeric scalar or length-n vector in \[0, 1\].
 #' @param delta_reporting_cases Symptom-onset-to-surveillance reporting delay
 #'        in days (non-negative integer). *Not* infection-to-report --
 #'        incubation is handled separately by the E compartment and `iota`.
-#' @param delta_reporting_deaths Death-event-to-death-report delay in days
-#'        (non-negative integer). The engine reads `disease_deaths` at
-#'        `tick - delta_reporting_deaths` and thins by `rho_deaths`
-#'        (`R/sim_components.R`), so this is a post-mortem reporting lag only:
-#'        the onset-to-death interval is implicit in `gamma_1^-1`, *not* here.
+#' @param delta_reporting_deaths **Deprecated and ignored.** Since v0.96.0 a death
+#'        is reported on the same lag as its case (`delta_reporting_cases`), as the
+#'        surveillance record it is scored against does. Retained so older configs
+#'        still load; any value supplied is dropped and not returned.
 #'
 #' ## Spatial model
 #' Location coordinates and the gravity-model mobility parameters governing
@@ -241,7 +246,7 @@
 #'      gamma_1 = 0.2,
 #'      gamma_2 = 0.25,
 #'      epsilon = 0.05,
-#'      mu_j_baseline = c(0.01, 0.01),
+#'      mu_jt = c(0.02, 0.015),
 #'      rho = 0.9,
 #'      sigma = 0.5,
 #'      beta_j0_hum = c(0.05, 0.03),
@@ -314,10 +319,10 @@ make_simulation_config <- function(output_file_path = NULL,
                               gamma_1 = NULL,
                               gamma_2 = NULL,
                               epsilon = NULL,
-                              mu_jt = NULL,  # DEPRECATED + IGNORED: legacy-config tolerance only (see @param)
-                              mu_j_baseline = NULL,  # Baseline IFR for threshold-dependent model
+                              mu_jt = NULL,  # Reported CFR by location and day (v0.96.0)
+                              mu_j_baseline = NULL,  # REMOVED v0.96.0: marks a pre-v0.96.0 config (refused)
                               mu_j_slope = NULL,  # DEPRECATED + IGNORED: legacy-config tolerance only (see @param)
-                              mu_j_epidemic_factor = NULL,  # Proportional increase during epidemics
+                              mu_j_epidemic_factor = NULL,  # REMOVED v0.96.0: marks a pre-v0.96.0 config (refused)
 
                               # Observation Processes
                               rho = NULL,
@@ -328,7 +333,7 @@ make_simulation_config <- function(output_file_path = NULL,
                               chi_epidemic = NULL,
                               epidemic_threshold = NULL,  # Used for both case reporting and IFR threshold models
                               delta_reporting_cases = NULL,  # Symptom-onset-to-case reporting delay
-                              delta_reporting_deaths = NULL,  # Death-event-to-death-report delay (post-mortem lag; onset-to-death is in gamma_1^-1)
+                              delta_reporting_deaths = NULL,  # DEPRECATED + IGNORED: deaths are reported on the case lag (v0.96.0)
 
                               # Spatial model
                               longitude = NULL,
@@ -375,6 +380,19 @@ make_simulation_config <- function(output_file_path = NULL,
 ) {
 
      message('Validating parameter values...')
+
+     # A config written for the pre-v0.96.0 mortality model carries
+     # mu_j_baseline / mu_j_epidemic_factor, and often a `mu_jt` matrix that no
+     # engine ever read. Accepting it would silently promote that dead matrix to
+     # the reported CFR, so it is refused with the reason.
+     if (!is.null(mu_j_baseline) || !is.null(mu_j_epidemic_factor)) {
+          stop("This config was written for the pre-v0.96.0 mortality model (it supplies ",
+               paste(c("mu_j_baseline", "mu_j_epidemic_factor")[
+                    c(!is.null(mu_j_baseline), !is.null(mu_j_epidemic_factor))], collapse = " and "),
+               "). That model's `mu_jt` field was never read by any engine, so it is not ",
+               "reinterpreted as the reported case fatality ratio. Drop those fields and supply ",
+               "a v0.96.0 `mu_jt` (see make_mu_jt()).", call. = FALSE)
+     }
 
      if (is.null(seed) || !is.numeric(seed) || length(seed) != 1 || seed <= 0 || seed %% 1 != 0) {
           stop("'seed' must be provided as an integer scalar greater than zero.")
@@ -425,6 +443,7 @@ make_simulation_config <- function(output_file_path = NULL,
           gamma_1           = gamma_1,
           gamma_2           = gamma_2,
           epsilon           = epsilon,
+          mu_jt             = mu_jt,
           rho               = rho,
           rho_deaths        = rho_deaths,
           sigma             = sigma,
@@ -490,20 +509,9 @@ make_simulation_config <- function(output_file_path = NULL,
           params$prop_V2_initial <- prop_V2_initial
      }
 
-     # Add optional IFR parameters if provided
-     if (!is.null(mu_j_baseline)) {
-          params$mu_j_baseline <- mu_j_baseline
-     }
-     if (!is.null(mu_j_epidemic_factor)) {
-          params$mu_j_epidemic_factor <- mu_j_epidemic_factor
-     }
-
      # Add optional delta parameters if provided
      if (!is.null(delta_reporting_cases)) {
           params$delta_reporting_cases <- delta_reporting_cases
-     }
-     if (!is.null(delta_reporting_deaths)) {
-          params$delta_reporting_deaths <- delta_reporting_deaths
      }
 
      # Optional epidemic peaks pass-through; NULL is allowed (see docstring +
@@ -686,34 +694,30 @@ make_simulation_config <- function(output_file_path = NULL,
           stop("epsilon must be a numeric scalar greater than or equal to zero.")
      }
 
-     # Threshold-dependent IFR parameters. The engine consumes mu_j_baseline and
-     # mu_j_epidemic_factor directly and builds its own per-tick mortality hazard
-     # (R/sim_components.R); it never reads a pre-materialised [nL x nT] mu_jt
-     # matrix, so no such matrix is generated or returned here. `mu_jt` and
-     # `mu_j_slope` survive in the signature purely as legacy-config tolerance and
-     # are dropped silently (see @param mu_jt, @param mu_j_slope).
-     # Length rule: SCALAR or per-location, matching the engine. `.sim_patch_vector()`
-     # (R/sim_params.R) broadcasts a length-1 mu_j_* to every patch, so demanding
-     # length(location_name) here would reject configs the engine accepts.
-     if (!is.null(mu_j_baseline)) {
-          if (!is.numeric(mu_j_baseline) ||
-              !(length(mu_j_baseline) %in% c(1L, length(location_name)))) {
-               stop("mu_j_baseline must be a numeric scalar or a vector with length equal to location_name.")
+     # Reported case fatality ratio by location and day (v0.96.0). A scalar or a
+     # per-location vector is expanded to the full [nL x nT] matrix so every
+     # config carries one schema; `mu_j_slope` survives in the signature only as
+     # legacy-config tolerance and is dropped silently (see @param mu_j_slope).
+     nL_mu <- length(location_name); nT_mu <- length(t)
+     if (!is.numeric(mu_jt)) stop("mu_jt must be numeric.")
+     if (is.matrix(mu_jt)) {
+          if (nrow(mu_jt) != nL_mu || ncol(mu_jt) != nT_mu) {
+               stop("mu_jt must be a matrix with rows equal to length(location_name) and columns equal to ",
+                    "the daily sequence from date_start to date_stop, a per-location vector, or a scalar.")
           }
-          if (any(mu_j_baseline < 0 | mu_j_baseline > 1)) {
-               stop("All values in mu_j_baseline must be between 0 and 1.")
-          }
+     } else if (length(mu_jt) %in% c(1L, nL_mu)) {
+          mu_jt <- matrix(as.numeric(mu_jt), nrow = nL_mu, ncol = nT_mu)
+     } else if (nL_mu == 1L && length(mu_jt) == nT_mu) {
+          # A one-location daily series (how JSON returns a [1 x nT] matrix).
+          mu_jt <- matrix(as.numeric(mu_jt), nrow = 1L)
+     } else {
+          stop("mu_jt must be a matrix with rows equal to length(location_name) and columns equal to ",
+               "the daily sequence from date_start to date_stop, a per-location vector, or a scalar.")
      }
-
-     if (!is.null(mu_j_epidemic_factor)) {
-          if (!is.numeric(mu_j_epidemic_factor) ||
-              !(length(mu_j_epidemic_factor) %in% c(1L, length(location_name)))) {
-               stop("mu_j_epidemic_factor must be a numeric scalar or a vector with length equal to location_name.")
-          }
-          if (any(mu_j_epidemic_factor < -1)) {
-               stop("All values in mu_j_epidemic_factor must be greater than or equal to -1.")
-          }
+     if (any(!is.finite(mu_jt)) || any(mu_jt < 0) || any(mu_jt >= 1)) {
+          stop("All values in mu_jt must be finite and in [0, 1).")
      }
+     params$mu_jt <- mu_jt
 
      # Observation Processes validation.
      if (!is.numeric(rho) || rho < 0 || rho > 1) {
@@ -721,6 +725,9 @@ make_simulation_config <- function(output_file_path = NULL,
      }
      if (!is.null(rho_deaths) && (!is.numeric(rho_deaths) || rho_deaths < 0 || rho_deaths > 1)) {
           stop("rho_deaths must be a numeric scalar between 0 and 1.")
+     }
+     if (rho_deaths == 0 && any(mu_jt > 0)) {
+          stop("rho_deaths is 0, so no death is ever reported, yet mu_jt asks for a positive reported CFR.")
      }
      if (!is.numeric(sigma) || sigma < 0 || sigma > 1) {
           stop("sigma must be a numeric scalar between 0 and 1.")
@@ -732,6 +739,15 @@ make_simulation_config <- function(output_file_path = NULL,
      if (!is.numeric(chi_epidemic) || chi_epidemic <= 0 || chi_epidemic > 1) {
           stop("chi_epidemic must be a numeric scalar in (0, 1].")
      }
+     # The engine's per-onset fatality probability must stay below 1.
+     if (rho_deaths > 0) {
+          p_max <- max(mu_jt) * rho / (rho_deaths * chi_epidemic)
+          if (p_max >= 1) {
+               stop(sprintf(paste0("max(mu_jt) * rho / (rho_deaths * chi_epidemic) = %.3f: no per-onset ",
+                                   "fatality probability can produce that reported CFR with these ",
+                                   "reporting parameters."), p_max))
+          }
+     }
      if (!is.null(epidemic_threshold) && (!is.numeric(epidemic_threshold) || any(epidemic_threshold < 0) || any(epidemic_threshold > 1))) {
           stop("epidemic_threshold must be NULL or a numeric scalar or vector with all values in [0, 1].")
      }
@@ -739,13 +755,6 @@ make_simulation_config <- function(output_file_path = NULL,
      if (!is.null(delta_reporting_cases)) {
           if (!is.numeric(delta_reporting_cases) || delta_reporting_cases < 0 || delta_reporting_cases != floor(delta_reporting_cases)) {
                stop("delta_reporting_cases must be a non-negative integer.")
-          }
-     }
-
-     # Validate delta_reporting_deaths
-     if (!is.null(delta_reporting_deaths)) {
-          if (!is.numeric(delta_reporting_deaths) || delta_reporting_deaths < 0 || delta_reporting_deaths != floor(delta_reporting_deaths)) {
-               stop("delta_reporting_deaths must be a non-negative integer.")
           }
      }
 

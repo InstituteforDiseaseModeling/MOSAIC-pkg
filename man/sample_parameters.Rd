@@ -50,15 +50,12 @@ survival; decay_days_long is derived as short + spread (default TRUE)
 \item sample_chi_epidemic: PPV among suspected cases during epidemic periods (default TRUE)
 \item sample_rho: Care-seeking rate (default TRUE)
 \item sample_rho_deaths: Surveillance capture rate of true cholera deaths
-(default FALSE; PINNED at \code{config_default$rho_deaths} = 0.42). Under
-the B2 derivation \code{mu_j_baseline} is proportional to
-\code{1 / rho_deaths} while the engine thins \code{disease_deaths} by
-\code{rho_deaths}, so the parameter cancels from the deaths mean
-identically and carries no likelihood information (Fisher information is
-exactly zero to O(mu^2)). Sweeping it over 0.25-0.65 \emph{with} the
-derivation moves realized deaths 0.3-1.3 percent (n = 48 seeds/arm,
-5 national medoids), against 6-27 percent for either half-change alone.
-The Beta(36.95, 51.02) prior is retained in \code{priors_default} as the
+(default FALSE; PINNED at \code{config_default$rho_deaths} = 0.42). The
+engine converts the reported CFR \code{mu_jt} to a per-onset fatality
+probability by dividing by \code{rho_deaths} and then thins true deaths
+by it, so the parameter cancels from reported deaths exactly and carries
+no likelihood information; it sets only the level of true deaths. The
+Beta(36.95, 51.02) prior is retained in \code{priors_default} as the
 literature record and for sensitivity runs; set TRUE to re-enable the draw.
 \item sample_sigma: Symptomatic fraction (default TRUE)
 \item sample_zeta_1: Symptomatic shedding rate (default TRUE)
@@ -71,34 +68,8 @@ literature record and for sensitivity runs; set TRUE to re-enable the draw.
 \item sample_a_2_j: Seasonality (default TRUE)
 \item sample_b_1_j: Seasonality (default TRUE)
 \item sample_b_2_j: Seasonality (default TRUE)
-\item sample_CFR_target: Per-country target reported case-fatality ratio
-(B2 lognormal location prior). When the priors object carries a
-\code{CFR_target} location prior, this gates whether CFR_target is drawn
-(TRUE) or held at its config default / prior median (FALSE) (default TRUE)
-\item sample_mu_j_baseline: Under B2 (priors object has a \code{CFR_target}
-location prior) this gates the \emph{derivation} of \code{mu_j_baseline}
-from \code{CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)}
-(the B2.1 engine-correct chain factor) rather than an
-independent draw; \code{mu_j_baseline} is no longer an independently
-sampled location parameter. Under a legacy priors object (no
-\code{CFR_target} prior) it gates the old independent mu_j_baseline draw.
-(default TRUE)
-\item sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)
-\item sample_epidemic_threshold: Location-specific epidemic activation threshold (default TRUE)
+\item sample_epidemic_threshold: Location-specific case-reporting PPV switch threshold (default TRUE)
 \item sample_delta_reporting_cases: Symptom-onset-to-case reporting delay in days (default TRUE)
-\item sample_delta_reporting_deaths: Death-event-to-death-report delay in
-days (default FALSE; PINNED at
-\code{config_default$delta_reporting_deaths} = 5). The engine reads
-\code{disease_deaths} at \code{tick - delta_reporting_deaths} and thins by
-\code{rho_deaths}, so this is a post-mortem reporting lag only; the
-onset-to-death interval is implicit in \code{gamma_1^-1}. There is no
-observational anchor to calibrate against, because deaths and cases are
-reported on the same WHO bulletin row (weekly cross-correlation peaks at
-lag 0 in 11 of 15 countries) and the posterior beats a resampling null in
-only 6 of 27 countries. 5 days is the rounded prior median/mean of the
-retained TruncNorm(4, 3) truncated to 1-14 days, and the midpoint of
-the 3-7 day IDSR death-to-report window that anchors it. Set TRUE to
-re-enable the draw.
 \item sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
 \item sample_psi_star_b: Suitability calibration scale/offset (default TRUE)
 \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)
@@ -108,7 +79,16 @@ re-enable the draw.
 reporting chain (sigma, rho, chi_endemic, iota). Only active when
 sample_initial_conditions is TRUE. (default FALSE)
 }
-If NULL, all parameters are sampled (default behavior).}
+If NULL, all parameters are sampled (default behavior).
+
+The reported case fatality ratio \code{mu_jt} is not sampled. It is a
+\link{location x day} matrix carried by the config, and calibration integrates
+its level and year-to-year deviations out of the deaths likelihood
+analytically (\code{\link{calc_log_likelihood_deaths_integrated}}). The
+flags \code{sample_CFR_target}, \code{sample_mu_j_baseline},
+\code{sample_mu_j_epidemic_factor} and \code{sample_delta_reporting_deaths}
+were removed with the parameters they controlled in v0.96.0; supplying one
+raises a warning and has no effect.}
 
 \item{verbose}{Logical indicating whether to print progress messages. Default TRUE.}
 

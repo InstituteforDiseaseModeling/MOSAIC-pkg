@@ -109,14 +109,10 @@ convert_config_to_dataframe <- function(config) {
           "decay_days_long",
           "decay_shape_1",
           "decay_shape_2",
-          "CFR_target",         # B2: per-country target reported CFR
-          "mu_j_baseline",      # Added: Baseline location-specific IFR
-          "mu_j_epidemic_factor", # Added: Epidemic IFR multiplier
-          "epidemic_threshold", # Added: Epidemic activation threshold
+          "epidemic_threshold", # Case-reporting PPV switch threshold
           "chi_endemic",        # Added: PPV during endemic periods
           "chi_epidemic",       # Added: PPV during epidemic periods
-          "delta_reporting_cases",  # Symptom-onset-to-case reporting delay
-          "delta_reporting_deaths", # Death-event-to-death-report delay (post-mortem lag; onset-to-death is in gamma_1^-1)
+          "delta_reporting_cases",  # Symptom-onset-to-case reporting delay (deaths share it)
           "psi_star_a",         # Added: psi_star calibration parameters
           "psi_star_b",
           "psi_star_z",
@@ -158,8 +154,6 @@ convert_config_to_dataframe <- function(config) {
                "beta_j0_env", "beta_j0_hum", "beta_j0_tot", "p_beta",
                "tau_i", "theta_j",
                "a_1", "a_2", "b_1", "b_2",
-               "CFR_target",
-               "mu_j_baseline", "mu_j_epidemic_factor",
                "epidemic_threshold",
                "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"
           )

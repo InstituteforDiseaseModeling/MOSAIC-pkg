@@ -26,7 +26,9 @@
 #' arguments to \code{\link{est_suitability}} and overrides any date keys passed
 #' via \code{est_suitability_spec} (with a warning). \code{est_suitability_spec}
 #' therefore controls only modeling choices (target, features, architecture), not
-#' the cutoff window.
+#' the cutoff window. The reported CFR \code{mu_jt} is held at its value on
+#' \code{T} for every later day, because its post-cutoff years are estimated
+#' from WHO annual data that were not available at \code{T}.
 #'
 #' \strong{Coupled metapopulation.} \code{iso} may be a single country or a vector;
 #' a vector runs as the coupled metapopulation (one calibration per cutoff covering
@@ -252,9 +254,19 @@ run_rolling_cv <- function(PATHS,
                     psi_csv <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
                }
 
-               # 2. build cutoff config: subset loc, swap psi, mask obs > T
+               # 2. build cutoff config: subset loc, swap psi, freeze mu_jt, mask obs > T
                cfg <- MOSAIC::get_location_config(iso = iso, config = base_config)
                cfg$psi_jt <- .rolling_cv_psi_matrix(psi_csv, cfg$location_name, cfg_dates)
+               # The reported CFR's post-cutoff years come from WHO annual data
+               # that did not exist at T, so it is held at its value on T (the
+               # same carry-forward the config builder uses past the last data
+               # year). Calibration's CFR offset, estimated on data <= T, then
+               # carries into the forecast through the post-hoc death redraw.
+               if (!is.null(cfg$mu_jt)) {
+                    cfg$mu_jt <- .mosaic_freeze_time_matrix(
+                         .rcv_as_matrix(cfg$mu_jt, length(cfg$location_name), length(cfg_dates)),
+                         cfg_dates, T_k)
+               }
                nloc <- length(cfg$location_name)
                rc <- .rcv_as_matrix(cfg$reported_cases,  nloc, length(cfg_dates))
                rd <- .rcv_as_matrix(cfg$reported_deaths, nloc, length(cfg_dates))

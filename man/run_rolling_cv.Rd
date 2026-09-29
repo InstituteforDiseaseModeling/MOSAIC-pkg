@@ -141,7 +141,9 @@ nor labeled OOS.
 arguments to \code{\link{est_suitability}} and overrides any date keys passed
 via \code{est_suitability_spec} (with a warning). \code{est_suitability_spec}
 therefore controls only modeling choices (target, features, architecture), not
-the cutoff window.
+the cutoff window. The reported CFR \code{mu_jt} is held at its value on
+\code{T} for every later day, because its post-cutoff years are estimated
+from WHO annual data that were not available at \code{T}.
 
 \strong{Coupled metapopulation.} \code{iso} may be a single country or a vector;
 a vector runs as the coupled metapopulation (one calibration per cutoff covering

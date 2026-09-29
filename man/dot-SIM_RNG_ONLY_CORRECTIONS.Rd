@@ -28,6 +28,12 @@ progression <= 2 at sigma = 0.2). Covered by test-sigma-split.R.}
 \code{W/(kappa + W)} with W an absolute cell count; kappa is a
 concentration. Production divides by N. Covered by
 test-env-dose-response.R.}
+\item{infectious/fatal_onsets}{v0.96.0. The oracle's mortality is a daily
+hazard \code{mu_j_baseline * (1 + mu_j_epidemic_factor * flag)} on the
+symptomatic stock, reported \code{delta_reporting_deaths} days after the
+death. Production draws each onset's outcome at onset from the
+time-varying reported CFR \code{mu_jt} and reports deaths on the case
+lag. Covered by test-sim-mortality-onset.R.}
 }
 }
 \keyword{internal}

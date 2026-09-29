@@ -100,37 +100,26 @@
   invisible(wrote)
 }
 
-#' Weighted per-location endemic/epidemic CFR reference levels for the CFR panel
+#' Posterior reported-CFR reference for the trajectory CFR panel
 #'
-#' Computes the best-subset weighted median of the implied surveillance CFR
-#' (\code{cfr_baseline_<iso>} / \code{cfr_epidemic_<iso>} columns written by
-#' \code{calc_implied_cfr()}) per location, for the dashed regime reference lines
-#' on the trajectory CFR(t) panel (DM F4). Uses the candidate best subset
-#' (\code{is_best_subset} / \code{weight_best}) to match the trajectory weighting.
-#' Returns \code{NULL} when neither column family is present (e.g. gamma_1 absent).
+#' The ensemble's posterior reported CFR by location and year
+#' (\code{calc_model_ensemble()$cfr_posterior}), in config location order, for
+#' the dashed reference on the trajectory CFR(t) panel. On epidemic-PPV ticks the
+#' simulated reported CFR should sit on this line. Returns \code{NULL} when the
+#' ensemble carries no posterior (deaths were not redrawn).
 #'
-#' @param results The samples/results data.frame (from samples.parquet).
+#' @param cfr_posterior Data frame from \code{calc_model_ensemble()$cfr_posterior}, or \code{NULL}.
 #' @param location_names Character vector of locations (config order).
-#' @return A data.frame \code{location, cfr_baseline, cfr_epidemic} (weighted
-#'   medians; \code{NA} where a column is absent), or \code{NULL}.
+#' @return A data.frame \code{location, year, cfr_median, cfr_lower, cfr_upper}, or \code{NULL}.
 #' @noRd
-.mosaic_compute_cfr_refs <- function(results, location_names) {
-  if (is.null(results) || !is.data.frame(results) ||
-      !("is_best_subset" %in% names(results))) return(NULL)
-  sub <- results[results$is_best_subset %in% TRUE, , drop = FALSE]
-  if (nrow(sub) == 0L) return(NULL)
-  w <- sub$weight_best
-  if (is.null(w) || all(!is.finite(w)) || sum(w, na.rm = TRUE) == 0) return(NULL)
-  bcols <- paste0("cfr_baseline_", location_names)
-  ecols <- paste0("cfr_epidemic_", location_names)
-  if (!any(c(bcols, ecols) %in% names(sub))) return(NULL)  # no CFR columns at all
-  .wmed <- function(col) if (col %in% names(sub))
-    weighted_quantiles(sub[[col]], w, 0.5) else NA_real_
-  data.frame(
-    location     = location_names,
-    cfr_baseline = vapply(bcols, .wmed, numeric(1)),
-    cfr_epidemic = vapply(ecols, .wmed, numeric(1)),
-    row.names    = NULL, stringsAsFactors = FALSE)
+.mosaic_compute_cfr_refs <- function(cfr_posterior, location_names) {
+  if (is.null(cfr_posterior) || !is.data.frame(cfr_posterior) || !nrow(cfr_posterior)) return(NULL)
+  keep <- cfr_posterior$location %in% location_names
+  if (!any(keep)) return(NULL)
+  out <- cfr_posterior[keep, c("location", "year", "cfr_median", "cfr_lower", "cfr_upper"), drop = FALSE]
+  out <- out[order(match(out$location, location_names), out$year), , drop = FALSE]
+  rownames(out) <- NULL
+  out
 }
 
 #' Persist the compact trajectory artifact for the "trajectories" figure group
@@ -681,7 +670,7 @@
   }
 
   # Skip known metadata/structural fields that don't need 'distribution'
-  metadata_fields <- c("metadata", "parameters_global", "parameters_location",
+  metadata_fields <- c("metadata", "parameters_global", "parameters_location", "mu_jt",
                        "simulation", "reporting", "climate", "vaccination")
 
   # Check that each prior has distribution field
@@ -1341,7 +1330,10 @@
 #'   density -- a change in likelihood VALUES -- but left this string at
 #'   "R/v0.92.0", so a resume could have pooled v0.92 and v0.93 shards. The
 #'   per-channel `eps_rel` change re-bumps it and closes that window too.
-.mosaic_likelihood_impl_version <- function() "R/v0.93.0+eps_rel"
+#'   v0.96.0 scores deaths with the reported CFR integrated out
+#'   (\code{calc_log_likelihood_deaths_integrated()}), weekly, instead of the
+#'   eps-floored daily negative binomial on one realisation.
+.mosaic_likelihood_impl_version <- function() "R/v0.96.0+deaths_integrated"
 
 #' Likelihood-Value Provenance Descriptor
 #'

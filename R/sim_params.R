@@ -19,11 +19,14 @@
 #'   file.
 #' @param components Pipeline subset that will be run; determines which
 #'   compartments \code{Census} sums and which parameters are required.
+#' @param mode \code{"rng"} (production) or \code{"replay"} (the laser-cholera
+#'   parity harness); decides which mortality inputs are read.
 #' @return A list of validated engine parameters, including the original
 #'   (normalised) config under \code{$config}.
 #' @keywords internal
-sim_params <- function(config, components = SIM_PIPELINE) {
+sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "replay")) {
 
+     mode <- match.arg(mode)
      config <- .sim_load_config(config)
 
      par <- list()
@@ -159,30 +162,43 @@ sim_params <- function(config, components = SIM_PIPELINE) {
 
           par$delta_reporting_cases  <- .sim_lag(config$delta_reporting_cases,
                                                  "delta_reporting_cases")
-          par$delta_reporting_deaths <- .sim_lag(config$delta_reporting_deaths,
-                                                 "delta_reporting_deaths")
-
-          # mu_j_slope was dropped in v0.95.0 (CFR restructure R3); the engine no
-          # longer carries a linear-in-time mortality trend, so a `mu_j_slope`
-          # field on an older config is ignored rather than validated.
-          for (nm in c("mu_j_baseline", "mu_j_epidemic_factor")) {
-               par[[nm]] <- .sim_patch_vector(config[[nm]], nm, par$npatches)
-          }
-          if (any(par$mu_j_baseline < 0)) {
-               stop("`mu_j_baseline` is negative at patch(es) ",
-                    .sim_fmt(which(par$mu_j_baseline < 0)), ".", call. = FALSE)
-          }
-          if (any(par$mu_j_epidemic_factor < 0)) {
-               stop("`mu_j_epidemic_factor` is negative at patch(es) ",
-                    .sim_fmt(which(par$mu_j_epidemic_factor < 0)), ".", call. = FALSE)
-          }
 
           # Scalar OR per-patch in the engine; broadcasting covers both.
-          # float32: it sits on the right of two comparisons whose outcomes are
-          # discrete (the epidemic flag, and the endemic/epidemic chi choice).
+          # float32: it sits on the right of a comparison whose outcome is
+          # discrete (the endemic/epidemic chi choice, and in replay mode the
+          # mortality epidemic flag).
           par$epidemic_threshold <- .sim_f32(.sim_patch_vector(
                config$epidemic_threshold, "epidemic_threshold", par$npatches,
                lower = 0))
+
+          if (identical(mode, "replay")) {
+               # Replay reproduces laser-cholera 0.16.1 draw for draw, and the
+               # oracle's mortality is a daily hazard on the symptomatic stock:
+               # mu_j_baseline x (1 + mu_j_epidemic_factor x flag), reported
+               # delta_reporting_deaths days after the death. The fixtures carry
+               # exactly those inputs, so replay reads them and nothing else.
+               par$delta_reporting_deaths <- .sim_lag(config$delta_reporting_deaths,
+                                                      "delta_reporting_deaths")
+               for (nm in c("mu_j_baseline", "mu_j_epidemic_factor")) {
+                    par[[nm]] <- .sim_patch_vector(config[[nm]], nm, par$npatches)
+               }
+               if (any(par$mu_j_baseline < 0)) {
+                    stop("`mu_j_baseline` is negative at patch(es) ",
+                         .sim_fmt(which(par$mu_j_baseline < 0)), ".", call. = FALSE)
+               }
+               if (any(par$mu_j_epidemic_factor < 0)) {
+                    stop("`mu_j_epidemic_factor` is negative at patch(es) ",
+                         .sim_fmt(which(par$mu_j_epidemic_factor < 0)), ".", call. = FALSE)
+               }
+          } else {
+               # Production mortality (v0.96.0): the reported CFR `mu_jt`, one
+               # value per location and day, is converted to the probability that
+               # a new symptomatic onset is fatal at that tick. The conversion is
+               # exact: E[reported deaths] / E[reported cases] = mu_jt on
+               # epidemic-PPV ticks, whatever gamma_1 or the lags are.
+               par$mu_jt      <- .sim_mu_jt(config, par)
+               par$p_fatal_jt <- .sim_p_fatal(par)
+          }
      }
 
      if ("Vaccinated" %in% components) {
@@ -307,10 +323,10 @@ sim_params <- function(config, components = SIM_PIPELINE) {
 #   phi_2                   round(phi_2 * doses2)        Vaccinated, dose two
 #   nu_1_jt, nu_2_jt        round(nu_*_jt[tick])         Vaccinated, both schedules
 #   chi_endemic/_epidemic   round(drawn / chi_eff)       Infectious, reported cases
-#   epidemic_threshold      Isym > threshold * N         Infectious, epidemic flag
+#   epidemic_threshold      Isym > threshold * N         Infectious, epidemic flag (replay)
 #                           frac < threshold             Infectious, chi selection
 #
-# Everything else the engine stores as float32 -- `d_jt`, `b_jt`, `mu_j_*`,
+# Everything else the engine stores as float32 -- `d_jt`, `b_jt`, `mu_jt`, `mu_j_*` (replay),
 # `alpha_*`, `theta_j`, `kappa`, `zeta_*`, `beta_*`, `psi_jt` -- reaches only a
 # float: a hazard compared under the combined tolerance, or a float output
 # channel. Those stay in double, which is the more accurate of the two.
@@ -470,6 +486,99 @@ sim_params <- function(config, components = SIM_PIPELINE) {
 
      .sim_reject_nonfinite(out, name)
      out
+}
+
+# Fields that mark a config written for a pre-v0.96.0 mortality model: the daily
+# hazard on the symptomatic stock (mu_j_baseline, mu_j_epidemic_factor and the B2
+# target CFR_target they were derived from) and the older single-rate model (mu_j).
+# Not the same list as .MOSAIC_REMOVED_MORTALITY_PARAMS (sample_parameters.R), the
+# priors the sampler skips: mu_j_slope and delta_reporting_deaths do not mark a
+# config as legacy, because make_simulation_config() accepts and drops them.
+.MOSAIC_LEGACY_MORTALITY_FIELDS <- c("mu_j_baseline", "mu_j_epidemic_factor", "CFR_target", "mu_j")
+
+# The reported CFR as a [nticks, npatches] matrix (row i is tick i - 1). The ONE
+# resolver of config$mu_jt: the engine (.sim_mu_jt) and the integrated deaths
+# likelihood (.mosaic_config_mu_jt) both call it, so they cannot disagree.
+#
+# A legacy config (any of .MOSAIC_LEGACY_MORTALITY_FIELDS) often carries a `mu_jt`
+# matrix that no engine ever read, so that matrix is never trusted. Its
+# calibrated per-location `CFR_target` -- the reported CFR that model targeted --
+# becomes a constant `mu_jt` instead, and the user is told once per session. A
+# legacy config without `CFR_target` has nothing to convert and is refused.
+.mosaic_mu_jt_matrix <- function(config, nticks, npatches) {
+     legacy <- .MOSAIC_LEGACY_MORTALITY_FIELDS[
+          vapply(.MOSAIC_LEGACY_MORTALITY_FIELDS, function(f) !is.null(config[[f]]), logical(1))]
+     if (length(legacy)) {
+          if (is.null(config$CFR_target)) {
+               stop("This config predates the v0.96.0 mortality model: it carries ",
+                    paste0("`", legacy, "`", collapse = ", "), " but no `CFR_target` to ",
+                    "convert. Rebuild it from a current config_default (see make_mu_jt()).",
+                    call. = FALSE)
+          }
+          .mosaic_warn_once("legacy_mortality_config", paste0(
+               "Config predates the v0.96.0 mortality model (it carries ",
+               paste0("`", legacy, "`", collapse = ", "), "). Its per-location ",
+               "`CFR_target` is used as a constant `mu_jt`; its other mortality fields, ",
+               "`delta_reporting_deaths` and any legacy `mu_jt` are ignored. Rebuild the ",
+               "config to use the time-varying WHO-annual `mu_jt`."))
+          mu <- config$CFR_target
+     } else {
+          mu <- config$mu_jt
+          if (is.null(mu)) {
+               stop("Config is missing `mu_jt`, the reported case fatality ratio by location ",
+                    "and day (see make_mu_jt()).", call. = FALSE)
+          }
+          # A one-location [1 x nticks] matrix can come back from JSON as a plain vector.
+          if (npatches == 1L && !is.array(mu) && length(mu) == nticks && nticks > 1L)
+               mu <- matrix(as.numeric(mu), nrow = 1L)
+     }
+     m <- .sim_time_matrix(mu, "mu_jt", nticks, npatches)
+     bad <- m < 0 | m >= 1
+     if (any(bad)) {
+          w <- which(bad, arr.ind = TRUE)[1L, ]
+          stop(sprintf("`mu_jt` must lie in [0, 1); patch %d at tick %d is %s.",
+                       w[2], w[1] - 1L, format(m[w[1], w[2]])), call. = FALSE)
+     }
+     m
+}
+
+.sim_mu_jt <- function(config, par) .mosaic_mu_jt_matrix(config, par$nticks, par$npatches)
+
+# Per-onset probability of a fatal outcome, [nticks, npatches]:
+#   p = mu_jt * rho / (rho_deaths * chi_epidemic).
+# Substituting into the observation model gives E[reported deaths] /
+# E[reported cases] = mu_jt on epidemic-PPV ticks exactly. A probability of 1 or
+# more means the requested reported CFR cannot be produced by these reporting
+# parameters, so it is an error, never a clamp.
+.sim_p_fatal <- function(par) {
+     if (par$rho_deaths <= 0) {
+          if (any(par$mu_jt > 0)) {
+               stop("`rho_deaths` is 0, so no death is ever reported, yet `mu_jt` asks for ",
+                    "a positive reported CFR.", call. = FALSE)
+          }
+          return(par$mu_jt)
+     }
+     p <- par$mu_jt * (par$rho / (par$rho_deaths * par$chi_epidemic))
+     if (any(p >= 1)) {
+          w <- which(p >= 1, arr.ind = TRUE)[1L, ]
+          stop(sprintf(paste0("mu_jt * rho / (rho_deaths * chi_epidemic) reaches %s at patch %d, ",
+                              "tick %d: no per-onset fatality probability produces that reported CFR ",
+                              "(mu_jt %s, rho %s, rho_deaths %s, chi_epidemic %s)."),
+                       format(p[w[1], w[2]]), w[2], w[1] - 1L, format(par$mu_jt[w[1], w[2]]),
+                       format(par$rho), format(par$rho_deaths), format(par$chi_epidemic)),
+               call. = FALSE)
+     }
+     p
+}
+
+# One warning per R session per key. PSOCK workers are separate sessions, so each
+# warns at most once.
+.mosaic_once <- new.env(parent = emptyenv())
+.mosaic_warn_once <- function(key, message) {
+     if (isTRUE(.mosaic_once[[key]])) return(invisible(FALSE))
+     assign(key, TRUE, envir = .mosaic_once)
+     warning(message, call. = FALSE)
+     invisible(TRUE)
 }
 
 .sim_patch_vector <- function(x, name, npatches, integral = FALSE,

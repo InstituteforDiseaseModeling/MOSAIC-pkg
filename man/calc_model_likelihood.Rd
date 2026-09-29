@@ -20,6 +20,7 @@ calc_model_likelihood(
   nb_k_deaths = NULL,
   eps_rel_cases = 0.02,
   eps_rel_deaths = 0.25,
+  ll_deaths_core = NULL,
   verbose = FALSE,
   weight_peak_timing = 0,
   weight_peak_magnitude = 0,
@@ -78,6 +79,14 @@ the level (a Jensen gap: \code{E_seed[LL(est)]} peaks well above
 unbiased. Cases are far less exposed: 13.6 percent of scored deaths cells
 predict zero against a positive observation, versus 1.7 percent of cases
 cells.}
+
+\item{ll_deaths_core}{Optional numeric vector, one value per location: the
+deaths log-likelihood computed with the reported case fatality ratio
+integrated out (\code{calc_log_likelihood_deaths_integrated()$ll}). When
+supplied it replaces the negative-binomial deaths core, so
+\code{eps_rel_deaths} and \code{nb_k_deaths} are not used for the core;
+\code{run_MOSAIC()} always supplies it. The deaths shape terms, when
+enabled, still read \code{est_deaths}.}
 
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 

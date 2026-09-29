@@ -227,9 +227,11 @@ test_that("capability check: capture on but no channels returned -> warn + NULL"
     summary = summ, lines = do.call(rbind, parts),
     obs_cases = matrix(abs(rnorm(n_loc * n_time, 90, 10)), n_loc, n_time),
     obs_deaths = matrix(abs(rnorm(n_loc * n_time, 9, 3)), n_loc, n_time),
-    cfr_refs = data.frame(location = locs,
-                          cfr_baseline = rep(0.01, n_loc),
-                          cfr_epidemic = rep(0.03, n_loc),
+    cfr_refs = data.frame(location = rep(locs, each = 2L),
+                          year = rep(2021:2022, n_loc),
+                          cfr_median = rep(c(0.02, 0.025), n_loc),
+                          cfr_lower = rep(c(0.01, 0.012), n_loc),
+                          cfr_upper = rep(c(0.04, 0.05), n_loc),
                           stringsAsFactors = FALSE)
   ), class = "mosaic_trajectories")
 }
@@ -260,19 +262,21 @@ test_that("plot_model_trajectories errors on unknown location", {
                "not found")
 })
 
-test_that(".mosaic_compute_cfr_refs returns weighted per-location regime CFRs", {
-  res <- data.frame(
-    is_best_subset = c(TRUE, TRUE, FALSE),
-    weight_best    = c(0.5, 0.5, 0.1),
-    cfr_baseline_AAA = c(0.010, 0.020, 0.99),
-    cfr_epidemic_AAA = c(0.030, 0.050, 0.99))
-  refs <- MOSAIC:::.mosaic_compute_cfr_refs(res, "AAA")
-  expect_equal(refs$location, "AAA")
-  expect_true(refs$cfr_baseline >= 0.010 && refs$cfr_baseline <= 0.020)  # subset only
-  expect_true(is.finite(refs$cfr_epidemic))
-  # NULL when no cfr columns present at all
-  expect_null(MOSAIC:::.mosaic_compute_cfr_refs(
-    data.frame(is_best_subset = TRUE, weight_best = 1), "AAA"))
+test_that(".mosaic_compute_cfr_refs returns the posterior CFR by year in config order", {
+  post <- data.frame(location = c("BBB", "AAA", "AAA", "CCC"),
+                     year = c(2021L, 2022L, 2021L, 2021L),
+                     cfr_median = c(0.03, 0.025, 0.02, 0.9),
+                     cfr_lower = c(0.02, 0.015, 0.01, 0.8),
+                     cfr_upper = c(0.04, 0.035, 0.03, 0.95),
+                     prior_median = 0.02)
+  refs <- MOSAIC:::.mosaic_compute_cfr_refs(post, c("AAA", "BBB"))
+  expect_identical(names(refs), c("location", "year", "cfr_median", "cfr_lower", "cfr_upper"))
+  expect_identical(refs$location, c("AAA", "AAA", "BBB"))   # config order; CCC dropped
+  expect_identical(refs$year, c(2021L, 2022L, 2021L))
+  expect_equal(refs$cfr_median, c(0.02, 0.025, 0.03))
+  expect_null(MOSAIC:::.mosaic_compute_cfr_refs(NULL, "AAA"))
+  expect_null(MOSAIC:::.mosaic_compute_cfr_refs(post[0, ], "AAA"))
+  expect_null(MOSAIC:::.mosaic_compute_cfr_refs(post, "ZZZ"))
 })
 
 test_that("plot_model_trajectories draws CFR regime lines when cfr_refs present", {

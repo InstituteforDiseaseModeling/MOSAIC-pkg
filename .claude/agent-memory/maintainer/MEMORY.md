@@ -18,3 +18,4 @@
 - [run_MOSAIC work-volume pin](reference_run_mosaic_workvolume_pin.md) — only control$calibration$n_simulations (FIXED mode) pins sim count; min/max_batches_adaptive + target_r2_adaptive do NOT bound it; .mosaic_validate_priors ignores its config arg
 - [NB dispersion review (v0.92.0)](project_nb_dispersion_review_v092.md) — NA-k escapes when <5 fittable locations (kills single-country runs); `pkg::fn` inside sprintf strings is invisible to R CMD check; roxygen2 8.1.0 regen eats `>=` and drops params; v0.91.0 check baseline 0E/3W/2N
 - [CFR R6 hygiene (v0.93.0)](project_cfr_r6_hygiene.md) — canonical implied-CFR helper + config->sample-frame delegation pattern; chi_end/chi_epi=2/3 gap pinned to fail at R4/R5; sprintf-filename drift smell
+- [CFR v2.1 mu_jt audit (v0.96 WIP)](project_cfr_v21_mujt_audit.md) — legacy-mu_jt guard sites disagree; integrated param absent from config_medoid → re-sims get prior deaths; ensemble mock-signature drift

@@ -357,6 +357,14 @@
 #'   When \code{FALSE}, the channels are spilled to scratch but NOT reduced; the
 #'   scratch handle is returned in \code{$trajectory_scratch} so the caller can
 #'   reduce over a final (e.g. optimized) subset without re-simulating.
+#' @param deaths_integration Optional run-level setup from
+#'   \code{run_MOSAIC()} (\code{control$likelihood$.deaths_integration}). When
+#'   supplied, each member's deaths are redrawn after its simulation from the
+#'   reported CFR's posterior given that member's path -- the same integration
+#'   calibration scores with -- so predicted deaths, true deaths and forecast
+#'   years carry the calibrated CFR; the ensemble also returns
+#'   \code{cfr_posterior}. When \code{NULL} (default) deaths are the engine's,
+#'   drawn at the config's \code{mu_jt}.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return S3 object of class \code{"mosaic_ensemble"} containing:
@@ -415,6 +423,7 @@ calc_model_ensemble <- function(config,
                                 trajectory_n_lines = 150L,
                                 trajectory_scratch_dir = NULL,
                                 reduce_trajectories = TRUE,
+                                deaths_integration = NULL,
                                 verbose = TRUE) {
 
   # ===========================================================================
@@ -637,6 +646,7 @@ calc_model_ensemble <- function(config,
   .capture_traj  <- isTRUE(capture_trajectories)
   .traj_channels <- as.character(trajectory_channels)
   .traj_scratch  <- traj_scratch   # NULL unless capturing (set above)
+  .deaths_int    <- deaths_integration
 
   # The per-task simulation worker is the package-level
   # .mosaic_ensemble_sim_task() (R/calc_model_ensemble_task.R). PSOCK workers
@@ -694,7 +704,7 @@ calc_model_ensemble <- function(config,
     .ens_sim_task <- .mosaic_ensemble_sim_task
     parallel::clusterExport(cl, c("param_configs", ".ens_sim_task",
                                    ".capture_traj", ".traj_channels",
-                                   ".traj_scratch"),
+                                   ".traj_scratch", ".deaths_int"),
                             envir = environment())
 
     if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
@@ -707,7 +717,7 @@ calc_model_ensemble <- function(config,
     .ens_idle_timeout <- as.numeric(
       getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
     .ens_task_fun <- function(row) .ens_sim_task(
-      row, param_configs, .capture_traj, .traj_channels, .traj_scratch)
+      row, param_configs, .capture_traj, .traj_channels, .traj_scratch, .deaths_int)
     environment(.ens_task_fun) <- .GlobalEnv  # resolve names worker-side
     results_list <- .mosaic_cluster_lapply_robust(
       cl = cl,
@@ -730,7 +740,7 @@ calc_model_ensemble <- function(config,
       split(task_list, seq_len(nrow(task_list))),
       function(row) .mosaic_ensemble_sim_task(row, param_configs,
                                               .capture_traj, .traj_channels,
-                                              .traj_scratch)
+                                              .traj_scratch, .deaths_int)
     )
   }
 
@@ -956,6 +966,34 @@ calc_model_ensemble <- function(config,
   cases_stats  <- calculate_overall_stats(cases_array)
   deaths_stats <- calculate_overall_stats(deaths_array)
 
+  # Posterior reported CFR by location and year, from the per-member draws the
+  # post-hoc death redraw made (member weights shared equally across its
+  # stochastic runs, as for the predictions). NULL when deaths were not redrawn.
+  cfr_posterior <- NULL
+  if (!is.null(deaths_integration)) {
+    yrs <- deaths_integration$years
+    cfr_arr <- array(NA_real_, dim = c(n_locations, length(yrs), n_param_sets, n_simulations_per_config))
+    for (result in results_list) {
+      if (isTRUE(result$success) && !is.null(result$cfr_year)) {
+        cfr_arr[, , result$param_idx, result$stoch_idx] <- result$cfr_year
+      }
+    }
+    sim_w <- rep(parameter_weights, times = n_simulations_per_config) / n_simulations_per_config
+    rows <- vector("list", n_locations * length(yrs))
+    r <- 0L
+    for (i in seq_len(n_locations)) for (y in seq_along(yrs)) {
+      v <- as.vector(cfr_arr[i, y, , ])
+      q <- weighted_quantiles(v, sim_w, c(0.5, 0.025, 0.975))
+      r <- r + 1L
+      rows[[r]] <- data.frame(location = location_names[i], year = yrs[y],
+                              cfr_median = q[1], cfr_lower = q[2], cfr_upper = q[3],
+                              prior_median = stats::plogis(mean(deaths_integration$base_logit_full[
+                                i, deaths_integration$year_full == yrs[y]])),
+                              stringsAsFactors = FALSE)
+    }
+    cfr_posterior <- do.call(rbind, rows)
+  }
+
   # ===========================================================================
   # Per-member seeds, aligned with cases_array's param dimension (member i <->
   # seeds[i]). Bound to the parameter set that PRODUCED each member so downstream
@@ -1012,6 +1050,7 @@ calc_model_ensemble <- function(config,
       pi_ij_ensemble            = pi_ij_ensemble,
       trajectories              = trajectories,
       trajectory_scratch        = trajectory_scratch,
+      cfr_posterior             = cfr_posterior,
       artifact_mask             = list(
         cases_warmup     = as.integer(n_cases_warmup_mask),
         deaths_final     = isTRUE(mask_final_deaths_step),

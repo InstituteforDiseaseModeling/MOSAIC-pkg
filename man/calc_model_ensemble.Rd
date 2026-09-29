@@ -26,6 +26,7 @@ calc_model_ensemble(
   trajectory_n_lines = 150L,
   trajectory_scratch_dir = NULL,
   reduce_trajectories = TRUE,
+  deaths_integration = NULL,
   verbose = TRUE
 )
 }
@@ -114,6 +115,15 @@ reduction runs here over all members and is attached as \code{$trajectories}.
 When \code{FALSE}, the channels are spilled to scratch but NOT reduced; the
 scratch handle is returned in \code{$trajectory_scratch} so the caller can
 reduce over a final (e.g. optimized) subset without re-simulating.}
+
+\item{deaths_integration}{Optional run-level setup from
+\code{run_MOSAIC()} (\code{control$likelihood$.deaths_integration}). When
+supplied, each member's deaths are redrawn after its simulation from the
+reported CFR's posterior given that member's path -- the same integration
+calibration scores with -- so predicted deaths, true deaths and forecast
+years carry the calibrated CFR; the ensemble also returns
+\code{cfr_posterior}. When \code{NULL} (default) deaths are the engine's,
+drawn at the config's \code{mu_jt}.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }

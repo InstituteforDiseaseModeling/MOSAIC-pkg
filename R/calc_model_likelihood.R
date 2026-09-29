@@ -59,6 +59,13 @@
 #'   unbiased. Cases are far less exposed: 13.6 percent of scored deaths cells
 #'   predict zero against a positive observation, versus 1.7 percent of cases
 #'   cells.
+#' @param ll_deaths_core Optional numeric vector, one value per location: the
+#'   deaths log-likelihood computed with the reported case fatality ratio
+#'   integrated out (\code{calc_log_likelihood_deaths_integrated()$ll}). When
+#'   supplied it replaces the negative-binomial deaths core, so
+#'   \code{eps_rel_deaths} and \code{nb_k_deaths} are not used for the core;
+#'   \code{run_MOSAIC()} always supplies it. The deaths shape terms, when
+#'   enabled, still read \code{est_deaths}.
 #' @param verbose If \code{TRUE}, prints component summaries per location.
 #' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms
 #'   (T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
@@ -103,6 +110,7 @@ calc_model_likelihood <- function(obs_cases,
                                   nb_k_deaths      = NULL,
                                   eps_rel_cases    = 0.02,
                                   eps_rel_deaths   = 0.25,
+                                  ll_deaths_core   = NULL,
                                   verbose          = FALSE,
                                   # ---- shape term weights (0 = OFF; 0.25 = 25% of NB core) ----
                                   weight_peak_timing       = 0,
@@ -152,6 +160,9 @@ calc_model_likelihood <- function(obs_cases,
      eps_rel_deaths <- .check_eps_rel(eps_rel_deaths)
 
      if (length(weights_location) != n_locations) stop("weights_location must match n_locations.")
+     if (!is.null(ll_deaths_core) &&
+         (!is.numeric(ll_deaths_core) || length(ll_deaths_core) != n_locations))
+          stop("ll_deaths_core must be a numeric vector with one value per location.")
 
      # NB dispersion. Accepts a scalar (recycled) or one value per location, the
      # same contract as weights_location. k depends only on the OBSERVATIONS, so
@@ -334,7 +345,7 @@ calc_model_likelihood <- function(obs_cases,
                verbose   = FALSE
           ) else 0
 
-          ll_deaths <- if (have_deaths) MOSAIC::calc_log_likelihood(
+          ll_deaths <- if (!is.null(ll_deaths_core)) ll_deaths_core[j] else if (have_deaths) MOSAIC::calc_log_likelihood(
                observed  = obs_d,
                estimated = est_d,
                family    = "negbin",
