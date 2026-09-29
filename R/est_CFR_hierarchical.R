@@ -121,58 +121,14 @@ est_CFR_hierarchical <- function(
     if (verbose) message("Loading WHO annual cholera data...")
     who_data <- utils::read.csv(who_data_path, stringsAsFactors = FALSE)
 
-    # One human-readable name per ISO. The WHO file spells some countries more
-    # than one way (CIV); the model keys on iso_code and this map only labels
-    # the outputs. The most frequent spelling wins, ties broken alphabetically.
-    who_named <- who_data[who_data$country != "AFRO Region" &
-                          !is.na(who_data$iso_code) & nzchar(who_data$iso_code), ]
-    iso_name_map <- data.frame(iso_code = sort(unique(who_named$iso_code)),
-                               stringsAsFactors = FALSE)
-    iso_name_map$country <- vapply(iso_name_map$iso_code, function(z) {
-        nm <- who_named$country[who_named$iso_code == z]
-        nm <- nm[!is.na(nm) & nzchar(nm)]
-        if (!length(nm)) return(z)
-        tab <- table(nm)
-        sort(names(tab)[tab == max(tab)])[1]
-    }, character(1), USE.NAMES = FALSE)
-
-    model_data <- .cfr_model_data(who_data, min_cases)
-    if (!nrow(model_data)) stop("No WHO annual country-years pass the filters.")
-    last_data_year <- max(model_data$year)
-
-    if (verbose) {
-        message(sprintf("  %d country-years from %d countries, %d-%d",
-                        nrow(model_data), length(unique(model_data$iso_code)),
-                        min(model_data$year), last_data_year))
-    }
-
-    if (verbose) message("Fitting hierarchical GAM (bam, fREML)...")
-    fit <- .cfr_fit_gam(model_data, k_year, k_trend, include_country_trends)
-    if (verbose) {
-        message(sprintf("  tau (between-country) %.3f | sigma (year-to-year) %.3f [logit]",
-                        fit$tau, fit$sigma))
-    }
-
+    est <- .cfr_estimate(who_data, min_cases = min_cases, k_year = k_year, k_trend = k_trend,
+                         include_country_trends = include_country_trends,
+                         forecast_years = forecast_years, forecast_method = forecast_method,
+                         verbose = verbose)
+    model_data <- est$model_data; last_data_year <- est$last_data_year; fit <- est$fit
+    predictions <- est$predictions; temporal_trend <- est$temporal_trend
+    country_effects <- est$country_effects
     mosaic_iso <- MOSAIC::iso_codes_mosaic
-    pred_years <- seq.int(min(model_data$year), last_data_year + forecast_years)
-    predictions <- .cfr_predict(fit, mosaic_iso, pred_years, last_data_year, forecast_method)
-    predictions$country <- iso_name_map$country[match(predictions$iso_code, iso_name_map$iso_code)]
-    predictions$country[is.na(predictions$country)] <- predictions$iso_code[is.na(predictions$country)]
-    predictions <- predictions[, c("country", "iso_code", "year", "cfr_estimate", "cfr_lower",
-                                   "cfr_upper", "cfr_se", "logit_mean", "logit_sd",
-                                   "is_forecast", "pooled", "n_country_years")]
-
-    temporal <- .cfr_predict(fit, "__global__", pred_years, last_data_year, forecast_method,
-                             global = TRUE)
-    temporal_trend <- data.frame(
-        year = temporal$year,
-        cfr_trend = temporal$cfr_estimate,
-        cfr_trend_lower = stats::plogis(temporal$logit_mean - 1.96 * temporal$cfr_se),
-        cfr_trend_upper = stats::plogis(temporal$logit_mean + 1.96 * temporal$cfr_se),
-        is_forecast = temporal$is_forecast
-    )
-
-    country_effects <- .cfr_country_effects(fit, iso_name_map)
 
     validation <- NULL
     if (isTRUE(validate)) {
@@ -247,6 +203,73 @@ est_CFR_hierarchical <- function(
     invisible(results)
 }
 
+
+
+# The GAM fit and its predictions, with no file output. `last_year` truncates
+# the WHO-annual record (years after it are dropped before fitting), which is
+# how rolling-origin forecast validation builds a leakage-free mu_jt per cutoff.
+.cfr_estimate <- function(who_data, min_cases = 1, k_year = 12, k_trend = 10,
+                          include_country_trends = TRUE, forecast_years = 3L,
+                          forecast_method = "carry_forward", last_year = NULL,
+                          verbose = FALSE) {
+    # One human-readable name per ISO. The WHO file spells some countries more
+    # than one way (CIV); the model keys on iso_code and this map only labels
+    # the outputs. The most frequent spelling wins, ties broken alphabetically.
+    who_named <- who_data[who_data$country != "AFRO Region" &
+                          !is.na(who_data$iso_code) & nzchar(who_data$iso_code), ]
+    iso_name_map <- data.frame(iso_code = sort(unique(who_named$iso_code)),
+                               stringsAsFactors = FALSE)
+    iso_name_map$country <- vapply(iso_name_map$iso_code, function(z) {
+        nm <- who_named$country[who_named$iso_code == z]
+        nm <- nm[!is.na(nm) & nzchar(nm)]
+        if (!length(nm)) return(z)
+        tab <- table(nm)
+        sort(names(tab)[tab == max(tab)])[1]
+    }, character(1), USE.NAMES = FALSE)
+
+    model_data <- .cfr_model_data(who_data, min_cases)
+    if (!is.null(last_year)) model_data <- model_data[model_data$year <= last_year, , drop = FALSE]
+    if (!nrow(model_data)) stop("No WHO annual country-years pass the filters.")
+    model_data$iso <- droplevels(model_data$iso)
+    model_data$obs <- factor(seq_len(nrow(model_data)))
+    last_data_year <- max(model_data$year)
+
+    if (verbose) {
+        message(sprintf("  %d country-years from %d countries, %d-%d",
+                        nrow(model_data), length(unique(model_data$iso_code)),
+                        min(model_data$year), last_data_year))
+    }
+
+    if (verbose) message("Fitting hierarchical GAM (bam, fREML)...")
+    fit <- .cfr_fit_gam(model_data, k_year, k_trend, include_country_trends)
+    if (verbose) {
+        message(sprintf("  tau (between-country) %.3f | sigma (year-to-year) %.3f [logit]",
+                        fit$tau, fit$sigma))
+    }
+
+    mosaic_iso <- MOSAIC::iso_codes_mosaic
+    pred_years <- seq.int(min(model_data$year), last_data_year + forecast_years)
+    predictions <- .cfr_predict(fit, mosaic_iso, pred_years, last_data_year, forecast_method)
+    predictions$country <- iso_name_map$country[match(predictions$iso_code, iso_name_map$iso_code)]
+    predictions$country[is.na(predictions$country)] <- predictions$iso_code[is.na(predictions$country)]
+    predictions <- predictions[, c("country", "iso_code", "year", "cfr_estimate", "cfr_lower",
+                                   "cfr_upper", "cfr_se", "logit_mean", "logit_sd",
+                                   "is_forecast", "pooled", "n_country_years")]
+
+    temporal <- .cfr_predict(fit, "__global__", pred_years, last_data_year, forecast_method,
+                             global = TRUE)
+    temporal_trend <- data.frame(
+        year = temporal$year,
+        cfr_trend = temporal$cfr_estimate,
+        cfr_trend_lower = stats::plogis(temporal$logit_mean - 1.96 * temporal$cfr_se),
+        cfr_trend_upper = stats::plogis(temporal$logit_mean + 1.96 * temporal$cfr_se),
+        is_forecast = temporal$is_forecast
+    )
+
+    list(fit = fit, model_data = model_data, last_data_year = last_data_year,
+         predictions = predictions, temporal_trend = temporal_trend,
+         country_effects = .cfr_country_effects(fit, iso_name_map))
+}
 
 # Country-years that enter the fit: every country in the file except the AFRO
 # aggregate, with finite counts and at least `min_cases` cases. Deaths are capped

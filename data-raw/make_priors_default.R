@@ -1715,40 +1715,12 @@ if (!file.exists(cfr_est_file) || !file.exists(cfr_sum_file)) {
 }
 cfr_est <- read.csv(cfr_est_file, stringsAsFactors = FALSE)
 cfr_sum <- readRDS(cfr_sum_file)
-for (nm in c("iso_code", "year", "logit_mean", "cfr_se"))
-     if (!nm %in% names(cfr_est)) stop("cfr_hierarchical_estimates.csv lacks column ", nm)
 if (!is.numeric(cfr_sum$sigma) || !is.finite(cfr_sum$sigma) || cfr_sum$sigma <= 0)
      stop("cfr_model_summary.rds carries no positive country-year SD (sigma).")
 mu_jt_years_min <- 2010L   # the earliest supported build start is 2015 (psi floor 2010)
-missing_cfr <- setdiff(j, cfr_est$iso_code)
-if (length(missing_cfr))
-     stop("cfr_hierarchical_estimates.csv has no rows for: ", paste(missing_cfr, collapse = ", "))
-
-priors_default$mu_jt <- list(
-     description = paste0(
-          "Reported case fatality ratio (reported deaths per reported suspected case) by location and year: ",
-          "the prior for the reported CFR that run_MOSAIC() integrates out per simulated path. ",
-          "Centres (logit_mean) are the est_CFR_hierarchical() WHO-annual GAM estimates that config_default$mu_jt ",
-          "is built from; logit_se is the SE of the country-trend mean. The CFR is logit mu0_jt + a_j + delta_{j,y}, ",
-          "with a_j ~ N(0, sd_product^2 + mean logit_se^2) and delta_{j,y} ~ N(0, sd_year^2). ",
-          "sd_year is the GAM country-year SD; sd_product (0.3) covers the WHO-annual vs weekly-surveillance ",
-          "product mismatch (sd(log ratio) 0.261 over 17 dense countries, 2023+). Not sampled."),
-     sd_year    = unname(cfr_sum$sigma),
-     sd_product = 0.3,
-     tau        = unname(cfr_sum$tau),
-     location   = list()
-)
-for (iso in j) {
-     d <- cfr_est[cfr_est$iso_code == iso & cfr_est$year >= mu_jt_years_min, , drop = FALSE]
-     d <- d[order(d$year), , drop = FALSE]
-     if (!nrow(d) || any(!is.finite(d$logit_mean)) || any(!is.finite(d$cfr_se) | d$cfr_se <= 0))
-          stop("Invalid mu_jt prior rows for ", iso)
-     priors_default$mu_jt$location[[iso]] <- list(
-          year       = as.integer(d$year),
-          logit_mean = unname(d$logit_mean),
-          logit_se   = unname(d$cfr_se)
-     )
-}
+priors_default$mu_jt <- MOSAIC:::.mosaic_mu_jt_prior(cfr_est, location_name = j,
+                                                     sd_year = cfr_sum$sigma, tau = cfr_sum$tau,
+                                                     sd_product = 0.3, year_min = mu_jt_years_min)
 message(sprintf("  mu_jt prior: %d locations, years %d-%d, sd_year %.3f, sd_product %.2f",
                 length(priors_default$mu_jt$location), mu_jt_years_min, max(cfr_est$year),
                 priors_default$mu_jt$sd_year, priors_default$mu_jt$sd_product))

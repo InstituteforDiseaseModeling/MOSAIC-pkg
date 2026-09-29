@@ -15,8 +15,6 @@
 #' @param date_start,date_stop First and last simulation dates (Date or character).
 #' @param interpolation \code{"linear_logit"} (default) or \code{"step"} (the
 #'   calendar-year value applies to every day of that year).
-#' @param freeze_after Optional Date. Every day after it takes the value on that
-#'   date (used by forecast cross-validation so no post-cutoff information enters).
 #'
 #' @return Numeric matrix with \code{length(location_name)} rows and one column
 #'   per day from \code{date_start} to \code{date_stop}; every value in (0, 1).
@@ -34,8 +32,7 @@
 #' dim(mu)
 #' @export
 make_mu_jt <- function(cfr_estimates, location_name, date_start, date_stop,
-                       interpolation = c("linear_logit", "step"),
-                       freeze_after = NULL) {
+                       interpolation = c("linear_logit", "step")) {
 
      interpolation <- match.arg(interpolation)
      if (!is.data.frame(cfr_estimates) ||
@@ -89,31 +86,62 @@ make_mu_jt <- function(cfr_estimates, location_name, date_start, date_stop,
           }
      }
 
-     if (!is.null(freeze_after)) out <- .mosaic_freeze_time_matrix(out, dates, freeze_after)
      out
 }
 
 
-#' Hold a [location x day] matrix constant after a date
+#' Build the priors \code{mu_jt} block from annual CFR estimates
 #'
-#' Every column dated after \code{cutoff} is replaced by the column at
-#' \code{cutoff}. A cutoff before the first date freezes at the first column; a
-#' cutoff on or after the last date leaves the matrix unchanged.
+#' The prior the integrated deaths likelihood reads (\code{priors$mu_jt}): per
+#' location and year the centre (\code{logit_mean}, the value \code{make_mu_jt()}
+#' puts in the config) and the SE of the country-trend mean (\code{logit_se}),
+#' plus the global widths. Used by \code{data-raw/make_priors_default.R} and by
+#' \code{run_rolling_cv()} for its per-cutoff priors.
 #'
-#' @param mat Numeric matrix, one column per date.
-#' @param dates Date vector, one entry per column of \code{mat}.
-#' @param cutoff Date (or character coercible to Date).
-#' @return \code{mat} with the post-cutoff columns replaced.
+#' @param cfr_estimates Data frame with \code{iso_code}, \code{year},
+#'   \code{logit_mean} and \code{cfr_se} (\code{est_CFR_hierarchical()$predictions}).
+#' @param location_name Character vector of ISO codes to include.
+#' @param sd_year Positive scalar: the GAM country-year SD (sigma).
+#' @param tau Scalar: the GAM between-country SD (reference only).
+#' @param sd_product Positive scalar: persistent WHO-annual vs weekly-surveillance
+#'   product mismatch on the logit scale.
+#' @param year_min Integer: first year kept.
+#' @return A list with \code{description}, \code{sd_year}, \code{sd_product},
+#'   \code{tau} and \code{location} (one list of \code{year}, \code{logit_mean},
+#'   \code{logit_se} per ISO code).
 #' @keywords internal
-.mosaic_freeze_time_matrix <- function(mat, dates, cutoff) {
-     if (!is.matrix(mat)) mat <- matrix(mat, nrow = 1L)
-     dates <- as.Date(dates); cutoff <- as.Date(cutoff)
-     if (length(dates) != ncol(mat))
-          stop("dates must have one entry per column of the matrix.")
-     if (is.na(cutoff)) stop("cutoff must be a valid date.")
-     after <- which(dates > cutoff)
-     if (!length(after)) return(mat)
-     anchor <- if (cutoff < dates[1]) 1L else max(which(dates <= cutoff))
-     mat[, after] <- mat[, anchor]
-     mat
+.mosaic_mu_jt_prior <- function(cfr_estimates, location_name, sd_year, tau,
+                                sd_product = 0.3, year_min = 2010L) {
+     for (nm in c("iso_code", "year", "logit_mean", "cfr_se"))
+          if (!nm %in% names(cfr_estimates)) stop("cfr_estimates lacks column ", nm)
+     if (!is.numeric(sd_year) || length(sd_year) != 1L || !is.finite(sd_year) || sd_year <= 0)
+          stop("sd_year must be a single positive number.")
+     if (!is.numeric(sd_product) || length(sd_product) != 1L || !is.finite(sd_product) || sd_product <= 0)
+          stop("sd_product must be a single positive number.")
+     missing_loc <- setdiff(location_name, cfr_estimates$iso_code)
+     if (length(missing_loc))
+          stop("cfr_estimates has no rows for: ", paste(missing_loc, collapse = ", "))
+     out <- list(
+          description = paste0(
+               "Reported case fatality ratio (reported deaths per reported suspected case) by location and year: ",
+               "the prior for the reported CFR that run_MOSAIC() integrates out per simulated path. ",
+               "Centres (logit_mean) are the est_CFR_hierarchical() WHO-annual GAM estimates that config$mu_jt ",
+               "is built from; logit_se is the SE of the country-trend mean. The CFR is logit mu0_jt + a_j + delta_{j,y}, ",
+               "with a_j ~ N(0, sd_product^2 + mean logit_se^2) and delta_{j,y} ~ N(0, sd_year^2). ",
+               "sd_year is the GAM country-year SD; sd_product (0.3) covers the WHO-annual vs weekly-surveillance ",
+               "product mismatch (sd(log ratio) 0.261 over 17 dense countries, 2023+). Not sampled."),
+          sd_year    = unname(sd_year),
+          sd_product = sd_product,
+          tau        = unname(tau),
+          location   = list())
+     for (iso in location_name) {
+          d <- cfr_estimates[cfr_estimates$iso_code == iso & cfr_estimates$year >= year_min, , drop = FALSE]
+          d <- d[order(d$year), , drop = FALSE]
+          if (!nrow(d) || any(!is.finite(d$logit_mean)) || any(!is.finite(d$cfr_se) | d$cfr_se <= 0))
+               stop("Invalid mu_jt prior rows for ", iso)
+          out$location[[iso]] <- list(year = as.integer(d$year),
+                                      logit_mean = unname(d$logit_mean),
+                                      logit_se = unname(d$cfr_se))
+     }
+     out
 }

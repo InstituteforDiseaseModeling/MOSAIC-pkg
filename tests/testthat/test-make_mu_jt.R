@@ -4,8 +4,7 @@
 # make_mu_jt() expands per-location, per-year reported CFR estimates into the
 # daily [location x day] matrix the engine reads as config$mu_jt: linear on the
 # logit scale between 1 July anchors, flat before the first and after the last
-# estimated year. .mosaic_freeze_time_matrix() holds a matrix constant after a
-# cutoff (rolling-origin CV).
+# estimated year.
 # =============================================================================
 
 .est <- data.frame(iso_code = rep(c("AAA", "BBB"), each = 3),
@@ -60,22 +59,4 @@ test_that("bad inputs are refused", {
   expect_error(make_mu_jt(.est, "AAA", "2023-12-31", "2023-01-01"), "date_stop >= date_start")
   expect_error(make_mu_jt(.est[, c("iso_code", "year")], "AAA", "2023-01-01", "2023-12-31"),
                "logit_mean or a cfr_estimate")
-})
-
-test_that("freeze_after holds every later day at the cutoff value", {
-  mu <- make_mu_jt(.est, c("AAA", "BBB"), "2023-01-01", "2025-12-31")
-  fr <- make_mu_jt(.est, c("AAA", "BBB"), "2023-01-01", "2025-12-31", freeze_after = "2024-03-15")
-  d <- seq(as.Date("2023-01-01"), as.Date("2025-12-31"), by = "day")
-  k <- match(as.Date("2024-03-15"), d)
-  expect_identical(fr[, seq_len(k)], mu[, seq_len(k)])
-  expect_true(all(fr[, (k + 1L):length(d)] == fr[, k]))
-})
-
-test_that(".mosaic_freeze_time_matrix handles cutoffs outside the window", {
-  m <- matrix(1:10, nrow = 2)
-  d <- as.Date("2024-01-01") + 0:4
-  expect_identical(MOSAIC:::.mosaic_freeze_time_matrix(m, d, "2024-02-01"), m)
-  early <- MOSAIC:::.mosaic_freeze_time_matrix(m, d, "2023-12-01")
-  expect_true(all(early == m[, 1]))
-  expect_error(MOSAIC:::.mosaic_freeze_time_matrix(m, d[-1], "2024-01-02"), "one entry per column")
 })

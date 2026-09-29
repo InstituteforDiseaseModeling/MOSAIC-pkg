@@ -1178,6 +1178,14 @@ run_MOSAIC <- function(config,
             length(control$likelihood$.deaths_integration$years),
             stats::median(control$likelihood$.deaths_integration$sd_shift),
             control$likelihood$.deaths_integration$sd_year)
+    # Persisted so a post-hoc calc_model_ensemble() re-run can redraw deaths from
+    # the calibrated CFR exactly as the run's own ensemble does.
+    tryCatch({
+      saveRDS(control$likelihood$.deaths_integration,
+              file.path(dirs$calibration, "deaths_integration.rds"))
+      log_msg("Saved 2_calibration/deaths_integration.rds")
+    }, error = function(e)
+      log_warn("deaths_integration.rds write skipped: %s", conditionMessage(e)))
   }
 
 
@@ -2233,6 +2241,10 @@ run_MOSAIC <- function(config,
   r2_deaths_ensemble         <- NA_real_
   bias_ratio_cases_ensemble  <- NA_real_
   bias_ratio_deaths_ensemble <- NA_real_
+  # Posterior reported CFR by location and year from the candidate ensemble. Held
+  # separately because the subset optimizer replaces `ensemble` with an object
+  # that carries no CFR draws; the trajectory panel and the medoid config use it.
+  cfr_posterior_run <- NULL
   # Dual metrics: BOTH the mean- and median-derived ensemble R^2/bias are
   # emitted in summary.json during the transition so historical (median) runs
   # remain cross-walkable regardless of the canonical central_method.
@@ -2339,6 +2351,7 @@ run_MOSAIC <- function(config,
           log_msg("Saved 3_results/posterior/cfr_posterior.csv")
         }, error = function(e)
           log_warn("cfr_posterior.csv write skipped: %s", conditionMessage(e)))
+        cfr_posterior_run <- ensemble$cfr_posterior
       }
 
       # Persist the engine spatial-structure arrays for the "spatial" figure
@@ -2677,7 +2690,7 @@ run_MOSAIC <- function(config,
       })
 
     if (!is.null(traj)) {
-      traj$cfr_refs <- .mosaic_compute_cfr_refs(ensemble$cfr_posterior, traj$location_names)
+      traj$cfr_refs <- .mosaic_compute_cfr_refs(cfr_posterior_run, traj$location_names)
       ensemble$trajectories <- traj
       .mosaic_persist_trajectory_artifact(ensemble, dirs, log_msg, log_warn)
 
@@ -2846,6 +2859,17 @@ run_MOSAIC <- function(config,
       }
     )
     if (!is.null(config_medoid)) {
+      # The reported CFR is integrated out, not sampled, so the sampled config
+      # still carries the prior mu_jt. Shift it to the run's posterior CFR so a
+      # re-simulation of config_medoid.json (rolling-CV projections, scenarios)
+      # draws deaths at the calibrated level rather than the prior's.
+      if (!is.null(cfr_posterior_run)) {
+        config_medoid <- tryCatch(.mosaic_apply_cfr_posterior(config_medoid, cfr_posterior_run),
+          error = function(e) {
+            log_warn("medoid config keeps the prior mu_jt: %s", conditionMessage(e))
+            config_medoid
+          })
+      }
       config_medoid_file <- file.path(dirs$cal_best_model, "config_medoid.json")
       jsonlite::write_json(config_medoid, config_medoid_file,
                            pretty = TRUE, auto_unbox = TRUE, digits = NA)

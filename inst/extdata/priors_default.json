@@ -6160,7 +6160,7 @@
     }
   },
   "mu_jt": {
-    "description": "Reported case fatality ratio (reported deaths per reported suspected case) by location and year: the prior for the reported CFR that run_MOSAIC() integrates out per simulated path. Centres (logit_mean) are the est_CFR_hierarchical() WHO-annual GAM estimates that config_default$mu_jt is built from; logit_se is the SE of the country-trend mean. The CFR is logit mu0_jt + a_j + delta_{j,y}, with a_j ~ N(0, sd_product^2 + mean logit_se^2) and delta_{j,y} ~ N(0, sd_year^2). sd_year is the GAM country-year SD; sd_product (0.3) covers the WHO-annual vs weekly-surveillance product mismatch (sd(log ratio) 0.261 over 17 dense countries, 2023+). Not sampled.",
+    "description": "Reported case fatality ratio (reported deaths per reported suspected case) by location and year: the prior for the reported CFR that run_MOSAIC() integrates out per simulated path. Centres (logit_mean) are the est_CFR_hierarchical() WHO-annual GAM estimates that config$mu_jt is built from; logit_se is the SE of the country-trend mean. The CFR is logit mu0_jt + a_j + delta_{j,y}, with a_j ~ N(0, sd_product^2 + mean logit_se^2) and delta_{j,y} ~ N(0, sd_year^2). sd_year is the GAM country-year SD; sd_product (0.3) covers the WHO-annual vs weekly-surveillance product mismatch (sd(log ratio) 0.261 over 17 dense countries, 2023+). Not sampled.",
     "sd_year": 0.696197027926755,
     "sd_product": 0.3,
     "tau": 0.615645878770304,

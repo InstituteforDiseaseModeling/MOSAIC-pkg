@@ -1,5 +1,34 @@
 # MOSAIC (development version)
 
+## Calibrated CFR outside the calibration loop; leak-free rolling CV (v0.96.1)
+
+- **`config_medoid.json` carries the calibrated reported CFR.** Because the CFR
+  is integrated out rather than sampled, the medoid config used to keep the
+  prior `mu_jt`, so re-simulating it (rolling-CV medoid projections, scenarios)
+  drew deaths at the prior level.
+  - Its `mu_jt` is now shifted, per location and calendar year on the logit
+    scale, to the run's posterior (`cfr_posterior`).
+  - The within-year shape is kept.
+  - A shift that needs a per-onset fatality probability >= 1 is refused, not
+    clamped.
+- **`2_calibration/deaths_integration.rds`** is saved, so a post-hoc
+  `calc_model_ensemble(deaths_integration = readRDS(...))` redraws deaths from
+  the calibrated CFR exactly as the run did.
+- **The trajectory CFR reference line survives the subset optimizer.** It
+  vanished when `optimize_subset = TRUE`, because the optimized ensemble carries
+  no `cfr_posterior`. It now reads the candidate ensemble's posterior.
+- **`run_rolling_cv()` no longer leaks post-cutoff CFR information.** Each
+  cutoff T refits the WHO-annual GAM on years <= year(T) - 1 and rebuilds both
+  the config's `mu_jt` and `priors$mu_jt` (centres, SEs, `sd_year`). Values are
+  carried flat past that year's 1 July. The old freeze at T interpolated toward
+  year(T) and year(T)+1 estimates from a fit on all years. It is removed, along
+  with `make_mu_jt(freeze_after =)`.
+- `est_CFR_hierarchical()` now wraps a non-writing core, `.cfr_estimate()`,
+  which takes a `last_year`. Its outputs are unchanged, byte for byte.
+- The priors `mu_jt` block is built by `.mosaic_mu_jt_prior()`, which both
+  `data-raw/make_priors_default.R` and rolling CV use. Only the block's
+  description text changed.
+
 ## CFR v2.1: deaths decided at onset from a time-varying reported CFR (v0.96.0)
 
 **Engine.** Each symptomatic onset is fatal with probability

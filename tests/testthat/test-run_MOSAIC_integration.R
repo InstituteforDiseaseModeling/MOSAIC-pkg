@@ -260,4 +260,17 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   expect_setequal(unique(cfr$location), config$location_name)
   expect_true(all(is.finite(cfr$cfr_median) & cfr$cfr_median > 0 & cfr$cfr_median < 1))
   expect_true(all(cfr$cfr_lower <= cfr$cfr_median & cfr$cfr_median <= cfr$cfr_upper))
+
+  # (9) config_medoid.json carries the calibrated reported CFR (the config's
+  # prior mu_jt shifted to cfr_posterior), so re-simulating it reproduces the
+  # calibrated deaths level; the integration setup is saved for post-hoc reruns.
+  med_file <- file.path(dir_output, "2_calibration", "best_model", "config_medoid.json")
+  expect_true(file.exists(med_file))
+  med <- MOSAIC::read_json_to_list(med_file)
+  expect_equal(unname(as.matrix(med$mu_jt)),
+               unname(MOSAIC:::.mosaic_apply_cfr_posterior(config, cfr)$mu_jt), tolerance = 1e-8)
+  expect_false(isTRUE(all.equal(unname(as.matrix(med$mu_jt)), unname(config$mu_jt))))
+  di_file <- file.path(dir_output, "2_calibration", "deaths_integration.rds")
+  expect_true(file.exists(di_file))
+  expect_true(all(c("setup", "base_logit_full", "years") %in% names(readRDS(di_file))))
 })

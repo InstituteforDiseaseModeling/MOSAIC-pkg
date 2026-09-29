@@ -417,3 +417,50 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
      list(reported_deaths = reported, disease_deaths = disease, cfr_year = cfr_year,
           theta = fit$theta)
 }
+
+# Move a config's reported CFR to a run's posterior level.
+#
+# The CFR is integrated out, not sampled, so a config sampled after calibration
+# (config_medoid.json) still carries the prior mu_jt. For each location and
+# calendar year, this shifts logit mu_jt by logit(cfr_median) - logit(prior_median)
+# from calc_model_ensemble()$cfr_posterior. That keeps the prior's within-year
+# shape and puts each year's level at the posterior median, including forecast
+# years, whose posterior carries the calibrated location offset. A
+# re-simulation of the returned config then draws deaths at the calibrated CFR
+# in the engine.
+#
+# The returned config is always in the v0.96.0 form. A legacy config's constant
+# CFR_target is the prior it starts from, and its retired mortality fields are
+# dropped so the engine reads the new mu_jt. A location whose shifted CFR would
+# need a per-onset fatality probability >= 1 is refused rather than clamped.
+.mosaic_apply_cfr_posterior <- function(config, cfr_posterior) {
+     need <- c("location", "year", "cfr_median", "prior_median")
+     if (!is.data.frame(cfr_posterior) || !all(need %in% names(cfr_posterior)))
+          stop("cfr_posterior must be a data frame with columns ", paste(need, collapse = ", "), ".",
+               call. = FALSE)
+     nL <- length(config$location_name)
+     dates <- seq.Date(as.Date(config$date_start), as.Date(config$date_stop), by = "day")
+     nT <- length(dates)
+     mu <- .mosaic_config_mu_jt(config, nL, nT)
+     yr <- as.integer(format(dates, "%Y"))
+     out <- mu
+     for (i in seq_len(nL)) {
+          rows <- cfr_posterior[cfr_posterior$location == config$location_name[i], , drop = FALSE]
+          for (r in seq_len(nrow(rows))) {
+               sh <- stats::qlogis(rows$cfr_median[r]) - stats::qlogis(rows$prior_median[r])
+               if (!is.finite(sh)) next
+               d <- yr == rows$year[r] & mu[i, ] > 0
+               out[i, d] <- stats::plogis(stats::qlogis(mu[i, d]) + sh)
+          }
+     }
+     if (!is.null(config$rho_deaths) && config$rho_deaths > 0) {
+          p_max <- apply(out, 1L, max) * config$rho / (config$rho_deaths * config$chi_epidemic)
+          if (any(p_max >= 1))
+               stop(sprintf("the posterior CFR for %s needs a per-onset fatality probability >= 1.",
+                            paste(config$location_name[p_max >= 1], collapse = ", ")), call. = FALSE)
+     }
+     dimnames(out) <- dimnames(config$mu_jt)
+     for (f in c(.MOSAIC_LEGACY_MORTALITY_FIELDS, "delta_reporting_deaths")) config[[f]] <- NULL
+     config$mu_jt <- out
+     config
+}

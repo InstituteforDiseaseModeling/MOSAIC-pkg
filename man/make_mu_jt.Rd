@@ -9,8 +9,7 @@ make_mu_jt(
   location_name,
   date_start,
   date_stop,
-  interpolation = c("linear_logit", "step"),
-  freeze_after = NULL
+  interpolation = c("linear_logit", "step")
 )
 }
 \arguments{
@@ -25,9 +24,6 @@ and either \code{logit_mean} or \code{cfr_estimate} (for example
 
 \item{interpolation}{\code{"linear_logit"} (default) or \code{"step"} (the
 calendar-year value applies to every day of that year).}
-
-\item{freeze_after}{Optional Date. Every day after it takes the value on that
-date (used by forecast cross-validation so no post-cutoff information enters).}
 }
 \value{
 Numeric matrix with \code{length(location_name)} rows and one column

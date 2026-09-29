@@ -364,7 +364,10 @@
 #'   calibration scores with -- so predicted deaths, true deaths and forecast
 #'   years carry the calibrated CFR; the ensemble also returns
 #'   \code{cfr_posterior}. When \code{NULL} (default) deaths are the engine's,
-#'   drawn at the config's \code{mu_jt}.
+#'   drawn at the config's \code{mu_jt} -- for configs sampled from the priors
+#'   that is the PRIOR reported CFR, not the calibrated one. To reproduce a
+#'   run's calibrated deaths post hoc, pass
+#'   \code{readRDS("<dir_output>/2_calibration/deaths_integration.rds")}.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return S3 object of class \code{"mosaic_ensemble"} containing:
