@@ -85,7 +85,16 @@ applies one).
 surveillance-derived R_eff computed the same way); it is not an invasion
 threshold. The renewal assumes transmission is linear in infectiousness; the
 human FOI uses \eqn{I^{\alpha_1}} and the environmental dose saturates, so both
-route values are trajectory descriptors, not per-contact constants. The
+route values are trajectory descriptors, not per-contact constants.
+Suitability \eqn{\psi} enters \eqn{R^{env}} twice, through
+\code{beta_jt_env} and through the reservoir lifetime \eqn{1/\delta_{jt}},
+and one infection's lifetime is valued at today's \eqn{\delta_{jt}}. Under
+seasonal \eqn{\psi}, \eqn{R^{env} > 1} is therefore not a growth threshold: in
+a high-\eqn{\psi} season it assumes survival that will not last the
+infection's lifetime (up to ~200 days), and between seasons the reverse. R
+here is also not comparable to literature cholera R estimated with a ~5-day
+serial interval: for the same growth rate a longer generation interval gives
+a larger R. The
 renewal is per location: infectious people arriving through mobility
 (\code{tau_i}, \code{pi_ij}) drive the destination's human force of infection
 but are not in its \eqn{\Lambda^{hum}}, so in multi-location runs imported

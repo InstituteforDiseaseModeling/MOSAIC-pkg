@@ -26,7 +26,8 @@ test_that("the member worker runs from an explicitly passed context", {
   # The replacement asserts the thing that actually matters: given a context,
   # the worker RUNS. A worker that cannot run from a passed context fails here.
   ctx <- list(base_config = NULL, priors = NULL, sampling = NULL, paths = NULL,
-              seeds = 1L, floor = 1, nL = 1L, Tn = 2L)
+              seeds = 1L, floor = 1, burn_in = 0L, peak_window = 1L,
+              nL = 1L, Tn = 2L)
 
   # sample_parameters is mocked, so this exercises the worker's own plumbing --
   # context unpacking, config rebuild from the seed, and the result shape --
@@ -56,11 +57,14 @@ test_that("the member worker runs from an explicitly passed context", {
   expect_named(r$reff, c("R_eff", "R_hum", "R_env"))
   expect_length(r$reff$R_eff, 1L)     # one per location
   expect_length(r$reff$R_eff[[1L]], 2L)
+  expect_named(r$peak, c("R_eff", "R_hum", "R_env"))
+  expect_equal(r$peak$R_eff, 1)       # time-max of the (mocked) R_eff series
 })
 
 test_that("the member worker refuses a member whose route incidences do not add up", {
   ctx <- list(base_config = NULL, priors = NULL, sampling = NULL, paths = NULL,
-              seeds = 1L, floor = 1, nL = 1L, Tn = 2L)
+              seeds = 1L, floor = 1, burn_in = 0L, peak_window = 1L,
+              nL = 1L, Tn = 2L)
   one <- matrix(c(1, 2), 1, 2)
   local_mocked_bindings(
     sample_parameters = function(...) list(theta_j = 0, zeta_1 = 1, zeta_2 = 1),
@@ -81,7 +85,8 @@ test_that("a genuinely broken member is reported, not thrown", {
   # Error capture still matters -- one bad member must not kill the batch --
   # but it is asserted on a REAL failure, not on the absence of setup.
   ctx <- list(base_config = NULL, priors = NULL, sampling = NULL, paths = NULL,
-              seeds = 1L, floor = 1, nL = 1L, Tn = 2L)
+              seeds = 1L, floor = 1, burn_in = 0L, peak_window = 1L,
+              nL = 1L, Tn = 2L)
   local_mocked_bindings(
     sample_parameters = function(...) stop("engine exploded"),
     .package = "MOSAIC"
@@ -101,8 +106,11 @@ test_that("the serial route supplies a context rather than relying on globals", 
   expect_true(grepl("lapply(tasks, function(tk)", src, fixed = TRUE))
   expect_true(grepl(".mosaic_reff_resim_member(tk,", src, fixed = TRUE))
   expect_true(grepl("ctx)", src, fixed = TRUE))
-  # and the parallel branch must NOT pass it per task (that would ship it n times)
-  expect_true(grepl("parLapplyLB(cl, tasks, .w)", src, fixed = TRUE))
+  # and the parallel branch must NOT pass it per task (that would ship it n
+  # times). It goes through the worker-death-robust gather, not parLapplyLB,
+  # which blocks forever on Linux when a worker is OOM-killed.
+  expect_true(grepl(".mosaic_cluster_lapply_robust(cl, tasks, .w", src, fixed = TRUE))
+  expect_false(grepl("parLapplyLB(", src, fixed = TRUE))
 })
 
 test_that("add_reproductive_numbers threads n_cores to the resim helper", {

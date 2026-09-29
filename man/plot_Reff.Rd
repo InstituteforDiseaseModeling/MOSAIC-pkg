@@ -55,9 +55,10 @@ artifacts) the total alone is drawn.
 MEDOID trajectory's R_t (a coherent member, preserving peak timing and
 height); on the direct path it is the renewal on weighted-median incidence.
 The daily series is noisy, so each component is shown as a centered
-\code{smooth_days} rolling mean, taken over the days on which both
-components are defined so the smoothed stack still sums to the smoothed
-total, with the raw daily total as a faint background line.
+\code{smooth_days} rolling mean, taken over the days on which the total is
+defined (a silent route counts as 0 there, as in \code{calc_Reff()}) so the
+smoothed stack still sums to the smoothed total, with the raw daily total as
+a faint background line.
 
 \strong{Faint band.} When populated, the \code{q2.5}-\code{q97.5} total-R band
 is the per-calendar-date range across members. Member peaks are
