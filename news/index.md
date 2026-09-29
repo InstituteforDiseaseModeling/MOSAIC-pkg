@@ -1,5 +1,71 @@
 # Changelog
 
+## MOSAIC 0.93.2
+
+- The
+  [`calc_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
+  kernel caveat no longer hand-escapes its percent signs, which main’s
+  roxygen guard (`test-mobility-od.R`) rejects.
+
+## MOSAIC 0.93.1
+
+### Post-merge review of the route-decomposed R_eff
+
+Four independent post-merge reviews of 0.92.1 (maintainer, statistician,
+swe, disease-modeler) found the estimator correct. This release fixes
+what they flagged.
+
+- **Run inputs are written at 17 significant digits.**
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  wrote `1_inputs/config.json`, `priors.json`, `control.json`,
+  `environment.json` and `summary.json` with jsonlite’s `digits = NA`,
+  which keeps 15 significant digits and does not round-trip a double
+  (0.1 + 0.2 comes back as 0.3). A member rebuilt from those files then
+  differs by ~1e-15 relative, and the engine’s integer rounding and
+  binomial draws amplify that into a different trajectory. On a
+  4-location config, 31 of 80 re-simulated members were not
+  bit-identical and the 95th-percentile total-case error was 10%, twice
+  the tolerance of the `add_reproductive_numbers(recompute_ci = TRUE)`
+  faithfulness gate, which would refuse the run. Single-location configs
+  were unaffected. The resume integrity check accepts `1_inputs` written
+  at either precision, so runs started before this release still resume.
+  Run directories written before this release keep 15-digit inputs, and
+  `recompute_ci` can still refuse multi-location runs there.
+- **`peak_Rt` is the time-max of a 7-day Cori window.** It was the
+  time-max of the daily ratio, which lands on low-count days: in 15 of
+  18 test location-runs the peak fell where route infectiousness was
+  1-3, and raising the floor from 1 to 10 halved it. Each member’s peak
+  is now the maximum of its trailing 7-day R (sum of infections over sum
+  of infectiousness), computed on the worker. The window is recorded in
+  `attr(, "peak_Rt_window")` and shown in the
+  [`plot_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_Reff.md)
+  annotation.
+- **The re-simulation survives a dead worker.** It used `parLapplyLB()`,
+  which blocks forever on Linux when a worker is OOM-killed or
+  segfaults. It now uses the same worker-death-robust gather as
+  [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md);
+  a dead worker fails the run with a count.
+- **Documentation:**
+  - The comment claiming that ignoring disease mortality moves the
+    kernel means by under 0.2 day was wrong. With `config_default` rates
+    the human kernel mean is 9.1 d at no mortality, 8.0 d at 0.017/day
+    and 6.5 d at 0.058/day, and on engine runs at those rates R_env
+    reads 2.5% and 6% low. At the median rate (~0.002/day) it is
+    negligible. The kernel still ignores mortality.
+  - The
+    [`calc_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
+    caveat now says that suitability enters R_env twice (transmission
+    rate and reservoir lifetime), so R_env \> 1 in a high-suitability
+    season is not a growth threshold, and that R here is not comparable
+    to literature R estimated with a ~5-day serial interval.
+  - [`plot_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_Reff.md)
+    describes the stacking rule it uses since 0.92.1.
+- **Tests now pin the timing.** A one-day lag error in the human
+  infectiousness, dropping the initial latent stock, and a one-day shift
+  in the reservoir decay each fail at least one test (checked by
+  mutation); before, the lag errors passed the engine-truth tests and
+  dropping the latent stock passed every test.
+
 ## MOSAIC 0.93.0
 
 ### New: automated data refresh and the overland mobility OD pipeline

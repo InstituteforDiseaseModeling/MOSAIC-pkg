@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,32 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.93.2" id="mosaic-0932">MOSAIC 0.93.2<a class="anchor" aria-label="anchor" href="#mosaic-0932"></a></h2>
+<ul><li>The <code><a href="../reference/calc_Reff.html">calc_Reff()</a></code> kernel caveat no longer hand-escapes its percent signs, which main’s roxygen guard (<code>test-mobility-od.R</code>) rejects.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.93.1" id="mosaic-0931">MOSAIC 0.93.1<a class="anchor" aria-label="anchor" href="#mosaic-0931"></a></h2>
+<div class="section level3">
+<h3 id="post-merge-review-of-the-route-decomposed-r_eff-0-93-1">Post-merge review of the route-decomposed R_eff<a class="anchor" aria-label="anchor" href="#post-merge-review-of-the-route-decomposed-r_eff-0-93-1"></a></h3>
+<p>Four independent post-merge reviews of 0.92.1 (maintainer, statistician, swe, disease-modeler) found the estimator correct. This release fixes what they flagged.</p>
+<ul><li>
+<strong>Run inputs are written at 17 significant digits.</strong> <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> wrote <code>1_inputs/config.json</code>, <code>priors.json</code>, <code>control.json</code>, <code>environment.json</code> and <code>summary.json</code> with jsonlite’s <code>digits = NA</code>, which keeps 15 significant digits and does not round-trip a double (0.1 + 0.2 comes back as 0.3). A member rebuilt from those files then differs by ~1e-15 relative, and the engine’s integer rounding and binomial draws amplify that into a different trajectory. On a 4-location config, 31 of 80 re-simulated members were not bit-identical and the 95th-percentile total-case error was 10%, twice the tolerance of the <code>add_reproductive_numbers(recompute_ci = TRUE)</code> faithfulness gate, which would refuse the run. Single-location configs were unaffected. The resume integrity check accepts <code>1_inputs</code> written at either precision, so runs started before this release still resume. Run directories written before this release keep 15-digit inputs, and <code>recompute_ci</code> can still refuse multi-location runs there.</li>
+<li>
+<strong><code>peak_Rt</code> is the time-max of a 7-day Cori window.</strong> It was the time-max of the daily ratio, which lands on low-count days: in 15 of 18 test location-runs the peak fell where route infectiousness was 1-3, and raising the floor from 1 to 10 halved it. Each member’s peak is now the maximum of its trailing 7-day R (sum of infections over sum of infectiousness), computed on the worker. The window is recorded in <code>attr(, "peak_Rt_window")</code> and shown in the <code><a href="../reference/plot_Reff.html">plot_Reff()</a></code> annotation.</li>
+<li>
+<strong>The re-simulation survives a dead worker.</strong> It used <code>parLapplyLB()</code>, which blocks forever on Linux when a worker is OOM-killed or segfaults. It now uses the same worker-death-robust gather as <code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code>; a dead worker fails the run with a count.</li>
+<li>
+<strong>Documentation:</strong>
+<ul><li>The comment claiming that ignoring disease mortality moves the kernel means by under 0.2 day was wrong. With <code>config_default</code> rates the human kernel mean is 9.1 d at no mortality, 8.0 d at 0.017/day and 6.5 d at 0.058/day, and on engine runs at those rates R_env reads 2.5% and 6% low. At the median rate (~0.002/day) it is negligible. The kernel still ignores mortality.</li>
+<li>The <code><a href="../reference/calc_Reff.html">calc_Reff()</a></code> caveat now says that suitability enters R_env twice (transmission rate and reservoir lifetime), so R_env &gt; 1 in a high-suitability season is not a growth threshold, and that R here is not comparable to literature R estimated with a ~5-day serial interval.</li>
+<li>
+<code><a href="../reference/plot_Reff.html">plot_Reff()</a></code> describes the stacking rule it uses since 0.92.1.</li>
+</ul></li>
+<li>
+<strong>Tests now pin the timing.</strong> A one-day lag error in the human infectiousness, dropping the initial latent stock, and a one-day shift in the reservoir decay each fail at least one test (checked by mutation); before, the lag errors passed the engine-truth tests and dropping the latent stock passed every test.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.93.0" id="mosaic-0930">MOSAIC 0.93.0<a class="anchor" aria-label="anchor" href="#mosaic-0930"></a></h2>
 <div class="section level3">

@@ -74,9 +74,11 @@ A `ggplot` object (not printed or saved).
 trajectory's R_t (a coherent member, preserving peak timing and height);
 on the direct path it is the renewal on weighted-median incidence. The
 daily series is noisy, so each component is shown as a centered
-`smooth_days` rolling mean, taken over the days on which both components
-are defined so the smoothed stack still sums to the smoothed total, with
-the raw daily total as a faint background line.
+`smooth_days` rolling mean, taken over the days on which the total is
+defined (a silent route counts as 0 there, as in
+[`calc_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md))
+so the smoothed stack still sums to the smoothed total, with the raw
+daily total as a faint background line.
 
 **Faint band.** When populated, the `q2.5`-`q97.5` total-R band is the
 per-calendar-date range across members. Member peaks are
