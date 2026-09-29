@@ -1179,8 +1179,9 @@ run_MOSAIC <- function(config,
   control$likelihood$.deaths_integration <- .mosaic_resolve_deaths_integration(
     config, control, priors, score_window = control$likelihood$.score_window_resolved)
   if (!is.null(control$likelihood$.deaths_integration)) {
-    log_msg("Deaths likelihood: reported CFR integrated out per path (weekly NB, %d years, location sd median %.2f, year sd %.2f)",
+    log_msg("Deaths likelihood: reported CFR integrated out per path (weekly quasi-Poisson, %d years, dispersion median %.2f, location sd median %.2f, year sd %.2f)",
             length(control$likelihood$.deaths_integration$years),
+            stats::median(control$likelihood$.deaths_integration$dispersion),
             stats::median(control$likelihood$.deaths_integration$sd_shift),
             control$likelihood$.deaths_integration$sd_year)
     # Persisted so a post-hoc calc_model_ensemble() re-run can redraw deaths from

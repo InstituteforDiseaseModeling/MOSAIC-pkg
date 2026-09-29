@@ -1,5 +1,15 @@
 # MOSAIC (development version)
 
+## posteriors.json no longer copies the prior reported-CFR block (v0.97.1)
+
+- `calc_model_posterior_distributions()` drops the top-level `mu_jt` block that
+  it had copied verbatim from the priors. The reported CFR is integrated out,
+  not sampled, so that block is a prior, and its calibrated value is
+  `3_results/posterior/cfr_posterior.csv`. Staged estimation is unaffected,
+  because `update_priors_from_posteriors()` starts from the priors.
+- The `run_MOSAIC()` log line for the deaths likelihood now names the
+  quasi-Poisson score and reports the median dispersion.
+
 ## CFR-v2.1 red-team fixes: a total-preserving deaths score and a corrected prior (v0.97.0)
 
 A line-by-line red-team review of v0.96.1 (engine, likelihood, prior, completeness
