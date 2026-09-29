@@ -37,7 +37,11 @@
 # a first-principles invasion threshold. The renewal assumes transmission is
 # linear in infectiousness; the human FOI uses I^alpha_1 and the environmental
 # dose saturates at W/N ~ kappa, so both R are trajectory descriptors, not
-# per-contact constants. The renewal is per location: infectious people arriving
+# per-contact constants. Suitability psi enters R_env twice -- through
+# beta_jt_env and through the reservoir lifetime 1/delta_jt -- and R_env values
+# one infection's lifetime at TODAY's delta, so R_env > 1 in a high-psi season
+# is not a growth threshold: that survival will not last the infection's
+# lifetime. The renewal is per location: infectious people arriving
 # through mobility (tau_i, pi_ij) drive the destination's human FOI but are not
 # in its Lambda_hum, so in multi-location runs imported spread is credited to
 # the destination's R_hum.
@@ -82,8 +86,11 @@
 #' engine's discrete-time transitions: after entering E on day 0 it progresses
 #' with probability \code{1 - exp(-iota)} per day, splits symptomatic with
 #' probability \code{sigma}, and recovers with \code{1 - exp(-gamma_k)} per day.
-#' Mortality is ignored: it shortens the symptomatic dwell by up to ~10-15% at
-#' high CFR but moves the kernel means by under 0.2 day.
+#' Disease mortality is ignored. At the median mortality rate (~0.002/day) that
+#' is negligible, but at high rates it overstates the symptomatic dwell: with
+#' \code{config_default} rates the human kernel mean is 9.1 d at mu = 0,
+#' 8.0 d at 0.017/day and 6.5 d at 0.058/day. Measured on engine runs at those
+#' two rates, R_env reads 2.5% and 6% low and R_hum 7-24% low (median).
 #'
 #' @param iota,gamma_1,gamma_2 Positive scalar daily rates.
 #' @param sigma Scalar in \[0, 1\], symptomatic proportion.
@@ -287,14 +294,31 @@
 #' @param infectiousness_floor Minimum route infectiousness (effective
 #'   infectious infections) required to report that route.
 #' @param init Optional initial stocks from \code{.mosaic_reff_init()}.
+#' @param window Integer smoothing window in days (Cori's tau). \code{1} is the
+#'   daily ratio; \code{w > 1} sums the numerator and the infectiousness over
+#'   the trailing \code{w} days (\code{NA} until \code{w} days are available),
+#'   and the floor then applies to the window-mean infectiousness.
 #' @return List with \code{R_eff}, \code{R_hum}, \code{R_env}.
 #' @keywords internal
 #' @noRd
 .mosaic_reff_routes <- function(inc_hum, inc_env, delta, kern,
-                                infectiousness_floor = 1, init = NULL) {
+                                infectiousness_floor = 1, init = NULL,
+                                window = 1L) {
   inc_hum <- as.numeric(inc_hum); inc_env <- as.numeric(inc_env)
   lam <- .mosaic_reff_infectiousness(inc_hum + inc_env, as.numeric(delta), kern,
                                      init = init)
+  window <- as.integer(window)
+  if (length(window) != 1L || is.na(window) || window < 1L)
+    stop(".mosaic_reff_routes: `window` must be a single integer >= 1")
+  if (window > 1L) {
+    trail <- function(v) {
+      out <- as.numeric(stats::filter(v, rep(1 / window, window), sides = 1L))
+      out[!is.finite(out)] <- NA_real_
+      out
+    }
+    inc_hum <- trail(inc_hum); inc_env <- trail(inc_env)
+    lam$Lambda_hum <- trail(lam$Lambda_hum); lam$Lambda_env <- trail(lam$Lambda_env)
+  }
   R_hum <- .cori_reff(inc_hum, lam$Lambda_hum, infectiousness_floor)
   R_env <- .cori_reff(inc_env, lam$Lambda_env, infectiousness_floor)
   part <- function(R, num) ifelse(is.finite(R), R,
@@ -420,7 +444,16 @@
 #' surveillance-derived R_eff computed the same way); it is not an invasion
 #' threshold. The renewal assumes transmission is linear in infectiousness; the
 #' human FOI uses \eqn{I^{\alpha_1}} and the environmental dose saturates, so both
-#' route values are trajectory descriptors, not per-contact constants. The
+#' route values are trajectory descriptors, not per-contact constants.
+#' Suitability \eqn{\psi} enters \eqn{R^{env}} twice, through
+#' \code{beta_jt_env} and through the reservoir lifetime \eqn{1/\delta_{jt}},
+#' and one infection's lifetime is valued at today's \eqn{\delta_{jt}}. Under
+#' seasonal \eqn{\psi}, \eqn{R^{env} > 1} is therefore not a growth threshold: in
+#' a high-\eqn{\psi} season it assumes survival that will not last the
+#' infection's lifetime (up to ~200 days), and between seasons the reverse. R
+#' here is also not comparable to literature cholera R estimated with a ~5-day
+#' serial interval: for the same growth rate a longer generation interval gives
+#' a larger R. The
 #' renewal is per location: infectious people arriving through mobility
 #' (\code{tau_i}, \code{pi_ij}) drive the destination's human force of infection
 #' but are not in its \eqn{\Lambda^{hum}}, so in multi-location runs imported
@@ -616,7 +649,7 @@ calc_Reff <- function(ensemble,
 #' return its per-location route-decomposed R series (with its OWN kernel,
 #' engine decay rates and initial stocks) plus the faithfulness diagnostics.
 #'
-#' Defined at FILE scope so \code{parLapplyLB} ships only the task, not the
+#' Defined at FILE scope so the parallel dispatcher ships only the task, not the
 #' calling frame. The heavy inputs come from the worker's global environment,
 #' put there once by \code{clusterExport}, and the config is REBUILT from its
 #' seed rather than broadcast.
@@ -664,19 +697,30 @@ calc_Reff <- function(ensemble,
       cc   <- suppressWarnings(stats::cor(rv[ok], sv[ok]))
       mx   <- max(abs(rv[ok] - sv[ok]))
     }
-    reff <- stats::setNames(lapply(MOSAIC:::.MOSAIC_REFF_ESTIMANDS, function(e)
-      vector("list", nL)), MOSAIC:::.MOSAIC_REFF_ESTIMANDS)
+    ests <- MOSAIC:::.MOSAIC_REFF_ESTIMANDS
+    reff <- stats::setNames(lapply(ests, function(e) vector("list", nL)), ests)
+    peak <- stats::setNames(lapply(ests, function(e) rep(NA_real_, nL)), ests)
+    burn <- if (ctx$burn_in >= 1L) seq_len(min(ctx$burn_in, Tn)) else integer(0)
     for (i in seq_len(nL)) {
       init <- MOSAIC:::.mosaic_reff_init(E[i, 1L], Is[i, 1L], Ia[i, 1L],
                                          inc_m[i, 1L])
       rr <- MOSAIC:::.mosaic_reff_routes(inc_h[i, ], inc_e[i, ], delta[i, ],
                                          kern, ctx$floor, init = init)
-      for (e in names(reff)) reff[[e]][[i]] <- rr[[e]]
+      rw <- MOSAIC:::.mosaic_reff_routes(inc_h[i, ], inc_e[i, ], delta[i, ],
+                                         kern, ctx$floor, init = init,
+                                         window = ctx$peak_window)
+      for (e in ests) {
+        reff[[e]][[i]] <- rr[[e]]
+        v <- rw[[e]]
+        if (length(burn)) v[burn] <- NA_real_
+        v <- v[is.finite(v)]
+        if (length(v)) peak[[e]][i] <- max(v)
+      }
     }
     kp <- vapply(c("iota", "gamma_1", "gamma_2", "sigma", "zeta_1", "zeta_2"),
                  function(nm) as.numeric(cfg[[nm]])[1L], numeric(1))
 
-    list(p = p, s = s, reff = reff, re = re, cc = cc,
+    list(p = p, s = s, reff = reff, peak = peak, re = re, cc = cc,
          ssum = ssum, rsum = rsum, max_abs = mx, kernel_params = kp)
   }, error = function(e) list(p = task$p, s = task$s, error = conditionMessage(e)))
 }
@@ -691,12 +735,13 @@ calc_Reff <- function(ensemble,
 #' simulated with seed \code{param_idx * 1000L + stoch_idx}, and its
 #' \code{reported_cases} compared with the saved \code{cases_array} (the
 #' statistical-equivalence FAITHFULNESS GATE). Each member's R series uses its
-#' own kernel, its own engine \code{delta_jt}, and its own initial-condition mask.
+#' own kernel, its own engine \code{delta_jt}, and its own initial stocks.
 #'
 #' \strong{Headline = the MEDOID trajectory's R_t (phase-coherent)}, selected by
 #' \code{run_MOSAIC()}'s criterion. The per-calendar-day cross-member quantiles
 #' are the calendar-date envelope (they regress toward 1 because member peaks
-#' are phase-misaligned). The per-member TIME-MAX statistic is \code{peak_Rt}.
+#' are phase-misaligned). \code{peak_Rt} holds the weighted quantiles of each
+#' member's time-max of its \code{peak_window}-day Cori R_t.
 #'
 #' @param ensemble A \code{mosaic_ensemble} with \code{seeds},
 #'   \code{parameter_weights}, \code{cases_array}, \code{n_param_sets},
@@ -709,6 +754,8 @@ calc_Reff <- function(ensemble,
 #' @param probs Quantile probabilities.
 #' @param infectiousness_floor Passed to \code{.cori_reff}.
 #' @param burn_in_days Leading days NA-masked before the per-member time-max.
+#' @param peak_window Days in the trailing Cori window whose time-max is each
+#'   member's peak R_t (default 7).
 #' @param cases_central_method Central method used to select the medoid.
 #' @param gate_rel_tol,gate_frac,gate_cor_min Faithfulness-gate thresholds:
 #'   the \code{gate_frac}-percentile and ensemble-aggregate relative total-case
@@ -718,6 +765,7 @@ calc_Reff <- function(ensemble,
 #' @param cl Optional cluster.
 #' @return List with \code{qmats}, \code{central} (named lists by estimand),
 #'   \code{central_definition}, \code{peak_Rt} (per location x estimand),
+#'   \code{peak_window},
 #'   \code{medoid_member}, \code{probs}, gate diagnostics, \code{n_members},
 #'   \code{kernel_params}.
 #' @keywords internal
@@ -727,6 +775,7 @@ calc_Reff <- function(ensemble,
                                   probs = c(0.025, 0.5, 0.975),
                                   infectiousness_floor = 1,
                                   burn_in_days = 0L,
+                                  peak_window = 7L,
                                   cases_central_method = "median",
                                   gate_rel_tol = 0.05, gate_frac = 0.95,
                                   gate_cor_min = 0.95, verbose = TRUE,
@@ -756,6 +805,9 @@ calc_Reff <- function(ensemble,
     stop(".mosaic_reff_resim_ci: seeds length != n_param_sets.")
   bid <- suppressWarnings(as.integer(burn_in_days))
   if (length(bid) != 1L || is.na(bid) || bid < 0L) bid <- 0L
+  pw_days <- suppressWarnings(as.integer(peak_window))
+  if (length(pw_days) != 1L || is.na(pw_days) || pw_days < 1L)
+    stop(".mosaic_reff_resim_ci: `peak_window` must be a single integer >= 1.")
   ests <- .MOSAIC_REFF_ESTIMANDS
 
   # Member index m = (s - 1) * nP + p ; weight = pw[p] / nS.
@@ -763,6 +815,8 @@ calc_Reff <- function(ensemble,
   reff_loc <- stats::setNames(lapply(ests, function(e)
     lapply(seq_len(nL), function(i) matrix(NA_real_, n_members, Tn))), ests)
   member_w <- numeric(n_members)
+  peak_loc <- stats::setNames(lapply(ests, function(e)
+    matrix(NA_real_, n_members, nL)), ests)
   # Statistical-equivalence gate. The R engine is bitwise-reproducible across
   # processes (test-sim_rng_contract.R), but the gate is kept robust rather than
   # exact because it is what catches a MIS-RECONSTRUCTED member config (wrong
@@ -787,7 +841,7 @@ calc_Reff <- function(ensemble,
   ctx <- list(base_config = base_config, priors = priors,
               sampling = sampling_args, paths = PATHS,
               seeds = parameter_seeds, floor = infectiousness_floor,
-              nL = nL, Tn = Tn)
+              burn_in = bid, peak_window = pw_days, nL = nL, Tn = Tn)
 
   use_cl <- !is.null(cl) && inherits(cl, "cluster") && length(cl) > 1L && n_members > 1L
   if (use_cl) {
@@ -800,7 +854,13 @@ calc_Reff <- function(ensemble,
     # a different build would fail to resolve it (as in .mosaic_run_batch()).
     .w <- .mosaic_reff_resim_member
     environment(.w) <- globalenv()
-    res <- parallel::parLapplyLB(cl, tasks, .w)
+    # Worker-death-robust gather: a worker killed at the OS level (OOM,
+    # segfault) would otherwise block parLapplyLB forever on Linux. A dead
+    # worker's task comes back with `$error` and fails the run below.
+    res <- .mosaic_cluster_lapply_robust(
+      cl, tasks, .w,
+      idle_timeout_sec = as.numeric(getOption("MOSAIC.ensemble_worker_timeout_sec", 1800)),
+      progress = isTRUE(verbose), label = ".mosaic_reff_resim_ci")
   } else {
     res <- lapply(tasks, function(tk) .mosaic_reff_resim_member(tk, ctx))
   }
@@ -818,7 +878,10 @@ calc_Reff <- function(ensemble,
     ssum_v[m] <- r$ssum; rsum_v[m] <- r$rsum
     max_abs   <- max(max_abs, r$max_abs)
     member_kp[[m]] <- r$kernel_params
-    for (e in ests) for (i in seq_len(nL)) reff_loc[[e]][[i]][m, ] <- r$reff[[e]][[i]]
+    for (e in ests) {
+      for (i in seq_len(nL)) reff_loc[[e]][[i]][m, ] <- r$reff[[e]][[i]]
+      peak_loc[[e]][m, ] <- r$peak[[e]]
+    }
     res[m] <- list(NULL)   # free as we go: the gathered list is as large as reff_loc
   }
   rm(res); gc(FALSE)
@@ -891,17 +954,13 @@ calc_Reff <- function(ensemble,
   central_definition <- "medoid_trajectory"
   m_medoid <- medoid_sel$member_id
 
-  # Per-member peak R_t (explosivity), per estimand, burn-in masked first.
-  burn_idx <- if (bid >= 1L) seq_len(min(bid, Tn)) else integer(0)
-  member_peaks <- function(M) {
-    if (length(burn_idx)) M[, burn_idx] <- NA_real_
-    apply(M, 1L, function(r) { r <- r[is.finite(r)]
-      if (length(r) == 0L) NA_real_ else max(r) })
-  }
+  # Per-member peak R_t (explosivity), per estimand: the time-max of the
+  # peak_window-day Cori ratio after burn-in, computed on the worker. A daily
+  # ratio's maximum lands on low-count days and measures Poisson noise.
   peak_prob_cols <- .mosaic_reff_prob_colnames(probs)
   peak_parts <- list()
   for (e in ests) for (i in seq_len(nL)) {
-    pk <- member_peaks(reff_loc[[e]][[i]])
+    pk <- peak_loc[[e]][, i]
     pq <- weighted_quantiles(pk, member_w, probs)
     row <- data.frame(location = locs[i], estimand = e, stringsAsFactors = FALSE)
     for (k in seq_along(probs)) row[[peak_prob_cols[k]]] <- pq[k]
@@ -914,7 +973,7 @@ calc_Reff <- function(ensemble,
   # Fallback: the member whose R_eff peak is the weighted median (location 1).
   if (is.na(m_medoid)) {
     central_definition <- "member_with_median_peak_Rt"
-    peaks1 <- member_peaks(reff_loc$R_eff[[1L]])
+    peaks1 <- peak_loc$R_eff[, 1L]
     med_peak <- weighted_quantiles(peaks1, member_w, 0.5)
     ok <- is.finite(peaks1)
     if (any(ok) && is.finite(med_peak))
@@ -928,7 +987,7 @@ calc_Reff <- function(ensemble,
 
   list(qmats = qmats, central = central, probs = probs,
        central_definition = central_definition,
-       peak_Rt = peak_Rt,
+       peak_Rt = peak_Rt, peak_window = pw_days,
        medoid_member = list(member_id = m_medoid,
                             param_idx = medoid_sel$param_idx,
                             stoch_idx = medoid_sel$stoch_idx,

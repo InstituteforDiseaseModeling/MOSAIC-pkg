@@ -199,6 +199,30 @@ test_that("human R recovers the engine's true instantaneous R (human-only run)",
   expect_lt(abs(stats::median(rr$R_hum[t][ok] / truth[ok]) - 1), 0.05)
 })
 
+test_that("human R has the engine's timing (growth phase of a linear human route)", {
+  # Over a whole rise-and-fall a one-day timing error cancels (I[t-1]/I[t] has
+  # median ~1), and at alpha_1 = 0.27 the human FOI barely responds to I. So
+  # use a linear human-only route and score the growth phase, where Lambda_hum
+  # built from I[t] or I[t-2] instead of I[t-1] reads ~7% off (measured).
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  cfg <- MOSAIC::config_simulation_epidemic
+  nl <- length(cfg$tau_i)
+  cfg$tau_i <- rep(0, nl); cfg$alpha_1 <- 1; cfg$alpha_2 <- 1
+  cfg$beta_j0_env <- rep(0, nl); cfg$beta_j0_hum <- rep(0.5, nl)
+  r <- run_simulation(config = cfg, seed = 7L, quiet = TRUE)$results
+  kern <- MOSAIC:::.mosaic_reff_config_kernel(cfg)
+  i <- which.max(rowSums(r$incidence_human)); t <- 2:ncol(r$incidence)
+  rr <- MOSAIC:::.mosaic_reff_routes(
+    r$incidence_human[i, ], r$incidence_env[i, ], r$delta_jt[i, ], kern,
+    init = MOSAIC:::.mosaic_reff_init(r$E[i, 1], r$Isym[i, 1], r$Iasym[i, 1],
+                                      r$incidence[i, 1]))
+  I <- (r$Isym + r$Iasym)[i, t - 1L]
+  truth <- r$beta_jt_human[i, t] * r$S[i, t] / r$N[i, t - 1L] * kern$D_h
+  grow <- is.finite(rr$R_hum[t]) & I > 100 & (r$Isym + r$Iasym)[i, t] > 1.02 * I
+  expect_gt(sum(grow), 15L)
+  expect_lt(abs(stats::median(rr$R_hum[t][grow] / truth[grow]) - 1), 0.03)
+})
+
 test_that("environmental R recovers the engine's true instantaneous R (linear dose)", {
   skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
   cfg <- MOSAIC::config_simulation_epidemic
@@ -307,6 +331,48 @@ test_that("initial infectious stocks enter Lambda, so R is defined from day 2", 
                  (k2$w1 * k2$sigma / k2$p1 + k2$w2 * (1 - k2$sigma) / k2$p2))
   expect_equal(MOSAIC:::.mosaic_reff_init(20, 3, 4, 5), c(15, 3, 4))
   expect_equal(MOSAIC:::.mosaic_reff_init(NULL, NULL, 4, 5), c(0, 0, 4))
+})
+
+test_that("an initial latent stock propagates in engine order (exact values)", {
+  # Only latent people at the start and no new infections: every Lambda value
+  # comes from the initial E stock, stepped here in the engine's order -- E
+  # progresses from the previous day's stock, arrivals are not recovered on
+  # arrival, incidence at t reads I and W at t - 1, and W[t] decays at delta[t].
+  Tn <- 30L; k <- kern_default(zeta_1 = 3, zeta_2 = 1); E0 <- 40
+  delta <- seq(0.02, 0.2, length.out = Tn)
+  lam <- MOSAIC:::.mosaic_reff_infectiousness(numeric(Tn), delta, k,
+                                              init = c(E0, 0, 0))
+  E <- Is <- Ia <- W <- numeric(Tn)
+  E[1] <- E0
+  for (t in 2:Tn) {
+    prog  <- k$p_i * E[t - 1]
+    E[t]  <- E[t - 1] - prog
+    Is[t] <- Is[t - 1] * (1 - k$p1) + k$sigma * prog
+    Ia[t] <- Ia[t - 1] * (1 - k$p2) + (1 - k$sigma) * prog
+    W[t]  <- W[t - 1] * (1 - delta[t]) + k$w1 * Is[t - 1] + k$w2 * Ia[t - 1]
+  }
+  S_w <- k$w1 * k$sigma / k$p1 + k$w2 * (1 - k$sigma) / k$p2
+  expect_equal(lam$Lambda_hum, c(0, (Is + Ia)[-Tn]) / k$D_h, tolerance = 1e-12)
+  expect_equal(lam$Lambda_env, c(0, W[-Tn]) * delta / S_w, tolerance = 1e-12)
+  expect_gt(lam$Lambda_hum[3], 0)
+})
+
+test_that("a windowed R is the ratio of trailing sums", {
+  Tn <- 60L; k <- kern_default()
+  set.seed(11)
+  ih <- rpois(Tn, 3); ie <- rpois(Tn, 30); d <- rep(0.05, Tn)
+  init <- c(5, 20, 40)
+  lam <- MOSAIC:::.mosaic_reff_infectiousness(ih + ie, d, k, init = init)
+  rw <- MOSAIC:::.mosaic_reff_routes(ih, ie, d, k, infectiousness_floor = 0,
+                                     init = init, window = 7L)
+  expect_true(all(is.na(rw$R_env[1:6])))
+  t <- 20L; w <- (t - 6L):t
+  expect_equal(rw$R_env[t], sum(ie[w]) / sum(lam$Lambda_env[w]))
+  expect_equal(rw$R_hum[t], sum(ih[w]) / sum(lam$Lambda_hum[w]))
+  expect_equal(rw$R_eff[t], rw$R_hum[t] + rw$R_env[t])
+  expect_identical(MOSAIC:::.mosaic_reff_routes(ih, ie, d, k, init = init),
+                   MOSAIC:::.mosaic_reff_routes(ih, ie, d, k, init = init, window = 1L))
+  expect_error(MOSAIC:::.mosaic_reff_routes(ih, ie, d, k, window = 0L), "window")
 })
 
 test_that("cell quantiles need half the member weight defined", {
