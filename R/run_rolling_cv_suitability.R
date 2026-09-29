@@ -147,7 +147,7 @@
 #' 32 GB box). The production runs used \code{parallel_seeds = 10}, which only
 #' fit on the 448 GB compute host; do not copy that value onto a smaller machine.
 #' A RAM-aware \code{warning()} fires here when the projected footprint exceeds
-#' ~85\% of probed system memory.
+#' ~85% of probed system memory.
 #' @keywords internal
 #' @noRd
 .psi_load_arch_control <- function(arch_control = NULL) {

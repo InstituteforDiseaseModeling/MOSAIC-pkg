@@ -66,11 +66,11 @@ MOSAIC_E3_TAU_WEEKLY <- c(
 #'   \code{\link{MOSAIC_E3_TAU_WEEKLY}}.
 #' @param tau_weekly_default Weekly value for countries the E3 work never
 #'   covered. Default \code{NULL} = the median of \code{tau_weekly}.
-#' @param span Target 95\% interval width, as a MULTIPLICATIVE factor, for
+#' @param span Target 95% interval width, as a MULTIPLICATIVE factor, for
 #'   countries with direct E3 evidence. Default \code{10} -- one order of
 #'   magnitude, which is what the underlying border-throughput evidence
 #'   actually supports (every count is a floor).
-#' @param span_default Target 95\% span for countries with no country-specific
+#' @param span_default Target 95% span for countries with no country-specific
 #'   evidence. Default \code{30}.
 #' @param family Prior family. \code{"lognormal"} (default) or \code{"beta"}.
 #'   Lognormal is strongly preferred: a Beta wide enough to express an

@@ -34,8 +34,8 @@
 #'   with components:
 #' \describe{
 #'   \item{predicted_median}{Median period CFR across ensemble members.}
-#'   \item{predicted_ci_lo}{Lower envelope quantile (default 2.5\%).}
-#'   \item{predicted_ci_hi}{Upper envelope quantile (default 97.5\%).}
+#'   \item{predicted_ci_lo}{Lower envelope quantile (default 2.5%).}
+#'   \item{predicted_ci_hi}{Upper envelope quantile (default 97.5%).}
 #'   \item{predicted_mean}{Mean across ensemble members.}
 #'   \item{predicted_sd}{SD across ensemble members.}
 #'   \item{n_members}{Number of finite ensemble-member CFR values.}

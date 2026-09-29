@@ -33,7 +33,7 @@
 #' \itemize{
 #'   \item Time series smoothing with 28-day running mean window
 #'   \item Local maxima detection with 10-day comparison windows
-#'   \item Prominence-based filtering (minimum 8\% of maximum smoothed value
+#'   \item Prominence-based filtering (minimum 8% of maximum smoothed value
 #'         for most countries; country-specific overrides below)
 #'   \item Minimum peak height threshold of 3 smoothed cases (default)
 #'   \item Minimum 75-day separation between consecutive peaks
@@ -42,9 +42,9 @@
 #'
 #' Country-specific adjustments are applied for:
 #' \itemize{
-#'   \item Niger (NER): Lower prominence threshold (1.5\%) for gradual peaks
-#'   \item Cameroon (CMR): Adjusted threshold (4\%) for plateau-shaped peaks
-#'   \item Ethiopia (ETH): Lower threshold (3\%) for multiple outbreaks
+#'   \item Niger (NER): Lower prominence threshold (1.5%) for gradual peaks
+#'   \item Cameroon (CMR): Adjusted threshold (4%) for plateau-shaped peaks
+#'   \item Ethiopia (ETH): Lower threshold (3%) for multiple outbreaks
 #' }
 #'
 #' Manual corrections have been applied for known issues including:

@@ -18,7 +18,7 @@ Named character vector of hex color codes for ribbon fills.
 }
 \description{
 Produces progressively lighter/desaturated variants of the base color for
-layered credible interval ribbons. The standard levels are 50\\%, 75\\%, 95\\%.
+layered credible interval ribbons. The standard levels are 50\%, 75\%, 95\%.
 }
 \details{
 Uncertainty is never a standalone color. It is always derived from the
