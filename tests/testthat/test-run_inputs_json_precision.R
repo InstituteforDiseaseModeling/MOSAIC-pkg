@@ -47,7 +47,7 @@ test_that("resume accepts 1_inputs written at either precision, and rejects chan
   MOSAIC:::.mosaic_write_json(config, file.path(inp, "config.json"), io = NULL)
   expect_no_error(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
 
-  # Run directories written before v0.92.2 (15 significant digits).
+  # Run directories written before v0.93.1 (15 significant digits).
   wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE,
                                             digits = NA)
   wj(priors, file.path(inp, "priors.json"))

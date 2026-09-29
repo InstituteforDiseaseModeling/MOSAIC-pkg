@@ -147,7 +147,7 @@
 #' 32 GB box). The production runs used \code{parallel_seeds = 10}, which only
 #' fit on the 448 GB compute host; do not copy that value onto a smaller machine.
 #' A RAM-aware \code{warning()} fires here when the projected footprint exceeds
-#' ~85\% of probed system memory.
+#' ~85% of probed system memory.
 #' @keywords internal
 #' @noRd
 .psi_load_arch_control <- function(arch_control = NULL) {
@@ -165,7 +165,10 @@
                      "patience", "country_dim", "timesteps", "n_seeds",
                      "seed_base", "seed_step", "max_gap_days", "rlr_patience",
                      "rw_step_months", "rw_test_months", "rw_subsample",
-                     "rw_gap_weeks", "parallel_seeds")
+                     "rw_gap_weeks", "parallel_seeds",
+                     # HA-01 12-week-horizon knobs. All absent from the B4 fixture,
+                     # so they resolve to NULL and the historical behaviour stands.
+                     "lead", "step_days", "test_days", "min_test_days")
      for (k in int_fields) if (!is.null(ac[[k]]) && !is.na(ac[[k]]))
           ac[[k]] <- as.integer(round(as.numeric(ac[[k]])))
      # Warn (once, before any worker spawns) if parallel_seeds risks OOM on this
@@ -266,11 +269,16 @@
           country_pool   = ac$country_pool %||% "all_mosaic",
           target_iso     = ac$target_iso %||% "MOZ",
           timesteps      = ac$timesteps,
+          lead           = as.integer(ac$lead %||% 0L),
           features       = features,
           split_params   = list(rw_step_months = ac$rw_step_months,
                                  rw_test_months = ac$rw_test_months,
                                  rw_subsample   = ac$rw_subsample,
-                                 rw_gap_weeks   = ac$rw_gap_weeks),
+                                 rw_gap_weeks   = ac$rw_gap_weeks,
+                                 rw_step_days   = ac$step_days,
+                                 rw_test_days   = ac$test_days,
+                                 rw_min_test_days = ac$min_test_days,
+                                 rw_min_train_years = ac$min_train_years),
           use_confidence_weight = isTRUE(ac$use_confidence_weight),
           response_var   = response_var,
           max_gap_days   = ac$max_gap_days,
@@ -335,7 +343,8 @@
      out_daily <- el[, c("iso_code", "date", "cases", "psi", "pred_raw",
                          "pred_smooth", "pred_bias_corrected",
                          "q025", "q25", "q75", "q975")]
-     out_daily$year        <- as.integer(format(out_daily$date, "%Y"))
+     # DA-01: ISO week-based year (`%G`) to match the `%V` week below.
+     out_daily$year        <- as.integer(format(out_daily$date, "%G"))
      out_daily$week        <- as.integer(format(out_daily$date, "%V"))
      out_daily$cases_binary <- as.integer(out_daily$cases > 0)
      out_daily$pred        <- out_daily$pred_raw   # backward-compat alias for cosmetic plotters
@@ -402,7 +411,63 @@
           n_features       = length(bundle$features),
           features         = bundle$features,
           fit_info         = ens$fit_info,
-          rw_diagnostics   = ens$rw_diagnostics)
+          rw_diagnostics   = ens$rw_diagnostics,
+
+          # DA-02 PROVENANCE. The manifest previously recorded 18 keys and NONE
+          # of: the source panel, the sequence/CV geometry, the smoothing and
+          # clamp constants, or any software version. Combined with lstm_v2's
+          # known cross-process non-determinism that made a psi artefact
+          # unreconstructible in principle -- and it is why a "rebuild the panel
+          # the same way but with the fix" could not be done reliably. Everything
+          # needed to reproduce the fit, or to prove two artefacts are not
+          # comparable, is recorded here. Additive: no existing key changed.
+          provenance = list(
+               source_csv        = source_csv,
+               source_csv_md5    = tryCatch(unname(tools::md5sum(source_csv)),
+                                            error = function(e) NA_character_),
+               source_csv_bytes  = tryCatch(as.numeric(file.info(source_csv)$size),
+                                            error = function(e) NA_real_),
+               source_csv_mtime  = tryCatch(as.character(file.info(source_csv)$mtime),
+                                            error = function(e) NA_character_),
+               # sequence + CV geometry (what makes a fold grid reproducible)
+               timesteps         = ac$timesteps,
+               lead              = as.integer(ac$lead %||% 0L),
+               max_gap_days      = ac$max_gap_days,
+               rw_step_months    = ac$rw_step_months,
+               rw_test_months    = ac$rw_test_months,
+               rw_subsample      = ac$rw_subsample,
+               rw_gap_weeks      = ac$rw_gap_weeks,
+               rw_step_days      = ac$step_days,
+               rw_test_days      = ac$test_days,
+               rw_min_test_days  = ac$min_test_days,
+               rw_min_train_years = ac$min_train_years,
+               n_rw_steps        = length(bundle$rw_steps),
+               # post-processing constants that survive into psi
+               smooth_span       = ac$smooth_span,
+               ensemble_logit_eps = ac$ensemble_logit_eps,
+               loss_kind         = ac$loss_kind,
+               use_confidence_weight = isTRUE(ac$use_confidence_weight),
+               # software identity
+               mosaic_version    = as.character(utils::packageVersion("MOSAIC")),
+               # NOTE: no `backend` field. A `backend` variable exists only on the
+               # feature/psi-torch-port branch; on main there is one keras path.
+               # Referencing it here was cross-branch contamination and it killed
+               # every shard of an arm at the END of its first cutoff -- after all
+               # the fitting work, when the manifest is written.
+               r_version         = paste(R.version$major, R.version$minor, sep = "."),
+               tf_version        = tryCatch(
+                    as.character(reticulate::py_get_attr(
+                         reticulate::import("tensorflow"), "__version__")),
+                    error = function(e) NA_character_),
+               keras3_version    = tryCatch(
+                    as.character(utils::packageVersion("keras3")),
+                    error = function(e) NA_character_),
+               torch_version     = tryCatch(
+                    as.character(utils::packageVersion("torch")),
+                    error = function(e) NA_character_),
+               host              = tryCatch(unname(Sys.info()[["nodename"]]),
+                                            error = function(e) NA_character_),
+               written_at        = as.character(Sys.time())))
      p_cfg <- file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json")
      jsonlite::write_json(config_info, p_cfg, pretty = TRUE, auto_unbox = TRUE,
                           digits = NA, null = "null")

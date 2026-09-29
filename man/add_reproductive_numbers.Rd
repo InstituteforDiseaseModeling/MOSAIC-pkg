@@ -23,7 +23,7 @@ directory that contains \code{1_inputs/}, \code{2_calibration/}, and
 \item{recompute_ci}{Logical. When \code{TRUE}, build a proper posterior
 credible interval by \strong{re-simulating} the saved posterior ensemble
 (\code{2_calibration/ensemble_candidate.rds}) and computing R_eff per member,
-then weighted quantiles (median + 95\\% interval). This captures the daily
+then weighted quantiles (median + 95\% interval). This captures the daily
 route incidence, stock and decay-rate channels that the persisted
 trajectory artifact does not retain at a daily grid. A faithfulness gate
 confirms the re-sim reproduces the saved \code{cases_array} before any CI is written.

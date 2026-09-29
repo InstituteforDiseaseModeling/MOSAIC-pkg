@@ -148,6 +148,33 @@
 #' @noRd
 .psi_as_target_array <- function(y) array(y, dim = c(length(y), 1L))
 
+#' The epoch whose weights a finished keras fit is HOLDING.
+#'
+#' NOT the epoch training stopped at. With early stopping the two differ by
+#' `patience` (10 by default), and the difference SHIPS: the caller records this
+#' as `best_epochs` (\code{.psi_fit_predict_rw_cv}), takes
+#' \code{round(median(best_epochs))}, and refits on the full in-sample data at
+#' that many epochs with no early stopping and no best-weight restoration.
+#' Reporting the stop epoch therefore over-trained the deployed model by up to
+#' `patience` on the 16-26 epoch schedule the production folds produce.
+#'
+#' When `restore_best` is FALSE the final weights ARE the last epoch's, so the
+#' stop epoch is the correct answer; likewise when there is no usable
+#' `val_loss` to take an argmin over.
+#'
+#' @param history the object returned by \code{keras3::fit}
+#' @param restore_best whether the fit ran with `restore_best_weights = TRUE`
+#' @return integer epoch, 1-based
+#' @keywords internal
+#' @noRd
+.psi_epoch_from_history <- function(history, restore_best) {
+     n_run <- length(history$metrics$loss)
+     if (!isTRUE(restore_best)) return(as.integer(n_run))
+     vl <- history$metrics$val_loss
+     if (!length(vl) || !any(is.finite(vl))) return(as.integer(n_run))
+     as.integer(which.min(vl))
+}
+
 #' Train a keras model on data_bundle and predict on X_pred.
 #'
 #' val mode (default): early stopping + ReduceLR on data_bundle$X_val/y_val.
@@ -227,7 +254,8 @@
                verbose = 0L, return_dict = TRUE)
           val_loss   <- as.numeric(score$loss)
           val_metric <- as.numeric(score[[lc$metric]])
-          n_epochs   <- length(history$metrics$loss)
+          n_epochs   <- .psi_epoch_from_history(
+               history, isTRUE(hp$restore_best_weights %||% TRUE))
      }
 
      x_pred <- make_x(data_bundle$X_pred,

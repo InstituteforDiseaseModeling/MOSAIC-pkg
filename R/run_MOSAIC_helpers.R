@@ -1362,7 +1362,7 @@
 #' new draws, so a mismatch is a hard error. Comparison uses the same serializer
 #' that wrote the files (byte-exact for identical inputs); if serialization
 #' cannot be performed the check downgrades to a warning rather than blocking.
-#' Run directories written before v0.92.2 hold 15-significant-digit JSON, so a
+#' Run directories written before v0.93.1 hold 15-significant-digit JSON, so a
 #' persisted file matching the incoming object at either precision passes.
 #'
 #' Also guards the transmission engine: resuming a run directory created before
@@ -1376,7 +1376,7 @@
 #' @noRd
 .mosaic_resume_check_inputs <- function(dirs, config, priors, control = NULL) {
   # digits = NA (15 significant) by default: the control sub-objects are
-  # compared after parsing control.json back, and at 15 digits a pre-v0.92.2
+  # compared after parsing control.json back, and at 15 digits a pre-v0.93.1
   # file and a current one serialise identically while real changes still
   # differ. config/priors are compared as raw file text, at both precisions.
   serialize_obj <- function(obj, digits = NA) {

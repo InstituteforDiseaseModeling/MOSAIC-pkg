@@ -4,7 +4,7 @@
 #' predictions artifact for one metric, one panel per cutoff (forecast origin),
 #' restricted to the assessed horizon (default \eqn{\le 5} months). The two
 #' posterior ensembles (\code{ensemble}, \code{ensemble_opt}) are drawn as
-#' "hero" series with 50/95\% prediction-interval ribbons; the two point
+#' "hero" series with 50/95% prediction-interval ribbons; the two point
 #' configurations (\code{best}, \code{medoid}) are drawn as thin reference
 #' lines. Held-out observations are overlaid as points and the forecast origin
 #' is marked with a labelled dashed rule. Each panel is annotated with the
@@ -31,7 +31,7 @@
 #'   panel relative to its cutoff (default 5).
 #' @param context_months Months of in-sample context shown before the cutoff
 #'   (left edge of each panel, default 2).
-#' @param models_ribbon Models drawn with 50/95\% PI ribbons + median line
+#' @param models_ribbon Models drawn with 50/95% PI ribbons + median line
 #'   (default \code{c("ensemble", "ensemble_opt")}).
 #' @param models_line Models drawn as thin reference median lines
 #'   (default \code{c("best", "medoid")}).

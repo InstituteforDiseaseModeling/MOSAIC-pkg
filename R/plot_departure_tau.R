@@ -2,7 +2,7 @@
 #'
 #' Two-panel figure for the \code{"spatial"} group of
 #' \code{\link{render_MOSAIC_figures}}: (left, A) a forest plot of the daily
-#' departure probability \eqn{\tau_i} per location, with optional 95\% credible
+#' departure probability \eqn{\tau_i} per location, with optional 95% credible
 #' intervals; (right, B) the implied total daily travelers leaving each origin,
 #' \eqn{N_i \tau_i}.
 #'

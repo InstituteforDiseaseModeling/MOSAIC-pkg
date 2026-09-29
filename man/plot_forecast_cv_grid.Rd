@@ -27,7 +27,7 @@ plot_forecast_cv_grid(
 \item{predictions}{Predictions to plot: a data.frame, a path to a
 \code{predictions*.parquet}/\code{.csv}, or a directory holding per-cell
 \code{*/cutoff_*/predictions.parquet}. Must carry \code{iso_code,
-  cutoff_date, date, metric, segment, observed, pred_median, model} and the CI
+cutoff_date, date, metric, segment, observed, pred_median, model} and the CI
 columns for \code{ci} (e.g. \code{pi95_lo}/\code{pi95_hi}).}
 
 \item{metric}{Single metric to render: \code{"cases"} or \code{"deaths"}.}
