@@ -20,6 +20,7 @@ compile_suitability_data(
   include_lags = FALSE,
   include_flood_prob = TRUE,
   gam_train_stop = NULL,
+  target_anchor_stop = NULL,
   backfill_case_gaps = TRUE,
   backfill_max_weeks = 2L,
   backfill_method = "linear"
@@ -125,6 +126,29 @@ compile_suitability_data(
   leakage-hygiene hook for building a leak-free per-cutoff panel in
   rolling-origin forecast CV. Default `NULL` = full-data fit
   (back-compatible).
+
+- target_anchor_stop:
+
+  Date or character (`"YYYY-MM-DD"`) or `NULL`. Upper bound on the rows
+  used to compute the normalising ANCHORS for the response variables –
+  `ti_p99` (`transmission_intensity`), the global count/rate p99s
+  (targets A, C) and the per-country `cp99c`/`cp99r` and median
+  population (targets B, D). When non-`NULL`, anchors use only trusted
+  rows with `date <= target_anchor_stop`, while every row in the panel
+  still RECEIVES a target scored on that anchor.
+
+  This is the target-side sibling of `gam_train_stop` and closes the
+  remaining leak in a per-cutoff panel: because such a panel keeps
+  `date_stop = NULL` (it must span rows past the cutoff so the model can
+  predict the forecast window), a full-window anchor makes the target at
+  time *t* depend on data after *t*. It also removes retroactive
+  re-baselining – with a fixed anchor window a data refresh can no
+  longer shift the entire historical target series.
+
+  Default `NULL` = full-window anchors (back-compatible; the canonical
+  panel is unchanged). Note `target_F_rank_per_country` is a rank over
+  the country's whole observed series and is full-window BY
+  CONSTRUCTION; this argument does not and cannot make it leak-free.
 
 - backfill_case_gaps:
 

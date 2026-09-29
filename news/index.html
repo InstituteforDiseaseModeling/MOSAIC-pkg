@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.92.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.92.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,22 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.92.3" id="mosaic-0923">MOSAIC 0.92.3<a class="anchor" aria-label="anchor" href="#mosaic-0923"></a></h2>
+<div class="section level3">
+<h3 id="psi_evolve-closed-out-the-correctness-fixes-ship-the-experimental-architectures-do-not-0-92-3">psi_evolve closed out: the correctness fixes ship, the experimental architectures do not<a class="anchor" aria-label="anchor" href="#psi_evolve-closed-out-the-correctness-fixes-ship-the-experimental-architectures-do-not-0-92-3"></a></h3>
+<p>The psi_evolve programme (waves 0-34 plus a 72-cell downstream A/B on dugong) found no psi variant that beats the production LSTM once psi is pushed through calibration. DLinear, D9b (static-covariate country embedding), N8 (per-country loss balancing) and the D9b+N8 branch defaults all fit in-sample WORSE than production (12/12 cells for DLinear and D9b+N8) and none improved out-of-sample WIS beyond the psi-seed noise floor. None of that experimental code is merged; the full history is kept under the git tag <code>archive/psi-evolve</code>.</p>
+<p>What does ship are the defects the programme found in the production psi path:</p>
+<ul><li>
+<strong>The deployed model was trained past its best epoch.</strong> The inner CV recorded the epoch training <em>stopped</em> at (best + <code>patience</code>), and the full-data refit ran for that many epochs with no early stopping, overshooting the optimum by up to 10 epochs (40-60% on the production schedule). New <code>.psi_epoch_from_history()</code> returns <code>argmin(val_loss)</code> when best weights were restored.</li>
+<li>
+<strong>The leak-free v7.4 panel had a leaking target.</strong> Response variables were normalised by p99 anchors computed over rows after the cutoff. New <code>compile_suitability_data(target_anchor_stop=)</code> bounds the anchor rows; <code><a href="../reference/prefit_rolling_cv_psi.html">prefit_rolling_cv_psi()</a></code> passes the cutoff and folds it into the psi cache key, so a panel built under the old anchor is never silently reused. Default <code>NULL</code> leaves the canonical panel unchanged.</li>
+<li>
+<strong>ISO-8601 week labelling</strong> was wrong in the surveillance/climate processors, and the RW-CV grid now accepts day-based geometry (a day-based stride is no longer multiplied by <code>rw_subsample</code>).</li>
+<li>
+<strong>psi RW-CV:</strong> optional forecast <code>lead</code> and validation input context; per-fold held-out predictions are retained; the drop-filled-tail guard fails loudly; the psi manifest records fit provenance (and no longer references an undefined <code>backend</code>).</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.92.1" id="mosaic-0921">MOSAIC 0.92.1<a class="anchor" aria-label="anchor" href="#mosaic-0921"></a></h2>
 <div class="section level3">

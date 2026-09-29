@@ -13,7 +13,7 @@ rolling windows, anomalies, and climate / WASH interaction terms."><meta propert
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.92.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.92.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,6 +65,7 @@ rolling windows, anomalies, and climate / WASH interaction terms.</p>
 <span>  include_lags <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  include_flood_prob <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  gam_train_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  target_anchor_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  backfill_case_gaps <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  backfill_max_weeks <span class="op">=</span> <span class="fl">2L</span>,</span>
 <span>  backfill_method <span class="op">=</span> <span class="st">"linear"</span></span>
@@ -156,6 +157,28 @@ hazard GAM is FIT only on rows with <code>date &lt;= gam_train_stop</code> and t
 predicts every row – the leakage-hygiene hook for building a leak-free
 per-cutoff panel in rolling-origin forecast CV. Default <code>NULL</code> =
 full-data fit (back-compatible).</p></dd>
+
+
+<dt id="arg-target-anchor-stop">target_anchor_stop<a class="anchor" aria-label="anchor" href="#arg-target-anchor-stop"></a></dt>
+<dd><p>Date or character (<code>"YYYY-MM-DD"</code>) or
+<code>NULL</code>. Upper bound on the rows used to compute the normalising
+ANCHORS for the response variables – <code>ti_p99</code>
+(<code>transmission_intensity</code>), the global count/rate p99s (targets A, C)
+and the per-country <code>cp99c</code>/<code>cp99r</code> and median population
+(targets B, D). When non-<code>NULL</code>, anchors use only trusted rows with
+<code>date &lt;= target_anchor_stop</code>, while every row in the panel still
+RECEIVES a target scored on that anchor.</p>
+<p>This is the target-side sibling of <code>gam_train_stop</code> and closes the
+remaining leak in a per-cutoff panel: because such a panel keeps
+<code>date_stop = NULL</code> (it must span rows past the cutoff so the model can
+predict the forecast window), a full-window anchor makes the target at time
+<em>t</em> depend on data after <em>t</em>. It also removes retroactive
+re-baselining – with a fixed anchor window a data refresh can no longer
+shift the entire historical target series.</p>
+<p>Default <code>NULL</code> = full-window anchors (back-compatible; the canonical
+panel is unchanged). Note <code>target_F_rank_per_country</code> is a rank over
+the country's whole observed series and is full-window BY CONSTRUCTION;
+this argument does not and cannot make it leak-free.</p></dd>
 
 
 <dt id="arg-backfill-case-gaps">backfill_case_gaps<a class="anchor" aria-label="anchor" href="#arg-backfill-case-gaps"></a></dt>
