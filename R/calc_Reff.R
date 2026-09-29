@@ -558,7 +558,7 @@ calc_Reff <- function(ensemble,
                                   probs = c(0.025, 0.5, 0.975),
                                   infectiousness_floor = 1,
                                   burn_in_days = 0L,
-                                  cases_central_method = "median",
+                                  cases_central_method = "mean",
                                   gate_rel_tol = 0.05, gate_frac = 0.95,
                                   gate_cor_min = 0.95, verbose = TRUE,
                                   cl = NULL) {
@@ -768,7 +768,7 @@ calc_Reff <- function(ensemble,
   # param set's own median, mapping to ONE re-simulated member id.
   # The central cases target must use the SAME per-channel central_method as
   # run_MOSAIC's medoid (control$predictions$central_method[["cases"]]); default
-  # "median" matches the production default. Using the wrong summary here would
+  # "mean" matches the package default. Using the wrong summary here would
   # pick a different medoid than calibration did.
   cases_central <- if (identical(cases_central_method, "mean") &&
                        !is.null(ensemble$cases_mean)) {

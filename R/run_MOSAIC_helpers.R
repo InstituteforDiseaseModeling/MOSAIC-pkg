@@ -230,22 +230,23 @@
 #' trajectory for predictions, plots, ensemble R^2/bias metrics, the medoid
 #' target, and the subset-selection objective. The weighted MEAN is the
 #' unbiased estimator of expected counts (\eqn{E[\sum]=\sum E}) and never
-#' collapses to zero, so it is the package default; \code{"median"} reproduces
-#' historical (pre-feature) runs.
+#' collapses to zero on sparse deaths, so it is the package default (v0.38.0 to
+#' v0.46.0 and again from v0.98.0); \code{"median"}, the default from v0.46.1 to
+#' v0.97.x, reproduces runs made then.
 #'
 #' Accepts a scalar (applies to both channels) or a named vector to set cases
 #' and deaths independently, e.g. \code{c(cases = "median", deaths = "mean")}.
 #'
 #' @param x \code{NULL}, a scalar \code{"mean"}/\code{"median"}, or a named
 #'   vector with \code{"cases"} and/or \code{"deaths"}. \code{NULL} or an
-#'   unset channel falls back to \code{"median"}.
+#'   unset channel falls back to \code{"mean"}.
 #' @return Named character vector \code{c(cases = ., deaths = .)}, each
 #'   \code{"mean"} or \code{"median"}.
 #' @noRd
 .mosaic_resolve_central_method <- function(x = NULL) {
   valid <- c("mean", "median")
   ch    <- c("cases", "deaths")
-  out   <- stats::setNames(rep("median", 2L), ch)
+  out   <- stats::setNames(rep("mean", 2L), ch)
 
   if (is.null(x) || length(x) == 0L) {
     return(out)
@@ -1376,8 +1377,11 @@
 #'   dispersion and an additive background, smooths the year deviations, scores
 #'   edge weeks and makes the deaths confidence weights mass-preserving. v0.97.2
 #'   makes the year deviations yearly levels (blended at each 1 January)
-#'   instead of an interpolated curve.
-.mosaic_likelihood_impl_version <- function() "R/v0.97.2+deaths_yearlevel"
+#'   instead of an interpolated curve. v0.98.0 centres each forecast year's
+#'   deviation on the latest observed year's; the values change only where a
+#'   scored day's blend reaches a forecast year (data ending within 30 days of a
+#'   1 January).
+.mosaic_likelihood_impl_version <- function() "R/v0.98.0+deaths_carryforward"
 
 #' Likelihood-Value Provenance Descriptor
 #'

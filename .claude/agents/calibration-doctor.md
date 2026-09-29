@@ -65,12 +65,16 @@ dev specialist.
   carries no best `r2_cases`/`bias_ratio_cases`; read the `*_ensemble` metrics (+ the dual
   `*_ensemble_mean`/`*_ensemble_median` cross-walk and `central_method_*` provenance). The
   top-likelihood draw is still flagged by `is_best_model` in `samples.parquet` for parameter audits.
-- **R²/bias:** computed from the ensemble **central series** vs observed (`central_method`, median
-  by default). Since v0.96.0 the reported CFR is integrated out per path and ensemble deaths are
-  redrawn from its posterior GIVEN THE OBSERVED DEATHS, so the in-sample deaths bias/R² are fitted
-  quantities (optimistic by construction; judge deaths skill out of sample) and a per-year deaths
-  miss usually means that year's case path is off -- read `3_results/posterior/cfr_posterior.csv`
-  (the calibrated reported CFR by year, conditional on the members' cases) beside the cases fit.
+- **R²/bias:** computed from the ensemble **central series** vs observed (`central_method`: mean
+  by default from v0.98.0, median v0.46.1-v0.97.x -- check `summary.json:central_method_*`).
+  Since v0.96.0 the reported CFR is integrated out per path and ensemble deaths are redrawn from
+  its posterior GIVEN THE OBSERVED DEATHS, so in-sample deaths are conditioned quantities: the
+  medoid reproduces the observed deaths, while the ensemble runs low (~0.8x in the 8-country
+  v0.97.2 test) where members' case paths undershoot, since a path cannot put deaths where it has
+  no cases. Judge deaths skill out of sample; a per-year deaths miss usually means that year's case
+  path is off -- read `3_results/posterior/cfr_posterior.csv` (the calibrated reported CFR by year,
+  conditional on the members' cases; forecast years continue the latest observed year's level from
+  v0.98.0) beside the cases fit.
   `summary.json:cfr_implied` is the members' realized period CFR over the scored window.
   Distinguish a timing/shape miss from a level miss before recommending a lever.
 

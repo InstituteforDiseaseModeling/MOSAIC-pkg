@@ -1124,8 +1124,8 @@ calc_model_ensemble <- function(config,
                                        location_names, date_start, date_stop,
                                        n_successful, obs_cases, obs_deaths,
                                        trajectory_channels,
-                                       central_method = c(cases = "median",
-                                                          deaths = "median"),
+                                       central_method = c(cases = "mean",
+                                                          deaths = "mean"),
                                        n_lines = 150L,
                                        line_stride = 7L, verbose = TRUE) {
   if (is.null(scratch_dir) || !dir.exists(scratch_dir)) return(NULL)

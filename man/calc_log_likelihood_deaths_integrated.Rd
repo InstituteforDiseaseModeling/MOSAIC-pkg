@@ -42,7 +42,7 @@ calc_log_likelihood_deaths_integrated(
 
 \item{week_offset}{Optional integer, length 1 or one per location, 0-6 days from Monday for the reporting-week boundary; detected from \code{obs_deaths} when \code{NULL}.}
 
-\item{years}{Optional integer vector of the years that carry deviations (default: every year of \code{onset_dates}); years without scored weeks keep their prior. Days before the first year or after the last take the nearest year's level.}
+\item{years}{Optional integer vector of the years that carry deviations (default: every year of \code{onset_dates}); years after the latest observed year are centred on its deviation, and other years without scored weeks keep their prior. Days before the first year or after the last take the nearest year's level.}
 }
 \value{
 A list with \code{ll} (marginal log-likelihood per location),
@@ -61,13 +61,18 @@ the time-varying prior \code{mu_jt} shifted on the logit scale by a
 location-level offset and one level per calendar year:
 \deqn{\mathrm{logit}\,\mu_{jt} = \mathrm{logit}\,\mu^{0}_{jt} + a_j +
   \sum_y B_y(t)\,\delta_{j,y},\qquad a_j \sim N(0, s_j^2),\quad
-  \delta_{j,y} \sim N(0, \sigma_y^2),}
+  \delta_{j,y} \sim N(0, \sigma_y^2)\ (y \le y^*_j),\quad
+  \delta_{j,y} \sim N(\delta_{j,y^*_j}, \sigma_y^2)\ (y > y^*_j),}
 where \eqn{B_y(t)} is 1 inside calendar year \eqn{y} and blends linearly into
 the next year over the 60 days centred on each 1 January, so the CFR has no
 step at a year boundary. Each year's deviation is a LEVEL for that year: a
 year observed only in part is fitted to the months observed and applied
 unchanged to the rest of the year (an interpolated basis would extrapolate
-the within-year trend past the data instead).
+the within-year trend past the data instead). \eqn{y^*_j} is the latest year
+observed past its New Year blend (the year of the last scored day minus 30
+days). Each later year is a forecast year centred on \eqn{y^*_j}'s deviation,
+so a forecast continues the latest calibrated CFR instead of reverting to the
+prior's long-run level, with the usual year-to-year spread \eqn{\sigma_y}.
 
 Deaths are aggregated to reporting weeks and scored with a quasi-Poisson
 likelihood: the Poisson log-likelihood divided by a per-location dispersion
@@ -86,6 +91,14 @@ data is scored on the days it has. Its weight is the mean weight of its days.
 The background is the same relative floor the cases channel applies to a cell
 whose prediction is zero, so a week with no onsets but observed deaths costs a
 bounded, data-scaled amount rather than an arbitrary constant.
+
+The forecast-year prior is a product of conditional densities with unit
+Jacobian, so a forecast year that no scored day touches leaves the marginal
+likelihood exactly as under independent year deviations; only its posterior
+moves, to the latest year's level. Data that end less than 30 days after a
+1 January reach the new year only through the blend, so the year before stays
+\eqn{y^*_j} and the new year is a forecast year, centred on the year before and
+still fitted to those days.
 }
 \examples{
 dates <- seq(as.Date("2024-01-01"), by = "day", length.out = 140)

@@ -1,5 +1,38 @@
 # MOSAIC (development version)
 
+## The ensemble central line is the mean; forecast years continue the latest CFR (v0.98.0)
+
+- **Ensemble central tendency defaults to the mean** for both cases and deaths
+  (`control$predictions$central_method = "mean"`; it was `"median"` from
+  v0.46.1). It drives the prediction line and `predicted_central`, the headline
+  `*_ensemble` R^2/bias, the medoid target and the subset objective. The daily
+  median of sparse deaths is zero on most days in low-count countries, so it
+  read 0x in-sample deaths bias for MOZ and KEN in the CFR-v2.1 calibration test;
+  across the 8 countries the median in-sample deaths bias moves from 0.65x to
+  0.78x and out-of-sample from 0.51x to 1.30x. Cases move from slightly low to
+  slightly high (0.94x to 1.08x in sample). WIS, coverage, the calibration and
+  the posterior are unchanged. **Behaviour change:** the medoid (and so
+  `config_medoid.json`, the medoid plots and the R_eff central line) is now the
+  member closest to the mean cases series. `summary.json` keeps both
+  `*_ensemble_mean` and `*_ensemble_median`, and
+  `central_method = "median"` reproduces the previous behaviour. Completed runs
+  whose `control.json` predates the setting are still read as median by
+  `render_MOSAIC_figures()` and `add_reproductive_numbers()`.
+- **Forecast years continue the latest calibrated CFR.** The integrated CFR's
+  year deviations were independent, so a year past the data reverted to the
+  prior's long-run country level; in the calibration test this under-forecast
+  COD's 2026 deaths after its CFR rose from about 1% to 3%. Each forecast year's
+  deviation is now centred on the latest observed year's, with the same
+  year-to-year spread (`sd_year`). The latest observed year is the year of the
+  last scored day minus 30 days, so data reaching only into a new year's
+  1 January blend leave the year before as the anchor. The prior is a product of
+  conditional densities with unit Jacobian, so the calibration likelihood is
+  unchanged except where a scored day's blend reaches a forecast year (data
+  ending within 30 days of a 1 January). The post-hoc death redraw,
+  `cfr_posterior.csv` and `config_medoid.json` follow. The likelihood version is
+  `R/v0.98.0+deaths_carryforward`. A `deaths_integration.rds` saved by an earlier
+  version re-runs with independent year deviations, as it was calibrated.
+
 ## est_CFR_hierarchical() documents the weak identification of tau (v0.97.3)
 
 Documentation only. `?est_CFR_hierarchical` now states that the between-country

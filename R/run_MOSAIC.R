@@ -2736,7 +2736,7 @@ run_MOSAIC <- function(config,
       # Log-scale MAE from each member to the ensemble central trajectory
       # (location 1, cases). Deliberate mix: per-member stochastic spread is
       # summarized by its MEDIAN (robust to a member's stochastic outliers),
-      # while the ensemble TARGET is the canonical central series (median by
+      # while the ensemble TARGET is the canonical central series (mean by
       # default) so the chosen representative member tracks the reported curve.
       cen_cases_target <- .central(ensemble, "cases")
       eps_med <- 1.0
@@ -2890,7 +2890,7 @@ run_MOSAIC <- function(config,
 
       # Run N stochastic reruns of the medoid config: R^2/bias and the
       # prediction plot both derive from the ensemble central series
-      # (central_method, median by default), consistent with the posterior ensemble.
+      # (central_method, mean by default), consistent with the posterior ensemble.
       log_msg("Building medoid model stochastic ensemble (%d reruns, source=%s)...",
               n_best_stochastic_per,
               if (ens_parallel) "local-parallel" else "local-sequential")
@@ -3434,10 +3434,11 @@ run_mosaic <- run_MOSAIC
 #'       \code{optimal_n} than exhaustive and records only the evaluated N's in the
 #'       diagnostics table. (The \code{\link{optimize_ensemble_subset}} function's
 #'       own \code{stride} default remains \code{1L} to preserve bit-identicality.)
-#'     \item \code{central_method}: Ensemble central tendency, \code{"median"}
-#'       (default; lower calibration bias) or \code{"mean"} (unbiased for
-#'       expected counts, never collapses on sparse deaths, unmasks implied-CFR
-#'       bias). Scalar or per-channel \code{c(cases=, deaths=)}. Governs the prediction
+#'     \item \code{central_method}: Ensemble central tendency, \code{"mean"}
+#'       (default; the expected count, which never collapses to zero on sparse
+#'       deaths) or \code{"median"} (the typical trajectory, robust to a few
+#'       explosive members; the default from v0.46.1 to v0.97.x). Scalar or
+#'       per-channel \code{c(cases=, deaths=)}. Governs the prediction
 #'       trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
 #'       the medoid target, and the subset-selection objective consistently.
 #'   }
@@ -3766,13 +3767,13 @@ mosaic_control_defaults <- function(calibration = NULL,
                                           # speed; set 1 for a bit-identical exhaustive
                                           # search. (The optimize_ensemble_subset()
                                           # function default stays 1L for parity.)
-    central_method     = "median",       # Ensemble central tendency: "median" (default,
-                                          # lower calibration bias; cases ~1.0, deaths
-                                          # ~0.7-2.1 on the v0456 5-country smoke) or
-                                          # "mean" (unbiased E[sum], unmasks implied-CFR
-                                          # bias). Scalar or per-channel
-                                          # c(cases=, deaths=). Drives predictions,
-                                          # plots, *_ensemble metrics, medoid, subset.
+    central_method     = "mean",         # Ensemble central tendency: "mean" (default
+                                          # from v0.98.0; the expected count, never 0 on
+                                          # sparse deaths) or "median" (the typical
+                                          # trajectory; the v0.46.1-v0.97.x default).
+                                          # Scalar or per-channel c(cases=, deaths=).
+                                          # Drives predictions, plots, *_ensemble
+                                          # metrics, medoid, subset.
     capture_trajectories = TRUE,          # Capture comprehensive internal-state channels
                                           # (compartments + FOI + incidence + burden) from
                                           # the POSTERIOR ensemble and persist

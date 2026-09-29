@@ -2,9 +2,10 @@
 # test-deaths_likelihood_integrated.R
 #
 # The deaths likelihood with the reported CFR integrated out (v0.96.0; score
-# revised v0.97.0):
+# revised v0.97.0, yearly levels v0.97.2, forecast years v0.98.0):
 #   logit mu_jt = logit mu0_jt + a_j + sum_y B_y(t) delta_{j,y}
-#   a ~ N(0, s^2), delta ~ N(0, sd_year^2), B_y = linear between 1 July anchors
+#   a ~ N(0, s^2), delta ~ N(0, sd_year^2) up to the latest observed year and
+#   N(delta_latest, sd_year^2) after it; B_y = yearly levels blended at 1 January
 # scored weekly with a quasi-Poisson likelihood (Poisson / phi) plus an additive
 # background, and marginalised by a Laplace step per location
 # (calc_log_likelihood_deaths_integrated() and its run_MOSAIC() adapters), plus
@@ -128,15 +129,17 @@ test_that("the level is recovered and the posterior SD is honest", {
   expect_true(all(fit$theta_sd[1, ] > 0 & fit$theta_sd[1, ] < c(1, 0.7)))
 })
 
-test_that("a year with no scored weeks keeps its prior; no scored weeks at all returns the prior", {
+test_that("a forecast year is centred on the latest observed year; no scored weeks at all returns the prior", {
   x <- .d7_data()
   fit <- calc_log_likelihood_deaths_integrated(
     x$obs, x$expo, rep(qlogis(0.02), 140), dates = x$dates, sd_shift = 0.5, sd_year = 0.7,
     week_offset = 0L, years = c(2024L, 2026L))
   expect_identical(colnames(fit$theta), c("a", "y2024", "y2026"))
-  # 2024 data carry no information on 2026 (no blending across the missing 2025).
-  expect_equal(unname(fit$theta[1, "y2026"]), 0)
-  expect_equal(unname(fit$theta_sd[1, "y2026"]), 0.7, tolerance = 1e-8)
+  # No blending across the missing 2025, so no data reach 2026: it is 2024's level
+  # plus one year-to-year deviation.
+  expect_equal(unname(fit$theta[1, "y2026"]), unname(fit$theta[1, "y2024"]), tolerance = 1e-8)
+  expect_equal(unname(fit$theta_sd[1, "y2026"]),
+               sqrt(unname(fit$theta_sd[1, "y2024"])^2 + 0.7^2), tolerance = 1e-8)
 
   none <- calc_log_likelihood_deaths_integrated(
     rep(NA_real_, 140), x$expo, rep(qlogis(0.02), 140), dates = x$dates, sd_shift = 0.5,
@@ -144,6 +147,69 @@ test_that("a year with no scored weeks keeps its prior; no scored weeks at all r
   expect_identical(none$ll, 0)
   expect_identical(none$n_weeks, 0L)
   expect_equal(unname(none$theta_sd[1, ]), c(0.5, 0.7))
+})
+
+test_that("forecast years leave the marginal likelihood unchanged and move only their posterior", {
+  x <- .d7_data()                                             # Jan-May 2024
+  base <- rep(qlogis(0.01), 140)                              # the data run at 2x the prior
+  one <- calc_log_likelihood_deaths_integrated(x$obs, x$expo, base, x$dates, sd_shift = 0.5,
+                                               sd_year = 0.7, week_offset = 0L, years = 2024L)
+  fc <- calc_log_likelihood_deaths_integrated(x$obs, x$expo, base, x$dates, sd_shift = 0.5,
+                                              sd_year = 0.7, week_offset = 0L, years = 2024:2026)
+  # Unscored years add a factor that integrates to 1, with or without the carry.
+  expect_equal(fc$ll, one$ll, tolerance = 1e-9)
+  expect_equal(unname(fc$theta[1, c("a", "y2024")]), unname(one$theta[1, ]), tolerance = 1e-7)
+  # Each forecast year is centred on 2024 and scatters one year-to-year SD around it.
+  expect_equal(unname(fc$theta[1, c("y2025", "y2026")]), rep(unname(fc$theta[1, "y2024"]), 2),
+               tolerance = 1e-8)
+  V <- fc$vcov[[1]]; v24 <- V[2, 2]
+  expect_equal(V[3, 3], v24 + 0.49, tolerance = 1e-8)
+  expect_equal(V[4, 4], v24 + 0.49, tolerance = 1e-8)
+  expect_equal(c(V[2, 3], V[2, 4], V[3, 4]), rep(v24, 3), tolerance = 1e-8)
+  # So the forecast CFR is the calibrated 2024 level, not the prior's.
+  cfr_2024 <- plogis(qlogis(0.01) + sum(fc$theta[1, c("a", "y2024")]))
+  cfr_2025 <- plogis(qlogis(0.01) + sum(fc$theta[1, c("a", "y2025")]))
+  expect_equal(cfr_2025, cfr_2024, tolerance = 1e-8)
+  expect_gt(cfr_2025, 0.015)
+})
+
+test_that("the forecast anchor is the latest year observed past its New Year blend", {
+  yrs <- 2023:2027
+  run_to <- function(stop) seq(as.Date("2023-03-01"), as.Date(stop), by = "day")
+  expect_identical(MOSAIC:::.d7_carry(run_to("2025-05-31"), yrs), list(from = 3L, to = 4:5))
+  # Data reaching only into the blend of a new year leave the year before as anchor.
+  expect_identical(MOSAIC:::.d7_carry(run_to("2026-01-20"), yrs), list(from = 3L, to = 4:5))
+  expect_identical(MOSAIC:::.d7_carry(run_to("2026-01-31"), yrs), list(from = 4L, to = 5L))
+  expect_identical(MOSAIC:::.d7_carry(run_to("2027-06-30"), yrs), list(from = 5L, to = integer(0)))
+  expect_identical(MOSAIC:::.d7_carry(as.Date(character(0)), yrs),
+                   list(from = NA_integer_, to = integer(0)))
+  expect_identical(MOSAIC:::.d7_carry(seq(as.Date("2023-01-01"), as.Date("2023-01-15"), by = "day"), yrs),
+                   list(from = NA_integer_, to = integer(0)))
+  # An unlisted anchor year maps to the listed year its level comes from.
+  expect_identical(MOSAIC:::.d7_carry(run_to("2024-06-30"), c(2023L, 2025L, 2026L)),
+                   list(from = 1L, to = 2:3))
+})
+
+test_that("a year observed only inside its New Year blend is centred on the year before", {
+  # Data through 2025-01-20 at 3% against a 1.5% prior: 2025 has only blend days,
+  # so 2024 stays the anchor and 2025 is a forecast year that is still fitted to
+  # those days. Its prior centre now enters the fit -- the one case where the
+  # carry changes the marginal likelihood -- and pulls it toward 2024's level.
+  d_all <- seq(as.Date("2024-01-01"), as.Date("2025-12-31"), by = "day")
+  X <- rep(10, length(d_all))
+  set.seed(5); D <- rpois(length(d_all), 0.03 * X); D[d_all > as.Date("2025-01-20")] <- NA
+  base <- rep(qlogis(0.015), length(d_all))
+  setup <- MOSAIC:::.d7_setup(matrix(D, 1), NULL, d_all, 2024:2025, sd_shift = 0.3,
+                              sd_year = 0.7, phi = 1, week_offset = 0L)
+  expect_identical(setup$locs[[1]][c("carry_from", "carry_to")], list(carry_from = 1L, carry_to = 2L))
+  fit_c <- MOSAIC:::.d7_fit_all(setup, matrix(X, 1), matrix(base, 1), as.numeric(d_all))
+  iid <- setup; iid$locs[[1]]$carry_from <- NA_integer_; iid$locs[[1]]$carry_to <- integer(0)
+  fit_i <- MOSAIC:::.d7_fit_all(iid, matrix(X, 1), matrix(base, 1), as.numeric(d_all))
+  lvl <- function(f, k) plogis(qlogis(0.015) + f$theta[1, "a"] + f$theta[1, k])
+  expect_lt(abs(lvl(fit_c, "y2025") - lvl(fit_c, "y2024")),
+            abs(lvl(fit_i, "y2025") - lvl(fit_i, "y2024")))
+  expect_false(isTRUE(all.equal(fit_c$ll, fit_i$ll)))
+  expect_true(all(fit_c$converged))
 })
 
 test_that("weeks cut by the data edges are scored on their own days; interior gaps drop the week", {
@@ -348,6 +414,35 @@ test_that("the redrawn deaths reproduce the observed total when cases are misfit
   expect_gt(sum(obs), 100)
   tot <- vapply(1:40, function(s) sum(MOSAIC:::.mosaic_posthoc_deaths(di, r, cfg2, seed = s)$reported_deaths), numeric(1))
   expect_equal(mean(tot) / sum(obs), 1, tolerance = 0.05)
+})
+
+test_that("the post-hoc redraw carries the latest observed year's CFR into forecast years", {
+  # Steady onsets; deaths at 2.5% for onsets in 2020-2021 and 5% in 2022, observed
+  # to the end of 2022 against a 2.5% prior. The forecast years 2023-2024 continue
+  # 2022's 5% instead of the location's multi-year level.
+  cfg <- MOSAIC::config_simulation_endemic
+  d <- seq(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")
+  nL <- length(cfg$location_name); nT <- length(d)
+  r <- list(new_symptomatic = matrix(300, nL, nT))
+  src <- seq_len(nT) - (as.integer(cfg$delta_reporting_cases) + 1L); ok <- src >= 1L
+  X <- matrix(0, nL, nT); X[, ok] <- cfg$rho / cfg$chi_epidemic * r$new_symptomatic[, src[ok]]
+  cfr_true <- ifelse(format(d[pmax(src, 1L)], "%Y") == "2022", 0.05, 0.025)
+  set.seed(21); obs <- matrix(rpois(nL * nT, sweep(X, 2L, cfr_true, `*`)), nL, nT)
+  obs[, d > as.Date("2022-12-31")] <- NA
+  cfg$reported_deaths <- obs; cfg$mu_jt[] <- 0.025
+  pri <- list(mu_jt = list(sd_year = 0.7, sd_product = 0.3,
+                           location = setNames(lapply(cfg$location_name, function(i)
+                             list(year = 2020:2024, logit_mean = rep(qlogis(0.025), 5),
+                                  logit_se = rep(0.2, 5))), cfg$location_name)))
+  di <- MOSAIC:::.mosaic_resolve_deaths_integration(cfg, list(likelihood = list()), pri, NULL)
+  expect_true(all(vapply(di$setup$locs, function(L) L$carry_from, integer(1)) == 3L))
+  cy <- sapply(1:30, function(s) MOSAIC:::.mosaic_posthoc_deaths(di, r, cfg, seed = s)$cfr_year,
+               simplify = "array")                                 # [loc x year x draw]
+  med <- apply(cy, c(1, 2), stats::median)
+  expect_equal(unname(med[, "2022"]), rep(0.05, nL), tolerance = 0.1)
+  expect_equal(unname(med[, "2023"]), unname(med[, "2022"]), tolerance = 0.2)
+  expect_equal(unname(med[, "2024"]), unname(med[, "2022"]), tolerance = 0.2)
+  expect_true(all(med[, "2021"] < 0.035))                          # earlier years keep their own level
 })
 
 test_that("the posterior shift puts each year's mean CFR on target and is continuous", {

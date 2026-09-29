@@ -338,7 +338,8 @@ render_MOSAIC_figures <- function(dir_output,
       "is_best_subset_opt" else "is_best_subset"
   }
 
-  # --- Resolve central_method from control.json (default median) --------------
+  # --- Resolve central_method from control.json. A control.json without the ---
+  # setting predates it (v0.38.0); those runs used the median. ----------------
   .resolve_central <- function() {
     cj <- file.path(dirs$inputs, "control.json")
     cm <- "median"

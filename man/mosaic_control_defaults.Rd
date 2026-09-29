@@ -100,10 +100,11 @@ the exhaustive search. Note it may select a slightly different
 \code{optimal_n} than exhaustive and records only the evaluated N's in the
 diagnostics table. (The \code{\link{optimize_ensemble_subset}} function's
 own \code{stride} default remains \code{1L} to preserve bit-identicality.)
-\item \code{central_method}: Ensemble central tendency, \code{"median"}
-(default; lower calibration bias) or \code{"mean"} (unbiased for
-expected counts, never collapses on sparse deaths, unmasks implied-CFR
-bias). Scalar or per-channel \code{c(cases=, deaths=)}. Governs the prediction
+\item \code{central_method}: Ensemble central tendency, \code{"mean"}
+(default; the expected count, which never collapses to zero on sparse
+deaths) or \code{"median"} (the typical trajectory, robust to a few
+explosive members; the default from v0.46.1 to v0.97.x). Scalar or
+per-channel \code{c(cases=, deaths=)}. Governs the prediction
 trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
 the medoid target, and the subset-selection objective consistently.
 }

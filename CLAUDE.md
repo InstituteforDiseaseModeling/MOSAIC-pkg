@@ -143,7 +143,7 @@ The `run_MOSAIC()` workflow is the **centerpiece** of the package — it orchest
 **Post-calibration:**
 - Medoid model identified, config saved to `2_calibration/best_model/config_medoid.json` (no `config_best.json` is produced)
 - `calc_model_ensemble()` computes posterior-weighted predictions (weighted median/mean across parameter sets × stochastic reruns)
-- R² and bias ratio computed from weighted median vs observed data
+- R² and bias ratio computed from the weighted mean (`control$predictions$central_method`; median before v0.98.0) vs observed data
 - `plot_model_ensemble()` generates prediction plots (only when `plots=TRUE`)
 
 **Output structure:**
