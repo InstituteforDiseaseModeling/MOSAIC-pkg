@@ -38,7 +38,7 @@ mosaic_control_defaults(
 \item \code{sample_mobility_omega}: Sample mobility omega (default: TRUE)
 \item \code{sample_iota}: Sample importation rate (default: TRUE)
 \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
-\item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: TRUE)
+\item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: FALSE, PINNED)
 \item \code{sample_alpha_2}: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)
 \item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
 }}

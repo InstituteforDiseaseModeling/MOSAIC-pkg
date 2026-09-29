@@ -735,7 +735,7 @@ testthat::test_that("UN population trends", {
 
 # Reproductive-number / R-effective calculations (the former TODO stubs here)
 # are now realized as the Cori R_eff implementation and live, un-skipped tests:
-#   - calc_Reff() / .cori_reff() / .mosaic_generation_time_pmf()
+#   - calc_Reff() / .cori_reff() / .mosaic_reff_route_kernel()
 #   - tests/testthat/test-reproductive_numbers.R
 # (Phase 1 of claude/plan_r0_rt/PLAN.md). They are covered there rather than in
 # this file, whose engine/ggExtra file-level skip gates would render them inert.

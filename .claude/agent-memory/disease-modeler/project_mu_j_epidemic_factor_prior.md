@@ -53,3 +53,81 @@ CD brief: claude/diagnose_fit/epi_lever_exploration/BRIEF_epi_levers.md.
 
 STAT owns sizing/identifiability and the variance question; DM (this note) owns the
 center/upper-bound plausibility and the mode>0 argument.
+
+---
+
+## UPDATE 2026-09-17 — the "UNIDENTIFIED" premise is FALSIFIED
+
+Direct OAT likelihood profiling on ETH v0.90.3 ([[param-identifiability-eth-v0903]]) puts
+`mu_j_epidemic_factor` in **class A**: 1,270 nats across its prior range, z = 34.9. It is a
+strongly identified, deaths-channel parameter -- not "calibration leaves posterior ~ prior".
+The posterior looked like the prior because the near-uniform best-subset weighting recovers
+almost nothing for ANY class-A parameter, not because the data are silent.
+
+Worse, the direction is wrong: the likelihood keeps improving as the factor goes DOWN, past the
+2nd percentile and out to the 1e-5 quantile (0.0066), gaining a further +66 nats -- i.e. the data
+want **no epidemic CFR escalation at all**. The v15.18 reshape moved the mode UP from 0 to 0.33.
+
+Do not treat this as settled. Revisit with the profile in hand, and bear in mind the companion
+finding that ETH's deaths mis-fit is a TIMING problem (best draw over-predicts total deaths 5.16x
+while the deaths LL still wants a higher CFR_target), so the epidemic multiplier may be absorbing
+mis-located deaths rather than a real IFR escalation.
+
+
+---
+
+## UPDATE 2026-09-19 — the +50% anchor is UNCITED and points the WRONG WAY. Recommend Gamma(1,8).
+
+Full evidence: `MOSAIC-pkg/claude/inference_lab/reports/CFR-MATH.md` (CFR-MATH-03).
+
+**1. The literature anchor does not exist.** `04-model-description.Rmd:1017` says "reflecting the
+approximately 50% increase in cholera CFR typically observed during outbreak surges" with **NO
+citation**, and `make_priors_default.R:1879-1881` cites that spec section. Every "literature +50%
+surge anchor" statement in this file and in the v15.18 build note traces to an uncited sentence.
+The spec ALSO still prints `Gamma(1,2)` (:1020) while the shipped prior is `Gamma(3,6)` — stale.
+
+**2. The engine's indicator selects the periods with the LOWEST observed CFR.** The flag fires on
+high symptomatic PREVALENCE (`sim_components.R:181-186`). Applying each country's own
+`epidemic_threshold` from priors v15.18 to the weekly combined surveillance file (2014-2026, AI
+rows excluded), converting weekly cases to prevalence with the engine's own identity:
+
+| min weekly cases | k | pooled epi/endemic CFR ratio (DerSimonian-Laird) | implied eps | countries >1 |
+|---|---|---|---|---|
+| 1 | 10 | 0.489 [0.316, 0.758] | -0.51 | 1/10 |
+| 20 | 9 | 0.538 [0.328, 0.883] | -0.46 | 1/9 |
+| 100 | 3 | 0.455 [0.268, 0.771] | -0.55 | 0/3 |
+
+Robust across case floors. ETH alone (best series): epi/endemic 0.94, quasi-Poisson log-CFR slope
+on log weekly cases **-0.062 (se 0.036, p=0.083)**. Caveat: low-incidence weeks can carry deaths
+belonging to earlier high-incidence weeks, biasing this DOWN — but it survives a 100-case floor
+where that artifact is weakest. No stratum supports +0.5.
+
+**3. Where the escalation actually lives: the EARLY phase.** First 6 weeks of an outbreak vs weeks
+7+ (runs separated by >=8 weeks), DL pool over 20 countries:
+**ratio 1.129, 95% CI [0.860, 1.481], 10/20 above 1.** Strongest SDN 3.09, CMR 2.68, SSD 2.14;
+reversed ZWE 0.34, ETH 0.45, MOZ 0.54, ZMB 0.54, NGA 0.66.
+
+**Biology (the real citations, use these):** cholera CFR is a function of TREATMENT ACCESS, and
+the documented pattern is a DECLINE over an outbreak as the response scales, not a rise at peak
+prevalence. Haiti 2010-12: ~4-5% in the first weeks falling to ~1% within months
+(Barzilay et al. NEJM 2013;368:599-609, doi:10.1056/NEJMoa1204927; Tappero & Tauxe EID
+2011;17:2087-93, doi:10.3201/eid1711.110827). Yemen 2016-18: **0.95% in the first wave vs 0.22%
+in the much LARGER second wave** (Camacho et al. Lancet Glob Health 2018;6:e680-e690,
+doi:10.1016/S2214-109X(18)30230-4) — higher prevalence, 4x lower CFR, the exact opposite of what
+the engine's indicator encodes. WHO/GTFCC treated target <1% vs untreated "up to 50%".
+
+**RECOMMENDATION: `Gamma(shape=1, rate=8)`** — mean 0.125, mode 0, median 0.087, p95 0.374,
+p97.5 0.461, p99 0.576. Matches the measured early/late anchor 1.129 [0.860, 1.481] almost
+exactly. Mode at 0 is now the HONEST shape (the earlier "mode must be >0 for a flagged epidemic
+tick" argument in this note assumed the flag means outbreak ONSET; it means high prevalence, where
+the CFR is if anything lower). If a mode >0 is still wanted, `Gamma(1.5, 12)` (mean 0.125,
+mode 0.042, p95 0.326). DM owns the 0.125 centre and the [0, 0.48] interval; STAT owns the fit.
+
+**Measured effect (paired CRN, 115 ETH posterior members):** `Gamma(1,8)` alone gives aggregate
+deaths **x0.793**, median member deaths bias 1.323 -> 1.107, **dR2 = -0.0001 +/- 0.032** (no R2
+effect). **With B2.2 already applied the level effect is NIL** (B2.2 alone x0.6959, B2.2+Gamma(1,8)
+x0.6973) — ship it for correctness, not for bias. See [[project-prod-deaths-bias-b2-epi-gap]].
+
+**Do NOT re-key the indicator to outbreak phase (an engine change).** The early/late signal is
++13% [-14%, +48%] with 10/20 countries reversed — too weak and too heterogeneous to justify it,
+and B2.2 makes the current indicator harmless for the deaths level.

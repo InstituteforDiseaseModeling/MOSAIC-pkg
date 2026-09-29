@@ -163,3 +163,51 @@ test_that("trajectory time-stride grid yields a full daily-consecutive set at st
   old_stride1 <- which(seq_len(n_time_points) %% 1L == 1L)
   expect_length(old_stride1, 0L)
 })
+
+# -----------------------------------------------------------------------------
+# End to end through the REAL engine: .mosaic_reff_resim_ci on a tiny ensemble
+# -----------------------------------------------------------------------------
+test_that(".mosaic_reff_resim_ci reduces real engine members into three estimands", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  base <- MOSAIC::config_simulation_epidemic
+  base$zeta_1 <- 1e6; base$zeta_2 <- 2e5
+  nP <- 2L; nS <- 2L
+  # Member configs differ by seed; sample_parameters is replaced by a
+  # deterministic perturbation so the test needs no priors, but the engine,
+  # channel extraction, kernels and reduction are all real.
+  member_cfg <- function(seed) {
+    cfg <- base; cfg$gamma_1 <- base$gamma_1 * (1 + 0.1 * (seed %% 3)); cfg
+  }
+  seeds <- c(11L, 12L)
+  Tn <- 366L; nL <- length(base$location_name)
+  ca <- array(NA_real_, dim = c(nL, Tn, nP, nS))
+  for (p in seq_len(nP)) for (s in seq_len(nS)) {
+    cfg <- member_cfg(seeds[p]); cfg$seed <- p * 1000L + s
+    ca[, , p, s] <- run_simulation(config = cfg, seed = cfg$seed, quiet = TRUE)$results$reported_cases
+  }
+  ens <- structure(list(seeds = seeds, parameter_weights = c(0.6, 0.4),
+                        cases_array = ca, n_param_sets = nP,
+                        n_simulations_per_config = nS,
+                        location_names = base$location_name,
+                        date_start = base$date_start,
+                        cases_median = apply(ca, c(1, 2), stats::median)),
+                   class = "mosaic_ensemble")
+  local_mocked_bindings(
+    sample_parameters = function(PATHS, priors, config, seed, ...) member_cfg(seed),
+    .mosaic_clamp_transmission_params = function(cfg) cfg,
+    .package = "MOSAIC")
+
+  res <- MOSAIC:::.mosaic_reff_resim_ci(ens, base_config = base, priors = NULL,
+                                        sampling_args = NULL, PATHS = NULL,
+                                        burn_in_days = 10L, verbose = FALSE)
+  expect_equal(res$gate_rel_err_pct, 0)                 # bitwise-reproducible engine
+  expect_named(res$central, c("R_eff", "R_hum", "R_env"))
+  expect_equal(dim(res$qmats$R_eff), c(nL, Tn, 3L))
+  both <- is.finite(res$central$R_hum) & is.finite(res$central$R_env)
+  expect_true(any(both))
+  expect_equal(res$central$R_eff[both], res$central$R_hum[both] + res$central$R_env[both])
+  expect_setequal(unique(res$peak_Rt$estimand), c("R_eff", "R_hum", "R_env"))
+  expect_equal(nrow(res$peak_Rt), 3L * nL)
+  expect_equal(unname(res$kernel_params[["gamma_1"]]),
+               member_cfg(seeds[res$medoid_member$param_idx])$gamma_1)
+})

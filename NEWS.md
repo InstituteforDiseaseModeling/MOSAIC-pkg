@@ -1,4 +1,24 @@
-# MOSAIC (development version)
+# MOSAIC 0.99.2
+
+## The CFR v2.1 line merges into main (v0.99.2)
+
+This release merges the CFR v2.1 development line into main. That line was
+numbered 0.92.0-0.99.1 in parallel with main's 0.92.1-0.93.0 (route-split R_eff,
+the psi_evolve close-out, the automated data refresh), so both sets of changes
+are listed: the CFR line's under this heading (its own 0.92.0 and 0.93.0 entries
+are labelled), main's under their versions below. What users will notice:
+
+- Deaths come from the fate-at-onset reported-CFR model: `mu_jt` is the reported
+  CFR, integrated out of the deaths likelihood per simulated path, and a config
+  carrying the retired mortality fields (`mu_j_baseline`, `mu_j_epidemic_factor`,
+  `CFR_target`, `delta_reporting_deaths`, `mu_j_slope`) is converted (a
+  `CFR_target` becomes a constant `mu_jt`, with a warning) or refused. Rebuild
+  such configs with `make_config_default()`.
+- The ensemble central line is the weighted mean (`central_method = "median"`
+  restores the previous behaviour), and forecast years carry the ensemble's
+  latest-year CFR shift.
+- The integrated deaths likelihood adds a median 13% (11-25%) to each scored
+  iteration on the 40-location config.
 
 ## Pre-merge audit fixes: figures follow the run's central line; stale deaths text (v0.99.1)
 
@@ -406,9 +426,7 @@ carrying the per-channel eps. `.mosaic_likelihood_impl_version()` is bumped so
 resume refuses to pool shards scored under the old floor (it was **not** bumped
 at 0.93.0, which also changed likelihood values).
 
-# MOSAIC 0.93.0
-
-## The likelihood scores every cell by its density (arm A1b)
+## The likelihood scores every cell by its density (arm A1b; CFR line 0.93.0)
 
 `calc_log_likelihood_negbin()` and `calc_log_likelihood_poisson()` special-cased
 a zero prediction against a positive observation with
@@ -427,7 +445,7 @@ Validated across ETH, MOZ and COD at a 6-month holdout: held-out cases MAE falls
 from 26.4 to 19.7 pooled, and deaths MAE from 1.07 to 0.59, with bias moving
 toward 1 on both channels.
 
-## Note on the two changes in 0.92.0-0.93.0
+## Note on the two changes in the CFR line's 0.92.0-0.93.0
 
 The conditional dispersion estimator (0.92.0) and the epsilon-floored density
 (0.93.0) were measured together in a 2x2 factorial at a 6-month holdout. A1b
@@ -440,9 +458,7 @@ belongs in an explicit temperature rather than in the dispersion. Set
 `control$likelihood$nb_k_cases` / `nb_k_deaths` to override the estimate if a
 sharper kernel is wanted for a given run.
 
-# MOSAIC 0.92.0
-
-## NB dispersion is now estimated, not floored
+## NB dispersion is now estimated, not floored (CFR line 0.92.0)
 
 `calc_model_likelihood()` previously estimated the negative-binomial dispersion
 `k` with a marginal method-of-moments form, `k = m^2/(v - m)`, computed across
@@ -475,7 +491,7 @@ Farrington/Noufaily convention used by the `surveillance` package.
   summarised in `summary.json`, including the **bound-bind rate** -- in a
   well-specified fit the hard bounds should rarely bind.
 
-## Breaking changes
+## Breaking changes (CFR line 0.92.0)
 
 * `control$likelihood$nb_k_min_cases` / `nb_k_min_deaths` are **retired**. Setting
   either now warns and is ignored. To set the dispersion explicitly use
@@ -492,6 +508,95 @@ Farrington/Noufaily convention used by the `surveillance` package.
   guard is bumped accordingly, so resuming a pre-0.92.0 run stops with an
   actionable error rather than silently mixing two scoring rules.
 * New dependencies: `MASS`, `splines`.
+# MOSAIC 0.93.0
+
+## New: automated data refresh and the overland mobility OD pipeline
+
+- `update_mosaic_data()` / `list_mosaic_data_steps()` run a registry of every data build that can be refreshed automatically (CLI: `inst/scripts/update_mosaic_data.R`); `check_mosaic_data_freshness()` and `check_mosaic_manual_inputs()` report what is stale and what must be refreshed by hand.
+- Dated-snapshot downloaders `download_EMDAT_data()`, `download_IDMC_data()`, `download_UN_WPP_data()`, `download_WB_data()` and `download_mobility_od_sources()` write atomic, never-overwritten snapshots into `MOSAIC-data/raw/<source>/` with a provenance row, per the root CLAUDE.md exception for automated snapshots.
+- Overland mobility: `get_travel_time_matrix()` builds a least-cost travel-time matrix; `process_mobility_od_data()` fuses four bilateral sources into one OD structure; `rake_mobility_od_to_tau()` rakes it to per-country departure margins; `est_overland_tau_prior()` turns that into a per-country overland departure-rate prior; `plot_mobility_fused()` draws the figures.
+- The shipped `config_default` / `priors_default` are **not** rebuilt in this release. A rebuild that sources `tau_i` from `est_overland_tau_prior()` is held back until it is reconciled with the CFR v2.1 schema change.
+
+## Fixed: hand-escaped percent signs truncated manual pages
+
+Under Roxygen markdown a hand-written `\%` renders as `\\%`, which Rd reads as a comment start, so the rest of the line was silently dropped from ~20 manual pages (e.g. the 95% CIs in `get_rho_care_seeking_params()`). Now plain `%` throughout; `test-mobility-od.R` guards against reintroduction.
+
+## `update_mosaic_data()` builds data and no longer fits models
+
+`est_suitability` (group 4B) is **removed from the registry**. Fitting the suitability LSTM is model fitting, not data building, and it does not belong in the data-update driver: it needs the TensorFlow/keras Python environment, budgets ~6 GB per seed worker, and runs for hours, so it needs its own schedule and its own failure handling. Call `est_suitability()` directly, or run it through the calibration workflow.
+
+`compile_suitability_data` (group 4A) **stays, and is now in the default plan.** It is a data compile — it assembles the LSTM training panel from its 13 upstream producers (climate, ENSO, demographics, the multi-source surveillance combine, mobility, epidemic peaks, EM-DAT, all four World Bank indicators, WASH, elevation) — so an ordinary run now keeps the suitability *data* in step with its inputs. Previously it was held back along with the fit and could silently fall behind.
+
+With no model fit left to hold back, `include_suitability` is **removed** from both `update_mosaic_data()` and `list_mosaic_data_steps()`, the `--suitability` CLI flag is removed from `inst/scripts/update_mosaic_data.R`, and `.mosaic_select_steps()` loses its fourth argument. Nothing is filtered from the default plan any more: every one of the 54 registry steps is a data build. `steps=` / `skip=` are unchanged and still accept `"4"`, `"4A"` or the step id.
+
+That gate had already failed once — it compared `s$group` to `"4"` when the ids are `"4A"`/`"4B"`, matched nothing, and left the multi-hour fit in the *default* plan (fixed in v0.90.6, in two sibling sites). Deleting the step retires the whole class of failure rather than the instance. `test-update_mosaic_data.R` now asserts `est_suitability` appears in no step id **and in no step body**, so it cannot be reintroduced by either route.
+
+## Fixed: the CLI wrapper silently overrode the `date_stop` default
+
+`inst/scripts/update_mosaic_data.R` passed a bare `Sys.Date()` whenever `--date-stop` was omitted, defeating `update_mosaic_data()`'s own `Sys.Date() + 540` default. That is precisely the shortfall the +540 default exists to prevent: it produces a vaccination matrix 139 days shorter than the psi forecast horizon, and `make_config_default.R` then fails validation with `nu_1_jt must be a matrix with ... columns equal to the daily sequence from date_start to date_stop` — an error that names the wrong culprit. The wrapper now matches the function default, and `--help` no longer advertises "default: today".
+
+## `alpha_1` is now PINNED by default
+
+`sample_alpha_1` flips `TRUE` -> `FALSE` in both places that carry the default: `mosaic_control_defaults()$sampling` (`R/run_MOSAIC.R`) and `default_sample_args` (`R/sample_parameters.R`). A 40-country run now draws 640 location-specific values instead of 680 — exactly the 40 per-location `alpha_1` — and `alpha_1` comes through as the shipped `config_default$alpha_1`, seed-invariant. `sample_alpha_1 = TRUE` still works as an explicit override for a deliberate mixing-exponent experiment.
+
+**Why.** `alpha_1` is collinear with `log(beta_j0_tot)` in the endemic regime (`beta * X^alpha_1`) and with any coupling multiplier at invasion, where the bracket collapses to the imported term and `log Lambda = log beta_j + alpha_1(log c + log M_j) - alpha_2 log N_j`. The 250,000-draw continental posterior (`stage3_continental_b21_a1loc`) moved `alpha_1` by a median **0.057 prior SD** against a random-subset null of **0.146** — it was learning nothing while costing 40 free dimensions and destroying cross-country comparability of the `beta_j0_tot` posteriors. The disease-modeler memory `reference_alpha_mixing_exponents.md` recommended pinning both alphas in the 40-country spatial fit; production had been doing the opposite because only one of the two default sites was ever consulted. `alpha_2` was already pinned and is unchanged.
+
+**The value 0.27 is deliberately unchanged.** Pinning is about *freedom*, not level. MOSAIC's patches are whole countries — weakly-coupled aggregates of many sub-populations — so strong sub-linear mixing is the intended national-scale behaviour. The published 0.90–0.98 values (Xia 2004; Giles 2020; `tsiR`) come from community- and city-scale measles models, which are far closer to well-mixed and are not the right comparison class.
+
+**Known consequence, documented not fixed.** Because the exponent applies to the pooled bracket, `alpha_1 < 1` damps imports when local prevalence dominates (~3.7x at 0.27) but *amplifies* them when the bracket is the imported term alone, which is the invasion regime: `x^0.27 > x` for `x < 1`, so an imported pressure of 0.019/day is treated as 0.342 (18x). Invasion probability therefore does not scale linearly with travel volume. This is a property of the FOI's structure, not of pinning, and pinning does not change it — but it now holds at a fixed exponent rather than a sampled one. See `MOSAIC-notes/2026-09-18 spatial FOI coupling research.md`.
+
+`test-alpha1-pinned-default.R` pins the default at both sites and asserts they agree, so the two cannot drift apart again; it also re-checks the engine invariant `alpha_1 in (0, 1]` for the shipped scalar-or-length-nL form.
+
+# MOSAIC 0.92.3
+
+## psi_evolve closed out: the correctness fixes ship, the experimental architectures do not
+
+The psi_evolve programme (waves 0-34 plus a 72-cell downstream A/B on dugong) found no psi variant that beats the production LSTM once psi is pushed through calibration. DLinear, D9b (static-covariate country embedding), N8 (per-country loss balancing) and the D9b+N8 branch defaults all fit in-sample WORSE than production (12/12 cells for DLinear and D9b+N8) and none improved out-of-sample WIS beyond the psi-seed noise floor. None of that experimental code is merged; the full history is kept under the git tag `archive/psi-evolve`.
+
+What does ship are the defects the programme found in the production psi path:
+
+- **The deployed model was trained past its best epoch.** The inner CV recorded the epoch training *stopped* at (best + `patience`), and the full-data refit ran for that many epochs with no early stopping, overshooting the optimum by up to 10 epochs (40-60% on the production schedule). New `.psi_epoch_from_history()` returns `argmin(val_loss)` when best weights were restored.
+- **The leak-free v7.4 panel had a leaking target.** Response variables were normalised by p99 anchors computed over rows after the cutoff. New `compile_suitability_data(target_anchor_stop=)` bounds the anchor rows; `prefit_rolling_cv_psi()` passes the cutoff and folds it into the psi cache key, so a panel built under the old anchor is never silently reused. Default `NULL` leaves the canonical panel unchanged.
+- **ISO-8601 week labelling** was wrong in the surveillance/climate processors, and the RW-CV grid now accepts day-based geometry (a day-based stride is no longer multiplied by `rw_subsample`).
+- **psi RW-CV:** optional forecast `lead` and validation input context; per-fold held-out predictions are retained; the drop-filled-tail guard fails loudly; the psi manifest records fit provenance (and no longer references an undefined `backend`).
+
+# MOSAIC 0.92.1
+
+## R_eff is now decomposed by route: R_eff = R_hum + R_env
+
+`calc_Reff()` used to divide total infection incidence by one generation-interval kernel: latent plus infectious period, moment-matched to a Gamma. That timing describes the human route only. Environmental transmission also passes through shedding and 16-200 days of survival in the reservoir, and it carries 99.4-99.9% of infections in every post-v0.89.0 calibration checked (MOZ, COD, ETH). With a ~3-5 day kernel applied to a ~30-200 day process, the old estimator compressed R strongly toward 1. The kernel's human part also used the mean infectious duration where the renewal needs the transmission-weighted mean infectious age.
+
+Each route now has its own numerator (`incidence_human`, `incidence_env`) and its own infectiousness. Both are driven by total incidence, because every infection is infectious through both routes, and R_eff is their sum. The kernels are derived from the engine's own daily transition probabilities and phase order.
+
+The environmental term is **instantaneous** (Cori: "if conditions stayed as they are at t"). The reservoir is rebuilt from the actual past decay path, and one infection's lifetime reservoir contribution is valued at today's `delta_jt`. Nothing after t enters, so truncating a series (e.g. at a forecast cut-off) leaves earlier values unchanged. People latent or infectious on the first day are included in both infectiousness terms, so no initial-condition mask is needed.
+
+- `calc_Reff()`:
+  - returns rows for `estimand` `"R_eff"`, `"R_hum"` and `"R_env"`;
+  - needs the `incidence_human`/`incidence_env` channels (plus `E`/`Isym`/`Iasym` for the initial stocks) and the config's `zeta_*`, `psi_jt` and `decay_*`;
+  - checks that the config's locations and start date match the trajectories;
+  - caps decay rates above 1, which occur when `decay_days_short < 1` day;
+  - `max_days` is removed;
+  - the caveat now states that the renewal is per location, so in multi-location runs imported human-route spread is credited to the destination.
+- `add_reproductive_numbers()`:
+  - builds the kernel from `2_calibration/best_model/config_medoid.json`, not the input config of prior centres, falling back with a warning; attribute `config_source` records which;
+  - applies the burn-in on both paths;
+  - re-simulated members use their own kernel, engine `delta_jt` and initial stocks;
+  - `peak_Rt` gains an `estimand` column, and cell quantiles need half the member weight defined;
+  - `overwrite = FALSE` no longer keeps an older total-only table;
+  - an explicit `burn_in_days = 0` now disables the burn-in (it used to become 30), and a negative value is an error.
+- `plot_Reff()`:
+  - stacks R_hum on top of an R_env area, and both are smoothed over the same days;
+  - the stack is drawn on every day the total is defined; a silent route counts as 0, as it does in `calc_Reff()`;
+  - the new `routes` argument is last, so existing positional calls are unchanged.
+- The internal `.mosaic_generation_time_pmf()` is removed. `get_generation_time_distribution()` is unchanged.
+
+Tests check against the engine rather than against the code's own algebra:
+- R_hum and R_env recover the engine's true instantaneous R in single-route linear runs (median ratios 0.99 and 0.94 on the test seed). The 0.94 is not a bias: that seed's realized symptomatic share was 0.21 against sigma = 0.24, which a mean-field reconstruction cannot see. Across seeds, R_env against a mortality-aware reference built from the engine's reservoir has a median ratio of about 1.00 (range 0.92-1.05).
+- I and W rebuilt from incidence track the simulated stocks and align best at zero lag.
+- Truncation invariance, and a brute-force check of the frozen-at-t definition.
+- The re-simulation path is exercised end to end through the real engine.
+
+On the post-v0.89.0 MOZ medoid, the 14-day-mean R_eff has an interquartile range of 0.54-1.71 and a p95 of 3.1; the old estimator gave 0.96-1.09 and 1.19. Old and new R_eff files are not comparable.
 
 # MOSAIC 0.83.0
 

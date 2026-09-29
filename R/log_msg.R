@@ -5,7 +5,7 @@
 #' \code{\link{run_MOSAIC}} and its helpers.
 #'
 #' @param msg Character string. The message to log. May include sprintf-style
-#'   formatting placeholders (e.g., \code{"\%d"}, \code{"\%s"}, \code{"\%.2f"}).
+#'   formatting placeholders (e.g., `"%d"`, `"%s"`, `"%.2f"`).
 #' @param ... Additional arguments passed to \code{sprintf} for message
 #'   formatting.
 #'

@@ -3426,7 +3426,7 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{sample_mobility_omega}: Sample mobility omega (default: TRUE)
 #'     \item \code{sample_iota}: Sample importation rate (default: TRUE)
 #'     \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
-#'     \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: TRUE)
+#'     \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: FALSE, PINNED)
 #'     \item \code{sample_alpha_2}: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
 #'   }
@@ -3655,7 +3655,9 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_mobility_omega = TRUE,    # Mobility rate
 
     # Transmission mixing exponents
-    sample_alpha_1 = TRUE,           # Within-metapop population mixing exponent (sampled)
+    sample_alpha_1 = FALSE,          # Within-metapop population mixing exponent: PINNED by default (collinear with beta_j0_tot endemically and
+                                      # with coupling at invasion; posterior moved 0.057 prior SD
+                                      # over 250k draws, inside the 0.146 null)
     sample_alpha_2 = FALSE,          # Frequency-dependence degree: PINNED by default (weakly identified; psi absorbs the signal)
     sample_omega_1 = TRUE,           # Waning rate (1 dose)
     sample_omega_2 = TRUE,           # Waning rate (2 doses)

@@ -1,39 +1,44 @@
 ---
 name: psi-flat-tail-lstm-v2-unfixed
-description: v0.44.14 .drop_filled_prediction_tail fix is legacy-path ONLY; lstm_v2 (production) still emits a flat na.locf carry-forward psi tail past the covariate horizon
+description: drop-tail fix IS now wired into lstm_v2, but the guard fails OPEN and the shipped psi artefact still carries a 98-day carry-forward tail; always check pred_raw for a dead-flat run
 metadata:
   type: project
 ---
 
-The v0.44.14 "drop trailing carry-forward fill" fix is **NOT wired into the production
-lstm_v2_hierarchical_film path** — it lives only in `.est_suitability_legacy` (`R/est_suitability.R`
-~L1315-1329, calls `.drop_filled_prediction_tail`). The lstm_v2 writer in
-`R/run_rolling_cv_suitability.R::.est_suitability_lstm_v2` (~L325-348) filters `out_daily` only by
-`pred_date_start..pred_date_stop` and never calls `.drop_filled_prediction_tail`.
+**Status update (verified 2026-09-16 at MOSAIC v0.85.0 — supersedes the "legacy-path only" claim).**
 
-**Flat-tail mechanism (lstm_v2):** LSTM produces weekly preds only where covariates exist
-(`data_bundle$dates_pred`, bounded by the ENSO/CMIP6 horizon). The daily grid in
-`R/ensemble_suitability.R::.psi_weekly_to_daily_smooth` (L69-73) runs `start..pred_end` and
-`zoo::na.locf` forward-fills (then `fromLast`) — so every day past the covariate edge gets the last
-genuine weekly value → constant `pred_raw`. `pred_smooth`/`psi` still micro-wiggle (LOESS +
-bias-correct on the flat raw), masking it on a quick look; check `pred_raw` for the dead-flat run.
+**The fix IS wired into lstm_v2 now.** `R/run_rolling_cv_suitability.R:357` calls
+`.drop_filled_prediction_tail(out_daily, ens$genuine_last_pred)`, and `genuine_last_pred` is built
+at `R/ensemble_suitability.R:206-215` from `max(data_bundle$dates_pred)` per iso. That input is
+correct: `.psi_build_data()` does `d <- d[complete.cases(d[, feats]), ]` *before* building the
+prediction sequences, so `max(dates_pred)` really is the last covariate-supported week.
 
-**Symptom seen (NMME full_metapop, 2026-06-26 artifact):** run used pred_date_stop=2027-02-04,
-fit_date_stop=2025-06-01 (per `model/input/psi_suitability_config.json`). Covariate edge =
-**2026-10-29** (last genuine weekly date, confirmed in `model/input/data_psi_suitability.csv`).
-29/40 countries go flat from exactly 2026-10-29 → 2027-02-04 = **99 days (~3.3 mo) flat fill**.
-(Countries flattening earlier at value 0.0100 are the per-country floor, unrelated.)
+**But the guard FAILS OPEN, and the shipped artefact proves it did not run.**
+1. `.drop_filled_prediction_tail` (`R/est_suitability.R:14-21`) validates `df` but never
+   `genuine_last`. `NULL`, zero-row, or ISO-case-mismatched `genuine_last` → `cutoff` all-`NA` →
+   `keep <- is.na(cutoff) | ...` keeps **every** row, no warning. Measured on a 3-row fixture:
+   NULL → 3/3 kept, empty df → 3/3 kept, lower-case ISO keys → 3/3 kept (1/3 with correct keys).
+   The caller then logs "Dropped 0 rows" as a normal outcome.
+2. The shipped `model/input/pred_psi_suitability_day.csv` (committed v0.77.0, `43fd94647`) runs to
+   2027-02-04 while the weekly file — the daily file inner-joined to the panel's weekly keys, psi
+   agreeing to max|diff| **0** — ends 2026-10-29. Over the last **98 days × 40 countries = 3,920
+   rows**, `pred_raw` is exactly constant per country (1 unique value) while `pred_smooth`/`psi`
+   vary (98 unique values), because LOESS is fitted *after* the na.locf fill and rolls the constant
+   into a plausible curve. Feeding that exact CSV + `last_genuine_date=2026-10-29` to HEAD's helper
+   drops exactly 3,920 rows — so HEAD's helper is right and the artefact came from a path/version
+   where the call did not happen.
+3. `make_config_default.R` derives `date_stop` from that file's max date, so `config_default`'s
+   window ends 2027-02-04: the last 98 of 3,322 ticks of *every* default simulation run on
+   fabricated psi. The script's comment (`:73`) claims the common-coverage rule prevents a flat
+   tail, but it only truncates to the CSV's coverage — it cannot detect a fill est_suitability
+   failed to drop.
 
-**Not a 5-month-cap bug.** There is no hard ~5-month horizon cap; the only hardcoded horizon is the
-`.psi_build_data` default `pred_date_stop = cutoff+6 months` (build_suitability_sequences.R L170),
-which is OVERRIDDEN here. The horizon ceiling = covariate (ENSO/CMIP6) coverage, exactly as the
-est-suitability skill states. User's "aiming at 5-mo horizon" hypothesis is wrong in mechanism but
-right in effect (flat tail). NMME retrofit didn't regress the fix — the fix was never in the v2 path.
+**Diagnostic recipe (reuse this):** never look at `psi` or `pred_smooth` for a fill tail — they
+wiggle. Compare `max(date)` in `pred_psi_suitability_day.csv` against `max(date)` in
+`pred_psi_suitability_week.csv` (the weekly file is bounded by the observed panel), and check
+`rle(round(pred_raw, 10))`'s terminal run length per iso. A terminal `pred_raw` run > ~7 days = fill.
+Separately, terminal runs at exactly **0.01** are the `ensemble_logit_eps` clamp, not a fill — see
+[[psi-artefact-provenance-v077]].
 
-**Fix options (proposed, not yet applied):** (A) port `.drop_filled_prediction_tail` into the v2
-writer — capture last genuine `dates_pred` per iso BEFORE the daily na.locf, drop rows beyond it;
-matches legacy + relies on make_config_default truncating the sim window to common coverage. (B) set
-pred_date_stop to the covariate edge so no fill happens. (A) is the consistent fix. Coordinate with
-downstream make_config_default truncation (swe owns the config/prediction-fill side).
-
-See also [[forecast-cv-leakage-redteam]] (already flagged "lstm_v2 flat-fill tail UNGUARDED").
+See also [[forecast-cv-leakage-redteam]] (flagged this as UNGUARDED), and
+[[psi-artefact-provenance-v077]] for the wider artefact-consistency problem in the same commit.

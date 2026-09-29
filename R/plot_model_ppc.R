@@ -23,7 +23,7 @@
 #' \enumerate{
 #'   \item Density overlays of observed vs predicted central (the run's
 #'     \code{central_method}, mean by default) distributions
-#'   \item Credible interval coverage analysis (50\% and 95\% CIs vs nominal)
+#'   \item Credible interval coverage analysis (50% and 95% CIs vs nominal)
 #'   \item Observed vs predicted calibration scatter plots
 #'   \item Quantile-quantile plots
 #'   \item Residuals vs observed

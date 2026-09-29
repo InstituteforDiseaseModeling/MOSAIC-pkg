@@ -38,6 +38,20 @@ non-deterministic, so freeze-once-per-cutoff + reuse is required for reproducibl
 - .rcv_bytes_hash FNV stays in double precision mod 2^32 (words exceed R integer range);
   format as two 16-bit halves (%04x%04x) — a single %08x on a >2^31 value overflows to NA.
   seq.int(lane, n, by=8) errors when lane>n: guard with `if (lane <= n)`.
+- **spec_hash is a `serialize()` of the R object, so it is BYTE-identity, not semantic
+  identity** (verified 2026-09-28 by re-implementing the helper and hashing variants):
+  swapping top-level key order, swapping `arch_control` key order, or writing `n_seeds = 10`
+  instead of `10L` ALL produce different hashes and a hard error at
+  `.rcv_psi_cache_lookup()` (R/run_rolling_cv.R:598-605). Only `arch_control$parallel_seeds`
+  is exempt (nulled at R/prefit_rolling_cv_psi.R:448). Practical rule: define `es_spec` ONCE
+  in the experiment script and pass the SAME binding to `prefit_rolling_cv_psi()` and
+  `run_rolling_cv()` — never retype it (this is what inst/examples/forecast_cv_experiment.R:201
+  already does).
+- **Cache filenames are keyed on the cutoff ALONE** (`psi_<T>.csv`,
+  R/prefit_rolling_cv_psi.R:145), not on the spec_hash. Two psi ARMS (e.g. LSTM vs DLinear
+  trunk) therefore COLLIDE: pointing arm B's prefit at arm A's `dir_cache` sees a spec_hash
+  mismatch, refits, and `file.rename()` OVERWRITES arm A's frozen psi (:202) with no warning.
+  Multi-arm experiments MUST use one `dir_cache` per arm.
 
 **ML comment fixes (R/ensemble_suitability.R):** the determinism comments now say POOLED psi is
 statistically equivalent across exec modes but PER-SEED draws are NOT bitwise-identical (thread
