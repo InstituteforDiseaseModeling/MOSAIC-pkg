@@ -69,6 +69,27 @@
 #'   predicts every row -- the leakage-hygiene hook for building a leak-free
 #'   per-cutoff panel in rolling-origin forecast CV. Default \code{NULL} =
 #'   full-data fit (back-compatible).
+#' @param target_anchor_stop Date or character (\code{"YYYY-MM-DD"}) or
+#'   \code{NULL}. Upper bound on the rows used to compute the normalising
+#'   ANCHORS for the response variables -- \code{ti_p99}
+#'   (\code{transmission_intensity}), the global count/rate p99s (targets A, C)
+#'   and the per-country \code{cp99c}/\code{cp99r} and median population
+#'   (targets B, D). When non-\code{NULL}, anchors use only trusted rows with
+#'   \code{date <= target_anchor_stop}, while every row in the panel still
+#'   RECEIVES a target scored on that anchor.
+#'
+#'   This is the target-side sibling of \code{gam_train_stop} and closes the
+#'   remaining leak in a per-cutoff panel: because such a panel keeps
+#'   \code{date_stop = NULL} (it must span rows past the cutoff so the model can
+#'   predict the forecast window), a full-window anchor makes the target at time
+#'   \emph{t} depend on data after \emph{t}. It also removes retroactive
+#'   re-baselining -- with a fixed anchor window a data refresh can no longer
+#'   shift the entire historical target series.
+#'
+#'   Default \code{NULL} = full-window anchors (back-compatible; the canonical
+#'   panel is unchanged). Note \code{target_F_rank_per_country} is a rank over
+#'   the country's whole observed series and is full-window BY CONSTRUCTION;
+#'   this argument does not and cannot make it leak-free.
 #'
 #' @return This function processes the data and merges the climate, ENSO, and cholera cases data into a single dataset. It creates a \code{cases_binary} column indicating environmental suitability based on case patterns using sophisticated temporal logic. The processed dataset is saved as a CSV file.
 #'
@@ -119,6 +140,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                                     forecast_mode = TRUE, forecast_horizon = 3, include_lags = FALSE,
                                     include_flood_prob = TRUE,
                                     gam_train_stop = NULL,
+                                    target_anchor_stop = NULL,
                                     backfill_case_gaps = TRUE, backfill_max_weeks = 2L,
                                     backfill_method = "linear") {
 
@@ -269,6 +291,34 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      message(sprintf("After merge: %d observations, columns: %s",
                      nrow(d), paste(head(names(d), 10), collapse = ", ")))
 
+     # DA-01 build-time guard. Duplicate (iso_code, year, week) keys mean an
+     # upstream processor has paired CALENDAR year with ISO week, which date-stamps
+     # the year-boundary row ~51 weeks early and collides it with the genuine W01
+     # row. Before the fix this produced 99 duplicated (iso_code, date) rows in the
+     # canonical panel, corrupting every row-based rolling window that walked over
+     # them -- ENSO34_lag36, a shipped v7.3 LSTM feature, was wrong on ~9% of rows.
+     #
+     # SCOPE OF THIS GUARD (measured, do not overstate it): all 99 duplicates came
+     # from the SURVEILLANCE grid, where two Mondays collide onto one (year, week)
+     # label -- {2001-01-01, 2001-12-31}, {2007-01-01, 2007-12-31},
+     # {2012-01-02, 2012-12-31}, {2018-01-01, 2018-12-31}, {2024-01-01, 2024-12-30}.
+     # The CLIMATE side fails differently and this guard CANNOT see it: there,
+     # group_by() collapses January and December into a SINGLE row, so the value is
+     # silently wrong but no key is duplicated. That case is caught at its source by
+     # the span assertion in process_open_meteo_data(). Two defects, two guards.
+     dup_keys <- duplicated(d[, c("iso_code", "year", "week")])
+     if (any(dup_keys)) {
+          ex <- utils::head(d[dup_keys, c("iso_code", "year", "week")], 5)
+          stop(sprintf(paste0("compile_suitability_data: %d duplicated (iso_code, year, week) keys ",
+                              "after the cases-climate merge. Usual cause: calendar-year/ISO-week ",
+                              "mislabelling upstream (use %%G with %%V, never %%Y). Also possible: two ",
+                              "parquets for the same ISO in PATHS$DATA_CLIMATE (a stale legacy file ",
+                              "beside the live one). First: %s"),
+                       sum(dup_keys),
+                       paste(sprintf("%s %d-W%02d", ex$iso_code, ex$year, ex$week), collapse = "; ")),
+               call. = FALSE)
+     }
+
 
      # Restrict the panel to ISO weeks 1-52.
      #
@@ -281,13 +331,24 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # 13 calendar weeks because the W53 row is missing).
      #
      # WHY WE DROP THEM ANYWAY:
-     # The upstream climate processor (process_open_meteo_data) labels W53
-     # rows by *calendar* year rather than ISO year, so it emits spurious
-     # (year=N+1, week=53) rows for the 1-2 January days that fall in
-     # ISO W53 of year N. Keeping W53 would pull those partial-week
-     # artifacts into the panel. Dropping all W53 is the simplest robust
-     # choice until the upstream processor is fixed; see notes/TODOs in
-     # process_open_meteo_data for the structural fix.
+     # HISTORICAL NOTE (superseded by DA-01): this filter was introduced because
+     # process_open_meteo_data labelled weeks by *calendar* year, which was believed
+     # to emit spurious (year=N+1, week=53) rows. That diagnosis was wrong in its
+     # particulars -- the real artifact was labelled week **1**, not 53, so this
+     # filter never caught it (see the duplicate-key guard above). The upstream
+     # labelling is now fixed (`%G` with `%V`), so genuine 53-week ISO years are
+     # labelled correctly and this filter now discards ~80 LEGITIMATE country-week
+     # rows from 2015 and 2020. Retained deliberately: removing it is a THREE-site
+     # change, and two of those sites are hard stops that fire immediately --
+     # R/est_suitability.R:349 and R/compile_suitability_data.R (the `53 %in% d$week`
+     # check near the end of this file), plus R/process_WHO_weekly_data.R:72-82,
+     # which folds every W53 case row into W52 with aggregate(sum). So the cases side
+     # structurally cannot emit W53 while climate and ENSO now can: dropping the
+     # filter today would yield climate+ENSO W53 rows with structurally-NA cases.
+     # All three sides currently agree; the filter just discards a coherent row.
+     # NOTE: W53 of 2026 IS inside the rebuilt panel window (2000-01-06..2027-02-04)
+     # and is being dropped -- the previous claim that the horizon ended before it is
+     # no longer true.
      # The 2026 forecast horizon ends well before W53 of 2026, so this
      # filter does not affect production forecasts today.
      d <- d %>%
@@ -394,6 +455,31 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # scored on the trusted-source scale. `source` is NA only for empty grid cells.
      is_ai <- if ("source" %in% names(d)) (!is.na(d$source) & d$source == "AI") else rep(FALSE, nrow(d))
 
+     # ANCHOR WINDOW (target-side leakage hygiene; sibling of gam_train_stop).
+     # `in_anchor_window` additionally bounds the anchor rows ABOVE by
+     # target_anchor_stop. A per-cutoff panel keeps date_stop = NULL so it can
+     # still predict past the cutoff, so without this bound the p99 that scales
+     # the target at time t is computed from rows AFTER t. Every row of the
+     # panel still receives a target; only the rows that DEFINE the scale are
+     # restricted. NULL (default) = full window, bit-identical to before.
+     if (is.null(target_anchor_stop)) {
+          in_anchor_window <- rep(TRUE, nrow(d))
+     } else {
+          .tas <- as.Date(target_anchor_stop)
+          if (is.na(.tas))
+               stop("compile_suitability_data: target_anchor_stop must be a Date or ",
+                    "'YYYY-MM-DD' string; got '", target_anchor_stop, "'")
+          in_anchor_window <- !is.na(d$date) & d$date <= .tas
+          if (!any(in_anchor_window & !is_ai))
+               stop("compile_suitability_data: target_anchor_stop = ", format(.tas),
+                    " leaves zero trusted rows to anchor on (panel spans ",
+                    format(min(d$date, na.rm = TRUE)), " to ",
+                    format(max(d$date, na.rm = TRUE)), ").")
+          message(sprintf("  - Target anchors bounded at %s (%d of %d trusted rows)",
+                          format(.tas), sum(in_anchor_window & !is_ai), sum(!is_ai)))
+     }
+     is_anchor <- !is_ai & in_anchor_window
+
      # ---- transmission_intensity: reproduction of est_suitability() ----
      # est_suitability() sets NA cases to 0 and negatives to 0, then normalizes by
      # log1p of the 99th percentile of cases over MOSAIC countries. Reproduced here
@@ -404,7 +490,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      ti_cases <- d$cases
      ti_cases[is.na(ti_cases)] <- 0
      ti_cases[ti_cases < 0]    <- 0
-     ti_anchor_mask <- (d$iso_code %in% iso_codes_mosaic) & !is_ai
+     ti_anchor_mask <- (d$iso_code %in% iso_codes_mosaic) & is_anchor
      ti_p99 <- stats::quantile(ti_cases[ti_anchor_mask], 0.99, na.rm = TRUE)
      if (!is.finite(ti_p99) || ti_p99 <= 0) ti_p99 <- 1
      d$transmission_intensity <- pmin(1.0, log1p(ti_cases) / log1p(ti_p99))
@@ -413,10 +499,10 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # These propagate NA where cases (or rate) is NA, so downstream consumers can
      # drop unobserved weeks during training. Anchors use trusted rows only.
 
-     # Global anchors (trusted rows, full-window).
-     global_p99_count <- stats::quantile(d$cases[!is_ai], 0.99, na.rm = TRUE)
+     # Global anchors (trusted rows, within the anchor window).
+     global_p99_count <- stats::quantile(d$cases[is_anchor], 0.99, na.rm = TRUE)
      if (!is.finite(global_p99_count) || global_p99_count <= 0) global_p99_count <- 1
-     global_p99_rate <- stats::quantile(d$rate[!is_ai], 0.99, na.rm = TRUE)
+     global_p99_rate <- stats::quantile(d$rate[is_anchor], 0.99, na.rm = TRUE)
      if (!is.finite(global_p99_rate) || global_p99_rate <= 0) global_p99_rate <- 1e-3
 
      # A: count, global p99
@@ -431,7 +517,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
 
      for (iso in unique(d$iso_code)) {
           mask         <- d$iso_code == iso
-          trusted_mask <- mask & !is_ai          # trusted (non-AI) rows for this country
+          trusted_mask <- mask & is_anchor       # trusted (non-AI) rows, within the anchor window
           country_cases <- d$cases[mask]
           country_rate  <- d$rate[mask]
           # Anchors from trusted rows only (invariant to AI volume). Population is

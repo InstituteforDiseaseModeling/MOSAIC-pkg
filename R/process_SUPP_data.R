@@ -78,9 +78,19 @@ process_SUPP_weekly_data <- function(PATHS) {
      df_aceng_2025 <- data.frame(
           country      = "Uganda",
           iso_code     = "UGA",
-          year         = lubridate::year(all_weeks),
+          # DA-01: ISO year + ISO week, matching every other processor in the
+          # package. `lubridate::year()` is the CALENDAR year (it disagrees with the
+          # ISO year on 8 Mondays over 2000-2027, collapsing 5 (year, week) cells,
+          # max span 365 days), and `epiweek()` is the MMWR Sunday-start week, which
+          # differs from %V on 212 of 1461 Mondays (14.5%) -- a different convention
+          # from WHO/JHU/AI/climate/ENSO. Latent today because
+          # process_cholera_surveillance_data() dedups on date_start and drops these
+          # columns, but the file on disk is schema-identical to the WHO/JHU ones
+          # (CLAUDE.md lesson #11: a stale wrong-convention field in a
+          # temporarily-unconsumed position becomes real the moment it is consumed).
+          year         = as.integer(format(all_weeks, "%G")),
           month        = lubridate::month(all_weeks),
-          week         = lubridate::epiweek(all_weeks),
+          week         = as.integer(format(all_weeks, "%V")),
           date_start   = all_weeks,
           date_stop    = all_weeks + 6,
           cases        = cases,

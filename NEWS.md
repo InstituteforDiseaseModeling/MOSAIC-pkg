@@ -1,3 +1,16 @@
+# MOSAIC 0.92.3
+
+## psi_evolve closed out: the correctness fixes ship, the experimental architectures do not
+
+The psi_evolve programme (waves 0-34 plus a 72-cell downstream A/B on dugong) found no psi variant that beats the production LSTM once psi is pushed through calibration. DLinear, D9b (static-covariate country embedding), N8 (per-country loss balancing) and the D9b+N8 branch defaults all fit in-sample WORSE than production (12/12 cells for DLinear and D9b+N8) and none improved out-of-sample WIS beyond the psi-seed noise floor. None of that experimental code is merged; the full history is kept under the git tag `archive/psi-evolve`.
+
+What does ship are the defects the programme found in the production psi path:
+
+- **The deployed model was trained past its best epoch.** The inner CV recorded the epoch training *stopped* at (best + `patience`), and the full-data refit ran for that many epochs with no early stopping, overshooting the optimum by up to 10 epochs (40-60% on the production schedule). New `.psi_epoch_from_history()` returns `argmin(val_loss)` when best weights were restored.
+- **The leak-free v7.4 panel had a leaking target.** Response variables were normalised by p99 anchors computed over rows after the cutoff. New `compile_suitability_data(target_anchor_stop=)` bounds the anchor rows; `prefit_rolling_cv_psi()` passes the cutoff and folds it into the psi cache key, so a panel built under the old anchor is never silently reused. Default `NULL` leaves the canonical panel unchanged.
+- **ISO-8601 week labelling** was wrong in the surveillance/climate processors, and the RW-CV grid now accepts day-based geometry (a day-based stride is no longer multiplied by `rw_subsample`).
+- **psi RW-CV:** optional forecast `lead` and validation input context; per-fold held-out predictions are retained; the drop-filled-tail guard fails loudly; the psi manifest records fit provenance (and no longer references an undefined `backend`).
+
 # MOSAIC 0.92.1
 
 ## R_eff is now decomposed by route: R_eff = R_hum + R_env

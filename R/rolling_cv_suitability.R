@@ -24,36 +24,82 @@
 #' Generate the expanding-window RW step grid.
 #' @keywords internal
 #' @noRd
+#' HA-01 (2026-09-17) adds three optional overrides for the 12-week-horizon work.
+#' All default to NULL and the month-based path is bit-identical when they are.
+#'
+#' @param step_days       integer. Day-based stride; overrides `step_months`.
+#'   Month stepping cannot tile an 84-day window, and a 91-day (3-month) stride
+#'   advances 4 x 91 = 364 days per four folds -- a drift of 1.25 days/year
+#'   against the annual cycle, which aliases the validation windows onto ~4
+#'   calendar months. An 84-day stride drifts 29.25 days/year and rotates
+#'   through all 12.
+#' @param test_days       integer. Day-based validation window; overrides
+#'   `test_months`. Set 84 for a 12-week horizon.
+#' @param min_train_years numeric. Replaces the midpoint grid-start rule with
+#'   "start once this many years of training data exist". The midpoint rule
+#'   discards the first half of the span by construction: at
+#'   fit_date_start = 2010 with a 2026 cutoff it never validates before
+#'   2018-05-31, so 8 years of training data are never validated and psi over
+#'   them is extrapolative.
 .psi_make_rw_cv_steps <- function(fit_date_start, cutoff_date,
                                   step_months   = 1L,
                                   test_months   = 5L,
                                   gap_weeks     = 4L,
                                   subsample     = 1L,
                                   timesteps     = 13L,
-                                  min_test_days = NULL) {
+                                  min_test_days = NULL,
+                                  step_days     = NULL,
+                                  test_days     = NULL,
+                                  min_train_years = NULL) {
      # Test window must hold >= 1 buildable sequence per country: with weekly
      # data and `timesteps` weeks/sequence, need >= timesteps*7 + ~7 days slack.
+     #
+     # NOTE (HA-01): this floor is REAL for the concurrent-target design, not a
+     # formality. `.psi_slice_rw_step()` builds validation sequences from rows
+     # INSIDE the window only, so a window shorter than `timesteps` weekly rows
+     # yields zero sequences. Overriding `min_test_days` alone does NOT make an
+     # 84-day window work at timesteps = 13 (84 d = 12 weekly rows < 13); the
+     # validation slice must additionally be widened to carry `timesteps - 1`
+     # rows of input context from before `test_start`, scoring only targets
+     # inside the window. That slice change is required for the lead-h target
+     # anyway and is tracked separately.
+     # `min_test_days` is the INCLUSIVE day count of the window (an 84-day window
+     # runs test_start .. test_start+83). The pre-HA-01 code compared the exclusive
+     # span `test_end - test_start` against `timesteps*7 + 7`; the default below is
+     # +8 so the inclusive comparison reproduces that threshold exactly. Mixing the
+     # two silently yields ZERO folds -- it did, during HA-01 development.
      if (is.null(min_test_days)) {
-          min_test_days <- as.integer(timesteps * 7L + 7L)
+          min_test_days <- as.integer(timesteps * 7L + 8L)
      }
      fit_date_start <- as.Date(fit_date_start)
      cutoff_date    <- as.Date(cutoff_date)
-     midpoint       <- fit_date_start +
-          as.numeric(cutoff_date - fit_date_start) / 2
+     grid_start <- if (is.null(min_train_years)) {
+          fit_date_start + as.numeric(cutoff_date - fit_date_start) / 2
+     } else {
+          fit_date_start + round(365.25 * as.numeric(min_train_years))
+     }
 
-     train_ends <- seq.Date(midpoint, cutoff_date,
-                            by = sprintf("%d months", step_months))
+     train_ends <- if (is.null(step_days)) {
+          seq.Date(grid_start, cutoff_date, by = sprintf("%d months", step_months))
+     } else {
+          n <- floor(as.numeric(cutoff_date - grid_start) / as.numeric(step_days))
+          grid_start + round(seq.int(0L, max(0L, n)) * as.numeric(step_days))
+     }
      # Last train_end must allow at least one valid test day before cutoff.
      train_ends <- train_ends[train_ends + 7L * gap_weeks < cutoff_date]
 
      steps <- lapply(seq_along(train_ends), function(k) {
           train_end  <- train_ends[k]
           test_start <- train_end + 7L * gap_weeks
-          raw_end <- seq.Date(test_start, by = sprintf("%d months", test_months),
-                              length.out = 2L)[2L] - 1L
+          raw_end <- if (is.null(test_days)) {
+               seq.Date(test_start, by = sprintf("%d months", test_months),
+                        length.out = 2L)[2L] - 1L
+          } else {
+               test_start + as.integer(test_days) - 1L
+          }
           test_end <- min(raw_end, cutoff_date - 1L)
           if (test_start >= cutoff_date) return(NULL)
-          if (as.integer(test_end - test_start) < min_test_days) return(NULL)
+          if (as.integer(test_end - test_start) + 1L < min_test_days) return(NULL)
           list(step       = k,
                train_end  = train_end,
                test_start = test_start,
@@ -61,6 +107,17 @@
      })
      steps <- Filter(Negate(is.null), steps)
 
+     # `step_days` and `subsample` are two ways to express the same thinning, and
+     # applying both MULTIPLIES them. Measured during HA-01 arm launch: with
+     # step_days = 84 and the B4 fixture's rw_subsample = 6 still in force, the
+     # effective stride became 504 days and a 12-fold grid silently became 2.
+     # When a day-based stride is given it IS the stride; subsample is ignored.
+     if (!is.null(step_days) && subsample > 1L) {
+          message(sprintf(paste0("  [rolling_cv] step_days=%d given; ignoring rw_subsample=%d ",
+                                 "(a day-based stride already expresses the thinning)"),
+                          as.integer(step_days), as.integer(subsample)))
+          subsample <- 1L
+     }
      if (subsample > 1L && length(steps) > 0L) {
           idx   <- seq.int(1L, length(steps), by = subsample)
           steps <- steps[idx]
@@ -91,11 +148,24 @@
           max_gap_days = sp$max_gap_days,
           country_id_lookup  = enc$country_to_id,
           region_for_country = enc$region_for_country,
-          cw        = if (use_cw) pd$cw[is_train] else NULL)
+          cw        = if (use_cw) pd$cw[is_train] else NULL,
+          lead      = as.integer(sp$lead %||% 0L))
 
-     is_val <- pd$dates >= step$test_start & pd$dates <= step$test_end &
+     # The validation slice must carry INPUT CONTEXT from before the block.
+     # `.psi_build_sequences()` anchors each window's target at its end, so a
+     # block shorter than `timesteps` weekly rows builds ZERO sequences from
+     # rows inside it: an 84-day (12-week) block cannot yield a single
+     # 13-timestep sequence. Widen backwards by (timesteps - 1 + lead) weeks,
+     # then keep only the sequences whose TARGET falls inside the block. The
+     # context rows are inputs only -- their targets are never scored -- which
+     # is also exactly the deployment situation, where a forecast is made from
+     # covariates the model has already seen.
+     lead_w    <- as.integer(sp$lead %||% 0L)
+     ctx_weeks <- as.integer(sp$timesteps - 1L + lead_w)
+     ctx_start <- step$test_start - 7L * ctx_weeks
+     is_val <- pd$dates >= ctx_start & pd$dates <= step$test_end &
           !is.na(pd$intensity)
-     if (sum(is_val) < sp$timesteps) {
+     if (sum(is_val) < sp$timesteps + lead_w) {
           # Allow training but skip validation (reports NA val_loss).
           return(list(X_train = seqs_tr$X, y_train = seqs_tr$y,
                       country_ids_train = seqs_tr$country_ids,
@@ -115,7 +185,31 @@
           max_gap_days = sp$max_gap_days,
           country_id_lookup  = enc$country_to_id,
           region_for_country = enc$region_for_country,
-          cw        = if (use_cw) pd$cw[is_val] else NULL)
+          cw        = if (use_cw) pd$cw[is_val] else NULL,
+          lead      = lead_w)
+
+     # Keep only sequences whose TARGET lies inside the block. Context-window
+     # targets (before test_start) were built to make the sequences possible and
+     # must not be scored.
+     keep <- seqs_val$dates >= step$test_start & seqs_val$dates <= step$test_end
+     if (!any(keep)) {
+          return(list(X_train = seqs_tr$X, y_train = seqs_tr$y,
+                      country_ids_train = seqs_tr$country_ids,
+                      region_ids_train  = seqs_tr$region_ids,
+                      confidence_weight_train = seqs_tr$cw,
+                      X_val = NULL, y_val = NULL,
+                      country_ids_val = NULL, region_ids_val = NULL,
+                      confidence_weight_val = NULL,
+                      n_train = length(seqs_tr$y), n_val = 0L))
+     }
+     seqs_val <- list(
+          X           = seqs_val$X[keep, , , drop = FALSE],
+          y           = seqs_val$y[keep],
+          countries   = seqs_val$countries[keep],
+          dates       = seqs_val$dates[keep],
+          country_ids = seqs_val$country_ids[keep],
+          region_ids  = seqs_val$region_ids[keep],
+          cw          = if (is.null(seqs_val$cw)) NULL else seqs_val$cw[keep])
 
      list(X_train = seqs_tr$X, y_train = seqs_tr$y,
           country_ids_train = seqs_tr$country_ids,
@@ -148,7 +242,8 @@
           max_gap_days = sp$max_gap_days,
           country_id_lookup  = enc$country_to_id,
           region_for_country = enc$region_for_country,
-          cw        = if (use_cw) pd$cw[is_train] else NULL)
+          cw        = if (use_cw) pd$cw[is_train] else NULL,
+          lead      = as.integer(sp$lead %||% 0L))
      list(X_train = seqs_tr$X, y_train = seqs_tr$y,
           country_ids_train = seqs_tr$country_ids,
           region_ids_train  = seqs_tr$region_ids,
@@ -177,6 +272,7 @@
      if (verbose) message(sprintf("  [RW CV] %d steps", length(rw_steps)))
 
      n_steps      <- length(rw_steps)
+     fold_preds   <- list()          # CV-07: per-fold held-out predictions
      best_epochs  <- integer(n_steps)
      val_losses   <- numeric(n_steps)
      val_metrics  <- numeric(n_steps)
@@ -230,6 +326,30 @@
           best_epochs[k] <- as.integer(out$n_epochs %||% NA_integer_)
           val_losses[k]  <- as.numeric(out$val_loss   %||% NA_real_)
           val_metrics[k] <- as.numeric(out$val_metric %||% NA_real_)
+
+          # CV-07: retain this fold's HELD-OUT predictions. The fold model
+          # predicts over the whole `X_pred` grid, which `dates_pred` /
+          # `countries_pred` align to, so the fold's own out-of-sample block is a
+          # subset -- no extra forward pass. Previously all 20+ fold models were
+          # discarded and the CV emitted a single scalar (median best_epoch),
+          # which is why the pipeline has never produced a per-horizon psi skill
+          # curve or a per-country fold score. Weekly resolution: 164 folds x 40
+          # countries x 12 weeks is ~79k rows, so this is cheap to always keep.
+          if (!is.null(out$pred) && !is.null(data_bundle$dates_pred)) {
+               dp <- as.Date(data_bundle$dates_pred)
+               inblk <- dp >= step$test_start & dp <= step$test_end
+               if (any(inblk)) {
+                    fold_preds[[length(fold_preds) + 1L]] <- data.frame(
+                         fold       = step$step,
+                         train_end  = step$train_end,
+                         test_start = step$test_start,
+                         test_end   = step$test_end,
+                         iso_code   = data_bundle$countries_pred[inblk],
+                         date       = dp[inblk],
+                         pred       = as.numeric(out$pred)[inblk],
+                         stringsAsFactors = FALSE)
+               }
+          }
 
           if (verbose)
                message(sprintf("       val_loss=%.4f  best_epoch=%s  elapsed=%.2f min",
@@ -295,6 +415,10 @@
                step_minutes   = step_minutes,
                final_minutes  = final_minutes,
                n_epochs_final = n_epochs_final,
-               all_steps_failed = !any(good))
+               all_steps_failed = !any(good),
+               # CV-07: one row per (fold, country, held-out target date).
+               # NULL when no fold produced a scoreable block.
+               fold_predictions = if (length(fold_preds))
+                    do.call(rbind, fold_preds) else NULL)
      )
 }

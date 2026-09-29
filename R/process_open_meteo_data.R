@@ -118,6 +118,26 @@ process_open_meteo_data <- function(PATHS, climate_model = "MRI_AGCM3_2_S", forc
           clim_future <- clim_data[clim_data$date > era5_max_date, ]
           combined <- rbind(hist_data, clim_future)
 
+          # --- ISO-8601 week labelling (DA-01) ---------------------------------
+          # The raw open-meteo parquets pair CALENDAR year (%Y) with ISO week (%V).
+          # That pairing is invalid: a Monday in late December belongs to ISO week 1
+          # of the NEXT ISO year, so grouping by (calendar year, ISO week) merges it
+          # with the FOLLOWING January. Measured on the shipped MOZ panel before this
+          # fix: 19 (year, week) cells per country spanned 365-366 days -- e.g.
+          # (2018, week 1) covered 2018-01-01..2018-12-31, so that cell's weekly value
+          # was the mean of January AND December. This biased every W01/W52 anomaly
+          # climatology and `wind_speed_10m_max`, the cyclone GAM's lead predictor.
+          # `%G` is the ISO week-based year and is the only valid partner for `%V`
+          # (verified identical to the Thursday-shift idiom used in
+          # process_EMDAT_data / process_IDMC_data). Re-derive here so the R side is
+          # correct regardless of what the upstream pipeline emits.
+          # `month` and `doy` are left CALENDAR-derived on purpose and are therefore
+          # NOT consistent with the ISO `year` on the ~48 boundary dates per country
+          # (e.g. 2001-12-31 -> year=2002, month=12, doy=365). Join on `date`, never
+          # on year+month or year+doy.
+          combined$year <- as.integer(format(combined$date, "%G"))
+          combined$week <- as.integer(format(combined$date, "%V"))
+
           # Identify climate variable columns
           var_cols <- setdiff(names(combined), meta_cols)
 
@@ -150,6 +170,20 @@ process_open_meteo_data <- function(PATHS, climate_model = "MRI_AGCM3_2_S", forc
                     date_stop = max(date),
                     .groups = "drop"
                )
+
+          # DA-01 guard for the CLIMATE-side failure mode. Mislabelled weeks do
+          # not duplicate keys here -- group_by() merges January and December into
+          # one cell, so the value is silently wrong. The observable signature is a
+          # cell whose member days span more than a week. Measured on MOZ under the
+          # old labelling: 19 cells with span > 7 days, max 366; under %G + %V: 0,
+          # max 7. This assertion is the only thing that discriminates the two.
+          span_bad <- sum((as.numeric(weekly_avg$date_stop - weekly_avg$date_start) + 1) > 7)
+          if (span_bad > 0L) {
+               stop(sprintf(paste0("process_open_meteo_data(%s): %d weekly cell(s) span more than 7 days. ",
+                                   "This means week labelling paired a CALENDAR year with an ISO week ",
+                                   "(use %%G with %%V, never %%Y), collapsing the year-boundary week into ",
+                                   "the following January."), iso, span_bad), call. = FALSE)
+          }
 
           # --- Write weekly output ---
           arrow::write_parquet(weekly_avg, weekly_out)
