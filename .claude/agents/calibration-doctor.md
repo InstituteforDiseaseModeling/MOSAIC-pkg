@@ -73,8 +73,8 @@ dev specialist.
   v0.97.2 test) where members' case paths undershoot, since a path cannot put deaths where it has
   no cases. Judge deaths skill out of sample; a per-year deaths miss usually means that year's case
   path is off -- read `3_results/posterior/cfr_posterior.csv` (the calibrated reported CFR by year,
-  conditional on the members' cases; forecast years continue the latest observed year's level from
-  v0.98.0) beside the cases fit.
+  conditional on the members' cases; from v0.99.0 forecast years carry the members' shared CFR shift
+  for the latest observed year, logged and stored in `deaths_integration.rds`) beside the cases fit.
   `summary.json:cfr_implied` is the members' realized period CFR over the scored window.
   Distinguish a timing/shape miss from a level miss before recommending a lever.
 

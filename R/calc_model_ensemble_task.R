@@ -42,6 +42,8 @@
 #'   and on success \code{reported_cases}, \code{reported_deaths},
 #'   \code{spatial_hazard}, \code{coupling}, \code{pi_ij}, \code{cfr_year}
 #'   (per-location yearly reported CFR drawn for this member, or \code{NULL}),
+#'   \code{anchor_dev} (per-location posterior-mode CFR deviation of the latest
+#'   observed year, NA without forecast years, or \code{NULL}),
 #'   optionally \code{traj}/\code{traj_epi}; on failure \code{error}.
 #'
 #' @keywords internal
@@ -68,6 +70,7 @@
     # trajectory channels N balances against the engine's deaths, not these.
     cfr_year <- NULL
     cfr_infeasible <- 0L
+    anchor_dev <- NULL
     if (!is.null(deaths_integration)) {
       ph <- .mosaic_posthoc_deaths(deaths_integration, model$results, param_config,
                                    seed = param_config$seed + 7919L)
@@ -75,6 +78,7 @@
       model$results$disease_deaths  <- ph$disease_deaths
       cfr_year <- ph$cfr_year
       cfr_infeasible <- ph$n_infeasible
+      anchor_dev <- .mosaic_anchor_deviation(deaths_integration, ph$theta)
     }
     # Extract the engine's spatial-structure arrays (J x T hazard, J x J
     # coupling, J x J pi_ij) BEFORE the model is discarded below (F1). These
@@ -94,6 +98,7 @@
                    pi_ij          = pij,
                    cfr_year       = cfr_year,
                    cfr_infeasible = cfr_infeasible,
+                   anchor_dev     = anchor_dev,
                    success = TRUE)
     # Trajectory channels (comprehensive internal-state capture). Harvested
     # here, where model$results is in hand, at zero marginal sim cost --

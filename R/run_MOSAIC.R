@@ -2294,6 +2294,60 @@ run_MOSAIC <- function(config,
       param_weights <- NULL
     }
 
+    # Forecast-year CFR shift. Years after a location's latest observed year are
+    # centred on the members' shared CFR deviation for that year: the weighted
+    # mean over members of each path's posterior-mode deviation, from one run per
+    # member (the first stochastic run of each, as in the ensemble below). A
+    # path's own deviation also absorbs its case error that year, so carrying it
+    # would carry the error; the mean keeps the shift the members share. It is
+    # stored in the deaths integration, so every ensemble, the medoid and a
+    # post-hoc re-run from deaths_integration.rds use the same value.
+    if (.mosaic_has_forecast_years(control$likelihood$.deaths_integration) &&
+        length(param_seeds) > 0) {
+      log_msg("Forecast-year CFR: members' latest-year shift from %d param sets x 1 run...",
+              length(param_seeds))
+      pilot <- tryCatch(
+        calc_model_ensemble(
+          config                   = config,
+          parameter_seeds          = param_seeds,
+          parameter_weights        = param_weights,
+          n_simulations_per_config = 1L,
+          envelope_quantiles       = c(0.025, 0.975),
+          PATHS                    = PATHS,
+          priors                   = priors,
+          sampling_args            = sampling_args,
+          score_idx_cases          = control$likelihood$.score_window_resolved$idx_cases,
+          score_idx_deaths         = control$likelihood$.score_window_resolved$idx_deaths,
+          parallel                 = ens_parallel,
+          n_cores                  = ens_n_cores,
+          root_dir                 = root_dir,
+          capture_trajectories     = FALSE,
+          deaths_integration       = control$likelihood$.deaths_integration,
+          verbose                  = FALSE
+        ),
+        error = function(e) {
+          log_warn("forecast-year CFR shift not estimated (%s); forecast years revert to the prior level",
+                   conditionMessage(e))
+          NULL
+        }
+      )
+      if (!is.null(pilot) && !is.null(pilot$forecast_shift)) {
+        control$likelihood$.deaths_integration <- .mosaic_set_forecast_shift(
+          control$likelihood$.deaths_integration, pilot$forecast_shift)
+        ok <- is.finite(pilot$forecast_shift)
+        log_msg("Forecast-year CFR shift (logit, latest observed year; %d location(s)): %s",
+                sum(ok), paste(sprintf("%s %+.2f", pilot$location_names[ok], pilot$forecast_shift[ok]),
+                               collapse = ", "))
+        tryCatch({
+          saveRDS(control$likelihood$.deaths_integration,
+                  file.path(dirs$calibration, "deaths_integration.rds"))
+          log_msg("Saved 2_calibration/deaths_integration.rds (with the forecast-year shift)")
+        }, error = function(e)
+          log_warn("deaths_integration.rds write skipped: %s", conditionMessage(e)))
+      }
+      rm(pilot)
+    }
+
     log_msg("Computing weighted posterior ensemble (%d param sets x %d stochastic)...",
             length(param_seeds), n_ensemble_stochastic_per)
 

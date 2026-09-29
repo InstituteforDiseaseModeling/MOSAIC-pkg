@@ -244,8 +244,8 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   expect_true(all(c("r2_cases_ensemble", "central_method_cases", "central_method_deaths",
                     "r2_cases_ensemble_mean", "r2_cases_ensemble_median")
                   %in% names(summ)))
-  expect_equal(summ$central_method_cases,  "median")
-  expect_equal(summ$central_method_deaths, "median")
+  expect_equal(summ$central_method_cases,  "mean")     # the default from v0.98.0
+  expect_equal(summ$central_method_deaths, "mean")
 
   # (8) Integrated deaths likelihood (v0.96.0): the posterior reported CFR by
   # location and year, from the ensemble members' post-hoc CFR draws.
@@ -276,5 +276,17 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   expect_false(isTRUE(all.equal(unname(as.matrix(med$mu_jt)), unname(config$mu_jt))))
   di_file <- file.path(dir_output, "2_calibration", "deaths_integration.rds")
   expect_true(file.exists(di_file))
-  expect_true(all(c("setup", "base_logit_full", "years") %in% names(readRDS(di_file))))
+  di <- readRDS(di_file)
+  expect_true(all(c("setup", "base_logit_full", "years") %in% names(di)))
+
+  # (10) Forecast years (config_default runs past every location's data) are
+  # centred on the members' latest-year CFR shift, estimated after calibration
+  # and saved in the integration setup: finite wherever a location has forecast
+  # years, and not all zero.
+  has_fc <- vapply(di$setup$locs, function(L) length(L$forecast_years) > 0L, logical(1))
+  expect_true(any(has_fc))
+  shift <- vapply(di$setup$locs, function(L) L$forecast_shift, numeric(1))
+  expect_true(all(is.finite(shift[has_fc])))
+  expect_true(any(abs(shift[has_fc]) > 1e-6))
+  expect_true(all(shift[!has_fc] == 0))
 })

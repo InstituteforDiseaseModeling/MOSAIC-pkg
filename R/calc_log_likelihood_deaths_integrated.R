@@ -10,7 +10,7 @@
 #' \deqn{\mathrm{logit}\,\mu_{jt} = \mathrm{logit}\,\mu^{0}_{jt} + a_j +
 #'   \sum_y B_y(t)\,\delta_{j,y},\qquad a_j \sim N(0, s_j^2),\quad
 #'   \delta_{j,y} \sim N(0, \sigma_y^2)\ (y \le y^*_j),\quad
-#'   \delta_{j,y} \sim N(\delta_{j,y^*_j}, \sigma_y^2)\ (y > y^*_j),}
+#'   \delta_{j,y} \sim N(f_j, \sigma_y^2)\ (y > y^*_j),}
 #' where \eqn{B_y(t)} is 1 inside calendar year \eqn{y} and blends linearly into
 #' the next year over the 60 days centred on each 1 January, so the CFR has no
 #' step at a year boundary. Each year's deviation is a LEVEL for that year: a
@@ -18,9 +18,12 @@
 #' unchanged to the rest of the year (an interpolated basis would extrapolate
 #' the within-year trend past the data instead). \eqn{y^*_j} is the latest year
 #' observed past its New Year blend (the year of the last scored day minus 30
-#' days). Each later year is a forecast year centred on \eqn{y^*_j}'s deviation,
-#' so a forecast continues the latest calibrated CFR instead of reverting to the
-#' prior's long-run level, with the usual year-to-year spread \eqn{\sigma_y}.
+#' days), and each later year is a forecast year centred on the forecast shift
+#' \eqn{f_j} with the usual year-to-year spread \eqn{\sigma_y}. \code{run_MOSAIC()}
+#' sets \eqn{f_j} to the posterior ensemble's mean deviation for \eqn{y^*_j}, so
+#' a forecast continues the latest calibrated CFR shift shared by the members --
+#' without each member's own case error, which its own \eqn{\delta_{j,y^*_j}}
+#' also absorbs -- instead of reverting to the prior's long-run level.
 #'
 #' Deaths are aggregated to reporting weeks and scored with a quasi-Poisson
 #' likelihood: the Poisson log-likelihood divided by a per-location dispersion
@@ -43,7 +46,8 @@
 #' @param background_rel Numeric scalar >= 0: the additive background on each week's expected deaths, as a fraction of the location's mean scored weekly deaths (floored at 1e-4).
 #' @param weights Optional matrix of per-day scoring weights (0 or \code{NA} = not scored); defaults to 1 wherever \code{obs_deaths} is finite. Used as given (not renormalised).
 #' @param week_offset Optional integer, length 1 or one per location, 0-6 days from Monday for the reporting-week boundary; detected from \code{obs_deaths} when \code{NULL}.
-#' @param years Optional integer vector of the years that carry deviations (default: every year of \code{onset_dates}); years after the latest observed year are centred on its deviation, and other years without scored weeks keep their prior. Days before the first year or after the last take the nearest year's level.
+#' @param years Optional integer vector of the years that carry deviations (default: every year of \code{onset_dates}); years after the latest observed year are centred on \code{forecast_shift}, and other years without scored weeks keep their prior. Days before the first year or after the last take the nearest year's level.
+#' @param forecast_shift Numeric, length 1 or one per location: the logit-scale deviation \eqn{f_j} each forecast year is centred on (default 0: forecast years revert to the prior level).
 #'
 #' @details
 #' A reporting week is scored when every one of its days inside the data is
@@ -53,13 +57,11 @@
 #' whose prediction is zero, so a week with no onsets but observed deaths costs a
 #' bounded, data-scaled amount rather than an arbitrary constant.
 #'
-#' The forecast-year prior is a product of conditional densities with unit
-#' Jacobian, so a forecast year that no scored day touches leaves the marginal
-#' likelihood exactly as under independent year deviations; only its posterior
-#' moves, to the latest year's level. Data that end less than 30 days after a
-#' 1 January reach the new year only through the blend, so the year before stays
-#' \eqn{y^*_j} and the new year is a forecast year, centred on the year before and
-#' still fitted to those days.
+#' A forecast year that no scored day touches leaves the marginal likelihood
+#' exactly as it is with \code{forecast_shift = 0}; only its posterior moves, to
+#' the shift. Data that end less than 30 days after a 1 January reach the new
+#' year only through the blend, so the year before stays \eqn{y^*_j} and the new
+#' year is a forecast year, centred on the shift and still fitted to those days.
 #'
 #' @return A list with \code{ll} (marginal log-likelihood per location),
 #'   \code{theta} (matrix \[locations x (1 + years)\]: the offset \code{a} and the
@@ -83,7 +85,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
                                                   sd_shift, sd_year, onset_dates = dates,
                                                   dispersion = 1, background_rel = 0.02,
                                                   weights = NULL, week_offset = NULL,
-                                                  years = NULL) {
+                                                  years = NULL, forecast_shift = 0) {
      as_mat <- function(x) if (is.matrix(x)) x else matrix(x, nrow = 1L)
      obs_deaths <- as_mat(obs_deaths); exposure <- as_mat(exposure); base_logit <- as_mat(base_logit)
      nT <- ncol(obs_deaths)
@@ -104,6 +106,10 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
                         years = years, sd_shift = sd_shift, sd_year = sd_year,
                         phi = dispersion, background_rel = background_rel,
                         week_offset = week_offset)
+     if (length(forecast_shift) == 1L) forecast_shift <- rep(forecast_shift, setup$nL)
+     if (length(forecast_shift) != setup$nL || any(!is.finite(forecast_shift)))
+          stop("forecast_shift must be finite, length 1 or one per location.")
+     setup <- .mosaic_set_forecast_shift(list(setup = setup), forecast_shift)$setup
      .d7_fit_all(setup, exposure = exposure, base_logit = base_logit,
                  onset_day = as.numeric(onset_dates))
 }
@@ -181,10 +187,11 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
                }
           }
           bg_j <- max(1e-4, background_rel * (if (length(D_w)) mean(D_w) else 0))
-          carry <- .d7_carry(dates[sel], years)
+          fc <- .d7_forecast_years(dates[sel], years)
           locs[[j]] <- list(day = which(sel), week = wk[sel], D = D_w, W = W_w,
                             sd_shift = sd_shift[j], phi = phi_j, bg = bg_j,
-                            carry_from = carry$from, carry_to = carry$to)
+                            anchor = fc$anchor, forecast_years = fc$forecast_years,
+                            forecast_shift = 0)
      }
      list(locs = locs, years = years, sd_year = sd_year, nL = nL, nT = nT)
 }
@@ -241,16 +248,16 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 # day minus the blend half-width, so data reaching only into the first days of a
 # year leave the year before as the anchor -- mapped to a listed year as the
 # basis maps it. Every listed year after the anchor is a forecast year, whose
-# deviation .d7_fit_location() centres on the anchor's. No scored days, or an
-# anchor before the first listed year, gives no forecast years.
-.d7_carry <- function(scored_dates, years) {
-     none <- list(from = NA_integer_, to = integer(0))
+# deviation .d7_fit_location() centres on the location's forecast shift. No
+# scored days, or an anchor before the first listed year, gives no forecast years.
+.d7_forecast_years <- function(scored_dates, years) {
+     none <- list(anchor = NA_integer_, forecast_years = integer(0))
      if (!length(scored_dates)) return(none)
      yr <- as.integer(format(max(scored_dates) - .D7_BLEND_DAYS, "%Y"))
      a <- which(years <= yr)
      if (!length(a)) return(none)
      a <- max(a)
-     list(from = a, to = which(years > years[a]))
+     list(anchor = a, forecast_years = which(years > years[a]))
 }
 
 .d7_fit_all <- function(setup, exposure, base_logit, onset_day) {
@@ -263,13 +270,13 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
      vc <- vector("list", setup$nL)
      for (j in seq_len(setup$nL)) {
           L <- setup$locs[[j]]
-          # A setup saved before v0.98.0 carries no forecast years: independent deviations.
+          # A setup saved before v0.99.0 has no forecast shift: every year keeps N(0, sd_year^2).
           f <- .d7_fit_location(D = L$D, W = L$W, week = L$week,
                                 X = exposure[j, L$day], eta0 = base_logit[j, L$day],
                                 B = B_all[L$day, , drop = FALSE], sd_shift = L$sd_shift,
                                 sd_year = setup$sd_year, phi = L$phi, bg = L$bg,
-                                carry_from = L$carry_from %||% NA_integer_,
-                                carry_to = L$carry_to %||% integer(0))
+                                forecast_years = L$forecast_years %||% integer(0),
+                                forecast_shift = L$forecast_shift %||% 0)
           ll[j] <- f$ll; conv[j] <- f$converged; nw[j] <- length(L$D)
           theta[j, ] <- f$theta; theta_sd[j, ] <- sqrt(pmax(diag(f$vcov), 0)); vc[[j]] <- f$vcov
      }
@@ -280,30 +287,22 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 }
 
 # Newton / Laplace for one location. theta = (a, delta_1..delta_Y); each scored
-# day's linear predictor is eta0 + a + B[day, ] %*% delta. carry_to indexes the
-# forecast years (see .d7_carry()), whose deviations are centred on year
-# carry_from's.
+# day's linear predictor is eta0 + a + B[day, ] %*% delta. The priors are
+# independent normals: a ~ N(0, sd_shift^2), delta_y ~ N(0, sd_year^2), and each
+# forecast year (forecast_years, indices into the years) delta_f ~
+# N(forecast_shift, sd_year^2).
 .d7_fit_location <- function(D, W, week, X, eta0, B, sd_shift, sd_year, phi, bg,
-                             carry_from = NA_integer_, carry_to = integer(0),
+                             forecast_years = integer(0), forecast_shift = 0,
                              max_iter = 60L, tol = 1e-9) {
      Y <- ncol(B); d <- 1L + Y
      prior_prec <- c(1 / sd_shift^2, rep(1 / sd_year^2, Y))
-     # Prior precision: a ~ N(0, sd_shift^2); delta_y ~ N(0, sd_year^2), except each
-     # forecast year, delta_f ~ N(delta_anchor, sd_year^2). Every factor is a
-     # conditional density with unit Jacobian, so det(P) -- and so prior_ld, the
-     # normaliser -- is that of the independent prior.
-     P <- diag(prior_prec, d)
-     if (length(carry_to) && !is.na(carry_from)) {
-          ia <- 1L + carry_from; i_f <- 1L + carry_to; p <- 1 / sd_year^2
-          P[ia, ia] <- P[ia, ia] + p * length(i_f)
-          P[ia, i_f] <- -p
-          P[i_f, ia] <- -p
-     }
+     prior_mean <- rep(0, d)
+     prior_mean[1L + forecast_years] <- forecast_shift
      prior_ld <- sum(stats::dnorm(0, 0, c(sd_shift, rep(sd_year, Y)), log = TRUE))
      nW <- length(D)
      if (!nW) {
           # No scored weeks: the posterior is the prior and the data contribute nothing.
-          return(list(ll = 0, theta = rep(0, d), vcov = chol2inv(chol(P)), converged = TRUE))
+          return(list(ll = 0, theta = prior_mean, vcov = diag(1 / prior_prec, d), converged = TRUE))
      }
      Bd <- cbind(1, B)                        # d eta_day / d theta
      lg_const <- -lgamma(D + 1)
@@ -322,7 +321,8 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
           p <- stats::plogis(eta0 + as.numeric(Bd %*% th))
           m <- wsum(p * X) + bg
           list(p = p, m = m,
-               lp = sum(W * (lg_const + D * log(m) - m)) / phi - 0.5 * sum(th * (P %*% th)))
+               lp = sum(W * (lg_const + D * log(m) - m)) / phi -
+                    0.5 * sum(prior_prec * (th - prior_mean)^2))
      }
      deriv_at <- function(th, ev) {
           p <- ev$p; m <- ev$m
@@ -331,14 +331,17 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
           u <- W * (D / m - 1) / phi           # d loglik / d m_week
           v <- -W * D / (phi * m^2)            # d2 loglik / d m_week2
           Gw <- wsum_m(Bd * g)                                # d m_week / d theta
-          grad <- as.numeric(crossprod(Gw, u)) - as.numeric(P %*% th)
-          H <- crossprod(Gw, Gw * v) + crossprod(Bd, Bd * (h * u[week])) - P
-          Fi <- crossprod(Gw, Gw * (W / (phi * m))) + P
+          grad <- as.numeric(crossprod(Gw, u)) - prior_prec * (th - prior_mean)
+          H <- crossprod(Gw, Gw * v) + crossprod(Bd, Bd * (h * u[week]))
+          diag(H) <- diag(H) - prior_prec
+          Fi <- crossprod(Gw, Gw * (W / (phi * m)))
+          diag(Fi) <- diag(Fi) + prior_prec
           list(grad = grad, H = H, fisher = Fi)
      }
 
-     # Start at the offset that matches total observed to total expected deaths.
-     th <- rep(0, d)
+     # Start at the prior means, with the offset that matches total observed to
+     # total expected deaths.
+     th <- prior_mean
      ev <- eval_at(th)
      tot_x <- sum(ev$m) - nW * bg; tot_d <- sum(D)
      if (tot_x > 0 && tot_d > 0) th[1] <- max(-8, min(8, log(tot_d / tot_x)))
@@ -479,6 +482,37 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
           background = vapply(setup$locs, function(L) L$bg, numeric(1)))
 }
 
+# Whether any location of a deaths integration has forecast years (years after
+# its latest observed year).
+.mosaic_has_forecast_years <- function(di) {
+     !is.null(di) && any(vapply(di$setup$locs, function(L) length(L$forecast_years %||% integer(0)) > 0L,
+                                logical(1)))
+}
+
+# Each location's posterior-mode deviation for its anchor (latest observed) year,
+# from one path's fit (theta: locations x (1 + years)); NA for a location with no
+# forecast years.
+.mosaic_anchor_deviation <- function(di, theta) {
+     vapply(seq_along(di$setup$locs), function(j) {
+          L <- di$setup$locs[[j]]
+          if (is.null(L$anchor) || is.na(L$anchor) || !length(L$forecast_years)) NA_real_
+          else as.numeric(theta[j, 1L + L$anchor])
+     }, numeric(1))
+}
+
+# Set each location's forecast shift -- the logit deviation its forecast years are
+# centred on -- in a deaths integration. One value per location; a non-finite
+# value leaves that location at 0 (forecast years revert to the prior level).
+.mosaic_set_forecast_shift <- function(di, shift) {
+     shift <- as.numeric(shift)
+     if (length(shift) != length(di$setup$locs))
+          stop(sprintf("forecast shift has %d value(s) for %d location(s).",
+                       length(shift), length(di$setup$locs)))
+     for (j in seq_along(di$setup$locs))
+          di$setup$locs[[j]]$forecast_shift <- if (is.finite(shift[j])) shift[j] else 0
+     di
+}
+
 # Exposure, base logit and onset day aligned to each reporting column. A
 # reported death in results column c comes from onsets in column c - s, with
 # s = delta_reporting_cases + 1: fatal onsets drawn at tick t are recorded one
@@ -520,8 +554,9 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 # and reported deaths with the alignment the engine uses. The rest of a year
 # observed only in part keeps that year's fitted level. Forecast years past the
 # last observation carry the location offset a and a deviation drawn around the
-# latest observed year's (the posterior of .d7_fit_location()'s forecast-year
-# prior), so a forecast continues the latest calibrated CFR.
+# location's forecast shift -- the ensemble's latest-year shift, when
+# run_MOSAIC() has set it (.mosaic_set_forecast_shift()) -- so a forecast
+# continues the latest calibrated CFR.
 #
 # A location whose posterior-mode CFR would need a per-onset fatality
 # probability >= 1 (a path that produces far too few onsets for the observed

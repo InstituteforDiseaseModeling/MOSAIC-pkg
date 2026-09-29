@@ -408,6 +408,11 @@
 #'     reported CFR in that year) and \code{prior_cfr} (the prior \code{mu_jt}'s
 #'     mean over the same days). Conditional on each member's modelled cases.
 #'     \code{NULL} otherwise.}
+#'   \item{forecast_shift}{When \code{deaths_integration} is supplied: one value
+#'     per location, the weighted mean over members of the posterior-mode logit
+#'     CFR deviation for the location's latest observed year (\code{NA} for a
+#'     location with no forecast years). \code{run_MOSAIC()} centres forecast
+#'     years on it. \code{NULL} otherwise.}
 #' }
 #'
 #' @seealso \code{\link{plot_model_ensemble}} to render plots from this object.
@@ -992,6 +997,7 @@ calc_model_ensemble <- function(config,
   # modelled cases: a year whose cases a member over-predicts gets a lower CFR, so
   # read it with the cases fit. NULL when deaths were not redrawn.
   cfr_posterior <- NULL
+  forecast_shift <- NULL
   if (!is.null(deaths_integration)) {
     n_infeasible <- sum(vapply(results_list, function(r)
       if (isTRUE(r$success) && !is.null(r$cfr_infeasible)) as.numeric(r$cfr_infeasible) else 0, numeric(1)))
@@ -1021,6 +1027,20 @@ calc_model_ensemble <- function(config,
                               stringsAsFactors = FALSE)
     }
     cfr_posterior <- do.call(rbind, rows)
+
+    # The members' latest-year CFR shift: the weighted mean over members of each
+    # path's posterior-mode deviation for the location's anchor (latest observed)
+    # year. Each path's own deviation also absorbs its case error that year; the
+    # mean keeps the shift the members share.
+    anc_arr <- array(NA_real_, dim = c(n_locations, n_param_sets, n_simulations_per_config))
+    for (result in results_list) {
+      if (isTRUE(result$success) && !is.null(result$anchor_dev))
+        anc_arr[, result$param_idx, result$stoch_idx] <- result$anchor_dev
+    }
+    forecast_shift <- vapply(seq_len(n_locations), function(i) {
+      v <- as.vector(anc_arr[i, , ]); ok <- is.finite(v) & sim_w > 0
+      if (any(ok)) sum(v[ok] * sim_w[ok]) / sum(sim_w[ok]) else NA_real_
+    }, numeric(1))
   }
 
   # ===========================================================================
@@ -1080,6 +1100,7 @@ calc_model_ensemble <- function(config,
       trajectories              = trajectories,
       trajectory_scratch        = trajectory_scratch,
       cfr_posterior             = cfr_posterior,
+      forecast_shift            = forecast_shift,
       artifact_mask             = list(
         cases_warmup     = as.integer(n_cases_warmup_mask),
         deaths_final     = isTRUE(mask_final_deaths_step),

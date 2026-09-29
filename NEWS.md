@@ -1,5 +1,33 @@
 # MOSAIC (development version)
 
+## Forecast years carry the ensemble's shared CFR shift, not each member's own (v0.99.0)
+
+v0.98.0 centred each ensemble member's forecast-year CFR on that member's own
+deviation for the latest observed year. That deviation also absorbs the member's
+case error that year: a member that under-shoots the year's cases gets a high
+CFR, and members like that tend to have larger waves later, so the carried
+error amplified the forecast. In the calibration test SSD's 2026 deaths went
+from 1.05x to 2.50x observed while NGA's improved.
+
+Each forecast year is now centred on one shift per location: the weighted mean,
+over the posterior ensemble's members, of their posterior-mode deviations for
+the latest observed year. The members' shared CFR change carries forward; each
+member's own case error does not, and each member keeps its own location offset.
+`run_MOSAIC()` estimates the shift after calibration from one run per ensemble
+member, logs it, and stores it in the deaths integration, so the ensemble, the
+medoid, `cfr_posterior.csv`, `config_medoid.json` and a post-hoc re-run from
+`deaths_integration.rds` all use it. The forecast-year prior is a normal centred
+on the shift (the v0.98.0 prior coupled forecast years to each member's latest
+year). The calibration likelihood is unchanged except where a scored day's
+blend reaches a forecast year, where it now uses a zero shift.
+`calc_model_ensemble()` returns the shift as `forecast_shift`, and
+`calc_log_likelihood_deaths_integrated()` gains a `forecast_shift` argument
+(default 0: forecast years revert to the prior level). The likelihood version is
+`R/v0.99.0+deaths_forecastshift`. Six test assertions that compared small
+quantities (CFRs near 0.01-0.08) with `expect_equal(tolerance =)` were vacuous,
+because testthat switches to an absolute difference when the values are smaller
+than the tolerance; they now use a relative-error check (`expect_rel_equal()`).
+
 ## The ensemble central line is the mean; forecast years continue the latest CFR (v0.98.0)
 
 - **Ensemble central tendency defaults to the mean** for both cases and deaths

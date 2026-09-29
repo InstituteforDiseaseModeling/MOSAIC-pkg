@@ -59,7 +59,7 @@ test_that("a re-simulation of the shifted config realizes the posterior CFR", {
     r <- MOSAIC::run_simulation(out, seed = s, quiet = TRUE)$results
     d <- d + sum(r$reported_deaths); cs <- cs + sum(r$reported_cases)
   }
-  expect_equal(d / cs, 0.08, tolerance = 0.12)
+  expect_rel_equal(d / cs, 0.08, 0.12)
 })
 
 test_that("a legacy config comes back in the v0.96.0 form", {

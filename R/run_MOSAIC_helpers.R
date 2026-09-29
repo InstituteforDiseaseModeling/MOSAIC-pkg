@@ -1377,11 +1377,12 @@
 #'   dispersion and an additive background, smooths the year deviations, scores
 #'   edge weeks and makes the deaths confidence weights mass-preserving. v0.97.2
 #'   makes the year deviations yearly levels (blended at each 1 January)
-#'   instead of an interpolated curve. v0.98.0 centres each forecast year's
-#'   deviation on the latest observed year's; the values change only where a
-#'   scored day's blend reaches a forecast year (data ending within 30 days of a
-#'   1 January).
-.mosaic_likelihood_impl_version <- function() "R/v0.98.0+deaths_carryforward"
+#'   instead of an interpolated curve. v0.98.0 centred each forecast year's
+#'   deviation on the latest observed year's; v0.99.0 centres it instead on a
+#'   fixed shift that run_MOSAIC() sets after calibration (0 while calibrating).
+#'   Either way the values change only where a scored day's blend reaches a
+#'   forecast year (data ending within 30 days of a 1 January).
+.mosaic_likelihood_impl_version <- function() "R/v0.99.0+deaths_forecastshift"
 
 #' Likelihood-Value Provenance Descriptor
 #'

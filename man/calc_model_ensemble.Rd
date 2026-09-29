@@ -168,6 +168,11 @@ weighted median and 95\% interval over members of each member's mean daily
 reported CFR in that year) and \code{prior_cfr} (the prior \code{mu_jt}'s
 mean over the same days). Conditional on each member's modelled cases.
 \code{NULL} otherwise.}
+\item{forecast_shift}{When \code{deaths_integration} is supplied: one value
+per location, the weighted mean over members of the posterior-mode logit
+CFR deviation for the location's latest observed year (\code{NA} for a
+location with no forecast years). \code{run_MOSAIC()} centres forecast
+years on it. \code{NULL} otherwise.}
 }
 }
 \description{
