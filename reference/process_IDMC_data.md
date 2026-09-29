@@ -27,11 +27,16 @@ process_IDMC_data(PATHS, source_dir = NULL, panel_start = "2000-01-03")
 
 - source_dir:
 
-  Optional directory of IDU event CSVs to read instead of
-  `PATHS$DATA_IDMC_RAW` (e.g. a scratch directory of HDX downloads). All
-  `*.csv` files in the directory are read and row-bound; duplicate event
-  `id`s are dropped, so per-country mirrors and a global export can be
-  mixed safely.
+  Optional directory of IDU event CSVs to read. When `NULL` (default),
+  the NEWEST `hdx_<date>/` snapshot directory under
+  `PATHS$DATA_IDMC_RAW` is selected automatically (the convention
+  written by
+  [`download_IDMC_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_IDMC_data.md));
+  if no such snapshot exists, `PATHS$DATA_IDMC_RAW` itself is read, so a
+  flat directory of CSVs still works. Pass an explicit path to reprocess
+  an older snapshot. All `*.csv` files in the chosen directory are read
+  and row-bound; duplicate event `id`s are dropped, so per-country
+  mirrors and a global export can be mixed safely.
 
 - panel_start:
 
@@ -89,13 +94,14 @@ to the start date (single-day event).
 
 **Coverage caveat – read before modelling.** IDU is a rolling
 near-real-time product and the accessible history depends on the route
-used: the HDX per-country mirrors begin ~2025, the API carries more.
-Zero cells before a country's first observed event therefore mean "not
-reported by this extract", not "no displacement occurred". Always check
-the per-country first-event dates printed by this function (and stored
-in the `coverage` attribute) before using the panel as a covariate or as
-a trigger denominator. This is a materially weaker coverage guarantee
-than EM-DAT's, which runs from 2000.
+used. Most HDX per-country mirrors begin 2025-01-01, but coverage is NOT
+uniform – KEN reaches back to 2011, while several series cover only a
+few weeks. Zero cells before a country's first observed event therefore
+mean "not reported by this extract", not "no displacement occurred".
+Always check the per-country first-event dates printed by this function
+(and stored in the `coverage` attribute) before using the panel as a
+covariate or as a trigger denominator. This is a materially weaker
+coverage guarantee than EM-DAT's, which runs from 2000.
 
 **Collinearity caveat.** `idmc_disaster_*` is largely flood/storm-driven
 and will correlate with `emdat_flood_*`; do not enter both into a
@@ -107,23 +113,35 @@ additional signal.
 IDU are *preliminary* estimates of new displacements, updated daily; the
 curated annual counterpart is the Global Internal Displacement Database
 (GIDD), which is too coarse for event-timing work. Two acquisition
-routes are supported by `source_dir`:
+routes exist:
 
-- **API** (preferred, full history): the IDMC IDU API, most easily via
-  the CRAN idmc package (`idmc::idmc_get_data()`), which reads an
-  endpoint URL from the `IDMC_API` environment variable. The URL embeds
-  a client id issued by IDMC on request. Save the returned frame as a
-  CSV in `PATHS$DATA_IDMC_RAW`.
+- **HDX per-country mirrors** (RECOMMENDED – open, no credentials,
+  refreshed daily): `<iso>-idmc-idu-events` datasets on the Humanitarian
+  Data Exchange. Use
+  [`download_IDMC_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_IDMC_data.md),
+  which resolves the current CSV resource URLs from the HDX CKAN API and
+  archives a dated snapshot. **38 of the 40 MOSAIC countries have a
+  dataset; ERI and TGO do not.** Measured 2026-09-17: all 38 refreshed
+  that day.
 
-- **HDX per-country mirrors** (open, no credentials, but only ~2025
-  onward): `<iso>-idmc-idu-events` datasets on the Humanitarian Data
-  Exchange. 26 of the 27 MOSAIC national countries have one. Useful for
-  standing the pipeline up before a key arrives.
+- **IDMC external API** via the CRAN idmc package
+  (`idmc::idmc_get_data()`), which reads an endpoint URL from the
+  `IDMC_API` environment variable. This route is **credential gated** –
+  unauthenticated calls to
+  `helix-tools-api.idmcdb.org/external-api/idus/all/` return
+  `HTTP 403 "Client is not registered."` – and the client id must be
+  requested from IDMC. It buys pre-2025 history; it is not otherwise
+  needed. Note `idmc_get_data()` parses a `standard_popup_text` column
+  that the HDX CSVs do not carry, so it cannot be used to read HDX
+  downloads.
 
 Note the URL advertised on the HDX resource page (`backend.idmcdb.org`)
-no longer resolves; the live API host is `helix-tools-api.idmcdb.org`.
+no longer resolves (DNS failure confirmed 2026-09-17); the live API host
+is `helix-tools-api.idmcdb.org`.
 
 ## See also
 
+[`download_IDMC_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_IDMC_data.md)
+to fetch the source CSVs from HDX,
 [`process_EMDAT_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
 for the sibling hazard panels.

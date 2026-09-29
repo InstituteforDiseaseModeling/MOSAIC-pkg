@@ -7,7 +7,7 @@ mobility network.
 ## Usage
 
 ``` r
-plot_mobility(PATHS)
+plot_mobility(PATHS, suffix = "")
 ```
 
 ## Arguments
@@ -26,6 +26,11 @@ plot_mobility(PATHS)
     African countries.
 
   - **DOCS_FIGURES**: Path to the directory where figures will be saved.
+
+- suffix:
+
+  Filename suffix identifying which est_mobility() run to plot (e.g.
+  `"_fused_raked_tt"`). Default `""` = the production air-derived fit.
 
 ## Value
 

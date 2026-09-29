@@ -6,24 +6,26 @@ Symptomatic cholera in MOSAIC's setting spans the full severity spectrum
 (mild watery diarrhea to severe rapid dehydration). The two Wiens 2025
 meta-analytic strata bracket that spectrum:
 
-- **General diarrhea** (3+ loose/liquid stools): 29.9\\ (95\\
-  care-seeking for the broader population of diarrheal episodes, which
-  is appropriate for the mild-to-moderate tail of symptomatic cholera
-  (the majority of cases by count).
+- **General diarrhea** (3+ loose/liquid stools): 29.9% (95% CI \[25.3,
+  35.1\]) from 122 observations. Represents care-seeking for the broader
+  population of diarrheal episodes, which is appropriate for the
+  mild-to-moderate tail of symptomatic cholera (the majority of cases by
+  count).
 
-- **Severe diarrhea + cholera**: 58.6\\ from 22 observations. Represents
-  care-seeking when symptoms are severe enough to be flagged as "severe"
-  or specifically cholera, which is appropriate for the severe tail of
-  symptomatic cholera.
+- **Severe diarrhea + cholera**: 58.6% (95% CI \[39.9, 75.2\]) from 22
+  observations. Represents care-seeking when symptoms are severe enough
+  to be flagged as "severe" or specifically cholera, which is
+  appropriate for the severe tail of symptomatic cholera.
 
 Anchoring on the severe+cholera stratum ALONE biases rho upward (it
 represents only the severe tail and is dominated by outbreak-response
 settings with enhanced care-seeking, e.g. the Haiti 2010-19 outbreak
-which contributes 50\\ ALONE biases rho downward (the broader category
-includes many mild, self-resolving episodes that don't reflect
-cholera-specific severity). Random-effects pooling of the two strata
-produces an estimate that honestly reflects the severity spectrum and
-its substantial heterogeneity.
+which contributes 50% of underlying rows). Anchoring on general diarrhea
+ALONE biases rho downward (the broader category includes many mild,
+self-resolving episodes that don't reflect cholera-specific severity).
+Random-effects pooling of the two strata produces an estimate that
+honestly reflects the severity spectrum and its substantial
+heterogeneity.
 
 **Why not include GEMS Nasrin 2013 as a separate co-anchor?**
 
@@ -40,7 +42,8 @@ resolves all three.
 
 **Methodology.** Random-effects meta-analysis on the logit scale
 (DerSimonian-Laird tau^2) with the two Wiens strata as the unit of
-pooling. The 95\\ pooled mean is then fit to a Beta distribution via
+pooling. The 95% CI of the pooled mean is then fit to a Beta
+distribution via
 [`get_beta_params`](https://rdrr.io/pkg/propvacc/man/get_beta_params.html).
 
 **Geographic provenance (severe+cholera stratum).** Of 23 underlying

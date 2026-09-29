@@ -109,9 +109,10 @@ evapotranspiration): a country-week is `drought_active = 1` when the
 "sustained" requirement (a single dry week does not qualify) and the
 rolling mean is the standard meteorological way to distinguish a drought
 *spell* from short-term dryness. On the production panel this yields
-~15\\ meteorological droughts (Southern Africa 2015-16 El Nino &
-2018-19, Horn of Africa 2016-17, the 2023-24 El Nino) – NOT the smeared
-multi-year mess the EM-DAT drought type produces.
+~15% positive weeks across 38 countries and recovers the known
+meteorological droughts (Southern Africa 2015-16 El Nino & 2018-19, Horn
+of Africa 2016-17, the 2023-24 El Nino) – NOT the smeared multi-year
+mess the EM-DAT drought type produces.
 
 **CRITICAL leakage control.** The concurrent `spei_approx` is the label
 source, so it (and its rolling mean) is **excluded** from the predictor

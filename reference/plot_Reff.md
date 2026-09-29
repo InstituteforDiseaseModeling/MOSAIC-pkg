@@ -37,7 +37,8 @@ plot_Reff(
 
 - show_iqr:
 
-  Logical. Also draw the inner 50\\ total-R band. Default `FALSE`.
+  Logical. Also draw the inner 50% (`q25`-`q75`) total-R band. Default
+  `FALSE`.
 
 - smooth_days:
 

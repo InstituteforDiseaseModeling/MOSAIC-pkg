@@ -88,7 +88,7 @@ mosaic_control_defaults(
   - `sample_gamma_2`: Sample second dose efficacy (default: TRUE)
 
   - `sample_alpha_1`: Sample within-metapop population mixing exponent
-    (default: TRUE)
+    (default: FALSE, PINNED)
 
   - `sample_alpha_2`: Sample frequency-dependence degree (default:
     FALSE; pinned, weakly identified)

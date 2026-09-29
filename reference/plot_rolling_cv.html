@@ -3,7 +3,7 @@
 predictions artifact for one metric, one panel per cutoff (forecast origin),
 restricted to the assessed horizon (default \(\le 5\) months). The two
 posterior ensembles (ensemble, ensemble_opt) are drawn as
-"hero" series with 50/95\
+"hero" series with 50/95% prediction-interval ribbons; the two point
 configurations (best, medoid) are drawn as thin reference
 lines. Held-out observations are overlaid as points and the forecast origin
 is marked with a labelled dashed rule. Each panel is annotated with the
@@ -12,7 +12,7 @@ ensembles, computed via evaluate_rolling_cv.'><meta property="og:description" co
 predictions artifact for one metric, one panel per cutoff (forecast origin),
 restricted to the assessed horizon (default \(\le 5\) months). The two
 posterior ensembles (ensemble, ensemble_opt) are drawn as
-"hero" series with 50/95\
+"hero" series with 50/95% prediction-interval ribbons; the two point
 configurations (best, medoid) are drawn as thin reference
 lines. Held-out observations are overlaid as points and the forecast origin
 is marked with a labelled dashed rule. Each panel is annotated with the
@@ -25,7 +25,7 @@ ensembles, computed via evaluate_rolling_cv.'><meta property="og:image" content=
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.92.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,7 +62,7 @@ ensembles, computed via evaluate_rolling_cv.'><meta property="og:image" content=
 predictions artifact for one metric, one panel per cutoff (forecast origin),
 restricted to the assessed horizon (default \(\le 5\) months). The two
 posterior ensembles (<code>ensemble</code>, <code>ensemble_opt</code>) are drawn as
-"hero" series with 50/95\<!-- % prediction-interval ribbons; the two point -->
+"hero" series with 50/95% prediction-interval ribbons; the two point
 configurations (<code>best</code>, <code>medoid</code>) are drawn as thin reference
 lines. Held-out observations are overlaid as points and the forecast origin
 is marked with a labelled dashed rule. Each panel is annotated with the
@@ -119,7 +119,7 @@ panel relative to its cutoff (default 5).</p></dd>
 
 
 <dt id="arg-models-ribbon">models_ribbon<a class="anchor" aria-label="anchor" href="#arg-models-ribbon"></a></dt>
-<dd><p>Models drawn with 50/95\<!-- % PI ribbons + median line -->
+<dd><p>Models drawn with 50/95% PI ribbons + median line
 (default <code>c("ensemble", "ensemble_opt")</code>).</p></dd>
 
 

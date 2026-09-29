@@ -45,7 +45,8 @@ sample_parameters(
   Each element should be named as `sample_[parameter]` with a logical
   value. Available options include:
 
-  - sample_alpha_1: Population mixing within metapops (default TRUE)
+  - sample_alpha_1: Population mixing within metapops (default FALSE;
+    PINNED, see Details)
 
   - sample_alpha_2: Degree of frequency driven transmission (default
     FALSE; pinned, weakly identified)

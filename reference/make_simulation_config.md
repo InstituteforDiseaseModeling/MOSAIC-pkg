@@ -277,18 +277,18 @@ make_simulation_config(
 
 - gamma_1:
 
-  Symptomatic shedding-duration rate `I_sym -> R` (numeric \>= 0, per
-  day; "severe / symptomatic" branch).
+  Symptomatic shedding-duration rate `I_sym -> R` (numeric= 0, per day;
+  "severe / symptomatic" branch).
 
 - gamma_2:
 
-  Asymptomatic shedding-duration rate `I_asym -> R` (numeric \>= 0, per
+  Asymptomatic shedding-duration rate `I_asym -> R` (numeric= 0, per
   day; "mild / asymptomatic" branch).
 
 - epsilon:
 
-  Natural-infection immunity waning rate `R -> S` (numeric \>= 0, per
-  day). Distinct from vaccine waning (`omega_1`, `omega_2`).
+  Natural-infection immunity waning rate `R -> S` (numeric= 0, per day).
+  Distinct from vaccine waning (omega_1, omega_2).
 
 - mu_jt:
 

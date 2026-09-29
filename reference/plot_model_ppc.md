@@ -62,7 +62,7 @@ Creates a 6-page multi-page PDF per output file:
 
 1.  Density overlays of observed vs predicted median distributions
 
-2.  Credible interval coverage analysis (50\\
+2.  Credible interval coverage analysis (50% and 95% CIs vs nominal)
 
 3.  Observed vs predicted calibration scatter plots
 

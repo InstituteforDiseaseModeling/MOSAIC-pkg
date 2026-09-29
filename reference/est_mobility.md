@@ -8,7 +8,13 @@ fits the mobility model, and saves the results in CSV format.
 ## Usage
 
 ``` r
-est_mobility(PATHS)
+est_mobility(
+  PATHS,
+  od_source = c("air", "fused", "fused_raked", "blend"),
+  distance_metric = c("great_circle", "travel_time"),
+  fused_count_scale = 1e+05,
+  suffix = NULL
+)
 ```
 
 ## Arguments
@@ -33,6 +39,80 @@ est_mobility(PATHS)
 
   - **DOCS_FIGURES**: Path to the directory where figures will be saved.
 
+- od_source:
+
+  Which origin-destination matrix drives the DIFFUSION fit.
+
+  `"air"`
+
+  :   (default) OAG flight counts – the historical behaviour,
+      byte-identical to previous runs.
+
+  `"fused"`
+
+  :   The four-source overland structure from
+      [`process_mobility_od_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_mobility_od_data.md)
+      (UN DESA stock + Abel-Cohen flows + Meta SCI + contiguity).
+      Row-normalised and unit-free, so `tau_i` is still fit on the air
+      matrix.
+
+  `"blend"`
+
+  :   **Recommended.** The additive sum of the air flight matrix and the
+      raked overland matrix, both daily person flows. Yields additive
+      `tau_i` and a single gamma/omega pair describing the combined
+      kernel – the only form `config_default` can represent. Retains the
+      long-range air links that pure overland replacement destroys.
+
+  `"fused_raked"`
+
+  :   The fused structure IPF-raked to evidence-based daily departure
+      margins by
+      [`rake_mobility_od_to_tau`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/rake_mobility_od_to_tau.md).
+      Carries amplitude, so `tau_i` is fit on it.
+
+- distance_metric:
+
+  Distance units for the gravity kernel.
+
+  `"great_circle"`
+
+  :   (default) Centroid-to-centroid great-circle distance. **Note the
+      stored units are not kilometres**:
+      [`get_distance_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_distance_matrix.md)
+      already returns km (spherical, R = 6371) and the historical code
+      then multiplies by 111.35, the planar degrees-to-km factor.
+      `mobility_D.csv` is therefore km x 111.35. Harmless for the fit –
+      the constant cancels in the row-normalised `pi` and `gamma` is
+      scale-free in a power model – but the artifact's units are wrong
+      and it is retained only for continuity with the shipped `gamma`.
+
+  `"travel_time"`
+
+  :   Overland least-cost travel time in HOURS from
+      [`get_travel_time_matrix`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_travel_time_matrix.md)
+      (MAP motorized friction surface). This is what the MOSAIC-OCV E3
+      work fit gamma on.
+
+  **gamma is not comparable across metrics** – it is a decay exponent on
+  whatever units D carries, so a travel-time gamma cannot be read
+  against a kilometre gamma. Compare only within a metric.
+
+- fused_count_scale:
+
+  Integer scale applied to the row-normalised fused structure so
+  [`mobility::mobility()`](https://rdrr.io/pkg/mobility/man/mobility.html)
+  receives counts. Default 1e5. The absolute scale does not move
+  gamma/omega (verified in the MOSAIC-OCV E3 Route-2 work); it only
+  affects the kernel-mix term.
+
+- suffix:
+
+  Filename suffix for outputs. Defaults to `"_fused"` when
+  `od_source = "fused"` and/or `"_tt"` for travel-time, and `""`
+  otherwise, so a non-default run cannot silently overwrite the
+  production air/great-circle connectivity.
+
 ## Value
 
 The function saves mobility matrices (M, D, N), travel probabilities
@@ -48,3 +128,16 @@ Install with:
 The `mobility` package requires JAGS (\>= 4.3.0) to be installed on your
 system. Most users will not need to regenerate mobility data, as
 pre-computed files are included in the package.
+
+## Structure vs amplitude (important)
+
+Under `od_source = "fused"` the departure process `tau_i` is **still fit
+on the OAG flight matrix**, not on the fused structure. This is
+deliberate. The fused matrix is row-normalised and unit-free, and its
+dominant input (UN DESA) is a decades-accumulated migrant *stock*;
+dividing such a matrix by population does not yield a departure rate.
+The MOSAIC-OCV E3 investigation measured a ~700x inflation from exactly
+that error. So the fused pathway supplies kernel **structure** (gamma,
+omega, pi) only; **amplitude** continues to come from real flow counts.
+A defensible overland amplitude needs separate evidence (border
+throughput / IOM DTM), which this function does not attempt.

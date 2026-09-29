@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.92.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -318,6 +318,13 @@
 
         </dt>
         <dd>Fit Mobility Model Using Flight Data and Distance Matrices</dd>
+
+        <dt>
+
+          <code><a href="est_overland_tau_prior.html">est_overland_tau_prior()</a></code>
+
+        </dt>
+        <dd>Build a per-country overland departure-rate prior for MOSAIC calibration</dd>
 
         <dt>
 
@@ -885,10 +892,45 @@
 
         <dt>
 
+          <code><a href="process_mobility_od_data.html">process_mobility_od_data()</a></code>
+
+        </dt>
+        <dd>Fuse four bilateral mobility sources into a connectivity structure</dd>
+
+        <dt>
+
           <code><a href="process_open_meteo_data.html">process_open_meteo_data()</a></code>
 
         </dt>
         <dd>Process Open-Meteo Climate Data from open-meteo-pipeline Repository</dd>
+
+        <dt>
+
+          <code><a href="download_EMDAT_data.html">download_EMDAT_data()</a></code>
+
+        </dt>
+        <dd>Download EM-DAT disaster events from the CRED GraphQL API</dd>
+
+        <dt>
+
+          <code><a href="download_IDMC_data.html">download_IDMC_data()</a></code>
+
+        </dt>
+        <dd>Download IDMC Internal Displacement Updates (IDU) from the HDX mirrors</dd>
+
+        <dt>
+
+          <code><a href="download_UN_WPP_data.html">download_UN_WPP_data()</a></code>
+
+        </dt>
+        <dd>Download UN World Population Prospects demographic indicators</dd>
+
+        <dt>
+
+          <code><a href="download_WB_data.html">download_WB_data()</a></code>
+
+        </dt>
+        <dd>Download World Bank indicators from the Indicators API</dd>
 
         <dt>
 
@@ -910,6 +952,13 @@
 
         </dt>
         <dd>Download 1km DEM Raster for Multiple Countries and Save to Files</dd>
+
+        <dt>
+
+          <code><a href="download_mobility_od_sources.html">download_mobility_od_sources()</a></code>
+
+        </dt>
+        <dd>Download the bilateral mobility sources used to build the fused OD structure</dd>
 
         <dt>
 
@@ -1052,6 +1101,13 @@
 
         </dt>
         <dd>Plot the model-implied mobility flux network</dd>
+
+        <dt>
+
+          <code><a href="plot_mobility_fused.html">plot_mobility_fused()</a></code>
+
+        </dt>
+        <dd>Publication figures for the fused overland OD connectivity model</dd>
 
         <dt>
 
@@ -1456,6 +1512,13 @@
 
         <dt>
 
+          <code><a href="get_travel_time_matrix.html">get_travel_time_matrix()</a></code>
+
+        </dt>
+        <dd>Build an overland least-cost travel-time matrix between countries</dd>
+
+        <dt>
+
           <code><a href="get_vaccine_effectiveness_data.html">get_vaccine_effectiveness_data()</a></code>
 
         </dt>
@@ -1481,6 +1544,20 @@
 
         </dt>
         <dd>Check Installed R and Python Dependencies for MOSAIC</dd>
+
+        <dt>
+
+          <code><a href="check_mosaic_data_freshness.html">check_mosaic_data_freshness()</a></code>
+
+        </dt>
+        <dd>Report the freshness of every MOSAIC data input and output</dd>
+
+        <dt>
+
+          <code><a href="check_mosaic_manual_inputs.html">check_mosaic_manual_inputs()</a></code>
+
+        </dt>
+        <dd>Report on the MOSAIC data sources that must be refreshed by hand</dd>
 
         <dt>
 
@@ -1840,6 +1917,20 @@
 
         <dt>
 
+          <code><a href="MOSAIC_E3_TAU_WEEKLY.html">MOSAIC_E3_TAU_WEEKLY</a></code>
+
+        </dt>
+        <dd>Per-country overland departure rates from the E3 border-throughput evidence</dd>
+
+        <dt>
+
+          <code><a href="MOSAIC_WB_INDICATORS.html">MOSAIC_WB_INDICATORS</a></code>
+
+        </dt>
+        <dd>World Bank indicators MOSAIC consumes</dd>
+
+        <dt>
+
           <code><a href="add_reproductive_numbers.html">add_reproductive_numbers()</a></code>
 
         </dt>
@@ -2155,6 +2246,20 @@
 
         <dt>
 
+          <code><a href="check_mosaic_data_freshness.html">check_mosaic_data_freshness()</a></code>
+
+        </dt>
+        <dd>Report the freshness of every MOSAIC data input and output</dd>
+
+        <dt>
+
+          <code><a href="check_mosaic_manual_inputs.html">check_mosaic_manual_inputs()</a></code>
+
+        </dt>
+        <dd>Report on the MOSAIC data sources that must be refreshed by hand</dd>
+
+        <dt>
+
           <code><a href="check_overdispersion.html">check_overdispersion()</a></code>
 
         </dt>
@@ -2309,6 +2414,34 @@
 
         <dt>
 
+          <code><a href="download_EMDAT_data.html">download_EMDAT_data()</a></code>
+
+        </dt>
+        <dd>Download EM-DAT disaster events from the CRED GraphQL API</dd>
+
+        <dt>
+
+          <code><a href="download_IDMC_data.html">download_IDMC_data()</a></code>
+
+        </dt>
+        <dd>Download IDMC Internal Displacement Updates (IDU) from the HDX mirrors</dd>
+
+        <dt>
+
+          <code><a href="download_UN_WPP_data.html">download_UN_WPP_data()</a></code>
+
+        </dt>
+        <dd>Download UN World Population Prospects demographic indicators</dd>
+
+        <dt>
+
+          <code><a href="download_WB_data.html">download_WB_data()</a></code>
+
+        </dt>
+        <dd>Download World Bank indicators from the Indicators API</dd>
+
+        <dt>
+
           <code><a href="download_africa_shapefile.html">download_africa_shapefile()</a></code>
 
         </dt>
@@ -2327,6 +2460,13 @@
 
         </dt>
         <dd>Download 1km DEM Raster for Multiple Countries and Save to Files</dd>
+
+        <dt>
+
+          <code><a href="download_mobility_od_sources.html">download_mobility_od_sources()</a></code>
+
+        </dt>
+        <dd>Download the bilateral mobility sources used to build the fused OD structure</dd>
 
         <dt>
 
@@ -2439,6 +2579,13 @@
 
         </dt>
         <dd>Fit Mobility Model Using Flight Data and Distance Matrices</dd>
+
+        <dt>
+
+          <code><a href="est_overland_tau_prior.html">est_overland_tau_prior()</a></code>
+
+        </dt>
+        <dd>Build a per-country overland departure-rate prior for MOSAIC calibration</dd>
 
         <dt>
 
@@ -2778,6 +2925,13 @@
 
         <dt>
 
+          <code><a href="get_travel_time_matrix.html">get_travel_time_matrix()</a></code>
+
+        </dt>
+        <dd>Build an overland least-cost travel-time matrix between countries</dd>
+
+        <dt>
+
           <code><a href="get_vaccine_effectiveness_data.html">get_vaccine_effectiveness_data()</a></code>
 
         </dt>
@@ -2901,6 +3055,13 @@
 
         </dt>
         <dd>ISO3 Country Codes for WHO AFRO Region Countries</dd>
+
+        <dt>
+
+          <code><a href="list_mosaic_data_steps.html">list_mosaic_data_steps()</a></code>
+
+        </dt>
+        <dd>List the steps <code><a href="../reference/update_mosaic_data.html">update_mosaic_data()</a></code> knows about</dd>
 
         <dt>
 
@@ -3174,6 +3335,13 @@
 
         </dt>
         <dd>Plot the model-implied mobility flux network</dd>
+
+        <dt>
+
+          <code><a href="plot_mobility_fused.html">plot_mobility_fused()</a></code>
+
+        </dt>
+        <dd>Publication figures for the fused overland OD connectivity model</dd>
 
         <dt>
 
@@ -3562,6 +3730,13 @@
 
         <dt>
 
+          <code><a href="process_mobility_od_data.html">process_mobility_od_data()</a></code>
+
+        </dt>
+        <dd>Fuse four bilateral mobility sources into a connectivity structure</dd>
+
+        <dt>
+
           <code><a href="process_open_meteo_data.html">process_open_meteo_data()</a></code>
 
         </dt>
@@ -3573,6 +3748,13 @@
 
         </dt>
         <dd>Gompertz Distribution Quantile Function</dd>
+
+        <dt>
+
+          <code><a href="rake_mobility_od_to_tau.html">rake_mobility_od_to_tau()</a></code>
+
+        </dt>
+        <dd>Rake the fused OD structure to per-country outbound departure margins</dd>
 
         <dt>
 
@@ -3734,6 +3916,13 @@
 
         </dt>
         <dd>MOSAIC ggplot2 Theme</dd>
+
+        <dt>
+
+          <code><a href="update_mosaic_data.html">update_mosaic_data()</a></code>
+
+        </dt>
+        <dd>Refresh every MOSAIC data input that can be refreshed automatically</dd>
 
         <dt>
 

@@ -161,7 +161,8 @@ mobility.
     │   ├── model/                   # transmission model I/O and LAUNCH.R
     │   ├── claude/                  # USE THIS for temporary files
     │   └── DESCRIPTION              # Package metadata
-    ├── MOSAIC-data/                 # Data repository (raw/ is READ-ONLY)
+    ├── MOSAIC-data/                 # Data repository (raw/ is hand-curated READ-ONLY,
+    │                               #   EXCEPT dated download_* snapshots - see root CLAUDE.md)
     ├── MOSAIC-docs/                 # Documentation website
     ├── laser-cholera/               # Former Python engine — READ-ONLY, historical reference only
     ├── ees-cholera-mapping/         # Web scraping tools (READ-ONLY)

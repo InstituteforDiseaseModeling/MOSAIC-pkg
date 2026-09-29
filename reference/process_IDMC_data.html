@@ -15,7 +15,7 @@ compile_suitability_data()."><meta property="og:image" content="https://institut
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.92.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,11 +71,15 @@ families can be joined onto the same ISO-week grid in
 
 
 <dt id="arg-source-dir">source_dir<a class="anchor" aria-label="anchor" href="#arg-source-dir"></a></dt>
-<dd><p>Optional directory of IDU event CSVs to read instead of
-<code>PATHS$DATA_IDMC_RAW</code> (e.g. a scratch directory of HDX downloads).
-All <code>*.csv</code> files in the directory are read and row-bound; duplicate
-event <code>id</code>s are dropped, so per-country mirrors and a global export
-can be mixed safely.</p></dd>
+<dd><p>Optional directory of IDU event CSVs to read. When
+<code>NULL</code> (default), the NEWEST <code>hdx_&lt;date&gt;/</code> snapshot directory
+under <code>PATHS$DATA_IDMC_RAW</code> is selected automatically (the
+convention written by <code><a href="download_IDMC_data.html">download_IDMC_data</a></code>); if no such
+snapshot exists, <code>PATHS$DATA_IDMC_RAW</code> itself is read, so a flat
+directory of CSVs still works. Pass an explicit path to reprocess an
+older snapshot. All <code>*.csv</code> files in the chosen directory are read
+and row-bound; duplicate event <code>id</code>s are dropped, so per-country
+mirrors and a global export can be mixed safely.</p></dd>
 
 
 <dt id="arg-panel-start">panel_start<a class="anchor" aria-label="anchor" href="#arg-panel-start"></a></dt>
@@ -127,13 +131,14 @@ Records missing a start date are dropped; a missing or earlier end date is
 set to the start date (single-day event).</p>
 <p><strong>Coverage caveat – read before modelling.</strong> IDU is a rolling
 near-real-time product and the accessible history depends on the route
-used: the HDX per-country mirrors begin ~2025, the API carries more. Zero
-cells before a country's first observed event therefore mean "not
-reported by this extract", not "no displacement occurred". Always check
-the per-country first-event dates printed by this function (and stored in
-the <code>coverage</code> attribute) before using the panel as a covariate or as
-a trigger denominator. This is a materially weaker coverage guarantee than
-EM-DAT's, which runs from 2000.</p>
+used. Most HDX per-country mirrors begin 2025-01-01, but coverage is
+NOT uniform – KEN reaches back to 2011, while several series cover only
+a few weeks. Zero cells before a country's first observed event therefore
+mean "not reported by this extract", not "no displacement occurred".
+Always check the per-country first-event dates printed by this function
+(and stored in the <code>coverage</code> attribute) before using the panel as a
+covariate or as a trigger denominator. This is a materially weaker
+coverage guarantee than EM-DAT's, which runs from 2000.</p>
 <p><strong>Collinearity caveat.</strong> <code>idmc_disaster_*</code> is largely
 flood/storm-driven and will correlate with <code>emdat_flood_*</code>; do not
 enter both into a feature set without checking. <code>idmc_conflict_*</code> is
@@ -146,23 +151,31 @@ the genuinely additional signal.</p>
 <p>IDU are <em>preliminary</em> estimates of new displacements, updated daily;
 the curated annual counterpart is the Global Internal Displacement
 Database (GIDD), which is too coarse for event-timing work. Two
-acquisition routes are supported by <code>source_dir</code>:</p><ul><li><p><strong>API</strong> (preferred, full history): the IDMC IDU API, most
-easily via the CRAN <span class="pkg">idmc</span> package
+acquisition routes exist:</p><ul><li><p><strong>HDX per-country mirrors</strong> (RECOMMENDED – open, no
+credentials, refreshed daily): <code>&lt;iso&gt;-idmc-idu-events</code> datasets
+on the Humanitarian Data Exchange. Use
+<code><a href="download_IDMC_data.html">download_IDMC_data</a></code>, which resolves the current CSV
+resource URLs from the HDX CKAN API and archives a dated snapshot.
+<strong>38 of the 40 MOSAIC countries have a dataset; ERI and TGO do
+not.</strong> Measured 2026-09-17: all 38 refreshed that day.</p></li>
+<li><p><strong>IDMC external API</strong> via the CRAN <span class="pkg">idmc</span> package
 (<code>idmc::idmc_get_data()</code>), which reads an endpoint URL from the
-<code>IDMC_API</code> environment variable. The URL embeds a client id
-issued by IDMC on request. Save the returned frame as a CSV in
-<code>PATHS$DATA_IDMC_RAW</code>.</p></li>
-<li><p><strong>HDX per-country mirrors</strong> (open, no credentials, but only
-~2025 onward): <code>&lt;iso&gt;-idmc-idu-events</code> datasets on the
-Humanitarian Data Exchange. 26 of the 27 MOSAIC national countries
-have one. Useful for standing the pipeline up before a key arrives.</p></li>
+<code>IDMC_API</code> environment variable. This route is <strong>credential
+gated</strong> – unauthenticated calls to
+<code>helix-tools-api.idmcdb.org/external-api/idus/all/</code> return
+<code>HTTP 403 "Client is not registered."</code> – and the client id must
+be requested from IDMC. It buys pre-2025 history; it is not otherwise
+needed. Note <code>idmc_get_data()</code> parses a
+<code>standard_popup_text</code> column that the HDX CSVs do not carry, so
+it cannot be used to read HDX downloads.</p></li>
 </ul><p>Note the URL advertised on the HDX resource page
-(<code>backend.idmcdb.org</code>) no longer resolves; the live API host is
-<code>helix-tools-api.idmcdb.org</code>.</p>
+(<code>backend.idmcdb.org</code>) no longer resolves (DNS failure confirmed
+2026-09-17); the live API host is <code>helix-tools-api.idmcdb.org</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="process_EMDAT_data.html">process_EMDAT_data</a></code> for the sibling hazard panels.</p></div>
+    <div class="dont-index"><p><code><a href="download_IDMC_data.html">download_IDMC_data</a></code> to fetch the source CSVs from
+HDX, <code><a href="process_EMDAT_data.html">process_EMDAT_data</a></code> for the sibling hazard panels.</p></div>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -1,7 +1,8 @@
 # Generate Graduated Uncertainty Colors from a Base Color
 
 Produces progressively lighter/desaturated variants of the base color
-for layered credible interval ribbons. The standard levels are 50\\
+for layered credible interval ribbons. The standard levels are 50%, 75%,
+95%.
 
 ## Usage
 

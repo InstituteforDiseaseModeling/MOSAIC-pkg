@@ -101,11 +101,12 @@ Predictors computed inline (the caller need not supply them):
   differences.
 
 The active fraction is very low (~74 weeks out of ~35k country-weeks,
-~0.2\\ concentrates predicted probability on the historically
-cyclone-exposed coastal countries (MOZ, MWI, ZWE, MDG-adjacent belt) and
-keeps landlocked / non-cyclone countries near zero. A region-conditional
-wind smooth (`s(wind_speed_10m_max, by = region_f)`) lets Southern
-Africa (the cyclone belt) map wind to risk more steeply than the other
+~0.2%). The country random effect `s(iso_code_f, bs = "re")`
+concentrates predicted probability on the historically cyclone-exposed
+coastal countries (MOZ, MWI, ZWE, MDG-adjacent belt) and keeps
+landlocked / non-cyclone countries near zero. A region-conditional wind
+smooth (`s(wind_speed_10m_max, by = region_f)`) lets Southern Africa
+(the cyclone belt) map wind to risk more steeply than the other
 subregions.
 
 Sentinel handling mirrors the flood imputer: any NA prediction (lag

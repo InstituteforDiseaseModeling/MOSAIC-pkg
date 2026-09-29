@@ -44,14 +44,15 @@ add_reproductive_numbers(
   Logical. When `TRUE`, build a proper posterior credible interval by
   **re-simulating** the saved posterior ensemble
   (`2_calibration/ensemble_candidate.rds`) and computing R_eff per
-  member, then weighted quantiles (median + 95\\ route incidence, stock
-  and decay-rate channels that the persisted trajectory artifact does
-  not retain at a daily grid. A faithfulness gate confirms the re-sim
-  reproduces the saved `cases_array` before any CI is written. When
-  `FALSE` (default) the cheap point-estimate path is used (renewal on
-  the weighted-median route incidence from `trajectories_ensemble.rds`;
-  CI columns are populated only if the artifact carries
-  daily-consecutive per-member lines, otherwise NA).
+  member, then weighted quantiles (median + 95% interval). This captures
+  the daily route incidence, stock and decay-rate channels that the
+  persisted trajectory artifact does not retain at a daily grid. A
+  faithfulness gate confirms the re-sim reproduces the saved
+  `cases_array` before any CI is written. When `FALSE` (default) the
+  cheap point-estimate path is used (renewal on the weighted-median
+  route incidence from `trajectories_ensemble.rds`; CI columns are
+  populated only if the artifact carries daily-consecutive per-member
+  lines, otherwise NA).
 
 - burn_in_days:
 

@@ -1,5 +1,153 @@
 # Changelog
 
+## MOSAIC 0.93.0
+
+### New: automated data refresh and the overland mobility OD pipeline
+
+- [`update_mosaic_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_mosaic_data.md)
+  /
+  [`list_mosaic_data_steps()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/list_mosaic_data_steps.md)
+  run a registry of every data build that can be refreshed automatically
+  (CLI: `inst/scripts/update_mosaic_data.R`);
+  [`check_mosaic_data_freshness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_mosaic_data_freshness.md)
+  and
+  [`check_mosaic_manual_inputs()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_mosaic_manual_inputs.md)
+  report what is stale and what must be refreshed by hand.
+- Dated-snapshot downloaders
+  [`download_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_EMDAT_data.md),
+  [`download_IDMC_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_IDMC_data.md),
+  [`download_UN_WPP_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_UN_WPP_data.md),
+  [`download_WB_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_WB_data.md)
+  and
+  [`download_mobility_od_sources()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_mobility_od_sources.md)
+  write atomic, never-overwritten snapshots into
+  `MOSAIC-data/raw/<source>/` with a provenance row, per the root
+  CLAUDE.md exception for automated snapshots.
+- Overland mobility:
+  [`get_travel_time_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_travel_time_matrix.md)
+  builds a least-cost travel-time matrix;
+  [`process_mobility_od_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_mobility_od_data.md)
+  fuses four bilateral sources into one OD structure;
+  [`rake_mobility_od_to_tau()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/rake_mobility_od_to_tau.md)
+  rakes it to per-country departure margins;
+  [`est_overland_tau_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_overland_tau_prior.md)
+  turns that into a per-country overland departure-rate prior;
+  [`plot_mobility_fused()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility_fused.md)
+  draws the figures.
+- The shipped `config_default` / `priors_default` are **not** rebuilt in
+  this release. A rebuild that sources `tau_i` from
+  [`est_overland_tau_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_overland_tau_prior.md)
+  is held back until it is reconciled with the CFR v2.1 schema change.
+
+### Fixed: hand-escaped percent signs truncated manual pages
+
+Under Roxygen markdown a hand-written `\%` renders as `\\%`, which Rd
+reads as a comment start, so the rest of the line was silently dropped
+from ~20 manual pages (e.g. the 95% CIs in
+[`get_rho_care_seeking_params()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_rho_care_seeking_params.md)).
+Now plain `%` throughout; `test-mobility-od.R` guards against
+reintroduction.
+
+### `update_mosaic_data()` builds data and no longer fits models
+
+`est_suitability` (group 4B) is **removed from the registry**. Fitting
+the suitability LSTM is model fitting, not data building, and it does
+not belong in the data-update driver: it needs the TensorFlow/keras
+Python environment, budgets ~6 GB per seed worker, and runs for hours,
+so it needs its own schedule and its own failure handling. Call
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+directly, or run it through the calibration workflow.
+
+`compile_suitability_data` (group 4A) **stays, and is now in the default
+plan.** It is a data compile — it assembles the LSTM training panel from
+its 13 upstream producers (climate, ENSO, demographics, the multi-source
+surveillance combine, mobility, epidemic peaks, EM-DAT, all four World
+Bank indicators, WASH, elevation) — so an ordinary run now keeps the
+suitability *data* in step with its inputs. Previously it was held back
+along with the fit and could silently fall behind.
+
+With no model fit left to hold back, `include_suitability` is
+**removed** from both
+[`update_mosaic_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_mosaic_data.md)
+and
+[`list_mosaic_data_steps()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/list_mosaic_data_steps.md),
+the `--suitability` CLI flag is removed from
+`inst/scripts/update_mosaic_data.R`, and `.mosaic_select_steps()` loses
+its fourth argument. Nothing is filtered from the default plan any more:
+every one of the 54 registry steps is a data build. `steps=` / `skip=`
+are unchanged and still accept `"4"`, `"4A"` or the step id.
+
+That gate had already failed once — it compared `s$group` to `"4"` when
+the ids are `"4A"`/`"4B"`, matched nothing, and left the multi-hour fit
+in the *default* plan (fixed in v0.90.6, in two sibling sites). Deleting
+the step retires the whole class of failure rather than the instance.
+`test-update_mosaic_data.R` now asserts `est_suitability` appears in no
+step id **and in no step body**, so it cannot be reintroduced by either
+route.
+
+### Fixed: the CLI wrapper silently overrode the `date_stop` default
+
+`inst/scripts/update_mosaic_data.R` passed a bare
+[`Sys.Date()`](https://rdrr.io/r/base/Sys.time.html) whenever
+`--date-stop` was omitted, defeating
+[`update_mosaic_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_mosaic_data.md)’s
+own `Sys.Date() + 540` default. That is precisely the shortfall the +540
+default exists to prevent: it produces a vaccination matrix 139 days
+shorter than the psi forecast horizon, and `make_config_default.R` then
+fails validation with
+`nu_1_jt must be a matrix with ... columns equal to the daily sequence from date_start to date_stop`
+— an error that names the wrong culprit. The wrapper now matches the
+function default, and `--help` no longer advertises “default: today”.
+
+### `alpha_1` is now PINNED by default
+
+`sample_alpha_1` flips `TRUE` -\> `FALSE` in both places that carry the
+default: `mosaic_control_defaults()$sampling` (`R/run_MOSAIC.R`) and
+`default_sample_args` (`R/sample_parameters.R`). A 40-country run now
+draws 640 location-specific values instead of 680 — exactly the 40
+per-location `alpha_1` — and `alpha_1` comes through as the shipped
+`config_default$alpha_1`, seed-invariant. `sample_alpha_1 = TRUE` still
+works as an explicit override for a deliberate mixing-exponent
+experiment.
+
+**Why.** `alpha_1` is collinear with `log(beta_j0_tot)` in the endemic
+regime (`beta * X^alpha_1`) and with any coupling multiplier at
+invasion, where the bracket collapses to the imported term and
+`log Lambda = log beta_j + alpha_1(log c + log M_j) - alpha_2 log N_j`.
+The 250,000-draw continental posterior (`stage3_continental_b21_a1loc`)
+moved `alpha_1` by a median **0.057 prior SD** against a random-subset
+null of **0.146** — it was learning nothing while costing 40 free
+dimensions and destroying cross-country comparability of the
+`beta_j0_tot` posteriors. The disease-modeler memory
+`reference_alpha_mixing_exponents.md` recommended pinning both alphas in
+the 40-country spatial fit; production had been doing the opposite
+because only one of the two default sites was ever consulted. `alpha_2`
+was already pinned and is unchanged.
+
+**The value 0.27 is deliberately unchanged.** Pinning is about
+*freedom*, not level. MOSAIC’s patches are whole countries —
+weakly-coupled aggregates of many sub-populations — so strong sub-linear
+mixing is the intended national-scale behaviour. The published 0.90–0.98
+values (Xia 2004; Giles 2020; `tsiR`) come from community- and
+city-scale measles models, which are far closer to well-mixed and are
+not the right comparison class.
+
+**Known consequence, documented not fixed.** Because the exponent
+applies to the pooled bracket, `alpha_1 < 1` damps imports when local
+prevalence dominates (~3.7x at 0.27) but *amplifies* them when the
+bracket is the imported term alone, which is the invasion regime:
+`x^0.27 > x` for `x < 1`, so an imported pressure of 0.019/day is
+treated as 0.342 (18x). Invasion probability therefore does not scale
+linearly with travel volume. This is a property of the FOI’s structure,
+not of pinning, and pinning does not change it — but it now holds at a
+fixed exponent rather than a sampled one. See
+`MOSAIC-notes/2026-09-18 spatial FOI coupling research.md`.
+
+`test-alpha1-pinned-default.R` pins the default at both sites and
+asserts they agree, so the two cannot drift apart again; it also
+re-checks the engine invariant `alpha_1 in (0, 1]` for the shipped
+scalar-or-length-nL form.
+
 ## MOSAIC 0.92.3
 
 ### psi_evolve closed out: the correctness fixes ship, the experimental architectures do not
@@ -107,11 +255,15 @@ infectiousness terms, so no initial-condition mask is needed.
 
 Tests check against the engine rather than against the code’s own
 algebra: - R_hum and R_env recover the engine’s true instantaneous R in
-single-route linear runs, with median ratios 0.99 and 0.94. - I and W
-rebuilt from incidence track the simulated stocks and align best at zero
-lag. - Truncation invariance, and a brute-force check of the frozen-at-t
-definition. - The re-simulation path is exercised end to end through the
-real engine.
+single-route linear runs (median ratios 0.99 and 0.94 on the test seed).
+The 0.94 is not a bias: that seed’s realized symptomatic share was 0.21
+against sigma = 0.24, which a mean-field reconstruction cannot see.
+Across seeds, R_env against a mortality-aware reference built from the
+engine’s reservoir has a median ratio of about 1.00 (range 0.92-1.05). -
+I and W rebuilt from incidence track the simulated stocks and align best
+at zero lag. - Truncation invariance, and a brute-force check of the
+frozen-at-t definition. - The re-simulation path is exercised end to end
+through the real engine.
 
 On the post-v0.89.0 MOZ medoid, the 14-day-mean R_eff has an
 interquartile range of 0.54-1.71 and a p95 of 3.1; the old estimator

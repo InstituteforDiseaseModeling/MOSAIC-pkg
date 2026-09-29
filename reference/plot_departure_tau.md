@@ -3,8 +3,8 @@
 Two-panel figure for the `"spatial"` group of
 [`render_MOSAIC_figures`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md):
 (left, A) a forest plot of the daily departure probability \\\tau_i\\
-per location, with optional 95\\ intervals; (right, B) the implied total
-daily travelers leaving each origin, \\N_i \tau_i\\.
+per location, with optional 95% credible intervals; (right, B) the
+implied total daily travelers leaving each origin, \\N_i \tau_i\\.
 
 ## Usage
 

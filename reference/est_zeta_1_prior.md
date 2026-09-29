@@ -111,8 +111,8 @@ apply the duration multiplier.
 **Relation to documented priors.** Earlier MOSAIC-docs narrative states
 `zeta_1 ~ Uniform(10^4, 10^8)`. That range derives from the Frame-B
 calibration rescaling and is superseded by this lognormal
-literature-derived prior. The new prior's 95\\ well above the stale
-Uniform upper bound.
+literature-derived prior. The new prior's 95% CI extends to ~10^13, well
+above the stale Uniform upper bound.
 
 Primary source notes are stored in
 `claude/zeta_priors_update/zeta_sources/` (14 PDFs + 32 source notes).

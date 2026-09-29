@@ -68,8 +68,8 @@ Epidemic peaks are identified using the following methodology:
 
 - Local maxima detection with 10-day comparison windows
 
-- Prominence-based filtering (minimum 8\\ for most countries;
-  country-specific overrides below)
+- Prominence-based filtering (minimum 8% of maximum smoothed value for
+  most countries; country-specific overrides below)
 
 - Minimum peak height threshold of 3 smoothed cases (default)
 
@@ -79,11 +79,11 @@ Epidemic peaks are identified using the following methodology:
 
 Country-specific adjustments are applied for:
 
-- Niger (NER): Lower prominence threshold (1.5\\
+- Niger (NER): Lower prominence threshold (1.5%) for gradual peaks
 
-- Cameroon (CMR): Adjusted threshold (4\\
+- Cameroon (CMR): Adjusted threshold (4%) for plateau-shaped peaks
 
-- Ethiopia (ETH): Lower threshold (3\\
+- Ethiopia (ETH): Lower threshold (3%) for multiple outbreaks
 
 Manual corrections have been applied for known issues including:
 

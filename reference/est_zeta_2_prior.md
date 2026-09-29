@@ -98,7 +98,7 @@ asymptomatic infection is `zeta_2 / gamma_2`.
 **Relation to documented priors.** Earlier MOSAIC-docs narrative states
 `zeta_2 ~ Uniform(0.01, 10^3)`. That range derives from the Frame-B
 calibration rescaling and is superseded by this lognormal
-literature-derived prior, whose 95\\
+literature-derived prior, whose 95% CI extends to ~10^7.
 
 ## References
 

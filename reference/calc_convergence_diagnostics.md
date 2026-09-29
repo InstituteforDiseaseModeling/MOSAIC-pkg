@@ -119,17 +119,13 @@ calc_convergence_diagnostics(
 
 - is_diagnostics:
 
-  Optional named list with elements `best` and `all`, each as returned
-  by
-  [`calc_is_diagnostics`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_is_diagnostics.md).
-  These are the EXACT (untruncated) importance-sampling diagnostics.
-  They are reported alongside `ESS_B` but are deliberately NOT part of
-  the pass/fail gate, because `ESS_B` is computed on truncated weights
-  and cannot fall below a floor set by the truncation alone.
+  Optional list of pre-computed diagnostics with elements `best` and
+  `all`, supplied instead of recomputing them from the draws. `NULL`
+  (default) computes them internally. (default TRUE)
 
 - verbose:
 
-  Logical indicating whether to print diagnostic messages (default TRUE)
+  Logical indicating whether to print diagnostic messages
 
 ## Value
 

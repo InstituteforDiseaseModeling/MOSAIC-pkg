@@ -5,11 +5,12 @@ Renders the out-of-sample forecast from a
 predictions artifact for one metric, one panel per cutoff (forecast
 origin), restricted to the assessed horizon (default \\\le 5\\ months).
 The two posterior ensembles (`ensemble`, `ensemble_opt`) are drawn as
-"hero" series with 50/95\\ configurations (`best`, `medoid`) are drawn
-as thin reference lines. Held-out observations are overlaid as points
-and the forecast origin is marked with a labelled dashed rule. Each
-panel is annotated with the cumulative \\\le\\max-horizon skill (R\\^2\\
-correlation + WIS) of the ensembles, computed via
+"hero" series with 50/95% prediction-interval ribbons; the two point
+configurations (`best`, `medoid`) are drawn as thin reference lines.
+Held-out observations are overlaid as points and the forecast origin is
+marked with a labelled dashed rule. Each panel is annotated with the
+cumulative \\\le\\max-horizon skill (R\\^2\\ correlation + WIS) of the
+ensembles, computed via
 [`evaluate_rolling_cv`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_rolling_cv.md).
 
 ## Usage
@@ -61,7 +62,8 @@ plot_rolling_cv(
 
 - models_ribbon:
 
-  Models drawn with 50/95\\ (default `c("ensemble", "ensemble_opt")`).
+  Models drawn with 50/95% PI ribbons + median line (default
+  `c("ensemble", "ensemble_opt")`).
 
 - models_line:
 

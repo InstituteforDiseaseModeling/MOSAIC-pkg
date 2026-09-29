@@ -3,10 +3,11 @@
 Reads a
 [`run_rolling_cv`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
 predictions artifact and computes out-of-sample forecast skill: per-cell
-metrics (R2 correlation & SSE, bias ratio, 50/95\\ horizons, plus
-MAE-skill and WIS-skill versus seasonal-climatology and persistence
-baselines, aggregated across cutoffs and countries with bootstrap CIs
-(suppressed at small cell counts).
+metrics (R2 correlation & SSE, bias ratio, 50/95% PI coverage, WIS) for
+the in-sample fit and for cumulative OOS horizons, plus MAE-skill and
+WIS-skill versus seasonal-climatology and persistence baselines,
+aggregated across cutoffs and countries with bootstrap CIs (suppressed
+at small cell counts).
 
 ## Usage
 
@@ -127,11 +128,11 @@ baseline and **requires \\\ge 2\\ years of in-sample history**; with
 less, the seasonal baseline (and its skill) is `NA` (no grand-mean
 fallback). `"persistence"` (trailing 4-point mean carried forward) and
 `"persistence_last"` (the single last observed value) are secondary
-nulls. Each baseline is also given 50/95\\ quantiles of its in-sample
-residuals, so a genuine **WIS-skill** exists: \\1 -
-WIS\_{model}/WIS\_{baseline}\\. `mae_skill` is the analogous MAE ratio.
-Positive = model beats the baseline; `NA` when the baseline (or its
-interval) cannot be formed.
+nulls. Each baseline is also given 50/95% predictive intervals from
+empirical quantiles of its in-sample residuals, so a genuine
+**WIS-skill** exists: \\1 - WIS\_{model}/WIS\_{baseline}\\. `mae_skill`
+is the analogous MAE ratio. Positive = model beats the baseline; `NA`
+when the baseline (or its interval) cannot be formed.
 
 **Weight-ESS gate.** If the predictions carry an `ess` column (the
 cutoff calibration's importance-weight ESS, constant per cutoff), each

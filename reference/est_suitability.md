@@ -212,11 +212,12 @@ collapsed out-of-sample forecasts. Defaults are pinned to the B4
 fixture; override via `arch_control`.
 
 *Honest framing.* lstm_v2 converts a structurally-collapsed flat psi
-(Pearson ~0.09, ~3\\ directional signal (median cross-country Pearson
-~0.22, but a wide per-cell range with a large anti-correlated minority –
-psi can be worse than climatology for some countries). It strictly
-dominates the incumbent on shape; it is NOT a decision-grade forecaster.
-psi reaches the downstream simulation engine through TWO channels – a
+(Pearson ~0.09, ~3% of observed amplitude) into a weak-but-real,
+better-phased directional signal (median cross-country Pearson ~0.22,
+but a wide per-cell range with a large anti-correlated minority – psi
+can be worse than climatology for some countries). It strictly dominates
+the incumbent on shape; it is NOT a decision-grade forecaster. psi
+reaches the downstream simulation engine through TWO channels – a
 fractional deviation `(psi - psi_bar)/psi_bar` (timing/shape) and the
 absolute level (environmental-reservoir decay) – so the response anchor
 and `bias_correct` can move outbreak magnitude, not just timing. Report
