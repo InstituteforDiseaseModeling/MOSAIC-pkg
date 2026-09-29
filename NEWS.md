@@ -1,3 +1,7 @@
+# MOSAIC 0.93.2
+
+- The `calc_Reff()` kernel caveat no longer hand-escapes its percent signs, which main's roxygen guard (`test-mobility-od.R`) rejects.
+
 # MOSAIC 0.93.1
 
 ## Post-merge review of the route-decomposed R_eff

@@ -90,7 +90,7 @@
 #' is negligible, but at high rates it overstates the symptomatic dwell: with
 #' \code{config_default} rates the human kernel mean is 9.1 d at mu = 0,
 #' 8.0 d at 0.017/day and 6.5 d at 0.058/day. Measured on engine runs at those
-#' two rates, R_env reads 2.5\% and 6\% low and R_hum 7-24\% low (median).
+#' two rates, R_env reads 2.5% and 6% low and R_hum 7-24% low (median).
 #'
 #' @param iota,gamma_1,gamma_2 Positive scalar daily rates.
 #' @param sigma Scalar in \[0, 1\], symptomatic proportion.
