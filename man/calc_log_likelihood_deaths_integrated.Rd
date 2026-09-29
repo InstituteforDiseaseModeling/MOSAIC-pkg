@@ -42,7 +42,7 @@ calc_log_likelihood_deaths_integrated(
 
 \item{week_offset}{Optional integer, length 1 or one per location, 0-6 days from Monday for the reporting-week boundary; detected from \code{obs_deaths} when \code{NULL}.}
 
-\item{years}{Optional integer vector of the years that carry deviations (default: every year of \code{onset_dates}); years without scored weeks keep their prior.}
+\item{years}{Optional integer vector of the years that carry deviations (default: every year of \code{onset_dates}); years without scored weeks keep their prior. Days before the first year or after the last take the nearest year's level.}
 }
 \value{
 A list with \code{ll} (marginal log-likelihood per location),
@@ -58,14 +58,16 @@ fatality ratio (CFR) integrated out analytically. Given a path, expected
 reported deaths on each day are the CFR times a known exposure, so the CFR's
 level can be solved for per path rather than sampled. The CFR is modelled as
 the time-varying prior \code{mu_jt} shifted on the logit scale by a
-location-level offset and a smooth deviation built from one value per
-calendar year:
+location-level offset and one level per calendar year:
 \deqn{\mathrm{logit}\,\mu_{jt} = \mathrm{logit}\,\mu^{0}_{jt} + a_j +
   \sum_y B_y(t)\,\delta_{j,y},\qquad a_j \sim N(0, s_j^2),\quad
   \delta_{j,y} \sim N(0, \sigma_y^2),}
-where \eqn{B_y(t)} interpolates linearly between 1 July anchors and is held
-flat before the first and after the last -- the rule \code{make_mu_jt()} uses
-for \eqn{\mu^0} -- so the CFR has no step at a year boundary.
+where \eqn{B_y(t)} is 1 inside calendar year \eqn{y} and blends linearly into
+the next year over the 60 days centred on each 1 January, so the CFR has no
+step at a year boundary. Each year's deviation is a LEVEL for that year: a
+year observed only in part is fitted to the months observed and applied
+unchanged to the rest of the year (an interpolated basis would extrapolate
+the within-year trend past the data instead).
 
 Deaths are aggregated to reporting weeks and scored with a quasi-Poisson
 likelihood: the Poisson log-likelihood divided by a per-location dispersion

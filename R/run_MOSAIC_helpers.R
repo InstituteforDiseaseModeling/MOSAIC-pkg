@@ -1374,8 +1374,10 @@
 #'   eps-floored daily negative binomial on one realisation. v0.97.0 changes that
 #'   score from a negative binomial to quasi-Poisson with a per-location
 #'   dispersion and an additive background, smooths the year deviations, scores
-#'   edge weeks and makes the deaths confidence weights mass-preserving.
-.mosaic_likelihood_impl_version <- function() "R/v0.97.0+deaths_quasipoisson"
+#'   edge weeks and makes the deaths confidence weights mass-preserving. v0.97.2
+#'   makes the year deviations yearly levels (blended at each 1 January)
+#'   instead of an interpolated curve.
+.mosaic_likelihood_impl_version <- function() "R/v0.97.2+deaths_yearlevel"
 
 #' Likelihood-Value Provenance Descriptor
 #'

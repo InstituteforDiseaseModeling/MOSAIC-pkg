@@ -6,14 +6,16 @@
 #' reported deaths on each day are the CFR times a known exposure, so the CFR's
 #' level can be solved for per path rather than sampled. The CFR is modelled as
 #' the time-varying prior \code{mu_jt} shifted on the logit scale by a
-#' location-level offset and a smooth deviation built from one value per
-#' calendar year:
+#' location-level offset and one level per calendar year:
 #' \deqn{\mathrm{logit}\,\mu_{jt} = \mathrm{logit}\,\mu^{0}_{jt} + a_j +
 #'   \sum_y B_y(t)\,\delta_{j,y},\qquad a_j \sim N(0, s_j^2),\quad
 #'   \delta_{j,y} \sim N(0, \sigma_y^2),}
-#' where \eqn{B_y(t)} interpolates linearly between 1 July anchors and is held
-#' flat before the first and after the last -- the rule \code{make_mu_jt()} uses
-#' for \eqn{\mu^0} -- so the CFR has no step at a year boundary.
+#' where \eqn{B_y(t)} is 1 inside calendar year \eqn{y} and blends linearly into
+#' the next year over the 60 days centred on each 1 January, so the CFR has no
+#' step at a year boundary. Each year's deviation is a LEVEL for that year: a
+#' year observed only in part is fitted to the months observed and applied
+#' unchanged to the rest of the year (an interpolated basis would extrapolate
+#' the within-year trend past the data instead).
 #'
 #' Deaths are aggregated to reporting weeks and scored with a quasi-Poisson
 #' likelihood: the Poisson log-likelihood divided by a per-location dispersion
@@ -36,7 +38,7 @@
 #' @param background_rel Numeric scalar >= 0: the additive background on each week's expected deaths, as a fraction of the location's mean scored weekly deaths (floored at 1e-4).
 #' @param weights Optional matrix of per-day scoring weights (0 or \code{NA} = not scored); defaults to 1 wherever \code{obs_deaths} is finite. Used as given (not renormalised).
 #' @param week_offset Optional integer, length 1 or one per location, 0-6 days from Monday for the reporting-week boundary; detected from \code{obs_deaths} when \code{NULL}.
-#' @param years Optional integer vector of the years that carry deviations (default: every year of \code{onset_dates}); years without scored weeks keep their prior.
+#' @param years Optional integer vector of the years that carry deviations (default: every year of \code{onset_dates}); years without scored weeks keep their prior. Days before the first year or after the last take the nearest year's level.
 #'
 #' @details
 #' A reporting week is scored when every one of its days inside the data is
@@ -96,7 +98,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 
 # Precompute everything that depends only on the observations: the weekly
 # blocks, weekly observed totals and weights, the per-location dispersion and
-# background, the year anchors, and the priors.
+# background, the years that carry deviations, and the priors.
 #
 # phi = NULL estimates each location's dispersion from the observed deaths and
 # cases (.d7_dispersion); a number (or one per location) uses it as given.
@@ -169,8 +171,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
           locs[[j]] <- list(day = which(sel), week = wk[sel], D = D_w, W = W_w,
                             sd_shift = sd_shift[j], phi = phi_j, bg = bg_j)
      }
-     list(locs = locs, years = years, anchors = as.numeric(as.Date(paste0(years, "-07-01"))),
-          sd_year = sd_year, nL = nL, nT = nT)
+     list(locs = locs, years = years, sd_year = sd_year, nL = nL, nT = nT)
 }
 
 # Quasi-Poisson dispersion of weekly observed deaths around a year-specific
@@ -190,23 +191,36 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 }
 
 # Year-deviation basis: for each day (numeric date), the weight on each year's
-# deviation -- linear between consecutive 1 July anchors, flat before the first
-# and after the last. [n_days x n_years]; every row sums to 1.
-.d7_basis <- function(day_num, anchors) {
-     n <- length(day_num); Y <- length(anchors)
+# deviation. A day inside calendar year y has weight 1 on y, except in the
+# `blend` days either side of a 1 January, where the weight moves linearly from
+# the old year to the new one (0.5 / 0.5 on 1 January). Days before the first
+# year or after the last take the nearest year's level. [n_days x n_years];
+# every row sums to 1.
+.d7_basis <- function(day_num, years, blend = 30) {
+     n <- length(day_num); Y <- length(years)
      B <- matrix(0, n, Y)
      if (Y == 1L) { B[, 1L] <- 1; return(B) }
-     pos <- findInterval(day_num, anchors)
-     i1 <- pmax(pos, 1L); i2 <- pmin(pos + 1L, Y)
-     w2 <- ifelse(i1 == i2, 0, (day_num - anchors[i1]) / (anchors[i2] - anchors[i1]))
-     B[cbind(seq_len(n), i1)] <- 1 - w2
-     B[cbind(seq_len(n), i2)] <- B[cbind(seq_len(n), i2)] + w2
+     yr <- as.integer(format(as.Date(day_num, origin = "1970-01-01"), "%Y"))
+     # A year between listed years that is not itself listed takes the earlier one.
+     i <- pmin(pmax(findInterval(yr, years), 1L), Y)
+     listed <- years[i] == yr
+     jan_this <- as.numeric(as.Date(paste0(yr, "-01-01")))
+     jan_next <- as.numeric(as.Date(paste0(yr + 1L, "-01-01")))
+     j <- i; w <- numeric(n)
+     # Blend only between consecutive calendar years that both carry a deviation.
+     nxt <- pmin(i + 1L, Y); prv <- pmax(i - 1L, 1L)
+     up <- listed & i < Y & years[nxt] == yr + 1L & day_num >= jan_next - blend
+     w[up] <- (day_num[up] - (jan_next[up] - blend)) / (2 * blend); j[up] <- i[up] + 1L
+     dn <- listed & i > 1L & years[prv] == yr - 1L & day_num < jan_this + blend
+     w[dn] <- ((jan_this[dn] + blend) - day_num[dn]) / (2 * blend); j[dn] <- i[dn] - 1L
+     B[cbind(seq_len(n), i)] <- 1 - w
+     B[cbind(seq_len(n), j)] <- B[cbind(seq_len(n), j)] + w
      B
 }
 
 .d7_fit_all <- function(setup, exposure, base_logit, onset_day) {
      Y <- length(setup$years)
-     B_all <- .d7_basis(onset_day, setup$anchors)
+     B_all <- .d7_basis(onset_day, setup$years)
      theta <- matrix(0, setup$nL, 1L + Y,
                      dimnames = list(NULL, c("a", paste0("y", setup$years))))
      theta_sd <- theta
@@ -452,11 +466,12 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 # onsets they can be drawn after the simulation. For each location: fit the CFR
 # offsets to the observed deaths given this path (the quasi-Poisson fit, whose
 # level reproduces the observed deaths totals), draw (a, delta) from the Laplace
-# posterior, build the daily CFR with the same smooth year basis, and draw fatal
-# onsets and reported deaths with the alignment the engine uses. Years without
-# scored weeks -- including forecast years past the last observation -- carry the
-# location offset a with a deviation drawn from its prior, so a forecast
-# inherits the calibrated level and eases back to it over half a year.
+# posterior, build the daily CFR with the same year basis, and draw fatal onsets
+# and reported deaths with the alignment the engine uses. The rest of a year
+# observed only in part keeps that year's fitted level. Years without scored
+# weeks -- forecast years past the last observation -- carry the location offset
+# a with a deviation drawn from its prior, so a forecast inherits the
+# calibrated level.
 #
 # A location whose posterior-mode CFR would need a per-onset fatality
 # probability >= 1 (a path that produces far too few onsets for the observed
@@ -477,7 +492,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
      conv <- params$rho / (params$rho_deaths * params$chi_epidemic)
      lc <- as.integer(params$delta_reporting_cases)
      # The CFR that applies to onsets in column k is the one at day k.
-     Bk <- cbind(1, .d7_basis(as.numeric(di$dates_full), di$setup$anchors))
+     Bk <- cbind(1, .d7_basis(as.numeric(di$dates_full), di$setup$years))
      yr_f <- factor(di$year_full, levels = di$years)
 
      rng_state <- .sim_rng_begin(seed)
@@ -528,13 +543,13 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 #
 # The CFR is integrated out, not sampled, so a config sampled after calibration
 # (config_medoid.json) still carries the prior mu_jt. This shifts logit mu_jt by
-# a smooth offset -- one value per calendar year, interpolated between 1 July
-# anchors like the integration's year deviations -- solved so that each year's
-# mean daily CFR equals that year's `cfr_median` in `cfr_posterior`
+# one offset per calendar year, blended across each 1 January with the same basis
+# as the integration's year deviations, solved so that each year's mean daily
+# CFR equals that year's `cfr_median` in `cfr_posterior`
 # (calc_model_ensemble()$cfr_posterior). The prior's within-year shape is kept,
 # the CFR has no step at a year boundary, and a re-simulation of the returned
 # config draws deaths at the posterior CFR in the engine. Years the posterior
-# does not cover keep a zero offset at their anchor.
+# does not cover keep a zero offset.
 #
 # The returned config is always in the v0.96.0 form. A legacy config's constant
 # CFR_target is the prior it starts from, and its retired mortality fields are
@@ -551,7 +566,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
      mu <- .mosaic_config_mu_jt(config, nL, nT)
      yr <- as.integer(format(dates, "%Y"))
      years <- sort(unique(yr))
-     B <- .d7_basis(as.numeric(dates), as.numeric(as.Date(paste0(years, "-07-01"))))
+     B <- .d7_basis(as.numeric(dates), years)
      yr_f <- factor(yr, levels = years)
      out <- mu
      for (i in seq_len(nL)) {
@@ -567,7 +582,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
           lg <- stats::qlogis(mu[i, pos])
           s_y <- rep(0, length(years))
           # Fixed point on the yearly offsets: the basis is nearly diagonal at the
-          # yearly level, so this converges in a handful of steps.
+          # yearly level (only the blend days mix years), so this converges fast.
           for (it in 1:100) {
                cur <- as.numeric(tapply(stats::plogis(lg + as.numeric(B[pos, , drop = FALSE] %*% s_y)),
                                         yr_f[pos], mean))

@@ -1,5 +1,20 @@
 # MOSAIC (development version)
 
+## The CFR's year deviations are yearly levels, not an interpolated curve (v0.97.2)
+
+v0.97.0 interpolated the integrated CFR's year deviations linearly between
+1 July anchors. That extrapolates the within-year trend past the end of the
+data. Every calibration ends partway through a year, so the forecast for the
+rest of that year overshot. With the true CFR at 3% through 2024 and 1.5% in
+Jan-May 2025, it forecast June-December 2025 at 1.3%, below the fitted Jan-May
+level. The calibration test showed the effect on NGA (out-of-sample deaths 0.7x).
+
+Each year's deviation is now a level for that calendar year, blended linearly
+over the 60 days centred on each 1 January, so the CFR still has no step at a
+year boundary. A year observed only in part is forecast at the level of its
+observed months. The medoid config's posterior shift uses the same basis. The
+likelihood version is `R/v0.97.2+deaths_yearlevel`.
+
 ## posteriors.json no longer copies the prior reported-CFR block (v0.97.1)
 
 - `calc_model_posterior_distributions()` drops the top-level `mu_jt` block that

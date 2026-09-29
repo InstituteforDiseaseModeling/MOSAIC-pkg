@@ -81,17 +81,41 @@ test_that("the dispersion scales the likelihood and widens the posterior by sqrt
   expect_equal(unname(f4$theta_sd[1, 1] / f1$theta_sd[1, 1]), 2, tolerance = 1e-3)
 })
 
-test_that("the year deviations are continuous and flat beyond the first and last anchors", {
-  anchors <- as.numeric(as.Date(c("2023-07-01", "2024-07-01", "2025-07-01")))
-  d <- as.numeric(seq(as.Date("2023-01-01"), as.Date("2025-12-31"), by = "day"))
-  B <- MOSAIC:::.d7_basis(d, anchors)
+test_that("the year deviations are yearly levels, blended over 60 days at each 1 January", {
+  years <- 2023:2025
+  d <- as.numeric(seq(as.Date("2022-11-01"), as.Date("2026-02-28"), by = "day"))
+  B <- MOSAIC:::.d7_basis(d, years)
   expect_equal(rowSums(B), rep(1, length(d)))
-  expect_true(all(B[d <= anchors[1], 1] == 1))
-  expect_true(all(B[d >= anchors[3], 3] == 1))
-  expect_lt(max(abs(diff(B))), 1 / 360)                # no step anywhere, incl. 1 January
-  mid <- which(d == as.numeric(as.Date("2024-01-01")))
-  expect_equal(unname(B[mid, 1:2]), c(182, 184) / 366, tolerance = 1e-12)
-  expect_equal(MOSAIC:::.d7_basis(d, anchors[2]), matrix(1, length(d), 1))
+  mid24 <- d >= as.numeric(as.Date("2024-02-15")) & d <= as.numeric(as.Date("2024-11-15"))
+  expect_true(all(B[mid24, 2] == 1))                              # a level inside the year
+  jan <- which(d == as.numeric(as.Date("2024-01-01")))
+  expect_equal(unname(B[jan, 1:2]), c(0.5, 0.5))
+  expect_lt(max(abs(diff(B))), 1 / 60 + 1e-12)                    # continuous: no step
+  expect_true(all(B[d < as.numeric(as.Date("2023-01-01")), 1] == 1))   # before: first year
+  expect_true(all(B[d > as.numeric(as.Date("2026-01-01")), 3] == 1))   # after: last year
+  # Years with a gap do not blend across it; an unlisted year takes the earlier level.
+  G <- MOSAIC:::.d7_basis(d, c(2023L, 2025L))
+  in24 <- d >= as.numeric(as.Date("2024-01-01")) & d <= as.numeric(as.Date("2024-12-31"))
+  expect_true(all(G[in24, 1] == 1))
+  expect_equal(MOSAIC:::.d7_basis(d, 2024L), matrix(1, length(d), 1))
+})
+
+test_that("a year observed only in part is forecast at its observed level, not an extrapolated trend", {
+  # The v0.97.0 interpolated basis extrapolated the within-year trend: with the
+  # true CFR 3% through 2024 and 1.5% in Jan-May 2025, it forecast Jun-Dec 2025 at
+  # 1.3%, BELOW the fitted Jan-May level. A yearly level carries Jan-May forward.
+  d_all <- seq(as.Date("2023-01-01"), as.Date("2025-12-31"), by = "day")
+  X <- rep(200, length(d_all)); cfr_true <- ifelse(d_all < as.Date("2025-01-01"), 0.03, 0.015)
+  set.seed(3); D <- rpois(length(d_all), cfr_true * X); D[d_all > as.Date("2025-05-31")] <- NA
+  base <- rep(qlogis(0.03), length(d_all))
+  fit <- calc_log_likelihood_deaths_integrated(D, X, base, d_all, sd_shift = 0.5, sd_year = 0.7,
+                                               week_offset = 0L, years = 2023:2025)
+  th <- fit$theta[1, ]
+  cfr_fit <- plogis(base + th[1] + as.numeric(MOSAIC:::.d7_basis(as.numeric(d_all), 2023:2025) %*% th[-1]))
+  obs_part <- mean(cfr_fit[d_all >= as.Date("2025-02-01") & d_all <= as.Date("2025-05-31")])
+  rest     <- mean(cfr_fit[d_all >= as.Date("2025-06-01")])
+  expect_equal(rest, obs_part, tolerance = 1e-8)
+  expect_equal(obs_part, 0.015, tolerance = 0.15)
 })
 
 test_that("the level is recovered and the posterior SD is honest", {
@@ -110,7 +134,7 @@ test_that("a year with no scored weeks keeps its prior; no scored weeks at all r
     x$obs, x$expo, rep(qlogis(0.02), 140), dates = x$dates, sd_shift = 0.5, sd_year = 0.7,
     week_offset = 0L, years = c(2024L, 2026L))
   expect_identical(colnames(fit$theta), c("a", "y2024", "y2026"))
-  # 2024 data lie before the 2024 anchor, so the 2026 deviation is untouched.
+  # 2024 data carry no information on 2026 (no blending across the missing 2025).
   expect_equal(unname(fit$theta[1, "y2026"]), 0)
   expect_equal(unname(fit$theta_sd[1, "y2026"]), 0.7, tolerance = 1e-8)
 
@@ -338,7 +362,7 @@ test_that("the posterior shift puts each year's mean CFR on target and is contin
     want <- post$cfr_median[post$location == cfg$location_name[i]]
     expect_equal(unname(as.numeric(got)), want, tolerance = 1e-8)
     jumps <- abs(diff(qlogis(out$mu_jt[i, ])))
-    expect_lt(max(jumps), 0.02)                        # no step at a year boundary
+    expect_lt(max(jumps), 0.06)                        # blended: no step at a year boundary
   }
   # A location the posterior does not cover keeps its mu_jt exactly.
   out2 <- MOSAIC:::.mosaic_apply_cfr_posterior(cfg, post[post$location == "MOZ", ])
