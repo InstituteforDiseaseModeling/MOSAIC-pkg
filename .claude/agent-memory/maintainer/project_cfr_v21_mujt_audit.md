@@ -30,4 +30,10 @@ forced epidemic PPV, 0.1002 vs 0.100 at forced endemic).
   not the tracked builders = provenance gap.
 - MOZ country repo configs (mu_j_baseline, no CFR_target) are REFUSED by v0.96 by design.
 - Worktree was live-edited during the red-team: snapshot before running anything.
+- Pre-merge review 2026-09-29 (HEAD 0d8d95581 v0.99.5): worker-deaths-integration test now
+  exists and runs un-skipped (closes the worker mutation gap). Builders now tracked (v5.1/v16.1
+  reproducible from data-raw). Branch CONTAINS still-OPEN PR #127. Merge-audit technique that
+  worked: for each merge M, check every `+` line of B..P1 and B..P2 is present in M (found a
+  duplicated `@param is_diagnostics` in calc_convergence_diagnostics.R from 3abfa0ba8).
+  Exported calc_cases/deaths_from_infections removed with no NEWS line.
 Related: [[cfr-r6-hygiene]], [[reviewer-checklist]], [[rcmdcheck-baseline-v048]].

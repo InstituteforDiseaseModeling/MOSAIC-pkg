@@ -1,3 +1,11 @@
+# MOSAIC 0.99.7
+
+## Pre-merge review fixes (v0.99.7)
+
+- `calc_convergence_diagnostics()` documented `is_diagnostics` twice after the v0.99.2 merge, which moved `verbose`'s default under the wrong parameter and dropped the link to `calc_is_diagnostics()`.
+- NEWS now records the removal of `calc_cases_from_infections()` and `calc_deaths_from_infections()`.
+- `write_trajectory_csv()` no longer says the summary is the weighted median throughout: `disease_deaths` follows the deaths `central_method`.
+
 # MOSAIC 0.99.6
 
 ## R CMD check hygiene (v0.99.6)
@@ -533,6 +541,9 @@ Farrington/Noufaily convention used by the `surveillance` package.
 * `calc_log_likelihood_negbin()`'s `k_min` is deprecated and ignored.
 * `check_overdispersion()` and the internal `.nb_size_from_obs_weighted()` are
   removed; both are superseded by `est_nb_dispersion()`.
+* `calc_cases_from_infections()` and `calc_deaths_from_infections()` are
+  removed. Neither had a caller, and the deaths one was a third, divergent
+  copy of the CFR algebra.
 * **All calibration results change.** Every likelihood value moves, so previous
   runs are not comparable. The likelihood-provenance string used by the resume
   guard is bumped accordingly, so resuming a pre-0.92.0 run stops with an

@@ -41,9 +41,6 @@
 #'   \code{all}. Reported under \code{$importance_sampling} but never gated:
 #'   these are untruncated-weight quantities, unlike the gated ESS_B.
 #' @param verbose Logical indicating whether to print diagnostic messages
-#' @param is_diagnostics Optional list of pre-computed diagnostics with
-#'   elements `best` and `all`, supplied instead of recomputing them from
-#'   the draws. `NULL` (default) computes them internally.
 #'   (default TRUE)
 #'
 #' @return A list with the following structure:

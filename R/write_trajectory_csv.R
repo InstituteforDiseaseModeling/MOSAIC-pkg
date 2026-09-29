@@ -45,8 +45,9 @@
 #' \code{rho_deaths}.
 #'
 #' @section What is lost:
-#' The summary carries the weighted \strong{median} only, so these are central
-#' trajectories with no credible intervals. Intervals for these channels
+#' The summary carries one central line per channel and no credible intervals:
+#' \code{disease_deaths} follows the run's deaths \code{central_method} (default
+#' mean), and every other channel is the weighted \strong{median}. Intervals for these channels
 #' require the per-member data. \code{reported_cases} and
 #' \code{reported_deaths} keep their intervals in the prediction CSVs.
 #'
