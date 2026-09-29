@@ -42,7 +42,7 @@ The environmental term is **instantaneous** (Cori: "if conditions stayed as they
 - The internal `.mosaic_generation_time_pmf()` is removed. `get_generation_time_distribution()` is unchanged.
 
 Tests check against the engine rather than against the code's own algebra:
-- R_hum and R_env recover the engine's true instantaneous R in single-route linear runs, with median ratios 0.99 and 0.94.
+- R_hum and R_env recover the engine's true instantaneous R in single-route linear runs (median ratios 0.99 and 0.94 on the test seed). The 0.94 is not a bias: that seed's realized symptomatic share was 0.21 against sigma = 0.24, which a mean-field reconstruction cannot see. Across seeds, R_env against a mortality-aware reference built from the engine's reservoir has a median ratio of about 1.00 (range 0.92-1.05).
 - I and W rebuilt from incidence track the simulated stocks and align best at zero lag.
 - Truncation invariance, and a brute-force check of the frozen-at-t definition.
 - The re-simulation path is exercised end to end through the real engine.
