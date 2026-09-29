@@ -1174,8 +1174,9 @@ run_MOSAIC <- function(config,
   # config's time-varying mu_jt are solved analytically (Laplace) instead of
   # sampled. Everything that depends only on the observations -- weekly blocks,
   # weekly observed totals and weights, the prior widths -- is resolved here once
-  # and reaches every worker through likelihood_settings. Resolved AFTER the NB
-  # dispersion, whose weekly deaths k it uses.
+  # and reaches every worker through likelihood_settings. It estimates its own
+  # per-location dispersion phi_j (deaths against observed cases); the NB deaths
+  # k above is diagnostic only.
   control$likelihood$.deaths_integration <- .mosaic_resolve_deaths_integration(
     config, control, priors, score_window = control$likelihood$.score_window_resolved)
   if (!is.null(control$likelihood$.deaths_integration)) {

@@ -42,7 +42,8 @@ scatter plots, Q-Q plots, residuals vs observed, and temporal residual patterns.
 \details{
 Creates a 6-page multi-page PDF per output file:
 \enumerate{
-\item Density overlays of observed vs predicted median distributions
+\item Density overlays of observed vs predicted central (the run's
+\code{central_method}, mean by default) distributions
 \item Credible interval coverage analysis (50\\% and 95\\% CIs vs nominal)
 \item Observed vs predicted calibration scatter plots
 \item Quantile-quantile plots

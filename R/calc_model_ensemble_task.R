@@ -66,8 +66,9 @@
     # before any channel is harvested below, so predictions, trajectories and
     # forecast years all carry it.
     # The population compartments keep the engine's own fatal draws (at the
-    # prior mu_jt; they remove a fraction of a percent of Isym), so in the
-    # trajectory channels N balances against the engine's deaths, not these.
+    # prior mu_jt: p_fatal, a few percent of symptomatic onsets, never enter
+    # Isym), so in the trajectory channels N balances against the engine's
+    # deaths, not these.
     cfr_year <- NULL
     cfr_infeasible <- 0L
     anchor_dev <- NULL

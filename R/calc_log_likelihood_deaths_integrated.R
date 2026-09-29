@@ -545,9 +545,11 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 
 # Redraw a simulated path's deaths from the reported CFR's conditional posterior.
 #
-# Deaths do not feed back into transmission beyond removing fatal onsets from
-# Isym (a fraction of a percent of symptomatic person-days), so given the path's
-# onsets they can be drawn after the simulation. For each location: fit the CFR
+# Deaths do not feed back into transmission beyond the engine's fatal onsets,
+# which never enter Isym (p_fatal = mu_jt*rho/(rho_deaths*chi_epidemic): median
+# 2.8%, range 0.2-10% of symptomatic onsets at config_default). Given the path's
+# onsets they can therefore be drawn after the simulation; the redraw ignores the
+# transmission effect of the posterior-minus-prior difference in p_fatal. For each location: fit the CFR
 # offsets to the observed deaths given this path (the quasi-Poisson fit, whose
 # level reproduces the observed deaths totals), draw (a, delta) from the Laplace
 # posterior, build the daily CFR with the same year basis, and draw fatal onsets

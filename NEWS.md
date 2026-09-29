@@ -1,5 +1,46 @@
 # MOSAIC (development version)
 
+## Pre-merge audit fixes: figures follow the run's central line; stale deaths text (v0.99.1)
+
+- **render_MOSAIC_figures() drew the median for every mean run.** It read
+  `central_method` from the top of `1_inputs/control.json`, but run_MOSAIC()
+  nests the control under `$control`, so the lookup always fell back to the
+  median; since the v0.98.0 default flip every re-rendered prediction figure
+  (and the in-run `plots = TRUE` figures) showed the median while the CSVs and
+  summary metrics used the mean. The lookup is now `.mosaic_run_central_method()`,
+  which reads the nested shape and still treats a control.json without the
+  setting (pre-v0.38.0) as median; the test fixture writes the real shape.
+- **The final deaths step is no longer masked.** `mask_final_deaths_step`
+  defaulted to TRUE for a laser-cholera off-by-one (issue #82) that the R engine
+  does not have: since v0.96.0 deaths are reported on the cases' row and the
+  post-hoc redraw fills the last column, so the mask blanked a real day in the
+  CSVs, plots and R^2/bias. The default is now FALSE in calc_model_ensemble(),
+  plot_model_ensemble() and the prediction table; an ensemble saved without an
+  `artifact_mask` (laser-cholera era) still masks. A regression test checks the
+  engine's final deaths column is populated.
+- **Plot labels.** The PPC names the plotted central series from the CSV's
+  `central_method` ("Predicted Mean"/"Median"); plot_forecast_cv_grid() draws
+  `pred_central` (falling back to `pred_median`); the ensemble caption names the
+  nested intervals correctly ("95% and 50%"); the trajectory true-deaths panel
+  follows the deaths channel's central method and is labelled as fatal onsets
+  dated at onset; plot_model_posteriors_detail() draws truncated-normal priors
+  (delta_reporting_cases, epidemic_threshold, decay_*, psi_star_*).
+- **plot_CFR_hierarchical()** takes its years from the model outputs (it had
+  1970-2024 and 2024 hard-coded), shades and dashes the years each trend is
+  held at its last fitted year, drops in-progress years as the model does,
+  replaces the random-effects page (the country intercept is weakly identified,
+  about 1e-5) with each fitted country curve's deviation from the population
+  trend, keys its summary on iso_code (Cote d'Ivoire was split in two), and says
+  "Case Fatality Ratio".
+- **Docs:** the fatal share of symptomatic onsets is a few percent, not "a
+  fraction of a percent"; the NB deaths dispersion is diagnostic only and the
+  retired-setting warning no longer suggests `nb_k_deaths`; the Deployment
+  vignette's install/run chunks are `eval = FALSE`; skill and agent notes updated
+  (central_method default, the integrated deaths core, retired `nb_k_min_*`).
+- Removed the orphaned `model/input/parameters_inventory.csv` (no reader; its
+  `mu_j` row was the retired mortality model) and `local/calibration/
+  calibration_test_43.R` (it set removed `sample_mu_j_*` flags).
+
 ## Forecast years carry the ensemble's shared CFR shift, not each member's own (v0.99.0)
 
 v0.98.0 centred each ensemble member's forecast-year CFR on that member's own

@@ -269,6 +269,17 @@ plot_model_posteriors_detail <- function(quantiles_file,
           eta <- params$eta
           b * eta * exp(b * x_vals) * exp(eta) * exp(-eta * exp(b * x_vals))
         },
+        "truncnorm" = {
+          # Bounds a/b default to infinite, as in plot_model_distributions().
+          a <- if (!is.null(params$a)) as.numeric(params$a) else -Inf
+          b <- if (!is.null(params$b)) as.numeric(params$b) else Inf
+          m <- as.numeric(params$mean); s <- as.numeric(params$sd)
+          if (length(m) == 1L && length(s) == 1L && is.finite(m) && is.finite(s) && s > 0 && b > a) {
+            truncnorm::dtruncnorm(x_vals, a = a, b = b, mean = m, sd = s)
+          } else {
+            rep(0, length(x_vals))
+          }
+        },
         rep(0, length(x_vals)) # Default to zero if distribution not supported
       )
     }, error = function(e) {

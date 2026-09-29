@@ -34,8 +34,8 @@ reasonable but encodes the wrong derivation is the failure mode you guard agains
 - **Estimation:** all `est_*.R` (e.g. `est_zeta_*`, `est_kappa_prior`, `est_CFR_hierarchical`,
   `est_seasonal_dynamics`, `est_mobility`, `est_vaccine_effectiveness`, `est_initial_*`,
   `est_symptomatic_prop`, `est_WASH_coverage`, `est_demographic_rates`)
-- **Reporting chain:** `calc_cases_from_infections.R`, `calc_deaths_from_infections.R`,
-  `calc_cfr_period_implied.R`, `make_mu_jt.R` (the reported-CFR matrix and its prior block)
+- **Reporting chain:** `calc_cfr_period_implied.R`, `make_mu_jt.R` (the reported-CFR matrix and
+  its prior block), the engine's reporting draws in `sim_components.R`
 - **Prior semantics in sampling:** `sample_parameters.R` (the meaning/constraints of draws),
   literature accessors (`get_*_data.R`)
 

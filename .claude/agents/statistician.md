@@ -50,13 +50,15 @@ subtly wrong is the failure mode you exist to prevent.
 - **Deaths/cases field naming:** likelihood and PPC comparisons use
   `model$results$reported_deaths` and `reported_cases` — **never** raw `disease_deaths` /
   `disease_cases`. Raw disease counts are inflated by ~1/rho_deaths (≈2.4×). (Lesson #12.)
-- **Likelihood assembly:** `LL = w_cases*NB_cases + w_deaths*NB_deaths + (T/N_peaks)*w_pt*peaks
-  + T*w_cum*cumulative + T*w_wis*WIS`. Shape terms are T-normalized; all shape weights default
-  to 0 (OFF). Non-finite LL returns `-Inf`.
+- **Likelihood assembly:** `LL = w_cases*NB_cases + w_deaths*deaths_core + (T/N_peaks)*w_pt*peaks
+  + T*w_cum*cumulative + T*w_wis*WIS`, where `deaths_core` (v0.96.0+) is the weekly quasi-Poisson
+  score with the reported CFR integrated out per path (`calc_log_likelihood_deaths_integrated()`);
+  level-dependent deaths shape terms are dropped when it is supplied. Shape terms are T-normalized;
+  all shape weights default to 0 (OFF). Non-finite LL returns `-Inf`.
 - **WIS** includes the **0.5·MAE coefficient** per Bracher et al. 2021 (Lesson #4 — this was
   silently missing once).
-- **Negative Binomial:** weighted method-of-moments dispersion with a `k_min` floor for
-  low-count stability.
+- **Negative Binomial (cases):** per-location dispersion estimated from the weekly observations by
+  `est_nb_dispersion()` (the `k_min` floor is retired); `nb_k_cases` replaces the estimate.
 - **Scaling traps:** beware constants/floors that look harmless but explode after T-normalization
   (the cumulative-term -1e9 floor → -115B LL, Lesson #5). Sanity-check magnitudes after any
   scaling change.

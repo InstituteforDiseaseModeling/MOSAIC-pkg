@@ -309,10 +309,12 @@
 #' to the EST series only; the observed series stays unmasked, and the ensemble's
 #' raw central/array fields are never mutated -- only the matrix passed here is
 #' transformed. Artifacts: (1) the first \code{cases_warmup} cases timesteps are an
-#' initial-condition warm-up transient; (2) the final deaths timestep is a
-#' structural zero (reported deaths are written at \code{tick} rather than
-#' \code{tick + 1}, so the last row is trimmed -- laser-cholera issue #82,
-#' reproduced by the R engine because the trim rule was ported verbatim).
+#' initial-condition warm-up transient; (2) when \code{deaths_final} is set, the
+#' final deaths timestep, a structural zero in the laser-cholera engine's output
+#' (reported deaths written at \code{tick} rather than \code{tick + 1}, so the
+#' last row was trimmed; laser-cholera issue #82). The R engine reports deaths on
+#' the cases' row since v0.96.0, so \code{calc_model_ensemble()} records
+#' \code{deaths_final = FALSE}.
 #'
 #' Masks by COLUMN (= time), so it is correct for any number of locations (rows);
 #' scoring sites flatten column-major via \code{as.numeric()}.
@@ -321,8 +323,8 @@
 #'   single-row matrix). The central series to mask.
 #' @param chan \code{"cases"} or \code{"deaths"}.
 #' @param spec Artifact-mask list (\code{ens$artifact_mask}). If \code{NULL},
-#'   falls back to \code{list(cases_warmup = 2L, deaths_final = TRUE)} so older
-#'   ensembles or sub-ensembles lacking the field still mask correctly.
+#'   falls back to \code{list(cases_warmup = 2L, deaths_final = TRUE)}: an
+#'   ensemble saved before the field existed came from the laser-cholera engine.
 #' @return The matrix with artifact columns set to \code{NA}.
 #' @noRd
 .mosaic_mask_central_for_scoring <- function(mat, chan, spec) {
@@ -481,8 +483,9 @@
     warning(sprintf(
       paste0("control$likelihood$%s is RETIRED and has been ignored. NB dispersion is now ",
              "estimated per location from the weekly observations by est_nb_dispersion(). ",
-             "To set the dispersion explicitly, use control$likelihood$nb_k_cases / ",
-             "nb_k_deaths, which REPLACE the estimate (scalar or one value per location)."),
+             "To set the cases dispersion explicitly, use control$likelihood$nb_k_cases, which ",
+             "REPLACES the estimate (scalar or one value per location). nb_k_deaths is not used: ",
+             "run_MOSAIC() scores deaths with the reported CFR integrated out (dispersion phi_j)."),
       paste(.retired_nbk, collapse = " and ")), call. = FALSE)
     for (nm in .retired_nbk) def$likelihood[[nm]] <- NULL
   }

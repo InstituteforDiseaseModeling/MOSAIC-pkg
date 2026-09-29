@@ -12,7 +12,7 @@ plot_model_ensemble(
   title_label = "Posterior Ensemble",
   save_predictions = FALSE,
   central_method = "mean",
-  mask_final_deaths_step = TRUE,
+  mask_final_deaths_step = FALSE,
   n_cases_warmup_mask = 2L,
   score_idx_cases = NULL,
   score_idx_deaths = NULL,
@@ -51,15 +51,16 @@ emits a one-time deprecation warning. Default \code{FALSE}.}
 on sparse deaths) or \code{"median"} (the typical trajectory; the default
 from v0.46.1 to v0.97.x). Scalar or per-channel \code{c(cases=, deaths=)}.}
 
-\item{mask_final_deaths_step}{Logical. If \code{TRUE} (default), blank the
-FINAL timestep of every Deaths prediction (set the predicted/CI cells to
-\code{NA}) in the exported CSV and the rendered lines. This masks a
-laser-cholera engine off-by-one in which \code{reported_deaths} is written
+\item{mask_final_deaths_step}{Logical. If \code{TRUE}, blank the FINAL
+timestep of every Deaths prediction (set the predicted/CI cells to
+\code{NA}) in the exported CSV and the rendered lines. This masked a
+laser-cholera engine off-by-one in which \code{reported_deaths} was written
 at \code{[tick]} on an array of length \code{nticks + 1}, so the final slot
-is never written and reads as an artificial drop-to-zero. DISPLAY ONLY:
-the underlying ensemble arrays are untouched, so any R2/bias/likelihood
-computed upstream from the raw object is unaffected. Cases are written at
-\code{[tick + 1]} and are not affected.}
+was never written and read as an artificial drop-to-zero. Since v0.96.0 the
+R engine reports deaths on the same row as cases, so the default is
+\code{FALSE}; set \code{TRUE} for an ensemble from the laser-cholera engine.
+DISPLAY ONLY: the underlying ensemble arrays are untouched, so any
+R2/bias/likelihood computed upstream from the raw object is unaffected.}
 
 \item{n_cases_warmup_mask}{Integer. Number of LEADING timesteps of every
 Suspected Cases prediction to blank (set to \code{NA}) in the exported CSV
@@ -99,8 +100,9 @@ Invisibly returns a list with:
 }
 \description{
 Renders time-series plots from a \code{mosaic_ensemble} object produced by
-\code{\link{calc_model_ensemble}}. Shows the weighted median prediction line
-with confidence interval ribbons and observed data points. Optionally saves
+\code{\link{calc_model_ensemble}}. Shows the central prediction line (the
+weighted mean by default; \code{central_method}) with interval ribbons and
+observed data points. Optionally saves
 per-location prediction CSVs for downstream use.
 }
 \seealso{

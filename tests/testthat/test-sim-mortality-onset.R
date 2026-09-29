@@ -168,3 +168,21 @@ test_that("fatal_onsets is an rng-only draw site and disease_deaths a replay-onl
   expect_identical(MOSAIC:::.SIM_REPLAY_ONLY_SITES, "infectious/disease_deaths")
   expect_false("infectious/fatal_onsets" %in% names(MOSAIC:::.SIM_ORACLE_SITE_MAP))
 })
+
+test_that("the final reported-deaths column is a real value, not a structural zero", {
+  # laser-cholera never wrote its last reported_deaths slot (issue #82), which is
+  # why ensembles once masked the final deaths step. The R engine reports deaths
+  # on the cases' row, so the final column carries deaths like any other day.
+  cfg <- MOSAIC::config_simulation_endemic
+  cfg$mu_jt[] <- 0.2
+  cfg$epsilon <- cfg$epsilon * 10          # faster waning keeps transmission going to the end
+  last <- trail <- 0
+  for (s in 1:4) {
+    r <- MOSAIC::run_simulation(cfg, seed = s, quiet = TRUE)$results
+    nT <- ncol(r$reported_deaths)
+    last <- last + sum(r$reported_deaths[, nT])
+    trail <- trail + sum(r$reported_deaths[, (nT - 30):(nT - 1)]) / 30
+  }
+  skip_if(trail < 1, "the fixture epidemic ended before the last day")
+  expect_gt(last, 0)
+})

@@ -39,12 +39,30 @@ build_min_dir_output <- function(root) {
   MOSAIC:::.mosaic_write_prediction_csvs(tbl, data_dir = dirs$res_predictions,
                                          file_prefix = "medoid", verbose = FALSE)
 
-  # --- control.json so central_method resolves -------------------------------
-  jsonlite::write_json(list(predictions = list(central_method = "median")),
+  # --- control.json so central_method resolves (run_MOSAIC's nested shape) ---
+  jsonlite::write_json(list(control = list(predictions = list(central_method = "median")),
+                            iso_code = "AAA"),
                        file.path(dirs$inputs, "control.json"),
                        auto_unbox = TRUE, pretty = TRUE)
   dirs
 }
+
+test_that("a finished run's central_method is read from run_MOSAIC's nested control.json", {
+  d <- withr::local_tempdir()
+  wj <- function(x) jsonlite::write_json(x, file.path(d, "control.json"), auto_unbox = TRUE)
+  # The shape run_MOSAIC() writes: the control under $control, run metadata beside it.
+  wj(list(control = list(predictions = list(central_method = "mean")), iso_code = "NGA"))
+  expect_equal(MOSAIC:::.mosaic_run_central_method(d), c(cases = "mean", deaths = "mean"))
+  wj(list(control = list(predictions = list(central_method = list(cases = "median", deaths = "mean")))))
+  expect_equal(MOSAIC:::.mosaic_run_central_method(d), c(cases = "median", deaths = "mean"))
+  wj(list(predictions = list(central_method = "mean")))               # unnested, also accepted
+  expect_equal(MOSAIC:::.mosaic_run_central_method(d), c(cases = "mean", deaths = "mean"))
+  # A control.json without the setting predates it (v0.38.0): those runs used the median.
+  wj(list(control = list(likelihood = list(weight_cases = 1))))
+  expect_equal(MOSAIC:::.mosaic_run_central_method(d), c(cases = "median", deaths = "median"))
+  unlink(file.path(d, "control.json"))
+  expect_equal(MOSAIC:::.mosaic_run_central_method(d), c(cases = "median", deaths = "median"))
+})
 
 test_that("render_MOSAIC_figures renders predictions without triggering simulation", {
   skip_if_not_installed("ggplot2")

@@ -99,8 +99,8 @@ affect onset. `p_beta` (human vs env fraction): secondary; higher → more self-
 
 **Timing / shape** — `psi_star_k` (suitability time offset, days): peak timing, negative shifts
 earlier. `a_1_j,b_1_j` (Fourier phase): seasonal phase. `a_2_j,b_2_j` (Fourier amplitude): seasonal
-contrast + variance. `epidemic_threshold`: epidemic onset / which years are epidemic; affects deaths
-shape. `gamma_1,gamma_2` (recovery): epidemic duration (lower = longer). `iota` (incubation): onset
+contrast + variance. `epidemic_threshold`: epidemic onset / which years are epidemic; switches the
+case-reporting PPV (chi) only — it no longer enters mortality. `gamma_1,gamma_2` (recovery): epidemic duration (lower = longer). `iota` (incubation): onset
 sharpness (higher = faster rise).
 
 **Observation model (cases)** — `sigma` (symptomatic fraction), `rho` (care-seeking → reported):

@@ -37,25 +37,27 @@ TRUE}). Each panel shows the comprehensive internal-state channels over time —
 surveillance fit (reported cases/deaths), burden, incidence drivers, force of
 infection, the SVEIR + W compartments, and sanity checks (mass balance,
 population, epidemic fraction) — with a uniform-thinned set of \strong{actual}
-posterior member trajectories (the spaghetti, conveying spread) and the
-weighted \strong{median} overlaid in bold. Observed surveillance points are
+posterior member trajectories (the spaghetti, conveying spread) and a bold
+central line (see \strong{Central line}). Observed surveillance points are
 overlaid only on the \code{reported_cases}/\code{reported_deaths} panels.
 }
 \details{
 \strong{Pure read-render:} this function never runs the engine, never
 re-simulates, and never re-weights — it consumes only the compact artifact
-(per-channel weighted median + thinned actual lines, both already reduced over
+(per-channel central series + thinned actual lines, both already reduced over
 the best subset). It is the trajectory analogue of
 \code{\link{plot_model_ensemble}}.
 
 \strong{Central line:} for \code{reported_cases} / \code{reported_deaths} the
 bold line is the ensemble \emph{central} series following
-\code{control$predictions$central_method} (weighted median or weighted mean,
-per channel) and is \strong{bit-identical} to the cases/deaths \emph{prediction}
-plots -- it is reduced from the same captured draws over the same final
-displayed member set and weights (no re-simulation). All other channels
-(compartments, FOI, incidence, derived) have no prediction-plot counterpart and
-use the conventional weighted \emph{median}.
+\code{control$predictions$central_method} (weighted mean by default, or weighted
+median, per channel) and is \strong{bit-identical} to the cases/deaths
+\emph{prediction} plots -- it is reduced from the same captured draws over the
+same final displayed member set and weights (no re-simulation). True deaths
+(\code{disease_deaths}) follow the deaths channel's method so the two deaths
+panels are comparable. All other channels (compartments, FOI, incidence,
+derived) have no prediction-plot counterpart and use the weighted
+\emph{median}.
 
 \strong{Weighting note:} the central series and lines are reduced over the
 \emph{final displayed} member set and weights: the \emph{candidate} best subset

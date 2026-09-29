@@ -24,7 +24,7 @@
 #' @param n_cases_warmup_mask Integer. Leading Suspected-Cases timesteps blanked
 #'   to \code{NA}. Default \code{2L}.
 #' @param mask_final_deaths_step Logical. Blank the final Deaths timestep.
-#'   Default \code{TRUE}.
+#'   Default \code{FALSE} (see \code{\link{plot_model_ensemble}}).
 #' @param score_idx_cases,score_idx_deaths Integer (1-based) scored-window start
 #'   per channel. \code{NULL} (default) reads from \code{ensemble$artifact_mask}.
 #'
@@ -33,7 +33,7 @@
 .mosaic_assemble_prediction_table <- function(ensemble,
                                               central_method         = "mean",
                                               n_cases_warmup_mask    = 2L,
-                                              mask_final_deaths_step = TRUE,
+                                              mask_final_deaths_step = FALSE,
                                               score_idx_cases        = NULL,
                                               score_idx_deaths       = NULL) {
 
@@ -111,9 +111,10 @@
   # ---------------------------------------------------------------------------
   # Boundary-artifact mask (DISPLAY ONLY)
   # ---------------------------------------------------------------------------
-  # Artifact 1 (mask_final_deaths_step): reported_deaths is written at [tick] on
-  #   an array of length nticks+1, so the final slot is never written and reads
-  #   as a drop-to-zero. Cases write at [tick+1] and are fine.
+  # Artifact 1 (mask_final_deaths_step, off by default since v0.96.0): the
+  #   laser-cholera engine wrote reported_deaths at [tick] on an array of length
+  #   nticks+1, so its final slot was never written and read as a drop-to-zero.
+  #   The R engine reports deaths on the cases' row, so the final slot is real.
   # Artifact 2 (n_cases_warmup_mask): the first ~1-2 reported cases steps are an
   #   IC warm-up transient. The legitimate leading reporting-lag zeros in Deaths
   #   (delta_reporting_cases; deaths are reported on the case lag) are REAL and
@@ -217,8 +218,9 @@
 #'
 #' @description
 #' Renders time-series plots from a \code{mosaic_ensemble} object produced by
-#' \code{\link{calc_model_ensemble}}. Shows the weighted median prediction line
-#' with confidence interval ribbons and observed data points. Optionally saves
+#' \code{\link{calc_model_ensemble}}. Shows the central prediction line (the
+#' weighted mean by default; \code{central_method}) with interval ribbons and
+#' observed data points. Optionally saves
 #' per-location prediction CSVs for downstream use.
 #'
 #' @param ensemble A \code{mosaic_ensemble} object returned by
@@ -244,15 +246,16 @@
 #'   \code{"mean"} (default; the expected count, which never collapses to zero
 #'   on sparse deaths) or \code{"median"} (the typical trajectory; the default
 #'   from v0.46.1 to v0.97.x). Scalar or per-channel \code{c(cases=, deaths=)}.
-#' @param mask_final_deaths_step Logical. If \code{TRUE} (default), blank the
-#'   FINAL timestep of every Deaths prediction (set the predicted/CI cells to
-#'   \code{NA}) in the exported CSV and the rendered lines. This masks a
-#'   laser-cholera engine off-by-one in which \code{reported_deaths} is written
+#' @param mask_final_deaths_step Logical. If \code{TRUE}, blank the FINAL
+#'   timestep of every Deaths prediction (set the predicted/CI cells to
+#'   \code{NA}) in the exported CSV and the rendered lines. This masked a
+#'   laser-cholera engine off-by-one in which \code{reported_deaths} was written
 #'   at \code{[tick]} on an array of length \code{nticks + 1}, so the final slot
-#'   is never written and reads as an artificial drop-to-zero. DISPLAY ONLY:
-#'   the underlying ensemble arrays are untouched, so any R2/bias/likelihood
-#'   computed upstream from the raw object is unaffected. Cases are written at
-#'   \code{[tick + 1]} and are not affected.
+#'   was never written and read as an artificial drop-to-zero. Since v0.96.0 the
+#'   R engine reports deaths on the same row as cases, so the default is
+#'   \code{FALSE}; set \code{TRUE} for an ensemble from the laser-cholera engine.
+#'   DISPLAY ONLY: the underlying ensemble arrays are untouched, so any
+#'   R2/bias/likelihood computed upstream from the raw object is unaffected.
 #' @param n_cases_warmup_mask Integer. Number of LEADING timesteps of every
 #'   Suspected Cases prediction to blank (set to \code{NA}) in the exported CSV
 #'   and the rendered lines. Default \code{2L}. This masks the initial-condition
@@ -300,7 +303,7 @@ plot_model_ensemble <- function(ensemble,
                                 title_label      = "Posterior Ensemble",
                                 save_predictions = FALSE,
                                 central_method   = "mean",
-                                mask_final_deaths_step = TRUE,
+                                mask_final_deaths_step = FALSE,
                                 n_cases_warmup_mask    = 2L,
                                 score_idx_cases        = NULL,
                                 score_idx_deaths       = NULL,
@@ -535,11 +538,8 @@ plot_model_ensemble <- function(ensemble,
           )
         },
         caption = paste0(
-          "Ribbons show ", paste(
-            paste0(round(envelope_quantiles[seq(1, length(envelope_quantiles), by = 2)] * 100), "-",
-                   round(envelope_quantiles[seq(2, length(envelope_quantiles), by = 2)] * 100), "%"),
-            collapse = " and "
-          ), " confidence intervals | Central: cases=", central_method[["cases"]],
+          "Ribbons show ", .mosaic_interval_label(envelope_quantiles),
+          " intervals | Central: cases=", central_method[["cases"]],
           ", deaths=", central_method[["deaths"]], "\n",
           "Cases: Obs = ", format(round(.paired_total(obs_c, pred_c)[["obs"]]), big.mark = ","),
           ", Pred = ",     format(round(.paired_total(obs_c, pred_c)[["pred"]]), big.mark = ","),
@@ -727,4 +727,14 @@ plot_model_ensemble <- function(ensemble,
   obs <- as.numeric(obs); pred <- as.numeric(pred)
   ok <- is.finite(obs) & is.finite(pred)
   c(obs = sum(obs[ok]), pred = sum(pred[ok]))
+}
+
+# Name the nested central intervals an envelope's quantiles form, pairing each
+# lower quantile with its mirror (q_i with q_{n-i+1}): c(0.025, 0.25, 0.75, 0.975)
+# gives "95% and 50%".
+.mosaic_interval_label <- function(q) {
+  q <- sort(as.numeric(q)); n <- length(q)
+  if (n < 2L) return("no")
+  k <- seq_len(n %/% 2L)
+  paste0(paste0(sprintf("%g", round((q[n - k + 1L] - q[k]) * 100, 1)), "%"), collapse = " and ")
 }

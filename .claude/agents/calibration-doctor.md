@@ -37,7 +37,8 @@ dev specialist.
 
 ## Diagnostic playbook
 - **Over-prediction** is usually a **shape** problem, not a scale problem. Best in-sample bias
-  lever is raising `nb_k_min_cases`; best OOS lever is `psi` + lag. Combos beyond that risk
+  lever was raising the cases NB dispersion (`nb_k_min_cases`, retired; set `nb_k_cases` now);
+  best OOS lever is `psi` + lag. Combos beyond that risk
   instability — **avoid** `peak_magnitude` weighting, β×4, and stacked levers (memory
   `project_bias_sweep_moz_2024_10`).
 - **Under-prediction OOS** is often ψ *not being used*: calibration attenuates `psi_star_b` to the

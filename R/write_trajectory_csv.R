@@ -37,8 +37,9 @@
 #' When the run integrated the reported CFR out (MOSAIC >= v0.96.0),
 #' \code{reported_deaths} and \code{disease_deaths} are the members' deaths
 #' redrawn from the calibrated CFR. The population compartments and \code{N}
-#' carry the engine's own fatal draws at the prior \code{mu_jt} (they remove a
-#' fraction of a percent of \code{Isym}), so \code{N} balances against those,
+#' carry the engine's own fatal draws at the prior \code{mu_jt} (the fatal share
+#' \code{p_fatal} of symptomatic onsets, a few percent, never enters
+#' \code{Isym}), so \code{N} balances against those,
 #' not against the redrawn \code{disease_deaths}. \code{disease_deaths} are true
 #' deaths, i.e. reported deaths / \code{rho_deaths}, and rest on the pinned
 #' \code{rho_deaths}.

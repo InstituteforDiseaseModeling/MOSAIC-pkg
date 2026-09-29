@@ -15,7 +15,7 @@ calc_model_ensemble(
   priors = NULL,
   sampling_args = list(),
   n_cases_warmup_mask = 2L,
-  mask_final_deaths_step = TRUE,
+  mask_final_deaths_step = FALSE,
   score_idx_cases = 1L,
   score_idx_deaths = 1L,
   parallel = FALSE,
@@ -65,13 +65,14 @@ returned series here; it is recorded in the returned \code{artifact_mask}
 element so downstream scoring (R2/bias) can exclude these positions. Set to
 \code{0L} to record "no cases warm-up mask".}
 
-\item{mask_final_deaths_step}{Logical. If \code{TRUE} (default, matching
-\code{\link{plot_model_ensemble}}), record that the FINAL deaths timestep is
-a laser-cholera structural zero (\code{reported_deaths} written at tick
-then leading-trimmed, so the last slot is never written; laser-cholera issue #82).
-This value is NOT applied to any returned series here; it
-is recorded in the returned \code{artifact_mask} element for downstream
-scoring.}
+\item{mask_final_deaths_step}{Logical. If \code{TRUE}, record that the FINAL
+deaths timestep is a structural zero to exclude from scoring. That was true
+of the laser-cholera engine (\code{reported_deaths} written at tick and
+leading-trimmed, so the last slot was never written; laser-cholera issue #82).
+Since v0.96.0 the R engine reports deaths on the same row as cases, and the
+post-hoc death redraw fills the final column, so the default is \code{FALSE}.
+This value is NOT applied to any returned series here; it is recorded in the
+returned \code{artifact_mask} element for downstream scoring.}
 
 \item{score_idx_cases, score_idx_deaths}{Integer (1-based). Per-channel scored
 time-window START index (burn-in / deaths-era start). Columns strictly
