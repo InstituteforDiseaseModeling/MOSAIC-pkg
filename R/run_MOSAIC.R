@@ -662,7 +662,7 @@
 #' \describe{
 #'   \item{dirs}{Named list of output directories}
 #'   \item{files}{Named list of key output files}
-#'   \item{summary}{Named list with run statistics (batches, sims, converged, runtime)}
+#'   \item{summary}{Named list with run statistics (batches, sims, converged, runtime); \code{converged} is \code{NA} in fixed mode, which never evaluates the ESS stopping criterion}
 #' }
 #'
 #' @section Control Structure:
@@ -3266,6 +3266,7 @@ run_MOSAIC <- function(config,
                                              bias_ratio_deaths_ensemble_tier = bias_ratio_deaths_ensemble_tier,
                                              n_ensemble_params_tier = n_ensemble_params_tier,
                                              cfr_implied = if (exists("cfr_implied", inherits = FALSE)) cfr_implied else NULL,
+                                             posthoc_criteria_met = if (exists("final_converged", inherits = FALSE)) final_converged else NA,
                                              io = control$io)
   log_msg("  Saved 3_results/summary.json")
 
@@ -3281,7 +3282,9 @@ run_MOSAIC <- function(config,
   best_str <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
   log_msg("=== Run Summary ===")
   log_msg("  Location: %s (%s to %s)", summary_obj$location, summary_obj$date_start, summary_obj$date_stop)
-  log_msg("  Converged: %s", if (isTRUE(summary_obj$converged)) "YES" else "NO")
+  conv_str <- if (is.na(summary_obj$converged)) "NA (fixed mode: ESS criterion not evaluated)"
+              else if (isTRUE(summary_obj$converged)) "YES" else "NO"
+  log_msg("  Converged: %s", conv_str)
   log_msg("  R2 ensemble:   cases = %s | deaths = %s", r2ce_str, r2de_str)
   if (!is.na(summary_obj$ess_n_params)) {
     log_msg("  ESS: %d/%d params (%.0f%%) above target %g (min: %.1f, median: %.1f)",
@@ -3302,27 +3305,22 @@ run_MOSAIC <- function(config,
   # finished AND extract headline metrics in one pass.
   #
   # Status decision tree (don't conflate "calibration converged" with
-  # "end-to-end run succeeded"):
-  #   - "completed_unconverged": calibration ESS criterion not met
-  #   - "success_partial":       converged BUT the posterior-ensemble block
-  #                              failed and never populated r2_cases_ensemble
-  #   - "success":               converged AND r2_cases_ensemble populated
+  # "end-to-end run succeeded"; fixed mode never evaluates convergence): see
+  # .mosaic_run_status(). posthoc_met is the post-hoc best-subset tier result.
   outputs_ok <- !is.na(summary_obj$r2_cases_ensemble)
-  status_str <- if (!isTRUE(state$converged)) {
-    "completed_unconverged"
-  } else if (!outputs_ok) {
-    "success_partial"
-  } else {
-    "success"
-  }
+  status_str <- .mosaic_run_status(state, outputs_ok)
+  run_conv   <- .mosaic_run_converged(state)
+  posthoc_met <- summary_obj$posthoc_criteria_met
 
   log_msg(paste0(
-    "[RUN_SUMMARY] status=%s converged=%s outputs_ok=%s runtime_min=%.2f ",
-    "r2_cases_ensemble=%s r2_deaths_ensemble=%s ",
+    "[RUN_SUMMARY] status=%s mode=%s converged=%s posthoc_criteria_met=%s outputs_ok=%s ",
+    "runtime_min=%.2f r2_cases_ensemble=%s r2_deaths_ensemble=%s ",
     "sims_total=%s sims_retained=%s sims_best_subset=%s sims_best_subset_tier=%s ",
     "ess_pct_above_target=%s resumed=%s dir_output=%s"),
     status_str,
-    if (isTRUE(state$converged)) "YES" else "NO",
+    if (is.null(state$mode)) "NA" else state$mode,
+    if (is.na(run_conv)) "NA" else if (run_conv) "YES" else "NO",
+    if (length(posthoc_met) != 1L || is.na(posthoc_met)) "NA" else if (posthoc_met) "YES" else "NO",
     if (outputs_ok) "YES" else "NO",
     as.numeric(runtime),
     if (is.na(summary_obj$r2_cases_ensemble))  "NA" else sprintf("%.4f", summary_obj$r2_cases_ensemble),
@@ -3356,7 +3354,7 @@ run_MOSAIC <- function(config,
       batches = state$batch_number,
       sims_total = state$total_sims_run,
       sims_success = state$total_sims_successful,
-      converged = isTRUE(state$converged),
+      converged = .mosaic_run_converged(state),
       resumed = isTRUE(state$resumed),
       sims_reused = state$n_sims_reused %||% 0L,
       runtime_min = as.numeric(runtime)

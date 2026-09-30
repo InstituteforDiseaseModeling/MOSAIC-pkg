@@ -259,6 +259,43 @@
   invisible(stale)
 }
 
+#' Calibration convergence and end-of-run status
+#'
+#' The calibration ESS criterion is evaluated only in auto mode, so a
+#' fixed-mode run reports \code{converged = NA} and its own status rather
+#' than "completed_unconverged". Status tree:
+#' \itemize{
+#'   \item \code{"completed_fixed"} / \code{"completed_fixed_partial"}: fixed
+#'     mode, with / without the posterior-ensemble metrics;
+#'   \item \code{"completed_unconverged"}: auto mode, ESS criterion not met;
+#'   \item \code{"success_partial"}: converged but the posterior-ensemble block
+#'     failed and never populated \code{r2_cases_ensemble};
+#'   \item \code{"success"}: converged and \code{r2_cases_ensemble} populated.
+#' }
+#'
+#' @param state The calibration state (\code{mode}, \code{converged}).
+#' @param outputs_ok Logical; whether the ensemble metrics were populated.
+#' @return \code{.mosaic_run_converged()}: \code{TRUE}/\code{FALSE}, or
+#'   \code{NA} in fixed mode. \code{.mosaic_run_status()}: the status string.
+#' @noRd
+.mosaic_run_converged <- function(state) {
+  if (identical(state$mode, "fixed")) NA else isTRUE(state$converged)
+}
+
+#' End-of-run status string (see .mosaic_run_converged() for the tree)
+#' @noRd
+.mosaic_run_status <- function(state, outputs_ok) {
+  if (identical(state$mode, "fixed")) {
+    if (isTRUE(outputs_ok)) "completed_fixed" else "completed_fixed_partial"
+  } else if (!isTRUE(state$converged)) {
+    "completed_unconverged"
+  } else if (!isTRUE(outputs_ok)) {
+    "success_partial"
+  } else {
+    "success"
+  }
+}
+
 #' Write the per-location tau_i credible-interval artifact
 #'
 #' Copies the 95\% interval of the upstream departure-probability fit
@@ -534,6 +571,7 @@
                                        bias_ratio_deaths_ensemble_tier = NA_real_,
                                        n_ensemble_params_tier = NA_integer_,
                                        cfr_implied = NULL,
+                                       posthoc_criteria_met = NA,
                                        io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -609,7 +647,12 @@
     # Convergence and model fit. The pipeline produces the posterior ENSEMBLE
     # and the MEDOID member; the single best-likelihood model is not produced,
     # so summary.json reports ensemble (+ tier) fit metrics only.
-    converged     = isTRUE(state$converged),
+    # `converged` is the calibration ESS stopping criterion, evaluated only in
+    # auto mode; a fixed-mode run never evaluates it, so it is NA (null), not
+    # FALSE. `posthoc_criteria_met` is whether a post-hoc best-subset tier met
+    # all its targets (FALSE = fallback subset), in either mode.
+    converged     = .mosaic_run_converged(state),
+    posthoc_criteria_met = as.logical(posthoc_criteria_met)[1],
     r2_cases_ensemble  = if (!is.na(r2_cases_ensemble)) round(r2_cases_ensemble, 4) else NA_real_,
     r2_deaths_ensemble = if (!is.na(r2_deaths_ensemble)) round(r2_deaths_ensemble, 4) else NA_real_,
     bias_ratio_cases_ensemble  = if (!is.na(bias_ratio_cases_ensemble)) round(bias_ratio_cases_ensemble, 4) else NA_real_,
