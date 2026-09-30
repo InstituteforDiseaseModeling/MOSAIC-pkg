@@ -427,8 +427,10 @@
   burn_in <- if (is.null(burn_in)) 0L else as.integer(round(as.numeric(burn_in)))
   if (is.na(burn_in) || burn_in < 0L) burn_in <- 0L
 
-  # Cases start: explicit score_start_cases (date) overrides burn-in; otherwise
-  # burn_in_days. Index is offset + 1 (1-based scored start).
+  # Cases start: the later of burn_in_days and score_start_cases (a date), so
+  # score_start_cases can only move the start later, never into the burn-in
+  # head. Index is offset + 1 (1-based scored start). Cases may start later
+  # than deaths; the worker then masks the residual cases prefix.
   cases_off <- if (!is.null(lik$score_start_cases)) {
     max(burn_in, date_offset(lik$score_start_cases))
   } else {

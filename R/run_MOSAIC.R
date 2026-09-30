@@ -328,6 +328,11 @@
   #   2. zero weights_obs_deaths on the residual prefix s:(idx_deaths-1) so the
   #      later-starting deaths channel is not scored there (the region is
   #      already spike-free, so peak/cumulative are safe);
+  #   2b. mask (NA) the obs/est CASES on the residual prefix s:(idx_cases-1)
+  #      when cases start later than deaths (score_start_cases after the deaths
+  #      start). NA cells drop out of the NB core, its effective-sample gate and
+  #      every shape term, which matches the cases head that the ensemble R2/
+  #      bias mask and the cases dispersion estimate already exclude;
   #   3. pass the SLICED start date (date_start + (s-1)) as config$date_start so
   #      the peak-index date_seq length matches the sliced n_time_steps (else the
   #      length check fails over to weekly and mis-snaps peaks).
@@ -367,6 +372,9 @@
       .wobs_deaths_lik[, seq_len(.deaths_prefix)] <- 0
     }
   }
+  # Residual cases prefix (post-slice columns 1:(idx_cases - s)); 0 unless
+  # cases start later than deaths.
+  .cases_prefix <- if (.slice_lik) .sw$idx_cases - .s_start else 0L
 
   # Run iterations
   for (j in 1:n_iterations) {
@@ -421,6 +429,10 @@
             est_cases  <- est_cases[,  .keep, drop = FALSE]
             obs_deaths <- obs_deaths[, .keep, drop = FALSE]
             est_deaths <- est_deaths[, .keep, drop = FALSE]
+            if (.cases_prefix > 0L) {
+              obs_cases[, seq_len(.cases_prefix)] <- NA_real_
+              est_cases[, seq_len(.cases_prefix)] <- NA_real_
+            }
           }
 
           # Deaths core: the reported CFR integrated out of this path. Computed on
