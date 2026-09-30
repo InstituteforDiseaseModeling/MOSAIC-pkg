@@ -33,4 +33,8 @@ writer anywhere in the package, read by `process_GTFCC_vaccination_data`,
 `process_WHO_vaccination_data`, `est_vaccination_rate`, `est_mobility`) — refreshing
 WPP does not reach any of those four.
 
+**Still present at v0.93.0 (2026-09-29 review):** reads now at compile L569/L584; 15.0% of
+shared GDP country-years differ >1% from the fresh file, 2025 missing. Default v7.3 feature set
+has no WB covariates, so production psi impact is nil; legacy/"all" covariate path affected.
+
 See [[newest-raw-mtime-resolver-hazard]] and [[wb-poverty-line-redefinition]].

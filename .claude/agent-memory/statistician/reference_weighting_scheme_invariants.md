@@ -128,3 +128,11 @@ measured to get worse with more draws.
 Related: [[weighting-stack-measured-v085]] (nb_k_min, the three weight columns),
 [[likelihood-overconcentration-invariants]] (score noise SD 120 vs best-vs-2nd gap 244 — the noise
 swamps exactly the top-1 comparison that carries the saturated scheme's only discrimination).
+
+## (v0.93.0 review, 2026-09-29) `"tempered"` never reaches the posterior
+
+`best_subset_weighting` is read ONLY in the gated-metrics block (`run_MOSAIC.R:1852-1880`: ESS_B/A/CVw,
+temperature, degeneracy warning). `results$weight_best` (`:1999-2011`) is hard-coded `pmin(Delta,4)`,
+eta 0.5, and that is what the ensemble/posterior consume. So flipping the switch changes the gate verdict
+(ESS_B ~1.25 on ETH -> FAIL) but not one posterior number. Check this wiring before believing any
+"scheme X changes the posterior" claim.

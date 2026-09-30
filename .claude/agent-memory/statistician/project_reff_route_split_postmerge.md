@@ -25,3 +25,11 @@ because W_hat and S_w inflate together.
   relative to complete members only, not total posterior weight.
 
 **How to apply:** if asked to trust peak_Rt/explosivity or tighten these tests, start here. Related: [[reff-median-aggregation-flattening]].
+
+**Update 2026-09-29 (v0.93.0 review):** the v0.92.2 fix (branch fix/reff-postmerge-review, a0d7ff51a) is
+UNMERGED, so main still has daily peak_Rt, parLapplyLB hang, and 15-digit `1_inputs` JSON (verified:
+2/6 members of a 4-loc config diverge 0.4-1.6% total cases -> recompute_ci gate refuses multi-loc runs).
+config_medoid.json is written at 15 digits even on the branch. recompute_ci uses ensemble_candidate
+(tier weights) because optimize re-sorts p (breaks p*1000+s seeds); correct fix = resim candidate,
+reweight by weight_best_opt. Kernel ignores mu: Isym survival is exactly exp(-(gamma_1+mu)); mean_hum
+9.12/8.04/6.53 d at mu 0/0.017/0.058.

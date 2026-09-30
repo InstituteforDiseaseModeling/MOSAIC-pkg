@@ -12,3 +12,4 @@
 - [ND / DLinear evidence audit](project_nd_dlinear_evidence_audit.md) — the -13.3% ND win is raw-psi wk1-13 only; it REVERSES on the pre-registered wk9-13 blend estimand. Option, not default.
 - [psi replicate floor is family-specific](reference_psi_replicate_floor_family_specific.md) — LSTM 0.10% vs DLinear 1.59% MAE spread; never certify one family's effect with another's noise floor.
 - [psi A/B cache inventory (dugong)](project_psi_ab_cache_inventory.md) — NO psi_cache is production-configured (run_arm.R pins country_static=off/balance=FALSE); manifests shard-raced to 1-of-10 cutoffs so run_rolling_cv(psi_cache=) errors; sharded refit ~1.6 h wall not 15 h; seasonal baseline dead before 2025-04-01
+- [Default-path target-anchor leak (v0.93 review)](project_default_path_target_anchor_leak.md) — target_anchor_stop only on opt-in v7.4 prefit; v7.3 default CV still leaks (AGO ~9x); cache key unversioned; prefit manifest drops cutoffs

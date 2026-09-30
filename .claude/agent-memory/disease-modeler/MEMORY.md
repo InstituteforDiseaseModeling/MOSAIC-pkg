@@ -35,3 +35,4 @@
 
 - [tau_i departure semantics + prior defects](reference_tau_i_departure_semantics.md) — tau_i = per-DAY away-fraction (1 tick=1 day, no return compartment), air tau IS daily (docs L650/L724 say "weekly"=STALE); prod prior deflated 1000x => 31/40 mode-at-zero, median CV 1.4; E3 "~1:90 StatsSA"/"~100x" are transcription+unit errors (real anchor 2-10x, real lift ~12x); 40 patches exclude DJI/SDN/LSO
 - [R_eff route-split review (v0.92.1)](reference_reff_route_split_review.md) — kernel faithful; mortality shifts human GI ~1d at high mu ("<0.2d" false); R_env frozen-at-t double-counts psi (beta_env x 1/delta, 11.5x); p_beta is NOT a route share (realized 0.1-10%)
+- [v0.93 review: dose/IC/psi defects](project_v093_review_dose_ic_psi.md) — W/N dose desaturates only at config zeta_1 MODE (prior median 416x up => still saturated); config_default 37x under; 2018 IC = Beta(1,999) zero-case fallback; psi_jt unreproducible

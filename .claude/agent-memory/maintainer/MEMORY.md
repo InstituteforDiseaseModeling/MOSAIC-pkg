@@ -26,3 +26,5 @@
 - [psi_evolve red-team review](project_psi_evolve_redteam_review.md) — 3 MAE estimators reproduced to 4dp (0.1348/0.1490/0.1494), daily-psi vs weekly-obs index misalignment (seasonal 0.1975 vs 0.1935), block-10 EVAL_GRID cascade, verified fold counts
 - [keras3-R API traps](reference_keras3_r_api_traps.md) — layer_concatenate(name=) raises KeyError:0; axis is 1-based; dim() is zero-length on KerasTensor; a new hyperparameter needs the arch_hp whitelist or it never reaches the model
 - [R_eff route-split review (v0.92.1)](project_reff_route_split_review.md) — PR #126 clean-list; MOSAIC-docs spec rewrite was uncommitted; lazydata exists(asNamespace) skip-guard trap
+- [v0.93.0 release review](project_v093_release_review.md) — sample_kappa dual-default drift, undeclared gdistance/malariaAtlas/mipfp, vignette purl hazard, NEWS gaps; reusable static checks
+- [pkgdown root-md publish trap](reference_pkgdown_root_md_publish_trap.md) — every root *.md (CLAUDE.md, plans) goes to public site despite .Rbuildignore; deploy clean:false keeps dead pages
