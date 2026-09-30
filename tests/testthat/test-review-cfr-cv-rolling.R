@@ -353,6 +353,51 @@ test_that("prefit keeps earlier cutoffs in the manifest and keys cache hits on t
   expect_identical(readLines(canon), "SENTINEL")
 })
 
+test_that("prefit keeps the fit config and records the pooled seeds and anchor end", {
+  # SCV-2: psi_suitability_config.json is the only record of which seeds were
+  # pooled; the isolated fit deleted it with its scratch dir, so a cutoff
+  # pooled over 4 of 5 seeds looked like a normal manifest entry.
+  env <- new.env()
+  fake <- .rv_fake_est(env)
+  local_mocked_bindings(est_suitability = function(PATHS, ...) {
+    fake(PATHS, ...)
+    jsonlite::write_json(list(n_seeds = 5L, n_seeds_ok = 4L, seeds_ok = I(1:4),
+                              seeds_failed = I(5L), target_anchor_end = "2024-01-07",
+                              provenance = list(source_csv_md5 = "abc123")),
+                         file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json"),
+                         auto_unbox = TRUE)
+    invisible(NULL)
+  }, .package = "MOSAIC")
+  cache <- tempfile("rv_prefit_")
+  suppressWarnings(prefit_rolling_cv_psi(list(MODEL_INPUT = tempdir()), cutoffs = "2024-03-01",
+                        est_suitability_spec = list(feature_set = "v7.3"),
+                        pred_date_start = "2023-01-01", pred_date_stop = "2025-01-01",
+                        dir_cache = cache, verbose = FALSE))
+  expect_true(file.exists(file.path(cache, "psi_2024-03-01_config.json")))
+  man <- MOSAIC:::.rcv_psi_read_manifest(file.path(cache, "psi_manifest.json"))
+  e <- man$cutoffs[[1]]
+  expect_identical(e$psi_config, "psi_2024-03-01_config.json")
+  expect_equal(as.integer(e$n_seeds), 5L)       # spec had no arch_control$n_seeds
+  expect_equal(as.integer(e$n_seeds_ok), 4L)
+  expect_equal(as.integer(unlist(e$seeds_failed)), 5L)
+  expect_identical(e$target_anchor_end, "2024-01-07")
+  expect_identical(e$source_csv_md5, "abc123")
+})
+
+test_that("an isolated psi fit without a config removes a stale copied config", {
+  env <- new.env()
+  local_mocked_bindings(est_suitability = .rv_fake_est(env), .package = "MOSAIC")
+  d <- withr::local_tempdir()
+  dest <- file.path(d, "psi_x.csv")
+  writeLines("{}", file.path(d, "psi_x_config.json"))
+  out <- MOSAIC:::.rcv_fit_psi_isolated(
+    list(PATHS = list(MODEL_INPUT = d), fit_date_stop = "2024-03-01",
+         pred_date_start = "2024-01-01", pred_date_stop = "2024-02-01"), dest)
+  expect_true(file.exists(dest))
+  expect_null(attr(out, "config_json"))
+  expect_false(file.exists(file.path(d, "psi_x_config.json")))
+})
+
 test_that("prefit warns that the canonical-panel (non-v7.4) path is not leak-free", {
   env <- new.env()
   local_mocked_bindings(est_suitability = .rv_fake_est(env), .package = "MOSAIC")

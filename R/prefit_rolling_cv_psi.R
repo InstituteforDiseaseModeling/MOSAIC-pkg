@@ -217,18 +217,24 @@ prefit_rolling_cv_psi <- function(PATHS,
           # Fit into a private scratch MODEL_INPUT and atomically freeze the
           # daily psi into the cache (never touches PATHS$MODEL_INPUT).
           es_args <- .rcv_merge_est_args(spec, owned)
-          .rcv_fit_psi_isolated(es_args, csv_dst)
+          fitted  <- .rcv_fit_psi_isolated(es_args, csv_dst)
+          # What the fit actually pooled (seeds that failed are dropped with only
+          # a console warning), its target-anchor end and the source-panel hash
+          # exist only in the fit config, which the scratch directory deletes.
+          fit_prov <- .rcv_psi_config_fields(attr(fitted, "config_json"))
 
-          entry <- list(
+          entry <- c(list(
                cutoff          = T_chr,
                csv             = basename(csv_dst),
                sha256          = .rcv_file_hash(csv_dst),
                spec_hash       = spec_hash,
                pred_date_start = as.character(pred_start),
                pred_date_stop  = as.character(pred_stop),
-               n_seeds         = n_seeds,
+               n_seeds         = if (is.na(n_seeds) && !is.null(fit_prov$n_seeds_requested))
+                                      as.integer(fit_prov$n_seeds_requested) else n_seeds,
                parallel_seeds  = par_seeds,
-               mosaic_version  = mosaic_ver)
+               mosaic_version  = mosaic_ver),
+               fit_prov[setdiff(names(fit_prov), "n_seeds_requested")])
           if (v74$active) {
                entry$hazard_panel        <- "v7.4_leakfree"
                entry$panel_csv           <- sprintf("panel_v74_%s.csv", T_chr)
@@ -567,7 +573,12 @@ prefit_rolling_cv_psi <- function(PATHS,
 #' file. This helper redirects \code{MODEL_INPUT} and \code{DOCS_FIGURES} to a
 #' private temporary directory, runs the fit, and atomically copies the daily
 #' psi CSV to \code{dest_csv} (tempfile in the destination dir + rename). The
-#' scratch directory is removed on exit.
+#' fit's \code{psi_suitability_config.json} -- the only record of the seeds
+#' actually pooled, the target-anchor end and the source-panel hash -- is copied
+#' the same way to \code{<dest stem>_config.json} (see
+#' \code{.rcv_psi_config_path()}). The scratch directory is removed on exit.
+#' @return Invisibly, \code{dest_csv}, with attribute \code{config_json} (the
+#'   copied config path, or \code{NULL} when the fit wrote none).
 #' @keywords internal
 #' @noRd
 .rcv_fit_psi_isolated <- function(es_args, dest_csv) {
@@ -594,7 +605,60 @@ prefit_rolling_cv_psi <- function(PATHS,
           if (file.exists(tmp)) unlink(tmp)
           stop("failed to atomically place psi at ", dest_csv)
      }
-     invisible(dest_csv)
+
+     cfg_dest <- .rcv_psi_config_path(dest_csv)
+     cfg_src  <- file.path(scratch, "psi_suitability_config.json")
+     config_json <- NULL
+     if (file.exists(cfg_src)) {
+          tmp_cfg <- tempfile(pattern = "psi_cfg_", tmpdir = dirname(dest_csv),
+                              fileext = ".json.tmp")
+          if (!file.copy(cfg_src, tmp_cfg, overwrite = TRUE) ||
+              !file.rename(tmp_cfg, cfg_dest)) {
+               if (file.exists(tmp_cfg)) unlink(tmp_cfg)
+               stop("failed to atomically place the psi fit config at ", cfg_dest)
+          }
+          config_json <- cfg_dest
+     } else if (file.exists(cfg_dest)) {
+          # A config left by an earlier fit of this CSV would describe the wrong psi.
+          unlink(cfg_dest)
+     }
+     invisible(structure(dest_csv, config_json = config_json))
+}
+
+#' Path of the fit config copied next to a frozen psi CSV
+#' (\code{psi_<T>.csv} -> \code{psi_<T>_config.json}).
+#' @keywords internal
+#' @noRd
+.rcv_psi_config_path <- function(psi_csv) {
+     sub("\\.csv$", "_config.json", psi_csv)
+}
+
+#' Seed and leakage provenance of one psi fit, for its manifest entry
+#'
+#' Reads the copied \code{psi_suitability_config.json} and returns the fields a
+#' manifest entry needs to show what the frozen psi was built from:
+#' \code{n_seeds_ok}/\code{seeds_failed} (a seed that failed is dropped from the
+#' pool with only a console warning), \code{target_anchor_end} and the source
+#' panel's \code{source_csv_md5}. Missing fields (e.g. the lstm_v1_legacy
+#' config) are omitted.
+#' @param config_json Path returned as \code{attr(, "config_json")} by
+#'   \code{.rcv_fit_psi_isolated()}, or \code{NULL}.
+#' @return Named list (possibly empty).
+#' @keywords internal
+#' @noRd
+.rcv_psi_config_fields <- function(config_json) {
+     if (is.null(config_json) || !file.exists(config_json)) return(list())
+     cfg <- tryCatch(jsonlite::read_json(config_json, simplifyVector = TRUE),
+                     error = function(e) NULL)
+     if (is.null(cfg)) return(list())
+     out <- list(
+          psi_config        = basename(config_json),
+          n_seeds_requested = cfg$n_seeds,
+          n_seeds_ok        = cfg$n_seeds_ok,
+          seeds_failed      = if (!is.null(cfg$seeds_failed)) I(as.integer(unlist(cfg$seeds_failed))),
+          target_anchor_end = cfg$target_anchor_end,
+          source_csv_md5    = cfg$provenance$source_csv_md5)
+     Filter(Negate(is.null), out)
 }
 
 #' Write psi_manifest.json from the per-cutoff entry list.
