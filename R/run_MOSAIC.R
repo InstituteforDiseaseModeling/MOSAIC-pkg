@@ -723,9 +723,11 @@
 #' config <- get_location_config(iso = "ETH")
 #' priors <- get_location_priors(iso = "ETH")
 #'
-#' # Tighten transmission rate prior
-#' priors$tau_i$shape <- 20
-#' priors$tau_i$rate <- 4
+#' # Tighten the departure-probability (tau_i) prior for ETH. Location priors
+#' # live under priors$parameters_location; tau_i is lognormal(meanlog, sdlog).
+#' tau_eth <- priors$parameters_location$tau_i$location$ETH$parameters
+#' tau_eth$sdlog <- tau_eth$sdlog / 2
+#' priors$parameters_location$tau_i$location$ETH$parameters <- tau_eth
 #'
 #' run_MOSAIC(config, priors, "./output")
 #'
@@ -3396,14 +3398,14 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param sampling List of parameter sampling flags (what to sample). Default is:
 #'   \itemize{
-#'     \item \code{sample_tau_i}: Sample transmission rate (default: TRUE)
-#'     \item \code{sample_mobility_gamma}: Sample mobility gamma (default: TRUE)
-#'     \item \code{sample_mobility_omega}: Sample mobility omega (default: TRUE)
-#'     \item \code{sample_iota}: Sample importation rate (default: TRUE)
-#'     \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
+#'     \item \code{sample_tau_i}: Sample the daily departure (travel) probability by location (default: TRUE)
+#'     \item \code{sample_mobility_gamma}: Sample the gravity-model distance-decay exponent (default: TRUE)
+#'     \item \code{sample_mobility_omega}: Sample the gravity-model population-scaling exponent (default: TRUE)
+#'     \item \code{sample_iota}: Sample the incubation rate, E to I (default: TRUE)
+#'     \item \code{sample_gamma_2}: Sample the asymptomatic recovery rate (default: TRUE; second-dose vaccine effectiveness is \code{sample_phi_2})
 #'     \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: FALSE, PINNED)
 #'     \item \code{sample_alpha_2}: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)
-#'     \item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
+#'     \item ... (see \code{mosaic_control_defaults()} for complete list of 40 flags)
 #'   }
 #'
 #' @param likelihood List of likelihood calculation settings (how to score model fit). Default is:
@@ -3421,9 +3423,11 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
 #'     \item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
 #'     \item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
-#'     \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
-
+#'     \item \code{min_best_subset}: Smallest best-subset size searched (default: 30)
+#'     \item \code{max_best_subset}: Largest best-subset size searched (default: 1000)
 #'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "perplexity")
+#'     \item \code{ESS_marginal_method}: Per-parameter marginal ESS method, "kde" or "binned" (default: "kde")
+#'     \item \code{best_subset_weighting}: Best-subset posterior weights, "saturated" or "tempered" (default: "saturated"; "tempered" is sharper, not softer)
 #'   }
 #'
 #' @param predictions List of prediction generation settings. Default is:
@@ -3619,15 +3623,15 @@ mosaic_control_defaults <- function(calibration = NULL,
   default_sampling <- list(
     # === GLOBAL PARAMETERS (21) ===
     # Transmission dynamics
-    sample_iota = TRUE,              # Environmental contamination rate
-    sample_epsilon = TRUE,           # Latent period rate
+    sample_iota = TRUE,              # Incubation rate (E -> I)
+    sample_epsilon = TRUE,           # Waning rate of natural immunity
     sample_gamma_1 = TRUE,           # Recovery rate (symptomatic)
     sample_gamma_2 = TRUE,           # Recovery rate (asymptomatic)
-    sample_rho = TRUE,               # Proportion symptomatic
+    sample_rho = TRUE,               # Care-seeking (reporting) rate
 
     # Mobility
-    sample_mobility_gamma = TRUE,    # Gravity model exponent
-    sample_mobility_omega = TRUE,    # Mobility rate
+    sample_mobility_gamma = TRUE,    # Gravity-model distance-decay exponent
+    sample_mobility_omega = TRUE,    # Gravity-model population-scaling exponent
 
     # Transmission mixing exponents
     sample_alpha_1 = FALSE,          # Within-metapop population mixing exponent: PINNED by default (collinear with beta_j0_tot endemically and
@@ -3636,12 +3640,12 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_alpha_2 = FALSE,          # Frequency-dependence degree: PINNED by default (weakly identified; psi absorbs the signal)
     sample_omega_1 = TRUE,           # Waning rate (1 dose)
     sample_omega_2 = TRUE,           # Waning rate (2 doses)
-    sample_phi_1 = TRUE,             # Vaccine coverage (1 dose)
-    sample_phi_2 = TRUE,             # Vaccine coverage (2 doses)
+    sample_phi_1 = TRUE,             # Vaccine effectiveness (1 dose)
+    sample_phi_2 = TRUE,             # Vaccine effectiveness (2 doses)
 
     # Reporting/observation
-    sample_sigma = TRUE,             # Proportion symptomatic
-    sample_kappa                  = FALSE,             # Overdispersion parameter
+    sample_sigma = TRUE,             # Symptomatic fraction
+    sample_kappa                  = FALSE,             # 50% infectious dose of V. cholerae
     sample_chi_endemic = TRUE,       # PPV among suspected cases (endemic)
     sample_chi_epidemic = TRUE,      # PPV among suspected cases (epidemic)
     sample_rho_deaths = FALSE,       # Death detection rate: PINNED at 0.42 (cancels from reported deaths exactly; sets only true deaths)
