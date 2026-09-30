@@ -35,7 +35,11 @@ test_that("a missing tensorflow/keras is reported in the summary and leaks no gl
           .package  = "reticulate"
      )
 
-     out <- paste(cli::cli_fmt(check_dependencies()), collapse = "\n")
+     # print(config) writes to stdout, which cli_fmt() does not capture.
+     printed <- utils::capture.output(
+          out <- paste(cli::cli_fmt(check_dependencies()), collapse = "\n"))
+
+     expect_match(paste(printed, collapse = "\n"), paths$exec, fixed = TRUE)
 
      expect_match(out, "tensorflow \\[suitability\\] not found in pip")
      expect_match(out, "Suitability estimation: Limited")

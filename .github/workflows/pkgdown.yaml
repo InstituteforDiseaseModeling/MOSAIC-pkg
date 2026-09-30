@@ -36,11 +36,12 @@ jobs:
           extra-packages: any::pkgdown, local::.
           needs: website
 
-      # pkgdown renders EVERY root *.md into a site page and has no exclude
-      # option, so the internal agent/planning notes would be published. Drop
-      # them from this throwaway checkout before building.
+      # pkgdown renders EVERY root *.md except README, LICENSE and NEWS into a
+      # site page and has no exclude option, so internal agent/planning notes
+      # would be published. Drop every other root *.md from this throwaway
+      # checkout before building, so a note added later stays off the site too.
       - name: Keep internal notes off the site
-        run: rm -f CLAUDE.md migrate-laser-r.md plan-review.md pipeline-performance-plan.md
+        run: find . -maxdepth 1 -type f -name '*.md' ! -name README.md ! -name NEWS.md ! -name LICENSE.md -print -delete
 
       - name: Build site
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)

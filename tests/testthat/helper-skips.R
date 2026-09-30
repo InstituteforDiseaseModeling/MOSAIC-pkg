@@ -87,14 +87,18 @@ skip_if_no_data <- function(env = parent.frame()) {
 # build, not the load_all() build under test. Under devtools::test() a stale
 # install makes a parallel-vs-serial comparison test two different builds, and
 # assertions on file names or counts cannot see the difference. Skip unless the
-# installed version matches the version under test (CI installs the tarball
-# first, so there it always matches).
+# installed version matches the version under test AND, when the package source
+# is present (devtools::test / test_local), the install is newer than every file
+# in R/. The version check alone passes a stale install whenever the version was
+# not bumped. A fresh checkout can make R/ look newer than a good install, which
+# only skips. CI installs the tarball after checkout, so there both checks pass.
 skip_if_installed_build_stale <- function() {
   inst_path <- find.package("MOSAIC", lib.loc = .libPaths(), quiet = TRUE)
   testthat::skip_if(length(inst_path) == 0L,
                     "MOSAIC is not installed; PSOCK workers cannot load it")
+  inst_lib <- dirname(inst_path[1])
   inst_ver <- tryCatch(
-    as.character(utils::packageVersion("MOSAIC", lib.loc = dirname(inst_path[1]))),
+    as.character(utils::packageVersion("MOSAIC", lib.loc = inst_lib)),
     error = function(e) NA_character_)
   here_ver <- as.character(utils::packageVersion("MOSAIC"))
   testthat::skip_if(
@@ -102,6 +106,27 @@ skip_if_installed_build_stale <- function() {
     sprintf(paste0("installed MOSAIC (%s) differs from the build under test (%s); ",
                    "PSOCK workers would run the installed one"),
             if (is.na(inst_ver)) "unreadable" else inst_ver, here_ver))
+
+  # Tests run with the working directory at tests/testthat, so the package
+  # source (when present) is two levels up.
+  src_desc <- file.path("..", "..", "DESCRIPTION")
+  is_src <- file.exists(src_desc) && identical(
+    tryCatch(unname(read.dcf(src_desc, fields = "Package")[1, 1]),
+             error = function(e) NA_character_), "MOSAIC")
+  src_files <- if (is_src) list.files(file.path("..", "..", "R"),
+                                      pattern = "\\.[Rr]$", full.names = TRUE) else character(0)
+  if (length(src_files)) {
+    built <- utils::packageDescription("MOSAIC", lib.loc = inst_lib)$Built
+    built_at <- if (is.null(built)) NA else suppressWarnings(as.POSIXct(
+      trimws(strsplit(built, ";", fixed = TRUE)[[1]][3]), tz = "UTC"))
+    newest <- max(file.mtime(src_files))
+    testthat::skip_if(
+      is.na(built_at) || newest > built_at,
+      sprintf(paste0("installed MOSAIC was built %s, before the newest change in ",
+                     "R/ (%s); PSOCK workers would run the stale install"),
+              format(built_at, "%Y-%m-%d %H:%M:%S UTC"),
+              format(newest, tz = "UTC", "%Y-%m-%d %H:%M:%S UTC")))
+  }
 }
 
 # --- Core-count skip (parallel tests that spawn PSOCK/mclapply clusters) ------

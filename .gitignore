@@ -52,4 +52,4 @@ __pycache__/
 *.pem
 *_key
 *_key.pub
-docs/
+/docs/

@@ -89,13 +89,19 @@ test_that("population_weighted is deprecated and ignored", {
   expect_equal(w$res$predictions$logit_mean, .shared()$res$predictions$logit_mean)
 })
 
-test_that("an in-progress year is excluded and an early-ending country is held at its own last year", {
+# Edge-case panel: country 2's data end in 2015 and 2024 is an in-progress year.
+.edge_who <- function() {
   who <- .synthetic_who(seed = 2)
   early <- MOSAIC::iso_codes_mosaic[2]
   who <- who[!(who$iso_code == early & who$year > 2015), ]          # data end in 2015
   who$source <- "dashboard_annual"
   who$source[who$year == 2024 & who$iso_code != "AFRO"] <- "dashboard_snapshot_2024-05-01"   # partial year
-  out <- .run_est(who)
+  who
+}
+
+test_that("an in-progress year is excluded and an early-ending country is held at its own last year", {
+  early <- MOSAIC::iso_codes_mosaic[2]
+  out <- .run_est(.edge_who())
   expect_identical(out$res$summary$last_data_year, 2023L)          # 2024 rows dropped
   p <- out$res$predictions
   q <- p[p$iso_code == early, ]
@@ -114,9 +120,11 @@ test_that("an in-progress year is excluded and an early-ending country is held a
 
 test_that("the validation block reports both forecast rules with a proper coverage", {
   # validate = TRUE refits the model once per held-out year, which made this
-  # the single slowest test in the fast tier; it runs in the nightly slow tier.
+  # the single slowest test in the fast tier; it runs in the nightly slow tier,
+  # on the same edge-case panel (early-ending country, in-progress year).
   skip_if_slow()
-  out <- .run_est(.synthetic_who(seed = 2), validate = TRUE)
+  out <- .run_est(.edge_who(), validate = TRUE)
+  expect_identical(out$res$summary$last_data_year, 2023L)
   v <- out$res$validation$summary
   expect_setequal(v$method, c("carry_forward", "project"))
   expect_true(all(v$coverage95 >= 0 & v$coverage95 <= 1))

@@ -1,7 +1,8 @@
 # Tests for the re-simulated posterior R_eff credible interval machinery:
 #   - .mosaic_reff_to_mat()          (orientation-robust channel coercion)
 #   - per-member weighted-quantile reduction (known weights -> known quantiles)
-#   - burn-in exclusion (.add_reff_mask_burn_in: leading days set NA)
+#   - burn-in exclusion (.add_reff_mask_burn_in, and the inline mask in
+#     .add_reff_recompute_ci with the re-simulation mocked)
 #   - .mosaic_build_trajectories() grid: stride = 1 -> full daily-consecutive set
 #
 # The full re-simulation (.mosaic_reff_resim_ci / add_reproductive_numbers
@@ -79,6 +80,54 @@ test_that(".add_reff_mask_burn_in sets the leading days to NA in every estimate"
   expect_identical(attr(out, "burn_in_days"), bid)
   # bid = 0 is a no-op apart from recording the attribute.
   expect_equal(unname(MOSAIC:::.add_reff_mask_burn_in(reff, 0L)$central), central)
+})
+
+# The recompute_ci path masks burn-in inline rather than through the helper
+# above, so it needs its own check. The re-simulation is mocked; the masking,
+# assembly and attributes are the real code.
+test_that(".add_reff_recompute_ci NAs the burn-in days of every estimand", {
+  nL <- 2L; Tn <- 12L; bid <- 4L
+  probs <- c(0.025, 0.5, 0.975)
+  out_dir <- withr::local_tempdir()
+  dir.create(file.path(out_dir, "2_calibration"))
+  dir.create(file.path(out_dir, "1_inputs"))
+  saveRDS(list(cases_array = array(1, dim = c(nL, Tn, 1L, 1L)),
+               location_names = c("AAA", "BBB"), date_start = "2024-01-01"),
+          file.path(out_dir, "2_calibration", "ensemble_candidate.rds"))
+  jsonlite::write_json(list(), file.path(out_dir, "1_inputs", "priors.json"))
+  jsonlite::write_json(list(control = list(sampling = list())),
+                       file.path(out_dir, "1_inputs", "control.json"))
+
+  fake_resim <- function(...) {
+    mk <- function(v) matrix(v, nL, Tn)
+    central <- list(R_eff = mk(1.5), R_hum = mk(1), R_env = mk(0.5))
+    qmats <- lapply(central, function(m) array(rep(m, 3L), dim = c(nL, Tn, 3L)))
+    list(central = central, qmats = qmats, probs = probs, kernel_params = list(),
+         central_definition = "test", peak_Rt = NULL, peak_window = 7L,
+         medoid_member = 1L, gate_frac = 0.9, gate_rel_err_pct = 0,
+         gate_rel_err_max = 0, gate_agg_rel_err = 0, gate_cor_median = 1,
+         gate_cor_min = 1, gate_max_abs_diff = 0, gate_n_outliers = 0L,
+         n_members = 1L)
+  }
+  testthat::local_mocked_bindings(.mosaic_reff_resim_ci = fake_resim,
+                                  get_paths = function(...) list(),
+                                  .package = "MOSAIC")
+
+  out <- MOSAIC:::.add_reff_recompute_ci(out_dir, base_config = list(),
+                                         burn_in_days = bid, verbose = FALSE)
+  val_cols <- c("central", "q2.5", "q50", "q97.5")
+  expect_true(all(val_cols %in% names(out)))
+  early <- out$t <= bid
+  expect_setequal(unique(out$estimand), c("R_eff", "R_hum", "R_env"))
+  for (col in val_cols) {
+    expect_true(all(is.na(out[[col]][early])), info = col)
+    expect_true(all(is.finite(out[[col]][!early])), info = col)
+  }
+  expect_true(all(is.na(attr(out, "central_matrix")[, seq_len(bid)])))
+  expect_true(all(is.finite(attr(out, "central_matrix")[, (bid + 1L):Tn])))
+  for (r in attr(out, "route_central"))
+    expect_true(all(is.na(r[, seq_len(bid)])))
+  expect_identical(attr(out, "burn_in_days"), bid)
 })
 
 # -----------------------------------------------------------------------------
