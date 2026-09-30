@@ -1868,6 +1868,15 @@ run_MOSAIC <- function(config,
 
     log_msg("  All tiers failed - using fallback (top %d simulations, %.1f%%)",
             n_top_final, percentile_used)
+    subset_weighting <- control$targets$best_subset_weighting %||% "saturated"
+    if (!identical(subset_weighting, "saturated")) {
+      log_warn(paste0("Best-subset tier search ran under best_subset_weighting = '%s'; ",
+                      "every tier failed, so the posterior is the top %d draws by ",
+                      "likelihood with posthoc_criteria_met = NO. '%s' weights are ",
+                      "sharper than 'saturated' and may not meet any tier at this ",
+                      "run size."),
+               subset_weighting, n_top_final, subset_weighting)
+    }
 
     # Create minimal optimal_subset_result for consistency
     optimal_subset_result <- list(

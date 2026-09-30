@@ -5,11 +5,16 @@
 #'
 #' @param plot A ggplot object from which the legend should be extracted.
 #'
-#' @return A grob representing the legend of the ggplot object.
+#' @return A grob representing the legend of the ggplot object, or an empty
+#'   \code{grid::nullGrob()} when the plot has no legend (e.g. a mapped layer with
+#'   no rows, such as a single-location flux network), so the result can always
+#'   be passed to \code{gridExtra::grid.arrange()} or \code{cowplot::plot_grid()}.
 #'
 #' @details This function converts a ggplot object into a grob using **`ggplotGrob()`** and
-#' extracts the legend, which is stored in the grob under the name "guide-box". The function
-#' can be used to separate the legend from the plot and combine it with other plots as needed.
+#' extracts the legend. ggplot2 >= 3.5 lays out one guide-box slot per position
+#' (\code{"guide-box-right"}, \code{"guide-box-bottom"}, ...), leaving empty slots
+#' as zero grobs; the first non-empty slot is returned, and the single
+#' \code{"guide-box"} grob of older ggplot2 versions is matched too.
 #'
 #' @importFrom ggplot2 ggplotGrob
 #' @importFrom grid grid.draw
@@ -33,8 +38,14 @@ get_ggplot_legend <- function(plot) {
      # Convert the ggplot object to a gtable object
      gtable <- ggplot2::ggplotGrob(plot)
 
-     # Extract the legend, which is named "guide-box" in the gtable
-     legend <- gtable$grobs[[which(sapply(gtable$grobs, function(x) x$name) == "guide-box")]]
+     # Guide-box grobs: layout slots named "guide-box[-<position>]" (ggplot2
+     # >= 3.5) or a grob named "guide-box" (older); empty slots are zeroGrobs.
+     grob_names <- vapply(gtable$grobs, function(x) as.character(x$name %||% "")[1],
+                          character(1))
+     is_box <- grepl("^guide-box", gtable$layout$name) | grepl("^guide-box", grob_names)
+     is_empty <- vapply(gtable$grobs, function(x) inherits(x, "zeroGrob"), logical(1))
+     idx <- which(is_box & !is_empty)
+     legend <- if (length(idx)) gtable$grobs[[idx[1]]] else grid::nullGrob()
 
      return(legend)
 }

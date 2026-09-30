@@ -406,6 +406,21 @@ calc_model_posterior_quantiles <- function(results,
     best_subset_idx <- as.logical(results[[subset_col]])
     best_subset_weights <- results[[weight_col]][best_subset_idx]
 
+    # The weighted KDE behind the posterior KL needs a Kish n_eff >= 2 (its
+    # bandwidth is undefined below that), so a near-degenerate posterior gives
+    # KL = NA for every parameter. Say so once rather than leave a column of NAs.
+    w_ok <- best_subset_weights[is.finite(best_subset_weights) & best_subset_weights >= 0]
+    if (length(w_ok) && sum(w_ok) > 0) {
+        w_ok <- w_ok / sum(w_ok)
+        n_eff_post <- 1 / sum(w_ok^2)
+        if (n_eff_post < 2) {
+            warning(sprintf(paste0("calc_model_posterior_quantiles: posterior weights ('%s') ",
+                                   "have Kish n_eff = %.2f < 2, so the weighted-KDE KL ",
+                                   "divergence is NA for the posterior rows."),
+                            weight_col, n_eff_post), call. = FALSE)
+        }
+    }
+
     if (verbose) {
         message("Computing prior and posterior quantiles for ", nrow(param_inventory), " parameters...")
         message("All finite simulations (prior): ", sum(all_finite_idx), " models")

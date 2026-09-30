@@ -310,3 +310,9 @@ test_that("KNOWN DEFECT: kde marginal ESS stays large for a point-mass weight ve
                                   marginal_method = "kde")
   expect_gt(ess$ess_marginal[ess$parameter == "gamma_1"], 100)
 })
+
+test_that("a forced fallback under non-saturated best-subset weighting is logged", {
+  body_txt <- paste(deparse(body(MOSAIC::run_MOSAIC)), collapse = "\n")
+  expect_true(grepl("every tier failed, so the posterior is the top %d draws", body_txt,
+                    fixed = TRUE))
+})
