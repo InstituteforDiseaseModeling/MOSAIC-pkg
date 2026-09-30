@@ -1271,7 +1271,6 @@ est_epidemic_peaks <- function(PATHS) {
      }
 
      # Apply manual interval adjustments for specific peaks
-     message(paste("DEBUG: About to apply manual adjustments. nrow(out) =", nrow(out)))
      if (nrow(out) > 0) {
           # NGA October 2024: Reduce interval by 40% due to smoothing artifact
           nga_oct_2024_idx <- which(out$iso_code == "NGA" &
