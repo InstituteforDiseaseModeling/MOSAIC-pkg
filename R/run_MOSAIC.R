@@ -877,12 +877,8 @@ run_MOSAIC <- function(config,
   # Validate sampling_args
   sampling_args <- .mosaic_validate_sampling_args(sampling_args)
 
-  # ===========================================================================
-  # PYTHON ENVIRONMENT CHECK
-  # ===========================================================================
-
-  check_python_env()
-  Sys.setenv(PYTHONWARNINGS = "ignore::UserWarning")
+  # (No Python environment check: simulation and calibration are pure R since
+  # v0.68.0. check_python_env() remains available for est_suitability() users.)
 
   # ===========================================================================
   # BLAS THREAD CONTROL CHECK (Critical for cluster performance)
@@ -1228,7 +1224,7 @@ run_MOSAIC <- function(config,
       log_msg(paste0("Derived data-driven weights_location (down-weighting ",
                      "low-signal/absence countries): %d below 0.5, floor %.3f, ",
                      "range [%.3f, %.3f]"),
-              sum(derived_wl < 0.5), min(derived_wl),
+              sum(derived_wl < 0.5), formals(.mosaic_derive_weights_location)$floor,
               min(derived_wl), max(derived_wl))
     }
   }
@@ -1814,7 +1810,7 @@ run_MOSAIC <- function(config,
     if (tier_result$converged) {
       # CRITICAL: Calculate percentile from absolute count
       tier_percentile <- (tier_result$n / nrow(results)) * 100
-      log_msg("    \u2713 Tier '%s' converged at n=%d (%.1f%% of retained)",
+      log_msg("    \u2713 Tier '%s' converged at n=%d (%.1f%% of all draws)",
               tier$name, tier_result$n, tier_percentile)
       optimal_subset_result <- tier_result
       tier_used <- tier$name
@@ -3151,13 +3147,13 @@ run_MOSAIC <- function(config,
   # COMBINE PREDICTION CSVs
   # ===========================================================================
 
-  # Combine per-location prediction CSVs by type. Ensemble, best, medoid, and
-  # stochastic each have their own column schema and cannot be rbind'd together.
+  # Combine per-location prediction CSVs by type. Ensemble and medoid each
+  # have their own column schema and cannot be rbind'd together.
   # Per-location files live in dirs$res_predictions alongside the combined
   # file. Pattern: predictions_<type>_<LOC>.csv (per-location) ->
   # predictions_<type>_all.csv (combined, multi-location only). For N=1 the
   # per-location CSV is canonical on its own and no _all.csv is written.
-  for (pred_type in c("ensemble", "medoid", "stochastic")) {
+  for (pred_type in c("ensemble", "medoid")) {
     pred_csvs <- list.files(
       dirs$res_predictions,
       pattern = sprintf("^predictions_%s_.*\\.csv$", pred_type),
