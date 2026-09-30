@@ -7,7 +7,7 @@
 #'   \item \strong{DATA_PROCESSED}: Path to save the symptomatic proportion data.
 #' }
 #'
-#' @return The function does not return a value but saves the data frame to a CSV file.
+#' @return Invisibly, the data frame, after saving it to a CSV file. Errors if any row has \code{ci_lo > ci_hi} or a mean outside its interval.
 #'
 #' @examples
 #' \dontrun{
@@ -25,8 +25,10 @@ get_symptomatic_prop_data <- function(PATHS) {
 
      df <- data.frame(
           mean     = c(0.57, 0.25, NA, 0.238, 0.213, 0.204, 0.371, 0.184, 0.0005996),
-          ci_lo    = c(NA, NA, 0.2, 0.227, 0.194, NA, NA, 0.256, 0.0004998),
-          ci_hi    = c(NA, NA, 0.6, 0.25, 0.231, NA, NA, 0.112, 0.0007994),
+          # Harris et al (2008): bounds were transposed (0.256 / 0.112); the
+          # interval is centred on the 0.184 point estimate.
+          ci_lo    = c(NA, NA, 0.2, 0.227, 0.194, NA, NA, 0.112, 0.0004998),
+          ci_hi    = c(NA, NA, 0.6, 0.25, 0.231, NA, NA, 0.256, 0.0007994),
           source   = c("Nelson et al (2009)", "Lueng & Matrajt (2021)", "Harris et al (2012)", "Finger et al (2024)",
                        "Jackson et al (2013)", "Bart et al (1970)", "Bart et al (1970)", "Harris et al (2008)", "Hegde et al (2023)"),
           location = c(NA, NA, "Endemic regions", "Haiti", "Haiti", "Pakistan", "Pakistan", "Bangladesh", "Bangladesh"),
@@ -37,8 +39,16 @@ get_symptomatic_prop_data <- function(PATHS) {
           note2    = c("", "", "", "", "", "El Tor Ogawa", "Inaba", "", "")
      )
 
+     bad <- which(!is.na(df$ci_lo) & !is.na(df$ci_hi) &
+                  (df$ci_lo > df$ci_hi |
+                   (!is.na(df$mean) & (df$mean < df$ci_lo | df$mean > df$ci_hi))))
+     if (length(bad)) {
+          stop("Symptomatic-proportion rows with inconsistent intervals (need ci_lo <= mean <= ci_hi): ",
+               paste(df$source[bad], collapse = ", "))
+     }
+
      path <- file.path(PATHS$DATA_SYMPTOMATIC, "summary_symptomatic_cases.csv")
      utils::write.csv(df, file = path, row.names = FALSE)
      message(paste("Symptomatic proportion data saved to:", path))
-
+     invisible(df)
 }
