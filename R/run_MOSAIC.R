@@ -1285,7 +1285,11 @@ run_MOSAIC <- function(config,
       type = control$parallel$type
     )
     owns_cluster <- TRUE
-    log_msg("Created %s cluster with %d cores", control$parallel$type, control$parallel$n_cores)
+    # length(cl), not the request: make_mosaic_cluster() may have clamped it
+    # to the free R connections.
+    log_msg("Created %s cluster with %d workers%s", control$parallel$type, length(cl),
+            if (length(cl) < control$parallel$n_cores)
+              sprintf(" (requested %d)", control$parallel$n_cores) else "")
 
     # Register cleanup handler (will be called on normal exit or error)
     on.exit({
