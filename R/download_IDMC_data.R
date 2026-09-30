@@ -111,12 +111,20 @@ download_IDMC_data <- function(PATHS,
                               file = NA_character_, note = NA_character_,
                               stringsAsFactors = FALSE)
 
-          url <- tryCatch(.idmc_hdx_resource_url(iso), error = function(e) NULL)
-          if (is.null(url)) {
-               blank$note <- "no HDX dataset"
-               if (verbose) message(glue::glue("  {iso}: no HDX IDU dataset"))
+          # Only a definite not-found from HDX is a genuine absence (counted as
+          # done in the manifest). A transport or parse failure is a failed
+          # download (ok = FALSE), so the snapshot stays partial and the next
+          # run retries that country instead of freezing it out.
+          hdx <- .idmc_hdx_resource_url(iso)
+          if (is.null(hdx$url)) {
+               blank$note <- hdx$note
+               if (verbose) {
+                    message(glue::glue(if (hdx$absent) "  {iso}: no HDX IDU dataset"
+                                       else "  {iso}: HDX lookup FAILED ({hdx$note})"))
+               }
                return(blank)
           }
+          url <- hdx$url
 
           dest <- file.path(snap_dir, sprintf("%s_idmc_idu_events.csv", tolower(iso)))
           dl <- .mosaic_download(
@@ -184,7 +192,18 @@ download_IDMC_data <- function(PATHS,
 }
 
 
+#' Manifest note that marks a country as genuinely absent from HDX
+#' @keywords internal
+#' @noRd
+.IDMC_ABSENT_NOTE <- "no HDX dataset"
+
+
 #' Resolve the current HDX CSV download URL for one country's IDU dataset
+#'
+#' Returns \code{list(url, absent, note)}. \code{url} is non-NULL on success.
+#' \code{absent = TRUE} only for a definite not-found (HTTP 404, or HDX
+#' answering \code{success = false}); every transport, HTTP or parse failure
+#' returns \code{absent = FALSE} with the error in \code{note}.
 #'
 #' @keywords internal
 #' @noRd
@@ -192,20 +211,37 @@ download_IDMC_data <- function(PATHS,
      api <- sprintf(
           "https://data.humdata.org/api/3/action/package_show?id=%s-idmc-idu-events",
           tolower(iso))
-     txt <- suppressWarnings(tryCatch(
-          paste(readLines(api, warn = FALSE), collapse = ""),
-          error = function(e) NULL))
-     if (is.null(txt)) stop("HDX lookup failed for ", iso, call. = FALSE)
+     resp <- tryCatch(httr::GET(api, httr::timeout(60)), error = function(e) e)
+     if (inherits(resp, "error")) {
+          return(.idmc_classify_hdx_response(NA_integer_, NULL, conditionMessage(resp)))
+     }
+     .idmc_classify_hdx_response(httr::status_code(resp),
+                                 httr::content(resp, as = "text", encoding = "UTF-8"))
+}
 
-     js <- jsonlite::fromJSON(txt, simplifyVector = TRUE)
-     if (!isTRUE(js$success)) stop("HDX returned success=false for ", iso, call. = FALSE)
 
+#' Classify one HDX package_show response (see .idmc_hdx_resource_url)
+#'
+#' @keywords internal
+#' @noRd
+.idmc_classify_hdx_response <- function(status, body, transport_error = NULL) {
+     fail <- function(note) list(url = NULL, absent = FALSE, note = note)
+     if (!is.null(transport_error)) return(fail(paste("HDX lookup failed:", transport_error)))
+     if (identical(as.integer(status), 404L)) {
+          return(list(url = NULL, absent = TRUE, note = .IDMC_ABSENT_NOTE))
+     }
+     if (is.na(status) || status >= 400L) return(fail(paste("HDX lookup HTTP", status)))
+     js <- tryCatch(jsonlite::fromJSON(body, simplifyVector = TRUE), error = function(e) NULL)
+     if (is.null(js) || !is.list(js)) return(fail("HDX response not parseable JSON"))
+     if (identical(js$success, FALSE)) {
+          return(list(url = NULL, absent = TRUE, note = .IDMC_ABSENT_NOTE))
+     }
+     if (!isTRUE(js$success)) return(fail("HDX response has no success flag"))
      res <- js$result$resources
-     if (is.null(res) || !nrow(res)) stop("no resources for ", iso, call. = FALSE)
-
+     if (!is.data.frame(res) || !nrow(res)) return(fail("HDX dataset has no resources"))
      csv <- res[tolower(res$format) == "csv", , drop = FALSE]
-     if (!nrow(csv)) stop("no CSV resource for ", iso, call. = FALSE)
-     csv$url[1L]
+     if (!nrow(csv)) return(fail("HDX dataset has no CSV resource"))
+     list(url = csv$url[1L], absent = FALSE, note = NA_character_)
 }
 
 
@@ -265,7 +301,7 @@ download_IDMC_data <- function(PATHS,
      m <- tryCatch(utils::read.delim(f, stringsAsFactors = FALSE, na.strings = ""),
                    error = function(e) NULL)
      if (is.null(m) || !all(c("iso_code", "ok", "note") %in% names(m))) return(FALSE)
-     done <- as.logical(m$ok) | (!is.na(m$note) & m$note == "no HDX dataset")
+     done <- as.logical(m$ok) | (!is.na(m$note) & m$note == .IDMC_ABSENT_NOTE)
      done[is.na(done)] <- FALSE
      if (!is.null(iso_codes) && !all(toupper(iso_codes) %in% m$iso_code[done])) return(FALSE)
      all(done)

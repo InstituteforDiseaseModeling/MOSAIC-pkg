@@ -105,6 +105,87 @@ test_that("IDMC resolver skips a newer partial snapshot and honours the manifest
      expect_equal(basename(suppressMessages(MOSAIC:::.idmc_latest_snapshot(raw))), "hdx_2026-09-18")
 })
 
+test_that("an HDX transport failure is a failed download, only a not-found is an absence", {
+     cls <- MOSAIC:::.idmc_classify_hdx_response
+     ok_body <- '{"success":true,"result":{"resources":[{"format":"CSV","url":"https://x/ken.csv"},{"format":"XLSX","url":"https://x/ken.xlsx"}]}}'
+     expect_equal(cls(200L, ok_body)$url, "https://x/ken.csv")
+     a404 <- cls(404L, "Not found"); af <- cls(200L, '{"success":false}')
+     expect_true(a404$absent); expect_null(a404$url); expect_true(af$absent)
+     expect_equal(a404$note, MOSAIC:::.IDMC_ABSENT_NOTE)
+     for (r in list(cls(NA_integer_, NULL, "Timeout was reached"), cls(503L, ""),
+                    cls(200L, "<html>maintenance</html>"),
+                    cls(200L, '{"success":true,"result":{"resources":[]}}'),
+                    cls(200L, '{"success":true,"result":{"resources":[{"format":"XLSX","url":"u"}]}}'))) {
+          expect_false(r$absent); expect_null(r$url)
+          expect_false(identical(r$note, MOSAIC:::.IDMC_ABSENT_NOTE))
+     }
+     expect_match(cls(NA_integer_, NULL, "Timeout was reached")$note, "Timeout")
+
+     # A snapshot whose lookups failed on the network is not complete
+     snap <- withr::local_tempdir()
+     man <- data.frame(iso_code = c("KEN", "NGA", "ERI"), ok = c(TRUE, FALSE, FALSE),
+                       n_events = c(1, NA, NA),
+                       note = c("", "HDX lookup failed: Timeout was reached", MOSAIC:::.IDMC_ABSENT_NOTE))
+     utils::write.table(man, file.path(snap, "MANIFEST.tsv"), sep = "\t", row.names = FALSE, quote = FALSE)
+     expect_false(MOSAIC:::.idmc_snapshot_complete(snap, c("KEN", "NGA", "ERI")))
+})
+
+test_that("download_IDMC_data records a lookup outage as ok = FALSE and leaves the snapshot partial", {
+     PATHS <- list(DATA_IDMC_RAW = withr::local_tempdir())
+     local_mocked_bindings(.idmc_hdx_resource_url = function(iso) {
+          if (iso == "ERI") list(url = NULL, absent = TRUE, note = MOSAIC:::.IDMC_ABSENT_NOTE)
+          else list(url = NULL, absent = FALSE, note = "HDX lookup failed: Could not resolve host")
+     })
+     out <- download_IDMC_data(PATHS, iso_codes = c("ERI", "KEN"), snapshot_date = as.Date("2026-09-29"),
+                               verbose = FALSE)
+     expect_equal(out$ok, c(FALSE, FALSE))
+     expect_equal(out$note[2], "HDX lookup failed: Could not resolve host")
+     snap <- file.path(PATHS$DATA_IDMC_RAW, "hdx_2026-09-29")
+     expect_false(MOSAIC:::.idmc_snapshot_complete(snap, c("ERI", "KEN")))
+})
+
+test_that("WHO vaccination table is written as a dated, logged snapshot and never overwritten", {
+     dir <- withr::local_tempdir()
+     PATHS <- list(DATA_SCRAPE_WHO_VACCINATION = dir)
+     legacy <- file.path(dir, "who_vaccination_data.csv")
+     writeLines("old,content", legacy)
+     expect_equal(MOSAIC:::.who_vaccination_latest_file(dir), legacy)
+     suppressMessages(capture.output(get_WHO_vaccination_data(PATHS)))
+     expect_equal(readLines(legacy), "old,content")        # legacy file untouched
+     snaps <- list.files(dir, pattern = "^who_vaccination_data_snapshot_")
+     expect_length(snaps, 1L)
+     expect_equal(basename(MOSAIC:::.who_vaccination_latest_file(dir)), snaps)
+     expect_true(file.exists(file.path(dir, "PROVENANCE.md")))
+     # identical rebuild: nothing new written, nothing logged
+     prov <- readLines(file.path(dir, "PROVENANCE.md"))
+     suppressMessages(capture.output(get_WHO_vaccination_data(PATHS)))
+     expect_length(list.files(dir, pattern = "^who_vaccination_data_snapshot_"), 1L)
+     expect_equal(readLines(file.path(dir, "PROVENANCE.md")), prov)
+     # a same-day path never collides with an existing snapshot
+     now <- as.POSIXct("2031-01-01 10:15:00")
+     p1 <- MOSAIC:::.who_vaccination_snapshot_path(dir, now)
+     writeLines("x", p1)
+     p2 <- MOSAIC:::.who_vaccination_snapshot_path(dir, now)
+     expect_equal(basename(p2), "who_vaccination_data_snapshot_2031-01-01_101500.csv")
+     writeLines("y", p2)
+     expect_equal(MOSAIC:::.who_vaccination_latest_file(dir), p2)
+})
+
+test_that("download_country_DEM logs each downloaded raster in PROVENANCE.md", {
+     skip_if_not_installed("raster")
+     tmp <- withr::local_tempdir()
+     PATHS <- list(DATA_DEM = file.path(tmp, "DEM"), DATA_SHAPEFILES = file.path(tmp, "shp"))
+     dir.create(PATHS$DATA_SHAPEFILES)
+     file.create(file.path(PATHS$DATA_SHAPEFILES, "KEN_ADM0.shp"))
+     local_mocked_bindings(st_read = function(...) data.frame(id = 1), .package = "sf")
+     local_mocked_bindings(get_elev_raster = function(...) raster::raster(matrix(1:4, 2)),
+                           .package = "elevatr")
+     suppressMessages(download_country_DEM(PATHS, "KEN"))
+     expect_true(file.exists(file.path(PATHS$DATA_DEM, "KEN_1km_DEM.tif")))
+     prov <- readLines(file.path(PATHS$DATA_DEM, "PROVENANCE.md"))
+     expect_true(any(grepl("KEN_1km_DEM.tif", prov, fixed = TRUE)))
+})
+
 test_that("mobility-OD resolver prefers the newest snapshot holding all three sources", {
      raw <- withr::local_tempdir()
      base <- file.path(raw, "mobility_od")
@@ -134,7 +215,7 @@ test_that("download_country_DEM skips an existing raster without re-downloading"
      expect_equal(out, f)
 })
 
-test_that("process_WB_GDP_data writes the name compile reads and creates its directory", {
+test_that("process_WB_GDP_data writes world_bank_GDP_data.csv and creates its directory", {
      tmp <- withr::local_tempdir()
      d <- file.path(tmp, "raw", "world_bank", "GDP"); dir.create(d, recursive = TRUE)
      f <- file.path(d, "API_NY.GDP.MKTP.CD_DS2_en_csv_v2_api_2026-09-18.csv")
