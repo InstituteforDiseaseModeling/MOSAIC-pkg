@@ -54,7 +54,7 @@ If \eqn{s^2 \le \bar{x}}, the function uses the Poisson limit (\code{k = Inf}).
 \examples{
 # k is used as supplied
 calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
-# Provide k but allow flooring if too small
+# Supply the dispersion k explicitly (used exactly as given)
 calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5), k = 1.2)
 
 }

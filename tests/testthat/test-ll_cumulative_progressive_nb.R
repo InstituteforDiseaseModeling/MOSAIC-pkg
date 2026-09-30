@@ -15,19 +15,18 @@ test_that("perfect match produces best (least negative) LL", {
   expect_true(ll_perfect > ll_bad)
 })
 
-test_that("works with k=Inf (Poisson via dnbinom size=Inf)", {
+test_that("k=Inf scores the cumulative sums as Poisson", {
   obs <- c(10, 20, 30, 40)
   est <- c(12, 18, 32, 38)
-  ll <- MOSAIC:::.ll_cumulative_progressive_nb(obs, est, k_data = Inf)
-  expect_true(is.finite(ll))
+  ll <- MOSAIC:::.ll_cumulative_progressive_nb(obs, est, k_data = Inf, timepoints = c(0.5, 1))
+  expected <- mean(c(dpois(30, 30, log = TRUE) / 2, dpois(100, 100, log = TRUE) / 4))
+  expect_equal(ll, expected, tolerance = 1e-12)
 })
 
-test_that("returns floor for all-NA data", {
+test_that("returns 0 when no cell is scorable", {
   obs <- rep(NA_real_, 10)
   est <- rep(10, 10)
-  ll <- MOSAIC:::.ll_cumulative_progressive_nb(obs, est, k_data = 3)
-  # All cumulative sums will be 0 (na.rm=TRUE on all-NA), or the function handles gracefully
-  expect_true(is.finite(ll) || ll == -1e9)
+  expect_identical(MOSAIC:::.ll_cumulative_progressive_nb(obs, est, k_data = 3), 0)
 })
 
 test_that("returns mean (not sum) across timepoints", {

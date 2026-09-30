@@ -131,7 +131,11 @@ impute_flood_probability <- function(d,
      #     52-week annual) -- captures basin saturation memory.
      #   * Joint climate index: precip_anom * soil_moisture_anom captures
      #     the "very wet AND already saturated" regime.
-     d_aug <- d %>%
+     # .orig_row carries each row's position in `d` through the per-country
+     # sort, so predictions are written back to the rows they belong to.
+     d_aug <- d
+     d_aug$.orig_row <- seq_len(nrow(d))
+     d_aug <- d_aug %>%
           dplyr::group_by(iso_code) %>%
           dplyr::arrange(date, .by_group = TRUE) %>%
           dplyr::mutate(
@@ -314,7 +318,8 @@ impute_flood_probability <- function(d,
      # needed. Guard the contract: numeric, no NA, in [0, 1].
      stopifnot(!any(is.na(preds)), all(preds >= 0), all(preds <= 1))
 
-     d[[output_col]] <- preds
+     d[[output_col]] <- NA_real_
+     d[[output_col]][d_aug$.orig_row] <- preds
 
      if (isTRUE(diagnostics)) {
           if (is.null(diag_dir)) {

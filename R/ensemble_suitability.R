@@ -80,9 +80,16 @@
 # One worker = one whole seed pipeline (its RW-CV fits + refit + predict), so the
 # ~10 s TF import amortizes over the seed's K+1 fits (plan §7). Each worker pins
 # the 6 BLAS/Numba thread vars and RETICULATE_PYTHON BEFORE loading keras.
-# Requires an INSTALLED MOSAIC (workers library(MOSAIC)); under devtools the
-# caller falls back to serial. RAM (not cores) is the real cap — TF grabs memory
-# per process — so workers are clamped to cores-2 and the user's value.
+# Workers run library(MOSAIC), i.e. the INSTALLED package, and a closure shipped
+# to them resolves its namespace by name to that installed copy. So under
+# devtools::load_all() the seeds would silently run the installed (possibly
+# older) fitting code while the parent smooths/writes with the dev code. This
+# function therefore refuses a load_all() namespace (returns NULL -> serial) and
+# errors if a worker's MOSAIC version differs from the parent's (the caller
+# catches that and falls back to serial). RAM (not cores) is the real cap — TF
+# grabs memory per process — so workers are clamped to cores-2 and the user's
+# value. A worker's fit error is returned (not discarded) so the parent can
+# report which seeds failed and why.
 #' @keywords internal
 #' @noRd
 .psi_fit_seeds_parallel <- function(seeds, parallel_seeds, fit_predict_fn,
@@ -114,6 +121,14 @@
      n_workers <- .mosaic_clamp_psock_workers(n_workers, reserve = 2L,
                                               what = "seed-fit workers")
      if (n_workers <= 1L) return(NULL)   # nothing to gain; caller runs serial
+     if (.psi_is_dev_namespace()) {
+          warning("parallel_seeds > 1 ignored: MOSAIC is loaded with devtools::load_all(), and ",
+                  "PSOCK workers would run the INSTALLED MOSAIC's fitting code instead of this ",
+                  "session's. Fitting seeds serially. Install the package to fit seeds in parallel.",
+                  call. = FALSE)
+          return(NULL)
+     }
+     parent_version <- as.character(getNamespaceVersion("MOSAIC"))
      # Focus each worker's TF intra-op pool to its core slice so n_workers x
      # tf_intra ~ nc (saturate the box, no oversubscription). The fit
      # (.psi_fit_predict_lstm) reads MOSAIC_PSI_TF_INTRAOP and applies the cap.
@@ -146,17 +161,37 @@
           suppressMessages(library(keras3))
           NULL
      })
+     worker_versions <- unlist(parallel::clusterEvalQ(
+          cl, as.character(getNamespaceVersion("MOSAIC"))))
+     if (any(worker_versions != parent_version))
+          stop(sprintf("PSOCK workers loaded MOSAIC %s but this session runs %s; the seeds would be fit with different code.",
+                       paste(unique(worker_versions), collapse = "/"), parent_version),
+               call. = FALSE)
      parallel::clusterExport(cl, c("fit_predict_fn", "data_bundle", "hyperparams"),
                              envir = environment())
      parallel::parLapply(cl, seeds, function(seed) {
-          t0 <- proc.time()
+          t0  <- proc.time()
+          err <- NA_character_
           out <- tryCatch(
                fit_predict_fn(data_bundle = data_bundle, seed = seed,
                               hyperparams = hyperparams),
-               error = function(e) NULL)
-          list(seed = seed, out = out,
+               error = function(e) {
+                    err <<- conditionMessage(e)
+                    NULL
+               })
+          list(seed = seed, out = out, error = err,
                elapsed = round((proc.time() - t0)["elapsed"] / 60, 2))
      })
+}
+
+#' TRUE when the MOSAIC namespace was created by devtools/pkgload::load_all()
+#' (pkgload marks it with `.__DEVTOOLS__`, which is what pkgload::is_dev_package()
+#' checks). PSOCK workers cannot see such a namespace.
+#' @keywords internal
+#' @noRd
+.psi_is_dev_namespace <- function() {
+     isNamespaceLoaded("MOSAIC") &&
+          exists(".__DEVTOOLS__", envir = asNamespace("MOSAIC"), inherits = FALSE)
 }
 
 #' Multi-seed ensemble runner with per-country logit-scale aggregation.
@@ -170,10 +205,12 @@
 #'   (default 0.01 — the ENSEMBLE eps, DISTINCT from the loss logit_eps 1e-6).
 #' @param parallel_seeds Integer; >1 fits seeds across PSOCK workers (default 1L
 #'   serial). Falls back to serial if the cluster cannot be set up.
-#' @return list(ensemble_long, by_country, seeds_by_country, fit_info,
+#' @return list(ensemble_long, by_country, seeds_by_country, fit_info
+#'   \[one row per seed, with status and the error text of failed seeds\],
 #'   rw_diagnostics, genuine_last_pred \[per-iso last covariate-supported weekly
 #'   prediction date, pre-fill\], ensemble \[target headline\],
-#'   seeds \[target headline\]).
+#'   seeds \[target headline\], seeds_ok, seeds_failed).
+#'   A warning is raised whenever some (but not all) seeds fail.
 #' @keywords internal
 #' @noRd
 .psi_run_seed_ensemble <- function(fit_predict_fn, data_bundle,
@@ -195,39 +232,45 @@
      isos_pred  <- sort(unique(data_bundle$countries_pred))
      target_iso <- data_bundle$target_iso
 
-     # Per-country day grids (each country starts at its first predicted date).
-     day_grids <- lapply(stats::setNames(isos_pred, isos_pred), function(iso) {
-          idx   <- data_bundle$countries_pred == iso
-          start <- min(data_bundle$dates_pred[idx])
-          seq.Date(start, pred_end, by = "day")
-     })
-
      # Per-country LAST GENUINE (covariate-supported) weekly prediction date,
-     # captured from the weekly prediction grid BEFORE the daily na.locf
-     # forward-fill in .psi_weekly_to_daily_smooth. Days in the daily grid beyond
-     # this date are present only via carry-forward fill (a flat constant tail
-     # that suppresses environmental FOI downstream), so the lstm_v2 writer drops
-     # them via .drop_filled_prediction_tail. Mirrors the legacy path's
-     # genuine_last_pred (R/est_suitability.R). Seed-independent.
+     # capped at pred_date_stop. Seed-independent. Mirrors the legacy path's
+     # genuine_last_pred (R/est_suitability.R).
      genuine_last_pred <- data.frame(
           iso_code = isos_pred,
           last_genuine_date = as.Date(vapply(isos_pred, function(iso) {
-               as.character(max(data_bundle$dates_pred[data_bundle$countries_pred == iso]))
+               as.character(min(pred_end,
+                                max(data_bundle$dates_pred[data_bundle$countries_pred == iso])))
           }, character(1))),
           stringsAsFactors = FALSE)
+
+     # Per-country day grids: first predicted date -> last GENUINE prediction
+     # date. The grid used to run to pred_date_stop, so the carry-forward fill
+     # past a country's covariate coverage entered the LOESS fit (pulling the
+     # retained end-of-series days toward the flat constant) and the per-country
+     # amplitude reference of calibrate_psi_predictions() before the writer
+     # dropped it. Ending the grid here keeps the fill out of both; the writer's
+     # .drop_filled_prediction_tail() is then a no-op safety net.
+     day_grids <- lapply(stats::setNames(isos_pred, isos_pred), function(iso) {
+          idx   <- data_bundle$countries_pred == iso
+          start <- min(data_bundle$dates_pred[idx])
+          stop_ <- genuine_last_pred$last_genuine_date[genuine_last_pred$iso_code == iso]
+          seq.Date(start, max(start, stop_), by = "day")
+     })
 
      # ---- Phase A: fit every seed (serial or parallel) ---------------------
      fit_one_seed <- function(seed) {
           if (verbose) message(sprintf("\n--- fitting seed %d ---", seed))
           t0  <- proc.time()
+          err <- NA_character_
           out <- tryCatch(
                fit_predict_fn(data_bundle = data_bundle, seed = seed,
                               hyperparams = hyperparams),
                error = function(e) {
-                    message(sprintf("  seed %d FAILED: %s", seed, conditionMessage(e)))
+                    err <<- conditionMessage(e)
+                    message(sprintf("  seed %d FAILED: %s", seed, err))
                     NULL
                })
-          list(seed = seed, out = out,
+          list(seed = seed, out = out, error = err,
                elapsed = round((proc.time() - t0)["elapsed"] / 60, 2))
      }
 
@@ -275,6 +318,7 @@
                     seed = seed, val_loss = NA_real_, val_metric = NA_real_,
                     train_minutes = unname(elapsed), n_epochs = NA_integer_,
                     loss_type = NA_character_, status = "failed",
+                    error = as.character(sf$error %||% NA_character_),
                     stringsAsFactors = FALSE)
                next
           }
@@ -313,10 +357,11 @@
                seed          = seed,
                val_loss      = out$val_loss      %||% NA_real_,
                val_metric    = out$val_metric    %||% out$val_mae %||% NA_real_,
-               train_minutes = out$train_minutes %||% elapsed,
+               train_minutes = unname(out$train_minutes %||% elapsed),
                n_epochs      = out$n_epochs      %||% NA_integer_,
                loss_type     = out$loss_type     %||% NA_character_,
                status        = "ok",
+               error         = NA_character_,
                stringsAsFactors = FALSE)
           if (verbose) {
                message(sprintf("  seed %d ok: val_loss=%.4f val_metric=%.4f epochs=%s",
@@ -327,6 +372,24 @@
 
      if (length(per_seed_daily_by_country) == 0L)
           stop(".psi_run_seed_ensemble: ALL seeds failed")
+
+     # A partial failure silently shrinks the ensemble the manifest describes;
+     # say so, with each failed seed's error.
+     fit_info  <- do.call(rbind, fit_rows)
+     rownames(fit_info) <- NULL
+     failed    <- fit_info$status != "ok"
+     seeds_ok     <- fit_info$seed[!failed]
+     seeds_failed <- fit_info$seed[failed]
+     if (length(seeds_failed)) {
+          warning(sprintf(".psi_run_seed_ensemble: %d of %d seed(s) failed; psi is pooled over the %d that succeeded (%s). Failed: %s",
+                          length(seeds_failed), length(seed_fits), length(seeds_ok),
+                          paste(seeds_ok, collapse = ", "),
+                          paste(sprintf("seed %s (%s)", seeds_failed,
+                                        ifelse(is.na(fit_info$error[failed]), "no error captured",
+                                               fit_info$error[failed])),
+                                collapse = "; ")),
+                  call. = FALSE)
+     }
 
      # ---- Per-country cross-seed aggregation (on the LOGIT scale) ----------
      ensembles_by_country <- list()
@@ -376,8 +439,6 @@
      }))
      rownames(ensemble_long) <- NULL
 
-     fit_info <- do.call(rbind, fit_rows)
-
      list(
           ensemble          = ensembles_by_country[[target_iso]],
           seeds             = seeds_by_country[[target_iso]],
@@ -386,6 +447,8 @@
           ensemble_long     = ensemble_long,
           fit_info          = fit_info,
           rw_diagnostics    = rw_diag_by_seed,
-          genuine_last_pred = genuine_last_pred
+          genuine_last_pred = genuine_last_pred,
+          seeds_ok          = seeds_ok,
+          seeds_failed      = seeds_failed
      )
 }

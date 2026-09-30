@@ -85,8 +85,8 @@ make_simulation_config(
 }
 \arguments{
 \item{output_file_path}{A character string representing the full file path of the output file.
-Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.
-If NULL, no file is written and the parameters are returned.}
+Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .hdf5.gz, .yaml, or .yaml.gz extension.
+If NULL, no file is written. The validated parameters are returned either way.}
 
 \item{seed}{Integer scalar giving the random seed value for the simulation run.
 \subsection{Initialization}{
@@ -185,11 +185,14 @@ ratio \code{mu_jt}.
 a \emph{rate}, not a period -- prior median ~0.71/day. The engine uses
 \code{iota * E} as the flow out of E.}
 
-\item{gamma_1}{Symptomatic shedding-duration rate \code{I_sym -> R} (numeric= 0, per day; "severe / symptomatic" branch).}
+\item{gamma_1}{Symptomatic shedding-duration rate \code{I_sym -> R} (numeric,
+\verb{>= 0}, per day; "severe / symptomatic" branch).}
 
-\item{gamma_2}{Asymptomatic shedding-duration rate \code{I_asym -> R} (numeric= 0, per day; "mild / asymptomatic" branch).}
+\item{gamma_2}{Asymptomatic shedding-duration rate \code{I_asym -> R} (numeric,
+\verb{>= 0}, per day; "mild / asymptomatic" branch).}
 
-\item{epsilon}{Natural-infection immunity waning rate \code{R -> S} (numeric= 0, per day). Distinct from vaccine waning (omega_1, omega_2).}
+\item{epsilon}{Natural-infection immunity waning rate \code{R -> S} (numeric,
+\verb{>= 0}, per day). Distinct from vaccine waning (\code{omega_1}, \code{omega_2}).}
 
 \item{mu_jt}{Reported case fatality ratio (reported deaths per reported
 suspected case) by location and day: a matrix with rows equal to
@@ -215,10 +218,10 @@ matrix. Retained in the signature so the refusal names the problem.}
 \code{(1 + mu_j_slope * tick/nticks)} was removed from the engine in v0.95.0
 (CFR restructure R3): it is not estimable from the deaths series, it
 double-counted the \code{s(year)} term already inside \code{CFR_target}, and no
-secular trend in cholera CFR is documented. Retained only so that configs
-written before v0.95.0 can still be replayed through
-\code{do.call(make_simulation_config, config)}; any value supplied is silently
-dropped and is \strong{not} returned in the config.}
+secular trend in cholera CFR is documented. Retained only so that
+existing calls that pass \code{mu_j_slope} explicitly do not fail with an
+unused-argument error; any value supplied is silently dropped and is
+\strong{not} returned in the config.}
 
 \item{mu_j_epidemic_factor}{\strong{Removed in v0.96.0.} The pre-v0.96.0 epidemic
 mortality multiplier; treated exactly like \code{mu_j_baseline}.
@@ -300,8 +303,8 @@ or a per-location vector of length \code{length(location_name)}.}
 \item{alpha_2}{Exponent on \code{N_jt} in the FOI denominator
 (numeric in [0, 1]). \code{alpha_2 = 1} is frequency-dependent
 transmission (FOI proportional to \code{I/N}); \code{alpha_2 = 0} is
-density-dependent (FOI proportional to \code{I}). Dual-mode: scalar or a
-per-location vector of length \code{length(location_name)}.
+density-dependent (FOI proportional to \code{I}). A single global scalar:
+the engine rejects a per-location vector.
 \subsection{Force of Infection (environment-to-human)}{
 
 Environmental suitability, its calibration parameters, shedding rates, and
@@ -364,11 +367,12 @@ the Python port in laser-cholera). Must contain two character columns:
 (ISO \code{YYYY-MM-DD} strings parseable by \code{as.Date}). NULL allowed; when
 NULL the peak shape terms contribute 0 to the likelihood.}
 
-\item{sigfigs}{Integer; number of significant figures to round all numeric values to. Default is 4.}
+\item{sigfigs}{Ignored; retained for backward compatibility. No rounding is applied, and supplying it raises a warning.}
 }
 \value{
-Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
-in the format determined by the file extension.
+The validated list of parameters (invisibly when \code{output_file_path} is
+provided, after the parameters are written to a file in the format
+determined by the file extension).
 }
 \description{
 This function generates a JSON/HDF5/YAML configuration file to be used as transmission model simulation parameters.
@@ -376,7 +380,7 @@ It validates all input parameters and, if an output file path is provided, write
 The file extension determines which output format is used:
 \itemize{
 \item .json or .json.gz → written with write_list_to_json,
-\item .h5, or .h5.gz → written with write_list_to_hdf5,
+\item .h5, .hdf5, .h5.gz or .hdf5.gz → written with write_list_to_hdf5,
 \item .yaml or .yaml.gz → written with write_list_to_yaml.
 }
 }

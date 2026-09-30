@@ -8,7 +8,7 @@ plot_seasonal_clustering(
   PATHS,
   use_cases = FALSE,
   set_inferred_to_na = TRUE,
-  clustering_method = "hierarchical",
+  clustering_method = c("ward.D2", "kmeans", "dbscan", "knn"),
   k = 4
 )
 }
@@ -24,7 +24,7 @@ plot_seasonal_clustering(
 
 \item{set_inferred_to_na}{A logical value. If \code{TRUE}, inferred countries are set to \code{NA} in the clustering. Default is \code{TRUE} when using precipitation, \code{FALSE} when using cases.}
 
-\item{clustering_method}{A character string specifying the clustering method. Options are \code{"kmeans"}, \code{"ward.D2"}, \code{"dbscan"}, or \code{"knn"}. Default is \code{"ward.D2"} for hierarchical clustering.}
+\item{clustering_method}{A character string specifying the clustering method. One of \code{"ward.D2"} (hierarchical, the default), \code{"kmeans"}, \code{"dbscan"}, or \code{"knn"}.}
 
 \item{k}{An integer specifying the number of clusters for k-means and hierarchical clustering. Default is 4.}
 }

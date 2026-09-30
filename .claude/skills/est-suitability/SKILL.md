@@ -80,10 +80,13 @@ MOSAIC::est_suitability(
 - **Horizon ceiling:** `pred_date_stop` ≤ `min(climate horizon, ENSO horizon)`. The climate ceiling
   is CMIP6 `DEFAULT_END_YEAR`, computed dynamically as `date.today().year + 1` in
   `open-meteo-pipeline/src/openmeteo/config.py` (~12-month lead — encode the rule, not a year);
-  ENSO/NMME gives ~8 months. In the production lstm_v2 path, usable ψ is bounded by the **ENSO-OK
-  auto-cutoff** (`fit_date_stop`/`pred_date_stop` auto-detected from the last ENSO-covered date) plus
-  the `pred_date_stop` filter — the daily grid is `na.locf`-filled, NOT trailing-dropped. (The
-  `.drop_filled_prediction_tail` trailing-drop is **legacy-path only**, not the default architecture.)
+  ENSO/NMME gives ~8 months. In the production lstm_v2 path the NULL defaults auto-detect:
+  `fit_date_stop` = the last week with **both** cholera cases and complete ENSO (weeks past the
+  surveillance edge are never fabricated as zero targets), and `pred_date_stop` = the last complete-ENSO
+  date, plus `arch_control$lead` weeks when a forecast lead is trained. The daily grid is `na.locf`-filled
+  internally for smoothing, but **both** the lstm_v2 and legacy paths then drop the carry-forward tail
+  (`.drop_filled_prediction_tail`), so each country's saved ψ ends at its last genuine
+  (covariate-supported) prediction and `make_config_default()` truncates to the common coverage.
 
 ### `response_var` ↔ `psi_star_b` coupling (load-bearing)
 The `_per_country` response is **self-normalized per country**, so ψ levels are NOT comparable across

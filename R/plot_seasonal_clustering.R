@@ -10,7 +10,7 @@
 #' }
 #' @param use_cases A logical value. If `TRUE`, clustering is based on Fourier series fitted to cholera cases. If `FALSE`, clustering is based on precipitation.
 #' @param set_inferred_to_na A logical value. If `TRUE`, inferred countries are set to `NA` in the clustering. Default is `TRUE` when using precipitation, `FALSE` when using cases.
-#' @param clustering_method A character string specifying the clustering method. Options are `"kmeans"`, `"ward.D2"`, `"dbscan"`, or `"knn"`. Default is `"ward.D2"` for hierarchical clustering.
+#' @param clustering_method A character string specifying the clustering method. One of `"ward.D2"` (hierarchical, the default), `"kmeans"`, `"dbscan"`, or `"knn"`.
 #' @param k An integer specifying the number of clusters for k-means and hierarchical clustering. Default is 4.
 #'
 #' @return The function generates and saves a PNG file showing the clustering of countries based on seasonal dynamics.
@@ -30,8 +30,10 @@
 plot_seasonal_clustering <- function(PATHS,
                                      use_cases = FALSE,
                                      set_inferred_to_na = TRUE,
-                                     clustering_method = "hierarchical",
+                                     clustering_method = c("ward.D2", "kmeans", "dbscan", "knn"),
                                      k = 4) {
+
+     clustering_method <- match.arg(clustering_method)
 
      # Load required data
      combined_fitted_values <- utils::read.csv(file.path(PATHS$DOCS_TABLES, "pred_seasonal_dynamics.csv"), stringsAsFactors = FALSE)
@@ -60,26 +62,7 @@ plot_seasonal_clustering <- function(PATHS,
 
      # Perform clustering based on the chosen method
      precip_matrix <- precip_fitted_df %>% dplyr::select(-iso_code)
-     if (clustering_method == "kmeans") {
-          set.seed(123)
-          clustering_result <- kmeans(precip_matrix, centers = k)
-          precip_fitted_df$cluster <- clustering_result$cluster
-     } else if (clustering_method == "ward.D2") {
-          dist_matrix <- dist(precip_matrix)
-          hc <- hclust(dist_matrix, method = "ward.D2") # hierarchical
-          precip_fitted_df$cluster <- cutree(hc, k = k)
-     } else if (clustering_method == "dbscan") {
-          set.seed(123)
-          dbscan_result <- dbscan(precip_matrix, eps = 1, minPts = 3)
-          precip_fitted_df$cluster <- as.factor(dbscan_result$cluster)
-     } else if (clustering_method == "knn") {
-          set.seed(123)
-          knn_distances <- FNN::get.knnx(precip_matrix, k = k)$nn.dist
-          knn_clustering <- kmeans(knn_distances, centers = k)
-          precip_fitted_df$cluster <- knn_clustering$cluster
-     } else {
-          stop("Invalid clustering method specified.")
-     }
+     precip_fitted_df$cluster <- .seasonal_cluster(precip_matrix, clustering_method, k)
 
      # Merge clustering results with spatial data
      africa_with_clusters <- africa %>%
@@ -133,4 +116,35 @@ plot_seasonal_clustering <- function(PATHS,
 
      message(glue::glue("Clustering plot saved to {png_filename}."))
 
+}
+
+
+#' Assign seasonal-profile clusters for plot_seasonal_clustering()
+#'
+#' @param x Numeric matrix or data frame, one row per country, one column per week.
+#' @param method One of "ward.D2", "kmeans", "dbscan", "knn".
+#' @param k Number of clusters (ignored by "dbscan").
+#' @return Cluster labels, one per row of \code{x} (a factor for "dbscan").
+#' @keywords internal
+#' @noRd
+.seasonal_cluster <- function(x, method, k) {
+     x <- as.matrix(x)
+     if (method == "kmeans") {
+          set.seed(123)
+          stats::kmeans(x, centers = k)$cluster
+     } else if (method == "ward.D2") {
+          stats::cutree(stats::hclust(stats::dist(x), method = "ward.D2"), k = k)
+     } else if (method == "dbscan") {
+          set.seed(123)
+          as.factor(dbscan::dbscan(x, eps = 1, minPts = 3)$cluster)
+     } else if (method == "knn") {
+          # Cluster on each country's distances to its k nearest other countries.
+          # The query set is the data itself, so the first neighbour is the
+          # country at distance 0 and is dropped.
+          set.seed(123)
+          nn <- FNN::get.knnx(data = x, query = x, k = k + 1L)$nn.dist[, -1L, drop = FALSE]
+          stats::kmeans(nn, centers = k)$cluster
+     } else {
+          stop("Unknown clustering method: ", method, call. = FALSE)
+     }
 }

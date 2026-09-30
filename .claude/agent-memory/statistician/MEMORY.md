@@ -28,3 +28,4 @@
 - [R_eff route-split red-team (2026-09-28)](project_reff_route_split_redteam.md) — per-cohort env normalization = FUTURE-delta look-ahead (2-3x peak inflation vs past-only); direct path uses base config; IC rescale unstable; delta>1 aborts
 - [Docs CFR v2.1 red-team (2026-09-29)](project_docs_cfr_v21_redteam.md) — Laplace verified to 0.003 nats; open: medoid uses loc 1 only; mobility data-raw does not reproduce shipped omega/gamma/tau; ESS defaults perplexity+kde
 - [Weighted KDE bandwidth (2026-09-30)](reference_kde_bandwidth_weighted.md) — weighted sample KDE needs weighted sd/IQR + Kish n_eff bw; unweighted bw.nrd0 smoothed IS posterior KL 3.19->1.3; one-hot -> NA
+- [Truncated-prior double truncation](reference_truncated_prior_double_truncation.md) — carrying lower=1 onto an untruncated CI-fit of truncated draws drifts zeta_ratio median 184->1017 per no-info stage; fit in truncated family

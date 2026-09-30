@@ -15,7 +15,7 @@
 #' @param bounded Logical; if \code{TRUE}, clamp the result to \eqn{[0,1]}. Default \code{FALSE}.
 #' @param na_rm Logical; drop NA pairs. Default \code{TRUE}.
 #' @param finite_only Logical; drop non-finite values. Default \code{TRUE}.
-#' @param weights Optional non-negative weights (used for \code{method="sse"} and weighted Pearson in \code{"corr"}).
+#' @param weights Optional non-negative weights: length 1 (recycled), the input length (subset with the validity mask), or the number of valid pairs (pre-filtered); used for \code{method="sse"} and weighted Pearson in \code{"corr"}.
 #' @param verbose Logical; if \code{TRUE}, emit brief diagnostics.
 #'
 #' @return Scalar \eqn{R^2}. May be negative for \code{method="sse"} unless \code{bounded=TRUE}.
@@ -54,12 +54,20 @@ calc_model_R2 <- function(observed,
      }
      y  <- y[valid]; yh <- yh[valid]
 
-     # Handle weights
+     # Handle weights (same contract as calc_model_cor): recycle a scalar; a
+     # full-length vector is subset with the same validity mask as y/yh; a
+     # vector already of length sum(valid) is taken as pre-filtered.
      if (!is.null(weights)) {
-          w <- as.numeric(weights)[valid]
-          if (length(w) == 1L) w <- rep(w, length(y))
-          if (length(w) != length(y) || any(!is.finite(w)) || any(w < 0)) {
-               if (verbose) message("calc_model_R2: invalid weights (length/finite/non-negative).")
+          w <- as.numeric(weights)
+          if (length(w) == 1L) w <- rep(w, length(valid))
+          if (length(w) == length(valid)) {
+               w <- w[valid]
+          } else if (length(w) != length(y)) {
+               if (verbose) message("calc_model_R2: weights length does not match inputs.")
+               return(NA_real_)
+          }
+          if (any(!is.finite(w)) || any(w < 0)) {
+               if (verbose) message("calc_model_R2: invalid weights (finite/non-negative).")
                return(NA_real_)
           }
      } else {
@@ -116,7 +124,7 @@ calc_model_R2 <- function(observed,
 #'
 #' @param observed Numeric vector or matrix.
 #' @param estimated Numeric vector or matrix (same length after flattening).
-#' @param na_rm Logical; drop NA pairs. Default \code{TRUE}.
+#' @param na_rm Logical; drop NA pairs. If \code{FALSE} and any \code{NA} is present, returns \code{NA_real_}. Default \code{TRUE}.
 #' @param finite_only Logical; drop non-finite values. Default \code{TRUE}.
 #'
 #' @return Scalar ratio. Values > 1 indicate over-prediction, < 1 under-prediction.
@@ -133,6 +141,7 @@ calc_bias_ratio <- function(observed,
   yh <- as.numeric(estimated)
 
   if (length(y) != length(yh)) return(NA_real_)
+  if (!na_rm && anyNA(c(y, yh))) return(NA_real_)
 
   valid <- !(is.na(y) | is.na(yh))
   if (finite_only) valid <- valid & is.finite(y) & is.finite(yh)

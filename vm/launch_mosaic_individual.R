@@ -53,9 +53,6 @@
 library(MOSAIC)
 
 
-# Attach MOSAIC environment
-MOSAIC::attach_mosaic_env(silent = TRUE)
-
 # Set MOSAIC root directory
 set_root_directory("~/MOSAIC")
 

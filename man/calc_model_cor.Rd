@@ -30,8 +30,10 @@ mismatch), returns \code{NA_real_}.}
 \item{finite_only}{Logical; if \code{TRUE} (default), also drop non-finite
 values (\code{Inf}, \code{-Inf}, \code{NaN}) during pairwise filtering.}
 
-\item{weights}{Optional numeric vector of non-negative weights (recycled if
-length 1). Only used when \code{method = "pearson"}; ignored otherwise.}
+\item{weights}{Optional numeric vector of non-negative weights: length 1
+(recycled), the input length (subset with the same pairwise validity
+mask), or the number of valid pairs (pre-filtered). Only used when
+\code{method = "pearson"}; ignored otherwise.}
 
 \item{verbose}{Logical; if \code{TRUE}, emit brief diagnostic messages.}
 }

@@ -26,8 +26,10 @@
 #' \itemize{
 #'   \item The RETICULATE_PYTHON variable is cleared
 #'   \item The current Python session remains active (cannot be changed)
-#'   \item When R restarts, MOSAIC will NOT auto-attach to r-mosaic
-#'   \item You can set a different RETICULATE_PYTHON before loading MOSAIC
+#'   \item Detaching lasts only for this session: in a new session,
+#'     \code{library(MOSAIC)} sets RETICULATE_PYTHON to r-mosaic again whenever
+#'     it is unset and r-mosaic exists
+#'   \item To use a different Python, set RETICULATE_PYTHON before loading MOSAIC
 #' }
 #'
 #' @examples
@@ -98,7 +100,7 @@ detach_mosaic_env <- function(restart = FALSE) {
                if (restart) {
                     cli::cli_alert_info("Restarting R session...")
                     cli::cli_text("")
-                    cli::cli_text("After restart, MOSAIC will NOT auto-attach to r-mosaic.")
+                    cli::cli_text("After restart, loading MOSAIC points reticulate at r-mosaic again unless RETICULATE_PYTHON is already set.")
                     cli::cli_text("You can:")
                     cli::cli_text("  1. Set RETICULATE_PYTHON to a different environment before loading MOSAIC")
                     cli::cli_text("  2. Or call {.run MOSAIC::attach_mosaic_env()} to re-attach to r-mosaic")
@@ -138,8 +140,8 @@ detach_mosaic_env <- function(restart = FALSE) {
      } else {
           cli::cli_alert_success("Detachment complete")
           cli::cli_text("")
-          cli::cli_text("When you next load MOSAIC, it will NOT auto-attach to r-mosaic")
-          cli::cli_text("unless you call {.run MOSAIC::attach_mosaic_env()}")
+          cli::cli_text("This lasts for the current session only. In a new session, loading MOSAIC")
+          cli::cli_text("points reticulate at r-mosaic again unless RETICULATE_PYTHON is already set.")
           cli::cli_text("")
      }
 

@@ -32,8 +32,7 @@ plot_rolling_cv(
 
 \item{metric}{Metric to plot: \code{"cases"} (default) or \code{"deaths"}.}
 
-\item{horizon_max_months}{Max assessed horizon in months; right edge of each
-panel relative to its cutoff (default 5).}
+\item{horizon_max_months}{Max assessed horizon in months; right edge of each panel relative to its scoring origin (default 5).}
 
 \item{context_months}{Months of in-sample context shown before the cutoff
 (left edge of each panel, default 2).}
@@ -96,11 +95,14 @@ ensembles, computed via \code{\link{evaluate_rolling_cv}}.
 \details{
 \strong{Horizon truncation.} The compiled artifact stores the full OOS path
 to \code{window_stop} regardless of cutoff, so an early cutoff appears to
-forecast years ahead. This function clips each panel to
-\code{[cutoff - context_months, cutoff + horizon_max_months]} so the plotted
-window equals the scored window. Scoring in \code{evaluate_rolling_cv()} is
-already restricted to cumulative \eqn{\le h}-month windows, so this is a
-display change only.
+forecast years ahead. \code{evaluate_rolling_cv()} scores the dates strictly
+after the scoring origin -- the later of the cutoff and the last
+\code{segment == "embargo"} date -- up to origin + \code{horizon_max_months}.
+This function clips each panel to
+\code{[cutoff - context_months, origin + horizon_max_months]} and shades
+\code{(origin, origin + horizon_max_months]}, so the shaded region is the
+scored window; any harness embargo sits unshaded between the dashed cutoff
+rule and the band. The skill annotation is computed on the unclipped series.
 
 \strong{Styling.} Uses \code{\link{theme_mosaic}} and the MOSAIC semantic
 palette. Output is sized for 16:9 slides and written as both PNG (raster,

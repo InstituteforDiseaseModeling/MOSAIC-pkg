@@ -17,8 +17,9 @@
 #' The function will provide appropriate guidance based on the current state.
 #'
 #' **Recommended**: Use \code{\link{attach_mosaic_env}} for clearer semantics
-#' and better error handling. The Python environment is now automatically
-#' attached when you load MOSAIC via \code{library(MOSAIC)}.
+#' and better error handling. Loading MOSAIC does not attach Python: it only
+#' sets RETICULATE_PYTHON to r-mosaic (when unset), so reticulate binds r-mosaic
+#' on the first Python call.
 #'
 #' @examples
 #' \dontrun{
@@ -28,8 +29,8 @@
 #' # New approach (recommended)
 #' attach_mosaic_env()
 #'
-#' # Auto-attach on package load (no action needed)
-#' library(MOSAIC)  # Automatically attaches r-mosaic
+#' # Loading MOSAIC points reticulate at r-mosaic; Python starts lazily
+#' library(MOSAIC)
 #' }
 #'
 #' @seealso

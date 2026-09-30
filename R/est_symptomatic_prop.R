@@ -33,10 +33,10 @@ est_symptomatic_prop <- function(PATHS) {
 
      # Make a Beta distribution to simulate sigma (proportion of infections that are symptomatic)
 
-     quantiles <- c(0.0001, 0.0275, 0.25, 0.5, 0.75, 0.975, 0.9999)
+     quantiles <- c(0.0001, 0.025, 0.25, 0.5, 0.75, 0.975, 0.9999)
 
      probs <- c(min(df$ci_lo, na.rm=T),
-                quantile(df$ci_lo, probs=0.0275, na.rm=T),
+                quantile(df$ci_lo, probs=0.025, na.rm=T),
                 quantile(df$ci_lo, probs=0.25, na.rm=T),
                 mean(df$mean, na.rm=T),
                 quantile(df$ci_hi, probs=0.75, na.rm=T),

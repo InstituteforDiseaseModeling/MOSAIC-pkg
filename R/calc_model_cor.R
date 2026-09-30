@@ -30,8 +30,10 @@
 #'   mismatch), returns \code{NA_real_}.
 #' @param finite_only Logical; if \code{TRUE} (default), also drop non-finite
 #'   values (\code{Inf}, \code{-Inf}, \code{NaN}) during pairwise filtering.
-#' @param weights Optional numeric vector of non-negative weights (recycled if
-#'   length 1). Only used when \code{method = "pearson"}; ignored otherwise.
+#' @param weights Optional numeric vector of non-negative weights: length 1
+#'   (recycled), the input length (subset with the same pairwise validity
+#'   mask), or the number of valid pairs (pre-filtered). Only used when
+#'   \code{method = "pearson"}; ignored otherwise.
 #' @param verbose Logical; if \code{TRUE}, emit brief diagnostic messages.
 #'
 #' @return A single numeric value: the correlation coefficient for the chosen
@@ -99,6 +101,14 @@ calc_model_cor <- function(observed,
           return(NA_real_)
      }
 
+     # Weights are aligned with the UNFILTERED input: recycle a scalar, then
+     # subset with the same validity mask as x/y.
+     if (!is.null(weights)) {
+          weights <- as.numeric(weights)
+          if (length(weights) == 1L) weights <- rep(weights, length(valid))
+          if (length(weights) == length(valid)) weights <- weights[valid]
+     }
+
      x <- x[valid]
      y <- y[valid]
 
@@ -123,12 +133,9 @@ calc_model_cor <- function(observed,
      }
 
      # Weighted Pearson
-     w <- as.numeric(weights)
-     if (length(w) == 1L) {
-          w <- rep(w, length(x))
-     }
+     w <- weights
      if (length(w) != length(x)) {
-          if (verbose) message("calc_model_cor: weights length does not match valid pairs.")
+          if (verbose) message("calc_model_cor: weights length does not match inputs.")
           return(NA_real_)
      }
      if (any(!is.finite(w)) || any(w < 0)) {

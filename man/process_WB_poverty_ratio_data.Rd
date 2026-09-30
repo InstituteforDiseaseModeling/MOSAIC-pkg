@@ -9,10 +9,9 @@ process_WB_poverty_ratio_data(PATHS)
 \arguments{
 \item{PATHS}{List. Project paths object with components \code{DATA_RAW} and \code{DATA_PROCESSED}.
 \itemize{
-\item Expects the raw file located in:
-\code{file.path(PATHS$DATA_RAW, 'world_bank', '<poverty_ratio_filename>.csv')}
-\item Will write output to:
-\code{file.path(PATHS$DATA_PROCESSED, 'world_bank', 'poverty_ratio_data_world_bank.csv')}
+\item Reads the newest raw CSV for indicator \code{SI.POV.DDAY} in
+\code{file.path(PATHS$DATA_RAW, 'world_bank', 'poverty_ratio')} (see \code{\link[=download_WB_data]{download_WB_data()}}).
+\item Writes \code{file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_poverty_ratio_data.csv')}, creating the directory if needed.
 }}
 }
 \value{

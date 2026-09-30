@@ -60,6 +60,12 @@ hazard covariates, whereas conflict-driven displacement is an
 independent signal (WASH collapse, camp formation, care-seeking
 disruption) with no EM-DAT analogue.
 
+Only rows with \code{role == "Recommended figure"} are used; IDU
+\code{"Triangulation"} rows are alternative estimates of displacement the
+recommended rows already count (IDMC totals use recommended figures only),
+so including them would double-count. Rows from extracts without a
+\code{role} column are kept.
+
 Each event is expanded across the ISO-weeks its
 \code{displacement_start_date}:\code{displacement_end_date} range touches.
 Records missing a start date are dropped; a missing or earlier end date is

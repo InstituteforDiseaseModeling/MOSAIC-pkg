@@ -31,10 +31,13 @@ utils::globalVariables(c("val", "unit_lab", "origin", "ess_ok", "med_val", "lab"
 #'   \code{\link{evaluate_rolling_cv}}.
 #' @param value What to plot (see Details). Default \code{"R2_corr"}.
 #' @param horizon_months Primary OOS horizon; mapped to the \code{OOS<=\{h\}mo}
-#'   window (default 6).
+#'   window (default 3, the forecast-CV scoring cap, which
+#'   \code{evaluate_rolling_cv()}'s default horizons include).
 #' @param baseline Baseline for the skill values (default \code{"seasonal"});
 #'   ignored for R2/bias.
-#' @param model Model type to plot (default \code{"ensemble"}).
+#' @param model Model type to plot (default \code{"ensemble_opt"}, the headline
+#'   model of \code{\link{make_forecast_cv_table}} and
+#'   \code{\link{plot_forecast_cv_grid}}).
 #' @param metrics Channels to facet (default \code{c("cases","deaths")}).
 #' @param show_gated Logical; draw ESS-gated-out origins as hollow points instead
 #'   of dropping them (default TRUE). Gated origins are excluded from the median +
@@ -56,9 +59,9 @@ utils::globalVariables(c("val", "unit_lab", "origin", "ess_ok", "med_val", "lab"
 plot_forecast_cv_skill <- function(x,
                                    value          = c("R2_corr", "bias_ratio",
                                                       "R2_sse", "wis_skill", "mae_skill"),
-                                   horizon_months = 6,
+                                   horizon_months = 3,
                                    baseline       = "seasonal",
-                                   model          = "ensemble",
+                                   model          = "ensemble_opt",
                                    metrics        = c("cases", "deaths"),
                                    show_gated     = TRUE,
                                    title          = NULL,
@@ -103,6 +106,9 @@ plot_forecast_cv_skill <- function(x,
           stop("window '", win, "' not in data. Available: ",
                paste(grep("^OOS", unique(cells$window), value = TRUE), collapse = ", "))
 
+     if (!model %in% cells$model)
+          stop("model '", model, "' not in data (e.g. run with optimize_subset = FALSE). Available: ",
+               paste(unique(cells$model), collapse = ", "))
      d <- cells[cells$model == model & cells$window == win & cells$metric %in% metrics, , drop = FALSE]
      d$val <- suppressWarnings(as.numeric(d[[col]]))
      d <- d[is.finite(d$val), , drop = FALSE]

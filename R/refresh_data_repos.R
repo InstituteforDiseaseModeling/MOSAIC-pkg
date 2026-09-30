@@ -30,10 +30,16 @@
 #' local branch will fail loudly rather than auto-merge. Uncommitted local
 #' changes will also block the pull and surface in \code{pull_output}.
 #'
-#' For \code{ees-cholera-mapping} and \code{jhu_cholera_data}, the function
-#' additionally peeks at the canonical surveillance file (the one the
-#' \code{process_WHO_weekly_data()} / \code{process_JHU_weekly_data()} functions read)
-#' and reports record count, date range, and country count. ENSO and
+#' For \code{ees-cholera-mapping} the function additionally peeks at the WHO AWD
+#' weekly file \code{process_WHO_weekly_data()} reads and reports record count,
+#' date range (week-start Mondays derived from WHO's \code{year}/\code{week}) and
+#' country count.
+#'
+#' \strong{JHU is a static archive.} \code{process_JHU_weekly_data()} does NOT read
+#' the \code{jhu_cholera_data} repo: it reads the frozen OSF archive
+#' \code{MOSAIC-data/raw/JHU/osfstorage-archive/Public_surveillance_dataset.rds}.
+#' Pulling the repo therefore never changes MOSAIC's JHU input; the summary
+#' reports the archive's year range and file date, labelled as static. ENSO and
 #' open-meteo coverage stats are not extracted because their data is spread
 #' across many per-country / per-source files; commit date is the practical
 #' freshness signal.
@@ -72,7 +78,8 @@ refresh_data_repos <- function(root       = NULL,
 
      repo_meta <- list(
           "ees-cholera-mapping"    = "WHO surveillance (AWD weekly + GHO annual + GTFCC)",
-          "jhu_cholera_data"       = "JHU public cholera surveillance dataset",
+          "jhu_cholera_data"       = paste0("JHU scraper repo -- NOT read by MOSAIC; process_JHU_weekly_data() ",
+                                             "uses the static OSF archive in MOSAIC-data/raw/JHU"),
           "ai-cholera-data-mining" = "AI-mined gap-filling cholera observations (historic, no cron)",
           "enso-data"              = "ENSO/IOD: NOAA historical + NMME forecast (default) + BOM (legacy)",
           "open-meteo-pipeline"    = "Climate: ERA5 historical + MRI projections"
@@ -145,9 +152,15 @@ refresh_data_repos <- function(root       = NULL,
           df <- tryCatch(utils::read.csv(f, stringsAsFactors = FALSE),
                          error = function(e) NULL)
           if (is.null(df) || !nrow(df)) return(NULL)
-          date_col <- intersect(c("date_start", "date", "report_date"), names(df))[1L]
-          dr <- if (!is.na(date_col)) {
-               d <- suppressWarnings(as.Date(df[[date_col]]))
+          # The AWD CSV carries WHO epi year/week, not dates
+          dr <- if (all(c("year", "week") %in% names(df))) {
+               # Invalid year/week pairs (e.g. W53 in a 52-week epi year) are
+               # excluded and counted, never allowed to blank the whole range.
+               d <- .who_epiweek_start(df$year, df$week, invalid = "na")
+               n_bad <- sum(is.na(d))
+               if (n_bad) {
+                    message(sprintf("  WHO AWD: %d row(s) with a missing or non-existent epi year/week excluded from the date range", n_bad))
+               }
                d <- d[!is.na(d)]
                if (length(d)) range(d) else NA
           } else NA
@@ -158,15 +171,10 @@ refresh_data_repos <- function(root       = NULL,
      }
 
      if (repo == "jhu_cholera_data") {
-          f <- file.path(root, "jhu_cholera_data", "Public_surveillance_dataset.rds")
-          if (!file.exists(f)) {
-               # Fall back: scan common locations
-               cand <- list.files(file.path(root, "jhu_cholera_data"),
-                                  pattern = "Public_surveillance_dataset\\.rds$",
-                                  recursive = TRUE, full.names = TRUE)
-               if (!length(cand)) return(NULL)
-               f <- cand[1L]
-          }
+          # The file process_JHU_weekly_data() actually reads -- NOT in this repo
+          f <- file.path(root, "MOSAIC-data", "raw", "JHU", "osfstorage-archive",
+                         "Public_surveillance_dataset.rds")
+          if (!file.exists(f)) return(NULL)
           df <- tryCatch(readRDS(f), error = function(e) NULL)
           if (is.null(df) || !nrow(df)) return(NULL)
           dr <- if ("epiweek" %in% names(df)) {
@@ -177,7 +185,8 @@ refresh_data_repos <- function(root       = NULL,
           loc_col <- intersect(c("location_name", "iso_code"), names(df))[1L]
           n_loc <- if (!is.na(loc_col)) length(unique(df[[loc_col]])) else NA_integer_
           return(list(file = basename(f), rows = nrow(df),
-                      year_range = dr, n_locations = n_loc))
+                      year_range = dr, n_locations = n_loc, static = TRUE,
+                      file_date = as.Date(file.info(f)$mtime)))
      }
 
      NULL
@@ -226,6 +235,10 @@ refresh_data_repos <- function(root       = NULL,
                     cat(sprintf("       coverage:     %d -> %d, %d rows, %d locations\n",
                                 cov$year_range[1L], cov$year_range[2L],
                                 cov$rows, cov$n_locations %||% NA_integer_))
+                    if (isTRUE(cov$static)) {
+                         cat(sprintf("       STATIC archive %s (file date %s) -- not updated by this pull\n",
+                                     cov$file, format(cov$file_date)))
+                    }
                }
           }
           cat("\n")

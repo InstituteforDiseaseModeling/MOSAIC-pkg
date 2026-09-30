@@ -9,7 +9,6 @@ process_GTFCC_vaccination_data(PATHS)
 \arguments{
 \item{PATHS}{A list containing file paths for input and output data. The list should include:
 \itemize{
-\item \strong{DATA_DEMOGRAPHICS}: Path to the directory where demographic data is stored.
 \item \strong{MODEL_INPUT}: Path to the directory where processed vaccination data will be saved.
 }}
 }
@@ -32,9 +31,6 @@ This function performs the following steps:
 - Aggregates events by request ID to extract doses requested, approved, and shipped.
 - Uses Delivery event dates as campaign dates.
 - Converts country names to ISO codes for consistency.
-\item \strong{Load and Merge Demographic Data}:
-- Reads demographic data for African countries from a CSV file.
-- Filters the data for the year 2023 and retains population sizes.
 \item \strong{Infer Missing Campaign Dates}:
 - Computes the delay between decision and campaign dates.
 - Infers missing campaign dates based on the mean delay where possible.
@@ -51,7 +47,6 @@ This function performs the following steps:
 \dontrun{
 # Example usage
 PATHS <- list(
-  DATA_DEMOGRAPHICS = "path/to/demographics",
   MODEL_INPUT = "path/to/model/input"
 )
 

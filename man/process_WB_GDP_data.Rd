@@ -9,10 +9,9 @@ process_WB_GDP_data(PATHS)
 \arguments{
 \item{PATHS}{List. Project paths object with components \code{DATA_RAW} and \code{DATA_PROCESSED}.
 \itemize{
-\item Expects the raw file at:
-\code{file.path(PATHS$DATA_RAW, 'world_bank', 'API_NY.GDP.MKTP.CD_DS2_en_csv_v2_132025.csv')}
-\item Will write output to:
-\code{file.path(PATHS$DATA_PROCESSED, 'world_bank', 'GDP_data_world_bank.csv')}
+\item Reads the newest raw CSV for indicator \code{NY.GDP.MKTP.CD} in
+\code{file.path(PATHS$DATA_RAW, 'world_bank', 'GDP')} (see \code{\link[=download_WB_data]{download_WB_data()}}).
+\item Writes \code{file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_GDP_data.csv')}, creating the directory if needed.
 }}
 }
 \value{

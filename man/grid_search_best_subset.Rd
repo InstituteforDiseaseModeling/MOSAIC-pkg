@@ -13,6 +13,7 @@ grid_search_best_subset(
   max_size,
   step_size = 1,
   ess_method = c("kish", "perplexity"),
+  weighting = c("saturated", "tempered"),
   verbose = FALSE
 )
 }
@@ -32,6 +33,8 @@ grid_search_best_subset(
 \item{step_size}{Integer step size for search (default 1)}
 
 \item{ess_method}{Character ESS calculation method: "kish" or "perplexity"}
+
+\item{weighting}{Character best-subset weighting scheme, matching \code{control$targets$best_subset_weighting}: "saturated" (default) or "tempered"}
 
 \item{verbose}{Logical print progress messages}
 }
@@ -58,22 +61,29 @@ first size where all three criteria are met simultaneously:
 \item CVw <= target_CVw
 }
 
-Metrics are calculated using Gibbs weighting with dynamic temperature:
-\enumerate{
-\item Calculate AIC = -2 * likelihood for subset
-\item Calculate Delta AIC (relative to best in subset)
-\item Calculate dynamic temperature:
+For each candidate size n the top-n draws by likelihood are weighted, and
+ESS, A and CVw are calculated from those weights:
 \itemize{
-\item effective_range = 4.0 (standard Akaike range)
-\item actual_range = range(Delta AIC)
-\item temperature = 0.5 * (effective_range / actual_range)
-}
-\item Apply Gibbs weighting: weights = exp(-Delta AIC / temperature) / Z
-\item Calculate ESS, A, CVw from Gibbs-weighted samples
+\item \code{"saturated"} (default): \eqn{\Delta_i = -2(\ell_i - \max \ell)}{Delta_i = -2 (ll_i - max ll)},
+saturated at 4, and \eqn{w_i \propto \exp(-0.5 \min(\Delta_i, 4))}{w_i ~ exp(-0.5 min(Delta_i, 4))}
+(MOSAIC-docs calibration chapter, equation aic-weights). Weights lie in
+\eqn{[e^{-2}, 1]} before normalisation. Once most of the subset is past
+\eqn{\Delta = 4} the weights are nearly flat, so in practice the ESS
+target alone sets n and the A and CVw targets rarely bind.
+\item \code{"tempered"}: the adaptive-eta Gibbs weights
+(\eqn{\eta} chosen so the worst draw of the subset sits at a weight
+floor of 1e-15). Because \eqn{\eta} is rescaled to each subset's own
+\eqn{\Delta} range, the ESS grows roughly in proportion to n (about
+0.06 n when \eqn{\Delta} rises linearly with rank), so the targets are
+met, if at all, at a much larger n than under \code{"saturated"}.
 }
 
-The temperature adapts to the data's actual Delta AIC range, providing
-consistent discrimination across different likelihood spreads.
+Weights come from the same helper as \code{results$weight_best} and the
+final ESS_B/A/CVw gate in \code{run_MOSAIC()}, which passes
+\code{control$targets$best_subset_weighting} here: the size the search
+certifies against a tier is then the size at which the posterior's own
+weights meet that tier. Searching under one scheme and weighting the
+posterior under the other certified a subset the final gate then failed.
 
 If no size meets criteria, returns results at max_size with converged=FALSE.
 }

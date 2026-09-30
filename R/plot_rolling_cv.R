@@ -14,11 +14,14 @@
 #' @details
 #' \strong{Horizon truncation.} The compiled artifact stores the full OOS path
 #' to \code{window_stop} regardless of cutoff, so an early cutoff appears to
-#' forecast years ahead. This function clips each panel to
-#' \code{[cutoff - context_months, cutoff + horizon_max_months]} so the plotted
-#' window equals the scored window. Scoring in \code{evaluate_rolling_cv()} is
-#' already restricted to cumulative \eqn{\le h}-month windows, so this is a
-#' display change only.
+#' forecast years ahead. \code{evaluate_rolling_cv()} scores the dates strictly
+#' after the scoring origin -- the later of the cutoff and the last
+#' \code{segment == "embargo"} date -- up to origin + \code{horizon_max_months}.
+#' This function clips each panel to
+#' \code{[cutoff - context_months, origin + horizon_max_months]} and shades
+#' \code{(origin, origin + horizon_max_months]}, so the shaded region is the
+#' scored window; any harness embargo sits unshaded between the dashed cutoff
+#' rule and the band. The skill annotation is computed on the unclipped series.
 #'
 #' \strong{Styling.} Uses \code{\link{theme_mosaic}} and the MOSAIC semantic
 #' palette. Output is sized for 16:9 slides and written as both PNG (raster,
@@ -27,8 +30,7 @@
 #' @param predictions A \code{run_rolling_cv} output directory, a path to a
 #'   \code{predictions.parquet}, or the predictions data frame itself.
 #' @param metric Metric to plot: \code{"cases"} (default) or \code{"deaths"}.
-#' @param horizon_max_months Max assessed horizon in months; right edge of each
-#'   panel relative to its cutoff (default 5).
+#' @param horizon_max_months Max assessed horizon in months; right edge of each panel relative to its scoring origin (default 5).
 #' @param context_months Months of in-sample context shown before the cutoff
 #'   (left edge of each panel, default 2).
 #' @param models_ribbon Models drawn with 50/95% PI ribbons + median line
@@ -107,10 +109,24 @@ plot_rolling_cv <- function(predictions,
      if (!length(keep_models)) stop("none of the requested models are present")
      d <- d[d$model %in% keep_models, , drop = FALSE]
 
-     # ---- truncate each cutoff to [cutoff - context, cutoff + horizon] ---------
+     # ---- scoring origin per cutoff (as evaluate_rolling_cv() defines it) -----
+     # The later of the cutoff and the last embargo-labelled date: scored dates
+     # are strictly after it and horizon windows are measured from it.
+     d_full <- d
+     origin_of <- function(cd) {
+          emb <- d$date[d$cutoff_date == cd & d$segment == "embargo"]
+          if (length(emb)) max(cd, max(emb)) else cd
+     }
+     all_cuts <- sort(unique(d$cutoff_date))
+     origins  <- stats::setNames(as.Date(vapply(all_cuts, function(cd) as.numeric(origin_of(cd)),
+                                                numeric(1)), origin = "1970-01-01"),
+                                 as.character(all_cuts))
+     d$score_origin <- unname(origins[as.character(d$cutoff_date)])
+
+     # ---- truncate each cutoff to [cutoff - context, origin + horizon] --------
      lo_off <- ceiling(context_months     * 30.4375)
      hi_off <- ceiling(horizon_max_months * 30.4375)
-     d <- d[d$date >= (d$cutoff_date - lo_off) & d$date <= (d$cutoff_date + hi_off), ,
+     d <- d[d$date >= (d$cutoff_date - lo_off) & d$date <= (d$score_origin + hi_off), ,
             drop = FALSE]
      if (!nrow(d)) stop("no rows remain after horizon truncation")
 
@@ -140,11 +156,11 @@ plot_rolling_cv <- function(predictions,
      model_lty  <- c(ensemble = "solid", ensemble_opt = "solid",
                      best = "longdash", medoid = "dotted")[lvl]
 
-     # ---- forecast-region band + cutoff rules (one row per cutoff) ------------
+     # ---- scored-window band + cutoff rules (one row per cutoff) --------------
      band_df <- data.frame(
           cutoff_date = cutoffs,
-          xmin        = cutoffs,
-          xmax        = cutoffs + hi_off,
+          xmin        = unname(origins[as.character(cutoffs)]),
+          xmax        = unname(origins[as.character(cutoffs)]) + hi_off,
           panel       = factor(paste0("Forecast origin: ", format(cutoffs, "%Y-%m-%d")),
                                levels = levels(d$panel)),
           stringsAsFactors = FALSE)
@@ -154,7 +170,7 @@ plot_rolling_cv <- function(predictions,
      skill_cells <- NULL
      if (annotate) {
           cells <- if (!is.null(eval) && is.list(eval) && !is.null(eval$cells)) eval$cells
-                   else evaluate_rolling_cv(d, horizons_months = horizon_max_months,
+                   else evaluate_rolling_cv(d_full, horizons_months = horizon_max_months,
                                             metrics = metric, n_boot = 1L)$cells
           win <- sprintf("OOS<=%gmo", horizon_max_months)
           skill_cells <- cells[cells$metric == metric & cells$window == win &
@@ -192,7 +208,8 @@ plot_rolling_cv <- function(predictions,
           subtitle <- paste0(base_sub, " | ", length(cutoffs), " origins")
      if (is.null(caption))
           caption <- paste0("Bands = 50/95% prediction intervals (ensembles); ",
-                            "points = held-out observations; dashed line = forecast origin.")
+                            "points = held-out observations; dashed line = forecast origin; ",
+                            "shaded = scored window.")
 
      # ---- the plot builder ----------------------------------------------------
      build <- function(dd, bb, aa, faceted) {

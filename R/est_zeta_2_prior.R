@@ -45,8 +45,9 @@
 #' on a single primary source (Nelson 2009). The fit applies a hard floor
 #' `sdlog >= 2.0` (raised from 1.5 in rev 1 per modeller review). The floor
 #' preserves the lognormal median (meanlog is unchanged); the mode shifts
-#' left as a consequence. With the median at ~1.5e5 and sdlog = 2.0 the
-#' 95 percent CI spans roughly 3e3 to 7.6e6 - factor ~50 on each side - which
+#' left as a consequence. With the weights 1.0 / 0.1 / 0.1 (v0.29.1) the
+#' weighted log10 mean is ~5.34, so the median is ~2.2e5; with sdlog = 2.0 the
+#' 95 percent CI spans roughly 4.4e3 to 1.1e7 - factor ~50 on each side - which
 #' is the correct spread to cover a +/- 1 order-of-magnitude error in the
 #' single primary source.
 #'
@@ -146,7 +147,7 @@ est_zeta_2_prior <- function(PATHS) {
           study_type     = c("Expert review", "Expert review",
                              "Expert review", "Expert review"),
           notes          = c("Only primary anchor; verbatim 'approximately 10^3 vibrios per gram of stool'",
-                             "Review; overlaps Nelson primary - weight 0.25 avoids double-counting",
+                             "Review; overlaps Nelson primary - weight 0.10 avoids double-counting",
                              "Review range upper bound",
                              "Mechanism review; no cholera-specific CFU data (Excluded)"),
           stringsAsFactors = FALSE

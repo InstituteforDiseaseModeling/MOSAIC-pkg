@@ -23,7 +23,10 @@ Takes a named R list and writes it to a JSON file.
 \details{
 The function converts the R list to JSON text using \code{jsonlite::toJSON()} (with pretty printing enabled) and then writes it out either to a
 plain text file or to a gzipped file if \code{compress = TRUE}. The gzipped file is created using a connection
-opened with \code{gzfile()}.
+opened with \code{gzfile()}. Numbers are written with 17 significant digits, enough to round-trip every double
+exactly, so a config read back from the file reproduces a simulation bit for bit. The text is written to a
+temporary file in the target directory and then renamed over \code{file_path}, so an interrupted write never
+leaves a truncated file behind.
 }
 \examples{
 \dontrun{

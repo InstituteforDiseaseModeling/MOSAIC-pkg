@@ -111,7 +111,11 @@ impute_cyclone_probability <- function(d,
 
      # Inline-compute teleconnection lags the GAM needs but the saved
      # suitability CSV doesn't necessarily carry at these horizons.
-     d_aug <- d %>%
+     # .orig_row carries each row's position in `d` through the per-country
+     # sort, so predictions are written back to the rows they belong to.
+     d_aug <- d
+     d_aug$.orig_row <- seq_len(nrow(d))
+     d_aug <- d_aug %>%
           dplyr::group_by(iso_code) %>%
           dplyr::arrange(date, .by_group = TRUE) %>%
           dplyr::mutate(
@@ -210,7 +214,8 @@ impute_cyclone_probability <- function(d,
 
      stopifnot(!any(is.na(preds)), all(preds >= 0), all(preds <= 1))
 
-     d[[output_col]] <- preds
+     d[[output_col]] <- NA_real_
+     d[[output_col]][d_aug$.orig_row] <- preds
 
      if (isTRUE(diagnostics)) {
           if (is.null(diag_dir)) {

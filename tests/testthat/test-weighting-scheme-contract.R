@@ -27,9 +27,12 @@ test_that("tempered is SHARPER than saturated on a realistic best subset", {
   ll <- -c(0, cumsum(abs(rnorm(114, sd = 18))))
   delta <- -2 * ll - min(-2 * ll)
 
-  sat <- calc_model_weights_gibbs(pmin(delta, 4.0), eta = 0.5, verbose = FALSE)
-  tmp <- MOSAIC:::.mosaic_calc_adaptive_gibbs_weights(ll, verbose = FALSE)$weights
-  sat <- sat / sum(sat); tmp <- tmp / sum(tmp)
+  # Both schemes through the production helper that feeds weight_best.
+  sat <- MOSAIC:::.mosaic_best_subset_weights(ll, "saturated")$weights
+  tmp <- MOSAIC:::.mosaic_best_subset_weights(ll, "tempered")$weights
+  expect_equal(sum(sat), 1); expect_equal(sum(tmp), 1)
+  # Saturated is exp(-0.5 * min(delta, 4)), normalised.
+  expect_equal(sat, exp(-0.5 * pmin(delta, 4)) / sum(exp(-0.5 * pmin(delta, 4))))
 
   # The documented claim was "softer". It is not.
   expect_gt(max(tmp), max(sat))
@@ -41,9 +44,10 @@ test_that("saturated weighting is not sample-coherent", {
   # Two fixed draws' RELATIVE weight must not depend on what else is sampled.
   # Under pmin(delta, 4) it does, because the sample max sits inside a
   # non-linear function so the additive shift stops cancelling.
+  # Uses the production saturated weights (.mosaic_best_subset_weights), so a
+  # change to the scheme that restores coherence makes this test fail.
   ratio <- function(ll) {
-    d <- -2 * ll; d <- d - min(d)
-    w <- exp(-0.5 * pmin(d, 4))
+    w <- MOSAIC:::.mosaic_best_subset_weights(ll, "saturated")$weights
     w[1] / w[2]
   }
   expect_equal(ratio(c(-100, -102)), exp(2), tolerance = 1e-8)

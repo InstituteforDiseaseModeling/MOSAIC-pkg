@@ -15,7 +15,7 @@ tick, in the same phase, at the same site.
 
 A simulation's output is determined solely by its \code{seed} and
 \code{config} -- never by worker identity, batch position, or how much
-randomness was consumed earlier in the session. \code{.sim_rng_state()}
+randomness was consumed earlier in the session. \code{.sim_rng_begin()}
 establishes an isolated stream and returns everything needed to restore the
 caller's \code{.Random.seed} afterwards, so calling the engine never
 perturbs the caller's stream.

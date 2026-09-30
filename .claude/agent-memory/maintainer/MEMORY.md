@@ -34,3 +34,9 @@
 - [Packaging-env review v0.99.9](project_packaging_env_review_v0999.md) — attach_mosaic_env in vignette/vm stops w/o Python; sporadic/rare example regimes =0 cases; check_dependencies <<- globalenv leak; roxygen '>=' block-quote
 - [Naming-contract trace (v0.99.9)](project_naming_contract_review_v099.md) — rda/json clean; alpha_1 inventory scale stale, create_sampling_args formals() trap, psi_star all-pinned gate
 - [Integration fixer v0.100.0](project_integration_fixer_v0100.md) — cross-group interaction bugs (medoid selector drift, clear-list vs read-if-exists, two-stage truncation, JSON-lost attrs); data-raw uses INSTALLED pkg under worktree
+- [Roxygen block-quote trap](roxygen_blockquote_trap.md) — wrapped roxygen line starting '>=' skips that Rd; grep document() output for ✖
+- [test-suite-isolation-traps](test_suite_isolation_traps.md) — MOSAIC testthat traps - leaked root_directory, stale installed build in PSOCK workers, vacuous guarded asserts, Poisson-fallback noise; and the helpers that fix them
+- [outbreak-regime-example-retune](outbreak_regime_example_retune.md) — inst/examples/simulate_outbreak_settings.R sporadic/rare regimes are dead under the v0.89 per-capita dose; what a 2026-09-29 probe learned before handing to disease-modeler
+- [pkgdown-build-traps](pkgdown_build_traps.md) — pkgdown/vignette traps in MOSAIC - root *.md always published, clean:false deploy, eval=FALSE include_graphics, buildignored figures
+- [prior-truncation-and-s3-registration](prior_truncation_and_s3_registration.md) — Adding a field to a prior family (e.g. lognormal lower/upper) must reach every prior consumer; hand-maintained NAMESPACE needs S3method() for each print.* method
+- [weighted-kde-bandwidth-trap](weighted_kde_bandwidth_trap.md) — Kish-n_eff weighted nrd0 bandwidth (.bw_nrd0_weighted, v0.99.11 h5-stats) blows up as n_eff->1 via n_eff/(n_eff-1) SD correction; KL underestimates exactly in the tempered ESS~1 regime

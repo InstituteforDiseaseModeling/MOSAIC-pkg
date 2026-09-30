@@ -13,6 +13,8 @@ optimize_ensemble_subset(
   central_method = "median",
   stride = 1L,
   cl = NULL,
+  weighting = c("saturated", "tempered"),
+  ess_method = c("kish", "perplexity"),
   verbose = TRUE
 )
 }
@@ -69,6 +71,10 @@ serial path. Must be a \code{"PSOCK"} cluster (FORK is unsafe at this point
 in the pipeline). For trivially small problems the function falls back to
 serial regardless of \code{cl}.}
 
+\item{weighting}{Best-subset weighting scheme for the per-N weights, matching \code{control$targets$best_subset_weighting} (the scheme of \code{weight_best}): \code{"saturated"} (default) or \code{"tempered"}.}
+
+\item{ess_method}{ESS formula for \code{evaluation_table$ess}: \code{"kish"} (default) or \code{"perplexity"}.}
+
 \item{verbose}{Logical; if \code{TRUE}, emit progress messages.}
 }
 \value{
@@ -79,7 +85,7 @@ An S3 object of class \code{mosaic_subset_optimization} containing:
 N, not every N in \code{min_n:max_n}.}
 \item{optimal_n}{Selected subset size.}
 \item{optimal_score}{Score at optimal N.}
-\item{optimal_weights}{Re-computed Gibbs weights for the optimal subset.}
+\item{optimal_weights}{Re-computed best-subset weights for the optimal subset.}
 \item{optimal_indices}{Integer indices into the original ensemble arrays.}
 \item{optimal_seeds}{Simulation seeds of the optimal subset in
 likelihood-sorted order, aligned with \code{optimal_weights} (when
@@ -103,9 +109,18 @@ separate \code{mosaic_ensemble} object at the optimal subset size, leaving the
 original ensemble untouched.
 
 For each candidate size N (from \code{min_n} to the full ensemble), the
-function re-computes Gibbs weights within the top-N subset, re-computes
-weighted median predictions from the 4D arrays, and scores with the selected
-objective function.
+function re-computes the best-subset weights within the top-N subset,
+re-computes weighted median predictions from the 4D arrays, and scores with
+the selected objective function.
+
+The per-N weights use the same scheme as the \code{weight_best} posterior
+that \code{run_MOSAIC()} builds the candidate ensemble from (by default
+\eqn{w \propto \exp(-0.5 \min(\Delta, 4))}{w ~ exp(-0.5 min(Delta, 4))} with
+\eqn{\Delta = -2(\ell - \max \ell)}{Delta = -2 (ll - max ll)} within the top N).
+So at N = the full ensemble the weights, and therefore
+\code{diagnostics_score}, reproduce the candidate ensemble, and any score
+change reported for a smaller N is due to the subset, not to a change of
+weighting scheme.
 }
 \details{
 The evaluation loop is organized \emph{cell-outer}: each

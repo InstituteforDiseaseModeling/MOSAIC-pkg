@@ -159,7 +159,13 @@ get_travel_time_matrix <- function(PATHS,
                fr <- raster::aggregate(fr, fact = as.integer(aggregate_factor),
                                        fun = get(aggregate_fun), na.rm = TRUE)
           }
-          raster::writeRaster(fr, f_ras, overwrite = TRUE)
+          # Atomic (temp file + rename) and logged: this cache lives in raw/.
+          .write_file_atomic(f_ras, function(tmp) raster::writeRaster(fr, tmp, overwrite = TRUE))
+          .append_raw_provenance(
+               dirname(f_ras), f_ras, nrow(fr), ncol(fr),
+               sprintf("malariaAtlas::getRaster(dataset_id = '%s'), aggregate x%d (%s).",
+                       dataset_id, as.integer(aggregate_factor), aggregate_fun),
+               Sys.Date(), title = "MAP friction raster cache provenance log")
      }
      if (verbose) {
           message(glue::glue("Friction grid: {nrow(fr)} x {ncol(fr)} cells ",

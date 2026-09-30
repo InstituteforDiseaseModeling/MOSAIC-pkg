@@ -45,19 +45,18 @@ test_that("calc_log_mean_exp handles edge cases", {
   # All NA values
   expect_true(is.na(calc_log_mean_exp(c(NA, NA))))
   
-  # All infinite values
-  expect_true(is.na(calc_log_mean_exp(c(-Inf, -Inf))))
-  expect_true(is.na(calc_log_mean_exp(c(Inf, Inf))))
-  
-  # Mix with non-finite values - should use only finite values
-  x <- c(-10, NA, -12, -Inf, -11)
-  result <- calc_log_mean_exp(x)
-  expected <- calc_log_mean_exp(c(-10, -12, -11))
-  expect_equal(result, expected)
-  
-  # Single finite value among non-finite
-  x <- c(NA, -5, Inf, -Inf)
-  expect_equal(calc_log_mean_exp(x), -5)
+  # All -Inf is a zero likelihood, not missing; any +Inf dominates
+  expect_identical(calc_log_mean_exp(c(-Inf, -Inf)), -Inf)
+  expect_identical(calc_log_mean_exp(c(Inf, Inf)), Inf)
+  expect_identical(calc_log_mean_exp(c(-3, Inf)), Inf)
+
+  # NA/NaN are dropped; -Inf enters the mean as exp(-Inf) = 0
+  x <- c(-10, NA, -12, -Inf, -11, NaN)
+  expect_equal(calc_log_mean_exp(x),
+               log(sum(exp(c(-10, -12, -11))) / 4))
+
+  # Single finite value with one -Inf: log(exp(-5) / 2)
+  expect_equal(calc_log_mean_exp(c(NA, -5, -Inf)), -5 - log(2))
   
 })
 
@@ -114,4 +113,14 @@ test_that("calc_log_mean_exp handles likelihood-like values", {
   result <- calc_log_mean_exp(x)
   expect_true(abs(result - (-1000.001)) < 0.01)
   
+})
+test_that("calc_log_mean_exp does not drop -Inf replicates (review likelihood-07)", {
+  # log(mean(exp(c(0, -Inf)))) = log(0.5); the pre-fix code returned 0.
+  expect_equal(calc_log_mean_exp(c(0, -Inf)), log(0.5), tolerance = 1e-12)
+  # m = 3 replicates, one at -Inf: log((e^-10 + e^-10 + 0) / 3) = -10 + log(2/3)
+  expect_equal(calc_log_mean_exp(c(-10, -10, -Inf)), -10 + log(2 / 3), tolerance = 1e-12)
+  # Documented example value
+  expect_equal(calc_log_mean_exp(c(-100, -101, -99)),
+               -99 + log((exp(-1) + exp(-2) + 1) / 3), tolerance = 1e-12)
+  expect_equal(round(calc_log_mean_exp(c(-100, -101, -99)), 2), -99.69)
 })

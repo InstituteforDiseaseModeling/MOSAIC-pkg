@@ -24,5 +24,8 @@ Data frame with columns: date, year, day_of_year, cases, annual_total
 }
 \description{
 Disaggregates annual cholera case counts to daily resolution using Fourier series
-seasonal patterns. Ensures exact preservation of annual totals.
+seasonal patterns. Ensures exact preservation of annual totals. Day \eqn{t}
+of each year gets weight \eqn{\max(0, 1 + f(t))}, where \eqn{f} is the
+two-harmonic term with period 365 on calendar day-of-year (the engine's
+seasonal envelope, see \code{est_seasonal_dynamics()}).
 }

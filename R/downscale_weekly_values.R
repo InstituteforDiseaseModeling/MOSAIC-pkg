@@ -88,7 +88,7 @@ downscale_weekly_values <- function(date_start, value, integer = TRUE) {
 
      } else {
 
-          if (!all.equal(sum(value, na.rm = TRUE), sum(df_full$value, na.rm = TRUE), tolerance = 1e-6)) {
+          if (!isTRUE(all.equal(sum(value, na.rm = TRUE), sum(df_full$value, na.rm = TRUE), tolerance = 1e-6))) {
                stop("Total values do not match between weekly and daily data (integer = FALSE).")
           }
 

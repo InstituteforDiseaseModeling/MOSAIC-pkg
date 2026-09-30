@@ -82,3 +82,15 @@ test_that("calc_model_posterior_quantiles with subset_col='is_best_subset_opt' d
   q50_opt  <- post_opt$q0.5
   expect_false(isTRUE(all.equal(q50_tier, q50_opt, tolerance = 1e-10)))
 })
+
+test_that("a posterior with Kish n_eff < 2 warns that KL is NA", {
+  results <- make_mock_results_for_quantiles()
+  results$weight_best[results$is_best_subset] <- c(0.97, rep(0.03 / 9, 9))
+  out <- withr::local_tempdir()
+  expect_warning(q <- calc_model_posterior_quantiles(results, output_dir = out, verbose = FALSE),
+                 "Kish n_eff = 1\\.06 < 2")
+  expect_true(all(is.na(q$kl[q$type == "posterior"])))
+  # A well-spread posterior does not warn
+  expect_no_warning(calc_model_posterior_quantiles(make_mock_results_for_quantiles(),
+                                                   output_dir = out, verbose = FALSE))
+})

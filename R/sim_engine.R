@@ -4,8 +4,26 @@
 #' returns the result channels. This is the package's only engine entry point:
 #' there is deliberately no \code{engine =} switch, because there is only one
 #' engine. Prior to v0.68.0 this function was a \pkg{reticulate} bridge to the
-#' Python \code{laser-cholera} package; it is now pure R and the two agree to
-#' the tolerances recorded in \code{tests/testthat/fixtures/ORACLE.md}.
+#' Python \code{laser-cholera} package; it is now pure R.
+#'
+#' @section Relationship to laser-cholera:
+#' Only \code{rng = "replay"} (the parity test mode) reproduces
+#' \code{laser-cholera} 0.16.1, to the tolerances recorded in
+#' \code{tests/testthat/fixtures/ORACLE.md}. The default \code{"rng"} mode,
+#' which every production run uses, deliberately follows the model
+#' specification where the Python engine departed from it, so its output is
+#' not certified against \code{laser-cholera} and is not expected to match it:
+#' \itemize{
+#'   \item the symptomatic split of new infections, and of \code{I_j_initial}
+#'     at t = 0, is a binomial draw rather than \code{round(sigma * n)}
+#'     (v0.89.0);
+#'   \item the environmental dose-response uses the per-capita dose
+#'     \eqn{W/N} rather than the absolute reservoir \eqn{W} (v0.89.0);
+#'   \item each symptomatic onset's fate is drawn at onset from the reported
+#'     CFR \code{mu_jt}, and deaths are reported on the case lag
+#'     (\code{delta_reporting_deaths} is not used) (v0.96.0).
+#' }
+#' The internal \code{.SIM_RNG_ONLY_CORRECTIONS} registry lists these.
 #'
 #' @param config Config list, or a path to a \code{.json} / \code{.json.gz}
 #'   file. See \code{sim_params()} for the normalisation and validation
@@ -28,7 +46,8 @@
 #'   error naming it rather than silently ignoring it. See
 #'   \link{removed_api}.
 #'
-#' @return A list with \code{params} (the normalised config), \code{results}
+#' @return A list with \code{params} (the config as supplied; a file path is
+#'   parsed), \code{results}
 #'   (the 28 result channels as \code{[patch, time]} matrices, except
 #'   \code{pi_ij} and \code{coupling} which are \code{[patch, patch]}) and
 #'   \code{seed}.
@@ -106,7 +125,7 @@ run_simulation <- function(config,
      ctl <- sim_draws(mode = rng, seed = seed, record = record)
 
      state <- sim_alloc_state(par$nticks, par$npatches)
-     state <- sim_seed_state(state, par)
+     state <- sim_seed_state(state, par, ctl)
      state <- .sim_seed_census(state, par, ctl)
 
      phases <- .SIM_PHASE_FUNCTIONS[components]

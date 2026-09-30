@@ -36,9 +36,7 @@ Must include \code{config$location_name} and \code{config$date_start}.}
 \code{n_samples >= 100} (default FALSE). Uses \code{parallel::mclapply()} with all
 available cores. Note: Not supported on Windows.}
 
-\item{variance_inflation}{Factor to create variance in Beta distributions (default 2).
-Sets ci_lower = mean_val / variance_inflation and ci_upper = mean_val * variance_inflation.
-Values > 1 create wider distributions around the sample mean. Should be > 1.1 for meaningful variance.}
+\item{variance_inflation}{Multiplicative CI factor for the Beta refit (default 2): the Beta keeps the Monte Carlo mean and its spread is fit to the target 95\% CI mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be > 1.1 for meaningful variance.}
 }
 \value{
 A list with two main components:
@@ -60,10 +58,20 @@ Infected (I) compartments at model start time using recent surveillance data
 through a Monte Carlo simulation approach.
 }
 \details{
-The method back-calculates true infections from reported cases using the surveillance
-cascade, accounts for reporting delays, and estimates E/I compartments based on
-epidemiological progression rates. Includes comprehensive parameter validation,
-numerical stability protections, and optional parallel processing.
+The method back-calculates symptom onsets from reported cases through the
+engine's reporting chain and maps them to E/I stocks at t0 (see
+\code{\link{est_initial_E_I_location}}). Each Monte Carlo draw samples
+\code{sigma}, \code{iota}, \code{gamma_1}, \code{gamma_2}, \code{rho},
+\code{chi_endemic} and \code{delta_reporting_cases} from
+\code{priors$parameters_global} (a missing prior is replaced by a fixed
+value with a warning); the parallel and sequential branches run the same
+draw function. Draws with E or I = 0 are kept in the mean. Locations with no
+usable surveillance in the window (no rows, or every case count NA) get the
+near-zero Beta(0.01, 99999.99) template, the same prior as a window that
+reports zero cases throughout: absent surveillance is not evidence of active
+infection at t0, so it never seeds more E/I than confirmed zeros. Locations
+with surveillance but too few usable draws, or an estimation error, get the
+fallback Beta priors (Beta(1, 9999) for E, Beta(0.5, 9999.5) for I).
 }
 \examples{
 \dontrun{

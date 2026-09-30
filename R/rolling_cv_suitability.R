@@ -11,8 +11,9 @@
 #       stopping would over-train and blow up amplitude (plan §8 gate 6b, round-3).
 #
 # Design:
-#   - IS data = everything strictly before cutoff_date; OOS = cutoff..forecast_end
-#     (never touched during fitting).
+#   - IS data = everything on or before cutoff_date (inclusive, matching the
+#     scaler, the bias-correction fit and the "training" label); OOS = the dates
+#     after cutoff_date (never touched during fitting).
 #   - Inside IS: start at midpoint = fit_date_start + (cutoff - fit_date_start)/2;
 #     at step k, train_end = midpoint + k*step_months, test_start = train_end +
 #     gap_weeks (4-week embargo), test_end = min(test_start + test_months, cutoff).
@@ -22,8 +23,7 @@
 # =============================================================================
 
 #' Generate the expanding-window RW step grid.
-#' @keywords internal
-#' @noRd
+#'
 #' HA-01 (2026-09-17) adds three optional overrides for the 12-week-horizon work.
 #' All default to NULL and the month-based path is bit-identical when they are.
 #'
@@ -41,6 +41,8 @@
 #'   fit_date_start = 2010 with a 2026 cutoff it never validates before
 #'   2018-05-31, so 8 years of training data are never validated and psi over
 #'   them is extrapolative.
+#' @keywords internal
+#' @noRd
 .psi_make_rw_cv_steps <- function(fit_date_start, cutoff_date,
                                   step_months   = 1L,
                                   test_months   = 5L,
@@ -222,8 +224,9 @@
           n_train = length(seqs_tr$y), n_val = length(seqs_val$y))
 }
 
-#' Slice the pool data to FULL IS (everything strictly before cutoff_date), no
-#' validation set. Used for the final refit.
+#' Slice the pool data to FULL IS (every target dated on or before cutoff_date,
+#' the same inclusive convention as the scaler, the bias-correction fit and the
+#' "training" label), no validation set. Used for the final refit.
 #' @keywords internal
 #' @noRd
 .psi_slice_full_is <- function(data_bundle) {
@@ -232,7 +235,7 @@
      enc <- data_bundle$encoders
      use_cw <- isTRUE(data_bundle$use_confidence_weight)
 
-     is_train <- pd$dates < data_bundle$cutoff_date & !is.na(pd$intensity)
+     is_train <- pd$dates <= data_bundle$cutoff_date & !is.na(pd$intensity)
      seqs_tr <- .psi_build_sequences(
           X         = pd$X[is_train, , drop = FALSE],
           y         = pd$intensity[is_train],

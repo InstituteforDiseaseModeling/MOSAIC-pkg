@@ -27,12 +27,27 @@ decide what to vary next based on what you just observed, like a modeler at a wo
 
 Both are exported MOSAIC functions; call them from R / `Rscript`.
 
-**`run_fit_sandbox(config, params = list(), seed = 42L, locations = NULL, full_metrics = TRUE, outdir = NULL, run_label = "...")`**
+**`run_fit_sandbox(config, params = list(), seed = 42L, locations = NULL, full_metrics = TRUE, outdir = NULL, run_label = "fit_sandbox", quiet = TRUE)`**
 Runs ONE deterministic `run_simulation()` from a calibration config with point-value overrides
 (~1-2 s), aggregates predicted vs observed across `locations`, and returns
-`$predictions`, `$metrics` (incl. `fit_diagnostics` + merged `scorecard`), and
-`$params_applied`. `config` may be a list or a path to a config JSON (use the run's
-medoid, e.g. `.../2_calibration/best_model/config_medoid.json`).
+`$predictions`, `$metrics` (incl. `fit_diagnostics` + merged `scorecard`, and the 1-based
+scored-window starts `score_idx_cases`/`score_idx_deaths`), and `$params_applied`. `config` may be
+a list or a path to a config JSON (use the run's medoid, e.g.
+`.../2_calibration/best_model/config_medoid.json`).
+
+Scoring is **paired and windowed** the way `run_MOSAIC()` scores a fit: each day's predicted total
+sums only the location-days that carry an observation (an unobserved location contributes to
+neither side; a day with no observation anywhere is `NA`, never 0), and the leading unscored steps
+are dropped before any metric is computed — the default `control$likelihood$burn_in_days` (30
+days) plus, for cases, the two-step initial-condition warm-up. A run calibrated with a non-default
+`burn_in_days`/`score_start_cases`/`deaths_score_start` is still scored here on the default window,
+so its sandbox metrics are not directly comparable to that run's `summary.json`. The
+`$predictions` table uses the same pairing but is **not** windowed, and carries
+`n_locations_observed` (how many selected locations were observed that day): on observed days
+`observed` and `predicted_*` are summed over exactly those locations; on unobserved days
+`observed` is `NA` and `predicted_*` is the full aggregate. When comparing a sandbox table to a
+calibration's `predictions_*.csv`, compare only rows with `n_locations_observed > 0` and past the
+scored-window start.
 
 **`calc_fit_diagnostics(observed, predicted, dates, epidemic_threshold = NULL)`**
 The metrics engine (called for you by the sandbox; call directly to re-score series). Returns
@@ -42,8 +57,9 @@ The metrics engine (called for you by the sandbox; call directly to re-score ser
 (`cv_ratio`, `residual_autocorr_lag7`), and a per-series `scorecard`.
 
 Scorecard cut points: **bias** PASS <1.2× / WARN <2.0× / FAIL (symmetric, so 0.5× = 2×).
-**peak_timing** PASS <7d / WARN <21d. **peak_shape** from `shape_corr` (bias-decoupled).
-**variance** = worst of cv_ratio and |residual autocorr| (>0.3 ≈ reporting-delay mismatch).
+**peak_timing** PASS <7d / WARN <21d. **peak_shape** from `1 - shape_corr` (bias-decoupled):
+PASS <0.15 / WARN <0.4. **variance** = worst of cv_ratio (PASS within 1.25×, WARN within 1.6×,
+symmetric) and |residual autocorr lag 7| (PASS <0.2 / WARN <0.4; high ≈ reporting-delay mismatch).
 
 Example:
 ```r
@@ -81,7 +97,7 @@ Rscript -e '
    steps), Fourier `a_1_j/b_1_j` (±20%). Peak too sharp/broad → `iota` (higher = faster rise),
    `gamma_1` (lower = broader). Poor `seasonal_corr` → Fourier amplitude `a_2_j/b_2_j`, `psi_star_a`.
 5. **Variance.** Too smooth (`cv_ratio` < 0.8) → `alpha_2`, `sigma`. Weekly residual autocorrelation
-   (`residual_autocorr_lag7` > 0.3) → reporting-delay mismatch, try `delta_reporting_cases` ∈ {0,3,7}.
+   (`|residual_autocorr_lag7|` >= 0.2, i.e. WARN or worse) → reporting-delay mismatch, try `delta_reporting_cases` ∈ {0,3,7}.
 6. **Tradeoffs.** Run 3-5 joint combinations from the single-parameter findings. Does fixing bias
    break shape? Does fixing timing inflate bias? Document tradeoffs explicitly.
 7. **Synthesise** the brief (below).

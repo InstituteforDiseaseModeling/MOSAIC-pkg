@@ -22,5 +22,11 @@ Python implementation writes \code{np.arange(0, nticks) + 1} with the comment
 "R is 1-indexed, so we start at 1", i.e. it already matches an R convention.
 Using \code{0:(nticks-1)} here would phase-shift the whole seasonal envelope
 by one day.
+
+\strong{Calendar phase.} The coefficients are estimated on calendar
+day-of-year (\code{est_seasonal_dynamics()}, t = 1 is 1 January), so tick
+\code{i} is evaluated at \code{t = par$season_t0 + i}, where
+\code{season_t0} is the day-of-year of \code{date_start} minus one (set by
+\code{sim_params()}; 0 for a 1 January start, and taken as 0 when absent).
 }
 \keyword{internal}

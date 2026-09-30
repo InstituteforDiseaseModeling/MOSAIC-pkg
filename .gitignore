@@ -27,7 +27,6 @@ claude/psi_evolve/psi_cache/
 ..Rcheck/
 sbi-logs/
 vignettes/cache/
-vignettes/figures/
 vignettes/articles/cache/
 vignettes/articles/figures/
 model/scenarios/
@@ -53,3 +52,4 @@ __pycache__/
 *.pem
 *_key
 *_key.pub
+/docs/

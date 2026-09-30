@@ -36,6 +36,13 @@ jobs:
           extra-packages: any::pkgdown, local::.
           needs: website
 
+      # pkgdown renders EVERY root *.md except README, LICENSE and NEWS into a
+      # site page and has no exclude option, so internal agent/planning notes
+      # would be published. Drop every other root *.md from this throwaway
+      # checkout before building, so a note added later stays off the site too.
+      - name: Keep internal notes off the site
+        run: find . -maxdepth 1 -type f -name '*.md' ! -name README.md ! -name NEWS.md ! -name LICENSE.md -print -delete
+
       - name: Build site
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
         shell: Rscript {0}
@@ -44,6 +51,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: JamesIves/github-pages-deploy-action@v4.5.0
         with:
-          clean: false
+          # clean: true prunes pages for topics that no longer exist
+          # (run_LASER, Running-LASER, ...) instead of leaving them live.
+          clean: true
           branch: gh-pages
           folder: docs

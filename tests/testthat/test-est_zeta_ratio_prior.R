@@ -59,3 +59,44 @@ test_that("est_zeta_ratio_prior writes all four artefacts", {
      expect_true(file.exists(file.path(PATHS$MODEL_INPUT, "param_zeta_ratio_prior.csv")))
      expect_true(file.exists(file.path(PATHS$DOCS_FIGURES, "zeta_ratio_prior.png")))
 })
+
+test_that("$fit and the CSV carry the shipped direct channel (A), not combined (C)", {
+     # Regression (v0.100.0): make_priors_default ships the direct channel, but
+     # $fit and param_zeta_ratio_prior.csv used to carry the combined channel,
+     # so the documented artefact did not reproduce the sampled prior.
+     PATHS <- .mk_test_paths()
+     res <- suppressMessages(est_zeta_ratio_prior(PATHS, n_sim = 200L, seed = 1L))
+     expect_equal(res$fit$meanlog, res$diagnostics$fit_direct$meanlog)
+     expect_equal(res$fit$sdlog, res$diagnostics$fit_direct$sdlog)
+     expect_false(isTRUE(all.equal(res$fit$meanlog, res$diagnostics$fit_combined$meanlog)))
+     csv <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "param_zeta_ratio_prior.csv"))
+     expect_equal(csv$parameter_value[csv$parameter_name == "meanlog"],
+                  res$fit$meanlog, tolerance = 1e-10)
+     expect_equal(csv$parameter_value[csv$parameter_name == "sdlog"],
+                  res$fit$sdlog, tolerance = 1e-10)
+     expect_equal(res$fit$p_below_1,
+                  stats::plnorm(1, res$fit$meanlog, res$fit$sdlog))
+})
+
+test_that("the shipped prior is truncated below at 1 and its summaries describe the truncation", {
+     PATHS <- .mk_test_paths()
+     res <- suppressMessages(est_zeta_ratio_prior(PATHS, n_sim = 200L, seed = 1L))
+     f <- res$fit
+     expect_equal(f$lower, 1)
+     p_lo <- stats::plnorm(1, f$meanlog, f$sdlog)
+     q <- function(p) stats::qlnorm(p_lo + p * (1 - p_lo), f$meanlog, f$sdlog)
+     expect_rel_equal(f$median, q(0.5), rel = 1e-10)
+     expect_rel_equal(f$ci_lower, q(0.025), rel = 1e-10)
+     expect_true(f$ci_lower >= 1 && f$mode >= 1)
+     # truncated mean by Monte Carlo
+     set.seed(3)
+     x <- sample_from_prior(4e5, list(distribution = "lognormal",
+                                      parameters = list(meanlog = f$meanlog, sdlog = f$sdlog,
+                                                        lower = 1)))
+     expect_equal(stats::median(x), f$median, tolerance = 0.05)
+     csv <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "param_zeta_ratio_prior.csv"))
+     expect_equal(csv$parameter_value[csv$parameter_name == "lower"], 1)
+     pred <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "pred_zeta_ratio_prior.csv"))
+     d <- pred[pred$channel == "direct", ]
+     expect_true(all(d$density[d$zeta_ratio < 1] == 0))
+})

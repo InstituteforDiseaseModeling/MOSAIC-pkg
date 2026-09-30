@@ -121,6 +121,10 @@ calc_is_diagnostics <- function(log_lik, method = c("kish", "perplexity")) {
 
      ord    <- sort.int(log_r, method = "quick")
      cutoff <- ord[n - tail_len]
+     # A tail tied with its threshold (e.g. all log-likelihoods equal, i.e.
+     # uniform weights) has zero exceedances because nothing varies -- not
+     # because anything underflowed. Report that before the underflow check.
+     if (ord[n] == cutoff) return(bad("tail ratios tied: k-hat undefined"))
      # Exceedances on the natural scale, relative to the tail threshold.
      x <- exp(ord[(n - tail_len + 1L):n]) - exp(cutoff)
      x <- x[is.finite(x) & x > 0]

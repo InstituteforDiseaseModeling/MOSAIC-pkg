@@ -93,3 +93,39 @@ test_that("plot_rolling_cv annotation path runs and exposes <=h skill cells", {
      expect_true(all(res$skill$window == "OOS<=5mo"))
      expect_true(all(res$skill$model %in% c("ensemble", "ensemble_opt")))
 })
+
+test_that("plot_rolling_cv clips and shades the window evaluate_rolling_cv scores", {
+     skip_if_not_installed("ggplot2")
+     # A 4-week harness embargo: scoring starts after the last embargo date, so
+     # the panel must reach embargo end + horizon, not cutoff + horizon.
+     pred <- .mk_rcv_predictions()
+     emb  <- pred$segment == "OOS" & pred$date <= pred$cutoff_date + 28
+     pred$segment[emb] <- "embargo"
+     res  <- plot_rolling_cv(pred, metric = "cases", annotate = FALSE)
+
+     hi <- ceiling(5 * 30.4375)
+     cuts <- sort(unique(pred$cutoff_date))
+     origin <- vapply(cuts, function(cd)
+          as.numeric(max(pred$date[pred$cutoff_date == cd & pred$segment == "embargo"])),
+          numeric(1))
+     dd <- res$data
+     for (k in seq_along(cuts)) {
+          dk <- dd[dd$cutoff_date == cuts[k], ]
+          expect_equal(as.numeric(max(dk$date)),
+                       max(as.numeric(pred$date[pred$cutoff_date == cuts[k] &
+                                                pred$date <= origin[k] + hi])))
+          expect_gt(as.numeric(max(dk$date)), as.numeric(cuts[k]) + hi)
+     }
+     band <- res$overview$layers[[1]]$data
+     expect_equal(as.numeric(band$xmin), origin)
+     expect_equal(as.numeric(band$xmax), origin + hi)
+
+     # Every date the scorer uses for the <=5mo window is on the plot.
+     ev <- evaluate_rolling_cv(pred, horizons_months = 5, metrics = "cases", n_boot = 1L)
+     cell <- ev$cells[ev$cells$model == "ensemble" & ev$cells$window == "OOS<=5mo", ]
+     n_plotted <- vapply(cuts, function(cd) {
+          dk <- dd[dd$cutoff_date == cd & dd$model == "ensemble" & dd$segment == "OOS", ]
+          nrow(dk)
+     }, integer(1))
+     expect_equal(sort(cell$n), sort(n_plotted))
+})

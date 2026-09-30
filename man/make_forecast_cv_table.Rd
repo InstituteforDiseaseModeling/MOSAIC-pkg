@@ -12,7 +12,7 @@ make_forecast_cv_table(
   primary_horizon = 3,
   exploratory_isos = "NGA",
   near_cast_metrics = "deaths",
-  train_start = as.Date("2018-01-01"),
+  train_start = NULL,
   dir_output = NULL,
   file_prefix = "forecast_cv_table"
 )
@@ -29,7 +29,8 @@ cutoff_date, metric, model, window} and skill/bias columns.}
 \item{horizons_months}{Horizons to include as detail rows (default
 \code{c(1,2,3)}); matched against \code{window == "OOS<=Nmo"}.}
 
-\item{primary_horizon}{Horizon used for the summary rows (default 3).}
+\item{primary_horizon}{Horizon used for the summary rows (default 3); must be
+one of \code{horizons_months}.}
 
 \item{exploratory_isos}{Isos flagged exploratory + dropped from the pooled
 summary (default \code{"NGA"}).}
@@ -37,8 +38,10 @@ summary (default \code{"NGA"}).}
 \item{near_cast_metrics}{Metrics flagged conditional near-casts (default
 \code{"deaths"}).}
 
-\item{train_start}{Anchor for the reported training-window length (default
-\code{2018-01-01}, the config window start).}
+\item{train_start}{Anchor for the reported training-window length. NULL
+(default) uses each cell's \code{anchor_date} (the run's config start,
+carried by \code{evaluate_rolling_cv()} cells), else
+\code{MOSAIC::config_default$date_start}.}
 
 \item{dir_output}{If non-NULL, write \code{<file_prefix>_detail} and
 \code{_summary} as parquet (if \pkg{arrow}) else CSV.}
@@ -60,7 +63,12 @@ The headline skill is WIS-skill vs the seasonal-climatology baseline
 (\eqn{1 - WIS_{model}/WIS_{clim}}); bias-ratio is a secondary cumulative-bias
 check. NGA is flagged exploratory (surveillance data-quality confound) and
 excluded from the pooled summary; deaths are flagged conditional near-casts
-(the 2-week embargo is shorter than the infection-to-reported-death dwell).
+(the scoring embargo is shorter than the infection-to-reported-death dwell).
+
+Summary rows aggregate only cells that pass the weight-ESS gate
+(\code{ess_ok}, when the column is present), matching
+\code{evaluate_rolling_cv()$summary} and \code{\link{plot_forecast_cv_skill}};
+\code{n_gated} counts the origins left out.
 }
 \seealso{
 \code{\link{plot_forecast_cv_grid}}, \code{\link{evaluate_rolling_cv}}

@@ -10,14 +10,28 @@
 #' @param config List containing model configuration including location codes
 #' @param n_samples Integer, number of Monte Carlo samples for uncertainty quantification (default 1000)
 #' @param t0 Date object, target date for estimation (default NULL uses current date)
-#' @param disaggregate Logical, whether to use Fourier disaggregation (TRUE) or mid-year point estimate (FALSE)
+#' @param disaggregate Logical, whether to spread each year's cases over the year with the location's seasonal priors (\code{priors$parameters_location$a_1_j}, \code{b_1_j}, \code{a_2_j}, \code{b_2_j}; TRUE) or place them at mid-year (FALSE)
 #' @param verbose Logical, whether to print progress messages (default TRUE)
 #' @param parallel Logical, whether to use parallel processing for locations when length(location_codes) >= 8 (default FALSE).
 #'   Uses parallel::mclapply() with all available cores. Note: Not supported on Windows.
-#' @param variance_inflation Numeric factor to inflate variance of fitted Beta distributions (default 1 = no inflation).
-#'   Values > 1 increase uncertainty while preserving the mean. For example, 2 doubles the variance.
+#' @param variance_inflation Multiplier on the SD of the Monte Carlo R/N samples in the method-of-moments Beta refit, which keeps the sample mean (default 1 = no change; 0 is also treated as no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.
 #'
 #' @return List with structure matching priors_default for prop_R_initial parameters
+#'
+#' @details
+#' \strong{Reporting chain.} Reported cases are converted to infections through
+#' the engine's observation process: the engine reports
+#' \code{Binomial(new_symptomatic, rho) / chi} (\code{sim_components.R}), so
+#' infections = cases * chi / (rho * sigma), with \code{rho} and
+#' \code{chi_endemic} drawn from the global priors. Before v0.100.0 those
+#' lookups never resolved and every draw used the hardcoded fallbacks rho = 0.1,
+#' chi = 0.5 (chi / rho = 5). At priors_default v16.1 (rho ~ Beta(5.38, 7.10),
+#' chi_endemic ~ Beta(5.43, 5.01)) \eqn{E[chi/rho] \approx 1.36}, so the
+#' infection multiplier, and with it the prop_R_initial mean, is about 3.7x
+#' lower than before, with S correspondingly higher through the simplex
+#' residual. The IC is now consistent with the observation model the
+#' calibration samples.
+#'
 #' @export
 #'
 #' @examples
@@ -118,6 +132,21 @@ est_initial_R <- function(
           default_variance_inflation <- variance_inflation
      }
 
+     # Reporting-chain priors. rho is global; chi is split into chi_endemic /
+     # chi_epidemic (priors_default >= v15.x) -- chi_endemic is used for the
+     # annual endemic totals. A missing prior falls back to the documented
+     # default below, with a warning rather than silently.
+     # [[ ]] not $: `$rho` would partial-match `rho_deaths` if `rho` were absent.
+     rho_prior <- priors$parameters_global[["rho"]]
+     chi_prior <- priors$parameters_global[["chi_endemic"]]
+     if (is.null(chi_prior)) chi_prior <- priors$parameters_global[["chi"]]
+     if (is.null(rho_prior)) {
+          warning("est_initial_R: priors$parameters_global$rho not found; using rho = 0.2")
+     }
+     if (is.null(chi_prior)) {
+          warning("est_initial_R: priors$parameters_global$chi_endemic not found; using chi = 0.66")
+     }
+
      # Define location processing function
      process_location <- function(loc, loc_index = NULL) {
           if (verbose && !parallel && !is.null(loc_index)) {
@@ -185,16 +214,14 @@ est_initial_R <- function(
                return(NULL)
           }
 
-          # Get Fourier parameter priors for location (if disaggregating)
+          # Seasonal (Fourier) priors for this location, if disaggregating: the
+          # per-location a_1_j/b_1_j/a_2_j/b_2_j priors from est_seasonal_dynamics()
           fourier_priors <- NULL
           if (disaggregate) {
-               if (!is.null(priors$parameters_location$fourier_params)) {
-                    fourier_loc <- priors$parameters_location$fourier_params$parameters$location[[loc]]
-                    if (!is.null(fourier_loc)) {
-                         fourier_priors <- fourier_loc
-                    } else {
-                         if (!parallel) warning("No Fourier parameters for ", loc, ", using uniform seasonality")
-                    }
+               fourier_priors <- .est_initial_R_fourier_priors(priors, loc)
+               if (is.null(fourier_priors) && !parallel) {
+                    warning("No seasonal a_1_j/b_1_j/a_2_j/b_2_j priors for ", loc,
+                            "; placing annual cases at mid-year")
                }
           }
 
@@ -210,18 +237,14 @@ est_initial_R <- function(
                gamma_1_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_1, verbose = verbose)
                gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = verbose)
 
-               # Sample location-specific surveillance parameters
-               if (!is.null(priors$parameters_location$rho$parameters$location[[loc]])) {
-                    rho_i <- sample_from_prior(n = 1, prior = priors$parameters_location$rho$parameters$location[[loc]], verbose = verbose)
-               } else {
-                    rho_i <- 0.1  # Default reporting rate
-               }
-
-               if (!is.null(priors$parameters_location$chi$parameters$location[[loc]])) {
-                    chi_i <- sample_from_prior(n = 1, prior = priors$parameters_location$chi$parameters$location[[loc]], verbose = verbose)
-               } else {
-                    chi_i <- 0.5  # Default diagnostic positivity
-               }
+               # Reporting chain: global rho and the endemic PPV chi_endemic
+               # (annual WHO totals are dominated by endemic-regime reporting)
+               rho_i <- if (!is.null(rho_prior)) {
+                    sample_from_prior(n = 1, prior = rho_prior, verbose = verbose)
+               } else NA_real_
+               chi_i <- if (!is.null(chi_prior)) {
+                    sample_from_prior(n = 1, prior = chi_prior, verbose = verbose)
+               } else NA_real_
 
                # Handle missing parameters with defaults
                if (is.na(epsilon_i)) epsilon_i <- 0.0004  # ~4 year half-life
@@ -234,10 +257,10 @@ est_initial_R <- function(
 
                if (disaggregate && !is.null(fourier_priors)) {
                     # Sample Fourier seasonality parameters
-                    a1_i <- sample_from_prior(n = 1, prior = fourier_priors$a1, verbose = verbose)
-                    b1_i <- sample_from_prior(n = 1, prior = fourier_priors$b1, verbose = verbose)
-                    a2_i <- sample_from_prior(n = 1, prior = fourier_priors$a2, verbose = verbose)
-                    b2_i <- sample_from_prior(n = 1, prior = fourier_priors$b2, verbose = verbose)
+                    a1_i <- sample_from_prior(n = 1, prior = fourier_priors$a_1_j, verbose = verbose)
+                    b1_i <- sample_from_prior(n = 1, prior = fourier_priors$b_1_j, verbose = verbose)
+                    a2_i <- sample_from_prior(n = 1, prior = fourier_priors$a_2_j, verbose = verbose)
+                    b2_i <- sample_from_prior(n = 1, prior = fourier_priors$b_2_j, verbose = verbose)
 
                     # Use defaults if sampling failed
                     if (is.na(a1_i)) a1_i <- 0
@@ -533,7 +556,10 @@ est_initial_R_location <- function(
 #'
 #' @description
 #' Disaggregates annual cholera case counts to daily resolution using Fourier series
-#' seasonal patterns. Ensures exact preservation of annual totals.
+#' seasonal patterns. Ensures exact preservation of annual totals. Day \eqn{t}
+#' of each year gets weight \eqn{\max(0, 1 + f(t))}, where \eqn{f} is the
+#' two-harmonic term with period 365 on calendar day-of-year (the engine's
+#' seasonal envelope, see \code{est_seasonal_dynamics()}).
 #'
 #' @param annual_cases Vector of annual case counts
 #' @param years Vector of years corresponding to cases
@@ -577,15 +603,18 @@ disagg_annual_cases_to_daily <- function(
           # Day of year sequence
           t <- 1:n_days
 
-          # Generate daily weights from Fourier series
-          # Use 365.25 for period to handle leap years consistently
-          fourier_daily <- a1 * cos(2 * pi * t / 365.25) +
-               b1 * sin(2 * pi * t / 365.25) +
-               a2 * cos(4 * pi * t / 365.25) +
-               b2 * sin(4 * pi * t / 365.25)
+          # Daily weights from the seasonal envelope 1 + f(t), the same
+          # multiplicative form and period (p = 365, t = calendar day-of-year)
+          # the engine uses (sim_beta_jt_human(); est_seasonal_dynamics()).
+          # f alone is zero-mean, so weighting by pmax(0, f) (before v0.100.0)
+          # put every case in the ~half of the year where f > 0. pmax() only
+          # guards coefficients whose envelope dips below zero.
+          fourier_daily <- a1 * cos(2 * pi * t / 365) +
+               b1 * sin(2 * pi * t / 365) +
+               a2 * cos(4 * pi * t / 365) +
+               b2 * sin(4 * pi * t / 365)
 
-          # Ensure non-negative weights
-          weights <- pmax(0, fourier_daily)
+          weights <- pmax(0, 1 + fourier_daily)
 
           # Normalize weights to sum to 1
           weight_sum <- sum(weights)
@@ -732,69 +761,44 @@ fit_beta_safe <- function(x, label = "") {
 #' Helper Function to Fit Beta Distribution with Variance Inflation for est_initial_R
 #'
 #' @description
-#' Fits Beta distribution using CI expansion method with variance inflation.
-#' Uses sqrt(variance_inflation) for CI expansion since variance scales as the square
-#' of standard deviation. Falls back to method of moments with direct variance scaling.
+#' Fits a Beta distribution to Monte Carlo R/N samples by the method of moments,
+#' keeping the sample mean and multiplying the sample SD by
+#' \code{variance_inflation} (so the variance scales by its square). Values in
+#' (0, 1) tighten, values > 1 widen, and 0 or 1 leave the spread unchanged. The
+#' concentration is floored at 2 (SD capped at \eqn{\sqrt{m(1-m)/3}}) so a very
+#' large factor cannot produce an invalid Beta, and at \eqn{1/m} so shape1 stays
+#' at least 1: with prop_R means of 1e-3 to 1e-2, a factor of 13-100 otherwise gave
+#' shape1 of ~0.004-0.06, a prior whose median sat tens of decades below its
+#' mean (e.g. ETH median 5.5e-87 against mean 1.8e-3). The mean is kept
+#' regardless; the factor is effectively capped where it would break that floor.
+#'
+#' Before v0.100.0 the half-widths of the sample 95% CI were scaled linearly,
+#' the lower bound floored at 1e-10 and the result passed to
+#' \code{fit_beta_from_ci()}. With the mode-exact logit-scale fitter that
+#' unreachable floored bound dominated the fit (prior mean ~2.5x the sample
+#' mean for typical prop_R inputs), so the SD is now scaled directly, which is
+#' what the factor was documented to do.
 #'
 #' @param samples Numeric vector of proportions in (0,1)
-#' @param variance_inflation Numeric inflation factor
+#' @param variance_inflation Numeric SD multiplier (0 or 1 = unchanged)
 #' @param label Character string for error messages
 #'
-#' @return List with shape1 and shape2 parameters, or NULL if fitting fails
+#' @return List with shape1 and shape2 parameters, or NULL with fewer than two
+#'   usable samples or zero sample variance
 fit_beta_with_variance_inflation_R <- function(samples, variance_inflation=0, label = "") {
-     # Remove invalid samples
-     valid_samples <- samples[!is.na(samples) & samples > 0 & samples < 1]
+     shapes <- .fit_beta_inflated_samples(samples, variance_inflation, min_shape1 = 1)
+     if (is.null(shapes)) return(NULL)
+     list(shape1 = shapes[1], shape2 = shapes[2])
+}
 
-     if (length(valid_samples) < 2) {
-          return(NULL)
-     }
 
-     # Calculate sample statistics
-     sample_mean <- mean(valid_samples)
-     sample_quantiles <- quantile(valid_samples, c(0.025, 0.975))
-     ci_lower <- sample_quantiles[1]
-     ci_upper <- sample_quantiles[2]
-
-     # Apply variance inflation correctly:
-     # For values < 1: tighten CI toward the mean
-     # For values > 1: expand CI away from the mean
-     if (variance_inflation <= 1 && variance_inflation > 0) {
-          # Tighten toward mean
-          ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
-          ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
-     } else if (variance_inflation > 1) {
-          # Expand away from mean
-          ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
-          ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
-     }
-     # If variance_inflation = 0, use original CI
-
-     # Ensure bounds remain valid
-     ci_lower <- pmax(1e-10, ci_lower)
-     ci_upper <- pmin(0.999, ci_upper)
-
-     # Wrap in tryCatch to handle potential errors
-     tryCatch({
-          beta_fit <- fit_beta_from_ci(
-               mode_val = sample_mean,
-               ci_lower = ci_lower,
-               ci_upper = ci_upper,
-               method = "moment_matching"
-          )
-
-          return(list(
-               shape1 = beta_fit$shape1,
-               shape2 = beta_fit$shape2
-          ))
-     }, error = function(e) {
-          # Fallback to simple method of moments
-          sample_var <- var(valid_samples)
-          precision <- (sample_mean * (1 - sample_mean) / sample_var) - 1
-          precision <- max(2.1, precision)
-
-          return(list(
-               shape1 = max(1.01, sample_mean * precision),
-               shape2 = max(1.01, (1 - sample_mean) * precision)
-          ))
-     })
+# Per-location seasonal priors for est_initial_R()'s disaggregation: a named
+# list (a_1_j, b_1_j, a_2_j, b_2_j) of prior entries from
+# priors$parameters_location, or NULL when any of the four is missing.
+.est_initial_R_fourier_priors <- function(priors, loc) {
+     nms <- c("a_1_j", "b_1_j", "a_2_j", "b_2_j")
+     out <- lapply(nms, function(nm) priors$parameters_location[[nm]][["location"]][[loc]])
+     names(out) <- nms
+     if (any(vapply(out, is.null, logical(1)))) return(NULL)
+     out
 }

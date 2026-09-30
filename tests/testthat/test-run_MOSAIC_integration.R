@@ -5,19 +5,15 @@
 #   parameter sampling -> batched simulation dispatch -> R-side likelihood
 #   -> outlier/subset selection -> importance weights -> posterior ensemble
 #   -> best/medoid reruns -> summary.json + return contract
-# --- and stubs ONLY the Python simulation engine.
+# --- and stubs ONLY the transmission engine.
 #
-# The stub seam (run_MOSAIC.R:247-252 and calc_model_ensemble.R:270-274): the
-# in-process simulation worker resolves the laser-cholera module by first
-# checking `.GlobalEnv` for an `lc` object and only importing the real Python
-# module when none exists. By assigning a FAKE `lc` into .GlobalEnv before the
-# call, the worker and the post-calibration ensemble both dispatch through it.
+# The stub seam is run_simulation() in the MOSAIC namespace: the calibration
+# worker and the post-calibration ensemble both reach the engine through it and
+# nothing else, so one local_mocked_bindings() covers the whole pipeline.
 #
-# CRITICAL: the fake lives in this process's .GlobalEnv, so the run MUST be
+# CRITICAL: a mocked binding exists only in this process, so the run MUST be
 # SEQUENTIAL (control$parallel$enable = FALSE, n_cores = 1). PSOCK workers are
-# separate processes that would import the real Python module and never see the
-# fake. With parallel disabled, run_MOSAIC sets
-# cl <- NULL (run_MOSAIC.R:1194-1196) and the worker runs in-process here.
+# separate processes that load MOSAIC afresh and would call the real engine.
 
 # A handful of fixed simulations through the stub is fast (the synthetic engine
 # call is a no-op matrix build), but parameter sampling for 40 locations x ~1278
@@ -33,10 +29,10 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   skip_if_not_installed("arrow")
   skip_if_not_installed("jsonlite")
 
-  # The worker's sample_parameters() reads packaged default data via get_paths();
-  # run_MOSAIC hard-requires options(root_directory). Set it best-effort.
-  tryCatch(set_root_directory("~/MOSAIC"), error = function(e) NULL)
-  skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
+  # run_MOSAIC hard-requires options(root_directory), but everything this test
+  # reads is packaged data, so a scoped root (the package dir when ~/MOSAIC is
+  # absent, as on CI) is enough -- see local_test_root() in helper-skips.R.
+  local_test_root()
 
   # ---- config / priors -----------------------------------------------------
   # config_default already validates through make_simulation_config; strip the

@@ -262,7 +262,7 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
      # retained, because replay exists to validate the port draw-for-draw
      # against the oracle and the oracle IS the deterministic form. Drawing here
      # would consume a variate Python never drew, desynchronising every
-     # subsequent draw and destroying the parity harness for all 22 other sites.
+     # subsequent draw and destroying the parity harness for all 22 oracle sites.
      # Replay answers "did we port Python correctly?"; for that question,
      # reproducing Python is correct. Production ("rng") answers "does the model
      # implement the spec?", and there the binomial is correct.

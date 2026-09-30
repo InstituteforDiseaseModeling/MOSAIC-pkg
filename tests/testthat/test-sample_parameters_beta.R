@@ -2,7 +2,7 @@ library(testthat)
 library(MOSAIC)
 
 # Set root directory (required for sample_parameters to load defaults)
-tryCatch(set_root_directory("~/MOSAIC"), error = function(e) NULL)
+local_test_root()  # scoped to this file; see helper-skips.R
 
 # These tests assert STRUCTURE and derivation identities that hold for any seed,
 # so they share one memoized draw via .cached_sampled_config() (helper-fixtures.R)

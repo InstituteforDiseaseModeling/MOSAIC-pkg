@@ -14,8 +14,11 @@
 # rather than contradicting the model description.
 #
 # rng mode divides by N; replay keeps the oracle's raw W so the Tier B fixtures
-# stay a valid port-parity harness. This file is therefore the ONLY coverage of
-# the production form -- CLAUDE.md lesson #18(v).
+# stay a valid port-parity harness -- replay does not cover the production form
+# (CLAUDE.md lesson #18(v)). The engine assertion below pins it directly; the
+# closure tests document what the per-capita form buys. It is also exercised
+# indirectly by test-reproductive_numbers.R (environmental R recovery) and
+# test-two-route-balance.R (realised human share).
 # =============================================================================
 
 test_that("the correction is registered where replay's blind spots are listed", {
@@ -76,4 +79,26 @@ test_that("a production run stays finite and bounded after the change", {
   # Psi is a hazard fed to -expm1(-Psi); a value that pins at 1 every tick is
   # the pathology this change removes.
   expect_true(any(out$results$Psi < 1))
+})
+
+test_that("the engine's Psi is the per-capita dose-response of its own W and N", {
+  # Psi[, t + 1] is computed from row t: beta_jt_env * (1 - theta) * D / (kappa + D)
+  # with D = W / max(N, 1). A revert to the raw-W form (D = W) misses this by a
+  # factor of roughly N at every cell.
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")),
+              "no packaged simulation config")
+  cfg <- MOSAIC::config_simulation_epidemic
+  r <- run_simulation(config = cfg, seed = 7L, quiet = TRUE)$results
+  t <- seq_len(ncol(r$Psi) - 1L)
+  W <- r$W[, t, drop = FALSE]
+  N <- pmax(r$N[, t, drop = FALSE], 1)
+  beta_env <- r$beta_jt_env[, t, drop = FALSE]
+  obs <- r$Psi[, t + 1L, drop = FALSE]
+  live <- obs > 0
+  expect_gt(sum(live), 100L)
+
+  resp <- function(D) beta_env * ((1 - cfg$theta_j) * D) / (cfg$kappa + D)
+  rel_err <- function(pred) max(abs(pred[live] - obs[live]) / obs[live])
+  expect_lt(rel_err(resp(W / N)), 1e-10)
+  expect_gt(rel_err(resp(W)), 0.5)
 })

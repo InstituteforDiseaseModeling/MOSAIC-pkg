@@ -7,9 +7,6 @@
 # back-compat callers. Behaviour calls are wrapped in suppressWarnings() to mute
 # the (expected) .Deprecated() warning.
 
-# Load the function
-if (file.exists("../../R/plot_model_parameters.R")) source("../../R/plot_model_parameters.R")
-
 test_that("plot_model_parameters emits a deprecation warning", {
 
     set.seed(123)

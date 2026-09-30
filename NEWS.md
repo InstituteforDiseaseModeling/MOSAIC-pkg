@@ -1,3 +1,139 @@
+# MOSAIC 0.100.0
+
+Production-readiness deep review of everything since the pure-R engine refactor (v0.67.0): 18 component and cross-cutting reviewers, every finding adversarially verified (249 confirmed), fixed in 12 file-owner groups, red-teamed, and integrated. **Calibration results change**; the resume guard refuses to pool simulations from earlier versions.
+
+**Deferred by decision:** the per-parameter marginal-ESS stopping rule (KDE, default) is known to pass a collapsed posterior; it is documented and pinned by a known-defect test, and will be redesigned separately.
+
+**Data objects not rebuilt:** the shipped `priors_default` (v16.1) and `config_default` (v5.1) are unchanged. Their builders now produce materially different content and are versioned v17.0 / v6.0 (changelog heads list the changes); several entries below take effect only at that rebuild and are marked "at the next rebuild".
+
+
+## Engine
+
+- The engine refuses a config missing S/E/R/V1/V2_j_initial for a compartment in the pipeline, or any initial field feeding the gravity populations ("Config is missing `x`"), instead of treating it as zero and silently producing an all-zero epidemic.
+- `nu_jt_sources` no longer accepts V1/V2 (they were zero donors that delivered no doses), matching make_simulation_config().
+- rng mode draws the t = 0 symptomatic split of I_j_initial as Binom(I_j_initial, sigma) at the new draw site infectious/sigma_split_t0 instead of round(sigma * I), so sparsely seeded patches no longer always start with zero symptomatic. Every rng stream shifts by one draw, so seeded results are not bit-identical to earlier versions; replay mode is unchanged. sim_seed_state() (internal) now requires a draw controller.
+- The human-transmission seasonal envelope is evaluated at calendar day-of-year (`season_t0 = yday(date_start) - 1`). Output changes for any config whose date_start is not 1 January; posteriors from earlier non-January runs have their seasonal coefficients out of phase.
+- DerivedValues no longer copies the state row list every tick when writing spatial_hazard (~15.6 MB of garbage per 1,398-tick run).
+- run_simulation() docs state that only replay mode reproduces laser-cholera 0.16.1, list the rng-mode spec corrections, and note that the engine uses the raw psi_jt (it does not read psi_star_*).
+
+## Configuration and parameter sampling
+
+- create_sampling_args() returns a complete `sample_args` flag list, so patterns sample only what they name (before, every pattern sampled everything) and never un-pin alpha_1, alpha_2, kappa or rho_deaths (use `custom`). spatial_only covers mobility_omega, mobility_gamma and tau_i; new environmental_only covers zeta_1, zeta_ratio and decay_*.
+- sample_parameters() defaults `sample_kappa = FALSE`, matching mosaic_control_defaults() (kappa pinned at 1e6), so post-hoc calc_model_ensemble() calls without `sampling_args` no longer redraw kappa. Both read one internal flag list.
+- sample_parameters() applies the config's psi_star_a/b/z/k to psi_jt whenever any differs from the identity, even with every sample_psi_star_* flag FALSE; config_default's pinned psi_star_b = 1 was silently dropped.
+- A config returned by sample_parameters() is marked as psi_star-calibrated (attribute plus a `psi_star_applied = TRUE` field that survives JSON, e.g. config_medoid.json). Passed back as the template, its psi_jt is kept when psi_star is not redrawn and sampling errors when it is, so calc_psi_star() is never applied twice.
+- sample_parameters() warns on unknown sample_* names in `...`; an NA global draw keeps the config value (or stops) instead of writing NA; a location-sampling failure stops instead of leaking `failed_locations` into the global environment.
+- convert_config_to_dataframe() and get_param_names() carry the same fields as convert_config_to_matrix() (a_*_j/b_*_j, chi_endemic/chi_epidemic, prop_*_initial).
+- make_simulation_config() rejects a vector alpha_2 and a wrong-length epidemic_threshold, returns the validated list when it writes a file, and supports .hdf5 output.
+- JSON writers (write_list_to_json(), write_json_or_gz(), write_model_json(), config_medoid.json) write 17 significant digits and atomically, so configs and priors round-trip exactly.
+- get_location_priors() works when MOSAIC is loaded but not attached; inflate_priors() logs empirical fits correctly. Docs for config_default, config_simulation_endemic and priors_default corrected (tau_i is lognormal; the prop_S_initial prior is informational only).
+
+## run_MOSAIC() orchestration and artifacts
+
+- A `control$likelihood$score_start_cases` later than the deaths start is honoured: the worker masks that cases prefix, so the likelihood, the cases dispersion and the ensemble R2/bias score the same window; peak-timing peaks in the excluded stretch are skipped for cases.
+- The medoid (config_medoid.json, medoid_ensemble.rds, medoid predictions) is chosen over every location and only the scored time steps; before, the first location alone and the burn-in head decided it. Single-location medoids can also change. add_reproductive_numbers(recompute_ci = TRUE) uses the same criterion, so its medoid R_eff member belongs to config_medoid.json's param set.
+- A non-resume re-run into an existing `dir_output` no longer reuses the previous run's files. Before, `ensemble_optimized.rds` kept run 1's posterior and figures, run_rolling_cv() and MOSAIC-OCV read it. The posterior/medoid/trajectory/spatial RDS files, config_medoid.json, the per-location prediction and trajectory CSVs, model_fit_windows.csv, optimization_diagnostics.csv, parameter_sensitivity.csv, cfr_posterior.csv and reproductive_numbers.{csv,rds} are deleted before they are rebuilt, and leftover `sim_*.parquet` shards are moved to `2_calibration/samples_stale_<time>/` instead of being pooled. Figures are only replaced when re-rendered.
+- `1_inputs/mobility_tau_ci.csv` is written again (an always-false `isTRUE(control$io)` guard had blocked it since v0.53.0), and a stale copy is removed when there is no interval to write.
+- Fixed-mode runs (`n_simulations` set) end with status `completed_fixed` (`completed_fixed_partial` without ensemble metrics) instead of `completed_unconverged`. `converged` stays logical (FALSE); summary.json and the returned summary gain `convergence_evaluated` (FALSE in fixed mode). summary.json gains `posthoc_criteria_met` (not in the returned summary), and `[RUN_SUMMARY]` gains `mode=`, `convergence_evaluated=` and `posthoc_criteria_met=`.
+- environment.json: `git$sha`/`branch`/`path` still describe the working-directory (country) repo that MOSAIC-OCV reads; new `git$mosaic_sha`/`mosaic_branch`/`mosaic_source` record the MOSAIC code that ran.
+- Resume refuses shards simulated or scored under different semantics: environment.json carries an `engine_semantics` stamp (season_t0 phase, t = 0 symptomatic split, pinned psi_star), and the likelihood tag is `R/v0.100.0+review_likelihood`. Run directories from earlier versions cannot be resumed.
+- run_MOSAIC() stops with an informative error when no location has a finite observation in the scored window, instead of calibrating on all-NA likelihoods; locations that contribute nothing are logged.
+- Calibration parallel robustness: an R-level error in one task counts as one failed simulation (with a warning giving the count and first message) instead of crashing the tally; the gather idle timeout scales with the work per task (option `MOSAIC.calibration_sec_per_engine_run`, default 30 s); worker setup no longer ships the whole run_MOSAIC frame (~10 MB/worker at 40 locations).
+- model_fit_windows.csv is correct for multi-location runs (windows over time, with dates; masked cells do not count toward n_obs).
+- `io$format = "csv"` is retired (output was always parquet); it is coerced to parquet with a warning.
+- control.json stores a per-channel `central_method` as a named `{cases, deaths}` object (older unnamed arrays still read), and mosaic_control_defaults()$sampling comes from sample_parameters()' flag list with corrected labels (kappa is the half-saturation dose, rho the care-seeking probability).
+- Docs: removed the nonexistent `targets$percentile_min`, fixed the run_MOSAIC() custom-priors example, set_root_directory() returns the root, get_paths() documents every path, and the Python helpers no longer claim MOSAIC attaches Python on load.
+
+## Likelihood
+
+- The cumulative shape term (weight_cumulative_total > 0) scores Poisson locations as Poisson, sums observations and predictions over the same scored cells (excluding zero-confidence-weight cells), and uses the core eps floor instead of the retired log(1e6) penalty.
+- With the default weights, a location whose observations all fall where weights_time is 0 is skipped instead of failing every simulation; a location with no data in either channel is NA, so fully missing input returns NA_real_ as documented.
+- calc_log_mean_exp() keeps -Inf replicates as zero likelihoods and drops only NA/NaN, so the n_iterations > 1 collapse no longer rewards parameter sets for failed replicates.
+- The integrated deaths likelihood's location-offset width averages the prior SEs over the years that location observes.
+- calc_model_likelihood() treats an `epidemic_peaks` read back from JSON as `list()` as no peaks. Docs describe the actual shape-term scaling (WIS by N_obs/length(wis_quantiles), cumulative by N_obs/length(cumulative_timepoints)); calc_log_likelihood() documents its scalar return.
+
+## Weighting, convergence and posterior
+
+- The best-subset tier search (grid_search_best_subset()), optimize_ensemble_subset(), `weight_best`, the posterior quantiles, posteriors.json and the ensemble weights all use `control$targets$best_subset_weighting`, the scheme the final ESS_B/A/CVw gate uses. The search used a scale-free exp(-2*delta/range) weighting, so a tier could converge on weights the gate then reported as WARN. The saturated default, exp(-0.5*min(delta, 4)), is unchanged; under "tempered" (ESS about 0.058 n) runs choose much larger subsets or fall back to the top max_best_subset draws, which is now logged as a warning. Both functions gain `weighting`; optimize_ensemble_subset() gains `ess_method` and names `persist_ensemble_arrays = TRUE` when given stripped arrays.
+- Posterior KL in posterior_quantiles.csv, and calc_kl_divergence(), are the information gain KL(posterior || prior) with a weighted-KDE bandwidth (weighted SD/IQR, Kish n_eff) integrated over the posterior's own support. Before, a capped KL(prior || posterior) reported 20 for every well-identified parameter and concentrated weights were smoothed back towards the prior. KL is NA when the weights' Kish n_eff < 2, and calc_model_posterior_quantiles() now warns when that makes every posterior KL NA.
+- calc_convergence_diagnostics(): the subset-percentile check uses the n_total denominator (it could never fail) and is reported as summary$percentile_status, not gated; ESS_B thresholds documented as implemented (pass 100%, warn 80%). calc_model_convergence_status() / convergence_status.csv show the subset percentile, the B_size_upper cap, the exact IS diagnostics (ESS_IS, Pareto k-hat with a reliability verdict) and the overall verdict.
+- calc_bookend_batch_size() returns phase "no_progress" instead of extrapolating a flat or declining ESS, and "low_confidence" when the fit puts the target below the current n while ESS is still short.
+- calc_is_diagnostics() reports a tied tail as "tail ratios tied: k-hat undefined". calc_model_posterior_distributions() no longer counts unknown-scale rows as fit failures; calc_model_parameter_sensitivity() fills location-scale descriptions.
+- Documented limitation: the kde (default) and binned marginal ESS do not detect importance-weight collapse (a point mass still gives roughly n/5 to n/25); read them with calc_is_diagnostics().
+
+## Ensemble, R_eff and fit diagnostics
+
+- run_fit_sandbox() scores the way run_MOSAIC() does: each day's total sums only location-days with an observation, and the default 30-day burn-in plus the 2-step cases warm-up are dropped (always the package default; there is no `control` argument). Scorecards are not comparable with earlier versions. On a pre-v0.96 config a CFR_target override takes effect and a mu_jt override is refused; predictions gain predicted_central, predicted_mean, central_method and n_locations_observed.
+- calc_model_R2() and calc_model_cor() share one weights contract (scalar, full-length subset with the validity mask, or pre-filtered), and calc_bias_ratio(na_rm = FALSE) returns NA when an NA is present.
+- calc_fit_diagnostics() computes cv_ratio and residual autocorrelation on paired, gap-aware days; an all-zero or flat prediction grades FAIL instead of NA.
+- add_reproductive_numbers(recompute_ci = TRUE) weights members by the run's final (optimized) posterior mapped by seed, skips members that failed at calibration, uses the run's resolved central method (warning and falling back to the mean when unresolvable), no longer requires trajectories_ensemble.rds, and reports the true ensemble_source.
+- calc_model_ensemble(): the worker no longer forces a per-simulation gc(), trajectory thinning no longer needs withr, the reconstructed epidemic_frac flag matches the engine, and PSOCK task errors are warned with a count.
+- calc_spatial_hazard(): docs, example and dimnames match the J x T orientation, and names no longer error when J != T.
+
+## CFR and rolling CV
+
+- process_CFR_data() drops in-progress snapshot years, names its output for the last complete year and removes superseded later-dated artifacts, aggregates by ISO code (CIV no longer split), keeps only country-years with both counts, and fits each Beta with a logit-scale quantile fit. propvacc::get_beta_params() had returned a degenerate Beta(~0.009, ~1.9) for every ~2% CFR, so the shipped case_fatality_ratio table needs regenerating.
+- est_CFR_hierarchical() labels the point row of param_mu_disease_mortality.csv `median`, and plot_CFR_hierarchical() marks population-average locations from the `pooled` flag. update_mosaic_data() fits the GAM with the package defaults (min_cases = 1, k_year = 12), matching the shipped artifacts; the old 3/15 settings moved some mu_jt centres by 10-14%.
+- run_rolling_cv() drops peaks whose scoring window passes the cutoff, wipes each cutoff's run directory, fits psi in a scratch MODEL_INPUT (the canonical psi CSV is no longer overwritten), checks that the psi cache covers the scored window, rewrites manifest.json after every cutoff, rejects unknown model names, and emits `ensemble_opt` only when the subset optimizer actually selected a subset. It warns that psi from the canonical panel is not leak-free and that priors other than mu_jt are not rebuilt per cutoff.
+- prefit_rolling_cv_psi() fits in an isolated scratch directory, keeps earlier cutoffs in its manifest, includes the prediction window in the cache-hit test, and no longer overwrites MOSAIC-docs figures. The cache key now includes a psi-algorithm version, so **existing psi caches (e.g. the OCV-4 cutoffs) are refitted, not reused**, after this release's drought_prob and lstm_v2 changes. Each fit's psi_suitability_config.json is kept next to its CSV (`psi_<T>_config.json`, also for run_rolling_cv() without a cache), and manifest entries record `n_seeds_ok`, `seeds_failed`, `target_anchor_end` and `source_csv_md5`, so a cutoff pooled over fewer seeds than requested is visible.
+- evaluate_rolling_cv() measures horizons from the end of the harness embargo and never scores embargo rows; partial named `embargo_weeks` work and cells carry `anchor_date`. Scored sets shift by one day, so published OCV-4 scores will not reproduce exactly.
+- Exported defaults changed: make_forecast_cv_table(train_start = NULL) takes the training length from each run's anchor date (summary rows respect the ESS gate, new `n_gated`), and plot_forecast_cv_skill() defaults to horizon_months = 3, model = "ensemble_opt". plot_rolling_cv() shades the window evaluate_rolling_cv() actually scores.
+
+## Environmental suitability
+
+- est_suitability() (lstm_v2): an auto-detected fit_date_stop is the last week with both observed cases and complete ENSO/IOD data, as documented, not the end of ENSO coverage (on the canonical panel 2027-04-29 -> 2026-08-13). The fold grid, the best epoch, the final refit and therefore the **default production psi change**; about 8 months per country move from 'training' to 'prediction'.
+- est_suitability() (lstm_v2): the final full in-sample refit includes the week at fit_date_stop; per-country smoothing and bias correction stop at each country's last covariate-supported prediction; a model trained with `lead > 0` predicts `lead` weeks past the last covariate week.
+- Under response_var = "transmission_intensity", every week without a case observation has an NA target instead of being trained as zero incidence; compile_suitability_data() writes that column as NA on such weeks (17,576 rows on the canonical panel). Observed weeks are unchanged.
+- est_suitability() warns when a pre-computed target_* response is fit at a cutoff before the panel's target-anchor end (target-side leakage, detected not removed); compile_suitability_data() records it in a new `target_anchor_stop` column. The lstm_v1_legacy path warns similarly for a retrospective cutoff.
+- psi_suitability_config.json records n_seeds_ok, seeds_ok, seeds_failed, seed_aggregation, target_anchor_end, the resolved arch_hp, loess settings and country_pool; failed seeds raise a warning, and under devtools::load_all() seeds fit serially (PSOCK workers would run the installed package).
+- compile_suitability_data() reads the World Bank GDP and population-density files written by the process_WB_* functions. The lagged, observed-climate drought_prob GAM (see Data pipeline) is signed off for psi; only feature_set v7.4 uses the drought channels.
+- calc_psi_star() no longer errors on a length-1 series or a single observed value under linear fill. est_suitability() documents logit-median seed pooling, feature_set = "v7.4" and a Leakage section.
+
+## Priors and parameter estimation
+
+- fit_beta_from_ci() keeps the mode exact and chooses the concentration by logit-scale quantile matching (an absolute +/-0.01 clamp discarded CIs below ~0.02); fit_lognormal_from_ci() matches the CI exactly on the log scale; fit_gompertz_from_ci() matches the interval and reports the true mode. Posterior JSON and staged priors from calc_model_posterior_distributions(), inflate_priors() and update_priors_from_posteriors() change accordingly.
+- The zeta_ratio prior is a lognormal truncated below at 1 (`parameters$lower`), so zeta_2 = zeta_1 / zeta_ratio can no longer exceed zeta_1 (about 16% of draws did); the median moves from ~75 to ~185 at the next rebuild. sample_from_prior() honours lognormal lower/upper bounds; calc_model_posterior_distributions() fits a bounded prior's posterior in the same truncated family and writes the bounds to posteriors.json; update_priors_from_posteriors() refits an unbounded posterior to the truncated family before attaching the bound, so staged updates no longer drift (a non-identifiable zeta_ratio's median had moved ~5x per stage). check_sampled_parameter() and the prior/posterior density plots use the truncated mean, quantiles and density. make_config_default.R takes the pinned zeta_ratio (and zeta_2) from the truncated prior median.
+- est_seasonal_dynamics() gains envelope_floor (default 0.1), shrinking case-fit coefficients so 1 + f(t) stays positive (new envelope_scale column), and aggregates precipitation on ISO weeks. param_seasonal_dynamics.csv is regenerated (30 of 40 locations scaled); both builders stop on a non-positive envelope. disagg_annual_cases_to_daily() weights days by 1 + f(t) with period 365, as the engine does.
+- est_initial_E_I() back-calculates through the engine's reporting chain (the rho, chi_endemic and delta_reporting_cases priors instead of branch-specific placeholders), no longer puts reported cases into E, keeps zero draws, and fits the Beta to the Monte Carlo mean. A window with zero reported cases or no usable surveillance gets the near-zero Beta(0.01, 99999.99); only a failed estimate with data uses Beta(1, 9999) / Beta(0.5, 9999.5).
+- est_initial_R() draws rho and chi_endemic from the global priors (it always used chi/rho = 5) and the per-location seasonal priors; est_initial_R() and est_initial_S() refit by method of moments, keeping the sample mean with the SD scaled by variance_inflation. fit_beta_with_variance_inflation_R() floors shape1 at 1 so a large factor cannot collapse prop_R onto 0. prop_R_initial means fall ~10-50x at the next rebuild.
+- est_initial_V1_V2() gains phi_1/phi_2 and converts pre-t0 doses to effective immunisations. It reads the ees-cholera-mapping GTFCC request log, not data_vaccinations_GTFCC_WHO.csv. est_initial_S() no longer errors with verbose = TRUE.
+- make_priors_default.R (at the next rebuild): no hand-tuned per-country E/I factors; a uniform E/I variance inflation of 10; variance_inflation_S = 1 (the 0.01-0.10 table shrank the SD); an assert that no prop_R prior's median is below 0.1x its mean; mobility inputs ported so a rebuild reproduces the shipped tau_i (overland lognormal) and blend gravity parameters; changelog-date guards.
+- The estimated_parameters inventory is rebuilt (v1.3.0): alpha_1 is location-scale, tau_i lognormal, kappa's units corrected. Posterior quantiles previously skipped the alpha_1_<ISO> columns.
+- est_zeta_ratio_prior()$fit, param_zeta_ratio_prior.csv and zeta_ratio_prior.png carry the shipped direct channel truncated at 1 (the figure had shaded the diagnostic combined channel's interval and median); est_immune_decay_vaccine() plots the est_vaccine_effectiveness() fit; est_WASH_coverage() pairs weights with the right countries; est_mobility() handles partial-coverage OD sources.
+- get_symptomatic_prop_data(): the Harris et al (2008) row is the published 127/202 (0.629, 95% CI 0.558-0.695) and intervals are validated; get_suspected_cases() fits chi to the true 2.5% quantile. print.mosaic_priors and print.mosaic_initial_conditions_S are registered S3 methods.
+
+## Data pipeline
+
+- combine_vaccination_data() matches WHO shipments to GTFCC campaigns by ICG request number (GTFCC records one total per request, WHO one row per shipment) and drops repeated WHO-only listings beyond a request's approved total. match_confidence labels are correct (38 were NA) and an all-matched WHO table no longer errors. The shipped combined file has 173 campaigns and 182.83M doses (was 186 and 200.35M; MOZ 2017 and CMR 2019 second shipments and a duplicated MWI 2018 row were double-counted), with its redistributed file and param_nu_vaccination_rate_GTFCC_WHO.csv regenerated. config_default nu_jt picks this up at the next rebuild.
+- process_WHO_weekly_data() dates weeks on WHO's epi-week calendar: 2025-W53 is no longer summed into W52 (doubling that week for ~20 countries), 2026 weeks are no longer 7 days early, and rows with a missing count are kept. process_JHU_weekly_data() keeps missing counts as NA instead of fabricating zeros (~1,870 weeks).
+- process_JHU_weekly_data() drops the 4,144 country-weeks the OSF archive flags `phantom` (zero-filled weeks with no report: cases 0, no deaths, no observation_collection_id). They had entered the combined series as reported zeros at full trust and outranked real AI counts (COD 2012-01-09: 0 instead of 1,600). In the combined weekly file, 4,113 former JHU weeks are now filled by AI (2,257 fourier with 214,355 cases at confidence ~0.5, 132 observed with 16,346, 100 documented_zero) or SUPP (46), and 1,578 are empty. In the 2023+ fit window, 88 of these weeks change: 26 become empty, 48 take AI observed counts and 14 take fourier.
+- process_cholera_surveillance_data() picks each country-week's row so that an observed row (WHO/JHU/SUPP, AI observed/documented_zero) always beats an imputed one (AI fourier_*, assumed_zero), whatever fields each carries, then by source priority WHO > JHU > AI > SUPP. The old rule put rows with both cases and deaths ahead of priority, so once JHU deaths became NA every JHU week without deaths lost to any AI row with both fields. On the phantom-free inputs that is 48 JHU weeks (SLE 19, SOM 23 fourier weeks in 2017 whose 92,603 cases replaced JHU's 45,542, and 6 others) plus 81 SUPP weeks that lost to fourier rows (UGA 2020-2021); none is in 2023+. If the chosen row has no death count, deaths come from another observed row with the same case count after half-up rounding (the same report), and the week keeps the lower confidence_weight of the two rows; rows from different reports are never mixed. A new source_deaths column in the weekly and daily combined files names the source of each death count.
+- Consumers that drop AI rows see these source changes as added or removed weeks: est_seasonal_dynamics() and the epidemic_threshold derivation in make_priors_default.R, and compile_suitability_data()'s target anchors (trusted rows only). The phantom zeros had counted as observed zero weeks in all three.
+- est_epidemic_peaks() detects peaks on observed weeks only: fourier_*/assumed_zero weeks are treated as missing, a flagged day on a flat stretch of the smoothed curve moves to the stretch's centre, and the peak day must be observed with cases > 0. The old rule took the last day of the stretch, which put an isolated observed week's peak ~11 days late on a zero day (ZAF 2023-09-11, SEN 2005-07-11, SOM 1997-12-08 reported 0 peak cases). A detected peak whose window is at least half imputed days is dropped. The hand-curated peaks the function appends are documented outbreaks and are exempt from that filter. plot_epidemic_peaks() draws the same series. Run on the corrected combined series, model/input/param_epidemic_peaks.csv and data/epidemic_peaks.rda (kept identical) have 159 peaks in 32 countries (was 139 in 28, built at v0.32.10 from data through 2026-04). By era: 11 before 2010 (JHU and AI observed back-history), 80 in 2010-2022, 68 from 2023 (59 before). In 2023+ the 2026 peaks move one week with the WHO re-dating and later 2026 outbreaks are added. The csv also feeds get_cases_binary_from_peaks(), which sets cases_binary in the suitability panel when compile_suitability_data() runs with use_epidemic_peaks = TRUE (update_mosaic_data(), prefit_rolling_cv_psi()), so the next psi fit trains on the new labels. config_default ships its own filtered copy, which changes at the next rebuild; until then only calc_model_likelihood()'s fallback for configs without epidemic_peaks reads the new object.
+- impute_drought_probability() lags local-climate predictors past the 12-week SPEI label window (the old fit was a circular nowcast) and gains climate_obs_stop, which compile_suitability_data() sets per country from the observed climate/ENSO horizon. drought_prob changes a lot (deviance explained 69% -> 28.5%), so the next est_suitability rebuild moves psi. All hazard imputers return predictions in input row order.
+- process_IDMC_data() counts only IDU 'Recommended figure' rows (Triangulation rows inflated displacement ~25%). process_WHO_annual_data() validates, deduplicates and logs dashboard snapshots, keeps the newest at equal coverage, and no longer splits Cote d'Ivoire.
+- Raw writers (download_WB_data, download_UN_WPP_data, EM-DAT, download_IDMC_data, download_mobility_od_sources, the friction cache, get_WHO_vaccination_data) write dated snapshots atomically and log provenance; resolvers skip partial snapshots; an HDX outage is a failed IDMC download; download_country_DEM() gains overwrite = FALSE.
+- get_cases_binary() handles countries with fewer than four weeks; refresh_data_repos() labels the JHU input as a static OSF archive.
+
+## Plotting
+
+- Prediction-figure captions score the same masked series as summary.json (warm-up and burn-in excluded).
+- render_MOSAIC_figures() reads the run's resolved per-channel central_method (summary.json, subset_opt.rds, then control.json, including unnamed arrays) instead of aborting or swapping channels; renders sensitivity from the existing parameter_sensitivity.csv (which now records `weighting` and `n_used` for the subtitle), recomputing with a fixed seed only when absent; and reads only the needed samples.parquet columns.
+- Spatial figures use posterior medians of tau_i, mobility_omega and mobility_gamma (fixed parameters stay fixed), and departure_tau shows the tau_i posterior interval. get_ggplot_legend() works with ggplot2 >= 3.5 and returns an empty grob for a legend-less plot, so mobility_flux_network.png is produced for single-location runs.
+- plot_psi_star_diagnostic() plots the psi_jt the run was calibrated on, works post-hoc without a MOSAIC root (PATHS optional), and no longer repeats one location's psi under every name.
+- plot_model_ppc() no longer double-counts multi-location runs, and its coverage statistic is labelled 'P(central > obs)'. plot_suitability_and_cases() and plot_suitability_by_country() plot the psi_jt the model receives.
+- plot_model_likelihood() counts -Inf draws as failed; plot_model_subset_optimization() places the optimal-N marker correctly; plot_epidemic_peaks() shares est_epidemic_peaks()' 28-day smoother; TruncNorm labels stay readable for small-scale parameters.
+- plot_seasonal_clustering() defaults to clustering_method = "ward.D2" (the old default errored) and its "knn" method works.
+
+## Packaging, documentation and tests
+
+- check_dependencies() reports missing TensorFlow/Keras as 'Limited', no longer creates a global `suitability_working`, and stops cleanly after an attach failure. install_dependencies() docs describe the suitability-only environment and the separate keras3 install.
+- The Running-MOSAIC vignette and vm launchers no longer call attach_mosaic_env(); the Running-simulations vignette shows regenerated figures; the startup banner, README and Installation vignette use the DESCRIPTION name and no longer mention LASER.
+- NEWS entries reconstructed for 0.74.0-0.91.x, including the 0.89.0 engine corrections and the change that pins kappa by default.
+- CI runs `R CMD check` (no tests or vignettes; fails on WARNING), and the nightly tier runs the run_MOSAIC() integration test. The samples.parquet schema and sample_parameters tests run without `~/MOSAIC`; vacuous and mirror tests now call production functions; flaky moment checks are seeded.
+- The pkgdown site no longer publishes internal planning/agent notes (every root *.md except README, NEWS and LICENSE is excluded), and inst/bin/setup_mosaic.sh is no longer installed.
+- A duplicate internal .mosaic_best_subset_weights() from the review-branch merge is removed (no behaviour change). calc_model_ess()'s example is corrected (~1.74). inst/examples/simulate_outbreak_settings.R warns when a setting produces zero cases; the sporadic and rare settings need re-tuning for the v0.89.0 engine.
+
 # MOSAIC 0.99.10
 
 - The pkgdown site carries the Gates Foundation standard footer (legal notice, privacy and terms links) (#121).
@@ -672,6 +808,39 @@ Tests check against the engine rather than against the code's own algebra:
 
 On the post-v0.89.0 MOZ medoid, the 14-day-mean R_eff has an interquartile range of 0.54-1.71 and a p95 of 3.1; the old estimator gave 0.96-1.09 and 1.19. Old and new R_eff files are not comparable.
 
+# MOSAIC 0.84.0 - 0.91.x (changelog reconstructed from the commit history)
+
+These releases shipped without NEWS entries; the summaries below are taken from their commit messages. Two of them change model behaviour.
+
+## 0.89.0: two engine corrections (results are not comparable across this boundary)
+
+Both are places where the R port faithfully reproduced laser-cholera 0.16.1 while laser-cholera diverged from `MOSAIC-docs/04-model-description.Rmd`, so neither could be found by comparing R to Python.
+
+- **The symptomatic split is stochastic.** E -> I is now split binomially, as the spec's stochastic-transitions table states, instead of `round(sigma * progressing)`. `round()` is not linear, so the old form was wrong in the mean: at `sigma = 0.2` it gave zero symptomatic for every `n <= 2`, which suppressed the observed arm on 15.4% of patch-days with `E >= 1` (28-41% in GNB/COG/NAM) -- exactly where outbreak onset is decided.
+- **The environmental dose-response is per capita.** `Psi = beta_jt_env * (1 - theta_j) * D / (kappa + D)` with `D = W / N`. The reservoir `W` is extensive while `kappa` is a concentration; comparing them pinned the response at 1 (0.9994 from a single symptomatic person; 95.7% of patch-days above 0.99), so `kappa`, `zeta_1`, `zeta_2`, `zeta_ratio` and the decay parameters were flat directions whose posteriors returned their priors. At `kappa = 1e6` the response now half-saturates near 0.3% symptomatic prevalence and the realised human share near onset moves from 0.13% to ~25%, without touching `p_beta` or any other prior. Replay mode keeps the raw-`W` form for port parity (`.SIM_RNG_ONLY_CORRECTIONS`).
+- **`kappa` is fixed by default in calibration.** `mosaic_control_defaults()` now sets `sampling$sample_kappa = FALSE`, so `run_MOSAIC()` holds `kappa` at its config value (`1e6`) instead of sampling it. The per-capita dose-response gives `kappa` a meaning, but the data still cannot estimate it. Pass `sample_kappa = TRUE` in `control$sampling` to sample it as before. A direct `sample_parameters()` call still defaults to `sample_kappa = TRUE`.
+
+Calibrations, posteriors and R_eff estimates from before 0.89.0 should not be compared with later ones.
+
+## 0.90.x: exact importance-sampling diagnostics
+
+- 0.90.0: the best-subset posterior **saturates** delta-AIC at 4 (`pmin(delta, 4)`) rather than applying the Delta <= 6 cut-off the spec described, so subset weights lie in `[exp(-2), 1]` and `ESS_B` is inflated by construction. This is now documented, and the honest numbers are reported alongside: new `calc_is_diagnostics()` (exact untruncated IS ESS + Pareto k-hat) and `summary.json` fields `ess_is_best`, `ess_is_all`, `ess_is_all_prop`, `khat_all`, `khat_all_status`, `n_positive_ratios_all` -- reported, never gated. New `control$targets$best_subset_weighting` (`"saturated"`, the unchanged default, or `"tempered"`). `codetools` declared in Suggests.
+- 0.90.1: `alpha_2` validation accepts the documented `[0, 1]` and rejects values above 1.
+- 0.90.2: the subset diagnostics score the subset the posterior actually uses. 0.90.4: `khat_status` reports usability, not just convergence. 0.90.5: corrected `tempered` weighting description; degenerate subsets guarded.
+- 0.90.6-0.90.11 (suitability RW-CV): ISO-8601 week labelling fixed and day-based RW geometry; forecast lead and validation input context; per-fold held-out predictions retained; the psi drop-tail guard fails loudly and the manifest records fit provenance; a day-based stride is no longer multiplied by `rw_subsample`; an undefined `backend` reference removed from the manifest.
+
+## 0.91.0
+
+- `write_trajectory_csv()` exports the ensemble trajectory channels (incidence, compartments, derived channels) as CSV, so they reach the results archive in a readable form.
+
+## 0.84.0 - 0.88.x: calibration pipeline performance and robustness
+
+- 0.84.0: the ensemble RAM projection counts the config broadcast.
+- 0.85.0: `add_reproductive_numbers()` gains `n_cores`; the R_eff re-simulation (`recompute_ci = TRUE`) runs on a PSOCK cluster.
+- 0.86.0: reverted the `open_dataset()` shard combine from 0.79.0 (2.1x slower on production hardware).
+- 0.87.0: `control$io$shard_batch_size` default 1 -> 100 (57x faster combine, 116x faster resume scan, 34.6x smaller on disk).
+- 0.88.0: the combine's small-file branch unifies shard schemas instead of silently dropping columns a later shard adds. 0.88.1: the implied-CFR identity uses the post-#67 form.
+
 # MOSAIC 0.83.0
 
 ## Every PSOCK cluster now clamps to the connection budget
@@ -689,6 +858,19 @@ R >= 4.4.0 accepts `--max-connections=N` (128 to 4096) to enlarge the table. It 
 Measured on dugong at `n_cores = 170`: **170 workers granted (was 123)**, cluster startup 16.6 s (was 13.6 s), 176 of 1024 file descriptors, 121 GB of 1511 GB resident. The connection table — not memory, not descriptors — was the binding constraint, and ~28% of the machine was being left idle. The flag precedes `"$@"` so a caller's own later value still wins (R takes the last occurrence); a flag placed *after* the script filename is ignored by R entirely. hedgehog (120 cores, `n_cores = 118`) sits under the default ceiling and does not need this; it gets the flag so both VMs behave identically.
 
 `inst/examples/forecast_cv_experiment.R` now derives its calibration cap from the live connection budget instead of a hard-coded `FORECAST_CV_PSOCK_CAP=120`; an explicit env var still overrides.
+
+# MOSAIC 0.74.0 - 0.82.x (changelog reconstructed from the commit history)
+
+These releases shipped without NEWS entries; the summaries below are taken from their commit messages.
+
+- 0.74.0: `inst/bench/`, a multi-version calibration benchmark suite.
+- 0.75.0: `process_IDMC_data()` builds displacement panels from IDMC IDU records.
+- 0.76.0: **`alpha_2` is pinned by default** (`sampling$sample_alpha_2 = FALSE`); it is weakly identified and suitability absorbs its signal. Set it `TRUE` to restore the old behaviour.
+- 0.77.0: **`config_default` rebuilt** on the 2018-01-01..2027-02-04 window (3,322 ticks, was 1,398) with refreshed psi and a newer UN WPP vintage. The demographic-trend test tolerance is now expressed per simulated year (0.8%/yr). 0.77.1-0.77.2: remaining laser-cholera relics and the dead `data-raw/mosaic_python_env.R` removed.
+- 0.78.0: the Python environment is optional and suitability-only; `library(MOSAIC)` no longer initialises Python (~5.2 s saved per interactive session).
+- 0.79.x: shard combine via `open_dataset()` (reverted in 0.86.0); four R CMD check warnings cleared and the build tarball shrunk 105x.
+- 0.80.0: `render_MOSAIC_figures()` renders per-location figure families across PSOCK workers (`cl` / `n_cores`); the vignettes ship in the package. 0.80.1: the resume scan reads simulation ids from the `sim` column, not the filename.
+- 0.81.0: parallel rendering actually engages (the cluster previously failed to start and fell back to serial); shard batching added. 0.81.2: the optimised ensemble keeps its scored-cell mask. 0.81.4: `results_all` restored.
 
 # MOSAIC 0.73.1
 

@@ -81,6 +81,10 @@ plot_model_convergence_status <- function(results_dir,
     # --- Create plot ------------------------------------------------------------
     # Increased height to accommodate parameter table, new B_size_upper row, and footer
     pdf(file.path(plots_dir, "convergence_status.pdf"), width = 14, height = 15)
+    pdf_dev <- grDevices::dev.cur()
+    # Close this device even if drawing errors, so a failure cannot leave it open
+    # (truncated PDF, later base graphics redirected into it).
+    on.exit(if (pdf_dev %in% grDevices::dev.list()) grDevices::dev.off(pdf_dev), add = TRUE)
 
     # Set up plot area with minimal margins (reduced bottom margin since no URL)
     par(mar = c(2, 1, 3, 1), xpd = TRUE, family = "sans")
@@ -373,7 +377,7 @@ plot_model_convergence_status <- function(results_dir,
     footer_text <- paste0("Generated: ", timestamp)
     text(0.5, 0.02, footer_text, cex = 0.7, col = col_text_secondary)
 
-    dev.off()
+    grDevices::dev.off(pdf_dev)
 
     if (verbose) {
         message("Convergence status plot saved to: ",

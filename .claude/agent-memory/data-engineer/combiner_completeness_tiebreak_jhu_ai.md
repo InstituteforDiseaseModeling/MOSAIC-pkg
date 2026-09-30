@@ -1,23 +1,30 @@
 ---
 name: combiner-completeness-tiebreak-jhu-ai
-description: process_cholera_surveillance_data completeness tie-break (complete cases+deaths beats source priority) + JHU missing-deaths=NA fix => 2235 observed JHU weeks lose to AI (mostly fourier) rows, cases 54k->265k; combined series HELD at v0.100.0 rebuild
+description: Combiner source selection + JHU PHANTOM rows — 4,144 OSF phantom zero-fills (phantom<=>no collection id) masqueraded as JHU observations; dropped at source v0.100.0; observed>imputed>priority rule; peaks observed-only
 metadata:
   type: project
 ---
 
-Found 2026-09-30 in the v0.100.0 rebuild stage 1. `process_cholera_surveillance_data()` dedups per
-(iso_code, date_start) ordering by `-.complete` (cases AND deaths non-NA) BEFORE source priority
-WHO>JHU>AI>SUPP (R/process_cholera_surveillance_data.R ~176-184, pre-existing since v0.45.3).
-Harmless while `process_JHU_weekly_data()` defaulted missing deaths to 0; once JHU deaths became NA
-(8749 of 11740 JHU rows), every JHU week with an AI row of both fields loses to AI:
-2235 source JHU->AI (2037 fourier_*, 100 documented_zero, 98 observed), 2011-2023, 34 countries,
-those weeks' cases 54,248 -> 264,759 (4.9x). Deaths NA-valued->NA 6457 rows (expected part).
+Fixed 2026-09-30 (MOSAIC-pkg 610e93557 + corrections 7ad56960e/42be07a36; MOSAIC-data 64b69ab).
 
-**Why:** the tie-break was designed when every source reported both fields; it now inverts the
-documented precedence and replaces observed JHU cases with synthetic AI interpolation.
-**How to apply:** do not commit a combined weekly/daily built by this combiner until it is changed
-(options: tie-break on cases-completeness only, exclude fourier/imputed AI from winning over an
-observed source, or field-wise coalesce deaths). Diagnose with source transition tables, per
-[[surveillance-revision-is-source-precedence]]. Also noted same day: ai-cholera-data-mining sibling
-repo has drifted — process_AI_cholera_data would write 72190 rows (was 64783; adds 1970-era
-documented_zero weeks); AI processed file NOT refreshed in that stage.
+**JHU phantom rows (the real bug, caught by red-team after my first fix):** raw
+`Public_surveillance_dataset.rds` has `phantom == TRUE` on 4,144 country-level rows — weeks the OSF
+archive zero-fills without a report: sCh=0, cCh/deaths NA, observation_collection_id NA (phantom holds
+exactly when the id is missing). process_JHU_weekly_data now drops them (7,596 rows remain; 4,851
+non-phantom sCh==0 rows are real reported zeros, kept). My first write-up's "2,235 weeks returned to
+JHU / 4.9x inflation" was 2,187 phantom weeks — I verified numbers but never checked whether the
+winning JHU rows were real. Lesson: when a fix makes source X win, audit what X's rows ARE (flags,
+collection ids), not just the counts.
+
+**Combiner rule:** per (iso, date_start) one whole row: non-empty > observed (method NA /
+observed / documented_zero) > imputed > has-cases > WHO>JHU>AI>SUPP. Deaths completion only from
+another observed row with floor(x+0.5)-equal cases; completed week gets min confidence_weight;
+`source_deaths` column. Field-wise coalescing rejected (74/231 candidate weeks were different reports).
+
+**Peaks:** est_epidemic_peaks blanks non-observed weeks + drops peaks >50% imputed window; csv and
+data/epidemic_peaks.rda regenerated together (159 peaks). Before, 221/372 peaks were Fourier artifacts.
+
+**How to apply:** diagnose combiner changes with source-transition tables
+([[surveillance-revision-is-source-precedence]]). Dropping phantoms means AI fourier now gap-fills
+those weeks (2,257 weeks, 214k cases at cw ~0.5) — by design, but a fit-target change. MOSAIC-docs
+03-data.Rmd JHU paragraph does not yet mention the phantom drop. Daily combined CSV is gitignored.

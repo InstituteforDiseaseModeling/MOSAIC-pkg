@@ -1,9 +1,9 @@
 #' Write an R list to an HDF5 file
 #'
-#' Writes an R list to an HDF5 file (.h5 or .h5.gz) format.
+#' Writes an R list to an HDF5 file (.h5, .hdf5, .h5.gz or .hdf5.gz) format.
 #'
 #' @param data_list A named list containing the data to write.
-#' @param file_path A character string specifying the full file path, including file extension (.h5 or .h5.gz).
+#' @param file_path A character string specifying the full file path, including file extension (.h5, .hdf5, .h5.gz or .hdf5.gz).
 #' @param compress_chunks Logical. If TRUE, applies internal dataset compression (level 9).
 #' @param compress_file Logical. If TRUE, creates a gzip-compressed copy (.gz) without removing the original file.
 #'
@@ -27,7 +27,7 @@ write_list_to_hdf5 <- function(data_list,
      is_gz <- grepl("\\.gz$", file_path)
      base_file_ext <- tools::file_ext(gsub("\\.gz$", "", file_path))
 
-     if (base_file_ext != "h5") stop("Unsupported file extension: ", base_file_ext)
+     if (!tolower(base_file_ext) %in% c("h5", "hdf5")) stop("Unsupported file extension: ", base_file_ext)
 
      if (!compress_file && file.exists(file_path)) file.remove(file_path)
 

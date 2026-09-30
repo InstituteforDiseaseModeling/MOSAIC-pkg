@@ -29,12 +29,17 @@ for the MOSAIC framework.
 Steps performed:
 \itemize{
 \item Load \code{Public_surveillance_dataset.rds} and keep only \code{spatial_scale == "country"}.
+\item Drop rows flagged \code{phantom}: weeks the archive zero-fills without a
+report (no \code{observation_collection_id}). They are unobserved, not zeros.
 \item Extract \code{iso_code} from \code{location_name} (suffix after “::”) and convert to full country name.
 \item Split \code{epiweek} (e.g. "2017-15") into \code{year} and \code{week}.
 \item Create \code{date_start} (Monday) and \code{date_stop} (Sunday) for each ISO week via \code{ISOweek::ISOweek2date()}.
 \item Compute \code{month} from \code{date_start} using \code{lubridate::month()}.
-\item Define \code{cases} using suspected (\code{sCh}) if present, else confirmed (\code{cCh}), defaulting to 0.
-\item Define \code{deaths} (zero if \code{NA}).
+\item Define \code{cases} using suspected (\code{sCh}) if present, else confirmed (\code{cCh}), else \code{NA}.
+\item Keep \code{deaths} as reported; a missing death count stays \code{NA} (it is
+not an observed zero -- about three quarters of country-level rows in the OSF
+archive carry no death count).
+\item Drop rows where both \code{cases} and \code{deaths} are \code{NA} (no observation).
 \item Save a data.frame with columns:
 \code{country, iso_code, year, month, week, date_start, date_stop, cases, deaths}.
 }

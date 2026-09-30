@@ -12,8 +12,8 @@ A data frame with 6 variables:
 \item{peak_date}{Date of peak incidence (Date)}
 \item{peak_stop}{End date of the epidemic period (Date)}
 \item{reported_cases}{Number of reported cholera cases at peak (numeric)}
-\item{outbreak_interval_days}{Number of days since the previous peak for
-the same country (numeric)}
+\item{outbreak_interval_days}{Length of the peak window in days,
+\code{peak_stop - peak_start} (numeric)}
 }
 }
 \source{
@@ -30,7 +30,8 @@ smoothing and prominence-based peak detection algorithms.
 }
 \details{
 \strong{Scope:} The dataset is the full historical detection record from the
-surveillance time series (2010+) and is \strong{not} pre-trimmed to any
+surveillance time series (all years of the combined daily series, observed
+weeks only -- AI Fourier reconstructions are excluded) and is \strong{not} pre-trimmed to any
 particular simulation window. Consumers that score peaks against a
 specific config window (e.g. \code{calc_model_likelihood()}, the Python
 likelihood port, the simulation config builders) must filter against
@@ -58,6 +59,12 @@ Country-specific adjustments are applied for:
 \item Cameroon (CMR): Adjusted threshold (4\%) for plateau-shaped peaks
 \item Ethiopia (ETH): Lower threshold (3\%) for multiple outbreaks
 }
+
+Detected peaks sit on observed weeks: imputed (AI Fourier, assumed-zero) weeks
+are treated as missing, a peak day must be observed with cases > 0, and a
+detected peak whose window is at least half imputed days is dropped. The
+manual corrections below are documented outbreaks and are exempt from that
+window filter.
 
 Manual corrections have been applied for known issues including:
 \itemize{

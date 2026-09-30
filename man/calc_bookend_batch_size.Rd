@@ -21,10 +21,21 @@ calc_bookend_batch_size(
 \item{target_r_squared}{Target R-squared for ESS regression (default: 0.95)}
 }
 \value{
-List with batch size recommendation
+List with batch size recommendation. \code{phase} is one of
+\code{"complete"}, \code{"low_confidence"}, \code{"no_progress"} or
+\code{"predictive"}.
 }
 \description{
 Predicts the number of simulations needed to reach a target ESS based on
-the observed ESS trajectory. Fits sqrt, linear, and log models to the
-cumulative (n_sims, threshold_ESS) data and returns a batch size.
+the observed ESS trajectory. Fits sqrt and linear models to the cumulative
+(n_sims, threshold_ESS) data and predicts from the sqrt model unless the
+linear model fits clearly better. A log model is also fitted, but only as a
+diagnostic (a warning when it fits best); it is never used for prediction.
+}
+\details{
+The extrapolation is only defined when the chosen model's ESS increases with
+the number of simulations. When its slope is zero or negative the target is
+unreachable on the fitted trajectory, and the function returns
+\code{phase = "no_progress"} with \code{batch_size = 0} instead of squaring a
+negative root into a positive requirement.
 }

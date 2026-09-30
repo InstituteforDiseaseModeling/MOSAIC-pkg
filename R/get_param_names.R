@@ -76,73 +76,12 @@ get_param_names <- function(object) {
     # Define parameter sets (same as convert_config_to_matrix)
     # ============================================================================
 
-    # All valid MOSAIC parameters
-    params_keep <- c(
-        "seed",
-        "location_name",
-        "N_j_initial",
-        "S_j_initial",
-        "E_j_initial",
-        "I_j_initial",
-        "R_j_initial",
-        "V1_j_initial",
-        "V2_j_initial",
-        "phi_1",
-        "phi_2",
-        "omega_1",
-        "omega_2",
-        "iota",
-        "gamma_1",
-        "gamma_2",
-        "epsilon",
-        "chi",
-        "rho",
-        "rho_deaths",
-        "sigma",
-        "mobility_omega",
-        "mobility_gamma",
-        "tau_i",
-        "beta_j0_tot",
-        "p_beta",
-        "beta_j0_hum",
-        "a_1",
-        "a_2",
-        "b_1",
-        "b_2",
-        "alpha_1",
-        "alpha_2",
-        "beta_j0_env",
-        "zeta_1",
-        "zeta_ratio",
-        "zeta_2",
-        "kappa",
-        "decay_days_short",
-        "decay_days_spread",  # v0.27.0: sampled; decay_days_long derived
-        "decay_days_long",
-        "decay_shape_1",
-        "decay_shape_2",
-        "epidemic_threshold", # Case-reporting PPV switch threshold
-        "delta_reporting_cases",
-        "theta_j",            # Added: WASH coverage parameter
-        "psi_star_a",         # Added: psi_star calibration parameters
-        "psi_star_b",
-        "psi_star_z",
-        "psi_star_k"
-    )
+    params_keep <- .MOSAIC_CONFIG_PARAMS_KEEP
 
-    # Location-specific parameter base names
-    location_params_base <- c(
-        "S_j_initial", "E_j_initial", "I_j_initial",
-        "R_j_initial", "V1_j_initial", "V2_j_initial",
-        "N_j_initial",
-        "alpha_1",                       # Dual-mode (v4.7/v15.16): length-nL -> location, scalar -> global (fallback below)
-        "beta_j0_tot", "p_beta",
-        "beta_j0_env", "beta_j0_hum",
-        "tau_i", "theta_j",
-        "a_1", "a_2", "b_1", "b_2",
-        "epidemic_threshold",            # Per-location case-reporting PPV switch threshold
-        "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"  # psi_star calibration parameters
-    )
+    # Location-specific parameter base names. N_j_initial and alpha_1 are added
+    # here because a config classifies by vector length: they are per-location
+    # whenever the config holds more than one location.
+    location_params_base <- c(.MOSAIC_CONFIG_LOCATION_PARAMS, "N_j_initial", "alpha_1")
 
     # ============================================================================
     # Process config object

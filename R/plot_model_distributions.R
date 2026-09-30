@@ -44,9 +44,6 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
   # All required packages loaded via NAMESPACE
 
-  # Save current warning setting
-  old_warn <- getOption("warn")
-
   # =========================================================================
   # INPUT VALIDATION
   # =========================================================================
@@ -84,7 +81,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # =========================================================================
 
   # Load estimated parameters inventory
-  data("estimated_parameters", package = "MOSAIC")
+  data("estimated_parameters", package = "MOSAIC", envir = environment())
 
   # Unnesting lives at package scope as .mosaic_unnest_json() so
   # render_MOSAIC_figures() can parse the same JSON the same way.
@@ -308,8 +305,12 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         failure_reason <- sprintf("lognormal: sdlog <= 0 (%.4g)", sdlog_val)
       } else {
         # Use quantile-based x-axis range for better coverage of extreme distributions
-        x_min <- qlnorm(0.001, meanlog_val, sdlog_val)  # 0.1st percentile
-        x_max <- qlnorm(0.999, meanlog_val, sdlog_val)  # 99.9th percentile
+        # Truncation bounds (e.g. zeta_ratio >= 1): quantiles and density are
+        # those of the truncated distribution the draws come from.
+        ln_lo <- parameters$lower
+        ln_hi <- parameters$upper
+        x_min <- .qlnorm_trunc(0.001, meanlog_val, sdlog_val, ln_lo, ln_hi)  # 0.1st percentile
+        x_max <- .qlnorm_trunc(0.999, meanlog_val, sdlog_val, ln_lo, ln_hi)  # 99.9th percentile
 
         if (!is.finite(x_min) || !is.finite(x_max)) {
           failure_reason <- sprintf("lognormal: non-finite quantiles (x_min=%.4g, x_max=%.4g)", x_min, x_max)
@@ -322,10 +323,10 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
             # prior and posterior when they sit on different decades of
             # the log-x axis. For lognormal this is equivalent to
             # dnorm(log10(x), meanlog/ln(10), sdlog/ln(10)).
-            y <- dlnorm(x, meanlog_val, sdlog_val) * x * log(10)
+            y <- .dlnorm_trunc(x, meanlog_val, sdlog_val, ln_lo, ln_hi) * x * log(10)
           } else {
             x <- seq(x_min, x_max, length.out = 1000)
-            y <- dlnorm(x, meanlog_val, sdlog_val)
+            y <- .dlnorm_trunc(x, meanlog_val, sdlog_val, ln_lo, ln_hi)
           }
 
           # Check if density is non-negligible (avoid flat lines from numerical precision issues)
@@ -355,14 +356,14 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
               mean_val <- if (!is.null(parameters$fitted_mean) || !is.null(parameters$mean)) {
                 as.numeric(parameters$fitted_mean %||% parameters$mean)
               } else {
-                exp(meanlog_val + sdlog_val^2/2)
+                .lognormal_trunc_mean(meanlog_val, sdlog_val, ln_lo, ln_hi)
               }
-              median_val <- exp(meanlog_val)
+              median_val <- .qlnorm_trunc(0.5, meanlog_val, sdlog_val, ln_lo, ln_hi)
               if (param_name %in% log_scale_params) {
                 # On a log-x axis, density_log10 peaks at the median (exp(meanlog))
                 # rather than the mean, which can sit decades away when sdlog is large.
-                q_lo <- qlnorm(0.01, meanlog_val, sdlog_val)
-                q_hi <- qlnorm(0.99, meanlog_val, sdlog_val)
+                q_lo <- .qlnorm_trunc(0.01, meanlog_val, sdlog_val, ln_lo, ln_hi)
+                q_hi <- .qlnorm_trunc(0.99, meanlog_val, sdlog_val, ln_lo, ln_hi)
                 if (is.finite(q_lo) && is.finite(q_hi) && q_lo > 0) {
                   log10_width <- log10(q_hi) - log10(q_lo)
                 }
@@ -444,10 +445,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
           x <- seq(x_min, x_max, length.out = 1000)
           y <- truncnorm::dtruncnorm(x, a = a_bound, b = b_bound, mean = mean_param, sd = sd_param)
 
-          # Format bounds for display
-          a_str <- if (is.infinite(a_bound)) "-Inf" else sprintf("%.0f", a_bound)
-          b_str <- if (is.infinite(b_bound)) "Inf" else sprintf("%.0f", b_bound)
-          dist_str <- sprintf("TruncNorm(%.1f, %.1f, [%s, %s])", mean_param, sd_param, a_str, b_str)
+          dist_str <- .mosaic_truncnorm_label(mean_param, sd_param, a_bound, b_bound)
           mean_val <- mean_param
         }
       }
@@ -1065,9 +1063,17 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
   cat("Plot generation completed!\n")
 
-  # Restore original warning setting
-  options(warn = old_warn)
-
   # Return plot objects invisibly
   invisible(plots)
+}
+
+# Legend label for a truncated-normal prior/posterior. Three significant digits
+# keep small-scale parameters (epidemic_threshold ~3e-6) readable; fixed-decimal
+# formats collapsed them to "TruncNorm(0.0, 0.0, [0, 0])".
+.mosaic_truncnorm_label <- function(mean, sd, a = -Inf, b = Inf) {
+  fmt <- function(v) {
+    if (is.infinite(v)) return(if (v < 0) "-Inf" else "Inf")
+    sprintf("%.3g", v)
+  }
+  sprintf("TruncNorm(%s, %s, [%s, %s])", fmt(mean), fmt(sd), fmt(a), fmt(b))
 }

@@ -138,12 +138,19 @@ sim_pi_ij <- function(N, d, omega, gamma) {
 #' Using \code{0:(nticks-1)} here would phase-shift the whole seasonal envelope
 #' by one day.
 #'
+#' \strong{Calendar phase.} The coefficients are estimated on calendar
+#' day-of-year (\code{est_seasonal_dynamics()}, t = 1 is 1 January), so tick
+#' \code{i} is evaluated at \code{t = par$season_t0 + i}, where
+#' \code{season_t0} is the day-of-year of \code{date_start} minus one (set by
+#' \code{sim_params()}; 0 for a 1 January start, and taken as 0 when absent).
+#'
 #' @param par Parameters from \code{sim_params()}.
 #' @return A \code{[nticks, npatches]} matrix.
 #' @keywords internal
 sim_beta_jt_human <- function(par) {
 
-     t <- seq_len(par$nticks)
+     t0 <- if (is.null(par$season_t0)) 0L else par$season_t0
+     t <- t0 + seq_len(par$nticks)
      p <- par$p
 
      # Each harmonic term is an outer product of a per-tick wave and a

@@ -16,18 +16,19 @@ create_sampling_args(
 \arguments{
 \item{pattern}{Character string specifying the pattern. Options:
 \itemize{
-\item "all": Sample all parameters (default)
+\item "all": The package default flags (every parameter except alpha_1, alpha_2, kappa and rho_deaths, which stay pinned)
 \item "none": Don't sample any parameters
-\item "disease_only": Sample only disease progression and immunity parameters
-\item "transmission_only": Sample only transmission parameters
-\item "mobility_only": Sample only mobility parameters
-\item "spatial_only": Sample only spatial parameters
+\item "disease_only": Sample only disease progression, immunity and reporting parameters
+\item "transmission_only": Sample only the transmission rates (beta_j0_tot, p_beta)
+\item "mobility_only": Sample only the mobility and diffusion parameters (mobility_omega, mobility_gamma, tau_i)
+\item "spatial_only": Same flags as "mobility_only"; the spatial coupling of the model is its mobility network
+\item "environmental_only": Sample only shedding and environmental decay (zeta_1, zeta_ratio, decay_*)
 \item "initial_conditions_only": Sample only initial condition proportions
 }}
 
 \item{seed}{Random seed for sampling}
 
-\item{custom}{Named list of custom overrides for specific parameters}
+\item{custom}{Named list of flag overrides (e.g. \code{list(sample_kappa = TRUE)}) applied after the pattern}
 
 \item{PATHS}{Optional PATHS object}
 
@@ -36,11 +37,22 @@ create_sampling_args(
 \item{config}{Optional config object}
 }
 \value{
-Named list of arguments suitable for do.call(sample_parameters, ...)
+Named list of arguments suitable for \code{do.call(sample_parameters, ...)}:
+\code{sample_args} (a complete named list of logical flags), \code{seed},
+and \code{PATHS}, \code{priors} and \code{config} when supplied.
 }
 \description{
 Helper function to create argument lists for common sampling scenarios,
 making it easier to work with the many parameters.
+}
+\details{
+Every pattern other than "all" sets each \code{sample_*} flag to FALSE except
+the ones the pattern names. No pattern turns on a parameter the package pins
+by default (\code{alpha_1}, \code{alpha_2}, \code{kappa}, \code{rho_deaths});
+re-enable one explicitly through \code{custom}. \code{ic_moment_match} keeps its default (FALSE)
+unless set in \code{custom}. With every psi_star flag FALSE, the config's
+psi_star values are still applied to \code{psi_jt} when they differ from the
+identity transform (see \code{\link{sample_parameters}}).
 }
 \examples{
 \dontrun{

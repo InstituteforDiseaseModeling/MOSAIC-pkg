@@ -7,9 +7,9 @@
 plot_forecast_cv_skill(
   x,
   value = c("R2_corr", "bias_ratio", "R2_sse", "wis_skill", "mae_skill"),
-  horizon_months = 6,
+  horizon_months = 3,
   baseline = "seasonal",
-  model = "ensemble",
+  model = "ensemble_opt",
   metrics = c("cases", "deaths"),
   show_gated = TRUE,
   title = NULL,
@@ -32,12 +32,15 @@ path to that parquet/csv, or the \code{$cells} data frame from
 \item{value}{What to plot (see Details). Default \code{"R2_corr"}.}
 
 \item{horizon_months}{Primary OOS horizon; mapped to the \code{OOS<=\{h\}mo}
-window (default 6).}
+window (default 3, the forecast-CV scoring cap, which
+\code{evaluate_rolling_cv()}'s default horizons include).}
 
 \item{baseline}{Baseline for the skill values (default \code{"seasonal"});
 ignored for R2/bias.}
 
-\item{model}{Model type to plot (default \code{"ensemble"}).}
+\item{model}{Model type to plot (default \code{"ensemble_opt"}, the headline
+model of \code{\link{make_forecast_cv_table}} and
+\code{\link{plot_forecast_cv_grid}}).}
 
 \item{metrics}{Channels to facet (default \code{c("cases","deaths")}).}
 

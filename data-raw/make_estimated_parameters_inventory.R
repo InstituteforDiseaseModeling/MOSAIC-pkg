@@ -57,8 +57,8 @@ estimated_parameters <- data.frame(
 # Only stochastic global parameters - organized by category, then alphabetically
 global_params <- data.frame(
   parameter_name = c(
-    # Transmission (2 params)
-    "alpha_1",
+    # Transmission (1 param). alpha_1 is per-location since priors_default
+    # v15.16 (parameters_location$alpha_1) -- it lives in transmission_params.
     "alpha_2",
     # Environmental (9 params) - reordered
     # decay_days_long is DERIVED (= decay_days_short + decay_days_spread) and
@@ -99,7 +99,6 @@ global_params <- data.frame(
   ),
   display_name = c(
     # Transmission
-    "Population Mixing",
     "Frequency-Driven Transmission",
     # Environmental - reordered (9 params, including derived decay_days_long and zeta_2)
     "Minimum V. cholerae Survival",
@@ -134,7 +133,6 @@ global_params <- data.frame(
   ),
   description = c(
     # Transmission
-    "Population mixing within metapops (0-1, 1 = well-mixed)",
     "Degree of frequency driven transmission (0-1)",
     # Environmental - reordered
     "Minimum V. cholerae survival time in environment",
@@ -145,7 +143,7 @@ global_params <- data.frame(
     "Shedding rate for symptomatic infections",
     "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)",
     "Shedding rate for asymptomatic infections (DERIVED = zeta_1 / zeta_ratio)",
-    "Concentration of V. cholerae for 50% infectious dose",
+    "Half-saturation dose of the environmental dose-response W/(kappa + W), applied to the per-capita environmental load W/N",
     # Disease - reordered
     "Rate parameter for incubation period (per day, 1/iota = mean incubation time)",
     "Proportion of infections that are symptomatic",
@@ -169,11 +167,13 @@ global_params <- data.frame(
   ),
   units = c(
     # Transmission
-    "proportion", "proportion",
+    "proportion",
     # Environmental - reordered (decay_days_short, decay_days_spread, decay_days_long,
     # decay_shape_1, decay_shape_2, zeta_1, zeta_ratio, zeta_2, kappa)
+    # kappa: the engine's dose is W/N (cells per capita, sim_components.R), not a
+    # water concentration, so kappa is a per-capita half-saturation dose.
     "days", "days", "days", "dimensionless", "dimensionless",
-    "bacteria/day (rate)", "dimensionless (ratio)", "bacteria/day (rate)", "bacteria/mL",
+    "bacteria/day (rate)", "dimensionless (ratio)", "bacteria/day (rate)", "cells per capita (W/N)",
     # Disease - reordered
     "per day (rate)", "proportion", "per day (rate)", "per day (rate)",
     # Immunity - reordered
@@ -185,7 +185,7 @@ global_params <- data.frame(
   ),
   distribution = c(
     # Transmission
-    "beta", "beta",
+    "beta",
     # Environmental - reordered (9 params, including derived decay_days_long and zeta_2)
     # decay_days_short: TruncNorm; decay_days_spread: TruncNorm (replaces direct decay_days_long
     #   prior in v0.27.0); decay_days_long: DERIVED = short + spread, posterior fit as truncnorm
@@ -209,7 +209,7 @@ global_params <- data.frame(
   scale = "global",
   category = c(
     # Transmission
-    "transmission", "transmission",
+    "transmission",
     # Environmental - reordered (9 params)
     "environmental", "environmental", "environmental", "environmental", "environmental",
     "environmental", "environmental", "environmental", "environmental",
@@ -222,11 +222,11 @@ global_params <- data.frame(
     # Mobility
     "mobility", "mobility"
   ),
-  order = 1:27,
+  order = 1:26,
   order_scale = "01",
   order_category = c(
     # Transmission (01)
-    "01", "01",
+    "01",
     # Environmental (02) - 9 params
     "02", "02", "02", "02", "02", "02", "02", "02", "02",
     # Disease (03)
@@ -239,8 +239,8 @@ global_params <- data.frame(
     "06", "06"
   ),
   order_parameter = c(
-    # Transmission
-    "01", "02",
+    # Transmission (alpha_2)
+    "01",
     # Environmental (9 in plot order: decay_days_short, decay_days_spread, decay_days_long,
     # decay_shape_1, decay_shape_2, zeta_1, zeta_ratio, zeta_2, kappa)
     "01", "02", "03", "04", "05", "06", "07", "08", "09",
@@ -272,7 +272,7 @@ global_params <- data.frame(
 # fit_truncnorm_from_ci() for the bounded integer parameter delta_reporting_cases.
 global_params$posterior_distribution <- c(
   # Transmission: beta prior → beta posterior
-  "beta", "beta",
+  "beta",
   # Environmental (9 params): all non-uniform after v0.27.0 — posterior family matches
   # prior family via the family-match guard in update_priors_from_posteriors.R.
   #   decay_days_short: truncnorm → truncnorm
@@ -294,7 +294,7 @@ global_params$posterior_distribution <- c(
   "gamma", "gamma"
 )
 global_params$posterior_lower <- c(
-  NA, NA,                                # transmission
+  NA,                                    # transmission
   # environmental (9): short, spread, long (DERIVED min=1.01), shape_1, shape_2, zeta_1,
   # zeta_ratio, zeta_2 (DERIVED min=0, handled by lognormal support), kappa
   NA, NA, 1.01, NA, NA, NA, NA, NA, NA,
@@ -304,7 +304,7 @@ global_params$posterior_lower <- c(
   NA, NA                                 # mobility
 )
 global_params$posterior_upper <- c(
-  NA, NA,                                # transmission
+  NA,                                    # transmission
   # environmental (9): decay_days_long DERIVED max = short_max + spread_max = 60 + 365 = 425
   NA, NA, 425, NA, NA, NA, NA, NA, NA,
   NA, NA, NA, NA,                        # disease
@@ -336,7 +336,7 @@ initial_params <- data.frame(
     "Initial Two-Dose Vaccinated Proportion"
   ),
   description = c(
-    "Proportion of population susceptible at start",
+    "Proportion of population susceptible at start (diagnostic reference: sample_parameters() sets S to the simplex residual of the sampled V1/V2/E/I/R, it does not draw this prior)",
     "Proportion of population exposed at start",
     "Proportion of population infected at start",
     "Proportion of population recovered/immune at start",
@@ -372,32 +372,40 @@ initial_params <- data.frame(
 # Transmission parameters
 # Note: beta_j0_hum and beta_j0_env are derived quantities (beta_j0_tot * p_beta and
 # beta_j0_tot * (1-p_beta)) — they are not sampled parameters and must not appear here.
+# alpha_1 (population mixing) has been per-location since priors_default v15.16
+# (parameters_location$alpha_1; sample_alpha_1 draws a length-nL vector that
+# convert_config_to_matrix() names alpha_1_<ISO>), so it is listed here, not in
+# global_params -- a "global" row made calc_model_posterior_quantiles() look for
+# a bare `alpha_1` column and drop the alpha_1_<ISO> posteriors.
 transmission_params <- data.frame(
   parameter_name = c(
+    "alpha_1",
     "beta_j0_tot",
     "p_beta"
   ),
   display_name = c(
+    "Population Mixing",
     "Total Base Transmission Rate",
     "Human-to-Human Proportion"
   ),
   description = c(
+    "Population mixing within metapops (0-1, 1 = well-mixed)",
     "Total base transmission rate (human + environmental)",
     "Proportion of total transmission that is human-to-human"
   ),
   units = c(
-    "per day", "proportion"
+    "proportion", "per day", "proportion"
   ),
-  distribution = c("lognormal", "beta"),
-  posterior_distribution = c("lognormal", "beta"),
-  posterior_lower = rep(NA_real_, 2),
-  posterior_upper = rep(NA_real_, 2),
+  distribution = c("beta", "lognormal", "beta"),
+  posterior_distribution = c("beta", "lognormal", "beta"),
+  posterior_lower = rep(NA_real_, 3),
+  posterior_upper = rep(NA_real_, 3),
   scale = "location",
   category = "transmission",
-  order = 29:30,
+  order = 29:31,
   order_scale = "02",
   order_category = "02",
-  order_parameter = sprintf("%02d", 1:2),
+  order_parameter = sprintf("%02d", 1:3),
   stringsAsFactors = FALSE
 )
 
@@ -436,12 +444,14 @@ spatial_params <- data.frame(
     "WASH Coverage"
   ),
   description = c(
-    "Country-level travel/mobility probability",
+    "Daily probability that a resident is away from their home location (per-day departure fraction)",
     "WASH coverage index (proportion with adequate water, sanitation, hygiene)"
   ),
-  units = c("probability", "proportion"),
-  distribution = c("beta", "beta"),
-  posterior_distribution = c("beta", "beta"),
+  units = c("probability per day", "proportion"),
+  # tau_i: the shipped prior is lognormal (priors_default parameters_location$tau_i,
+  # all 40 ISOs; values ~2e-4, so P(tau_i > 1) is negligible).
+  distribution = c("lognormal", "beta"),
+  posterior_distribution = c("lognormal", "beta"),
   posterior_lower = rep(NA_real_, 2),
   posterior_upper = rep(NA_real_, 2),
   scale = "location",
@@ -529,7 +539,7 @@ initial_params$order <- (.cur_order + 1):(.cur_order + nrow(initial_params))
 .cur_order <- .cur_order + nrow(initial_params)
 # order_category = "01"
 
-# Transmission parameters (2 params: beta_j0_tot, p_beta)
+# Transmission parameters (3 params: alpha_1, beta_j0_tot, p_beta)
 transmission_params$order <- (.cur_order + 1):(.cur_order + nrow(transmission_params))
 transmission_params$order_category <- "02"
 .cur_order <- .cur_order + nrow(transmission_params)
@@ -640,6 +650,35 @@ validate_inventory <- function(inventory) {
 # Run validation
 validate_inventory(estimated_parameters)
 
+# The inventory's scale must agree with where priors_default holds each prior.
+# Derived parameters (no prior entry) are allowed to be inventory-only.
+.derived_params <- c("decay_days_long", "zeta_2")
+.inv_scale <- setNames(estimated_parameters$scale, estimated_parameters$parameter_name)
+.bad_global <- setdiff(names(.inv_scale)[.inv_scale == "global"],
+                       c(names(priors_default$parameters_global), .derived_params))
+.bad_location <- setdiff(names(.inv_scale)[.inv_scale == "location"],
+                         names(priors_default$parameters_location))
+if (length(.bad_global) || length(.bad_location)) {
+  stop("Inventory scale disagrees with priors_default: global-but-not-in-parameters_global = ",
+       paste(.bad_global, collapse = ", "), "; location-but-not-in-parameters_location = ",
+       paste(.bad_location, collapse = ", "))
+}
+# ... and each non-derived row's prior family must match the shipped prior.
+.prior_family <- function(nm, sc) {
+  if (sc == "global") return(priors_default$parameters_global[[nm]]$distribution)
+  locs <- priors_default$parameters_location[[nm]]$location
+  unique(vapply(locs, function(x) x$distribution, character(1)))
+}
+for (.i in seq_len(nrow(estimated_parameters))) {
+  .nm <- estimated_parameters$parameter_name[.i]
+  if (.nm %in% .derived_params) next
+  .fam <- .prior_family(.nm, estimated_parameters$scale[.i])
+  if (length(.fam) != 1L || .fam != estimated_parameters$distribution[.i]) {
+    stop(sprintf("Inventory distribution for %s is '%s' but priors_default has '%s'",
+                 .nm, estimated_parameters$distribution[.i], paste(.fam, collapse = "/")))
+  }
+}
+
 # =============================================================================
 # 6. SORT BY ORDER COLUMN FOR CONSISTENCY
 # =============================================================================
@@ -654,7 +693,7 @@ rownames(estimated_parameters) <- NULL
 # =============================================================================
 
 attr(estimated_parameters, "creation_date") <- Sys.Date()
-attr(estimated_parameters, "version") <- "1.2.0"
+attr(estimated_parameters, "version") <- "1.3.0"
 attr(estimated_parameters, "description") <- paste(
   "Comprehensive parameter inventory for MOSAIC cholera transmission model.",
   "Includes metadata, categorization, and distribution information for all model parameters."

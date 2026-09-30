@@ -2,8 +2,6 @@
 # Load required packages
 library(MOSAIC)
 
-MOSAIC::attach_mosaic_env(silent = FALSE)
-
 
 # Create output directory and set up logging
 dir_output <- path.expand("~/MOSAIC/output/ETH_auto")

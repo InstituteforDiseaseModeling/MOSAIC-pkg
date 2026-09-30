@@ -16,8 +16,9 @@
     # Priors defined with mean/sd are converted on first round-trip through
     # the posterior pipeline. Both forms are supported by sample_from_prior()
     # and inflate_priors(); the meanlog/sdlog form gives more precise analytic
-    # inflation (CV-scaling vs approximate sd-scaling).
-    lognormal  = c("meanlog", "sdlog"),
+    # inflation (CV-scaling vs approximate sd-scaling). Optional lower/upper
+    # truncation bounds (e.g. zeta_ratio >= 1) are part of the distribution.
+    lognormal  = c("meanlog", "sdlog", "lower", "upper"),
     normal     = c("mean", "sd"),
     truncnorm  = c("mean", "sd", "a", "b"),
     uniform    = c("min", "max"),
