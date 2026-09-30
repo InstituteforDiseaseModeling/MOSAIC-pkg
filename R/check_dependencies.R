@@ -2,8 +2,8 @@
 #'
 #' @description
 #' This function checks the MOSAIC Python conda environment, verifies that the expected Python
-#' packages are installed, and confirms that the R packages `keras3` and `tensorflow` are present and
-#' configured correctly. It prints the currently active Python configuration and confirms whether the
+#' packages are installed, and reports the versions of the optional R packages `keras3` and
+#' `tensorflow` when they are installed. It prints the currently active Python configuration and confirms whether the
 #' backend is working.
 #'
 #' Since v0.68.0 the transmission engine is pure R, so the Python environment exists only for the
@@ -47,14 +47,20 @@ check_dependencies <- function() {
      # This ensures Python is initialized correctly, especially in non-interactive sessions
      # -----------------------------------------------------------------------
 
-     tryCatch({
+     # A return() inside the handler would only leave the handler, so the
+     # handler yields a flag and the early exit happens here in the function
+     # frame. Carrying on would import against whatever interpreter reticulate
+     # picked instead and bury the attach error under a generic activation abort.
+     attached <- tryCatch({
           MOSAIC::attach_mosaic_env(silent = TRUE)
+          TRUE
      }, error = function(e) {
-          cli::cli_alert_danger("Failed to attach Python environment: {e$message}")
+          cli::cli_alert_danger("Failed to attach Python environment: {conditionMessage(e)}")
           cli::cli_text("To diagnose: {.run MOSAIC::check_python_env()}")
           cli::cli_text("To reinstall: {.run MOSAIC::install_dependencies(force=TRUE)}")
-          return(invisible(NULL))
+          FALSE
      })
+     if (!attached) return(invisible(NULL))
 
 
      # -----------------------------------------------------------------------
@@ -168,7 +174,9 @@ check_dependencies <- function() {
                          }
                     } else {
                          if (pkg_category == "suitability") {
-                              suitability_working <<- FALSE
+                              # Plain assignment: this is the function frame, not a
+                              # closure, so `<<-` would write to the global env.
+                              suitability_working <- FALSE
                               cli::cli_alert_warning("{pkg_import_name} [suitability] not found in pip")
                          } else {
                               cli::cli_alert_warning("{pkg_import_name} not found in pip")

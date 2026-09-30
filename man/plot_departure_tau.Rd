@@ -41,9 +41,11 @@ reorder over the data frame, not a positional sort (F3-safe).
 
 \eqn{\tau_i} is a \strong{daily} probability (the engine consumes it per-day
 in the spatial-hazard step), so \eqn{N_i \tau_i} is the expected number of
-travelers \emph{per day}. CI bars are drawn only when \code{ci} is supplied
-(from the optional \code{mobility_tau_ci.csv} run artifact); otherwise the
-left panel shows point estimates only — matching \code{\link{plot_mobility}}
+travelers \emph{per day}. CI bars are drawn only when \code{ci} is supplied;
+\code{\link{render_MOSAIC_figures}} passes the posterior 95\% interval of
+\eqn{\tau_i} when every location's \eqn{\tau_i} was sampled, else the optional
+\code{mobility_tau_ci.csv} run artifact. Otherwise the left panel shows point
+estimates only — matching \code{\link{plot_mobility}}
 minus the error bars.
 }
 \seealso{

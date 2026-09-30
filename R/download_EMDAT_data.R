@@ -230,7 +230,7 @@ download_EMDAT_data <- function(PATHS,
      d <- do.call(rbind, lapply(pages, as.data.frame, stringsAsFactors = FALSE))
      d <- .emdat_api_rename(d)
 
-     utils::write.csv(d, dest, row.names = FALSE, na = "")
+     .write_file_atomic(dest, function(tmp) utils::write.csv(d, tmp, row.names = FALSE, na = ""))
      .emdat_append_provenance(PATHS$DATA_EMDAT_RAW, dest, d,
                               year_start, year_stop, classif, snapshot_date)
 

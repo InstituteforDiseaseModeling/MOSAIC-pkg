@@ -2,12 +2,17 @@
 # Comprehensive tests for calc_model_likelihood function
 # Testing all individual terms and their interactions
 # ============================================================================
-# Helper: simple zero data yields zero log-likelihood for Poisson
+# Production always scores with a finite per-location NB dispersion
+# (run_MOSAIC() supplies it; a standalone call estimates it from config$date_start).
+# Pass one explicitly so these tests exercise the NB path, not the Poisson-limit
+# fallback, which is pinned by its own test below.
+NB_K <- 3
 obs_zero <- matrix(0, nrow = 2, ncol = 3)
 est_zero <- matrix(0, nrow = 2, ncol = 3)
 # 1. Basic functionality: zero observed and estimated => finite (perfect match)
 testthat::test_that("zero data returns finite log-likelihood", {
      ll <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases     = obs_zero,
           est_cases     = est_zero,
           obs_deaths    = obs_zero,
@@ -21,6 +26,7 @@ testthat::test_that("zero data returns finite log-likelihood", {
 # 2. Weight scaling: non-default weight_cases and weight_deaths still yields finite for zero data
 testthat::test_that("weights do not affect zero-data result", {
      ll <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases     = obs_zero,
           est_cases     = est_zero,
           obs_deaths    = obs_zero,
@@ -37,6 +43,7 @@ testthat::test_that("weights do not affect zero-data result", {
 testthat::test_that("errors on non-matrix inputs", {
      expect_error(
           MOSAIC::calc_model_likelihood(
+               nb_k_cases = NB_K, nb_k_deaths = NB_K,
                obs_cases  = as.list(obs_zero),
                est_cases  = est_zero,
                obs_deaths = obs_zero,
@@ -50,6 +57,7 @@ testthat::test_that("errors when matrices have different dimensions", {
      est_bad <- matrix(0, nrow = 1, ncol = 3)
      expect_error(
           MOSAIC::calc_model_likelihood(
+               nb_k_cases = NB_K, nb_k_deaths = NB_K,
                obs_cases  = obs_zero,
                est_cases  = est_bad,
                obs_deaths = obs_zero,
@@ -62,6 +70,7 @@ testthat::test_that("errors when matrices have different dimensions", {
 testthat::test_that("errors when weight vectors have incorrect lengths", {
      expect_error(
           MOSAIC::calc_model_likelihood(
+               nb_k_cases = NB_K, nb_k_deaths = NB_K,
                obs_cases         = obs_zero,
                est_cases         = est_zero,
                obs_deaths        = obs_zero,
@@ -77,6 +86,7 @@ testthat::test_that("all NA data returns finite", {
      obs_na <- matrix(NA_real_, nrow = 2, ncol = 3)
      est_na <- matrix(NA_real_, nrow = 2, ncol = 3)
      ll <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases  = obs_na,
           est_cases  = est_na,
           obs_deaths = obs_na,
@@ -91,6 +101,7 @@ testthat::test_that("all-NA observed with real estimates returns finite", {
      obs_na   <- matrix(NA_real_, nrow = 1, ncol = 2)
      est_real <- matrix(c(1.2, 3.4),   nrow = 1, ncol = 2)
      ll <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases  = obs_na,
           est_cases  = est_real,
           obs_deaths = obs_na,
@@ -105,13 +116,12 @@ testthat::test_that("correct log-likelihood for simple non-zero data with core t
      obs <- matrix(c(1, 1, 1), nrow = 1, ncol = 3)
      est <- matrix(c(1, 1, 1), nrow = 1, ncol = 3)
      ll <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases  = obs,
           est_cases  = est,
           obs_deaths = obs,
           est_deaths = est
      )
-     # Core uses NB (k estimated from obs via MoM, falls back to Poisson limit for
-     # constant data where var <= mean).
      expect_true(is.finite(ll))
      expect_true(ll < 0)  # Perfect match still has negative LL for count data
 })
@@ -132,6 +142,7 @@ testthat::test_that("peak timing term works correctly", {
      est_deaths <- matrix(1, n_loc, n_time)
      # Test with same peak timing
      ll_same_peak <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
@@ -142,6 +153,7 @@ testthat::test_that("peak timing term works correctly", {
      est_cases_shifted <- matrix(5, n_loc, n_time)
      est_cases_shifted[1, 25:35] <- c(10, 20, 30, 40, 50, 40, 30, 20, 10, 5, 5)  # Shifted by 5
      ll_shifted_peak <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases_shifted,
           obs_deaths = obs_deaths,
@@ -165,6 +177,7 @@ testthat::test_that("peak magnitude term works correctly", {
      est_deaths <- matrix(1, n_loc, n_time)
      # Test with same peak magnitude
      ll_same_mag <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
@@ -175,6 +188,7 @@ testthat::test_that("peak magnitude term works correctly", {
      est_cases_diff <- matrix(5, n_loc, n_time)
      est_cases_diff[1, 25] <- 50  # Half the magnitude
      ll_diff_mag <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases_diff,
           obs_deaths = obs_deaths,
@@ -196,6 +210,7 @@ testthat::test_that("progressive cumulative total term works correctly", {
      est_deaths <- matrix(2, n_loc, n_time)
      # Test with default timepoints
      ll_default <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
@@ -205,6 +220,7 @@ testthat::test_that("progressive cumulative total term works correctly", {
      )
      # Test with custom timepoints
      ll_custom <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
@@ -217,6 +233,7 @@ testthat::test_that("progressive cumulative total term works correctly", {
      # Test with mismatched cumulative
      est_cases_bad <- matrix(20, n_loc, n_time)  # Double throughout
      ll_bad_cumulative <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases_bad,
           obs_deaths = obs_deaths,
@@ -239,6 +256,7 @@ testthat::test_that("WIS term penalizes uncertainty correctly", {
      est_deaths <- matrix(2, n_loc, n_time)
      # Test with WIS term
      ll_wis <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
@@ -249,6 +267,7 @@ testthat::test_that("WIS term penalizes uncertainty correctly", {
      expect_true(is.finite(ll_wis))
      # WIS penalty should make likelihood negative (since it's subtracted)
      ll_no_wis <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
@@ -273,6 +292,7 @@ testthat::test_that("all terms work together without conflict", {
      est_deaths <- round(est_cases * 0.1)
      # Test with all terms enabled at nonzero weights
      ll_all <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
@@ -286,6 +306,7 @@ testthat::test_that("all terms work together without conflict", {
      expect_true(is.finite(ll_all))
      # Test with core only
      ll_core_only <- MOSAIC::calc_model_likelihood(
+          nb_k_cases = NB_K, nb_k_deaths = NB_K,
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
@@ -295,26 +316,39 @@ testthat::test_that("all terms work together without conflict", {
      # All terms at nonzero weights should produce different result than core only
      expect_true(ll_all != ll_core_only)
 })
-# 15. Test automatic distribution selection (Poisson vs NegBin)
-testthat::test_that("automatic distribution selection works based on overdispersion", {
+# 15. Standalone dispersion estimation: with config$date_start and no k, the
+# per-location dispersion is estimated from the observations (no fallback warning).
+testthat::test_that("config$date_start drives per-location NB dispersion estimation", {
      set.seed(123)
      n_loc <- 2
-     n_time <- 52
-     # Low variance data (should use Poisson)
-     obs_cases_low_var <- matrix(10, n_loc, n_time)
-     obs_cases_low_var[1, ] <- obs_cases_low_var[1, ] + sample(-1:1, n_time, replace = TRUE)
-     obs_cases_low_var[obs_cases_low_var < 0] <- 0
-     # High variance data (should use NegBin)
-     obs_cases_high_var <- matrix(10, n_loc, n_time)
-     obs_cases_high_var[2, ] <- rpois(n_time, lambda = 10) * sample(1:5, n_time, replace = TRUE)
+     n_time <- 84
+     obs_cases <- rbind(rpois(n_time, 10), rpois(n_time, 10) * sample(1:5, n_time, replace = TRUE))
      est_cases <- matrix(10, n_loc, n_time)
-     obs_deaths <- matrix(2, n_loc, n_time)
+     obs_deaths <- matrix(rpois(n_loc * n_time, 2), n_loc, n_time)
      est_deaths <- matrix(2, n_loc, n_time)
-     ll <- MOSAIC::calc_model_likelihood(
-          obs_cases = rbind(obs_cases_low_var[1, ], obs_cases_high_var[2, ]),
-          est_cases = est_cases,
-          obs_deaths = obs_deaths,
-          est_deaths = est_deaths
-     )
-     expect_true(is.finite(ll))
+     cfg <- list(date_start = as.Date("2024-01-01"))
+     expect_no_warning(ll_est <- MOSAIC::calc_model_likelihood(
+          obs_cases = obs_cases, est_cases = est_cases,
+          obs_deaths = obs_deaths, est_deaths = est_deaths, config = cfg))
+     k_c <- MOSAIC::est_nb_dispersion(obs_cases, date_start = cfg$date_start)$k
+     k_d <- MOSAIC::est_nb_dispersion(obs_deaths, date_start = cfg$date_start)$k
+     ll_k <- MOSAIC::calc_model_likelihood(
+          obs_cases = obs_cases, est_cases = est_cases,
+          obs_deaths = obs_deaths, est_deaths = est_deaths,
+          nb_k_cases = k_c, nb_k_deaths = k_d)
+     expect_true(is.finite(ll_est))
+     expect_equal(ll_est, ll_k)
+})
+# 16. The Poisson-limit fallback is deliberate and announced.
+testthat::test_that("no dispersion and no date_start scores at the Poisson limit with a warning", {
+     obs <- matrix(c(3, 5, 2, 8), nrow = 1)
+     est <- matrix(c(4, 4, 4, 4), nrow = 1)
+     expect_warning(
+          ll_fb <- MOSAIC::calc_model_likelihood(obs_cases = obs, est_cases = est,
+                                                 obs_deaths = obs, est_deaths = est),
+          "Poisson limit")
+     ll_inf <- MOSAIC::calc_model_likelihood(obs_cases = obs, est_cases = est,
+                                             obs_deaths = obs, est_deaths = est,
+                                             nb_k_cases = Inf, nb_k_deaths = Inf)
+     expect_equal(ll_fb, ll_inf)
 })

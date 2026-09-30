@@ -11,8 +11,7 @@
 #' @param config Configuration object containing location codes
 #' @param n_samples Integer, number of Monte Carlo samples for uncertainty quantification (default 1000)
 #' @param t0 Date object, target date for estimation (default NULL, used for metadata)
-#' @param variance_inflation Numeric factor to inflate variance of fitted Beta distributions (default 1 = no inflation).
-#'   Values > 1 increase uncertainty while preserving the mean. For example, 2 doubles the variance.
+#' @param variance_inflation Multiplier on the SD of the S samples in the method-of-moments Beta refit, which keeps the sample mean (default 0 = no change; 1 is also no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.
 #' @param verbose Logical, whether to print progress messages (default TRUE)
 #' @param min_S_proportion Numeric, minimum allowed S proportion to prevent negative values (default 0.01 = 1%)
 #'
@@ -23,11 +22,24 @@
 #'     \itemize{
 #'       \item prop_S_initial: Beta distribution parameters for S/N by location
 #'     }
-#'     Each parameter contains $parameters$location$ISO_CODE with shape1 and shape2
+#'     Each parameter contains $parameters$location$ISO_CODE with shape1, shape2
+#'     and a \code{metadata} list (\code{estimated_from_constraints}, \code{mean},
+#'     \code{ci_lower}, \code{ci_upper}, \code{constraint_violation_rate})
 #'   }
 #' }
+#' The object has class \code{c("mosaic_initial_conditions_S",
+#' "mosaic_initial_conditions", "list")}.
 #'
 #' @details
+#' \strong{Diagnostic prior.} \code{sample_parameters()} does not draw
+#' \code{prop_S_initial}: it samples V1, V2, E, I and R and sets S to the
+#' simplex residual (renormalising when the others sum to 1 or more). The Beta
+#' built here is therefore not a sampling prior. It is a summary of the S
+#' distribution those draws imply (up to the \code{min_S_proportion} floor used
+#' here), kept in \code{priors_default} as the reference for prior-vs-posterior
+#' comparisons of S; tuning \code{variance_inflation} changes that reference
+#' only, not calibration.
+#'
 #' The function implements a constrained residual approach:
 #'
 #' **Method Overview:**
@@ -63,7 +75,7 @@
 #'   priors = priors_updated,
 #'   config = config_default,
 #'   n_samples = 1000,
-#'   variance_inflation = 2  # Double the variance for less constrained priors
+#'   variance_inflation = 2  # Double the SD (4x the variance)
 #' )
 #'
 #' # Access results for a location
@@ -133,7 +145,7 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
         cat("Target date (t0):", as.character(t0), "\n")
         cat("Processing", length(location_codes), "locations with", n_samples, "samples each\n")
         cat("Minimum S proportion:", min_S_proportion, "\n")
-        if (length(variance_inflation) == 1 && variance_inflation != 1) {
+        if (length(variance_inflation) == 1 && !variance_inflation %in% c(0, 1)) {
             cat("Variance inflation factor:", variance_inflation, "\n")
         }
         cat("\n")
@@ -167,57 +179,17 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
             return(list(shape1 = 30, shape2 = 7.5, method = "insufficient_data"))
         }
 
-        # Calculate sample statistics
-        sample_mean <- mean(valid_samples)
-        sample_quantiles <- quantile(valid_samples, c(0.025, 0.975))
-        ci_lower <- sample_quantiles[1]
-        ci_upper <- sample_quantiles[2]
-
-        # Apply variance inflation correctly:
-        # For values < 1: tighten CI toward the mean
-        # For values > 1: expand CI away from the mean
-        if (variance_inflation <= 1 && variance_inflation > 0) {
-            # Tighten toward mean
-            ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
-            ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
-        } else if (variance_inflation > 1) {
-            # Expand away from mean
-            ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
-            ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
+        # Method of moments on the sample mean and the SD multiplied by
+        # variance_inflation (see .fit_beta_inflated_samples()). Before v0.100.0
+        # the CI half-widths were scaled linearly, floored at 0.001 and passed to
+        # fit_beta_from_ci(), whose mode-exact logit fit is pulled off the sample
+        # mean by an unreachable floored bound.
+        shapes <- .fit_beta_inflated_samples(valid_samples, variance_inflation)
+        if (is.null(shapes)) {
+            if (verbose) cat("  Degenerate S samples for", label, "- using default\n")
+            return(list(shape1 = 30, shape2 = 7.5, method = "insufficient_data"))
         }
-        # If variance_inflation = 0, use original CI
-
-        # Ensure bounds remain valid
-        ci_lower <- pmax(0.001, ci_lower)
-        ci_upper <- pmin(0.999, ci_upper)
-
-        # Use fit_beta_from_ci with sample_mean as mode_val
-        tryCatch({
-            beta_fit <- fit_beta_from_ci(
-                mode_val = sample_mean,
-                ci_lower = ci_lower,
-                ci_upper = ci_upper,
-                method = "moment_matching"
-            )
-
-            return(list(
-                shape1 = beta_fit$shape1,
-                shape2 = beta_fit$shape2,
-                method = "ci_expansion_constrained_residual"
-            ))
-
-        }, error = function(e) {
-            # Simple fallback using method of moments
-            sample_var <- var(valid_samples)
-            precision <- (sample_mean * (1 - sample_mean) / sample_var) - 1
-            precision <- max(2.1, precision)
-
-            return(list(
-                shape1 = max(1.01, sample_mean * precision),
-                shape2 = max(1.01, (1 - sample_mean) * precision),
-                method = "fallback_method_of_moments"
-            ))
-        })
+        list(shape1 = shapes[1], shape2 = shapes[2], method = "method_of_moments_sd_inflation")
     }
 
     # Default parameters for each compartment (fallbacks)
@@ -272,7 +244,14 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
 
             results_list[[loc]] <- list(
                 shape1 = 30,
-                shape2 = 7.5
+                shape2 = 7.5,
+                metadata = list(
+                    estimated_from_constraints = FALSE,
+                    mean = 30 / 37.5,
+                    ci_lower = stats::qbeta(0.025, 30, 7.5),
+                    ci_upper = stats::qbeta(0.975, 30, 7.5),
+                    constraint_violation_rate = 0
+                )
             )
             next
         }
@@ -358,7 +337,14 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
         # Store results
         results_list[[loc]] <- list(
             shape1 = S_beta$shape1,
-            shape2 = S_beta$shape2
+            shape2 = S_beta$shape2,
+            metadata = list(
+                estimated_from_constraints = TRUE,
+                mean = S_mean,
+                ci_lower = unname(S_ci[1]),
+                ci_upper = unname(S_ci[2]),
+                constraint_violation_rate = constraint_violations / n_samples
+            )
         )
     }
 
@@ -398,14 +384,14 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
         )
     )
 
-    class(output) <- c("mosaic_initial_conditions", "list")
+    class(output) <- c("mosaic_initial_conditions_S", "mosaic_initial_conditions", "list")
 
     if (verbose) {
         cat("=== S Compartment Estimation Complete ===\n")
         cat(sprintf("Processed %d locations\n", length(results_list)))
 
         # Summary statistics
-        constrained_locs <- sum(sapply(results_list, function(x) x$metadata$estimated_from_constraints))
+        constrained_locs <- sum(vapply(results_list, function(x) isTRUE(x$metadata$estimated_from_constraints), logical(1)))
         independent_locs <- length(results_list) - constrained_locs
 
         cat(sprintf("Constrained estimates: %d locations\n", constrained_locs))
@@ -474,10 +460,9 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
         # Additional summary statistics
         if (constrained_locs > 0) {
             # Calculate overall statistics
-            all_S_means <- sapply(results_list[sapply(results_list, function(x) x$metadata$estimated_from_constraints)],
-                                 function(x) x$metadata$mean)
-            all_violations <- sapply(results_list[sapply(results_list, function(x) x$metadata$estimated_from_constraints)],
-                                   function(x) x$metadata$constraint_violation_rate)
+            is_constrained <- vapply(results_list, function(x) isTRUE(x$metadata$estimated_from_constraints), logical(1))
+            all_S_means <- vapply(results_list[is_constrained], function(x) x$metadata$mean, numeric(1))
+            all_violations <- vapply(results_list[is_constrained], function(x) x$metadata$constraint_violation_rate, numeric(1))
 
             cat("=== Summary Statistics ===\n")
             cat(sprintf("S compartment: mean = %.1f%%, range = %.1f%% - %.1f%%\n",
@@ -506,8 +491,9 @@ print.mosaic_initial_conditions_S <- function(x, ...) {
 
     # Summary table for locations with constrained estimates
     locs <- names(x$parameters_location$prop_S_initial$parameters$location)
-    constrained_locs <- locs[sapply(x$parameters_location$prop_S_initial$parameters$location,
-                                  function(y) y$metadata$estimated_from_constraints)]
+    constrained_locs <- locs[vapply(x$parameters_location$prop_S_initial$parameters$location,
+                                    function(y) isTRUE(y$metadata$estimated_from_constraints),
+                                    logical(1))]
 
     if (length(constrained_locs) > 0) {
         cat("Constrained S estimates (showing first 10):\n")
@@ -527,4 +513,5 @@ print.mosaic_initial_conditions_S <- function(x, ...) {
         summary_df <- do.call(rbind, summary_data)
         print(summary_df, row.names = FALSE)
     }
+    invisible(x)
 }

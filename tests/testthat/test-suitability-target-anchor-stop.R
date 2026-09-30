@@ -9,9 +9,11 @@
 # target at time t was scaled by data from after t. `gam_train_stop` had
 # already fixed the covariate side; this is its target-side sibling.
 #
-# Running the real compiler needs the full MOSAIC data tree, so these tests
-# exercise the anchor arithmetic on a synthetic panel of the same shape, and
-# assert the wiring separately.
+# Running the whole compiler needs the full MOSAIC data tree, so these tests
+# call the two production helpers it uses -- .csd_anchor_rows() (which rows
+# define the anchors) and .csd_response_targets() (the anchor arithmetic and
+# the target columns) -- on a synthetic panel of the same shape, and assert the
+# wiring separately.
 
 .anchor_panel <- function() {
      dates <- seq(as.Date("2020-01-02"), by = "week", length.out = 200L)
@@ -27,40 +29,89 @@
      d
 }
 
-# The anchor arithmetic, transcribed from compile_suitability_data() so the
-# test states the contract independently of the surrounding 700-line function.
-.cp99r_for <- function(d, iso, anchor_stop = NULL) {
-     in_window <- if (is.null(anchor_stop)) rep(TRUE, nrow(d)) else d$date <= anchor_stop
-     m <- d$iso_code == iso & d$source != "AI" & in_window
-     pop <- stats::median(d$total_population[m], na.rm = TRUE)
-     max(stats::quantile(d$rate[m], 0.99, na.rm = TRUE), 5 / pop * 1e5, na.rm = TRUE)
+# The panel's targets under a given anchor bound, via the production helpers.
+.targets_for <- function(d, anchor_stop = NULL) {
+     is_ai <- !is.na(d$source) & d$source == "AI"
+     is_anchor <- suppressMessages(MOSAIC:::.csd_anchor_rows(d, is_ai, anchor_stop))
+     MOSAIC:::.csd_response_targets(d, is_anchor, c("AAA", "BBB"))
 }
 
 test_that("a full-window anchor is contaminated by post-cutoff data", {
      d <- .anchor_panel()
-     full    <- .cp99r_for(d, "AAA", NULL)
-     bounded <- .cp99r_for(d, "AAA", as.Date("2023-01-01"))
-     expect_gt(full, bounded)          # the spike raised the full-window anchor
+     wk <- d$iso_code == "AAA" & d$date == as.Date("2022-01-06")
+     full    <- .targets_for(d, NULL)
+     bounded <- .targets_for(d, as.Date("2023-01-01"))
+     # target D = log1p(rate) / log1p(cp99r): recover the anchor each run used
+     cp99r_full    <- expm1(log1p(d$rate[wk]) / full$target_D_rate_per_country_floored[wk])
+     cp99r_bounded <- expm1(log1p(d$rate[wk]) / bounded$target_D_rate_per_country_floored[wk])
+     expect_gt(cp99r_full, cp99r_bounded)          # the spike raised the full-window anchor
      # and the contamination is large, not a rounding difference
-     expect_gt(full / bounded, 10)
+     expect_gt(cp99r_full / cp99r_bounded, 10)
 })
 
 test_that("bounding the anchor leaves the historical target unchanged by the future", {
      d <- .anchor_panel()
-     # target for a pre-cutoff week under each anchor
      wk <- d$iso_code == "AAA" & d$date == as.Date("2022-01-06")
-     t_full    <- pmin(1, log1p(d$rate[wk]) / log1p(.cp99r_for(d, "AAA", NULL)))
-     t_bounded <- pmin(1, log1p(d$rate[wk]) / log1p(.cp99r_for(d, "AAA", as.Date("2023-01-01"))))
-     expect_false(isTRUE(all.equal(t_full, t_bounded)))
-     # the bounded target is the LARGER one: it is not being deflated by a
-     # record that had not happened yet
-     expect_gt(t_bounded, t_full)
+     full    <- .targets_for(d, NULL)
+     bounded <- .targets_for(d, as.Date("2023-01-01"))
+     for (col in c("target_B_count_per_country", "target_D_rate_per_country_floored",
+                   "target_A_count_global", "target_C_rate_global")) {
+          expect_false(isTRUE(all.equal(full[[col]][wk], bounded[[col]][wk])), info = col)
+          # the bounded target is the LARGER one: it is not being deflated by a
+          # record that had not happened yet
+          expect_gt(bounded[[col]][wk], full[[col]][wk])
+     }
+     # a bound AFTER every observation is the full window, bit-identical
+     late <- .targets_for(d, as.Date("2030-01-01"))
+     expect_identical(late$target_D_rate_per_country_floored,
+                      full$target_D_rate_per_country_floored)
 })
 
-test_that("a country with no post-cutoff spike is unaffected by the bound", {
+test_that("a country with no post-cutoff spike is unaffected by the per-country bound", {
      d <- .anchor_panel()
-     expect_equal(.cp99r_for(d, "BBB", NULL),
-                  .cp99r_for(d, "BBB", as.Date("2023-01-01")))
+     b <- d$iso_code == "BBB"
+     expect_equal(.targets_for(d, NULL)$target_D_rate_per_country_floored[b],
+                  .targets_for(d, as.Date("2023-01-01"))$target_D_rate_per_country_floored[b])
+     expect_equal(.targets_for(d, NULL)$target_B_count_per_country[b],
+                  .targets_for(d, as.Date("2023-01-01"))$target_B_count_per_country[b])
+})
+
+test_that("transmission_intensity is NA on unobserved weeks and keeps the legacy anchor", {
+     d <- .anchor_panel()
+     miss <- d$iso_code == "BBB" & d$date >= as.Date("2021-01-07") &
+             d$date <= as.Date("2021-06-24")
+     d$cases[miss] <- NA
+     d$rate[miss]  <- NA
+     out <- .targets_for(d, NULL)
+     # unobserved weeks are NA, never a fabricated 0 (review item: no zero-fill)
+     expect_true(all(is.na(out$transmission_intensity[miss])))
+     expect_false(anyNA(out$transmission_intensity[!miss]))
+     # observed weeks match the frozen legacy recipe: NA counted as 0 in the p99
+     leg <- d$cases; leg[is.na(leg)] <- 0
+     p99 <- stats::quantile(leg, 0.99)
+     expect_equal(out$transmission_intensity[!miss],
+                  pmin(1, log1p(d$cases[!miss]) / log1p(p99)))
+     # the other targets already propagated NA
+     expect_true(all(is.na(out$target_D_rate_per_country_floored[miss])))
+})
+
+test_that("AI rows receive targets but never move the anchors", {
+     d <- .anchor_panel()
+     base <- .targets_for(d, NULL)
+     d2 <- rbind(d, transform(d[d$iso_code == "AAA", ][1:20, ],
+                              date = date + 1, source = "AI", cases = 1e6,
+                              rate = 1e6 / 1e7 * 1e5))
+     out <- .targets_for(d2, NULL)
+     trusted <- seq_len(nrow(d))
+     expect_equal(out$target_D_rate_per_country_floored[trusted],
+                  base$target_D_rate_per_country_floored)
+     expect_false(anyNA(out$target_D_rate_per_country_floored[-trusted]))
+})
+
+test_that("compile_suitability_data routes the targets through the tested helpers", {
+     src <- paste(deparse(MOSAIC::compile_suitability_data), collapse = "\n")
+     expect_true(grepl(".csd_anchor_rows(d, is_ai, target_anchor_stop)", src, fixed = TRUE))
+     expect_true(grepl(".csd_response_targets(d, is_anchor", src, fixed = TRUE))
 })
 
 test_that("compile_suitability_data exposes target_anchor_stop", {

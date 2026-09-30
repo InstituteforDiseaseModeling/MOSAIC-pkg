@@ -13,7 +13,7 @@ get_symptomatic_prop_data(PATHS)
 }}
 }
 \value{
-The function does not return a value but saves the data frame to a CSV file.
+Invisibly, the data frame, after saving it to a CSV file. Errors if any row has \code{ci_lo > ci_hi} or a mean outside its interval.
 }
 \description{
 This function creates a data frame with studies reporting the proportion of cholera infections that are symptomatic and saves it as a CSV file.

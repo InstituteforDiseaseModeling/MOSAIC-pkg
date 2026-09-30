@@ -86,9 +86,13 @@ numbers here.** Key levers (semantics, not values):
 ## 3. Control object
 `control = MOSAIC::mosaic_control_defaults()` then override. **Use the canonical key names** —
 `*_adaptive` / `*_total` / `ESS_method` (e.g. `target_r2_adaptive`, `n_simulations`,
-`max_simulations_total`). Legacy names (`batch_size`, `target_r2`, `max_simulations`, `ess_method`,
-…) are **silently dropped** if you also rely on defaults (see CLAUDE.md **Lesson #13**) — there is no
-unknown-key validator, so a typo'd/legacy key reverts to default with no warning. Common levers:
+`max_simulations_total`). The renamed legacy names (`batch_size`, `min_batches`, `max_batches`,
+`target_r2`, `max_predictive_batch`, `max_simulations`, `ess_method`) are honoured with a
+deprecation warning, or ignored with a warning if the canonical key is also set (v0.37.1; CLAUDE.md
+**Lesson #13**). The retired `likelihood$nb_k_min_cases`/`nb_k_min_deaths` warn and are ignored
+(dispersion is estimated per location; `likelihood$nb_k_cases` *replaces* the estimate), and
+`io$format = "csv"` warns and is coerced to parquet. Any *other* unknown or typo'd key is still
+**silently ignored** — there is no general unknown-key validator, so check spelling. Common levers:
 `weight_cases` / `weight_deaths`, ESS thresholds, `n_iter_ensemble`, `clean_output`, and the `io`
 preset (`default` / `debug` / `fast` / `archive`; `?mosaic_io_presets`). Multi-location-only samplers:
 `sample_tau_i`, `sample_mobility_*`. `central_method` (`"mean"` default since v0.98.0; `"median"`
@@ -96,7 +100,11 @@ reproduces v0.46.1-v0.97.x) sets the ensemble central tendency — see `?calc_mo
 
 **FIXED vs AUTO mode (matters for resumability and for what you can measure):**
 - `n_simulations = <integer>` ⇒ **FIXED**: runs exactly that many simulations in a single batch,
-  regardless of convergence. `converged = FALSE` in `summary.json` is EXPECTED here, not an error.
+  regardless of convergence. The ESS criterion is never evaluated, so `summary.json` has
+  `converged = FALSE` with `convergence_evaluated = FALSE`, and the run ends with
+  `[RUN_SUMMARY] status=completed_fixed mode=fixed` (`completed_fixed_partial` if the ensemble
+  metrics are missing) — EXPECTED, not an error. Whether a post-hoc best-subset tier met all its
+  targets is `posthoc_criteria_met` in both `summary.json` and `[RUN_SUMMARY]`.
   Use it when you want a predictable runtime or a controlled comparison — it is the only mode in
   which two runs do the same amount of work. Note the whole budget dispatches as one batch, so
   mid-run resume is coarse: shards land per simulation, but the adaptive checkpointing that AUTO
@@ -111,7 +119,12 @@ reproduces v0.46.1-v0.97.x) sets the ensemble central tendency — see `?calc_mo
   `targets$min_best_subset == targets$max_best_subset`, `predictions$n_iter_ensemble` and
   `predictions$n_iter_best`.
 - Validation rule: `batch_size_adaptive` must be strictly **<** `max_simulations_total`.
-- Resume: `run_MOSAIC(resume = TRUE)` requires `clean_output = FALSE`.
+- Resume: `run_MOSAIC(resume = TRUE)` requires `clean_output = FALSE`. A **non-resume** run into an
+  existing `dir_output` moves leftover `sim_*.parquet` shards to `2_calibration/samples_stale_<time>/`
+  (with a warning; never pooled) and deletes the post-calibration data artifacts before rebuilding
+  them (ensemble RDS files, `config_medoid.json`, prediction/trajectory CSVs, the fit/optimizer/
+  HSIC/CFR tables, and the post-hoc `reproductive_numbers.{csv,rds}`). Figures and other files
+  are only replaced when re-written, so use `clean_output = TRUE` for a guaranteed-empty tree.
 
 ## 4. Launch
 ```r

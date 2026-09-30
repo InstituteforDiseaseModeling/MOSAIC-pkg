@@ -6,50 +6,59 @@
 \title{Default Simulation Configuration}
 \format{
 A named \strong{list} built by the \code{data-raw/make_config_default.R}
-script and persisted as \code{data/config_default.rda}. Elements include:
+script and persisted as \code{data/config_default.rda} (its version is in
+\code{metadata$version}). Element groups:
 \itemize{
-\item \strong{Metadata} – \code{metadata$version}, \code{metadata$date}, \code{metadata$description}
-for provenance tracking;
-\item \strong{Scalars} – biological constants (\code{phi_1}, \code{gamma_1}, \code{epsilon}, …);
-\item \strong{Vectors} – initial populations (\code{S_j_initial}, \code{I_j_initial}, …),
-initial proportions (optional: \code{prop_S_initial}, \code{prop_I_initial}, …),
-coordinates (\code{longitude}, \code{latitude}), mobility coefficients, etc.;
-\item \strong{Matrices} – day-by-day series such as human-to-human transmission
-(\code{b_jt}), environmental suitability (\code{psi_jt}), birth/death rates;
-\item \strong{Character paths} – locations of required input data (see below).
+\item \strong{Metadata} -- \code{metadata$version}, \code{metadata$date} and
+\code{metadata$description} (the full change log) for provenance tracking;
+\item \strong{Simulation window and locations} -- \code{seed}, \code{date_start}, \code{date_stop},
+\code{location_name}, \code{longitude}, \code{latitude};
+\item \strong{Initial conditions} -- counts (\code{N_j_initial}, \code{S_j_initial},
+\code{E_j_initial}, \code{I_j_initial}, \code{R_j_initial}, \code{V1_j_initial},
+\code{V2_j_initial}) and the matching proportions (\verb{prop_*_initial});
+\item \strong{Global scalars} -- disease and immunity rates (\code{iota}, \code{gamma_1},
+\code{gamma_2}, \code{epsilon}, \code{phi_1}, \code{phi_2}, \code{omega_1}, \code{omega_2}), the
+observation process (\code{rho}, \code{rho_deaths}, \code{sigma}, \code{chi_endemic},
+\code{chi_epidemic}, \code{delta_reporting_cases}), mobility (\code{mobility_omega},
+\code{mobility_gamma}), mixing (\code{alpha_2}), shedding and dose (\code{zeta_1},
+\code{zeta_2}, \code{zeta_ratio}, \code{kappa}), environmental decay
+(\code{decay_days_short}, \code{decay_days_spread}, \code{decay_days_long},
+\code{decay_shape_1}, \code{decay_shape_2}) and the seasonal period \code{p};
+\item \strong{Per-location vectors} -- transmission (\code{beta_j0_tot}, \code{p_beta} and the
+derived \code{beta_j0_hum}, \code{beta_j0_env}), \code{alpha_1}, \code{tau_i}, \code{theta_j},
+seasonality (\code{a_1_j}, \code{a_2_j}, \code{b_1_j}, \code{b_2_j}), \code{epidemic_threshold}
+and the suitability calibration \code{psi_star_a}, \code{psi_star_b}, \code{psi_star_z},
+\code{psi_star_k};
+\item \strong{Location x day matrices} -- birth and death rates (\code{b_jt}, \code{d_jt}),
+one- and two-dose vaccination (\code{nu_1_jt}, \code{nu_2_jt}, with the eligible
+compartments in \code{nu_jt_sources}), environmental suitability (\code{psi_jt},
+uncalibrated: \code{sample_parameters()} applies \verb{psi_star_*} to it), and
+the reported case fatality ratio \code{mu_jt}, the deaths input of the
+mortality model since MOSAIC v0.96.0;
+\item \strong{Observed data} -- \code{reported_cases} and \code{reported_deaths} with their
+per-observation confidence weights \code{reported_cases_weight} and
+\code{reported_deaths_weight}, and the \code{epidemic_peaks} data frame used by the
+peak shape terms of the likelihood.
 }
 }
 \usage{
 config_default
 }
 \description{
-The \strong{canonical} simulation parameter object shipped with MOSAIC.
-It contains default values for \emph{all} model parameters, initial state
-vectors, and file-path references required to run the full cholera
-metapopulation transmission model across any number of locations.
+The \strong{canonical} simulation parameter object shipped with MOSAIC. It holds
+default values for every model parameter, the initial state vectors, the
+daily input matrices and the observed surveillance series for the 40
+modelled locations, and is the template that \code{get_location_config()}
+subsets and \code{sample_parameters()} draws into.
 }
 \details{
-Unlike the lightweight \emph{simulation} configs exported in
-\code{make_simulation_epidemic_config_files.R} and
-\code{make_simulation_endemic_config_files.R}, the \strong{default}
-configuration assumes the presence of external data files arranged in
-canonical MOSAIC directories:
-
-\describe{
-\item{MODEL_INPUT}{Directory containing baseline CSV inputs (population,
-rainfall, vaccination, WASH, etc.).}
-\item{DATA_WHO_DAILY}{Directory with processed WHO daily cholera line-list
-or aggregated case/death counts.}
-\item{ENV_RASTERS}{(Optional) Path to geotiff rasters used to build
-spatial priors for environmental suitability.}
-}
-
-The object is intended for full-scale analyses and is therefore \strong{large}
-(tens of megabytes) and \strong{not self-contained} – it will error if the file
-paths it references do not exist on the user's machine.  For tutorials or
-automated tests, consider using
-\code{\link{config_simulation_epidemic}} or \code{\link{config_simulation_endemic}}, which run
-without any external dependencies.
+The object is self-contained: it references no external files and runs
+directly, e.g. \code{run_simulation(config_default)}. The engine does not
+read \verb{psi_star_*}, so a direct run uses the raw \code{psi_jt} and ignores the
+shipped \code{psi_star_b = 1}; to simulate with the calibrated suitability, pass
+the config through \code{sample_parameters()} first. For tutorials or
+fast tests the smaller toy configs \code{\link{config_simulation_epidemic}} and
+\code{\link{config_simulation_endemic}} are also available.
 
 \strong{Note on Initial Condition Formats}: This configuration includes both count
 (\verb{*_j_initial}) and proportion (\verb{prop_*_initial}) representations of initial

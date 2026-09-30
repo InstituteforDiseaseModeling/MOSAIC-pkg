@@ -68,14 +68,17 @@
 #'   \item \strong{DOCS_FIGURES}: Path to save the generated plots.
 #' }
 #' @param fit_date_start Date string or NULL. Start date for model fitting period. If NULL, auto-detects from first cholera case data.
-#' @param fit_date_stop Date string or NULL. End date for model fitting period. If NULL, auto-detects from last date with both cholera cases and complete ENSO data.
+#' @param fit_date_stop Date string or NULL. End date (inclusive) of the model fitting period. If NULL, auto-detects the last date with both cholera cases and complete ENSO data. With a pre-computed `target_*` `response_var`, a cutoff earlier than the panel's target-anchor window leaks post-cutoff scaling into the targets; lstm_v2 warns when this happens (see \strong{Leakage}).
 #' @param pred_date_start Date string or NULL. Start date for prediction period. If NULL, uses fit_date_start.
-#' @param pred_date_stop Date string or NULL. End date for prediction period. If NULL, auto-detects from last date with complete ENSO data.
-#' @param feature_set Named covariate set, shared by both architectures: `"v7.3"`
-#'   (default; the 38 screening-informed features, see \code{\link{MINFEAT_V7_3_FEATURE_SET}})
-#'   or `"default"` (full production candidate set). This is the SOLE public,
-#'   schema-guarded feature selector. Errors if a `"v7.3"` feature is absent from
-#'   the suitability CSV (schema-drift guard).
+#' @param pred_date_stop Date string or NULL. End date for prediction period. If NULL, auto-detects from last date with complete ENSO data (lstm_v2: plus `arch_control$lead` weeks when a forecast lead is trained).
+#' @param feature_set Named covariate set: `"v7.3"` (default; the 38
+#'   screening-informed features, see \code{\link{MINFEAT_V7_3_FEATURE_SET}}),
+#'   `"v7.4"` (v7.3 plus 4 cyclone/drought hazard channels = 42 features, see
+#'   \code{\link{MINFEAT_V7_4_FEATURE_SET}}; lstm_v2 only, and requires a
+#'   `source_csv` compiled with the hazard GAMs), or `"default"` (full
+#'   production candidate set). `"v7.3"` and `"default"` are shared by both
+#'   architectures. This is the SOLE public, schema-guarded feature selector:
+#'   errors if a named set's feature is absent from the suitability CSV.
 #' @param response_var Training target column, shared by both architectures
 #'   (default `"target_D_rate_per_country_floored"` — per-capita, per-country anchor;
 #'   see the architecture notes above for why it was selected over `"transmission_intensity"`).
@@ -134,9 +137,11 @@
 #' confidence-weight overlay. Training uses expanding-window rolling-origin CV
 #' (each step validates strictly forward in time with a 4-week embargo,
 #' early-stopping records `best_epoch`); the model is then refit on the full
-#' in-sample data at `median(best_epoch)`. `n_seeds` fits are averaged on the
-#' logit scale to yield the prediction (canonical `psi` column), plus
-#' seed-dispersion quantiles (diagnostic only, NOT predictive intervals). This
+#' in-sample data at `median(best_epoch)`. The `n_seeds` fits are combined by
+#' the cross-seed MEDIAN on the logit scale (not the mean) to yield the
+#' prediction (canonical `psi` column), plus seed-dispersion quantiles
+#' (diagnostic only, NOT predictive intervals). A seed whose fit errors is
+#' dropped with a warning and the manifest records the seeds actually pooled. This
 #' regime fixes the v0.33 random-split temporal leak that collapsed out-of-sample
 #' forecasts. Defaults are pinned to the B4 fixture; override via `arch_control`.
 #'
@@ -168,6 +173,27 @@
 #' temporally-adjacent weeks on both sides of the train/val boundary, so the
 #' out-of-sample forecast collapses in amplitude -- the failure lstm_v2 fixes.
 #'
+#' @section Leakage:
+#' The `"transmission_intensity"` response is re-anchored on training rows only
+#' (`date <= fit_date_stop`), so any cutoff is leak-free on the target side. The
+#' pre-computed `target_*` columns (including the default
+#' `"target_D_rate_per_country_floored"`) arrive scaled by anchors that
+#' \code{\link{compile_suitability_data}} computed over its anchor window --
+#' the whole panel unless it was built with `target_anchor_stop`. Fitting such a
+#' panel at an earlier `fit_date_stop` trains (and bias-corrects) on targets
+#' scaled by later outbreaks, so out-of-sample skill measured from that fit is
+#' optimistic; lstm_v2 warns when it detects this and records the anchor window
+#' end as `target_anchor_end` in `psi_suitability_config.json`. The production
+#' refresh (auto-detected `fit_date_stop` at the end of surveillance) is not
+#' affected. For a retrospective / forecast-CV psi use
+#' `response_var = "transmission_intensity"` or a per-cutoff panel compiled with
+#' `target_anchor_stop`. Covariate climatologies in the panel remain full-window
+#' (see \code{\link{compile_suitability_data}}).
+#' The frozen `lstm_v1_legacy` path is never leak-free for a retrospective
+#' cutoff: it counts unobserved weeks as zero cases and scales its response by an
+#' anchor over the whole panel. Its numerics are frozen, so it warns instead when
+#' `fit_date_stop` precedes the last observed surveillance week.
+#'
 #' @section Migration (reproduce v0.33 production behavior):
 #' The current defaults set `response_var` to
 #' `"target_D_rate_per_country_floored"` and `architecture` to
@@ -192,8 +218,11 @@
 #' # Basic usage with default settings (lstm_v2 hierarchical-FiLM, rolling-CV)
 #' est_suitability(PATHS)
 #'
-#' # Custom date ranges for fitting and prediction
+#' # Custom date ranges for fitting and prediction. A retrospective cutoff on
+#' # the canonical (full-window-anchored) panel needs the train-only anchored
+#' # response to be leak-free (see the Leakage section).
 #' est_suitability(PATHS,
+#'                response_var = "transmission_intensity",
 #'                fit_date_start = "2015-01-01",
 #'                fit_date_stop = "2023-12-31",
 #'                pred_date_start = "2020-01-01",
@@ -307,6 +336,7 @@ est_suitability <- function(PATHS,
           if (!is.null(source_csv))
                stop("est_suitability: `source_csv` override is only supported by the lstm_v2_hierarchical_film path (the legacy path is frozen at its canonical panel).",
                     call. = FALSE)
+          .psi_legacy_leakage_warning(PATHS, fit_date_stop)
           return(.est_suitability_legacy(
                PATHS            = PATHS,
                fit_date_start   = fit_date_start,
@@ -332,6 +362,49 @@ est_suitability <- function(PATHS,
           arch_control     = arch_control,
           source_csv       = source_csv,
           plot_country_diagnostics = plot_country_diagnostics)
+}
+
+
+#' Leakage warning for the frozen legacy path used retrospectively.
+#'
+#' The frozen v0.33 body is not edited (legacy parity). It counts NA cases as 0
+#' and scales every response by an anchor computed over the whole panel (the
+#' in-function cases p99, or the full-window compile_suitability_data anchors
+#' of a target_* column), so a fit whose cutoff precedes the end of surveillance
+#' trains on targets scaled by later outbreaks and on unobserved weeks recorded
+#' as zero transmission. Warns in that case; silent when fit_date_stop is NULL
+#' (the production refresh) or at/after the last observed week, or when the
+#' panel cannot be read (the legacy body then fails with its own error).
+#' @param PATHS List from get_paths().
+#' @param fit_date_stop The user-supplied cutoff (NULL = auto-detect).
+#' @return Invisibly, TRUE if a warning was raised.
+#' @keywords internal
+#' @noRd
+.psi_legacy_leakage_warning <- function(PATHS, fit_date_stop) {
+     if (is.null(fit_date_stop)) return(invisible(FALSE))
+     cutoff <- as.Date(fit_date_stop)
+     path <- file.path(PATHS$DATA_CHOLERA_WEEKLY %||% "",
+                       "cholera_country_weekly_suitability_data.csv")
+     if (is.na(cutoff) || !file.exists(path)) return(invisible(FALSE))
+     d <- tryCatch(utils::read.csv(path, stringsAsFactors = FALSE),
+                   error = function(e) NULL)
+     if (is.null(d) || !all(c("iso_code", "date", "cases") %in% names(d)))
+          return(invisible(FALSE))
+     obs <- d$iso_code %in% MOSAIC::iso_codes_mosaic & !is.na(d$cases)
+     if (!any(obs)) return(invisible(FALSE))
+     last_obs <- max(as.Date(d$date[obs]), na.rm = TRUE)
+     if (cutoff >= last_obs) return(invisible(FALSE))
+     warning(sprintf(paste0(
+          "est_suitability(architecture = 'lstm_v1_legacy'): fit_date_stop = %s precedes ",
+          "the last observed surveillance week (%s). The frozen v0.33 path is NOT ",
+          "leak-free for a retrospective cutoff: its response is scaled by an anchor ",
+          "computed over the whole panel, including weeks after the cutoff, and it counts ",
+          "unobserved weeks (NA cases) as zero transmission. Out-of-sample skill measured ",
+          "from this fit is optimistic. For retrospective or forecast-CV psi use the default ",
+          "lstm_v2_hierarchical_film path with response_var = 'transmission_intensity' or a ",
+          "panel compiled with target_anchor_stop (see ?est_suitability, Leakage)."),
+          format(cutoff), format(last_obs)), call. = FALSE)
+     invisible(TRUE)
 }
 
 

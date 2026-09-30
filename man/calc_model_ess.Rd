@@ -49,7 +49,7 @@ calc_model_ess(w_uniform, method = "perplexity") # 10
 # Concentrated weights
 w_conc <- c(0.9, rep(0.01, 10))
 calc_model_ess(w_conc, method = "kish")       # ~1.2
-calc_model_ess(w_conc, method = "perplexity") # ~1.5
+calc_model_ess(w_conc, method = "perplexity") # ~1.74
 
 }
 \references{

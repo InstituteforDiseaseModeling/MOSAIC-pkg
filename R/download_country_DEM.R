@@ -8,8 +8,14 @@
 #' }
 #' @param iso_codes A character vector of ISO3 country codes for which DEM data should be downloaded.
 #' @param zoom_level An integer representing the zoom level for the DEM data. Zoom levels 6-8 are recommended for 1km resolution (default = 6).
+#' @param overwrite If \code{FALSE} (default), a country whose DEM file already exists is skipped; \code{TRUE} re-downloads and replaces it.
 #'
-#' @return The function does not return a value. It downloads the DEM data for each country and saves the results as GeoTIFF files in the specified directory.
+#' @return Invisibly, the paths of the DEM files that exist after the call. Each is written atomically (temporary file, then rename), so a failed or interrupted download never replaces a good raster.
+#'
+#' @details Terrain does not change between refreshes, and \code{PATHS$DATA_DEM} lives under
+#' \code{MOSAIC-data/raw/}, so existing rasters are never rewritten unless \code{overwrite = TRUE}. Each
+#' download appends a row to \code{PATHS$DATA_DEM/PROVENANCE.md}. File names stay undated because
+#' \code{get_elevation()} reads \code{<ISO>_1km_DEM.tif}.
 #'
 #' @importFrom elevatr get_elev_raster
 #' @importFrom sf st_bbox
@@ -25,11 +31,11 @@
 #' PATHS <- get_paths()
 #'
 #' # Download DEM rasters for the countries
-#' download_country_DEM(iso_codes, PATHS)
+#' download_country_DEM(PATHS, iso_codes)
 #' }
 #' @export
 
-download_country_DEM <- function(PATHS, iso_codes, zoom_level = 6) {
+download_country_DEM <- function(PATHS, iso_codes, zoom_level = 6, overwrite = FALSE) {
 
      requireNamespace('sf')
      requireNamespace('raster')
@@ -38,10 +44,18 @@ download_country_DEM <- function(PATHS, iso_codes, zoom_level = 6) {
      if (!dir.exists(PATHS$DATA_DEM)) dir.create(PATHS$DATA_DEM, recursive = TRUE)
 
 
-     # Loop through each ISO3 country code
-     for (i in 1:length(iso_codes)) {
+     out <- character(0)
 
-          message(glue::glue("Downloading DEM for {iso_codes[i]}..."))
+     # Loop through each ISO3 country code
+     for (i in seq_along(iso_codes)) {
+
+          dem_filename <- file.path(PATHS$DATA_DEM, glue::glue("{iso_codes[i]}_1km_DEM.tif"))
+
+          if (file.exists(dem_filename) && !overwrite) {
+               message(glue::glue("DEM for {iso_codes[i]} already exists; skipping."))
+               out <- c(out, dem_filename)
+               next
+          }
 
           # Construct the path to the shapefile for each country
           shapefile_path <- file.path(PATHS$DATA_SHAPEFILES, paste0(iso_codes[i], "_ADM0.shp"))
@@ -55,24 +69,30 @@ download_country_DEM <- function(PATHS, iso_codes, zoom_level = 6) {
           # Load the country shapefile
           country_shapefile <- sf::st_read(shapefile_path, quiet = TRUE)
 
-
           if (is.null(country_shapefile) || nrow(country_shapefile) == 0) {
                message(glue::glue("Skipping {iso_codes[i]}: shapefile not found."))
                next
           }
 
+          message(glue::glue("Downloading DEM for {iso_codes[i]}..."))
+
           # Download the DEM data for the country's bounding box
           dem_raster <- elevatr::get_elev_raster(locations = country_shapefile, z = zoom_level, clip = "bbox")
 
-          # Create a filename for the DEM file
-          dem_filename <- file.path(PATHS$DATA_DEM, glue::glue("{iso_codes[i]}_1km_DEM.tif"))
+          # Save atomically so an interrupted write cannot leave a truncated GeoTIFF
+          .write_file_atomic(dem_filename, function(tmp) {
+               raster::writeRaster(dem_raster, filename = tmp, format = "GTiff", overwrite = TRUE)
+          })
 
-          # Save the DEM raster as a GeoTIFF file
-          raster::writeRaster(dem_raster, filename = dem_filename, format = "GTiff", overwrite = TRUE)
-
+          .append_raw_provenance(
+               PATHS$DATA_DEM, dem_filename, NA_integer_, NA_integer_,
+               sprintf("elevatr::get_elev_raster z=%s, clip=bbox of %s_ADM0%s.",
+                       zoom_level, iso_codes[i], if (overwrite) "; replaced existing raster" else ""),
+               title = "DEM download provenance log")
           message(glue::glue("DEM for {iso_codes[i]} saved to {dem_filename}."))
-
+          out <- c(out, dem_filename)
      }
 
      message(glue::glue("DEM data saved for all countries in {PATHS$DATA_DEM}."))
+     invisible(out)
 }

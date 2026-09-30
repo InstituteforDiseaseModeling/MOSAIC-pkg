@@ -1,7 +1,8 @@
 # Tests for the re-simulated posterior R_eff credible interval machinery:
 #   - .mosaic_reff_to_mat()          (orientation-robust channel coercion)
 #   - per-member weighted-quantile reduction (known weights -> known quantiles)
-#   - burn-in exclusion (leading days set NA in the assembled table)
+#   - burn-in exclusion (.add_reff_mask_burn_in, and the inline mask in
+#     .add_reff_recompute_ci with the re-simulation mocked)
 #   - .mosaic_build_trajectories() grid: stride = 1 -> full daily-consecutive set
 #
 # The full re-simulation (.mosaic_reff_resim_ci / add_reproductive_numbers
@@ -56,24 +57,77 @@ test_that("per-member weighted quantiles recover the weighted median + 95% bound
 })
 
 # -----------------------------------------------------------------------------
-# Burn-in exclusion logic (mirror the table assembly in .add_reff_recompute_ci)
+# Burn-in exclusion: .add_reff_mask_burn_in() on a small R_eff table
 # -----------------------------------------------------------------------------
-test_that("burn-in exclusion sets the leading days to NA across all columns", {
-  nL <- 1L; Tn <- 20L; bid <- 5L
-  central <- matrix(1 + 0.1 * seq_len(Tn), nrow = nL)
-  qmats   <- array(0, dim = c(nL, Tn, 3L))
-  qmats[1, , 1] <- central - 0.2
-  qmats[1, , 2] <- central
-  qmats[1, , 3] <- central + 0.2
+test_that(".add_reff_mask_burn_in sets the leading days to NA in every estimate", {
+  Tn <- 20L; bid <- 5L
+  central <- 1 + 0.1 * seq_len(Tn)
+  reff <- data.frame(location = "AAA", t = seq_len(Tn), central = central,
+                     q0.025 = central - 0.2, q0.975 = central + 0.2)
+  attr(reff, "central_matrix") <- matrix(central, nrow = 1L)
+  attr(reff, "route_central")  <- list(human = matrix(central / 2, nrow = 1L))
 
-  burn_idx <- seq_len(min(bid, Tn))
-  central[, burn_idx] <- NA_real_
-  qmats[, burn_idx, ] <- NA_real_
+  out <- MOSAIC:::.add_reff_mask_burn_in(reff, bid)
 
-  expect_true(all(is.na(central[1, seq_len(bid)])))
-  expect_true(all(is.finite(central[1, (bid + 1L):Tn])))
-  expect_true(all(is.na(qmats[1, seq_len(bid), ])))
-  expect_true(all(is.finite(qmats[1, (bid + 1L):Tn, ])))
+  early <- out$t <= bid
+  for (col in c("central", "q0.025", "q0.975")) {
+    expect_true(all(is.na(out[[col]][early])), info = col)
+    expect_true(all(is.finite(out[[col]][!early])), info = col)
+  }
+  expect_true(all(is.na(attr(out, "central_matrix")[1, seq_len(bid)])))
+  expect_true(all(is.finite(attr(out, "central_matrix")[1, (bid + 1L):Tn])))
+  expect_true(all(is.na(attr(out, "route_central")$human[1, seq_len(bid)])))
+  expect_identical(attr(out, "burn_in_days"), bid)
+  # bid = 0 is a no-op apart from recording the attribute.
+  expect_equal(unname(MOSAIC:::.add_reff_mask_burn_in(reff, 0L)$central), central)
+})
+
+# The recompute_ci path masks burn-in inline rather than through the helper
+# above, so it needs its own check. The re-simulation is mocked; the masking,
+# assembly and attributes are the real code.
+test_that(".add_reff_recompute_ci NAs the burn-in days of every estimand", {
+  nL <- 2L; Tn <- 12L; bid <- 4L
+  probs <- c(0.025, 0.5, 0.975)
+  out_dir <- withr::local_tempdir()
+  dir.create(file.path(out_dir, "2_calibration"))
+  dir.create(file.path(out_dir, "1_inputs"))
+  saveRDS(list(cases_array = array(1, dim = c(nL, Tn, 1L, 1L)),
+               location_names = c("AAA", "BBB"), date_start = "2024-01-01"),
+          file.path(out_dir, "2_calibration", "ensemble_candidate.rds"))
+  jsonlite::write_json(list(), file.path(out_dir, "1_inputs", "priors.json"))
+  jsonlite::write_json(list(control = list(sampling = list())),
+                       file.path(out_dir, "1_inputs", "control.json"))
+
+  fake_resim <- function(...) {
+    mk <- function(v) matrix(v, nL, Tn)
+    central <- list(R_eff = mk(1.5), R_hum = mk(1), R_env = mk(0.5))
+    qmats <- lapply(central, function(m) array(rep(m, 3L), dim = c(nL, Tn, 3L)))
+    list(central = central, qmats = qmats, probs = probs, kernel_params = list(),
+         central_definition = "test", peak_Rt = NULL, peak_window = 7L,
+         medoid_member = 1L, gate_frac = 0.9, gate_rel_err_pct = 0,
+         gate_rel_err_max = 0, gate_agg_rel_err = 0, gate_cor_median = 1,
+         gate_cor_min = 1, gate_max_abs_diff = 0, gate_n_outliers = 0L,
+         n_members = 1L)
+  }
+  testthat::local_mocked_bindings(.mosaic_reff_resim_ci = fake_resim,
+                                  get_paths = function(...) list(),
+                                  .package = "MOSAIC")
+
+  out <- MOSAIC:::.add_reff_recompute_ci(out_dir, base_config = list(),
+                                         burn_in_days = bid, verbose = FALSE)
+  val_cols <- c("central", "q2.5", "q50", "q97.5")
+  expect_true(all(val_cols %in% names(out)))
+  early <- out$t <= bid
+  expect_setequal(unique(out$estimand), c("R_eff", "R_hum", "R_env"))
+  for (col in val_cols) {
+    expect_true(all(is.na(out[[col]][early])), info = col)
+    expect_true(all(is.finite(out[[col]][!early])), info = col)
+  }
+  expect_true(all(is.na(attr(out, "central_matrix")[, seq_len(bid)])))
+  expect_true(all(is.finite(attr(out, "central_matrix")[, (bid + 1L):Tn])))
+  for (r in attr(out, "route_central"))
+    expect_true(all(is.na(r[, seq_len(bid)])))
+  expect_identical(attr(out, "burn_in_days"), bid)
 })
 
 # -----------------------------------------------------------------------------
@@ -98,6 +152,39 @@ test_that(".mosaic_reff_select_medoid_member picks the param set + stoch rerun n
   expect_equal(sel$param_idx, 2L)
   expect_equal(sel$stoch_idx, 2L)
   expect_equal(sel$member_id, (2L - 1L) * nP + 2L)   # = 5
+})
+
+test_that(".mosaic_reff_select_medoid_member agrees with run_MOSAIC's all-location medoid", {
+  # nL = 2: location 1 favours param set 1, the larger location 2 favours set 3.
+  # A location-1-only selector picks p = 1; run_MOSAIC's pooled, masked
+  # .mosaic_medoid_distances() picks p = 3, and the R_eff selector must follow it.
+  Tn <- 12L; nP <- 3L; nS <- 2L
+  c1 <- rep(10, Tn); c2 <- rep(1000, Tn)
+  ca <- array(NA_real_, dim = c(2L, Tn, nP, nS))
+  for (s in 1:2) {
+    ca[1, , 1, s] <- c1;       ca[2, , 1, s] <- c2 * 8
+    ca[1, , 2, s] <- c1 * 2;   ca[2, , 2, s] <- c2 * 3
+    ca[1, , 3, s] <- c1 * 1.6; ca[2, , 3, s] <- c2
+  }
+  cen <- rbind(c1, c2)
+  mask <- list(cases_warmup = 2L, deaths_final = TRUE, score_idx_cases = 3L)
+  d_run <- MOSAIC:::.mosaic_medoid_distances(ca, cen, mask)
+  sel <- MOSAIC:::.mosaic_reff_select_medoid_member(ca, cen, nP, nS, mask_spec = mask)
+  expect_identical(which.min(d_run), 3L)
+  expect_identical(sel$param_idx, which.min(d_run))
+})
+
+test_that(".mosaic_reff_select_medoid_member ignores the unscored head (artifact mask)", {
+  # Set 1 matches the central everywhere except a huge burn-in head; set 2 is
+  # close on the head and off afterwards. Scored from step 6, set 1 must win.
+  Tn <- 10L; nP <- 2L; nS <- 1L
+  cen <- matrix(rep(50, Tn), nrow = 1L)
+  ca <- array(NA_real_, dim = c(1L, Tn, nP, nS))
+  ca[1, , 1, 1] <- c(rep(5000, 5), rep(50, 5))
+  ca[1, , 2, 1] <- c(rep(50, 5), rep(80, 5))
+  mask <- list(cases_warmup = 0L, deaths_final = TRUE, score_idx_cases = 6L)
+  expect_identical(MOSAIC:::.mosaic_reff_select_medoid_member(ca, cen, nP, nS,
+                                                              mask_spec = mask)$param_idx, 1L)
 })
 
 test_that(".mosaic_reff_select_medoid_member returns NA when central is absent/mismatched", {
@@ -148,20 +235,25 @@ test_that("per-member peak R_t = post-burn-in time-max reduced by weighted_quant
 # -----------------------------------------------------------------------------
 # .mosaic_build_trajectories grid (Phase-2 fix): stride = 1 -> full daily grid
 # -----------------------------------------------------------------------------
-test_that("trajectory time-stride grid yields a full daily-consecutive set at stride 1", {
-  n_time_points <- 30L
-  # Reproduce the (fixed) grid expression used in .mosaic_build_trajectories().
-  t_idx1 <- seq.int(1L, n_time_points, by = max(1L, 1L))
-  expect_equal(t_idx1, seq_len(n_time_points))            # full daily set
-  expect_true(all(diff(t_idx1) == 1L))                    # daily-consecutive
+test_that(".mosaic_build_trajectories emits a full daily grid at stride 1 and day-1-anchored strides", {
+  # The old grid `which(seq_len(n) %% stride == 1L)` was EMPTY at stride 1.
+  n_t <- 30L
+  scratch <- withr::local_tempdir()
+  saveRDS(list(traj = list(S = matrix(as.numeric(seq_len(n_t)), nrow = 1L))),
+          file.path(scratch, "sim_1_1.rds"))
+  arr <- array(as.numeric(seq_len(n_t)), dim = c(1L, n_t, 1L, 1L))
+  build <- function(stride) MOSAIC:::.mosaic_build_trajectories(
+    scratch_dir = scratch, subset_orig_pidx = 1L, subset_weights = 1,
+    cases_array = arr, deaths_array = arr, n_stoch = 1L, n_locations = 1L,
+    n_time_points = n_t, location_names = "AAA", date_start = "2024-01-01",
+    date_stop = "2024-01-30", n_successful = 1L, obs_cases = NULL,
+    obs_deaths = NULL, trajectory_channels = "S", line_stride = stride,
+    verbose = FALSE)
 
-  t_idx7 <- seq.int(1L, n_time_points, by = 7L)
-  expect_equal(t_idx7, c(1L, 8L, 15L, 22L, 29L))
-  expect_true(t_idx7[1L] == 1L)                           # starts at day 1
-
-  # The OLD buggy form yielded an EMPTY set at stride 1.
-  old_stride1 <- which(seq_len(n_time_points) %% 1L == 1L)
-  expect_length(old_stride1, 0L)
+  t1 <- sort(unique(build(1L)$lines$t[build(1L)$lines$channel == "S"]))
+  expect_equal(t1, seq_len(n_t))
+  t7 <- sort(unique(build(7L)$lines$t))
+  expect_equal(t7, c(1L, 8L, 15L, 22L, 29L))
 })
 
 # -----------------------------------------------------------------------------
@@ -203,6 +295,7 @@ test_that(".mosaic_reff_resim_ci reduces real engine members into three estimand
                         n_simulations_per_config = nS,
                         location_names = base$location_name,
                         date_start = base$date_start,
+                        cases_mean = apply(ca, c(1, 2), mean),
                         cases_median = apply(ca, c(1, 2), stats::median)),
                    class = "mosaic_ensemble")
   local_mocked_bindings(
@@ -210,9 +303,12 @@ test_that(".mosaic_reff_resim_ci reduces real engine members into three estimand
     .mosaic_clamp_transmission_params = function(cfg) cfg,
     .package = "MOSAIC")
 
-  res <- MOSAIC:::.mosaic_reff_resim_ci(ens, base_config = base, priors = NULL,
-                                        sampling_args = NULL, PATHS = NULL,
-                                        burn_in_days = 10L, verbose = FALSE)
+  # Default cases_central_method is "mean" and the ensemble carries cases_mean
+  # (as calc_model_ensemble() output does), so the medoid target needs no fallback.
+  expect_no_warning(
+    res <- MOSAIC:::.mosaic_reff_resim_ci(ens, base_config = base, priors = NULL,
+                                          sampling_args = NULL, PATHS = NULL,
+                                          burn_in_days = 10L, verbose = FALSE))
   expect_equal(res$gate_rel_err_pct, 0)                 # bitwise-reproducible engine
   expect_named(res$central, c("R_eff", "R_hum", "R_env"))
   expect_equal(dim(res$qmats$R_eff), c(nL, Tn, 3L))

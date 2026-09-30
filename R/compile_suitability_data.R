@@ -86,10 +86,27 @@
 #'   re-baselining -- with a fixed anchor window a data refresh can no longer
 #'   shift the entire historical target series.
 #'
-#'   Default \code{NULL} = full-window anchors (back-compatible; the canonical
-#'   panel is unchanged). Note \code{target_F_rank_per_country} is a rank over
-#'   the country's whole observed series and is full-window BY CONSTRUCTION;
-#'   this argument does not and cannot make it leak-free.
+#'   Default \code{NULL} = full-window anchors (back-compatible). Note
+#'   \code{target_F_rank_per_country} is a rank over the country's whole
+#'   observed series and is full-window BY CONSTRUCTION; this argument does not
+#'   and cannot make it leak-free.
+#'
+#'   The panel records the effective anchor window end (the last trusted,
+#'   observed row used for the anchors) in a constant \code{target_anchor_stop}
+#'   column. \code{est_suitability()} warns when a \code{target_*} response is
+#'   fit with a cutoff earlier than this date.
+#'
+#'   \strong{Leakage scope.} \code{gam_train_stop} and
+#'   \code{target_anchor_stop} bound the hazard GAMs and the target anchors
+#'   only. Covariate standardisations are still computed over the whole panel
+#'   window, including rows after either bound: the week-of-year climatology
+#'   anomalies (\code{precip_anom}, \code{temp_anom},
+#'   \code{soil_moisture_anom}, ...), the per-country \code{spei_approx}
+#'   scaling, the precipitation p90 / temperature p95 extreme thresholds, and
+#'   the \code{emdat_flood_prob_anom} baseline. No post-cutoff case data enters
+#'   these, but in a per-cutoff panel the pre-cutoff values of those covariates
+#'   depend weakly on the post-cutoff climate distribution, so such a panel is
+#'   leak-free on the target and hazard side only.
 #'
 #' @return This function processes the data and merges the climate, ENSO, and cholera cases data into a single dataset. It creates a \code{cases_binary} column indicating environmental suitability based on case patterns using sophisticated temporal logic. The processed dataset is saved as a CSV file.
 #'
@@ -341,11 +358,11 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # rows from 2015 and 2020. Retained deliberately: removing it is a THREE-site
      # change, and two of those sites are hard stops that fire immediately --
      # R/est_suitability.R:349 and R/compile_suitability_data.R (the `53 %in% d$week`
-     # check near the end of this file), plus R/process_WHO_weekly_data.R:72-82,
-     # which folds every W53 case row into W52 with aggregate(sum). So the cases side
-     # structurally cannot emit W53 while climate and ENSO now can: dropping the
-     # filter today would yield climate+ENSO W53 rows with structurally-NA cases.
-     # All three sides currently agree; the filter just discards a coherent row.
+     # check near the end of this file), plus the cases side: process_WHO_weekly_data
+     # keeps WHO's own epi-week labels (MMWR calendar, not ISO), so a WHO W53 row
+     # (e.g. 2025-W53, dated 2025-12-29) is a real week that does NOT correspond to
+     # an ISO W53. Surveillance must be joined on date_start, not (year, week),
+     # before this filter can be dropped.
      # NOTE: W53 of 2026 IS inside the rebuilt panel window (2000-01-06..2027-02-04)
      # and is being dropped -- the previous claim that the horizon ended before it is
      # no longer true.
@@ -456,117 +473,34 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      is_ai <- if ("source" %in% names(d)) (!is.na(d$source) & d$source == "AI") else rep(FALSE, nrow(d))
 
      # ANCHOR WINDOW (target-side leakage hygiene; sibling of gam_train_stop).
-     # `in_anchor_window` additionally bounds the anchor rows ABOVE by
+     # .csd_anchor_rows() additionally bounds the anchor rows ABOVE by
      # target_anchor_stop. A per-cutoff panel keeps date_stop = NULL so it can
      # still predict past the cutoff, so without this bound the p99 that scales
      # the target at time t is computed from rows AFTER t. Every row of the
      # panel still receives a target; only the rows that DEFINE the scale are
      # restricted. NULL (default) = full window, bit-identical to before.
-     if (is.null(target_anchor_stop)) {
-          in_anchor_window <- rep(TRUE, nrow(d))
-     } else {
-          .tas <- as.Date(target_anchor_stop)
-          if (is.na(.tas))
-               stop("compile_suitability_data: target_anchor_stop must be a Date or ",
-                    "'YYYY-MM-DD' string; got '", target_anchor_stop, "'")
-          in_anchor_window <- !is.na(d$date) & d$date <= .tas
-          if (!any(in_anchor_window & !is_ai))
-               stop("compile_suitability_data: target_anchor_stop = ", format(.tas),
-                    " leaves zero trusted rows to anchor on (panel spans ",
-                    format(min(d$date, na.rm = TRUE)), " to ",
-                    format(max(d$date, na.rm = TRUE)), ").")
-          message(sprintf("  - Target anchors bounded at %s (%d of %d trusted rows)",
-                          format(.tas), sum(in_anchor_window & !is_ai), sum(!is_ai)))
-     }
-     is_anchor <- !is_ai & in_anchor_window
+     is_anchor <- .csd_anchor_rows(d, is_ai, target_anchor_stop)
 
-     # ---- transmission_intensity: reproduction of est_suitability() ----
-     # est_suitability() sets NA cases to 0 and negatives to 0, then normalizes by
-     # log1p of the 99th percentile of cases over MOSAIC countries. Reproduced here
-     # over TRUSTED MOSAIC rows so the column is invariant to include_ai AND remains
-     # bit-identical to production when include_ai = FALSE (all rows trusted).
-     # est_suitability()/the LSTM sandbox recompute their own target from `cases`, so
-     # this column is a diagnostic/back-compat alias and does NOT propagate NA.
-     ti_cases <- d$cases
-     ti_cases[is.na(ti_cases)] <- 0
-     ti_cases[ti_cases < 0]    <- 0
-     ti_anchor_mask <- (d$iso_code %in% iso_codes_mosaic) & is_anchor
-     ti_p99 <- stats::quantile(ti_cases[ti_anchor_mask], 0.99, na.rm = TRUE)
-     if (!is.finite(ti_p99) || ti_p99 <= 0) ti_p99 <- 1
-     d$transmission_intensity <- pmin(1.0, log1p(ti_cases) / log1p(ti_p99))
+     # transmission_intensity + candidate response variables A/B/C/D/F, scaled
+     # by anchors computed over the is_anchor rows (see .csd_response_targets).
+     d <- .csd_response_targets(d, is_anchor, iso_codes_mosaic)
 
-     # ---- Candidate response variables (A/B/C/D/F) ----
-     # These propagate NA where cases (or rate) is NA, so downstream consumers can
-     # drop unobserved weeks during training. Anchors use trusted rows only.
-
-     # Global anchors (trusted rows, within the anchor window).
-     global_p99_count <- stats::quantile(d$cases[is_anchor], 0.99, na.rm = TRUE)
-     if (!is.finite(global_p99_count) || global_p99_count <= 0) global_p99_count <- 1
-     global_p99_rate <- stats::quantile(d$rate[is_anchor], 0.99, na.rm = TRUE)
-     if (!is.finite(global_p99_rate) || global_p99_rate <= 0) global_p99_rate <- 1e-3
-
-     # A: count, global p99
-     d$target_A_count_global <- pmin(1, log1p(d$cases) / log1p(global_p99_count))
-     # C: per-capita rate, global p99
-     d$target_C_rate_global <- pmin(1, log1p(d$rate) / log1p(global_p99_rate))
-
-     # B, D, F: per-country variants
-     d$target_B_count_per_country        <- NA_real_
-     d$target_D_rate_per_country_floored <- NA_real_
-     d$target_F_rank_per_country         <- NA_real_
-
-     for (iso in unique(d$iso_code)) {
-          mask         <- d$iso_code == iso
-          trusted_mask <- mask & is_anchor       # trusted (non-AI) rows, within the anchor window
-          country_cases <- d$cases[mask]
-          country_rate  <- d$rate[mask]
-          # Anchors from trusted rows only (invariant to AI volume). Population is
-          # source-independent; use trusted rows for the same invariance.
-          anchor_cases <- d$cases[trusted_mask]
-          anchor_rate  <- d$rate[trusted_mask]
-          country_pop  <- stats::median(d$total_population[trusted_mask], na.rm = TRUE)
-
-          # cp99c: per-country case p99, floored at 1 (avoids div-by-zero for
-          # non-endemic countries).
-          cp99c <- max(stats::quantile(anchor_cases, 0.99, na.rm = TRUE), 1)
-          if (!is.finite(cp99c) || cp99c <= 0) cp99c <- 1
-
-          # cp99r: per-country rate p99, floored at the "5 cases/wk equivalent
-          # rate" (population-scaled). Keeps full per-country dynamic range even
-          # for low-incidence countries (e.g. TGO) without re-creating the
-          # flat-prediction problem a fixed 0.19/100k floor caused.
-          cases_eq_5 <- if (is.finite(country_pop) && country_pop > 0) {
-               5 / country_pop * 1e5
-          } else {
-               1e-3  # fallback if pop is bad — small floor to avoid log(0)
-          }
-          cp99r <- max(stats::quantile(anchor_rate, 0.99, na.rm = TRUE), cases_eq_5, na.rm = TRUE)
-          if (!is.finite(cp99r) || cp99r <= 0) cp99r <- cases_eq_5
-
-          # B/D applied to ALL rows in the country (incl AI), scored on the trusted anchor.
-          d$target_B_count_per_country[mask] <-
-               pmin(1, log1p(country_cases) / log1p(cp99c))
-          d$target_D_rate_per_country_floored[mask] <-
-               pmin(1, log1p(country_rate) / log1p(cp99r))
-
-          # F: per-country rank over ALL observed weeks (trusted AND AI), so AI
-          # observations receive a rank value like targets A-D. na.last="keep" leaves
-          # empty grid cells NA; divide by (n_obs + 1) so the max is < 1 (keeps
-          # qlogis() finite for any logit-domain consumer).
-          # NOTE: unlike A-D (which anchor on trusted rows and are therefore invariant
-          # to include_ai), F co-ranks the AI rows, so its values reflect the AI weeks
-          # present in the build.
-          n_obs_iso <- sum(!is.na(country_cases))
-          d$target_F_rank_per_country[mask] <-
-               rank(country_cases, ties.method = "average", na.last = "keep") /
-                    (n_obs_iso + 1)
-     }
+     # Record the EFFECTIVE anchor window end (last trusted, observed row that
+     # defined the A/B/C/D anchors) as a constant column. Without it a consumer
+     # cannot tell a full-window panel from a per-cutoff one, and a fit whose
+     # cutoff precedes this date trains on targets scaled by later outbreaks.
+     # .psi_build_data() compares it with the cutoff and warns.
+     d$target_anchor_stop <- .csd_anchor_stop(d, is_anchor)
 
      # 2. World Bank socioeconomic indicators (annual, forward-fill for future years)
      message("  - Adding socioeconomic indicators...")
 
      # GDP
-     gdp_path <- file.path(PATHS$DATA_PROCESSED, "world_bank", "GDP_data_world_bank.csv")
+     # Read the files process_WB_GDP_data() / process_WB_population_density_data()
+     # actually write (world_bank_*_data.csv). The legacy *_world_bank.csv names
+     # are a fallback only, so a World Bank refresh reaches the panel.
+     gdp_path <- .csd_world_bank_path(PATHS, "world_bank_GDP_data.csv",
+                                      "GDP_data_world_bank.csv")
      if (file.exists(gdp_path)) {
           gdp_data <- utils::read.csv(gdp_path, stringsAsFactors = FALSE)
           gdp_data <- gdp_data[, c("iso_code", "year", "GDP")]
@@ -581,7 +515,8 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      }
 
      # Population density
-     pop_density_path <- file.path(PATHS$DATA_PROCESSED, "world_bank", "population_density_data_world_bank.csv")
+     pop_density_path <- .csd_world_bank_path(PATHS, "world_bank_population_density_data.csv",
+                                              "population_density_data_world_bank.csv")
      if (file.exists(pop_density_path)) {
           pop_density_data <- utils::read.csv(pop_density_path, stringsAsFactors = FALSE)
           pop_density_data <- pop_density_data %>%
@@ -840,7 +775,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      message("Handling NA values in all covariates...")
 
      # List all numeric columns that might have NAs (exclude identifiers and dates)
-     exclude_cols <- c("iso_code", "year", "week", "month", "date", "source",
+     exclude_cols <- c("iso_code", "year", "week", "month", "date", "source", "source_deaths",
                       "cases", "deaths", "cases_binary",
                       # Surveillance quality/provenance + response variables: these
                       # are TARGET-side, not features. Their NAs are meaningful
@@ -1563,6 +1498,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                output_col     = "drought_prob",
                integrator_col = "drought_prob_26w_mean",
                gam_train_stop = gam_train_stop,
+               climate_obs_stop = MOSAIC:::.drought_climate_obs_stop(PATHS),
                diagnostics    = TRUE,
                diag_dir       = diag_dir_drt,
                verbose        = TRUE
@@ -1586,7 +1522,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # preserved by design rather than only incidentally via remaining_cols.
      # Absent columns are dropped by the final `%in% names(d)` filter, so this is
      # a no-op when a column is not present.
-     surveillance_meta_cols <- c("source", "confidence_weight", "disaggregation_method")
+     surveillance_meta_cols <- c("source", "source_deaths", "confidence_weight", "disaggregation_method")
 
      # 2. Temporal variables
      temporal_cols <- c("sin_annual", "cos_annual", "sin_biannual", "cos_biannual",
@@ -1886,4 +1822,158 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      path <- file.path(PATHS$DATA_CHOLERA_WEEKLY, 'cholera_country_weekly_suitability_data.csv')
      write.csv(d, file = path, row.names = FALSE)
      message("Processed suitability data saved here: ", path)
+}
+
+
+# Response-variable columns of the suitability panel: the diagnostic
+# transmission_intensity alias and the candidate targets A/B/C/D/F. Every
+# normalization anchor (ti_p99, the global count/rate p99s, the per-country
+# cp99c/cp99r and median population) is computed over the `is_anchor` rows only
+# (trusted, non-AI rows inside the anchor window; see .csd_anchor_rows), while
+# every row receives a value. Extracted from compile_suitability_data() so the
+# anchor arithmetic is tested on values rather than on a transcribed copy.
+#' @param d Panel with iso_code, date, cases, rate, total_population.
+#' @param is_anchor Logical, one per row: rows that define the anchors.
+#' @param iso_mosaic Character vector of MOSAIC ISO codes (anchor set for ti_p99).
+#' @return `d` with transmission_intensity and the five target_* columns added.
+#' @keywords internal
+#' @noRd
+.csd_response_targets <- function(d, is_anchor, iso_mosaic) {
+     # ---- transmission_intensity: diagnostic alias of the legacy target ----
+     # No package code reads this column: the frozen legacy path recomputes its
+     # own target from `cases`, and lstm_v2 maps response_var =
+     # "transmission_intensity" to its train-only "intensity" recipe. The ANCHOR
+     # reproduces the legacy v0.33 recipe exactly -- NA cases counted as 0 in the
+     # p99, over trusted MOSAIC rows -- so an OBSERVED week carries the value the
+     # legacy target gives it (bit-identical when include_ai = FALSE). An
+     # UNOBSERVED week (NA cases) is NA, like targets A-D: writing 0 there would
+     # publish fabricated "no transmission" weeks for any consumer that trains
+     # on the column directly.
+     ti_cases <- d$cases
+     ti_cases[is.na(ti_cases)] <- 0
+     ti_cases[ti_cases < 0]    <- 0
+     ti_anchor_mask <- (d$iso_code %in% iso_mosaic) & is_anchor
+     ti_p99 <- stats::quantile(ti_cases[ti_anchor_mask], 0.99, na.rm = TRUE)
+     if (!is.finite(ti_p99) || ti_p99 <= 0) ti_p99 <- 1
+     d$transmission_intensity <- pmin(1.0, log1p(ti_cases) / log1p(ti_p99))
+     d$transmission_intensity[is.na(d$cases)] <- NA_real_
+
+     # ---- Candidate response variables (A/B/C/D/F) ----
+     # These propagate NA where cases (or rate) is NA, so downstream consumers can
+     # drop unobserved weeks during training. Anchors use trusted rows only.
+
+     # Global anchors (trusted rows, within the anchor window).
+     global_p99_count <- stats::quantile(d$cases[is_anchor], 0.99, na.rm = TRUE)
+     if (!is.finite(global_p99_count) || global_p99_count <= 0) global_p99_count <- 1
+     global_p99_rate <- stats::quantile(d$rate[is_anchor], 0.99, na.rm = TRUE)
+     if (!is.finite(global_p99_rate) || global_p99_rate <= 0) global_p99_rate <- 1e-3
+
+     # A: count, global p99
+     d$target_A_count_global <- pmin(1, log1p(d$cases) / log1p(global_p99_count))
+     # C: per-capita rate, global p99
+     d$target_C_rate_global <- pmin(1, log1p(d$rate) / log1p(global_p99_rate))
+
+     # B, D, F: per-country variants
+     d$target_B_count_per_country        <- NA_real_
+     d$target_D_rate_per_country_floored <- NA_real_
+     d$target_F_rank_per_country         <- NA_real_
+
+     for (iso in unique(d$iso_code)) {
+          mask         <- d$iso_code == iso
+          trusted_mask <- mask & is_anchor       # trusted (non-AI) rows, within the anchor window
+          country_cases <- d$cases[mask]
+          country_rate  <- d$rate[mask]
+          # Anchors from trusted rows only (invariant to AI volume). Population is
+          # source-independent; use trusted rows for the same invariance.
+          anchor_cases <- d$cases[trusted_mask]
+          anchor_rate  <- d$rate[trusted_mask]
+          country_pop  <- stats::median(d$total_population[trusted_mask], na.rm = TRUE)
+
+          # cp99c: per-country case p99, floored at 1 (avoids div-by-zero for
+          # non-endemic countries).
+          cp99c <- max(stats::quantile(anchor_cases, 0.99, na.rm = TRUE), 1)
+          if (!is.finite(cp99c) || cp99c <= 0) cp99c <- 1
+
+          # cp99r: per-country rate p99, floored at the "5 cases/wk equivalent
+          # rate" (population-scaled). Keeps full per-country dynamic range even
+          # for low-incidence countries (e.g. TGO) without re-creating the
+          # flat-prediction problem a fixed 0.19/100k floor caused.
+          cases_eq_5 <- if (is.finite(country_pop) && country_pop > 0) {
+               5 / country_pop * 1e5
+          } else {
+               1e-3  # fallback if pop is bad — small floor to avoid log(0)
+          }
+          cp99r <- max(stats::quantile(anchor_rate, 0.99, na.rm = TRUE), cases_eq_5, na.rm = TRUE)
+          if (!is.finite(cp99r) || cp99r <= 0) cp99r <- cases_eq_5
+
+          # B/D applied to ALL rows in the country (incl AI), scored on the trusted anchor.
+          d$target_B_count_per_country[mask] <-
+               pmin(1, log1p(country_cases) / log1p(cp99c))
+          d$target_D_rate_per_country_floored[mask] <-
+               pmin(1, log1p(country_rate) / log1p(cp99r))
+
+          # F: per-country rank over ALL observed weeks (trusted AND AI), so AI
+          # observations receive a rank value like targets A-D. na.last="keep" leaves
+          # empty grid cells NA; divide by (n_obs + 1) so the max is < 1 (keeps
+          # qlogis() finite for any logit-domain consumer).
+          # NOTE: unlike A-D (which anchor on trusted rows and are therefore invariant
+          # to include_ai), F co-ranks the AI rows, so its values reflect the AI weeks
+          # present in the build.
+          n_obs_iso <- sum(!is.na(country_cases))
+          d$target_F_rank_per_country[mask] <-
+               rank(country_cases, ties.method = "average", na.last = "keep") /
+                    (n_obs_iso + 1)
+     }
+
+     d
+}
+
+
+# Rows that DEFINE the target anchors: trusted (non-AI) rows, bounded above by
+# target_anchor_stop when given (NULL = full window).
+#' @keywords internal
+#' @noRd
+.csd_anchor_rows <- function(d, is_ai, target_anchor_stop = NULL) {
+     if (is.null(target_anchor_stop)) return(!is_ai)
+     .tas <- as.Date(target_anchor_stop)
+     if (is.na(.tas))
+          stop("compile_suitability_data: target_anchor_stop must be a Date or ",
+               "'YYYY-MM-DD' string; got '", target_anchor_stop, "'")
+     in_anchor_window <- !is.na(d$date) & d$date <= .tas
+     if (!any(in_anchor_window & !is_ai))
+          stop("compile_suitability_data: target_anchor_stop = ", format(.tas),
+               " leaves zero trusted rows to anchor on (panel spans ",
+               format(min(d$date, na.rm = TRUE)), " to ",
+               format(max(d$date, na.rm = TRUE)), ").")
+     message(sprintf("  - Target anchors bounded at %s (%d of %d trusted rows)",
+                     format(.tas), sum(in_anchor_window & !is_ai), sum(!is_ai)))
+     !is_ai & in_anchor_window
+}
+
+# Effective anchor window end recorded in the panel's target_anchor_stop column:
+# the last anchor row with observed cases ("YYYY-MM-DD"), NA if there is none.
+#' @keywords internal
+#' @noRd
+.csd_anchor_stop <- function(d, is_anchor) {
+     anchor_obs <- is_anchor & !is.na(d$cases)
+     if (any(anchor_obs)) format(max(d$date[anchor_obs])) else NA_character_
+}
+
+# Resolve a processed World Bank file: prefer the name the process_WB_*()
+# processor writes; fall back to the legacy name (with a message) only when the
+# current file is absent. Returns the current path when neither exists, so the
+# caller's file.exists() guard skips the block exactly as before.
+#' @keywords internal
+#' @noRd
+.csd_world_bank_path <- function(PATHS, current, legacy) {
+     dir_wb   <- file.path(PATHS$DATA_PROCESSED, "world_bank")
+     p_cur    <- file.path(dir_wb, current)
+     p_legacy <- file.path(dir_wb, legacy)
+     if (file.exists(p_cur)) return(p_cur)
+     if (file.exists(p_legacy)) {
+          message(sprintf("    %s not found; using legacy %s (re-run the process_WB_*() processor to refresh)",
+                          current, legacy))
+          return(p_legacy)
+     }
+     p_cur
 }

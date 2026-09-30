@@ -49,7 +49,7 @@
 # =============================================================================
 
 suppressMessages({
-     root <- Sys.getenv("MOSAIC_ROOT", unset = "/Users/johngiles/MOSAIC")
+     root <- Sys.getenv("MOSAIC_ROOT", unset = path.expand("~/MOSAIC"))
      MOSAIC::set_root_directory(root)
      library(MOSAIC)
 })
@@ -127,6 +127,8 @@ SPEC <- list(
 
      # --- models + central tendency -------------------------------------------
      models         = c("ensemble", "ensemble_opt", "medoid"),
+     # "median" reproduces the original (pre-v0.98.0) experiment; the package
+     # default is now "mean" (run_rolling_cv(), control$predictions).
      central_method = "median",
 
      # --- output --------------------------------------------------------------

@@ -13,7 +13,7 @@
 #' @source The data used by this function is sourced from the WHO ICG (International Coordinating Group on Vaccine Provision) dashboard,
 #' which can be accessed via the following Power BI link: \url{https://app.powerbi.com/view?r=eyJrIjoiYmFmZTBmM2EtYWM3Mi00NWYwLTg3YjgtN2Q0MjM5ZmE1ZjFkIiwidCI6ImY2MTBjMGI3LWJkMjQtNGIzOS04MTBiLTNkYzI4MGFmYjU5MCIsImMiOjh9}
 #'
-#' @return A data frame containing the processed WHO vaccination request data. The function also prints summary information,
+#' @return Invisibly, a data frame containing the processed WHO vaccination request data. The function also prints summary information,
 #' including the total number of observations, total requested doses, approved doses, shipped doses, and the start and end dates of the requests.
 #'
 #' @details
@@ -23,7 +23,9 @@
 #'   \item Extracts relevant columns such as Year, Country, Request Number, Status, Context, Decision Date, Doses Requested, Approved, and Shipped.
 #'   \item Handles missing values and checks for duplicated rows, removing duplicates and printing which rows were removed.
 #'   \item Summarizes the data, printing the total number of observations, total doses requested, approved, and shipped, as well as the first and last decision dates.
-#'   \item Saves the processed vaccination data to a CSV file in the location specified by the \code{PATHS} argument.
+#'   \item Saves the table as a new dated snapshot \code{who_vaccination_data_snapshot_<date>.csv} under
+#'     \code{PATHS$DATA_SCRAPE_WHO_VACCINATION} (atomically, logged in \code{PROVENANCE.md}), only when its
+#'     content differs from the newest existing file. Existing files are never modified.
 #' }
 #'
 #' @examples
@@ -415,9 +417,60 @@ message("Processing raw text")
      message("Total doses approved: ", sum(who_data$doses_approved, na.rm = TRUE))
      message("Total doses shipped: ", sum(who_data$doses_shipped, na.rm = TRUE))
 
-     data_path <- file.path(PATHS$DATA_SCRAPE_WHO_VACCINATION, "who_vaccination_data.csv")
-     write.csv(who_data, data_path, row.names = FALSE)
-     message(paste("Raw vaccination data saved to:", data_path))
+     # MOSAIC-data/raw/ writer rules (root CLAUDE.md): dated, atomic, logged,
+     # never overwritten. The table is rebuilt from the strings above, so a
+     # new dated snapshot is written only when its content differs from the
+     # newest existing one; process_WHO_vaccination_data() reads the newest.
+     dir.create(PATHS$DATA_SCRAPE_WHO_VACCINATION, recursive = TRUE, showWarnings = FALSE)
+     tmp <- tempfile(fileext = ".csv")
+     on.exit(unlink(tmp), add = TRUE)
+     utils::write.csv(who_data, tmp, row.names = FALSE)
+     latest <- .who_vaccination_latest_file(PATHS$DATA_SCRAPE_WHO_VACCINATION)
+     if (!is.null(latest) &&
+         identical(unname(tools::md5sum(tmp)), unname(tools::md5sum(latest)))) {
+          message(paste("WHO vaccination data unchanged; kept:", latest))
+     } else {
+          data_path <- .who_vaccination_snapshot_path(PATHS$DATA_SCRAPE_WHO_VACCINATION)
+          .write_file_atomic(data_path, function(t) file.copy(tmp, t, overwrite = TRUE))
+          .append_raw_provenance(
+               PATHS$DATA_SCRAPE_WHO_VACCINATION, data_path, nrow(who_data), ncol(who_data),
+               "WHO ICG OCV request/approval/shipment table transcribed in get_WHO_vaccination_data().",
+               title = "WHO vaccination snapshot provenance log")
+          message(paste("WHO vaccination data saved to:", data_path))
+     }
+
+     invisible(who_data)
 
 }
 
+
+
+#' Newest WHO vaccination table under the raw directory
+#'
+#' Dated snapshots (\code{who_vaccination_data_snapshot_<date>[_HHMMSS].csv})
+#' win, newest first; the legacy undated \code{who_vaccination_data.csv} is
+#' the fallback.
+#'
+#' @param dir Directory (\code{PATHS$DATA_SCRAPE_WHO_VACCINATION}).
+#' @return Path to the newest file, or NULL if none exists.
+#' @keywords internal
+#' @noRd
+.who_vaccination_latest_file <- function(dir) {
+     snaps <- list.files(dir, pattern = "^who_vaccination_data_snapshot_\\d{4}-\\d{2}-\\d{2}(_\\d{6})?\\.csv$",
+                         full.names = TRUE)
+     if (length(snaps)) return(sort(snaps, decreasing = TRUE)[1L])
+     legacy <- file.path(dir, "who_vaccination_data.csv")
+     if (file.exists(legacy)) legacy else NULL
+}
+
+
+#' Unused dated path for a new WHO vaccination snapshot (never an existing file)
+#' @keywords internal
+#' @noRd
+.who_vaccination_snapshot_path <- function(dir, now = Sys.time()) {
+     f <- file.path(dir, sprintf("who_vaccination_data_snapshot_%s.csv", format(now, "%Y-%m-%d")))
+     if (!file.exists(f)) return(f)
+     f <- file.path(dir, sprintf("who_vaccination_data_snapshot_%s.csv", format(now, "%Y-%m-%d_%H%M%S")))
+     if (file.exists(f)) stop("WHO vaccination snapshot already exists: ", f, call. = FALSE)
+     f
+}

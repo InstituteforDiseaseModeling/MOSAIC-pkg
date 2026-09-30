@@ -34,17 +34,16 @@ same length as \code{samples1}. If NULL, uniform weights are used.}
 \item{weights2}{Numeric vector of weights for \code{samples2}. Must be the
 same length as \code{samples2}. If NULL, uniform weights are used.}
 
-\item{n_points}{Integer specifying the number of points for kernel density
-estimation. Higher values provide more accurate estimates but require more
-computation. Default is 1000.}
+\item{n_points}{Integer minimum number of grid points over the support of \code{samples1} (default 1000); the grid is refined further when needed to resolve the P bandwidth.}
 
-\item{eps}{Numeric value for numerical stability. Small positive value added
-to densities to avoid log(0). Default is 1e-10.}
+\item{eps}{Numeric floor applied to the Q density before taking logs (default 1e-10).}
 }
 \value{
 A non-negative numeric value representing the KL divergence.
 Returns 0 when the distributions are identical, and larger values
-indicate greater divergence.
+indicate greater divergence. Returns \code{NA} with a warning when either
+weight vector has Kish effective sample size below 2 (the KDE bandwidth
+is then undefined).
 }
 \description{
 Computes the Kullback-Leibler (KL) divergence between two probability
@@ -53,14 +52,24 @@ how one probability distribution diverges from a reference distribution.
 }
 \details{
 The KL divergence KL(P||Q) is calculated as:
-\deqn{KL(P||Q) = \sum_i P(x_i) \log(P(x_i) / Q(x_i))}
+\deqn{KL(P||Q) = \int p(x) \log(p(x) / q(x)) dx}
 
 where P represents the distribution from \code{samples1} and Q represents
 the distribution from \code{samples2}.
 
-The function uses weighted kernel density estimation to approximate the
-continuous distributions from the discrete samples, then evaluates the
-KL divergence using numerical integration.
+Both densities are weighted kernel density estimates whose bandwidths use
+the weighted Silverman rule with the Kish effective sample size
+\eqn{n_{eff} = (\sum w)^2 / \sum w^2}, so a concentrated weight vector
+yields a narrow density even when the draws are spread out (with equal
+weights this is \code{stats::bw.nrd0()}). The integral
+\eqn{\int p \log(p/q)} is evaluated by the trapezoidal rule on a grid over
+the support of P only (where the integrand is non-zero), with Q interpolated
+from a full-range KDE, so the value does not level off at
+\code{log(n_points)} when P is much narrower than Q.
+
+Before v0.100.0 both densities used unweighted bandwidths on one grid over
+the pooled range and the densities were renormalised as discrete
+probabilities, so a narrow P saturated near \code{log(n_points)}.
 
 Note that KL divergence is not symmetric: KL(P||Q) ≠ KL(Q||P).
 }

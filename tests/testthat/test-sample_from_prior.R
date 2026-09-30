@@ -2,15 +2,12 @@
 
 library(testthat)
 
-# Source the function
-if (file.exists("../../R/sample_from_prior.R")) source("../../R/sample_from_prior.R")
-
-# Helper to check if rgompertz exists (from fit_gompertz_from_ci.R)
-if (file.exists("../../R/fit_gompertz_from_ci.R")) {
-  source("../../R/fit_gompertz_from_ci.R")
-}
+# Moment checks below are seeded (withr::local_seed) and use a tolerance of
+# 4 standard errors of the sample statistic (n = 100 draws), so they neither
+# flake nor pass vacuously.
 
 test_that("sample_from_prior handles beta distribution", {
+  withr::local_seed(20260930)
   prior <- list(
     distribution = "beta",
     parameters = list(shape1 = 2, shape2 = 5)
@@ -28,10 +25,12 @@ test_that("sample_from_prior handles beta distribution", {
   
   # Check approximate mean
   expected_mean <- 2 / (2 + 5)  # shape1 / (shape1 + shape2)
-  expect_true(abs(mean(results) - expected_mean) < 0.1)
+  beta_sd <- sqrt(2 * 5 / ((2 + 5)^2 * (2 + 5 + 1)))
+  expect_lt(abs(mean(results) - expected_mean), 4 * beta_sd / sqrt(100))
 })
 
 test_that("sample_from_prior handles gamma distribution", {
+  withr::local_seed(20260930)
   prior <- list(
     distribution = "gamma",
     parameters = list(shape = 2, rate = 1)
@@ -47,7 +46,7 @@ test_that("sample_from_prior handles gamma distribution", {
   
   # Check approximate mean (shape/rate)
   expected_mean <- 2 / 1
-  expect_true(abs(mean(results) - expected_mean) < 0.5)
+  expect_lt(abs(mean(results) - expected_mean), 4 * sqrt(2) / sqrt(100))
 })
 
 test_that("sample_from_prior handles lognormal with meanlog/sdlog", {
@@ -66,6 +65,7 @@ test_that("sample_from_prior handles lognormal with meanlog/sdlog", {
 })
 
 test_that("sample_from_prior handles lognormal with mean/sd", {
+  withr::local_seed(20260930)
   prior <- list(
     distribution = "lognormal",
     parameters = list(mean = 10, sd = 2)
@@ -80,10 +80,11 @@ test_that("sample_from_prior handles lognormal with mean/sd", {
   expect_true(all(results > 0))
   
   # Check approximate mean
-  expect_true(abs(mean(results) - 10) < 2)
+  expect_lt(abs(mean(results) - 10), 4 * 2 / sqrt(100))
 })
 
 test_that("sample_from_prior handles normal distribution", {
+  withr::local_seed(20260930)
   prior <- list(
     distribution = "normal",
     parameters = list(mean = 5, sd = 1)
@@ -97,11 +98,12 @@ test_that("sample_from_prior handles normal distribution", {
   expect_length(results, 100)
   
   # Check approximate mean and sd
-  expect_true(abs(mean(results) - 5) < 0.3)
-  expect_true(abs(sd(results) - 1) < 0.3)
+  expect_lt(abs(mean(results) - 5), 4 * 1 / sqrt(100))
+  expect_lt(abs(sd(results) - 1), 4 * 1 / sqrt(2 * (100 - 1)))
 })
 
 test_that("sample_from_prior handles uniform distribution", {
+  withr::local_seed(20260930)
   prior <- list(
     distribution = "uniform",
     parameters = list(min = 2, max = 8)
@@ -117,7 +119,7 @@ test_that("sample_from_prior handles uniform distribution", {
   
   # Check approximate mean (min + max) / 2
   expected_mean <- (2 + 8) / 2
-  expect_true(abs(mean(results) - expected_mean) < 0.5)
+  expect_lt(abs(mean(results) - expected_mean), 4 * (6 / sqrt(12)) / sqrt(100))
 })
 
 test_that("sample_from_prior handles NULL priors", {
@@ -213,6 +215,7 @@ test_that("verbose option works correctly", {
 })
 
 test_that("sample_from_prior handles truncated normal distribution", {
+  withr::local_seed(20260930)
   # Test basic functionality
   prior <- list(
     distribution = "truncnorm",
@@ -237,7 +240,8 @@ test_that("sample_from_prior handles truncated normal distribution", {
   expect_false(any(is.na(results)))
 
   # Check approximate mean (should be close to 0 for symmetric bounds)
-  expect_true(abs(mean(results)) < 0.3)
+  # sd of N(0, 1) truncated to [-2, 2] is < 1, so 4 / sqrt(n) bounds 4 SE
+  expect_lt(abs(mean(results)), 4 * 1 / sqrt(100))
 
   # Test with asymmetric bounds
   prior_asym <- list(

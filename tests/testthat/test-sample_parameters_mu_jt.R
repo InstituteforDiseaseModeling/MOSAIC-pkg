@@ -9,7 +9,7 @@
 # =============================================================================
 
 library(testthat)
-tryCatch(MOSAIC::set_root_directory("~/MOSAIC"), error = function(e) NULL)
+local_test_root()  # scoped to this file; see helper-skips.R
 
 .RETIRED <- c("CFR_target", "mu_j_baseline", "mu_j_epidemic_factor", "mu_j_slope", "delta_reporting_deaths")
 

@@ -37,7 +37,7 @@ Invisibly returns \code{NULL}. Side effects:
 \item Reads weekly CSVs from all three sources and adds a \code{source} column.
 \item Cleans rows with missing key grouping fields (iso_code, year, week).
 \item Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).
-\item Deduplicates by \code{iso_code} and \code{date_start} (the actual ISO-week Monday, robust to year-boundary week-1 collisions) using the fixed priority WHO > JHU > AI > SUPP with a completeness tie-break.
+\item Deduplicates by \code{iso_code} and \code{date_start} (the actual week Monday, robust to year-boundary week-1 collisions): observed beats imputed, then the fixed priority WHO > JHU > AI > SUPP (see Details), and adds \code{source_deaths}.
 \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 \item Saves the combined weekly data to
 \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
@@ -52,7 +52,7 @@ low-confidence reconstructed weeks inform the fit at reduced weight rather
 than being dropped.
 \item Downscales weekly \code{cases} and \code{deaths} to daily counts,
 preserving square structure (keeping days with NA), and carries \code{source},
-\code{disaggregation_method}, and \code{confidence_weight} to each daily row
+\code{source_deaths}, \code{disaggregation_method}, and \code{confidence_weight} to each daily row
 (the weight is replicated constant across the week, never divided).
 \item Saves the combined daily data to
 \code{PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv}.
@@ -66,8 +66,15 @@ from min to max date across the entire dataset, and downscales the combined week
 using \code{MOSAIC::downscale_weekly_values} with integer allocation.
 }
 \details{
-Duplicate country-week entries across sources are resolved by a fixed
-priority \strong{WHO > JHU > AI > SUPP}, with a completeness tie-break: within
-a key, rows with complete cases AND deaths are preferred before the source
-priority is applied.
+Duplicate country-week entries across sources are resolved by
+selecting one whole row per week: a row carrying a count beats an empty one;
+an observed row (WHO/JHU/SUPP, or AI \code{observed}/\code{documented_zero})
+beats an imputed one (AI \code{fourier_*} or any other modelled method),
+whatever the sources; a row with a case count beats a deaths-only row; and
+the fixed priority \strong{WHO > JHU > AI > SUPP} decides the rest. When the
+selected row has no death count, the deaths of the highest-priority other
+observed row reporting the same case count that week are used (the same
+report, compared after half-up rounding) and the week keeps the lower of the
+two rows' \code{confidence_weight}; \code{source_deaths} names the source
+of each death count.
 }

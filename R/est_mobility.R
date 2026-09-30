@@ -275,6 +275,17 @@ est_mobility <- function(PATHS,
 
 
      #--------------------------------------------------------------------------
+     # Align D and N to the countries kept in M. The blend / fused_raked /
+     # fused branches restrict M to the countries shared with the air matrix;
+     # D and N are built for every MOSAIC country, so without this the check
+     # below stopped on a dimension mismatch whenever coverage was partial.
+     #--------------------------------------------------------------------------
+
+     .mobility_align <- .est_mobility_align_to(rownames(M), D, N)
+     D <- .mobility_align$D
+     N <- .mobility_align$N
+
+     #--------------------------------------------------------------------------
      # Check that dimensions match
      #--------------------------------------------------------------------------
 
@@ -444,4 +455,20 @@ est_mobility <- function(PATHS,
      message("Matrices and parameter estimates saved here:")
      message(PATHS$MODEL_INPUT)
 
+}
+
+
+# Subset a distance matrix D and population vector N to the ISO codes `iso`
+# (the rows of the mobility matrix), in that order. Stops if any code is
+# missing from D or N.
+.est_mobility_align_to <- function(iso, D, N) {
+     missing_D <- setdiff(iso, rownames(D))
+     missing_N <- setdiff(iso, names(N))
+     if (length(missing_D) || length(missing_N)) {
+          stop("Mobility matrix countries missing from ",
+               if (length(missing_D)) paste0("D (", paste(missing_D, collapse = ", "), ") ") else "",
+               if (length(missing_N)) paste0("N (", paste(missing_N, collapse = ", "), ")") else "",
+               call. = FALSE)
+     }
+     list(D = D[iso, iso, drop = FALSE], N = N[iso])
 }

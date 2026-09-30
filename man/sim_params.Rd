@@ -17,8 +17,9 @@ compartments \code{Census} sums and which parameters are required.}
 parity harness); decides which mortality inputs are read.}
 }
 \value{
-A list of validated engine parameters, including the original
-(normalised) config under \code{$config}.
+A list of validated engine parameters, including the config as
+supplied (a file path is parsed, a list is kept unchanged) under
+\code{$config}.
 }
 \description{
 Python's \code{params.py} is 1,009 lines, and it is tempting to call it

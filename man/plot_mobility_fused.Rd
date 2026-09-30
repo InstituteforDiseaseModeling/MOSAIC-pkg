@@ -39,7 +39,8 @@ scale. Shows what each source contributes.}
 outflow reaching a land neighbour, air vs fused. The single scalar that
 captures what the method fixes.}
 \item{\code{fused_od_3_tau_prior.png}}{Daily departure probability, air fit
-vs overland prior with 95\% intervals, log scale.}
+vs overland prior (the rake target) with 95\% intervals, log scale. Read
+from the unsuffixed prior files, so \code{suffix} does not affect it.}
 \item{\code{fused_od_4_corridors.png}}{Dominant destination per origin drawn
 on the map, air vs fused.}
 }

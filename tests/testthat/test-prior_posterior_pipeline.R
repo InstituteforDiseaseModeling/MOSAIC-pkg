@@ -13,7 +13,7 @@ test_that(".mosaic_dist_core_fields returns complete canonical field list", {
                      "uniform", "gompertz", "fixed", "frozen") %in% names(fields)))
   expect_equal(fields$beta, c("shape1", "shape2"))
   expect_equal(fields$gamma, c("shape", "rate"))
-  expect_equal(fields$lognormal, c("meanlog", "sdlog"))
+  expect_equal(fields$lognormal, c("meanlog", "sdlog", "lower", "upper"))
   expect_equal(fields$truncnorm, c("mean", "sd", "a", "b"))
   expect_equal(fields$gompertz, c("b", "eta"))
   expect_equal(fields$fixed, c("value"))

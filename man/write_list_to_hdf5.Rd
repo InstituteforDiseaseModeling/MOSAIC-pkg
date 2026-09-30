@@ -14,7 +14,7 @@ write_list_to_hdf5(
 \arguments{
 \item{data_list}{A named list containing the data to write.}
 
-\item{file_path}{A character string specifying the full file path, including file extension (.h5 or .h5.gz).}
+\item{file_path}{A character string specifying the full file path, including file extension (.h5, .hdf5, .h5.gz or .hdf5.gz).}
 
 \item{compress_chunks}{Logical. If TRUE, applies internal dataset compression (level 9).}
 
@@ -24,5 +24,5 @@ write_list_to_hdf5(
 No value returned. Prints message upon successful writing.
 }
 \description{
-Writes an R list to an HDF5 file (.h5 or .h5.gz) format.
+Writes an R list to an HDF5 file (.h5, .hdf5, .h5.gz or .hdf5.gz) format.
 }

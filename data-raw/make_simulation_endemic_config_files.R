@@ -9,13 +9,14 @@
 #   survive long enough in water to re‑seed infection after vaccine‑ and
 #   infection‑derived immunity wanes.
 # ▸ Key levers:
-#     • 15‑year time span (2020‑01‑01 → 2034‑12‑31).
+#     • 5-year time span (2020-01-01 -> 2024-12-31).
 #     • Environmental suitability `psi_jt` fluctuates annually **and** on a
 #       4‑year cycle.
 #     • Longer environmental half‑life (`decay_days_long = 365`).
-#     • Moderate immunity waning (ω₁, ω₂ ≈ 1 / 180 days ≈ 0.0056).
-#     • Immunity coverage at t0: 30 % vaccinated, 20 % recovered, 2 % exposed /
-#       infected, 48 % susceptible.
+#     • Moderate vaccine-immunity waning (ω₁ = 0.0056 ≈ 1 / 180 days for one dose,
+#       ω₂ = 0.0033 ≈ 1 / 300 days for two doses).
+#     • Immunity coverage at t0: 30 % one-dose vaccinated, 10 % susceptible,
+#       0.125 % infected (E and I floored at 1 per patch), remainder (~60 %) recovered.
 #
 # Output
 #   inst/extdata/config_simulation_endemic.json
@@ -74,12 +75,12 @@ nu_1_jt <- nu_2_jt <- matrix(0, n_loc, T_len, dimnames = list(j, t))
 
 # --------------------------- 4. Transmission (human‑to‑human) ------------- #
 
-baseline_beta <- runif(n_loc, 0.25, 0.32)     # slightly lower than sim1
+baseline_beta <- runif(n_loc, 0.25, 0.32)     # overwritten below; kept so the RNG stream (phase_shift) is unchanged
 baseline_beta <- c(0.3, 0.5, 0.4)*0.6
 amp_beta      <- 0.2                         # annual amplitude
 phase_shift   <- runif(n_loc, 0, 2 * pi)
 
-# laser-cholera v0.13+ requires beta_j0_tot and p_beta. Derive beta_j0_hum and
+# make_simulation_config() requires beta_j0_tot and p_beta. Derive beta_j0_hum and
 # beta_j0_env from them so make_simulation_config()'s tolerance check
 # (|beta_j0_hum - p_beta * beta_j0_tot| < 1e-10) passes.
 beta_j0_tot_sim <- baseline_beta * 1.5                  # hum + env
@@ -111,7 +112,7 @@ psi_jt <- matrix(NA_real_, n_loc, T_len, dimnames = list(j, t))
 for (idx in seq_len(n_loc)) {
      annual     <- 0.25 * sin(2 * pi * seq_len(T_len) / 365 + phase_shift[idx])
      quad_year  <- 0.15 * sin(2 * pi * seq_len(T_len) / (365 * 4) + phase_shift[idx]/2)
-     psi_raw    <- 0.45 + annual + quad_year       # baseline 0.55
+     psi_raw    <- 0.45 + annual + quad_year       # baseline 0.45 (generated psi_jt: 0.06-0.85, mean 0.47)
      psi_jt[idx, ] <- pmax(0, pmin(1, psi_raw))
 }
 
@@ -150,7 +151,7 @@ sim_args <- list(
      phi_1            = 0.64,
      phi_2            = 0.85,
      omega_1          = 0.0056,    # ≈ 1 / 180 days (moderate waning)
-     omega_2          = 0.0033,
+     omega_2          = 0.0033,    # ≈ 1 / 300 days (two-dose immunity wanes slower)
      nu_jt_sources    = c("S", "E", "Isym", "Iasym", "R"),
      iota             = 1 / 1.4,
      gamma_1          = 0.20,
@@ -159,7 +160,7 @@ sim_args <- list(
      mu_jt            = 0.02,      # Reported CFR (2%, constant); the engine draws deaths at onset from it
      chi_endemic      = 0.5,       # PPV during endemic periods
      chi_epidemic     = 0.75,      # PPV during epidemic periods
-     epidemic_threshold = 0.0001,  # incidence threshold for epidemic definition
+     epidemic_threshold = 0.0001,  # Isym/N prevalence above which reported cases use chi_epidemic
      rho              = 0.52,
      rho_deaths       = 0.42,      # Death detection rate (laser-cholera#49; mean of informative Beta(36.95, 51.02))
      sigma            = 0.24,
@@ -177,9 +178,9 @@ sim_args <- list(
      b_1_j            = b_1_j,
      b_2_j            = b_2_j,
      p                = p,
-     alpha_1          = 0.90,      # slightly lower protection → faster loss
+     alpha_1          = 0.90,      # FOI mixing exponent on the infectious term (1 = well mixed)
      alpha_2          = 0.90,
-     beta_j0_env      = beta_j0_env_sim,      # stronger env. contribution
+     beta_j0_env      = beta_j0_env_sim,      # 1/3 of beta_j0_tot (p_beta = 2/3)
      theta_j          = theta_j,
      psi_jt           = psi_jt,
      psi_star_a       = rep(1, n_loc),    # Identity gain (no calibration)

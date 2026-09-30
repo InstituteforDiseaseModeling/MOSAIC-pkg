@@ -54,8 +54,9 @@ asymptomatic stool-volume measurement exists.
 on a single primary source (Nelson 2009). The fit applies a hard floor
 \code{sdlog >= 2.0} (raised from 1.5 in rev 1 per modeller review). The floor
 preserves the lognormal median (meanlog is unchanged); the mode shifts
-left as a consequence. With the median at ~1.5e5 and sdlog = 2.0 the
-95 percent CI spans roughly 3e3 to 7.6e6 - factor ~50 on each side - which
+left as a consequence. With the weights 1.0 / 0.1 / 0.1 (v0.29.1) the
+weighted log10 mean is ~5.34, so the median is ~2.2e5; with sdlog = 2.0 the
+95 percent CI spans roughly 4.4e3 to 1.1e7 - factor ~50 on each side - which
 is the correct spread to cover a +/- 1 order-of-magnitude error in the
 single primary source.
 

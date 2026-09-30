@@ -82,3 +82,33 @@ test_that("architecture='lstm_v1_legacy' routes to the legacy path (not lstm_v2)
   expect_equal(captured$branch, "legacy")
   expect_true(captured$bias_correct)
 })
+
+test_that("the legacy path warns about leakage when fit before the end of surveillance", {
+  tmp <- withr::local_tempdir()
+  iso <- MOSAIC::iso_codes_mosaic[1]
+  dates <- seq(as.Date("2020-01-02"), by = "week", length.out = 60L)
+  panel <- data.frame(iso_code = iso, date = dates,
+                      cases = c(rep(5, 50), rep(NA, 10)))
+  utils::write.csv(panel, file.path(tmp, "cholera_country_weekly_suitability_data.csv"),
+                   row.names = FALSE)
+  paths <- list(DATA_CHOLERA_WEEKLY = tmp)
+  last_obs <- dates[50]
+  testthat::local_mocked_bindings(.est_suitability_legacy = function(...) "ok",
+                                  .package = "MOSAIC")
+  # retrospective cutoff -> warning naming both dates
+  expect_warning(est_suitability(paths, architecture = "lstm_v1_legacy",
+                                 fit_date_stop = last_obs - 70),
+                 format(last_obs), fixed = TRUE)
+  expect_warning(est_suitability(paths, architecture = "lstm_v1_legacy",
+                                 fit_date_stop = last_obs - 70),
+                 "NOT leak-free")
+  # production refresh (auto cutoff) and cutoffs at/after the last observed week
+  # (the trailing NA weeks do not count as observed) stay silent
+  expect_no_warning(est_suitability(paths, architecture = "lstm_v1_legacy"))
+  expect_no_warning(est_suitability(paths, architecture = "lstm_v1_legacy",
+                                    fit_date_stop = last_obs))
+  # an unreadable panel is left to the legacy body's own error
+  expect_no_warning(est_suitability(list(DATA_CHOLERA_WEEKLY = file.path(tmp, "absent")),
+                                    architecture = "lstm_v1_legacy",
+                                    fit_date_stop = "2020-06-01"))
+})

@@ -58,7 +58,8 @@ absent from the fit), \code{n_country_years};
 \item \code{summary}: fit statistics, \code{tau}, \code{sigma} and settings.
 }
 Files written to \code{PATHS$MODEL_INPUT}: \code{param_mu_disease_mortality.csv}
-(MOSAIC parameter format; per location-year \code{point} median,
+(MOSAIC parameter format, an export not read by the package; per location-year
+\code{point} median (\code{parameter_name = "median"}),
 \code{beta} shapes and \code{logitnormal} mean/sd), \code{cfr_hierarchical_estimates.csv},
 \code{cfr_temporal_trend.csv}, \code{cfr_country_effects.csv} and
 \code{cfr_model_summary.rds}.

@@ -15,8 +15,7 @@
 #'
 #' @param results_file Path to \code{samples.parquet} containing calibration results.
 #' @param priors_file Path to \code{priors.json} (used for parameter descriptions).
-#' @param output_dir Optional directory to write \code{parameter_sensitivity.csv}.
-#'   When \code{NULL} (default) no file is written and the data.frame is returned.
+#' @param output_dir Optional directory to write \code{parameter_sensitivity.csv} (the \code{sens_df} columns plus run-level \code{weighting} and \code{n_used}). When \code{NULL} (default) no file is written.
 #' @param n_samples Maximum number of posterior draws to use. Samples are drawn
 #'   with replacement using importance weights. Default 2000.
 #' @param kernel Kernel type for input parameters passed to
@@ -135,7 +134,8 @@ calc_model_parameter_sensitivity <- function(results_file,
     }
 
     sims_sub <- sims[idx, ]
-    subset_label <- if (!is.null(weight_col)) "importance-weighted" else "uniform"
+    subset_label <- if (!is.null(weight_col))
+      sprintf("importance-weighted by %s", weight_col) else "uniform"
     estimator_type <- "V-stat"
   }
 
@@ -165,17 +165,7 @@ calc_model_parameter_sensitivity <- function(results_file,
 
   if (!is.null(priors_file) && file.exists(priors_file)) {
     priors <- jsonlite::fromJSON(priors_file, simplifyVector = FALSE)
-
-    for (nm in param_cols_active) {
-      if (!is.null(priors$parameters_global[[nm]]$description)) {
-        descriptions[nm] <- priors$parameters_global[[nm]]$description
-      }
-      for (loc in names(priors$parameters_location)) {
-        if (!is.null(priors$parameters_location[[loc]][[nm]]$description)) {
-          descriptions[nm] <- priors$parameters_location[[loc]][[nm]]$description
-        }
-      }
-    }
+    descriptions <- .mosaic_sensitivity_descriptions(priors, param_cols_active)
   }
 
   # -----------------------------------------------------------------------
@@ -236,10 +226,12 @@ calc_model_parameter_sensitivity <- function(results_file,
     if (!dir.exists(output_dir))
       dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
     csv_file <- file.path(output_dir, "parameter_sensitivity.csv")
-    utils::write.csv(
-      sens_df[, c("parameter", "hsic_r2", "p_value", "sig", "description")],
-      csv_file, row.names = FALSE
-    )
+    # weighting/n_used are run-level (constant per row) so a post-hoc render
+    # of the CSV can state how the draws were chosen and how many were used.
+    csv_df <- sens_df[, c("parameter", "hsic_r2", "p_value", "sig", "description")]
+    csv_df$weighting <- rep(subset_label, nrow(csv_df))
+    csv_df$n_used    <- rep(nrow(params_df), nrow(csv_df))
+    utils::write.csv(csv_df, csv_file, row.names = FALSE)
     if (verbose) log_msg("Saved %s", csv_file)
   }
 
@@ -249,4 +241,24 @@ calc_model_parameter_sensitivity <- function(results_file,
     subset_label = subset_label,
     n_used       = nrow(params_df)
   ))
+}
+
+
+# Parameter descriptions for sensitivity output. Global parameters are looked
+# up by name; location-scale columns ("<base>_<ISO>") use the single
+# description stored per base parameter at parameters_location[[base]].
+# @keywords internal
+.mosaic_sensitivity_descriptions <- function(priors, param_cols) {
+  descriptions <- stats::setNames(rep("", length(param_cols)), param_cols)
+  for (nm in param_cols) {
+    if (!is.null(priors$parameters_global[[nm]]$description)) {
+      descriptions[nm] <- priors$parameters_global[[nm]]$description
+    }
+    base_nm <- sub("_[A-Z]{3}$", "", nm)
+    if (!identical(base_nm, nm) &&
+        !is.null(priors$parameters_location[[base_nm]]$description)) {
+      descriptions[nm] <- priors$parameters_location[[base_nm]]$description
+    }
+  }
+  descriptions
 }

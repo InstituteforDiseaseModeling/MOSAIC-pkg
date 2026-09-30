@@ -6,7 +6,6 @@
 #'
 #' @param PATHS A list containing file paths for input and output data. The list should include:
 #' \itemize{
-#'   \item \strong{DATA_DEMOGRAPHICS}: Path to the directory where demographic data is stored.
 #'   \item \strong{MODEL_INPUT}: Path to the directory where processed vaccination data will be saved.
 #' }
 #'
@@ -23,9 +22,6 @@
 #'     - Aggregates events by request ID to extract doses requested, approved, and shipped.
 #'     - Uses Delivery event dates as campaign dates.
 #'     - Converts country names to ISO codes for consistency.
-#'   \item **Load and Merge Demographic Data**:
-#'     - Reads demographic data for African countries from a CSV file.
-#'     - Filters the data for the year 2023 and retains population sizes.
 #'   \item **Infer Missing Campaign Dates**:
 #'     - Computes the delay between decision and campaign dates.
 #'     - Infers missing campaign dates based on the mean delay where possible.
@@ -42,7 +38,6 @@
 #' \dontrun{
 #' # Example usage
 #' PATHS <- list(
-#'   DATA_DEMOGRAPHICS = "path/to/demographics",
 #'   MODEL_INPUT = "path/to/model/input"
 #' )
 #'
@@ -56,11 +51,7 @@
 
 process_GTFCC_vaccination_data <- function(PATHS) {
      
-     # Load population data and keep data for the year 2023
-     message('Loading GTFCC vaccination and population data')
-     pop_data <- read.csv(file.path(PATHS$DATA_DEMOGRAPHICS, 'demographics_africa_2000_2023.csv'), stringsAsFactors = FALSE)
-     pop_data <- pop_data[pop_data$year == 2023, c('iso_code', 'population')]
-     message('NOTE: population sizes based on 2023')
+     message('Loading GTFCC vaccination data')
      
      # Path to the scraped GTFCC data
      gtfcc_file <- file.path(PATHS$ROOT, "ees-cholera-mapping", "data", "cholera", 

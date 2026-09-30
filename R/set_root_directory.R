@@ -4,7 +4,7 @@
 #'
 #' @param root A character string representing the path to the root directory. If `NULL`, the function will prompt the user to enter the root directory interactively.
 #'
-#' @return A character string representing the root directory. The root directory is also stored globally in the option `root_directory`.
+#' @return The root directory (character string), invisibly. It is also stored globally in the option `root_directory`.
 #'
 #' @details This function uses either a user-specified path or a path provided interactively to set the root directory. The path is validated to ensure that it exists. Once validated, the path is stored in the global option `root_directory`, which can be accessed using `getOption("root_directory")`. If the path is invalid (i.e., it does not exist), the function throws an error.
 #'
@@ -39,4 +39,6 @@ set_root_directory <- function(root = NULL) {
      message("root_directory set to:")
      message(root)
      message("Retrieve with getOption('root_directory')")
+
+     invisible(root)
 }

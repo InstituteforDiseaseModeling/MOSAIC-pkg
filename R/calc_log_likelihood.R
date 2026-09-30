@@ -22,15 +22,6 @@
 #'     \item \code{mean_precision} (for \code{\link{calc_log_likelihood_beta}})
 #'     \item \code{trials} (for \code{\link{calc_log_likelihood_binomial}})
 #'     \item \code{k} (for \code{\link{calc_log_likelihood_negbin}})
-#'     \item \code{verbose} (common to all distributions)
-#'   }
-#' Dispatcher for multiple distribution log-likelihood functions
-#' ...
-#' @param ... Additional arguments passed to the underlying distribution function:
-#'   \itemize{
-#'     \item \code{mean_precision} (for \code{\link{calc_log_likelihood_beta}})
-#'     \item \code{trials} (for \code{\link{calc_log_likelihood_binomial}})
-#'     \item \code{k} (for \code{\link{calc_log_likelihood_negbin}})
 #'     \item \code{eps_rel} (for \code{\link{calc_log_likelihood_negbin}} and
 #'       \code{\link{calc_log_likelihood_poisson}}) -- the relative floor on the
 #'       predicted mean. Passing it with any other \code{family} is an error,
@@ -53,8 +44,8 @@
 #' The \code{weights} argument (if not \code{NULL}) is passed to the chosen sub-likelihood
 #' function, which multiplies each observation's log-likelihood contribution by \code{weights[i]}.
 #'
-#' @return The total log-likelihood (scalar) for most families, or (in the case of Normal)
-#'   a list with \code{log_likelihood}, \code{sigma}, \code{shapiro_p}.
+#' @return The total log-likelihood as a numeric scalar, for every family
+#'   (including Normal); \code{NA_real_} where the sub-function cannot score.
 #'
 #' @seealso
 #'   \code{\link{calc_log_likelihood_beta}},

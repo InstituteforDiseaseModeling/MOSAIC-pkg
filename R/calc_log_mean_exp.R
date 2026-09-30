@@ -4,14 +4,18 @@
 #' This is equivalent to log(mean(exp(x))) but avoids numerical overflow/underflow
 #' by subtracting the maximum value before exponentiation.
 #'
-#' @param x Numeric vector of log-values
+#' @param x Numeric vector of log-values. \code{-Inf} is a valid log-value
+#'   (a zero likelihood) and enters the mean as \code{exp(-Inf) = 0};
+#'   \code{NA}/\code{NaN} entries (failed evaluations) are dropped.
 #'
-#' @return Numeric scalar; the log-mean-exp of the input vector
+#' @return Numeric scalar; the log-mean-exp of the non-missing entries.
+#'   \code{-Inf} if every non-missing entry is \code{-Inf}, \code{Inf} if any
+#'   entry is \code{Inf}, and \code{NA_real_} if no entry is non-missing.
 #'
 #' @section Details:
 #' The log-mean-exp for a vector \eqn{x} is computed as:
 #' \deqn{ \mathrm{LME}(x) = \max(x) + \log\left(\frac{1}{|x|}\sum_i e^{x_i - \max(x)}\right) }
-#' 
+#'
 #' This is numerically stable because:
 #' \itemize{
 #'   \item The maximum value is subtracted before exponentiation, preventing overflow
@@ -19,31 +23,35 @@
 #'   \item Equivalent to \code{log(mean(exp(x)))} but without numerical issues
 #' }
 #'
+#' Dropping \code{-Inf} instead would shrink the denominator \eqn{|x|} and bias
+#' the result upward: averaging one zero-likelihood replicate out of \eqn{m}
+#' would gain \eqn{\log(m/(m-1))}.
+#'
 #' @examples
 #' # Basic usage
 #' x <- c(-100, -101, -99)
-#' calc_log_mean_exp(x)  # ≈ -99.59
-#' 
-#' # Compare with naive approach (which would overflow for large negative values)
-#' log(mean(exp(x)))     # Same result, but less stable
-#' 
-#' # With missing/infinite values
-#' calc_log_mean_exp(c(-50, -Inf, -60, NA))  # Returns log-mean-exp of finite values
-#' 
-#' # Empty or all non-finite input
-#' calc_log_mean_exp(c())           # Returns NA
-#' calc_log_mean_exp(c(-Inf, NA))   # Returns NA
+#' calc_log_mean_exp(x)  # -99.69
+#'
+#' # Compare with the naive form (underflows for very negative values)
+#' log(mean(exp(x)))
+#'
+#' # -Inf counts as a zero likelihood; NA is dropped
+#' calc_log_mean_exp(c(0, -Inf))        # log(0.5)
+#' calc_log_mean_exp(c(-50, -60, NA))   # log-mean-exp of -50 and -60
+#'
+#' # Empty, all-missing, or all -Inf input
+#' calc_log_mean_exp(c())           # NA
+#' calc_log_mean_exp(c(NA, NaN))    # NA
+#' calc_log_mean_exp(c(-Inf, -Inf)) # -Inf
 #'
 #' @family utility-functions
 #' @export
 calc_log_mean_exp <- function(x) {
-  # Remove non-finite values (NA, NaN, Inf, -Inf)
-  x <- x[is.finite(x)]
-  
-  # Return NA if no finite values remain
+  x <- as.numeric(x)
+  x <- x[!is.na(x)]
   if (length(x) == 0L) return(NA_real_)
-  
-  # Stable log-mean-exp computation
+
   m <- max(x)
+  if (is.infinite(m)) return(m)
   m + log(mean(exp(x - m)))
 }

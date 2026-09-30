@@ -31,8 +31,10 @@ evaluate_rolling_cv(
 \item{trusted_only}{Drop rows with \code{observed_source == "AI"} (default TRUE).}
 
 \item{embargo_weeks}{Channel-specific OOS embargo, in weeks, after the cutoff
-before scoring begins. A scalar applies to all metrics; a named vector
-(e.g. \code{c(cases = 4, deaths = 6)}) applies per metric. Default \code{0}.}
+before scoring begins, applied on top of the harness embargo (see Details).
+A scalar applies to all metrics; a named vector (e.g.
+\code{c(cases = 4, deaths = 6)}) applies per metric, and omitted metrics get
+0. Default \code{0}.}
 
 \item{ess_min}{Minimum importance-weight ESS for a cell to enter the summary
 aggregation. Default \code{0} (gate off). See Details.}
@@ -54,7 +56,8 @@ single \code{"ensemble"} model (back-compatible).}
 A list with:
 \describe{
 \item{cells}{Per (cutoff x model x iso x metric x window) metrics + per-baseline
-mae_skill and wis_skill, the cell \code{ess} and \code{ess_ok} flag.}
+mae_skill and wis_skill, the cell \code{ess} and \code{ess_ok} flag (plus
+\code{anchor_date} when the predictions carry it).}
 \item{summary}{Aggregated across \code{ess_ok} cells per (model x metric x
 window): \code{n_cells_used} / \code{n_cells_total}, mean/median of each
 metric, and mean baseline skills with bootstrap CI (suppressed when fewer
@@ -75,22 +78,28 @@ This is the post-hoc companion to \code{run_rolling_cv()} — the harness emits
 predictions only; all judgement (metrics, baselines, skill) lives here.
 
 Horizons are \strong{cumulative} (\eqn{\le h} months): the \eqn{\le h} window
-is every OOS point within \code{h} months of the per-metric OOS-scoring
-origin, computed from \code{date} and \code{cutoff_date} (not the disjoint
-\code{horizon_bucket} label), so the \eqn{\le}max-horizon window equals the
-full scored OOS set. An \code{IS} window (training fit, \eqn{\le} cutoff) is
-always reported.
+is every scored OOS date \eqn{d} with \code{origin < d <= origin +
+ceiling(h * 30.4375)} days, where \code{origin} is the per-metric OOS-scoring
+origin below. The origin is fixed by the cutoff and embargo, never by where
+observations happen to exist, so a reporting gap just after the cutoff shrinks
+a window's \code{n} instead of shifting its lead times (windows with fewer
+than 3 scorable dates are dropped). The \eqn{\le}max-horizon window is the
+largest scored set; predictions further out are not scored in any window. An
+\code{IS} window (training fit, \eqn{\le} cutoff) is always reported.
 
 Scoring uses \strong{trusted observed only}: rows whose \code{observed_source}
 is missing or not \code{"AI"} (when \code{trusted_only = TRUE}).
 
-\strong{Channel-specific embargo.} \code{embargo_weeks} may be a scalar (all
-metrics) or a named vector such as \code{c(cases = 4, deaths = 6)}. For each
-metric the OOS scoring start is re-derived as
-\code{cutoff_date + embargo_weeks[metric] * 7}; only OOS rows at or after that
-per-metric boundary are scored, independent of the single \code{segment} label
-baked into predictions. Default (\code{0}) reproduces the prior behavior of
-scoring the entire \code{segment == "OOS"} block.
+\strong{Embargo and scoring origin.} The harness labels the dates in
+\code{(cutoff, cutoff + embargo]} as \code{segment == "embargo"}; those are
+never scored. For each metric the scoring origin is
+\code{max(last embargo-labelled date (or the cutoff), cutoff_date +
+embargo_weeks[metric] * 7)} and the scored dates are those strictly after it.
+\code{embargo_weeks} can therefore only lengthen the harness embargo, per
+channel: it may be a scalar (all metrics) or a named vector such as
+\code{c(cases = 4, deaths = 6)}; metrics it omits get 0. With the default
+(\code{0}) exactly the \code{segment == "OOS"} block is scored, from the
+harness's own OOS origin.
 
 \strong{Baselines}, fit per (cutoff, country, metric) on the IS observed
 history. \code{"seasonal"} (week-of-year climatology) is the \strong{primary}

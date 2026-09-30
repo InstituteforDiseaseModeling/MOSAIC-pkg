@@ -93,7 +93,9 @@ run_roundtrip <- function(param_name, prior_entry, scale = "global", iso = NULL)
 # ---------------------------------------------------------------------------
 test_that("round-trip: beta prior recovers beta posterior", {
   prior <- list(distribution = "beta", parameters = list(shape1 = 5, shape2 = 12))
-  fitted <- run_roundtrip("alpha_1", prior)
+  # alpha_2 is a global beta parameter (alpha_1 is location-scale since the
+  # v1.3.0 parameter inventory).
+  fitted <- run_roundtrip("alpha_2", prior)
 
   expect_equal(fitted$distribution, "beta")
   expect_true(fitted$parameters$shape1 > 0)

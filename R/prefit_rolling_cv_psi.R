@@ -25,9 +25,16 @@
 #' and fits psi via \code{est_suitability(source_csv = <panel>, feature_set =
 #' "v7.4", fit_date_stop = T)}. The panel is compiled ONCE per cutoff and reused
 #' across the whole \eqn{\ge}10-seed psi ensemble (the 3 GAMs are not refit per
-#' seed). When v7.4 is not requested the DEFAULT path is byte-unchanged: psi is
-#' fit from the canonical panel with no \code{source_csv} and no
-#' \code{gam_train_stop} (v1/v7.3 behaviour).
+#' seed). When v7.4 is not requested the DEFAULT path is unchanged: psi is fit
+#' from the canonical panel with no \code{source_csv} and no
+#' \code{gam_train_stop} (v1/v7.3 behaviour). That panel is \strong{not}
+#' leak-free: its per-country target anchors (for the precomputed
+#' \code{target_*} responses, including the default) and the flood-probability
+#' GAM behind the \code{emdat_flood_prob*} channels of the default
+#' \code{"v7.3"} feature set were fitted on every row, including rows after
+#' \code{T}. The function warns in that case, and the manifest entries carry no
+#' \code{hazard_panel = "v7.4_leakfree"} marker, which
+#' \code{\link{run_rolling_cv}} also warns about.
 #'
 #' \strong{Panel-window alignment (v7.4).} The leak-free panel's compile/GAM-fit
 #' window is deliberately aligned to the psi-LSTM \emph{training} window
@@ -42,10 +49,16 @@
 #' resolved window is folded into the cache spec-hash (below) so a panel built
 #' over a different window cannot be silently reused.
 #'
-#' \strong{Atomic cache (concurrency-safe).} \code{est_suitability()} writes a
-#' single global \code{MODEL_INPUT/pred_psi_suitability_day.csv}; this function
-#' copies that file into \code{dir_cache/psi_<T>.csv} via a tempfile +
-#' \code{file.rename} so a partially-written cache file can never be observed.
+#' \strong{Isolated, atomic writes.} Each cutoff's \code{est_suitability()} fit
+#' runs with \code{MODEL_INPUT} (and \code{DOCS_FIGURES}) redirected to a
+#' private scratch directory, so it never overwrites the canonical
+#' \code{PATHS$MODEL_INPUT/pred_psi_suitability_day.csv} that
+#' \code{data-raw/make_config_default.R} reads, and concurrent calls sharing one
+#' \code{PATHS} cannot pick up each other's psi. The fitted file is copied into
+#' \code{dir_cache/psi_<T>.csv} via a tempfile + \code{file.rename} so a
+#' partially-written cache file can never be observed. Concurrent calls must
+#' still use different \code{dir_cache} directories: the manifest itself is
+#' not locked.
 #'
 #' \strong{Cache key (spec hash).} For each cutoff a \code{spec_hash} is computed
 #' over \code{list(fit_date_stop = T, est_suitability_spec)} where the resolved
@@ -60,8 +73,12 @@
 #' \strong{hard-errors} on a mismatch.
 #'
 #' \strong{Idempotent / resume.} A cutoff is skipped when its \code{psi_<T>.csv}
-#' exists and the manifest already records a matching \code{spec_hash} for that
-#' cutoff; rerunning therefore only fits the missing/changed cutoffs.
+#' exists and the manifest already records a matching \code{spec_hash} and the
+#' same prediction window for that cutoff; rerunning therefore only fits the
+#' missing/changed cutoffs. The cache can be extended over several calls: the
+#' manifest keeps every previously frozen cutoff, not only those in the current
+#' call. Each entry records its own \code{pred_date_start}/\code{pred_date_stop};
+#' the top-level values describe the most recent call.
 #'
 #' @param PATHS Path list from \code{\link{get_paths}}.
 #' @param cutoffs Date or character vector of rolling-origin cutoffs.
@@ -78,7 +95,8 @@
 #'
 #' @return Invisibly, the manifest list (also written to
 #'   \code{dir_cache/psi_manifest.json}). Side effects: one \code{psi_<T>.csv}
-#'   per fitted cutoff plus the manifest under \code{dir_cache}.
+#'   per fitted cutoff plus the manifest under \code{dir_cache}; nothing is
+#'   written to \code{PATHS$MODEL_INPUT}.
 #'
 #' @seealso \code{\link{run_rolling_cv}}, \code{\link{est_suitability}}
 #' @export
@@ -113,6 +131,10 @@ prefit_rolling_cv_psi <- function(PATHS,
           message(sprintf(
                "prefit_rolling_cv_psi: v7.4 leak-free hazard panels ON (compile window %s -> <cutoff>, gam_train_stop = cutoff)",
                v74$compile_date_start))
+     if (!v74$active)
+          warning(.rcv_psi_leak_warning(
+               "prefit_rolling_cv_psi() without feature_set = \"v7.4\" fits psi from the canonical panel"),
+               call. = FALSE)
 
      pred_start <- as.Date(pred_date_start)
      pred_stop  <- as.Date(pred_date_stop)
@@ -146,10 +168,19 @@ prefit_rolling_cv_psi <- function(PATHS,
           spec_hash <- .rcv_psi_spec_hash(T_k, spec)
 
           prev <- prior_by_cut[[T_chr]]
+          # The prediction window is part of the cache-hit test: a CSV frozen over
+          # a shorter window would otherwise be reused and carried flat past its
+          # end. Entries written before the window was recorded per entry fall
+          # back to the prior manifest's top-level window.
+          prev_start <- prev$pred_date_start %||% prior$pred_date_start
+          prev_stop  <- prev$pred_date_stop  %||% prior$pred_date_stop
+          same_window <- !is.null(prev_start) && !is.null(prev_stop) &&
+               identical(as.character(as.Date(prev_start)), as.character(pred_start)) &&
+               identical(as.character(as.Date(prev_stop)),  as.character(pred_stop))
           if (!is.null(prev) && file.exists(csv_dst) &&
-              identical(prev$spec_hash, spec_hash)) {
+              identical(prev$spec_hash, spec_hash) && same_window) {
                if (verbose)
-                    message(sprintf("[%d/%d] %s  cache hit (spec_hash match) -> skip fit",
+                    message(sprintf("[%d/%d] %s  cache hit (spec_hash + window match) -> skip fit",
                                     k, length(cutoffs), T_chr))
                # keep the (validated) prior entry as-is
                prior_by_cut[[T_chr]] <- prev
@@ -183,35 +214,27 @@ prefit_rolling_cv_psi <- function(PATHS,
                owned$source_csv <- panel_csv
           }
 
+          # Fit into a private scratch MODEL_INPUT and atomically freeze the
+          # daily psi into the cache (never touches PATHS$MODEL_INPUT).
           es_args <- .rcv_merge_est_args(spec, owned)
-          do.call(MOSAIC::est_suitability, es_args)
+          fitted  <- .rcv_fit_psi_isolated(es_args, csv_dst)
+          # What the fit actually pooled (seeds that failed are dropped with only
+          # a console warning), its target-anchor end and the source-panel hash
+          # exist only in the fit config, which the scratch directory deletes.
+          fit_prov <- .rcv_psi_config_fields(attr(fitted, "config_json"))
 
-          psi_src <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
-          if (!file.exists(psi_src))
-               stop("est_suitability() did not write ", psi_src,
-                    " for cutoff ", T_chr)
-
-          # Atomic freeze: copy to a tempfile in dir_cache then rename into place.
-          tmp <- tempfile(pattern = sprintf("psi_%s_", T_chr),
-                          tmpdir = dir_cache, fileext = ".csv.tmp")
-          ok  <- file.copy(psi_src, tmp, overwrite = TRUE)
-          if (!ok) {
-               if (file.exists(tmp)) unlink(tmp)
-               stop("failed to stage frozen psi copy for cutoff ", T_chr)
-          }
-          if (!file.rename(tmp, csv_dst)) {
-               if (file.exists(tmp)) unlink(tmp)
-               stop("failed to atomically place frozen psi for cutoff ", T_chr)
-          }
-
-          entry <- list(
-               cutoff         = T_chr,
-               csv            = basename(csv_dst),
-               sha256         = .rcv_file_hash(csv_dst),
-               spec_hash      = spec_hash,
-               n_seeds        = n_seeds,
-               parallel_seeds = par_seeds,
-               mosaic_version = mosaic_ver)
+          entry <- c(list(
+               cutoff          = T_chr,
+               csv             = basename(csv_dst),
+               sha256          = .rcv_file_hash(csv_dst),
+               spec_hash       = spec_hash,
+               pred_date_start = as.character(pred_start),
+               pred_date_stop  = as.character(pred_stop),
+               n_seeds         = if (is.na(n_seeds) && !is.null(fit_prov$n_seeds_requested))
+                                      as.integer(fit_prov$n_seeds_requested) else n_seeds,
+               parallel_seeds  = par_seeds,
+               mosaic_version  = mosaic_ver),
+               fit_prov[setdiff(names(fit_prov), "n_seeds_requested")])
           if (v74$active) {
                entry$hazard_panel        <- "v7.4_leakfree"
                entry$panel_csv           <- sprintf("panel_v74_%s.csv", T_chr)
@@ -221,14 +244,15 @@ prefit_rolling_cv_psi <- function(PATHS,
           prior_by_cut[[T_chr]] <- entry
 
           # Persist after every cutoff so a long interrupted run resumes cleanly.
+          # Write every known cutoff (earlier calls included), in date order.
           .rcv_psi_write_manifest(manifest_path,
-                                  prior_by_cut[as.character(cutoffs)],
+                                  prior_by_cut[sort(names(prior_by_cut))],
                                   spec = spec, pred_start = pred_start,
                                   pred_stop = pred_stop, mosaic_ver = mosaic_ver)
      }
 
      manifest <- .rcv_psi_write_manifest(
-          manifest_path, prior_by_cut[as.character(cutoffs)],
+          manifest_path, prior_by_cut[sort(names(prior_by_cut))],
           spec = spec, pred_start = pred_start, pred_stop = pred_stop,
           mosaic_ver = mosaic_ver)
 
@@ -298,10 +322,13 @@ prefit_rolling_cv_psi <- function(PATHS,
 #' its output to the CANONICAL
 #' \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_country_weekly_suitability_data.csv}.
 #' To avoid clobbering that committed artefact (the default psi path reads it),
-#' this helper redirects only \code{PATHS$DATA_CHOLERA_WEEKLY} to a per-cutoff
+#' this helper redirects \code{PATHS$DATA_CHOLERA_WEEKLY} to a per-cutoff
 #' scratch dir into which the one input file compile reads from that dir
-#' (\code{cholera_surveillance_weekly_combined.csv}) is symlinked/copied. All
-#' other read paths (\code{DATA_CLIMATE}, \code{DATA_ENSO}, ...) are untouched.
+#' (\code{cholera_surveillance_weekly_combined.csv}) is copied, and points
+#' \code{PATHS$DOCS_FIGURES} at the same scratch dir so the per-cutoff hazard-GAM
+#' diagnostics do not overwrite the production
+#' \code{MOSAIC-docs/figures/\{flood,cyclone,drought\}_imputation/} outputs. All
+#' read paths (\code{DATA_CLIMATE}, \code{DATA_ENSO}, ...) are untouched.
 #' The produced panel is then atomically moved into place at \code{out_csv}.
 #' @keywords internal
 #' @noRd
@@ -329,6 +356,7 @@ prefit_rolling_cv_psi <- function(PATHS,
 
      PATHS_c <- PATHS
      PATHS_c$DATA_CHOLERA_WEEKLY <- scratch
+     PATHS_c$DOCS_FIGURES        <- scratch   # hazard-GAM diagnostics stay in scratch
 
      if (verbose)
           message(sprintf(
@@ -427,7 +455,23 @@ prefit_rolling_cv_psi <- function(PATHS,
      .rcv_bytes_hash(raw)
 }
 
+#' Version of the psi-producing code, folded into every psi cache key.
+#'
+#' The cache key otherwise covers only the cutoff and the est_suitability spec,
+#' so a change to the estimator or to the covariate-panel code that alters psi
+#' under an unchanged spec would be served from a stale cache. Bump this
+#' whenever such a change ships. v0.100.0: the drought_prob GAM lags its
+#' predictors past the label window and takes a climate_obs_stop horizon, and
+#' the lstm_v2 full in-sample refit includes the cutoff week and smooths only up
+#' to each country's covariate edge.
+#' @keywords internal
+#' @noRd
+.MOSAIC_PSI_ALGORITHM_VERSION <- "0.100.0"
+
 #' spec_hash over (fit_date_stop, modeling spec) for one cutoff.
+#'
+#' The key also carries \code{.MOSAIC_PSI_ALGORITHM_VERSION}, so a cache built
+#' by an older psi estimator is refitted rather than reused.
 #'
 #' When the spec requests the v7.4 leak-free hazard panel, a normalized
 #' \code{v74_panel} block (leakfree marker + resolved compile window +
@@ -447,7 +491,8 @@ prefit_rolling_cv_psi <- function(PATHS,
      # serial on the whole box, calibrate cells that don't refit at all).
      if (!is.null(spec$arch_control)) spec$arch_control$parallel_seeds <- NULL
      key <- list(fit_date_stop = as.character(as.Date(cutoff)),
-                 est_suitability_spec = spec)
+                 est_suitability_spec = spec,
+                 psi_algorithm = .MOSAIC_PSI_ALGORITHM_VERSION)
      v74 <- .rcv_psi_v74_request(spec)
      if (v74$active)
           key$v74_panel <- list(leakfree = TRUE,
@@ -498,7 +543,8 @@ prefit_rolling_cv_psi <- function(PATHS,
      paste(hex_words, collapse = "")
 }
 
-#' Read a prior psi_manifest.json (returns list(cutoffs=<list>) or empty).
+#' Read a prior psi_manifest.json (returns list(cutoffs=<list>,
+#' pred_date_start, pred_date_stop) or empty cutoffs).
 #' @keywords internal
 #' @noRd
 .rcv_psi_read_manifest <- function(path) {
@@ -510,7 +556,109 @@ prefit_rolling_cv_psi <- function(PATHS,
      cuts <- lapply(man$cutoffs, function(e) lapply(e, function(x) {
           if (is.list(x) && length(x) == 1L) x[[1]] else x
      }))
-     list(cutoffs = cuts)
+     unbox <- function(x) if (is.list(x) && length(x) == 1L) x[[1]] else x
+     list(cutoffs         = cuts,
+          pred_date_start = unbox(man$pred_date_start),
+          pred_date_stop  = unbox(man$pred_date_stop))
+}
+
+#' Fit psi for one cutoff in an isolated scratch MODEL_INPUT and freeze it.
+#'
+#' \code{est_suitability()} writes its outputs (the daily/weekly psi CSVs, the
+#' fitted weights and config JSON) into \code{PATHS$MODEL_INPUT}. Pointing that
+#' at the caller's canonical directory would leave the last cutoff's
+#' truncated-training psi in the production
+#' \code{pred_psi_suitability_day.csv} (which \code{make_config_default.R}
+#' reads) and would let concurrent fits sharing \code{PATHS} read each other's
+#' file. This helper redirects \code{MODEL_INPUT} and \code{DOCS_FIGURES} to a
+#' private temporary directory, runs the fit, and atomically copies the daily
+#' psi CSV to \code{dest_csv} (tempfile in the destination dir + rename). The
+#' fit's \code{psi_suitability_config.json} -- the only record of the seeds
+#' actually pooled, the target-anchor end and the source-panel hash -- is copied
+#' the same way to \code{<dest stem>_config.json} (see
+#' \code{.rcv_psi_config_path()}). The scratch directory is removed on exit.
+#' @return Invisibly, \code{dest_csv}, with attribute \code{config_json} (the
+#'   copied config path, or \code{NULL} when the fit wrote none).
+#' @keywords internal
+#' @noRd
+.rcv_fit_psi_isolated <- function(es_args, dest_csv) {
+     scratch <- tempfile("rcv_psi_fit_")
+     dir.create(scratch, recursive = TRUE, showWarnings = FALSE)
+     on.exit(unlink(scratch, recursive = TRUE, force = TRUE), add = TRUE)
+     P <- es_args$PATHS
+     P$MODEL_INPUT  <- scratch
+     P$DOCS_FIGURES <- scratch
+     es_args$PATHS  <- P
+     do.call(MOSAIC::est_suitability, es_args)
+
+     psi_src <- file.path(scratch, "pred_psi_suitability_day.csv")
+     if (!file.exists(psi_src))
+          stop("est_suitability() did not write pred_psi_suitability_day.csv for cutoff ",
+               as.character(as.Date(es_args$fit_date_stop)))
+     dir.create(dirname(dest_csv), recursive = TRUE, showWarnings = FALSE)
+     tmp <- tempfile(pattern = "psi_", tmpdir = dirname(dest_csv), fileext = ".csv.tmp")
+     if (!file.copy(psi_src, tmp, overwrite = TRUE)) {
+          if (file.exists(tmp)) unlink(tmp)
+          stop("failed to stage psi copy for ", dest_csv)
+     }
+     if (!file.rename(tmp, dest_csv)) {
+          if (file.exists(tmp)) unlink(tmp)
+          stop("failed to atomically place psi at ", dest_csv)
+     }
+
+     cfg_dest <- .rcv_psi_config_path(dest_csv)
+     cfg_src  <- file.path(scratch, "psi_suitability_config.json")
+     config_json <- NULL
+     if (file.exists(cfg_src)) {
+          tmp_cfg <- tempfile(pattern = "psi_cfg_", tmpdir = dirname(dest_csv),
+                              fileext = ".json.tmp")
+          if (!file.copy(cfg_src, tmp_cfg, overwrite = TRUE) ||
+              !file.rename(tmp_cfg, cfg_dest)) {
+               if (file.exists(tmp_cfg)) unlink(tmp_cfg)
+               stop("failed to atomically place the psi fit config at ", cfg_dest)
+          }
+          config_json <- cfg_dest
+     } else if (file.exists(cfg_dest)) {
+          # A config left by an earlier fit of this CSV would describe the wrong psi.
+          unlink(cfg_dest)
+     }
+     invisible(structure(dest_csv, config_json = config_json))
+}
+
+#' Path of the fit config copied next to a frozen psi CSV
+#' (\code{psi_<T>.csv} -> \code{psi_<T>_config.json}).
+#' @keywords internal
+#' @noRd
+.rcv_psi_config_path <- function(psi_csv) {
+     sub("\\.csv$", "_config.json", psi_csv)
+}
+
+#' Seed and leakage provenance of one psi fit, for its manifest entry
+#'
+#' Reads the copied \code{psi_suitability_config.json} and returns the fields a
+#' manifest entry needs to show what the frozen psi was built from:
+#' \code{n_seeds_ok}/\code{seeds_failed} (a seed that failed is dropped from the
+#' pool with only a console warning), \code{target_anchor_end} and the source
+#' panel's \code{source_csv_md5}. Missing fields (e.g. the lstm_v1_legacy
+#' config) are omitted.
+#' @param config_json Path returned as \code{attr(, "config_json")} by
+#'   \code{.rcv_fit_psi_isolated()}, or \code{NULL}.
+#' @return Named list (possibly empty).
+#' @keywords internal
+#' @noRd
+.rcv_psi_config_fields <- function(config_json) {
+     if (is.null(config_json) || !file.exists(config_json)) return(list())
+     cfg <- tryCatch(jsonlite::read_json(config_json, simplifyVector = TRUE),
+                     error = function(e) NULL)
+     if (is.null(cfg)) return(list())
+     out <- list(
+          psi_config        = basename(config_json),
+          n_seeds_requested = cfg$n_seeds,
+          n_seeds_ok        = cfg$n_seeds_ok,
+          seeds_failed      = if (!is.null(cfg$seeds_failed)) I(as.integer(unlist(cfg$seeds_failed))),
+          target_anchor_end = cfg$target_anchor_end,
+          source_csv_md5    = cfg$provenance$source_csv_md5)
+     Filter(Negate(is.null), out)
 }
 
 #' Write psi_manifest.json from the per-cutoff entry list.

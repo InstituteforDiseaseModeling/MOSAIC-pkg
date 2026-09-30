@@ -39,7 +39,8 @@ survival; decay_days_long is derived as short + spread (default TRUE)
 \item sample_gamma_1: Recovery rate (default TRUE)
 \item sample_gamma_2: Recovery rate (default TRUE)
 \item sample_iota: Incubation rate (default TRUE)
-\item sample_kappa: V. cholerae 50 percent infectious dose concentration (default TRUE)
+\item sample_kappa: V. cholerae 50 percent infectious dose concentration
+(default FALSE; PINNED at \code{config_default$kappa} = 1e6 since v0.89.0)
 \item sample_mobility_gamma: Mobility distance decay parameter (default TRUE)
 \item sample_mobility_omega: Mobility population scaling parameter (default TRUE)
 \item sample_omega_1: Vaccine waning rate one dose (default TRUE)
@@ -73,13 +74,30 @@ literature record and for sensitivity runs; set TRUE to re-enable the draw.
 \item sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
 \item sample_psi_star_b: Suitability calibration scale/offset (default TRUE)
 \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)
-\item sample_psi_star_k: Suitability calibration time offset (default TRUE)
-\item sample_initial_conditions: Initial condition proportions (default TRUE)
+\item sample_psi_star_k: Suitability calibration time offset (default TRUE).
+The config's \code{psi_star_a/b/z/k} are applied to \code{psi_jt} by
+\code{calc_psi_star()} whenever any flag is TRUE or any value differs
+from the identity (a = 1, b = 0, z = 1, k = 0), so pinned values take
+effect too. \code{config} should carry the raw, uncalibrated
+\code{psi_jt}, as \code{config_default} and \code{get_location_config()}
+do. A returned config is marked with the attribute
+\code{psi_star_applied = TRUE} and carries the field
+\code{config$psi_star_applied = TRUE}, which survives JSON (e.g.
+\code{config_medoid.json}); passed back in as the template, its
+\code{psi_jt} is left as is when every psi_star flag is FALSE, and
+sampling stops with an error when any psi_star flag is TRUE, so the
+transform is never applied twice.
+\item sample_initial_conditions: Initial condition proportions (default TRUE).
+V1, V2, E, I and R are drawn from their per-location priors and S is
+the residual, so the \code{prop_S_initial} prior is not used.
 \item ic_moment_match: Derive E/I from observed week-1 cases and the sampled
 reporting chain (sigma, rho, chi_endemic, iota). Only active when
 sample_initial_conditions is TRUE. (default FALSE)
 }
-If NULL, all parameters are sampled (default behavior).
+If NULL, the defaults listed above are used: every parameter is sampled
+except \code{alpha_1}, \code{alpha_2}, \code{kappa} and \code{rho_deaths},
+which stay at their config values. These are the same defaults as
+\code{mosaic_control_defaults()$sampling}.
 
 The reported case fatality ratio \code{mu_jt} is not sampled. It is a
 [location x day] matrix carried by the config, and calibration integrates
@@ -95,7 +113,8 @@ raises a warning and has no effect.}
 \item{validate}{Logical indicating whether to run post-sampling validation. Default TRUE.}
 
 \item{...}{Additional individual sample_* arguments for backward compatibility.
-These override values in sample_args if both are provided.}
+These override values in sample_args if both are provided. An unrecognised
+name raises a warning and has no effect.}
 }
 \value{
 A MOSAIC config list with sampled parameter values.

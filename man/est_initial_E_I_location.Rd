@@ -29,7 +29,7 @@ est_initial_E_I_location(
 
 \item{t0}{Target date for estimation (Date class)}
 
-\item{lookback_days}{Days of data to use (default 60, must be positive)}
+\item{lookback_days}{Days of reports before t0 to use (default 60, must be positive); also the averaging window for the onset rate}
 
 \item{sigma}{Symptomatic proportion (must be in (0,1])}
 
@@ -37,7 +37,7 @@ est_initial_E_I_location(
 
 \item{chi}{Diagnostic positivity - proportion of suspected cases that are true cholera (must be in (0,1])}
 
-\item{tau_r}{Reporting delay in days from symptom onset to report (must be non-negative)}
+\item{tau_r}{Reporting delay in days from symptom onset to report (must be non-negative; rounded to whole days as in the engine)}
 
 \item{iota}{Incubation rate (1/incubation period, must be positive)}
 
@@ -59,14 +59,26 @@ protections and parameter validation. Warns if E or I exceed 2\% of population.
 }
 \description{
 This function performs the actual E/I estimation for a single location using
-surveillance data and epidemiological parameters. It back-calculates true infections
-from reported cases using the surveillance cascade, accounts for infection-to-report
-delays, and estimates current E and I compartments based on disease progression.
+surveillance data and epidemiological parameters, following the engine's
+reporting chain: a report on day d is a symptomatic onset on day
+\code{d - tau_r}, and all onsets (symptomatic and asymptomatic) are
+\code{reported * chi / (rho * sigma)}.
 }
 \details{
-The function includes comprehensive parameter validation, numerical stability
-protections for exponential calculations, and detailed progress reporting when verbose=TRUE.
-Uses exact infectiousness kernels for the I compartment estimation.
+\itemize{
+\item \strong{I}: observed onsets that have not yet recovered at t0
+(per-day survival \code{exp(-gamma_1)} for the symptomatic share
+\code{sigma}, \code{exp(-gamma_2)} for the rest), plus the onsets the
+window cannot see, filled in at the window's mean onset rate: those in
+the last \code{tau_r} days before t0 (reported on or after t0) and those
+older than the window.
+\item \strong{E}: people infected before t0 whose onset comes after t0.
+A reported case is already past E, so E is the stock in balance with the
+window's mean onset rate \eqn{\lambda}:
+\eqn{E = \lambda / (1 - e^{-\iota})}, the engine's daily E-to-I
+probability (Azman et al. 2013 for the incubation period behind
+\code{iota}).
+}
 }
 \examples{
 \dontrun{

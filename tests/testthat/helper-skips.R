@@ -41,27 +41,92 @@ skip_without_tensorflow <- function() {
   }
 }
 
-# --- Data-availability skip (RETURNS a fixture list; do not change contract) -
+# --- Scoped MOSAIC root for tests --------------------------------------------
 
-# Loads config_default/priors_default and sets the MOSAIC root, returning a
-# list(config=, priors=). Callers use it as `fx <- skip_if_no_data()`.
-skip_if_no_data <- function() {
+# Sets options(root_directory) for the CALLER's scope only and restores the
+# previous value when that scope exits. Called at the top level of a test file
+# it lasts until the end of that file; inside test_that() until the end of the
+# test. The root is $MOSAIC_ROOT, else /workspace/MOSAIC or ~/MOSAIC when present,
+# else the installed package directory -- which is all get_paths() needs for
+# tests that only read the packaged config_default/priors_default. A bare
+# set_root_directory() in a test leaks into every later file (and, under
+# Config/testthat/parallel, into whatever the reused worker runs next).
+local_test_root <- function(env = parent.frame()) {
+  candidates <- c(Sys.getenv("MOSAIC_ROOT", ""), "/workspace/MOSAIC", "~/MOSAIC")
+  candidates <- candidates[nzchar(candidates) & dir.exists(candidates)]
+  root <- if (length(candidates)) candidates[[1]] else system.file(package = "MOSAIC")
+  withr::local_options(list(root_directory = root), .local_envir = env)
+  invisible(root)
+}
+
+# --- Packaged-fixture skip (RETURNS a fixture list; do not change contract) --
+
+# Loads config_default/priors_default and sets a scoped MOSAIC root (see
+# local_test_root()), returning list(config=, priors=). Callers use it as
+# `fx <- skip_if_no_data()`. It skips only when the packaged data objects are
+# unavailable: the callers read nothing from the MOSAIC-data tree, so requiring
+# ~/MOSAIC made them skip on every CI runner.
+skip_if_no_data <- function(env = parent.frame()) {
   testthat::skip_if_not_installed("MOSAIC")
-  env <- new.env()
+  data_env <- new.env()
   ok <- tryCatch({
-    utils::data("config_default", package = "MOSAIC", envir = env)
-    utils::data("priors_default", package = "MOSAIC", envir = env)
+    utils::data("config_default", package = "MOSAIC", envir = data_env)
+    utils::data("priors_default", package = "MOSAIC", envir = data_env)
     TRUE
   }, error = function(e) FALSE, warning = function(w) FALSE)
-  if (!ok || !exists("config_default", envir = env)) {
+  if (!ok || !exists("config_default", envir = data_env)) {
     testthat::skip("config_default / priors_default not available")
   }
-  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
-  if (!dir.exists(root)) {
-    testthat::skip(paste("MOSAIC root not found at", root))
+  local_test_root(env)
+  list(config = data_env$config_default, priors = data_env$priors_default)
+}
+
+# --- Installed-build skew skip (tests that run package code on PSOCK workers) -
+
+# make_mosaic_cluster() workers call library(MOSAIC), so they run the INSTALLED
+# build, not the load_all() build under test. Under devtools::test() a stale
+# install makes a parallel-vs-serial comparison test two different builds, and
+# assertions on file names or counts cannot see the difference. Skip unless the
+# installed version matches the version under test AND, when the package source
+# is present (devtools::test / test_local), the install is newer than every file
+# in R/. The version check alone passes a stale install whenever the version was
+# not bumped. A fresh checkout can make R/ look newer than a good install, which
+# only skips. CI installs the tarball after checkout, so there both checks pass.
+skip_if_installed_build_stale <- function() {
+  inst_path <- find.package("MOSAIC", lib.loc = .libPaths(), quiet = TRUE)
+  testthat::skip_if(length(inst_path) == 0L,
+                    "MOSAIC is not installed; PSOCK workers cannot load it")
+  inst_lib <- dirname(inst_path[1])
+  inst_ver <- tryCatch(
+    as.character(utils::packageVersion("MOSAIC", lib.loc = inst_lib)),
+    error = function(e) NA_character_)
+  here_ver <- as.character(utils::packageVersion("MOSAIC"))
+  testthat::skip_if(
+    is.na(inst_ver) || !identical(inst_ver, here_ver),
+    sprintf(paste0("installed MOSAIC (%s) differs from the build under test (%s); ",
+                   "PSOCK workers would run the installed one"),
+            if (is.na(inst_ver)) "unreadable" else inst_ver, here_ver))
+
+  # Tests run with the working directory at tests/testthat, so the package
+  # source (when present) is two levels up.
+  src_desc <- file.path("..", "..", "DESCRIPTION")
+  is_src <- file.exists(src_desc) && identical(
+    tryCatch(unname(read.dcf(src_desc, fields = "Package")[1, 1]),
+             error = function(e) NA_character_), "MOSAIC")
+  src_files <- if (is_src) list.files(file.path("..", "..", "R"),
+                                      pattern = "\\.[Rr]$", full.names = TRUE) else character(0)
+  if (length(src_files)) {
+    built <- utils::packageDescription("MOSAIC", lib.loc = inst_lib)$Built
+    built_at <- if (is.null(built)) NA else suppressWarnings(as.POSIXct(
+      trimws(strsplit(built, ";", fixed = TRUE)[[1]][3]), tz = "UTC"))
+    newest <- max(file.mtime(src_files))
+    testthat::skip_if(
+      is.na(built_at) || newest > built_at,
+      sprintf(paste0("installed MOSAIC was built %s, before the newest change in ",
+                     "R/ (%s); PSOCK workers would run the stale install"),
+              format(built_at, "%Y-%m-%d %H:%M:%S UTC"),
+              format(newest, tz = "UTC", "%Y-%m-%d %H:%M:%S UTC")))
   }
-  MOSAIC::set_root_directory(root)
-  list(config = env$config_default, priors = env$priors_default)
 }
 
 # --- Core-count skip (parallel tests that spawn PSOCK/mclapply clusters) ------

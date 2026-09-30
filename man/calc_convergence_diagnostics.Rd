@@ -43,8 +43,8 @@ calc_convergence_diagnostics(
 
 \item{cvw_best}{Numeric coefficient of variation of weights in the best subset}
 
-\item{percentile_used}{Numeric percentile of likelihood distribution used for
-best subset selection (e.g., 5.0 for top 5\%)}
+\item{percentile_used}{Numeric size of the best subset as a percentage of all
+\code{n_total} draws (e.g., 5.0 for the top 5\%)}
 
 \item{convergence_tier}{Character string indicating which tier criteria were
 used (e.g., "tier_3", "fallback")}
@@ -122,13 +122,26 @@ targets:
 
 \strong{Default thresholds by metric:}
 \itemize{
-\item ESS_B: pass=0.8 (80\%), warn=0.5 (50\%)
+\item ESS_B (target \code{target_ess_best}): pass=1.0 (100\%), warn=0.8 (80\%)
 \item A_B: pass=0.9 (90\%), warn=0.7 (70\%)
 \item CVw_B: pass=1.2 (120\%), warn=2.0 (200\%)
-\item B_size: pass=1.0 (100\%), warn=0.5 (50\%)
-\item Percentile: pass=1.0 (100\%), warn=1.5 (150\%)
+\item B_size (lower bound, target \code{target_ess_best}): pass=1.0 (100\%), warn=0.5 (50\%)
+\item B_size_upper (upper cap, target \code{target_max_best_subset}, lower is
+better): pass when \code{n_best_subset <= target}, warn when it exceeds the
+cap by at most 20\%, fail beyond that. \code{run_MOSAIC()} enforces the cap
+when it selects the subset, so in a normal run this is an invariant check.
 \item Param ESS: pass=1.0 (100\%), warn=0.8 (80\%)
 }
+
+The subset percentile (\code{percentile_used} against
+\code{target_max_best_subset / n_total * 100}) carries the same information
+as B_size_upper on the same denominator, so its status is reported in
+\code{summary$percentile_status} but is not gated.
+
+The function defaults for the targets (300 / 0.95 / 0.5) are not the
+\code{run_MOSAIC()} control defaults (\code{ESS_best = 100},
+\code{A_best = 0.70}, \code{CVw_best = 1.0}); \code{run_MOSAIC()} always
+passes its targets explicitly.
 }
 
 \section{Overall Status}{

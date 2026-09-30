@@ -418,6 +418,19 @@ plot_model_ensemble <- function(ensemble,
   score_idx_cases  <- .resolve_score_idx(score_idx_cases,  "score_idx_cases")
   score_idx_deaths <- .resolve_score_idx(score_idx_deaths, "score_idx_deaths")
 
+  # Scored central series for the caption R2/bias/totals. Built with the same
+  # masking helper run_MOSAIC() uses for summary.json, driven by the same
+  # warm-up / final-deaths / scored-window settings that blank the plotted line,
+  # so the caption scores exactly the time steps the figure draws.
+  caption_mask <- list(
+    cases_warmup     = as.integer(n_cases_warmup_mask),
+    deaths_final     = isTRUE(mask_final_deaths_step),
+    score_idx_cases  = score_idx_cases,
+    score_idx_deaths = score_idx_deaths
+  )
+  cases_scored  <- .mosaic_mask_central_for_scoring(cases_central,  "cases",  caption_mask)
+  deaths_scored <- .mosaic_mask_central_for_scoring(deaths_central, "deaths", caption_mask)
+
   # ---------------------------------------------------------------------------
   # Plotting helpers
   # ---------------------------------------------------------------------------
@@ -474,15 +487,9 @@ plot_model_ensemble <- function(ensemble,
 
     obs_c  <- .extract_loc(obs_cases,    i)
     obs_d  <- .extract_loc(obs_deaths,   i)
-    pred_c <- .extract_loc(cases_central, i)
-    pred_d <- .extract_loc(deaths_central, i)
-
-    # Blank the unscored head of the central series so the displayed R2/bias
-    # annotations match the scored window (NA dropped pairwise downstream).
-    if (score_idx_cases > 1L)
-      pred_c[seq_len(min(score_idx_cases - 1L, length(pred_c)))] <- NA_real_
-    if (score_idx_deaths > 1L)
-      pred_d[seq_len(min(score_idx_deaths - 1L, length(pred_d)))] <- NA_real_
+    # Scored (masked) central series: NA steps are dropped pairwise downstream.
+    pred_c <- .extract_loc(cases_scored,  i)
+    pred_d <- .extract_loc(deaths_scored, i)
 
     r2_c   <- tryCatch(round(calc_model_R2(obs_c, pred_c), 3L), error = function(e) NA)
     r2_d   <- tryCatch(round(calc_model_R2(obs_d, pred_d), 3L), error = function(e) NA)
@@ -574,7 +581,7 @@ plot_model_ensemble <- function(ensemble,
 
     cases_data <- plot_data[plot_data$metric == "Suspected Cases", ]
     all_obs_c  <- as.numeric(obs_cases)
-    all_pred_c <- as.numeric(cases_central)
+    all_pred_c <- as.numeric(cases_scored)
     r2_c_all   <- tryCatch(round(calc_model_R2(all_obs_c, all_pred_c), 3L),
                             error = function(e) NA)
     bias_c_all <- tryCatch(round(calc_bias_ratio(all_obs_c, all_pred_c), 2L),
@@ -643,7 +650,7 @@ plot_model_ensemble <- function(ensemble,
 
     deaths_data <- plot_data[plot_data$metric == "Deaths", ]
     all_obs_d   <- as.numeric(obs_deaths)
-    all_pred_d  <- as.numeric(deaths_central)
+    all_pred_d  <- as.numeric(deaths_scored)
     r2_d_all    <- tryCatch(round(calc_model_R2(all_obs_d, all_pred_d), 3L),
                             error = function(e) NA)
     bias_d_all  <- tryCatch(round(calc_bias_ratio(all_obs_d, all_pred_d), 2L),

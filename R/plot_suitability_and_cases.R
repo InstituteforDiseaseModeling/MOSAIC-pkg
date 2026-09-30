@@ -8,11 +8,14 @@
 #'   Must include MODEL_INPUT (for reading prediction files) and DOCS_FIGURES (for saving plots).
 #' @param plot_iso_code The ISO code of the country to plot (e.g., "AGO", "CMR").
 #'
-#' @return A combined plot showing both cholera case bars and smoothed suitability predictions
-#'   for the specified country.
+#' @return Invisibly, the combined plot showing both cholera case bars and the
+#'   suitability series for the specified country.
 #'
-#' @details The function reads pred_psi_suitability_day.csv created by est_suitability(),
-#'   which contains: date, cases, pred, pred_smooth, and iso_code columns.
+#' @details The function reads pred_psi_suitability_day.csv created by est_suitability()
+#'   (columns date, cases, iso_code and psi) and plots the canonical \code{psi}
+#'   column (smoothed and bias-corrected), the series that becomes the engine's
+#'   \code{psi_jt}. A pre-v0.34 file without \code{psi} falls back to
+#'   \code{pred_smooth}, with a message.
 #'
 #' @export
 
@@ -33,8 +36,7 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      # Load and process prediction data
      d_all <- read.csv(pred_daily_file, stringsAsFactors = FALSE)
      d_all$date <- as.Date(d_all$date)
-     d_all$pred <- as.numeric(d_all$pred)
-     d_all$pred_smooth <- as.numeric(d_all$pred_smooth)
+     d_all$psi_plot <- .mosaic_suitability_series(d_all)
      d_all$cases <- as.numeric(d_all$cases)
      d_all$cases[is.na(d_all$cases)] <- 0
 
@@ -92,17 +94,11 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      line_plot <- ggplot2::ggplot() +
           # Future predictions in red-orange (after last case date)
           ggplot2::geom_line(data = plot_data[plot_data$date > date_last_case, ],
-                             ggplot2::aes(x = date, y = pred),
-                             linewidth = 0.8, color = color_pred, alpha = 0.3) +
-          ggplot2::geom_line(data = plot_data[plot_data$date > date_last_case, ],
-                             ggplot2::aes(x = date, y = pred_smooth),
+                             ggplot2::aes(x = date, y = .data$psi_plot),
                              linewidth = 1.2, color = color_pred) +
           # Historical predictions in gray (up to last case date)
           ggplot2::geom_line(data = plot_data[plot_data$date <= date_last_case, ],
-                             ggplot2::aes(x = date, y = pred),
-                             linewidth = 0.8, color = color_actual, alpha = 0.3) +
-          ggplot2::geom_line(data = plot_data[plot_data$date <= date_last_case, ],
-                             ggplot2::aes(x = date, y = pred_smooth),
+                             ggplot2::aes(x = date, y = .data$psi_plot),
                              linewidth = 1.2, color = color_actual) +
           # Vertical line marking the last case date
           ggplot2::geom_vline(xintercept = as.Date(date_last_case),
@@ -138,4 +134,22 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
 
      # Print a message
      message(glue::glue("Plot saved to: {plot_file}"))
+
+     invisible(p_combined)
+}
+
+# The suitability series the documentation figures plot: the canonical `psi`
+# column that make_config_default() turns into psi_jt (smoothed and
+# bias-corrected, est_suitability v0.34+). A pre-v0.34 prediction file has no
+# `psi`, so it falls back to `pred_smooth` with a message. Shared by
+# plot_suitability_and_cases() and plot_suitability_by_country() so the two
+# sibling figures cannot drift apart (CLAUDE.md lesson #11).
+.mosaic_suitability_series <- function(d) {
+  if ("psi" %in% names(d)) return(as.numeric(d$psi))
+  if (!"pred_smooth" %in% names(d))
+    stop("prediction file has neither a `psi` nor a `pred_smooth` column; ",
+         "regenerate it with est_suitability().", call. = FALSE)
+  message("`psi` column absent; plotting pre-correction `pred_smooth` ",
+          "(regenerate the prediction file with est_suitability v0.34+).")
+  as.numeric(d$pred_smooth)
 }

@@ -15,14 +15,15 @@ compile_rolling_cv_predictions(
 }
 \arguments{
 \item{dir_output}{A \code{run_rolling_cv()} output directory (must contain
-\code{manifest.json} and \code{runs/}).}
+\code{manifest.json} and \code{runs/}); a manifest from an interrupted run
+(\code{status = "running"}) compiles the cutoffs it records.}
 
 \item{base_config}{Config used to recover the held-out (unmasked) observed
 series (default \code{MOSAIC::config_default}); must match the run config.}
 
-\item{models}{Character vector of model types to compile (e.g.
-\code{"ensemble"}, \code{"opt"}, \code{"best"}, \code{"medoid"}); NULL
-(default) uses the set recorded in each run's manifest.}
+\item{models}{Character vector of model types to compile, from
+\code{"ensemble"}, \code{"ensemble_opt"}, \code{"best"}, \code{"medoid"};
+NULL (default) uses the set recorded in the run manifest.}
 
 \item{n_reps_best_medoid}{Integer or NULL (default); number of stochastic
 replicates to draw for the single-config \code{best}/\code{medoid}

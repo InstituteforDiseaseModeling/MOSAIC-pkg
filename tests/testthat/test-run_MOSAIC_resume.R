@@ -477,7 +477,9 @@ test_that(".mosaic_resume_check_inputs hard-errors on a pre-v0.68.0 run director
 
   # Same engine -> no error and, unlike the old guard, no warning either: the
   # discriminator is on disk, so there is nothing to be unable to determine.
-  wj(list(R = list(MOSAIC = "0.68.0")), file.path(inp, "environment.json"))
+  wj(list(R = list(MOSAIC = "0.68.0"),
+          engine_semantics = MOSAIC:::.mosaic_engine_semantics_version()),
+     file.path(inp, "environment.json"))
   expect_silent(expect_true(
     MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
 
@@ -506,6 +508,56 @@ test_that("the resume guard needs no Python to classify a run directory", {
   expect_false(grepl("reticulate", src, fixed = TRUE))
   expect_false(grepl("importlib", src, fixed = TRUE))
   expect_false(grepl("pkg_laser_cholera", src, fixed = TRUE))
+})
+
+test_that(".mosaic_resume_check_inputs refuses shards simulated under other engine semantics", {
+  base <- tempfile("sem_"); inp <- file.path(base, "1_inputs")
+  dir.create(inp, recursive = TRUE)
+  on.exit(unlink(base, recursive = TRUE), add = TRUE)
+  dirs <- list(inputs = inp)
+  priors <- list(a = 1); config <- list(location_name = "ETH")
+  wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+  wj(priors, file.path(inp, "priors.json"))
+  wj(config, file.path(inp, "config.json"))
+  env_path <- file.path(inp, "environment.json")
+  cur <- MOSAIC:::.mosaic_engine_semantics_version()
+  expect_true(is.character(cur) && length(cur) == 1L && nzchar(cur))
+
+  # Current stamp -> passes.
+  wj(list(R = list(MOSAIC = "0.99.10"), engine_semantics = cur), env_path)
+  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors))
+
+  # An R-engine run written before the stamp existed (e.g. v0.99.10, before the
+  # season_t0 / sigma_split_t0 / pinned psi_star changes) -> refused.
+  wj(list(R = list(MOSAIC = "0.99.10")), env_path)
+  expect_error(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors),
+               "predates the engine-semantics stamp")
+
+  # A different stamp -> refused, naming both.
+  wj(list(R = list(MOSAIC = "0.99.10"), engine_semantics = "R/older"), env_path)
+  expect_error(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors),
+               "'R/older'.*different trajectories")
+
+  # The Python-engine refusal still takes precedence.
+  wj(list(R = list(MOSAIC = "0.67.0")), env_path)
+  expect_error(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors),
+               "simulated with the Python")
+})
+
+test_that("the environment.json run_MOSAIC writes passes its own resume guard", {
+  base <- tempfile("stamp_"); inp <- file.path(base, "1_inputs")
+  dir.create(inp, recursive = TRUE)
+  on.exit(unlink(base, recursive = TRUE), add = TRUE)
+  dirs <- list(inputs = inp)
+  env <- MOSAIC:::.mosaic_stamp_resume_provenance(list(R = list(MOSAIC = "0.99.10")))
+  expect_identical(env$engine_semantics, MOSAIC:::.mosaic_engine_semantics_version())
+  expect_identical(env$likelihood_provenance, MOSAIC:::.mosaic_likelihood_provenance())
+  MOSAIC:::.mosaic_write_json(env, file.path(inp, "environment.json"), list())
+  expect_silent(expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, list(), list())))
+
+  # run_MOSAIC() writes environment.json through this stamp.
+  src <- paste(deparse(removeSource(MOSAIC::run_MOSAIC)), collapse = "\n")
+  expect_true(grepl(".mosaic_stamp_resume_provenance(env_snapshot)", src, fixed = TRUE))
 })
 
 # ---- likelihood-value provenance guard (Phase 3 / PR #111) ----
@@ -540,7 +592,8 @@ test_that(".mosaic_resume_check_inputs rejects a different likelihood provenance
   # pinning a live laser-cholera version read out of the Python environment --
   # a docker image whose wheel lagged env.yml would trip the engine guard first
   # and never reach the provenance dict. The fixture is now a literal.
-  r_engine_env <- list(R = list(MOSAIC = "0.68.0"))
+  r_engine_env <- list(R = list(MOSAIC = "0.68.0"),
+                       engine_semantics = MOSAIC:::.mosaic_engine_semantics_version())
 
   cur <- MOSAIC:::.mosaic_likelihood_provenance()
 

@@ -4,7 +4,7 @@ library(MOSAIC)
 # Set root directory (required for sample_parameters to load defaults).
 # Tests skip cleanly if not set so this file is safe to ship before the
 # data-raw rebuild has populated priors_default with rho_deaths.
-tryCatch(set_root_directory("~/MOSAIC"), error = function(e) NULL)
+local_test_root()  # scoped to this file; see helper-skips.R
 
 # skip_if_no_rho_deaths_prior() is centralized in helper-skips.R.
 

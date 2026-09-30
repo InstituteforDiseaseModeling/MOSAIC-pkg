@@ -92,16 +92,14 @@ which does not depend on the level, is kept.}
 
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 
-\item{weight_peak_timing, weight_peak_magnitude}{Weights for peak terms
-(T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
-of NB core influence.}
+\item{weight_peak_timing, weight_peak_magnitude}{Weights for peak terms, scaled
+by \code{N_obs / N_peaks}. Default \code{0} (OFF); set > 0 to enable.}
 
-\item{weight_cumulative_total}{Weight for cumulative progression (T-normalized).
-Default \code{0} (OFF). Cumulative helper is /end_idx normalized so weights
-are on the same scale as other shape terms.}
+\item{weight_cumulative_total}{Weight for cumulative progression, scaled by
+\code{N_obs / length(cumulative_timepoints)}. Default \code{0} (OFF).}
 
-\item{weight_wis}{Weight for WIS term (T-normalized). Default \code{0} (OFF).
-Ablation tests show 0.10 provides trajectory-shape regularization.}
+\item{weight_wis}{Weight for the negated WIS term, scaled by
+\code{N_obs / length(wis_quantiles)}. Default \code{0} (OFF).}
 
 \item{sigma_peak_time}{SD (weeks) for peak timing Normal; default \code{1}.}
 
@@ -113,7 +111,8 @@ Ablation tests show 0.10 provides trajectory-shape regularization.}
 }
 \value{
 Scalar total log-likelihood (finite), \code{-Inf} if non-finite,
-or \code{NA_real_} if all locations contribute nothing.
+or \code{NA_real_} if no location has data to score (fewer than three
+usable observations in both channels, and no integrated deaths score).
 }
 \description{
 Scores model fits against observed data using a Negative Binomial (NB)
@@ -126,10 +125,17 @@ Optional shape terms are enabled by setting their weight > 0: peak timing
 progression (NB at cumulative fractions), and Weighted Interval Score (WIS).
 All weights default to 0 (OFF).
 
-Shape terms are internally T-normalized so that weight parameters share
-a common scale: \code{weight = 0.25} means the term contributes roughly 25
-percent as much as the NB core. Peaks are scaled by \code{T / N_peaks},
-cumulative and WIS by \code{T} (both return per-evaluation averages).
+Each shape term helper returns a per-evaluation value, which is scaled up to
+the size of the NB core by \code{N_obs / N_eval}, where \code{N_obs} is the
+number of time steps with a finite observation in either channel and
+\code{N_eval} is the number of evaluations of that term: peaks are scaled by
+\code{N_obs / N_peaks}, WIS by \code{N_obs / length(wis_quantiles)} and the
+cumulative term by \code{N_obs / length(cumulative_timepoints)}. Because the
+WIS and cumulative helpers already average over their quantiles and
+timepoints, a given weight on those two terms carries less influence than the
+same weight on the peak terms (with the defaults, 1/5 and 1/4 of \code{N_obs}
+times the per-cell value), and changing the number of quantiles or timepoints
+changes their influence.
 
 Non-finite per-location LL values are replaced with \code{-Inf} (zero
 importance weight). The NB likelihood naturally produces very negative

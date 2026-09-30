@@ -33,14 +33,20 @@ test_that("alpha_2 = 0 survives a real simulation and is density-dependent", {
 })
 
 test_that("config validator and engine agree on the alpha_2 boundary", {
-  # make_simulation_config()'s documented contract is "[0, 1]". If that ever
-  # tightens, this test says so rather than letting the two drift apart again.
-  # Guard BEFORE reading: R/ is absent under an installed R CMD check, and
-  # readLines() throws there rather than falling through to a later skip_if().
-  f <- test_path("..", "..", "R", "make_simulation_config.R")
-  skip_if_not(file.exists(f), "package source R/ not available (installed check)")
-  src <- readLines(f, warn = FALSE)
-  line <- grep("alpha_2 must be numeric in", src, value = TRUE)
-  skip_if(length(line) == 0, "validator message not found")
-  expect_match(line[1], "\\[0, 1\\]", fixed = FALSE)
+  # make_simulation_config()'s documented contract is "[0, 1]", the same range
+  # the engine enforces above. Exercised behaviourally so a reworded message
+  # cannot turn this into a skip.
+  args <- MOSAIC::config_default
+  args[c("metadata", "zeta_ratio", "decay_days_spread", "reported_cases_weight",
+         "reported_deaths_weight", "output_file_path")] <- NULL
+  build <- function(v) { a <- args; a$alpha_2 <- v; do.call(MOSAIC::make_simulation_config, a) }
+  for (v in c(0, 1)) {
+    expect_no_error(cfg <- build(v))
+    expect_identical(cfg$alpha_2, v)
+    expect_silent(MOSAIC:::.sim_scalar(v, "alpha_2", lower = 0, upper = 1))
+  }
+  for (v in c(-0.01, 1.01)) {
+    expect_error(build(v), "alpha_2")
+    expect_error(MOSAIC:::.sim_scalar(v, "alpha_2", lower = 0, upper = 1))
+  }
 })

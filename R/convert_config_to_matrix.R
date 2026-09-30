@@ -49,10 +49,9 @@
 #' results_matrix <- matrix(NA_real_, nrow = n_sim, ncol = 4 + n_params)
 #' results_matrix[1, 5:ncol(results_matrix)] <- vec_params
 #' 
-#' # Compare with dataframe approach (slower)
+#' # Compare with dataframe approach (slower); same columns, same order
 #' df_params <- convert_config_to_dataframe(config_sampled)
-#' vec_params_slow <- as.numeric(df_params)
-#' all.equal(vec_params, vec_params_slow)  # Should be TRUE
+#' all.equal(vec_params, unlist(df_params))  # TRUE
 #' }
 convert_config_to_matrix <- function(config) {
      
@@ -68,71 +67,7 @@ convert_config_to_matrix <- function(config) {
           stop("config must be a list object")
      }
      
-     # ============================================================================
-     # Define parameters to keep (same as convert_config_to_dataframe)
-     # ============================================================================
-     
-     params_keep <- c(
-          "seed",
-          "location_name",
-          "N_j_initial",
-          "S_j_initial",
-          "E_j_initial",
-          "I_j_initial",
-          "R_j_initial",
-          "V1_j_initial",
-          "V2_j_initial",
-          "prop_S_initial",     # Added: Initial condition proportions
-          "prop_E_initial",
-          "prop_I_initial",
-          "prop_R_initial",
-          "prop_V1_initial",
-          "prop_V2_initial",
-          "phi_1",
-          "phi_2",
-          "omega_1",
-          "omega_2",
-          "iota",
-          "gamma_1",
-          "gamma_2",
-          "epsilon",
-          "rho",
-          "rho_deaths",        # Added: Death detection rate (laser-cholera#49)
-          "sigma",
-          "mobility_omega",
-          "mobility_gamma",
-          "tau_i",
-          "beta_j0_hum",
-          "beta_j0_env",
-          "beta_j0_tot",        # Added: Total transmission rate (primary parameter)
-          "p_beta",             # Added: Proportion of human-to-human transmission
-          "theta_j",            # Added: WASH coverage parameter
-          "a_1_j",
-          "a_2_j",
-          "b_1_j",
-          "b_2_j",
-          "alpha_1",
-          "alpha_2",
-          "zeta_1",
-          "zeta_ratio",
-          "zeta_2",
-          "kappa",
-          "decay_days_short",
-          "decay_days_spread",  # v0.27.0: sampled; decay_days_long derived
-          "decay_days_long",
-          "decay_shape_1",
-          "decay_shape_2",
-          "epidemic_threshold", # Case-reporting PPV switch threshold
-          "chi_endemic",        # Added: PPV during endemic periods
-          "chi_epidemic",       # Added: PPV during epidemic periods
-          "delta_reporting_cases",  # Symptom-onset-to-case reporting delay (deaths share it)
-          "psi_star_a",         # Added: psi_star calibration parameters
-          "psi_star_b",
-          "psi_star_z",
-          "psi_star_k"
-     )
-     
-     config_subset <- config[names(config) %in% params_keep]
+     config_subset <- config[names(config) %in% .MOSAIC_CONFIG_PARAMS_KEEP]
      
      # ============================================================================
      # Initialize output vector
@@ -145,19 +80,6 @@ convert_config_to_matrix <- function(config) {
      location_names <- config_subset$location_name
      n_locations <- length(location_names)
      
-     # Define location-specific parameter base names
-     location_params_base <- c(
-          "S_j_initial", "E_j_initial", "I_j_initial",
-          "R_j_initial", "V1_j_initial", "V2_j_initial",
-          "prop_S_initial", "prop_E_initial", "prop_I_initial",   # Added: Initial condition proportions
-          "prop_R_initial", "prop_V1_initial", "prop_V2_initial",
-          "beta_j0_env", "beta_j0_hum", "beta_j0_tot", "p_beta",
-          "tau_i", "theta_j",
-          "a_1_j", "a_2_j", "b_1_j", "b_2_j",
-          "epidemic_threshold",                          # Case-reporting PPV switch threshold
-          "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"  # psi_star calibration parameters
-     )
-
      # ============================================================================
      # Process each parameter
      # ============================================================================
@@ -172,7 +94,7 @@ convert_config_to_matrix <- function(config) {
           if (param_name == "location_name") next
           
           # Check if this parameter is location-specific
-          is_location_param <- param_name %in% location_params_base
+          is_location_param <- param_name %in% .MOSAIC_CONFIG_LOCATION_PARAMS
           
           # Convert to numeric (handles logical -> 0/1 conversion)
           if (is.logical(param_value)) {
@@ -230,3 +152,52 @@ convert_config_to_matrix <- function(config) {
      names(output_vec) <- output_names
      return(output_vec)
 }
+
+#' Parameters carried by the config converters
+#'
+#' The config fields kept by \code{convert_config_to_matrix()},
+#' \code{convert_config_to_dataframe()} and \code{get_param_names()}. One
+#' definition, so the three cannot drift apart again.
+#' @noRd
+.MOSAIC_CONFIG_PARAMS_KEEP <- c(
+     "seed", "location_name",
+     "N_j_initial", "S_j_initial", "E_j_initial", "I_j_initial",
+     "R_j_initial", "V1_j_initial", "V2_j_initial",
+     "prop_S_initial", "prop_E_initial", "prop_I_initial",
+     "prop_R_initial", "prop_V1_initial", "prop_V2_initial",
+     "phi_1", "phi_2", "omega_1", "omega_2",
+     "iota", "gamma_1", "gamma_2", "epsilon",
+     "rho", "rho_deaths", "sigma",
+     "mobility_omega", "mobility_gamma", "tau_i",
+     "beta_j0_hum", "beta_j0_env", "beta_j0_tot", "p_beta",
+     "theta_j",
+     "a_1_j", "a_2_j", "b_1_j", "b_2_j",
+     "alpha_1", "alpha_2",
+     "zeta_1", "zeta_ratio", "zeta_2", "kappa",
+     "decay_days_short",
+     "decay_days_spread",      # v0.27.0: sampled; decay_days_long derived
+     "decay_days_long", "decay_shape_1", "decay_shape_2",
+     "epidemic_threshold",     # Case-reporting PPV switch threshold
+     "chi_endemic", "chi_epidemic",
+     "delta_reporting_cases",  # Symptom-onset-to-case reporting delay (deaths share it)
+     "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"
+)
+
+#' Location-specific parameter base names for the config converters
+#'
+#' Fields in this set get an \code{_<ISO>} suffix even in a single-location
+#' config. \code{N_j_initial} and \code{alpha_1} are deliberately absent: they
+#' are suffixed only when the config has more than one location, and changing
+#' that would rename the single-location columns of existing samples files.
+#' @noRd
+.MOSAIC_CONFIG_LOCATION_PARAMS <- c(
+     "S_j_initial", "E_j_initial", "I_j_initial",
+     "R_j_initial", "V1_j_initial", "V2_j_initial",
+     "prop_S_initial", "prop_E_initial", "prop_I_initial",
+     "prop_R_initial", "prop_V1_initial", "prop_V2_initial",
+     "beta_j0_env", "beta_j0_hum", "beta_j0_tot", "p_beta",
+     "tau_i", "theta_j",
+     "a_1_j", "a_2_j", "b_1_j", "b_2_j",
+     "epidemic_threshold",
+     "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"
+)

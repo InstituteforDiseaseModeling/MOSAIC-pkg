@@ -1,4 +1,8 @@
 exportPattern("^[[:alpha:]]+")
+# NAMESPACE is maintained by hand (roxygen does not write it), so S3 methods
+# must be registered here; exportPattern() alone does not register them.
+S3method(print, mosaic_initial_conditions_S)
+S3method(print, mosaic_priors)
 importFrom("grDevices", "dev.off", "png")
 importFrom("methods", "as")
 importFrom("stats", "ave", "df", "predict", "reorder", 

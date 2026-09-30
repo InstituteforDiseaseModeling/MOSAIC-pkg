@@ -19,8 +19,6 @@
 # Load required packages
 library(MOSAIC)
 
-MOSAIC::attach_mosaic_env(silent = FALSE)
-
 
 
 

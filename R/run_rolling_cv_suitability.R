@@ -177,6 +177,153 @@
      ac
 }
 
+#' Build the per-seed fit function (RW-CV + full-IS refit over the gauge_A arch).
+#'
+#' A factory so the closure's environment holds only `verbose`: defined inline
+#' in the orchestrator it captured the whole frame, including the data bundle,
+#' which was then serialized to every PSOCK worker a second time alongside the
+#' explicitly exported `data_bundle`.
+#' @param verbose Logical, passed to .psi_fit_predict_rw_cv().
+#' @return function(data_bundle, seed, hyperparams).
+#' @keywords internal
+#' @noRd
+.psi_make_rw_cv_fit_fn <- function(verbose) {
+     force(verbose)
+     function(data_bundle, seed, hyperparams)
+          .psi_fit_predict_rw_cv(data_bundle = data_bundle,
+                                 fit_predict_fn = .psi_fit_predict_lstm,
+                                 seed = seed, hyperparams = hyperparams,
+                                 verbose = verbose)
+}
+
+#' Seed-ensemble fields of the psi manifest (psi_suitability_config.json).
+#'
+#' Records what the pooled psi was actually built from (requested seeds minus
+#' failures) and how the seeds were combined. The seed vectors are wrapped in
+#' I() so they are always JSON arrays under auto_unbox, whatever their length.
+#' @param ens Result of .psi_run_seed_ensemble() (uses seeds_ok, seeds_failed).
+#' @return Named list: n_seeds_ok, seeds_ok, seeds_failed, seed_aggregation.
+#' @keywords internal
+#' @noRd
+.psi_manifest_seed_fields <- function(ens) {
+     list(n_seeds_ok       = length(ens$seeds_ok),
+          seeds_ok         = I(as.integer(ens$seeds_ok)),
+          seeds_failed     = I(as.integer(ens$seeds_failed)),
+          seed_aggregation = "cross-seed median on the logit scale")
+}
+
+#' Provenance block of the psi manifest (psi_suitability_config.json).
+#'
+#' Everything needed to reproduce an lstm_v2 fit, or to prove two artefacts are
+#' not comparable: the source panel, the sequence/CV geometry, the country pool,
+#' every post-processing constant that survives into psi (LOESS span, surface and
+#' degree; logit clamp), the fully resolved architecture/loss hyperparameters the
+#' seeds were trained with, and the software identity.
+#' @param source_csv Path of the suitability panel the fit read.
+#' @param ac Resolved arch_control list (fixture merged with overrides).
+#' @param arch_hp Hyperparameter list passed to .psi_run_seed_ensemble().
+#' @param n_rw_steps Number of rolling-window CV steps in the data bundle.
+#' @return Named list written under config_info$provenance.
+#' @keywords internal
+#' @noRd
+.psi_manifest_provenance <- function(source_csv, ac, arch_hp, n_rw_steps) {
+     list(
+          source_csv        = source_csv,
+          source_csv_md5    = tryCatch(unname(tools::md5sum(source_csv)),
+                                       error = function(e) NA_character_),
+          source_csv_bytes  = tryCatch(as.numeric(file.info(source_csv)$size),
+                                       error = function(e) NA_real_),
+          source_csv_mtime  = tryCatch(as.character(file.info(source_csv)$mtime),
+                                       error = function(e) NA_character_),
+          # which countries' sequences were pooled into training
+          country_pool      = ac$country_pool %||% "all_mosaic",
+          # sequence + CV geometry (what makes a fold grid reproducible)
+          timesteps         = ac$timesteps,
+          lead              = as.integer(ac$lead %||% 0L),
+          max_gap_days      = ac$max_gap_days,
+          rw_step_months    = ac$rw_step_months,
+          rw_test_months    = ac$rw_test_months,
+          rw_subsample      = ac$rw_subsample,
+          rw_gap_weeks      = ac$rw_gap_weeks,
+          rw_step_days      = ac$step_days,
+          rw_test_days      = ac$test_days,
+          rw_min_test_days  = ac$min_test_days,
+          rw_min_train_years = ac$min_train_years,
+          n_rw_steps        = n_rw_steps,
+          # post-processing constants that survive into psi (defaults mirror the
+          # .psi_run_seed_ensemble() call)
+          smooth_span       = ac$smooth_span,
+          loess_surface     = ac$loess_surface %||% "direct",
+          loess_degree      = as.integer(ac$loess_degree %||% 2L),
+          ensemble_logit_eps = ac$ensemble_logit_eps,
+          loss_kind         = ac$loss_kind,
+          use_confidence_weight = isTRUE(ac$use_confidence_weight),
+          # the resolved architecture + loss hyperparameters every seed used
+          arch_hp           = arch_hp,
+          # software identity
+          mosaic_version    = as.character(utils::packageVersion("MOSAIC")),
+          # NOTE: no `backend` field. A `backend` variable exists only on the
+          # feature/psi-torch-port branch; on main there is one keras path.
+          # Referencing it here was cross-branch contamination and it killed
+          # every shard of an arm at the END of its first cutoff -- after all
+          # the fitting work, when the manifest is written.
+          r_version         = paste(R.version$major, R.version$minor, sep = "."),
+          tf_version        = tryCatch(
+               as.character(reticulate::py_get_attr(
+                    reticulate::import("tensorflow"), "__version__")),
+               error = function(e) NA_character_),
+          keras3_version    = tryCatch(
+               as.character(utils::packageVersion("keras3")),
+               error = function(e) NA_character_),
+          torch_version     = tryCatch(
+               as.character(utils::packageVersion("torch")),
+               error = function(e) NA_character_),
+          host              = tryCatch(unname(Sys.info()[["nodename"]]),
+                                       error = function(e) NA_character_),
+          written_at        = as.character(Sys.time()))
+}
+
+#' Auto-detect the lstm_v2 fit/prediction window from the suitability panel.
+#'
+#' `fit_date_stop` is the last week with BOTH observed cholera cases and complete
+#' ENSO/IOD covariates -- the documented contract, and the legacy path's rule.
+#' Keying on ENSO alone put the cutoff at the end of the covariate horizon
+#' (months past the last surveillance week), so the post-surveillance weeks were
+#' labelled "training" and, under the intensity target, trained as zeros.
+#' `pred_date_stop` is the last ENSO-complete week, extended by `lead` weeks when
+#' a forecast lead is trained (a lead-`h` model's last input week is the last
+#' covariate week, so its last target is `h` weeks later).
+#' @param dd Suitability panel (data.frame with date, cases, IOD, ENSO3, ENSO34, ENSO4).
+#' @param lead Forecast lead in weeks (default 0).
+#' @param need_fit Logical; detect `fit_date_stop` too (default TRUE). FALSE
+#'   (caller supplied the cutoff) needs only ENSO completeness, not a cases column.
+#' @return list(fit_date_stop, pred_date_stop), both Date (`fit_date_stop` is NA
+#'   when `need_fit = FALSE`).
+#' @keywords internal
+#' @noRd
+.psi_auto_detect_dates <- function(dd, lead = 0L, need_fit = TRUE) {
+     enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
+     miss <- setdiff(c("date", if (need_fit) "cases", enso_cols), names(dd))
+     if (length(miss))
+          stop("est_suitability: cannot auto-detect dates; panel lacks column(s): ",
+               paste(miss, collapse = ", "), call. = FALSE)
+     enso_ok <- stats::complete.cases(dd[, enso_cols])
+     if (!any(enso_ok))
+          stop("est_suitability: no rows with complete ENSO/IOD data; cannot auto-detect dates.",
+               call. = FALSE)
+     fit_date_stop <- as.Date(NA)
+     if (need_fit) {
+          fit_ok <- enso_ok & !is.na(dd$cases)
+          if (!any(fit_ok))
+               stop("est_suitability: no periods found with both cholera case data and complete ENSO data.",
+                    call. = FALSE)
+          fit_date_stop <- max(as.Date(dd$date[fit_ok]))
+     }
+     lead <- as.integer(lead %||% 0L)
+     list(fit_date_stop  = fit_date_stop,
+          pred_date_stop = max(as.Date(dd$date[enso_ok])) + 7L * max(0L, lead))
+}
+
 #' lstm_v2 orchestrator (the est_suitability default path).
 #' @keywords internal
 #' @noRd
@@ -186,7 +333,7 @@
                                      pred_date_start = NULL,
                                      pred_date_stop = NULL,
                                      feature_set = "v7.3",
-                                     response_var = "transmission_intensity",
+                                     response_var = "target_D_rate_per_country_floored",
                                      bias_correct = TRUE,
                                      arch_control = NULL,
                                      source_csv = NULL,
@@ -233,15 +380,14 @@
           dd <- utils::read.csv(source_csv, stringsAsFactors = FALSE)
           dd$date <- as.Date(dd$date)
           dd <- dd[dd$iso_code %in% MOSAIC::iso_codes_mosaic, ]
-          dd$cases[is.na(dd$cases)] <- 0
-          enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
-          enso_ok <- stats::complete.cases(dd[, enso_cols])
+          auto <- .psi_auto_detect_dates(dd, lead = as.integer(ac$lead %||% 0L),
+                                         need_fit = is.null(fit_date_stop))
           if (is.null(fit_date_stop)) {
-               fit_date_stop <- max(dd$date[enso_ok], na.rm = TRUE)
-               if (verbose) message(glue::glue("Auto-detected fit_date_stop (cutoff): {fit_date_stop}"))
+               fit_date_stop <- auto$fit_date_stop
+               if (verbose) message(glue::glue("Auto-detected fit_date_stop (cutoff; last week with cases + complete ENSO): {fit_date_stop}"))
           } else fit_date_stop <- as.Date(fit_date_stop)
           if (is.null(pred_date_stop)) {
-               pred_date_stop <- max(dd$date[enso_ok], na.rm = TRUE)
+               pred_date_stop <- auto$pred_date_stop
                if (verbose) message(glue::glue("Auto-detected pred_date_stop: {pred_date_stop}"))
           } else pred_date_stop <- as.Date(pred_date_stop)
           rm(dd)
@@ -286,11 +432,7 @@
 
      # ---- Seed ensemble (each seed = whole RW-CV + refit + predict) --------
      seeds <- seq.int(ac$seed_base, by = ac$seed_step, length.out = ac$n_seeds)
-     fit_fn <- function(data_bundle, seed, hyperparams)
-          .psi_fit_predict_rw_cv(data_bundle = data_bundle,
-                                 fit_predict_fn = .psi_fit_predict_lstm,
-                                 seed = seed, hyperparams = hyperparams,
-                                 verbose = verbose)
+     fit_fn <- .psi_make_rw_cv_fit_fn(verbose)
      arch_hp <- list(
           arch_kind = "hierarchical", hier_mode = "film",
           units_1 = ac$units_1, units_2 = ac$units_2, units_3 = ac$units_3,
@@ -393,7 +535,7 @@
      utils::write.csv(obs_out, p_data, row.names = FALSE)
      if (verbose) message("Observed data and metadata saved to: ", p_data)
 
-     config_info <- list(
+     config_info <- c(list(
           architecture     = "lstm_v2_hierarchical_film",
           fit_date_start   = as.character(fit_date_start),
           fit_date_stop    = as.character(cutoff_date),
@@ -401,10 +543,16 @@
           pred_date_stop   = as.character(pred_date_stop),
           feature_set      = feature_set,
           response_var     = response_var,
+          # End of the window that defined the target_* anchors (NA for the
+          # train-only intensity target); > fit_date_stop means target leakage.
+          target_anchor_end = if (is.na(bundle$target_anchor_end %||% NA)) NA_character_
+                              else as.character(bundle$target_anchor_end),
           bias_correct     = isTRUE(bias_correct),
           region_map       = ac$region_map,
           n_seeds          = ac$n_seeds,
-          seeds            = seeds,
+          seeds            = seeds),
+          .psi_manifest_seed_fields(ens),
+          list(
           parallel_seeds   = ac$parallel_seeds,
           n_countries      = bundle$encoders$n_countries,
           n_regions        = bundle$encoders$n_regions,
@@ -421,53 +569,9 @@
           # the same way but with the fix" could not be done reliably. Everything
           # needed to reproduce the fit, or to prove two artefacts are not
           # comparable, is recorded here. Additive: no existing key changed.
-          provenance = list(
-               source_csv        = source_csv,
-               source_csv_md5    = tryCatch(unname(tools::md5sum(source_csv)),
-                                            error = function(e) NA_character_),
-               source_csv_bytes  = tryCatch(as.numeric(file.info(source_csv)$size),
-                                            error = function(e) NA_real_),
-               source_csv_mtime  = tryCatch(as.character(file.info(source_csv)$mtime),
-                                            error = function(e) NA_character_),
-               # sequence + CV geometry (what makes a fold grid reproducible)
-               timesteps         = ac$timesteps,
-               lead              = as.integer(ac$lead %||% 0L),
-               max_gap_days      = ac$max_gap_days,
-               rw_step_months    = ac$rw_step_months,
-               rw_test_months    = ac$rw_test_months,
-               rw_subsample      = ac$rw_subsample,
-               rw_gap_weeks      = ac$rw_gap_weeks,
-               rw_step_days      = ac$step_days,
-               rw_test_days      = ac$test_days,
-               rw_min_test_days  = ac$min_test_days,
-               rw_min_train_years = ac$min_train_years,
-               n_rw_steps        = length(bundle$rw_steps),
-               # post-processing constants that survive into psi
-               smooth_span       = ac$smooth_span,
-               ensemble_logit_eps = ac$ensemble_logit_eps,
-               loss_kind         = ac$loss_kind,
-               use_confidence_weight = isTRUE(ac$use_confidence_weight),
-               # software identity
-               mosaic_version    = as.character(utils::packageVersion("MOSAIC")),
-               # NOTE: no `backend` field. A `backend` variable exists only on the
-               # feature/psi-torch-port branch; on main there is one keras path.
-               # Referencing it here was cross-branch contamination and it killed
-               # every shard of an arm at the END of its first cutoff -- after all
-               # the fitting work, when the manifest is written.
-               r_version         = paste(R.version$major, R.version$minor, sep = "."),
-               tf_version        = tryCatch(
-                    as.character(reticulate::py_get_attr(
-                         reticulate::import("tensorflow"), "__version__")),
-                    error = function(e) NA_character_),
-               keras3_version    = tryCatch(
-                    as.character(utils::packageVersion("keras3")),
-                    error = function(e) NA_character_),
-               torch_version     = tryCatch(
-                    as.character(utils::packageVersion("torch")),
-                    error = function(e) NA_character_),
-               host              = tryCatch(unname(Sys.info()[["nodename"]]),
-                                            error = function(e) NA_character_),
-               written_at        = as.character(Sys.time())))
+          provenance = .psi_manifest_provenance(
+               source_csv = source_csv, ac = ac, arch_hp = arch_hp,
+               n_rw_steps = length(bundle$rw_steps))))
      p_cfg <- file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json")
      jsonlite::write_json(config_info, p_cfg, pretty = TRUE, auto_unbox = TRUE,
                           digits = NA, null = "null")

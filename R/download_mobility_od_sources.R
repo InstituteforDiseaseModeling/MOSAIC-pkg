@@ -80,18 +80,18 @@ download_mobility_od_sources <- function(PATHS,
 
      spec <- list(
           desa = list(
-               file = "undesa_ims_stock_2024_destination_origin.xlsx",
+               file = .MOBILITY_OD_FILES[["desa"]],
                url  = paste0("https://www.un.org/development/desa/pd/sites/",
                              "www.un.org.development.desa.pd/files/",
                              "undesa_pd_2024_ims_stock_by_sex_destination_and_origin.xlsx"),
                # un.org 403s a default libcurl agent
                ua   = TRUE, min_bytes = 1e6),
           abel_cohen = list(
-               file = "abel_cohen_2022_bilat_mig_sex.csv",
+               file = .MOBILITY_OD_FILES[["abel_cohen"]],
                url  = "https://ndownloader.figshare.com/files/53235860",
                ua   = FALSE, min_bytes = 1e6),
           sci = list(
-               file = "meta_sci_country.csv",
+               file = .MOBILITY_OD_FILES[["sci"]],
                url  = paste0("https://data.humdata.org/dataset/",
                              "e9988552-74e4-4ff4-943f-c782ac8bca87/resource/",
                              "652cf9c9-541f-47de-8d53-ff818062bd0c/download/country.csv"),
@@ -126,6 +126,11 @@ download_mobility_od_sources <- function(PATHS,
                return(blank)
           }
           sz <- res$bytes
+          .append_raw_provenance(
+               file.path(PATHS$DATA_RAW, "mobility_od"),
+               file.path(basename(snap), sp$file), NA_integer_, NA_integer_,
+               sprintf("%s: %s (%s bytes)", s, sp$url, format(sz, scientific = FALSE)),
+               snapshot_date, title = "Mobility OD source snapshot provenance log")
           if (verbose) message(glue::glue("     {round(sz/1e6, 1)} MB -> {basename(dest)}"))
           data.frame(source = s, ok = TRUE, bytes = sz, file = dest,
                      note = NA_character_, stringsAsFactors = FALSE)
@@ -134,7 +139,13 @@ download_mobility_od_sources <- function(PATHS,
      out <- do.call(rbind, out)
      if (verbose) {
           message(glue::glue("\nmobility OD sources: {sum(out$ok)}/{nrow(out)} -> {snap}"))
-          if (any(!out$ok)) message("  failed: ", paste(out$source[!out$ok], collapse = ", "))
+     }
+     if (any(!out$ok)) {
+          warning("mobility OD source(s) failed to download: ",
+                  paste(out$source[!out$ok], collapse = ", "),
+                  ". Snapshot ", basename(snap), " is partial; process_mobility_od_data() ",
+                  "will keep using the newest complete snapshot until it is topped up ",
+                  "(re-run download_mobility_od_sources()).", call. = FALSE)
      }
      invisible(out)
 }
@@ -148,7 +159,23 @@ download_mobility_od_sources <- function(PATHS,
 }
 
 
-#' Newest mobility-OD snapshot directory
+#' Raw file name of each mobility-OD source inside a snapshot directory
+#' @keywords internal
+#' @noRd
+.MOBILITY_OD_FILES <- c(
+     desa       = "undesa_ims_stock_2024_destination_origin.xlsx",
+     abel_cohen = "abel_cohen_2022_bilat_mig_sex.csv",
+     sci        = "meta_sci_country.csv"
+)
+
+
+#' Newest complete mobility-OD snapshot directory
+#'
+#' A snapshot is complete when all three source files are present and
+#' non-empty. The newest complete one is returned; a newer partial snapshot
+#' (e.g. one source 403'd) is skipped with a warning so it cannot silently
+#' replace a complete older one. If none is complete, the newest non-empty
+#' snapshot is returned with a warning.
 #'
 #' @keywords internal
 #' @noRd
@@ -159,5 +186,21 @@ download_mobility_od_sources <- function(PATHS,
      snaps <- snaps[grepl("^snapshot_\\d{4}-\\d{2}-\\d{2}$", basename(snaps))]
      snaps <- snaps[vapply(snaps, function(d) length(list.files(d)) > 0L, logical(1))]
      if (!length(snaps)) return(NA_character_)
-     snaps[order(basename(snaps), decreasing = TRUE)][1L]
+     snaps <- snaps[order(basename(snaps), decreasing = TRUE)]
+     complete <- vapply(snaps, function(d) {
+          f <- file.path(d, .MOBILITY_OD_FILES)
+          all(file.exists(f)) && all(file.info(f)$size > 0)
+     }, logical(1))
+     if (!any(complete)) {
+          warning("No complete mobility-OD snapshot under ", base, "; using partial ",
+                  basename(snaps[1L]), ".", call. = FALSE)
+          return(unname(snaps[1L]))
+     }
+     first <- which(complete)[1L]
+     if (first > 1L) {
+          warning("Skipping partial mobility-OD snapshot(s) ",
+                  paste(basename(snaps[seq_len(first - 1L)]), collapse = ", "),
+                  "; using ", basename(snaps[first]), ".", call. = FALSE)
+     }
+     unname(snaps[first])
 }

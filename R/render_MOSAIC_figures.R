@@ -7,6 +7,10 @@
 # production cluster would otherwise want ~96 GB for the detail pages alone.
 .MOSAIC_DETAIL_MAX_WORKERS <- 8L
 
+# Seed for the renderer's HSIC recompute, used only when a run directory has no
+# parameter_sensitivity.csv, so repeated renders of that directory agree.
+.MOSAIC_RENDER_SENSITIVITY_SEED <- 20240101L
+
 #' Unnest single-element lists produced by jsonlite
 #'
 #' \code{jsonlite::read_json(simplifyVector = FALSE)} wraps every scalar in a
@@ -331,7 +335,9 @@ render_MOSAIC_figures <- function(dir_output,
   .resolve_subset_col <- function() {
     sp <- file.path(dirs$calibration, "samples.parquet")
     if (!file.exists(sp)) return("is_best_subset")
-    res <- tryCatch(arrow::read_parquet(sp), error = function(e) NULL)
+    # Only the one flag column is needed; the full table is ~1.2 GB at production scale.
+    res <- tryCatch(arrow::read_parquet(sp, col_select = dplyr::any_of("is_best_subset_opt")),
+                    error = function(e) NULL)
     if (is.null(res)) return("is_best_subset")
     if ("is_best_subset_opt" %in% names(res) &&
         isTRUE(any(as.logical(res$is_best_subset_opt), na.rm = TRUE)))
@@ -339,7 +345,9 @@ render_MOSAIC_figures <- function(dir_output,
   }
 
   # --- Resolve central_method from the run's control.json -------------------
-  .resolve_central <- function() .mosaic_run_central_method(dirs$inputs)
+  .resolve_central <- function()
+    .mosaic_run_central_method(dirs$inputs, results_dir = dirs$results,
+                               calibration_dir = dirs$calibration)
 
   files <- list(
     samples     = file.path(dirs$calibration, "samples.parquet"),
@@ -351,7 +359,13 @@ render_MOSAIC_figures <- function(dir_output,
 
   subset_col <- .resolve_subset_col()
   weight_col <- if (identical(subset_col, "is_best_subset_opt")) "weight_best_opt" else "weight_best"
-  central_method <- .resolve_central()
+  # A control.json this renderer cannot interpret must not abort every group.
+  central_method <- tryCatch(.resolve_central(), error = function(e) {
+    warning("central_method in control.json could not be resolved (",
+            conditionMessage(e), "); assuming the median, the pre-v0.38.0 ",
+            "behaviour (the current package default is the mean).", call. = FALSE)
+    .mosaic_resolve_central_method("median")
+  })
 
   attempted <- stats::setNames(logical(length(valid_groups)), valid_groups)
 
@@ -374,7 +388,8 @@ render_MOSAIC_figures <- function(dir_output,
 
     if (file.exists(files$samples)) {
       tryCatch({
-        results <- arrow::read_parquet(files$samples)
+        results <- arrow::read_parquet(
+          files$samples, col_select = dplyr::any_of(c("likelihood", "sim", "iter")))
         plot_model_likelihood(results = results, output_dir = dirs$res_fig_diag,
                               verbose = verbose)
       }, error = function(e) warning("likelihood curve plot failed: ",
@@ -504,14 +519,27 @@ render_MOSAIC_figures <- function(dir_output,
     .vmsg("Rendering parameter sensitivity / correlation figures...")
 
     if (file.exists(files$samples)) {
+      # run_MOSAIC() already wrote parameter_sensitivity.csv in its data layer.
+      # Render from that artifact rather than re-running HSIC, which would
+      # overwrite it with a fresh Monte Carlo resample on every render. Only a
+      # directory without the CSV is recomputed, on a fixed seed so re-renders
+      # agree, and the caller's RNG stream is restored afterwards.
+      sens_csv <- file.path(dirs$res_fig_diag, "parameter_sensitivity.csv")
+      sens_pre <- .mosaic_read_sensitivity_csv(sens_csv)
+      .plot_sens <- function() plot_model_parameter_sensitivity(
+        results_file = files$samples,
+        priors_file  = if (file.exists(files$priors)) files$priors else NULL,
+        output_dir   = dirs$res_fig_diag,
+        sensitivity  = sens_pre,
+        subset_col   = subset_col,
+        verbose      = verbose
+      )
       tryCatch(
-        plot_model_parameter_sensitivity(
-          results_file = files$samples,
-          priors_file  = if (file.exists(files$priors)) files$priors else NULL,
-          output_dir   = dirs$res_fig_diag,
-          subset_col   = subset_col,
-          verbose      = verbose
-        ),
+        if (is.null(sens_pre)) {
+          .mosaic_with_fixed_seed(.MOSAIC_RENDER_SENSITIVITY_SEED, .plot_sens)
+        } else {
+          .plot_sens()
+        },
         error = function(e) warning("parameter sensitivity plot failed: ",
                                     conditionMessage(e), call. = FALSE)
       )
@@ -633,30 +661,31 @@ render_MOSAIC_figures <- function(dir_output,
     }
 
     if (!is.null(location_names) && length(location_names) > 0L) {
+      # The raw psi is the run's own config.json psi_jt; get_paths() is only a
+      # fallback source for configs without one, so its absence is not fatal.
       PATHS <- tryCatch(get_paths(), error = function(e) NULL)
-      if (!is.null(PATHS)) {
-        tryCatch(
-          plot_psi_star_diagnostic(
-            dirs           = dirs,
-            PATHS          = PATHS,
-            location_names = as.character(location_names),
-            verbose        = verbose
-          ),
-          error = function(e) warning("psi_star diagnostic plot failed: ",
-                                      conditionMessage(e), call. = FALSE)
-        )
-      } else {
-        warning("psi_star: get_paths() unavailable; skipping.", call. = FALSE)
-      }
+      tryCatch(
+        plot_psi_star_diagnostic(
+          dirs           = dirs,
+          PATHS          = PATHS,
+          location_names = as.character(location_names),
+          verbose        = verbose
+        ),
+        error = function(e) warning("psi_star diagnostic plot failed: ",
+                                    conditionMessage(e), call. = FALSE)
+      )
     } else {
       warning("psi_star: no location_name in config.json; skipping.", call. = FALSE)
     }
   }
 
   # ===========================================================================
-  # SPATIAL (mobility figs 1-4 from config.json; hazard/coupling figs 5-6 from
-  # persisted engine arrays). Pure read-render (P5): config + .rds + a packaged
-  # basemap only -- never a simulation or a GeoBoundaries API call.
+  # SPATIAL (mobility figs 1-4 from config.json with its calibrated mobility
+  # parameters -- tau_i, mobility_omega, mobility_gamma -- replaced by their
+  # posterior medians; fig 1 prefers the persisted engine pi_ij; hazard/coupling
+  # figs 5-6 from persisted engine arrays). Pure read-render (P5): config + .rds
+  # + posterior CSV + a packaged basemap only -- never a simulation or a
+  # GeoBoundaries API call.
   # ===========================================================================
   if ("spatial" %in% which) {
     attempted["spatial"] <- TRUE
@@ -685,6 +714,18 @@ render_MOSAIC_figures <- function(dir_output,
       warning("spatial: 1_inputs/config.json missing or unreadable; ",
               "skipping mobility figures.", call. = FALSE)
     } else {
+      # 1_inputs/config.json holds the PRE-calibration mobility values; swap in
+      # the posterior medians so figs 2-4 match the posterior fig 1.
+      post_mob <- .mosaic_posterior_mobility_config(
+        cfg, if (!is.null(dirs$res_posterior))
+               file.path(dirs$res_posterior, "parameter_estimates.csv"))
+      cfg <- post_mob$config
+      # Fixed parameters (degenerate posterior rows) and parameters without a
+      # posterior keep their config value, which is what the model ran with.
+      if (!identical(post_mob$source, "posterior"))
+        .vmsg("spatial: mobility figures use %s values for tau_i/mobility_omega/mobility_gamma (%d sampled, %d held fixed, %d without a posterior).",
+              post_mob$source, post_mob$n_posterior, post_mob$n_fixed,
+              post_mob$n_missing)
       mf <- tryCatch(calc_mobility_flux(cfg), error = function(e) {
         warning("spatial: calc_mobility_flux failed (", conditionMessage(e),
                 "); skipping mobility figures.", call. = FALSE)
@@ -714,15 +755,19 @@ render_MOSAIC_figures <- function(dir_output,
                  error = function(e) warning("spatial: diffusion_pi failed: ",
                                              conditionMessage(e), call. = FALSE))
 
-        # Fig 2: departure tau (+ CI if artifact present).
-        tau_ci <- NULL
+        # Fig 2: departure tau with its posterior 95% CI; the upstream
+        # fit_prob_travel interval (mobility_tau_ci.csv) is used only when the
+        # run has no tau_i posterior.
+        tau_ci <- post_mob$tau_ci
         tau_ci_file <- file.path(dirs$inputs, "mobility_tau_ci.csv")
-        if (file.exists(tau_ci_file)) {
-          tau_ci <- tryCatch(utils::read.csv(tau_ci_file, stringsAsFactors = FALSE),
-                             error = function(e) NULL)
-        } else {
-          warning("spatial: mobility_tau_ci.csv not found; tau plot is ",
-                  "point-only.", call. = FALSE)
+        if (is.null(tau_ci)) {
+          if (file.exists(tau_ci_file)) {
+            tau_ci <- tryCatch(utils::read.csv(tau_ci_file, stringsAsFactors = FALSE),
+                               error = function(e) NULL)
+          } else {
+            warning("spatial: no tau_i posterior interval and no ",
+                    "mobility_tau_ci.csv; tau plot is point-only.", call. = FALSE)
+          }
         }
         tryCatch(.save_fig(plot_departure_tau(mf$tau, mf$N, mf$location_name, ci = tau_ci),
                            "departure_tau.png", width = 7, height = 9),
@@ -890,19 +935,176 @@ render_MOSAIC_figures <- function(dir_output,
   bm[, "iso3"]
 }
 
-# The ensemble central tendency a finished run used, read from its
-# 1_inputs/control.json. run_MOSAIC() writes the control nested under $control
-# (with run metadata beside it); an unnested control is also accepted. A
-# control.json without the setting predates it (v0.38.0), and those runs used the
-# median.
-.mosaic_run_central_method <- function(inputs_dir) {
+# The ensemble central tendency a finished run used, per channel. Sources, most
+# authoritative first:
+#   1. 3_results/summary.json central_method_cases/_deaths -- the values
+#      run_MOSAIC() resolved, written after the in-run render (so available to
+#      post-hoc renders only);
+#   2. 2_calibration/subset_opt.rds $central_method -- also resolved, present
+#      when best-subset optimization ran;
+#   3. 1_inputs/control.json predictions$central_method -- the RAW user control,
+#      nested under $control (an unnested control is also accepted).
+# control.json is ambiguous because jsonlite drops the names of an atomic
+# vector: c(deaths = "median", cases = "mean") is stored as ["median","mean"]
+# and a single named c(deaths = "median") as the scalar "median". A bare
+# two-element array with DIFFERENT values is therefore read in the documented
+# order (cases, deaths) with a warning that the order is assumed; equal values
+# are unambiguous. A bare scalar is read as applying to both channels, which is
+# the documented meaning of a scalar. A control.json without the setting
+# predates it (v0.38.0), and those runs used the median.
+.mosaic_run_central_method <- function(inputs_dir, results_dir = NULL,
+                                       calibration_dir = NULL) {
+  valid <- c("mean", "median")
+  .pair <- function(cs, dt) {
+    v <- c(cases = as.character(cs %||% NA_character_)[1L],
+           deaths = as.character(dt %||% NA_character_)[1L])
+    if (all(v %in% valid)) v else NULL
+  }
+
+  if (!is.null(results_dir)) {
+    sj <- file.path(results_dir, "summary.json")
+    if (file.exists(sj)) {
+      sm <- tryCatch(jsonlite::fromJSON(sj, simplifyVector = TRUE), error = function(e) NULL)
+      v <- tryCatch(.pair(sm$central_method_cases, sm$central_method_deaths),
+                    error = function(e) NULL)
+      if (!is.null(v)) return(v)
+    }
+  }
+  if (!is.null(calibration_dir)) {
+    so_path <- file.path(calibration_dir, "subset_opt.rds")
+    if (file.exists(so_path)) {
+      so <- tryCatch(readRDS(so_path), error = function(e) NULL)
+      cm <- if (is.list(so)) so$central_method else NULL
+      v <- if (!is.null(cm) && !is.null(names(cm)))
+        tryCatch(.pair(cm[["cases"]], cm[["deaths"]]), error = function(e) NULL)
+      if (!is.null(v)) return(v)
+    }
+  }
+
   cj <- file.path(inputs_dir, "control.json")
   cm <- "median"
   if (file.exists(cj)) {
     ctrl <- tryCatch(jsonlite::fromJSON(cj, simplifyVector = TRUE), error = function(e) NULL)
     v <- tryCatch(ctrl$control$predictions$central_method %||% ctrl$predictions$central_method,
                   error = function(e) NULL)
+    if (is.list(v)) v <- unlist(v)
+    if (!is.null(v) && length(v) == 2L &&
+        (is.null(names(v)) || all(!nzchar(names(v))))) {
+      v <- as.character(v)
+      if (!identical(v[1L], v[2L]))
+        warning("control.json stores a per-channel central_method without its ",
+                "channel names (", paste(v, collapse = ", "), "); assuming the ",
+                "documented order (cases, deaths). If the run set deaths first, ",
+                "the two channels are swapped.", call. = FALSE)
+      v <- stats::setNames(v, c("cases", "deaths"))
+    }
     if (!is.null(v) && length(v) >= 1L) cm <- v
   }
   .mosaic_resolve_central_method(cm)
+}
+
+# Evaluate fn() on an isolated, fixed-seed RNG stream and restore the caller's
+# stream afterwards (even on error), so a render neither varies run to run nor
+# advances the user's RNG.
+.mosaic_with_fixed_seed <- function(seed, fn) {
+  state <- .sim_rng_begin(seed)
+  on.exit(.sim_rng_end(state), add = TRUE)
+  fn()
+}
+
+# Read a run's persisted parameter_sensitivity.csv into the list shape
+# plot_model_parameter_sensitivity(sensitivity = ) accepts, or NULL when the
+# file is absent, unreadable or empty. The weighting and n_used columns record
+# how the HSIC draws were chosen; a CSV written before they existed yields a
+# generic label and n_used = NA, and the subtitle then omits n.
+.mosaic_read_sensitivity_csv <- function(path) {
+  if (!file.exists(path)) return(NULL)
+  df <- tryCatch(utils::read.csv(path, stringsAsFactors = FALSE),
+                 error = function(e) NULL)
+  need <- c("parameter", "hsic_r2", "p_value", "sig", "description")
+  if (is.null(df) || !nrow(df) || !all(need %in% names(df))) return(NULL)
+  first_ok <- function(col) {
+    if (!col %in% names(df)) return(NA)
+    v <- df[[col]][!is.na(df[[col]]) & nzchar(as.character(df[[col]]))]
+    if (length(v)) v[1L] else NA
+  }
+  weighting <- first_ok("weighting")
+  n_used    <- suppressWarnings(as.integer(first_ok("n_used")))
+  df$sig[is.na(df$sig)] <- ""
+  df <- df[order(-df$hsic_r2), need, drop = FALSE]
+  rownames(df) <- NULL
+  list(sens_df = df,
+       subset_label = if (is.na(weighting)) "as computed at calibration" else as.character(weighting),
+       n_used = n_used)
+}
+
+# Overwrite a run config's calibrated mobility parameters with their posterior
+# medians from 3_results/posterior/parameter_estimates.csv, so the mobility
+# figures describe the calibrated model rather than the pre-calibration inputs
+# in 1_inputs/config.json. The CSV also carries every FIXED parameter, as a
+# degenerate row (median == Q2.5 == Q97.5), so a row only counts as a posterior
+# when its 95% interval has width; a degenerate or absent row keeps the config
+# value, which is the value the calibrated model ran with. Returns
+# list(config, tau_ci, source, n_posterior, n_fixed, n_missing): tau_ci is the
+# posterior 95% interval of tau_i (location/lower/upper) when every location's
+# tau_i was sampled, else NULL (so the caller can use the upstream
+# mobility_tau_ci.csv interval); source is "posterior", "partial posterior" or
+# "input config".
+.mosaic_posterior_mobility_config <- function(cfg, param_csv) {
+  out <- list(config = cfg, tau_ci = NULL, source = "input config",
+              n_posterior = 0L, n_fixed = 0L, n_missing = 0L)
+  if (is.null(param_csv) || !nzchar(param_csv) || !file.exists(param_csv)) return(out)
+  pe <- tryCatch(utils::read.csv(param_csv, stringsAsFactors = FALSE),
+                 error = function(e) NULL)
+  if (is.null(pe) || !all(c("parameter", "median") %in% names(pe))) return(out)
+
+  .get <- function(nm, col = "median") {
+    if (!col %in% names(pe)) return(NA_real_)
+    v <- pe[[col]][match(nm, pe$parameter)]
+    if (length(v) != 1L || !is.finite(v)) NA_real_ else as.numeric(v)
+  }
+  # "posterior" (interval has width), "fixed" (degenerate row) or "missing".
+  # Without quantile columns a fixed parameter cannot be told apart, so a row
+  # with a finite median is taken as a posterior.
+  .status <- function(nm) {
+    med <- .get(nm)
+    if (is.na(med)) return("missing")
+    lo <- .get(nm, "Q2.5"); hi <- .get(nm, "Q97.5")
+    if (is.na(lo) || is.na(hi)) return("posterior")
+    scale <- max(abs(c(lo, hi, med)))
+    if (abs(hi - lo) <= sqrt(.Machine$double.eps) * scale) "fixed" else "posterior"
+  }
+
+  status <- character()
+  for (nm in c("mobility_omega", "mobility_gamma")) {
+    st <- .status(nm)
+    status <- c(status, st)
+    if (st == "posterior") cfg[[nm]] <- .get(nm)
+  }
+
+  loc <- as.character(cfg$location_name)
+  if (length(loc) && length(cfg$tau_i) == length(loc)) {
+    tau <- as.numeric(cfg$tau_i)
+    keys <- paste0("tau_i_", loc)
+    st_tau <- vapply(keys, .status, character(1L), USE.NAMES = FALSE)
+    status <- c(status, st_tau)
+    hit <- st_tau == "posterior"
+    tau[hit] <- vapply(keys[hit], .get, numeric(1L), USE.NAMES = FALSE)
+    cfg$tau_i <- tau
+    if (all(hit)) {
+      lo <- vapply(keys, .get, numeric(1L), col = "Q2.5",  USE.NAMES = FALSE)
+      hi <- vapply(keys, .get, numeric(1L), col = "Q97.5", USE.NAMES = FALSE)
+      if (!anyNA(lo) && !anyNA(hi))
+        out$tau_ci <- data.frame(location = loc, lower = lo, upper = hi,
+                                 stringsAsFactors = FALSE)
+    }
+  }
+
+  out$config      <- cfg
+  out$n_posterior <- sum(status == "posterior")
+  out$n_fixed     <- sum(status == "fixed")
+  out$n_missing   <- sum(status == "missing")
+  out$source <- if (out$n_posterior == 0L) "input config" else
+    if (out$n_posterior == length(status)) "posterior" else "partial posterior"
+  out
 }

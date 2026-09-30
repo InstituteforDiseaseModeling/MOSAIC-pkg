@@ -115,8 +115,8 @@ check_mosaic_data_freshness <- function(root            = NULL,
           file.path(root, "MOSAIC-pkg", "model", "input")
      )
 
-     # Intentionally static: download_country_DEM() skips files that already
-     # exist (download_country_DEM.R:50) because terrain does not change.
+     # Intentionally static: download_country_DEM() skips DEM files that
+     # already exist (overwrite = FALSE) because terrain does not change.
      # Ageing these produces a permanent false alarm that trains readers to
      # ignore the panel.
      static_dirs <- c("DEM", "elevation")

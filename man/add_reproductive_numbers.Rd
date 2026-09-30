@@ -21,9 +21,16 @@ directory that contains \code{1_inputs/}, \code{2_calibration/}, and
 \code{3_results/}). No path is hardcoded; all I/O is relative to this.}
 
 \item{recompute_ci}{Logical. When \code{TRUE}, build a proper posterior
-credible interval by \strong{re-simulating} the saved posterior ensemble
-(\code{2_calibration/ensemble_candidate.rds}) and computing R_eff per member,
-then weighted quantiles (median + 95\% interval). This captures the daily
+credible interval by \strong{re-simulating} the run's posterior members and
+computing R_eff per member: \code{central} is the medoid trajectory's R_t and
+\code{q2.5}/\code{q50}/\code{q97.5} are per-calendar-day cross-member
+weighted quantiles. Members are re-simulated from
+\code{2_calibration/ensemble_candidate.rds} (whose seeds reproduce them) and
+weighted, and the medoid chosen, by the run's FINAL posterior
+(\code{2_calibration/ensemble_optimized.rds}, mapped onto the candidate by
+seed; the optimized subset when \code{optimize_subset = TRUE}). Requires a
+run with \code{control$io$persist_ensemble_arrays = TRUE}; does not need the
+trajectory artifact. This captures the daily
 route incidence, stock and decay-rate channels that the persisted
 trajectory artifact does not retain at a daily grid. A faithfulness gate
 confirms the re-sim reproduces the saved \code{cases_array} before any CI is written.

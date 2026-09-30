@@ -4,12 +4,14 @@
 \alias{sim_seed_state}
 \title{Seed t=0 state from the validated parameters}
 \usage{
-sim_seed_state(state, par)
+sim_seed_state(state, par, ctl)
 }
 \arguments{
 \item{state}{State environment from \code{sim_alloc_state()}.}
 
 \item{par}{Parameters from \code{sim_params()}.}
+
+\item{ctl}{Draw controller from \code{sim_draws()} (required); \code{"replay"} keeps the oracle's deterministic \code{round()} split of \code{I_j_initial}, any other mode draws it.}
 }
 \value{
 The state environment with row 1 seeded.

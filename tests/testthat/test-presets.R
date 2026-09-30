@@ -8,7 +8,8 @@
 # =============================================================================
 
 test_that("mosaic_io_presets() returns the documented shapes", {
-  expect_identical(mosaic_io_presets("debug")$format, "csv")
+  expect_identical(mosaic_io_presets("debug")$format, "parquet")
+  expect_identical(mosaic_io_presets("debug")$compression, "none")
   expect_identical(mosaic_io_presets("default")$compression, "zstd")
   expect_identical(mosaic_io_presets("default")$compression_level, 3L)
   expect_identical(mosaic_io_presets("archive")$compression_level, 9L)

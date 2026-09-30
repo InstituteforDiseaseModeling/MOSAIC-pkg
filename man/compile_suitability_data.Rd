@@ -105,10 +105,27 @@ predict the forecast window), a full-window anchor makes the target at time
 re-baselining -- with a fixed anchor window a data refresh can no longer
 shift the entire historical target series.
 
-Default \code{NULL} = full-window anchors (back-compatible; the canonical
-panel is unchanged). Note \code{target_F_rank_per_country} is a rank over
-the country's whole observed series and is full-window BY CONSTRUCTION;
-this argument does not and cannot make it leak-free.}
+Default \code{NULL} = full-window anchors (back-compatible). Note
+\code{target_F_rank_per_country} is a rank over the country's whole
+observed series and is full-window BY CONSTRUCTION; this argument does not
+and cannot make it leak-free.
+
+The panel records the effective anchor window end (the last trusted,
+observed row used for the anchors) in a constant \code{target_anchor_stop}
+column. \code{est_suitability()} warns when a \code{target_*} response is
+fit with a cutoff earlier than this date.
+
+\strong{Leakage scope.} \code{gam_train_stop} and
+\code{target_anchor_stop} bound the hazard GAMs and the target anchors
+only. Covariate standardisations are still computed over the whole panel
+window, including rows after either bound: the week-of-year climatology
+anomalies (\code{precip_anom}, \code{temp_anom},
+\code{soil_moisture_anom}, ...), the per-country \code{spei_approx}
+scaling, the precipitation p90 / temperature p95 extreme thresholds, and
+the \code{emdat_flood_prob_anom} baseline. No post-cutoff case data enters
+these, but in a per-cutoff panel the pre-cutoff values of those covariates
+depend weakly on the post-cutoff climate distribution, so such a panel is
+leak-free on the target and hazard side only.}
 
 \item{backfill_case_gaps}{Logical (default \code{TRUE}). Linearly interpolate
 short interior gaps in the weekly case series (e.g. holiday non-reporting)

@@ -18,19 +18,44 @@
 #' the calibration likelihood only scores weeks \eqn{\le T} (observations after
 #' \code{T} are masked to \code{NA}); the post-\code{T} portion of the simulation
 #' is the forecast. A \code{embargo_weeks} gap separates the IS stop (\code{T})
-#' from the OOS start (\code{T + embargo}); the embargo week is neither trained
-#' nor labeled OOS.
+#' from the OOS start: dates in \code{(T, T + embargo]} are labeled
+#' \code{"embargo"} (neither trained nor scored) and the first OOS date is
+#' \code{T + embargo + 1}. \code{weeks_ahead} counts whole weeks from that first
+#' OOS date (week 1 = its first seven days).
 #'
-#' \strong{Leakage discipline.} psi is re-fit per cutoff with
-#' \code{fit_date_stop = T}; the harness \emph{owns} the leakage-critical date
-#' arguments to \code{\link{est_suitability}} and overrides any date keys passed
-#' via \code{est_suitability_spec} (with a warning). \code{est_suitability_spec}
-#' therefore controls only modeling choices (target, features, architecture), not
-#' the cutoff window. The reported CFR \code{mu_jt} and its prior are rebuilt per
-#' cutoff from a WHO-annual GAM fitted only to years up to \code{year(T) - 1}
-#' (a calendar year's annual total is not known until the year has ended), and
-#' carried flat past that year's 1 July. So no post-cutoff surveillance year
-#' reaches the config, the prior centres or the prior widths.
+#' \strong{Leakage discipline.} What is rebuilt as of each cutoff:
+#' \itemize{
+#'   \item psi is re-fit per cutoff with \code{fit_date_stop = T}; the harness
+#'     \emph{owns} the leakage-critical date arguments to
+#'     \code{\link{est_suitability}} and overrides any date keys passed via
+#'     \code{est_suitability_spec} (with a warning), so the spec controls only
+#'     modeling choices (target, features, architecture).
+#'   \item The reported CFR \code{mu_jt} and its prior are rebuilt from a
+#'     WHO-annual GAM fitted only to years up to \code{year(T) - 1}, carried flat
+#'     past that year's 1 July. The annual totals used are the final revised
+#'     ones, not the vintage that had been published at \code{T}.
+#'   \item Observed cases and deaths after \code{T} are masked, and epidemic peaks
+#'     whose 14-day peak-shape scoring window reaches past \code{T} are dropped
+#'     from the cutoff config (an empty set is kept as a 0-row table so the
+#'     likelihood never falls back to the full \code{\link{epidemic_peaks}}
+#'     dataset). The remaining peaks were still \emph{detected} on the full record.
+#' }
+#' What is \strong{not} as of the cutoff, so the hindcast is only approximately
+#' leak-free:
+#' \itemize{
+#'   \item psi fitted in place (\code{psi_cache = NULL}), or from a cache built
+#'     with any feature set other than \code{"v7.4"}, is trained on the canonical
+#'     suitability panel. Its per-country target anchors and its flood-probability
+#'     GAM were fitted on the whole panel, including rows after \code{T}. The run
+#'     warns when this is the case; build the cache with
+#'     \code{\link{prefit_rolling_cv_psi}(est_suitability_spec =
+#'     list(feature_set = "v7.4", ...))} for per-cutoff leak-free panels.
+#'   \item Every prior other than \code{mu_jt} comes from \code{priors} unchanged.
+#'     \code{priors_default} carries centres derived from surveillance through its
+#'     build date (e.g. the per-country \code{beta_j0_tot} centres, recentred on
+#'     posterior medians of fits to the full record); supply as-of priors for a
+#'     strictly leak-free hindcast.
+#' }
 #'
 #' \strong{Coupled metapopulation.} \code{iso} may be a single country or a vector;
 #' a vector runs as the coupled metapopulation (one calibration per cutoff covering
@@ -66,7 +91,10 @@
 #' @param priors Priors list (default \code{MOSAIC::priors_default}).
 #' @param control \code{run_MOSAIC} control list, or NULL for an experiment-grade
 #'   cheap default (fixed \code{n_simulations}, plots off). See
-#'   \code{\link{mosaic_control_defaults}}.
+#'   \code{\link{mosaic_control_defaults}}. The harness forces
+#'   \code{paths$clean_output = TRUE}, so each cutoff's \code{runs/cutoff_<T>/}
+#'   directory is wiped before its calibration and simulation shards left by an
+#'   earlier interrupted attempt cannot enter the new posterior.
 #' @param optimize_subset Logical (default \code{TRUE}); enable
 #'   \code{run_MOSAIC}'s post-ensemble best-subset optimizer
 #'   (\code{control$predictions$optimize_subset}). When \code{TRUE} the harness
@@ -78,8 +106,13 @@
 #'   \code{predictions.parquet} (default
 #'   \code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
 #'   (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
-#'   the optimizer-selected subset (only emitted when \code{optimize_subset =
-#'   TRUE} and \code{ensemble_optimized.rds} exists). \code{"medoid"} is
+#'   the optimizer-selected subset, emitted only for cutoffs where the optimizer
+#'   actually ran and selected a subset (\code{subset_opt.rds} present, or a
+#'   finite \code{n_ensemble_params_tier} in \code{summary.json}); with
+#'   \code{optimize_subset = FALSE} it is dropped from \code{models} up front,
+#'   and a cutoff whose optimizer selected nothing is skipped with a warning
+#'   rather than duplicating the candidate ensemble, which
+#'   \code{run_MOSAIC()} saves as a fallback \code{ensemble_optimized.rds}. \code{"medoid"} is
 #'   re-simulated from its saved config (see \code{n_reps_best_medoid}).
 #'   \code{"best"} is accepted for back-compat but is no longer produced by
 #'   \code{run_MOSAIC()} (no \code{config_best.json}); it is skipped with a
@@ -113,14 +146,22 @@
 #'   in-place (original behavior). When set, the per-cutoff \code{est_suitability()}
 #'   call is skipped and the frozen \code{psi_<T>.csv} is loaded from this cache
 #'   directory instead. The run \strong{hard-errors} if a requested cutoff is
-#'   absent from the cache manifest, or if the run's \code{est_suitability_spec}
-#'   hash does not match the manifest \code{spec_hash} recorded for that cutoff.
+#'   absent from the cache manifest, if the run's \code{est_suitability_spec}
+#'   hash does not match the manifest \code{spec_hash} recorded for that cutoff,
+#'   or if the cache's prediction window does not cover \code{base_config}'s
+#'   start through the cutoff's last OOS date. When \code{psi_cache} is NULL the
+#'   per-cutoff psi is fitted into a scratch \code{MODEL_INPUT} (the canonical
+#'   \code{pred_psi_suitability_day.csv} is never overwritten) and kept as
+#'   \code{runs/psi_cutoff_<T>.csv}.
 #' @param dir_output Directory for the experiment artifact (created if needed).
 #' @param verbose Logical (default TRUE).
 #'
 #' @return Invisibly, the manifest list. Side effects: writes
 #'   \code{manifest.json}, \code{predictions.parquet}, and \code{runs/} under
-#'   \code{dir_output}.
+#'   \code{dir_output}. \code{manifest.json} is rewritten atomically after every
+#'   cutoff (\code{status = "running"}, then \code{"complete"}), so the cutoffs
+#'   finished before an interruption can still be compiled with
+#'   \code{\link{compile_rolling_cv_predictions}}.
 #'
 #' @seealso \code{\link{run_MOSAIC}}, \code{\link{est_suitability}},
 #'   \code{\link{compile_rolling_cv_predictions}}
@@ -148,9 +189,12 @@ run_rolling_cv <- function(PATHS,
 
      stopifnot(is.character(iso), length(iso) >= 1L)
      if (missing(dir_output) || is.null(dir_output)) stop("dir_output is required.")
-     models <- match.arg(models, c("ensemble", "ensemble_opt", "best", "medoid"),
-                         several.ok = TRUE)
+     models <- .rcv_validate_models(models)
      models <- union("ensemble", models)              # candidate ensemble always emitted
+     if (!isTRUE(optimize_subset) && "ensemble_opt" %in% models) {
+          message("run_rolling_cv: optimize_subset = FALSE, so 'ensemble_opt' is dropped from models.")
+          models <- setdiff(models, "ensemble_opt")
+     }
      n_reps_best_medoid <- as.integer(n_reps_best_medoid)
      horizons_months <- sort(unique(as.numeric(horizons_months)))
      max_h_days      <- ceiling(max(horizons_months) * 30.4375)
@@ -187,6 +231,13 @@ run_rolling_cv <- function(PATHS,
      # the compiled predictions table is scored on (in-sample == out-of-sample).
      central_method <- .mosaic_resolve_central_method(central_method)
      control$predictions$central_method <- central_method
+     # Each cutoff owns runs/cutoff_<T>/ outright. run_MOSAIC() combines every
+     # sim_* shard it finds in 2_calibration/samples, so a directory left by an
+     # interrupted earlier attempt (possibly under a different psi, prior or
+     # simulation budget) would silently pool its stale shards into this
+     # cutoff's posterior. Wiping the per-cutoff directory first prevents that.
+     if (is.null(control$paths)) control$paths <- list()
+     control$paths$clean_output <- TRUE
 
      # ---- frozen-psi cache (optional) ----
      # When psi_cache is set, the per-cutoff est_suitability() fit is skipped and
@@ -194,6 +245,7 @@ run_rolling_cv <- function(PATHS,
      # once and the run's modeling spec hash is validated per cutoff below.
      use_psi_cache <- !is.null(psi_cache)
      psi_cache_man <- NULL
+     oos_end_of <- function(T_k) min(T_k + embargo_days + max_h_days, cfg_stop)
      if (use_psi_cache) {
           if (!is.character(psi_cache) || length(psi_cache) != 1L || !nzchar(psi_cache))
                stop("psi_cache must be a single cache-directory path or NULL.")
@@ -205,12 +257,25 @@ run_rolling_cv <- function(PATHS,
           if (!length(psi_cache_man$cutoffs))
                stop("psi_cache manifest records no cutoffs: ", man_path)
           # Validate the WHOLE requested schedule against the cache up front so a
-          # missing cutoff or spec_hash mismatch is a fatal configuration error
-          # (aborts the run) rather than a per-cutoff "failed" record swallowed by
-          # the loop's tryCatch. .rcv_psi_cache_lookup() hard-errors on either.
-          for (T_chk in cutoffs)
+          # missing cutoff, spec_hash mismatch or too-short prediction window is a
+          # fatal configuration error (aborts the run) rather than a per-cutoff
+          # "failed" record swallowed by the loop's tryCatch.
+          for (T_chk in as.list(cutoffs))
                invisible(.rcv_psi_cache_lookup(psi_cache, psi_cache_man, T_chk,
-                                               est_suitability_spec))
+                                               est_suitability_spec,
+                                               need_start = cfg_start,
+                                               need_stop  = oos_end_of(T_chk)))
+          not_leakfree <- vapply(psi_cache_man$cutoffs, function(e)
+               !identical(as.character(e$hazard_panel %||% ""), "v7.4_leakfree"),
+               logical(1))
+          cache_cuts <- vapply(psi_cache_man$cutoffs, function(e) as.character(e$cutoff),
+                               character(1))
+          if (any(not_leakfree[cache_cuts %in% as.character(cutoffs)]))
+               warning(.rcv_psi_leak_warning("psi_cache was not built from per-cutoff leak-free panels"),
+                       call. = FALSE)
+     } else {
+          warning(.rcv_psi_leak_warning("psi_cache = NULL fits psi from the canonical panel"),
+                  call. = FALSE)
      }
 
      # WHO annual data for the per-cutoff reported-CFR refit (one GAM per
@@ -232,6 +297,41 @@ run_rolling_cv <- function(PATHS,
      run_records  <- vector("list", length(cutoffs))
      pred_tables  <- vector("list", length(cutoffs))
 
+     # manifest.json is (re)written atomically after every cutoff so that an
+     # interrupted run (OOM, preemption, SIGKILL) still leaves a manifest that
+     # compile_rolling_cv_predictions() can rebuild predictions from.
+     spec_out <- list(
+          anchor_date      = as.character(cfg_start),
+          window_stop      = as.character(cfg_stop),
+          horizons_months  = horizons_months,
+          embargo_weeks    = as.integer(embargo_weeks),
+          step_months      = as.integer(step_months),
+          n_cutoffs        = length(cutoffs),
+          latest_cutoff    = as.character(max(cutoffs)),
+          iso              = iso,
+          optimize_subset  = isTRUE(optimize_subset),
+          models           = models,
+          n_reps_best_medoid = n_reps_best_medoid,
+          # as.list() so the per-channel names survive JSON round-trip:
+          # auto_unbox drops the names of a length-2 named vector (-> a bare
+          # array), which would break compile_rolling_cv_predictions()'s
+          # read-back. A named list serializes as a JSON object.
+          central_method   = as.list(central_method),
+          est_suitability_spec = est_suitability_spec,
+          psi_cache        = if (use_psi_cache) psi_cache else NULL)
+     created <- as.character(Sys.time())
+     write_manifest <- function(status) {
+          manifest <- list(
+               experiment         = "rolling_cv",
+               created            = created,
+               status             = status,
+               mosaic_pkg_version = as.character(utils::packageVersion("MOSAIC")),
+               spec               = spec_out,
+               runs               = Filter(Negate(is.null), run_records))
+          .rcv_write_json_atomic(manifest, file.path(dir_output, "manifest.json"))
+          manifest
+     }
+
      for (k in seq_along(cutoffs)) {
           T_k    <- cutoffs[k]
           run_id <- sprintf("cutoff_%s", format(T_k, "%Y-%m-%d"))
@@ -243,35 +343,40 @@ run_rolling_cv <- function(PATHS,
 
           rec <- list(run_id = run_id, iso = iso, cutoff_date = as.character(T_k),
                       is_range = c(as.character(cfg_start), as.character(T_k)),
-                      oos_range = c(as.character(T_k + embargo_days),
-                                    as.character(min(T_k + embargo_days + max_h_days, cfg_stop))),
+                      oos_range = c(as.character(T_k + embargo_days + 1L),
+                                    as.character(oos_end_of(T_k))),
                       dir = file.path("runs", run_id), status = "pending")
 
           res <- tryCatch({
-               # 1. Obtain leakage-clean psi for this cutoff. Two modes:
-               #    (a) psi_cache=NULL  -> re-fit psi on data <= T in-place (the
-               #        per-cutoff refit is the point of the rolling-CV test). The
-               #        harness owns the date args; est_suitability_spec controls
-               #        only modeling knobs (architecture, feature_set, arch_control).
+               # 1. Obtain psi for this cutoff. Two modes:
+               #    (a) psi_cache=NULL  -> re-fit psi on data <= T (the per-cutoff
+               #        refit is the point of the rolling-CV test) into a scratch
+               #        MODEL_INPUT, keeping a copy under runs/. The harness owns
+               #        the date args; est_suitability_spec controls only modeling
+               #        knobs (architecture, feature_set, arch_control).
                #    (b) psi_cache=<dir> -> skip the fit and load the FROZEN
                #        psi_<T>.csv from the cache, after asserting the cutoff is
-               #        present and the modeling-spec hash matches the manifest.
+               #        present, the modeling-spec hash matches the manifest and
+               #        the cache's prediction window covers this cutoff.
                if (use_psi_cache) {
                     psi_csv <- .rcv_psi_cache_lookup(
-                         psi_cache, psi_cache_man, T_k, est_suitability_spec)
+                         psi_cache, psi_cache_man, T_k, est_suitability_spec,
+                         need_start = cfg_start, need_stop = oos_end_of(T_k))
                } else {
                     es_args <- .rcv_merge_est_args(est_suitability_spec, list(
                          PATHS          = PATHS,
                          fit_date_stop  = T_k,
                          pred_date_start= cfg_start,
                          pred_date_stop = cfg_stop))
-                    do.call(MOSAIC::est_suitability, es_args)
-                    psi_csv <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
+                    psi_csv <- .rcv_fit_psi_isolated(
+                         es_args, file.path(runs_dir, sprintf("psi_%s.csv", run_id)))
                }
 
-               # 2. build cutoff config: subset loc, swap psi, as-of mu_jt, mask obs > T
+               # 2. build cutoff config: subset loc, swap psi, as-of mu_jt,
+               #    as-of epidemic peaks, mask obs > T
                cfg <- MOSAIC::get_location_config(iso = iso, config = base_config)
-               cfg$psi_jt <- .rolling_cv_psi_matrix(psi_csv, cfg$location_name, cfg_dates)
+               cfg$psi_jt <- .rolling_cv_psi_matrix(psi_csv, cfg$location_name, cfg_dates,
+                                                    required_stop = oos_end_of(T_k))
                # The reported CFR and its prior, from WHO annual years <= year(T) - 1
                # only. Calibration's CFR offset, estimated on deaths <= T, then
                # carries into the forecast through the post-hoc death redraw.
@@ -285,6 +390,7 @@ run_rolling_cv <- function(PATHS,
                     cfr_asof[[key]]$predictions, location_name = cfg$location_name,
                     sd_year = cfr_asof[[key]]$sigma, tau = cfr_asof[[key]]$tau,
                     sd_product = priors$mu_jt$sd_product %||% 0.3)
+               cfg$epidemic_peaks <- .rcv_asof_epidemic_peaks(cfg$epidemic_peaks, T_k)
                nloc <- length(cfg$location_name)
                rc <- .rcv_as_matrix(cfg$reported_cases,  nloc, length(cfg_dates))
                rd <- .rcv_as_matrix(cfg$reported_deaths, nloc, length(cfg_dates))
@@ -323,6 +429,7 @@ run_rolling_cv <- function(PATHS,
           if (!identical(res, "success")) rec$error <- attr(res, "message")
           rec$runtime_min <- round(as.numeric(difftime(Sys.time(), t0, units = "mins")), 2)
           run_records[[k]] <- rec
+          write_manifest("running")
      }
 
      # ---- compile unified predictions.parquet ----
@@ -332,32 +439,8 @@ run_rolling_cv <- function(PATHS,
           .rcv_write_parquet(predictions, file.path(dir_output, "predictions.parquet"))
      }
 
-     # ---- manifest + README ----
-     manifest <- list(
-          experiment            = "rolling_cv",
-          created               = as.character(Sys.time()),
-          mosaic_pkg_version     = as.character(utils::packageVersion("MOSAIC")),
-          spec = list(
-               anchor_date      = as.character(cfg_start),
-               window_stop      = as.character(cfg_stop),
-               horizons_months  = horizons_months,
-               embargo_weeks    = as.integer(embargo_weeks),
-               step_months      = as.integer(step_months),
-               n_cutoffs        = length(cutoffs),
-               latest_cutoff    = as.character(max(cutoffs)),
-               iso              = iso,
-               optimize_subset  = isTRUE(optimize_subset),
-               models           = models,
-               n_reps_best_medoid = n_reps_best_medoid,
-               # as.list() so the per-channel names survive JSON round-trip:
-               # auto_unbox drops the names of a length-2 named vector (-> a bare
-               # array), which would break compile_rolling_cv_predictions()'s
-               # read-back. A named list serializes as a JSON object.
-               central_method   = as.list(central_method),
-               est_suitability_spec = est_suitability_spec,
-               psi_cache        = if (use_psi_cache) psi_cache else NULL),
-          runs = run_records)
-     .rcv_write_json(manifest, file.path(dir_output, "manifest.json"))
+     # ---- final manifest + README ----
+     manifest <- write_manifest("complete")
      .rcv_write_readme(dir_output)
 
      n_ok <- sum(vapply(run_records, function(r) identical(r$status, "success"), logical(1)))
@@ -405,8 +488,9 @@ run_rolling_cv <- function(PATHS,
      oos0   <- cutoff + embargo_days
      segment <- ifelse(dates <= cutoff, "IS",
                 ifelse(dates <= oos0, "embargo", "OOS"))
+     # First OOS date is oos0 + 1, so week 1 is oos0+1 .. oos0+7.
      weeks_ahead <- ifelse(segment == "OOS",
-                           as.integer(floor(as.numeric(dates - oos0) / 7)) + 1L, NA_integer_)
+                           as.integer(floor(as.numeric(dates - oos0 - 1) / 7)) + 1L, NA_integer_)
      hb <- sort(unique(horizons_months))
      horizon_bucket <- rep(NA_character_, length(dates))
      is_oos <- segment == "OOS"
@@ -421,9 +505,20 @@ run_rolling_cv <- function(PATHS,
 
 #' Build psi_jt (locations x config-dates) from the est_suitability daily CSV
 #' (mirrors data-raw/make_config_default.R)
+#'
+#' Interior gaps are filled by carrying the neighbouring value (psi is smooth),
+#' but the CSV must cover every location from \code{min(dates)} through
+#' \code{required_stop} (the end of the scored OOS window): a location missing
+#' from the CSV, a series that starts after \code{min(dates)}, or one that ends
+#' before \code{required_stop} is an error, because carrying the last value
+#' forward would score a flat psi as if it were a forecast (the trailing-fill
+#' artefact removed from est_suitability() in v0.44.14). A series that ends
+#' between \code{required_stop} and \code{max(dates)} is filled flat with a
+#' warning, since those dates are simulated but never scored.
 #' @keywords internal
 #' @noRd
-.rolling_cv_psi_matrix <- function(psi_csv, location_names, dates) {
+.rolling_cv_psi_matrix <- function(psi_csv, location_names, dates,
+                                   required_stop = max(dates)) {
      if (!file.exists(psi_csv)) stop("psi prediction file not found: ", psi_csv)
      tmp <- utils::read.csv(psi_csv, stringsAsFactors = FALSE)
      # Option A (v0.34): consume the canonical `psi` column (smoothed +
@@ -446,7 +541,42 @@ run_rolling_cv <- function(PATHS,
      ic <- match(agg$dchr, date_chr)
      ok <- !is.na(ir) & !is.na(ic)
      full[cbind(ir[ok], ic[ok])] <- agg$psi[ok]
-     # carry forward/back to fill any interpolation gaps (psi is smooth)
+
+     # Coverage: every location, from the first config date through the end of
+     # the scored window.
+     has_val <- !is.na(full)
+     absent <- location_names[rowSums(has_val) == 0L]
+     if (length(absent))
+          stop("psi file has no rows for location(s) ", paste(absent, collapse = ", "),
+               " in the config window: ", psi_csv, call. = FALSE)
+     first_d <- dates[apply(has_val, 1L, function(v) min(which(v)))]
+     last_d  <- dates[apply(has_val, 1L, function(v) max(which(v)))]
+     late <- first_d > min(dates)
+     if (any(late))
+          stop(sprintf("psi file starts after the config start (%s) for %s: %s",
+                       format(min(dates)),
+                       paste(sprintf("%s (%s)", location_names[late], format(first_d[late])),
+                             collapse = ", "), psi_csv), call. = FALSE)
+     required_stop <- min(as.Date(required_stop), max(dates))
+     short <- last_d < required_stop
+     if (any(short))
+          stop(sprintf(paste0("psi file ends before the last scored OOS date (%s) for %s; ",
+                              "carrying psi forward would score a flat psi as a forecast: %s"),
+                       format(required_stop),
+                       paste(sprintf("%s (%s)", location_names[short], format(last_d[short])),
+                             collapse = ", "), psi_csv), call. = FALSE)
+     tail_fill <- last_d < max(dates)
+     if (any(tail_fill))
+          warning(sprintf(paste0("psi file ends before the config stop (%s) for %s; psi is held ",
+                                 "flat over those dates. They lie past the scored window only while ",
+                                 "evaluate_rolling_cv() uses the harness embargo; a larger ",
+                                 "embargo_weeks there shifts the scored window into them."),
+                          format(max(dates)),
+                          paste(sprintf("%s (%s)", location_names[tail_fill],
+                                        format(last_d[tail_fill])), collapse = ", ")),
+                  call. = FALSE)
+
+     # carry forward/back to fill interior interpolation gaps (psi is smooth)
      for (i in seq_len(nrow(full))) {
           full[i, ] <- zoo::na.locf(zoo::na.locf(full[i, ], na.rm = FALSE),
                                     fromLast = TRUE, na.rm = FALSE)
@@ -461,12 +591,13 @@ run_rolling_cv <- function(PATHS,
 #' cutoff or to add quantile columns), without recalibrating.
 #'
 #' @param dir_output A \code{run_rolling_cv()} output directory (must contain
-#'   \code{manifest.json} and \code{runs/}).
+#'   \code{manifest.json} and \code{runs/}); a manifest from an interrupted run
+#'   (\code{status = "running"}) compiles the cutoffs it records.
 #' @param base_config Config used to recover the held-out (unmasked) observed
 #'   series (default \code{MOSAIC::config_default}); must match the run config.
-#' @param models Character vector of model types to compile (e.g.
-#'   \code{"ensemble"}, \code{"opt"}, \code{"best"}, \code{"medoid"}); NULL
-#'   (default) uses the set recorded in each run's manifest.
+#' @param models Character vector of model types to compile, from
+#'   \code{"ensemble"}, \code{"ensemble_opt"}, \code{"best"}, \code{"medoid"};
+#'   NULL (default) uses the set recorded in the run manifest.
 #' @param n_reps_best_medoid Integer or NULL (default); number of stochastic
 #'   replicates to draw for the single-config \code{best}/\code{medoid}
 #'   models. NULL reuses the value stored in the run manifest.
@@ -493,6 +624,7 @@ compile_rolling_cv_predictions <- function(dir_output,
      # default model set / rep count from the manifest (fall back to the default set / 50)
      if (is.null(models))
           models <- unlist(man$spec$models) %||% c("ensemble", "ensemble_opt", "medoid")
+     models <- .rcv_validate_models(models)
      if (is.null(n_reps_best_medoid))
           n_reps_best_medoid <- as.integer(man$spec$n_reps_best_medoid %||% 50L)
      # Reuse the run's recorded central tendency unless the caller overrides it
@@ -510,6 +642,10 @@ compile_rolling_cv_predictions <- function(dir_output,
 
      runs <- man$runs
      tabs <- list()
+     if (!is.data.frame(runs) || !nrow(runs)) {
+          warning("manifest.json records no cutoff runs in ", dir_output, call. = FALSE)
+          return(invisible(NULL))
+     }
      for (r in seq_len(nrow(runs))) {
           if (!identical(runs$status[r], "success")) next
           run_dir <- file.path(dir_output, runs$dir[r])
@@ -590,6 +726,21 @@ compile_rolling_cv_predictions <- function(dir_output,
      do.call(rbind, out)
 }
 
+#' Validate rolling-CV model names (exact match; match.arg(several.ok = TRUE)
+#' would silently drop an unknown name such as "opt")
+#' @keywords internal
+#' @noRd
+.rcv_validate_models <- function(models) {
+     choices <- c("ensemble", "ensemble_opt", "best", "medoid")
+     models <- as.character(unlist(models))
+     bad <- setdiff(models, choices)
+     if (!length(models) || length(bad))
+          stop("models must be drawn from ", paste(sprintf("'%s'", choices), collapse = ", "),
+               if (length(bad)) paste0("; unknown: ", paste(sprintf("'%s'", bad), collapse = ", ")),
+               call. = FALSE)
+     unique(models)
+}
+
 #' Coerce a config reported_* field to an (n_loc x n_t) matrix
 #' @keywords internal
 #' @noRd
@@ -601,12 +752,18 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' Resolve and validate one cutoff's frozen psi CSV from a prefit cache.
 #'
 #' Hard-errors when the cutoff is absent from the manifest, when the recorded
-#' \code{psi_<T>.csv} is missing on disk, or when the run's modeling-spec hash
+#' \code{psi_<T>.csv} is missing on disk, when the run's modeling-spec hash
 #' (date keys stripped, mirroring \code{prefit_rolling_cv_psi}) does not match the
-#' \code{spec_hash} the cache recorded for that cutoff. Returns the CSV path.
+#' \code{spec_hash} the cache recorded for that cutoff, or (when
+#' \code{need_start}/\code{need_stop} are given) when the prediction window the
+#' cutoff was fitted over does not cover \code{[need_start, need_stop]}. The
+#' window is read from the cutoff's own entry, else from the manifest top level;
+#' a cache that records neither is left to the coverage check in
+#' \code{.rolling_cv_psi_matrix()}. Returns the CSV path.
 #' @keywords internal
 #' @noRd
-.rcv_psi_cache_lookup <- function(psi_cache, manifest, cutoff, est_suitability_spec) {
+.rcv_psi_cache_lookup <- function(psi_cache, manifest, cutoff, est_suitability_spec,
+                                  need_start = NULL, need_stop = NULL) {
      T_chr <- as.character(as.Date(cutoff))
      cuts  <- manifest$cutoffs
      keys  <- vapply(cuts, function(e) as.character(e$cutoff), character(1))
@@ -633,6 +790,21 @@ compile_rolling_cv_predictions <- function(dir_output,
                " but the cache recorded ", cache_hash %||% "<none>",
                ". The frozen psi was produced with a different modeling spec.",
                call. = FALSE)
+     pw_start <- entry$pred_date_start %||% manifest$pred_date_start
+     pw_stop  <- entry$pred_date_stop  %||% manifest$pred_date_stop
+     if (!is.null(need_start) && !is.null(pw_start) &&
+         as.Date(pw_start) > as.Date(need_start))
+          stop("psi_cache entry for ", T_chr, " was predicted from ", pw_start,
+               ", after the config start ", as.character(as.Date(need_start)),
+               ". Re-run prefit_rolling_cv_psi() with an earlier pred_date_start.",
+               call. = FALSE)
+     if (!is.null(need_stop) && !is.null(pw_stop) &&
+         as.Date(pw_stop) < as.Date(need_stop))
+          stop("psi_cache entry for ", T_chr, " was predicted only to ", pw_stop,
+               ", before the cutoff's last scored OOS date ",
+               as.character(as.Date(need_stop)),
+               ". Re-run prefit_rolling_cv_psi() with a later pred_date_stop.",
+               call. = FALSE)
      csv
 }
 
@@ -650,7 +822,6 @@ compile_rolling_cv_predictions <- function(dir_output,
      utils::modifyList(spec, owned)
 }
 
-#' Experiment-grade cheap calibration control
 #' Compile every requested model type for one cutoff into one long table
 #'
 #' Reads the candidate ensemble (always), the optimizer-selected ensemble (when
@@ -680,9 +851,18 @@ compile_rolling_cv_predictions <- function(dir_output,
 
      parts <- list(emit(ens, "ensemble"))
      if ("ensemble_opt" %in% models) {
+          # run_MOSAIC() writes ensemble_optimized.rds as a copy of the candidate
+          # ensemble whenever the optimizer is off or selects nothing, so the
+          # file alone does not mean an optimizer arm exists.
           opt_path <- file.path(cal, "ensemble_optimized.rds")
-          if (file.exists(opt_path))
+          if (file.exists(opt_path) && .rcv_optimizer_selected(run_dir)) {
                parts[[length(parts) + 1L]] <- emit(readRDS(opt_path), "ensemble_opt")
+          } else {
+               warning("models includes 'ensemble_opt' but the subset optimizer did not ",
+                       "select a subset in ", run_dir, " (optimize_subset off or empty ",
+                       "subset); skipping ensemble_opt rather than duplicating the ",
+                       "candidate ensemble.", call. = FALSE)
+          }
      }
      bm <- file.path(cal, "best_model")
      # "best" is no longer produced by run_MOSAIC() (only ensemble + medoid).
@@ -773,7 +953,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 
 #' Re-simulate a single config to a prediction object matching the ensemble shape
 #'
-#' Runs \code{n_reps} stochastic stochastic reruns of the saved config and reduces them
+#' Runs \code{n_reps} stochastic reruns of the saved config and reduces them
 #' to a predictive median + interval bounds on the template ensemble's date grid,
 #' so the result can be emitted by \code{.rolling_cv_compile_run}. Returns NULL if
 #' the config is absent.
@@ -832,6 +1012,7 @@ compile_rolling_cv_predictions <- function(dir_output,
           ci_bounds          = list(cases = qc$ci, deaths = qd$ci))
 }
 
+#' Experiment-grade cheap calibration control
 #' @keywords internal
 #' @noRd
 .rcv_cheap_control <- function() {
@@ -857,6 +1038,68 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' @noRd
 .rcv_write_json <- function(obj, path) {
      jsonlite::write_json(obj, path, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null")
+}
+
+#' Write JSON via a tempfile in the destination directory + rename, so readers
+#' never see a half-written file
+#' @keywords internal
+#' @noRd
+.rcv_write_json_atomic <- function(obj, path) {
+     tmp <- tempfile(pattern = paste0(basename(path), "_"), tmpdir = dirname(path),
+                     fileext = ".tmp")
+     on.exit(if (file.exists(tmp)) unlink(tmp), add = TRUE)
+     .rcv_write_json(obj, tmp)
+     if (!file.rename(tmp, path)) stop("failed to atomically place ", path)
+     invisible(path)
+}
+
+#' Whether run_MOSAIC's subset optimizer selected a subset in a run directory
+#'
+#' TRUE when \code{2_calibration/subset_opt.rds} exists (written only when the
+#' optimizer selected a subset), or, because that save sits in a non-fatal
+#' \code{tryCatch}, when \code{3_results/summary.json} records a finite
+#' \code{n_ensemble_params_tier} (set only on the same branch).
+#' @keywords internal
+#' @noRd
+.rcv_optimizer_selected <- function(run_dir) {
+     if (file.exists(file.path(run_dir, "2_calibration", "subset_opt.rds"))) return(TRUE)
+     sj <- file.path(run_dir, "3_results", "summary.json")
+     if (!file.exists(sj)) return(FALSE)
+     smry <- tryCatch(jsonlite::read_json(sj, simplifyVector = TRUE), error = function(e) NULL)
+     n_tier <- suppressWarnings(as.numeric(smry$n_ensemble_params_tier))
+     length(n_tier) == 1L && is.finite(n_tier) && n_tier > 0
+}
+
+#' Epidemic peaks usable at a cutoff
+#'
+#' Keeps peaks whose peak-shape scoring window (\code{half_window} days either
+#' side of the peak, the window \code{calc_model_likelihood()} uses) ends on or
+#' before the cutoff. Returns a 0-row \code{iso_code}/\code{peak_date} frame
+#' when none remain: the likelihood falls back to the full package dataset when
+#' the field is NULL, which would reintroduce every post-cutoff peak.
+#' @keywords internal
+#' @noRd
+.rcv_asof_epidemic_peaks <- function(peaks, cutoff, half_window = 14L) {
+     empty <- data.frame(iso_code = character(0), peak_date = character(0),
+                         stringsAsFactors = FALSE)
+     if (is.null(peaks) || !NROW(peaks)) return(empty)
+     keep <- !is.na(as.Date(peaks$peak_date)) &
+          as.Date(peaks$peak_date) + half_window <= as.Date(cutoff)
+     out <- peaks[keep, , drop = FALSE]
+     if (!nrow(out)) return(empty)
+     rownames(out) <- NULL
+     out
+}
+
+#' Warning text for psi that is not trained on a per-cutoff leak-free panel
+#' @keywords internal
+#' @noRd
+.rcv_psi_leak_warning <- function(what) {
+     paste0(what, ": the per-country target anchors and the flood-probability ",
+            "GAM behind the psi features were fitted on the whole suitability ",
+            "panel, including rows after each cutoff, so OOS skill is not strictly ",
+            "leak-free. Build the cache with prefit_rolling_cv_psi(est_suitability_spec ",
+            "= list(feature_set = \"v7.4\", ...)) for per-cutoff leak-free panels.")
 }
 
 #' @keywords internal

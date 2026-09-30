@@ -31,3 +31,9 @@
 - [R_eff route-split review (v0.92.1)](project_reff_route_split_review.md) — PR #126 clean-list; MOSAIC-docs spec rewrite was uncommitted; lazydata exists(asNamespace) skip-guard trap
 - [v0.93.0 release review](project_v093_release_review.md) — sample_kappa dual-default drift, undeclared gdistance/malariaAtlas/mipfp, vignette purl hazard, NEWS gaps; reusable static checks
 - [pkgdown root-md publish trap](reference_pkgdown_root_md_publish_trap.md) — every root *.md (CLAUDE.md, plans) goes to public site despite .Rbuildignore; deploy clean:false keeps dead pages
+- [Roxygen block-quote trap](roxygen_blockquote_trap.md) — wrapped roxygen line starting '>=' skips that Rd; grep document() output for ✖
+- [test-suite-isolation-traps](test_suite_isolation_traps.md) — MOSAIC testthat traps - leaked root_directory, stale installed build in PSOCK workers, vacuous guarded asserts, Poisson-fallback noise; and the helpers that fix them
+- [outbreak-regime-example-retune](outbreak_regime_example_retune.md) — inst/examples/simulate_outbreak_settings.R sporadic/rare regimes are dead under the v0.89 per-capita dose; what a 2026-09-29 probe learned before handing to disease-modeler
+- [pkgdown-build-traps](pkgdown_build_traps.md) — pkgdown/vignette traps in MOSAIC - root *.md always published, clean:false deploy, eval=FALSE include_graphics, buildignored figures
+- [prior-truncation-and-s3-registration](prior_truncation_and_s3_registration.md) — Adding a field to a prior family (e.g. lognormal lower/upper) must reach every prior consumer; hand-maintained NAMESPACE needs S3method() for each print.* method
+- [weighted-kde-bandwidth-trap](weighted_kde_bandwidth_trap.md) — Kish-n_eff weighted nrd0 bandwidth (.bw_nrd0_weighted, v0.99.11 h5-stats) blows up as n_eff->1 via n_eff/(n_eff-1) SD correction; KL underestimates exactly in the tempered ESS~1 regime

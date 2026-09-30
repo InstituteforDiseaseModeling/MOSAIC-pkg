@@ -19,7 +19,8 @@ debug, fast, default, or archive presets to optimize for your workflow.
 \details{
 Presets:
 \itemize{
-\item \code{debug}: CSV format, no compression (easy inspection)
+\item \code{debug}: Parquet with no compression (cheapest writes; output
+is always parquet, so there is no CSV preset)
 \item \code{fast}: Parquet with low compression (fastest)
 \item \code{default}: Parquet with medium compression (balanced)
 \item \code{archive}: Parquet with high compression (smallest files)

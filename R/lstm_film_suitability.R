@@ -27,6 +27,22 @@
 # provided package-wide by R/aaa_utils.R.
 # =============================================================================
 
+#' TF intra-op thread count for a suitability fit: MOSAIC_PSI_TF_INTRAOP (set
+#' per worker by .psi_fit_seeds_parallel) when set, else the per-process core
+#' budget MOSAIC_PSI_CORE_BUDGET, else NA (TF sizes its pool to the machine).
+#' Without the budget fallback, concurrent SERIAL processes (e.g. prefit shards)
+#' that set only the budget each sized TF to the whole box.
+#' @return Integer thread count, or NA_integer_ when neither is set.
+#' @keywords internal
+#' @noRd
+.psi_tf_intraop_threads <- function() {
+     for (v in c("MOSAIC_PSI_TF_INTRAOP", "MOSAIC_PSI_CORE_BUDGET")) {
+          n <- suppressWarnings(as.integer(Sys.getenv(v, "")))
+          if (!is.na(n) && n > 0L) return(n)
+     }
+     NA_integer_
+}
+
 #' Fit the gauge_A hierarchical-FiLM LSTM and predict over X_pred.
 #' @keywords internal
 #' @noRd
@@ -39,7 +55,7 @@
      # budget is set by .psi_fit_seeds_parallel(); a serial fit reads the whole-
      # process budget. tryCatch is silent because the call errors (no-op) once the
      # runtime is initialized, e.g. a 2nd seed fit in the same process.
-     .tf_intra <- suppressWarnings(as.integer(Sys.getenv("MOSAIC_PSI_TF_INTRAOP", "")))
+     .tf_intra <- .psi_tf_intraop_threads()
      .tf_inter <- suppressWarnings(as.integer(Sys.getenv("MOSAIC_PSI_TF_INTEROP", "")))
      if (!is.na(.tf_intra) && .tf_intra > 0L)
           try(tf$config$threading$set_intra_op_parallelism_threads(.tf_intra), silent = TRUE)

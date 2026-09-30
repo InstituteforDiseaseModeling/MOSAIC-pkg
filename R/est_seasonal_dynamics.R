@@ -12,6 +12,37 @@
 #' @param k Number of clusters for grouping countries by seasonality.
 #' @param exclude_iso_codes Optional character vector of ISO codes to exclude from clustering and neighbor matching.
 #' @param data_sources Character vector of data sources to include. Default is c('WHO', 'JHU', 'SUPP').
+#' @param envelope_floor Minimum allowed value of the human-transmission envelope 1 + f(t) over the year (default 0.1); case-fit coefficients whose envelope dips lower are shrunk towards zero.
+#'
+#' @details
+#' \strong{Phase convention.} The coefficients are fit against calendar
+#' day-of-year (\code{lubridate::yday()}, t = 1 is 1 January) with
+#' \code{p = 365}. The engine (\code{sim_beta_jt_human()}) evaluates the
+#' envelope at the day-of-year of each simulated day, so the coefficients keep
+#' this meaning whatever the simulation \code{date_start}.
+#'
+#' \strong{Weekly alignment.} Precipitation is summed over the same ISO weeks
+#' (Monday to Sunday) as the weekly surveillance file and merged on the week's
+#' start date; weeks with fewer than 7 days of precipitation at the edges of the
+#' window are dropped.
+#'
+#' \strong{Positivity of the envelope.} The engine uses the case-fit
+#' coefficients as a multiplicative modulation of the mean human transmission
+#' rate, \code{beta_j0_hum * (1 + f(t))}. A Fourier fit to affine-normalised
+#' weekly cases has no such constraint and can dip below -1, which the engine
+#' clamps to zero transmission for weeks at a time. Multiplicative seasonal
+#' forcing requires the envelope to stay positive (amplitude below 1 in
+#' \code{beta(t) = beta0 (1 + beta1 cos(wt))}; Keeling & Rohani 2008,
+#' \emph{Modeling Infectious Diseases in Humans and Animals}, section 5.2;
+#' King et al. 2008, \emph{Nature} 454:877, fit cholera seasonality on the log
+#' scale for the same reason). When \code{min_t(1 + f(t)) < envelope_floor}
+#' the four case coefficients (and their SE and CI) are multiplied by the single
+#' factor \code{(1 - envelope_floor) / -min_t f(t)}, which keeps the fitted
+#' phase and the relative shape of the season and lowers only its amplitude.
+#' The factor applied is recorded in the \code{envelope_scale} column
+#' (1 = unchanged). \code{envelope_floor} is a numerical positivity margin, not
+#' an estimated trough: it leaves room for prior draws around the mean
+#' (make_priors_default widens the SE) without crossing zero.
 #'
 #' @return Saves daily fitted values and parameter estimates to CSV.
 #' @export
@@ -24,7 +55,13 @@ est_seasonal_dynamics <- function(PATHS,
                                   clustering_method,
                                   k,
                                   exclude_iso_codes = NULL,
-                                  data_sources = c('WHO', 'JHU', 'SUPP')) {
+                                  data_sources = c('WHO', 'JHU', 'SUPP'),
+                                  envelope_floor = 0.1) {
+
+     if (!is.numeric(envelope_floor) || length(envelope_floor) != 1L ||
+         !is.finite(envelope_floor) || envelope_floor < 0 || envelope_floor >= 1) {
+          stop("`envelope_floor` must be a single number in [0, 1).")
+     }
 
      requireNamespace("dplyr")
      requireNamespace("minpack.lm")
@@ -108,21 +145,31 @@ est_seasonal_dynamics <- function(PATHS,
           precip_data <- precip_data[precip_data$variable_name == "precipitation_sum", ]
           precip_data$date <- as.Date(precip_data$date)
           precip_data <- precip_data[precip_data$date >= date_start & precip_data$date < date_stop, ]
-          precip_data <- precip_data %>%
-               dplyr::mutate(week = lubridate::week(date), year = lubridate::year(date)) %>%
-               dplyr::group_by(year, week) %>%
-               dplyr::summarize(weekly_precipitation_sum = sum(value, na.rm = TRUE),
-                                .groups = "drop") %>%
-               dplyr::mutate(iso_code = iso)
+          # Sum precipitation over ISO weeks (Monday-Sunday), the week definition
+          # of the weekly surveillance file, and key both on the week's start
+          # date. Partial weeks at the window edges are dropped so every
+          # precipitation value is a full 7-day sum.
+          week_key <- as.character(lubridate::floor_date(precip_data$date, unit = "week",
+                                                         week_start = 1))
+          week_sum <- tapply(precip_data$value, week_key, sum, na.rm = TRUE)
+          week_len <- tapply(precip_data$value, week_key, length)
+          precip_data <- data.frame(week_start = as.Date(names(week_sum)),
+                                    weekly_precipitation_sum = as.numeric(week_sum),
+                                    n_days = as.integer(week_len[names(week_sum)]))
+          precip_data <- precip_data[precip_data$n_days == 7L, ]
+          precip_data$iso_code <- iso
+          precip_data$year <- lubridate::isoyear(precip_data$week_start)
+          precip_data$week <- lubridate::isoweek(precip_data$week_start)
 
-          cholera_sub <- cholera_data[cholera_data$iso_code == iso, ]
-          merged <- merge(precip_data, cholera_sub, by = c("year", "week", "iso_code"), all.x = TRUE)
+          cholera_sub <- cholera_data[cholera_data$iso_code == iso, c("date_start", "cases")]
+          cholera_sub$week_start <- as.Date(cholera_sub$date_start)
+          cholera_sub <- cholera_sub[, c("week_start", "cases")]
+          merged <- merge(precip_data, cholera_sub, by = "week_start", all.x = TRUE)
 
           # Expand the weekly data to daily.
-          merged$date_start <- as.Date(paste0(merged$year, "-01-01")) + (merged$week - 1) * 7
           daily_rows <- lapply(seq_len(nrow(merged)), function(i) {
                week_row <- merged[i, ]
-               dates <- seq(week_row$date_start, week_row$date_start + 6, by = "1 day")
+               dates <- seq(week_row$week_start, week_row$week_start + 6, by = "1 day")
                data.frame(
                     day = dates,
                     day_of_year = lubridate::yday(dates),
@@ -156,7 +203,8 @@ est_seasonal_dynamics <- function(PATHS,
                mean = coef_p,
                se = se_p,
                ci_lo = coef_p - 1.96 * se_p,
-               ci_hi = coef_p + 1.96 * se_p
+               ci_hi = coef_p + 1.96 * se_p,
+               envelope_scale = NA_real_
           )
 
           fitted_days <- 1:365
@@ -175,6 +223,18 @@ est_seasonal_dynamics <- function(PATHS,
 
                coef_c <- coef(fit_c)
                se_c <- sqrt(diag(vcov(fit_c)))
+
+               # Keep the multiplicative envelope 1 + f(t) above envelope_floor
+               # (see @details): shrink amplitude, keep phase and shape.
+               envelope_scale <- .seasonal_envelope_scale(coef_c, floor = envelope_floor)
+               if (envelope_scale < 1) {
+                    message(sprintf(
+                         "  %s: case-fit envelope min(1 + f) = %.3f < %.2f; amplitude scaled by %.3f",
+                         iso, 1 + .seasonal_envelope_min(coef_c), envelope_floor, envelope_scale))
+               }
+               coef_c <- coef_c * envelope_scale
+               se_c <- se_c * envelope_scale
+
                param_c <- data.frame(
                     country_name = country_name,
                     country_iso_code = iso,
@@ -183,7 +243,8 @@ est_seasonal_dynamics <- function(PATHS,
                     mean = coef_c,
                     se = se_c,
                     ci_lo = coef_c - 1.96 * se_c,
-                    ci_hi = coef_c + 1.96 * se_c
+                    ci_hi = coef_c + 1.96 * se_c,
+                    envelope_scale = envelope_scale
                )
 
                fitted_cases <- MOSAIC::fourier_series_double(fitted_days, coef_c["a_1"], coef_c["b_1"],
@@ -200,7 +261,8 @@ est_seasonal_dynamics <- function(PATHS,
                     country_iso_code = iso,
                     response = "cases",
                     parameter = names(coef_p),
-                    mean = NA, se = NA, ci_lo = NA, ci_hi = NA
+                    mean = NA, se = NA, ci_lo = NA, ci_hi = NA,
+                    envelope_scale = NA_real_
                )
 
           }
@@ -372,10 +434,10 @@ est_seasonal_dynamics <- function(PATHS,
 
                combined_param_values[combined_param_values$country_iso_code == country_iso_code_no_data &
                                           combined_param_values$response == "cases",
-                                     c("parameter", "mean", "se", "ci_lo", "ci_hi")] <-
+                                     c("parameter", "mean", "se", "ci_lo", "ci_hi", "envelope_scale")] <-
                     combined_param_values[combined_param_values$country_iso_code == best_neighbor_iso_code &
                                                combined_param_values$response == "cases",
-                                          c("parameter", "mean", "se", "ci_lo", "ci_hi")]
+                                          c("parameter", "mean", "se", "ci_lo", "ci_hi", "envelope_scale")]
 
                combined_param_values[combined_param_values$country_iso_code == country_iso_code_no_data &
                                           combined_param_values$response == "cases", "inferred_from_neighbor"] <-
@@ -411,4 +473,24 @@ est_seasonal_dynamics <- function(PATHS,
      message(path1)
      message(path2)
 
+}
+
+
+# Minimum over the year (t = 1..365, p = 365) of the zero-mean two-harmonic
+# Fourier term f(t) = a1 cos + b1 sin + a2 cos2 + b2 sin2 for named coefficients
+# a_1, b_1, a_2, b_2.
+.seasonal_envelope_min <- function(coef) {
+     t <- seq_len(365L)
+     f <- coef[["a_1"]] * cos(2 * pi * t / 365) + coef[["b_1"]] * sin(2 * pi * t / 365) +
+          coef[["a_2"]] * cos(4 * pi * t / 365) + coef[["b_2"]] * sin(4 * pi * t / 365)
+     min(f)
+}
+
+# Factor in (0, 1] by which the Fourier coefficients must be multiplied so that
+# min_t(1 + f(t)) >= floor. f is linear in the coefficients, so scaling them by s
+# scales min f by s; returns 1 when the envelope already clears the floor.
+.seasonal_envelope_scale <- function(coef, floor = 0.1) {
+     m <- .seasonal_envelope_min(coef)
+     if (!is.finite(m) || 1 + m >= floor) return(1)
+     (1 - floor) / (-m)
 }

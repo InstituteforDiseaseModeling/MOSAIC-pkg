@@ -24,7 +24,8 @@
 #'     \item sample_gamma_1: Recovery rate (default TRUE)
 #'     \item sample_gamma_2: Recovery rate (default TRUE)
 #'     \item sample_iota: Incubation rate (default TRUE)
-#'     \item sample_kappa: V. cholerae 50 percent infectious dose concentration (default TRUE)
+#'     \item sample_kappa: V. cholerae 50 percent infectious dose concentration
+#'       (default FALSE; PINNED at \code{config_default$kappa} = 1e6 since v0.89.0)
 #'     \item sample_mobility_gamma: Mobility distance decay parameter (default TRUE)
 #'     \item sample_mobility_omega: Mobility population scaling parameter (default TRUE)
 #'     \item sample_omega_1: Vaccine waning rate one dose (default TRUE)
@@ -58,13 +59,30 @@
 #'     \item sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
 #'     \item sample_psi_star_b: Suitability calibration scale/offset (default TRUE)
 #'     \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)
-#'     \item sample_psi_star_k: Suitability calibration time offset (default TRUE)
-#'     \item sample_initial_conditions: Initial condition proportions (default TRUE)
+#'     \item sample_psi_star_k: Suitability calibration time offset (default TRUE).
+#'       The config's \code{psi_star_a/b/z/k} are applied to \code{psi_jt} by
+#'       \code{calc_psi_star()} whenever any flag is TRUE or any value differs
+#'       from the identity (a = 1, b = 0, z = 1, k = 0), so pinned values take
+#'       effect too. \code{config} should carry the raw, uncalibrated
+#'       \code{psi_jt}, as \code{config_default} and \code{get_location_config()}
+#'       do. A returned config is marked with the attribute
+#'       \code{psi_star_applied = TRUE} and carries the field
+#'       \code{config$psi_star_applied = TRUE}, which survives JSON (e.g.
+#'       \code{config_medoid.json}); passed back in as the template, its
+#'       \code{psi_jt} is left as is when every psi_star flag is FALSE, and
+#'       sampling stops with an error when any psi_star flag is TRUE, so the
+#'       transform is never applied twice.
+#'     \item sample_initial_conditions: Initial condition proportions (default TRUE).
+#'       V1, V2, E, I and R are drawn from their per-location priors and S is
+#'       the residual, so the \code{prop_S_initial} prior is not used.
 #'     \item ic_moment_match: Derive E/I from observed week-1 cases and the sampled
 #'       reporting chain (sigma, rho, chi_endemic, iota). Only active when
 #'       sample_initial_conditions is TRUE. (default FALSE)
 #'   }
-#'   If NULL, all parameters are sampled (default behavior).
+#'   If NULL, the defaults listed above are used: every parameter is sampled
+#'   except \code{alpha_1}, \code{alpha_2}, \code{kappa} and \code{rho_deaths},
+#'   which stay at their config values. These are the same defaults as
+#'   \code{mosaic_control_defaults()$sampling}.
 #'
 #'   The reported case fatality ratio \code{mu_jt} is not sampled. It is a
 #'   \[location x day\] matrix carried by the config, and calibration integrates
@@ -75,7 +93,8 @@
 #'   were removed with the parameters they controlled in v0.96.0; supplying one
 #'   raises a warning and has no effect.
 #' @param ... Additional individual sample_* arguments for backward compatibility.
-#'   These override values in sample_args if both are provided.
+#'   These override values in sample_args if both are provided. An unrecognised
+#'   name raises a warning and has no effect.
 #'
 #' @param verbose Logical indicating whether to print progress messages. Default TRUE.
 #' @param validate Logical indicating whether to run post-sampling validation. Default TRUE.
@@ -132,62 +151,8 @@ sample_parameters <- function(
   # Process sampling arguments
   # ============================================================================
 
-  # Define all possible sampling parameters with defaults
-  default_sample_args <- list(
-    # Global parameter sampling controls (21 parameters)
-    sample_alpha_1 = FALSE,  # PINNED by default: per-location alpha_1 is collinear with
-    # log(beta_j0_tot) in the endemic regime and with any coupling multiplier at
-    # invasion, so 40 free draws buy nothing -- the 250k-draw continental posterior
-    # moved it 0.057 prior SD, inside the 0.146 random-subset null. Set TRUE only
-    # for a deliberate mixing-exponent experiment.
-    sample_alpha_2 = FALSE,  # PINNED by default (weakly identified; psi absorbs the signal)
-    sample_decay_days_short = TRUE,
-    sample_decay_days_spread = TRUE,
-    sample_decay_shape_1 = TRUE,
-    sample_decay_shape_2 = TRUE,
-    sample_epsilon = TRUE,
-    sample_gamma_1 = TRUE,
-    sample_gamma_2 = TRUE,
-    sample_iota = TRUE,
-    sample_kappa = TRUE,
-    sample_mobility_gamma = TRUE,
-    sample_mobility_omega = TRUE,
-    sample_omega_1 = TRUE,
-    sample_omega_2 = TRUE,
-    sample_phi_1 = TRUE,
-    sample_phi_2 = TRUE,
-    sample_chi_endemic = TRUE,
-    sample_chi_epidemic = TRUE,
-    sample_rho = TRUE,
-    sample_rho_deaths = FALSE,  # PINNED at config_default$rho_deaths = 0.42 (cancels from reported deaths exactly; see roxygen)
-    sample_sigma = TRUE,
-    sample_zeta_1 = TRUE,
-    sample_zeta_ratio = TRUE,
-
-    # Location-specific parameter sampling controls
-    sample_beta_j0_tot = TRUE,
-    sample_p_beta = TRUE,
-    sample_tau_i = TRUE,
-    sample_theta_j = TRUE,
-    sample_a_1_j = TRUE,
-    sample_a_2_j = TRUE,
-    sample_b_1_j = TRUE,
-    sample_b_2_j = TRUE,
-    sample_epidemic_threshold = TRUE,
-    sample_delta_reporting_cases = TRUE,
-
-    # psi_star calibration parameters
-    sample_psi_star_a = TRUE,
-    sample_psi_star_b = TRUE,
-    sample_psi_star_z = TRUE,
-    sample_psi_star_k = TRUE,
-
-    # Initial conditions sampling control
-    sample_initial_conditions = TRUE,
-
-    # IC moment-matching: derive E/I from observed week-1 cases
-    ic_moment_match = FALSE
-  )
+  # Canonical sampling flags and their defaults (shared with create_sampling_args())
+  default_sample_args <- .mosaic_default_sample_args()
 
   # Start with defaults
   final_sample_args <- default_sample_args
@@ -216,6 +181,8 @@ sample_parameters <- function(
     } else if (name %in% removed_flags) {
       warning(name, " was removed in MOSAIC v0.96.0 together with the parameter it ",
               "controlled; it is ignored.", call. = FALSE)
+    } else {
+      warning("Unknown sampling parameter: ", name)
     }
   }
 
@@ -344,8 +311,89 @@ sample_parameters <- function(
     cat(paste(rep("=", 50), collapse = ""), "\n", sep = "")
   }
 
-  # Config is clean and ready for the engine - no R-specific metadata added
+  # R-side metadata: the psi_star_applied attribute and field (the engine ignores both)
   return(config_sampled)
+}
+
+#' Default sampling flags for sample_parameters()
+#'
+#' The single definition of every \code{sample_*} flag that
+#' \code{sample_parameters()} understands, with its default and the meaning of
+#' the parameter it controls. \code{sample_parameters()},
+#' \code{create_sampling_args()} and \code{mosaic_control_defaults()} all read it.
+#' @noRd
+.mosaic_default_sample_args <- function() {
+  list(
+    # === GLOBAL PARAMETERS ===
+    # Transmission mixing exponents
+    sample_alpha_1 = FALSE,            # Population mixing exponent. PINNED by default: per-location
+    # alpha_1 is collinear with log(beta_j0_tot) in the endemic regime and with any
+    # coupling multiplier at invasion, so 40 free draws buy nothing -- the 250k-draw
+    # continental posterior moved it 0.057 prior SD, inside the 0.146 random-subset
+    # null. Set TRUE only for a deliberate mixing-exponent experiment.
+    sample_alpha_2 = FALSE,            # Frequency-dependence degree. PINNED by default (weakly identified; psi absorbs the signal)
+
+    # Environmental decay (decay_days_long is derived = short + spread)
+    sample_decay_days_short = TRUE,    # Short V. cholerae survival time in the environment (days)
+    sample_decay_days_spread = TRUE,   # Long minus short survival time (days)
+    sample_decay_shape_1 = TRUE,       # First Beta shape mapping suitability to survival time
+    sample_decay_shape_2 = TRUE,       # Second Beta shape mapping suitability to survival time
+
+    # Natural history
+    sample_epsilon = TRUE,             # Waning rate of natural immunity (R -> S)
+    sample_gamma_1 = TRUE,             # Recovery rate, symptomatic infections
+    sample_gamma_2 = TRUE,             # Recovery rate, asymptomatic infections
+    sample_iota = TRUE,                # Incubation rate (E -> I)
+    sample_kappa = FALSE,              # Half-saturation (50%) infectious dose of V. cholerae. PINNED at
+                                       # config_default$kappa = 1e6 since v0.89.0 (per-capita dose-response)
+    sample_sigma = TRUE,               # Symptomatic fraction of infections
+    sample_zeta_1 = TRUE,              # Shedding rate, symptomatic infections
+    sample_zeta_ratio = TRUE,          # Symptomatic-to-asymptomatic shedding ratio
+
+    # Mobility
+    sample_mobility_gamma = TRUE,      # Gravity-model distance-decay exponent
+    sample_mobility_omega = TRUE,      # Gravity-model population-scaling exponent
+
+    # Vaccination
+    sample_omega_1 = TRUE,             # Waning rate of one-dose vaccine immunity
+    sample_omega_2 = TRUE,             # Waning rate of two-dose vaccine immunity
+    sample_phi_1 = TRUE,               # Vaccine effectiveness, one dose
+    sample_phi_2 = TRUE,               # Vaccine effectiveness, two doses
+
+    # Observation process
+    sample_chi_endemic = TRUE,         # PPV among suspected cases (endemic periods)
+    sample_chi_epidemic = TRUE,        # PPV among suspected cases (epidemic periods)
+    sample_rho = TRUE,                 # Care-seeking (reporting) probability of a symptomatic infection
+    sample_rho_deaths = FALSE,         # Death capture probability. PINNED at config_default$rho_deaths =
+                                       # 0.42 (cancels from reported deaths exactly; see roxygen)
+
+    # === LOCATION-SPECIFIC PARAMETERS ===
+    # Transmission
+    sample_beta_j0_tot = TRUE,         # Total baseline transmission rate
+    sample_p_beta = TRUE,              # Proportion of transmission that is human-to-human
+    sample_tau_i = TRUE,               # Daily departure (travel) probability
+    sample_theta_j = TRUE,             # WASH coverage
+
+    # Seasonality: Fourier coefficients of the human transmission rate
+    sample_a_1_j = TRUE,               # Cosine coefficient, first harmonic
+    sample_a_2_j = TRUE,               # Cosine coefficient, second harmonic
+    sample_b_1_j = TRUE,               # Sine coefficient, first harmonic
+    sample_b_2_j = TRUE,               # Sine coefficient, second harmonic
+
+    # Reporting
+    sample_epidemic_threshold = TRUE,  # Symptomatic prevalence (Isym/N) switching the case PPV from endemic to epidemic
+    sample_delta_reporting_cases = TRUE, # Symptom-onset-to-report delay (deaths are reported on the same lag)
+
+    # psi_star calibration of environmental suitability (calc_psi_star())
+    sample_psi_star_a = TRUE,          # Shape/gain
+    sample_psi_star_b = TRUE,          # Scale/offset
+    sample_psi_star_z = TRUE,          # Smoothing
+    sample_psi_star_k = TRUE,          # Time offset
+
+    # === INITIAL CONDITIONS ===
+    sample_initial_conditions = TRUE,  # Initial compartment proportions (S, V1, V2, E, I, R)
+    ic_moment_match = FALSE            # Derive E/I from observed week-1 cases + reporting chain
+  )
 }
 
 #' Extract sampling flags from function environment
@@ -456,6 +504,21 @@ sample_parameters <- function(
         verbose = FALSE
       )
 
+      # sample_from_prior() returns NA (without an error) for a 'failed' prior or
+      # NA hyperparameters; fall back to the config value as the location sampler does
+      if (length(sampled_value) != 1L || is.na(sampled_value)) {
+        if (!(param_name %in% names(config_sampled)) || is.null(config_sampled[[param_name]])) {
+          stop("Prior for global parameter '", param_name, "' returned NA and the config ",
+               "has no value to fall back on. Please check priors configuration.",
+               call. = FALSE)
+        }
+        .mosaic_warn_once(paste0("global_prior_na_", param_name), paste0(
+          "Prior for global parameter '", param_name, "' returned NA (failed or NA ",
+          "hyperparameters); keeping the config value ",
+          .format_verbose_value(config_sampled[[param_name]]), "."))
+        next
+      }
+
       # delta_reporting_cases is in integer days; make_simulation_config() rejects non-integers
       if (identical(param_name, "delta_reporting_cases")) {
         sampled_value <- as.integer(round(sampled_value))
@@ -533,36 +596,34 @@ sample_parameters <- function(
           # with distribution and parameters slots
           dist_info <- param_info$location[[iso]]
 
-          tryCatch({
-            sampled_value <- sample_from_prior(
-              n = 1,
-              prior = dist_info,
-              verbose = FALSE
-            )
-
-            # Check if sampling returned NA (e.g., due to NA prior parameters)
-            if (is.na(sampled_value)) {
-              # Fall back to default config value
-              if (param_name %in% names(config_sampled)) {
-                default_value <- config_sampled[[param_name]][i]
-                if (verbose) {
-                  message("Prior contains NA for ", param_name, " in ", iso,
-                         ", using default value: ", default_value)
-                }
-                sampled_values[i] <- default_value
-              } else {
-                warning("Cannot fall back to default for ", param_name, " in ", iso)
-                sampled_values[i] <- NA
-                failed_locations <<- c(failed_locations, iso)
-              }
-            } else {
-              sampled_values[i] <- sampled_value
+          sampled_value <- tryCatch(
+            sample_from_prior(n = 1, prior = dist_info, verbose = FALSE),
+            error = function(e) {
+              warning("Failed to sample ", param_name, " for location ", iso, ": ", e$message)
+              NULL
             }
-          }, error = function(e) {
-            warning("Failed to sample ", param_name, " for location ", iso, ": ", e$message)
+          )
+
+          if (is.null(sampled_value)) {
             sampled_values[i] <- NA
-            failed_locations <<- c(failed_locations, iso)
-          })
+            failed_locations <- c(failed_locations, iso)
+          } else if (is.na(sampled_value)) {
+            # Sampling returned NA (e.g. NA prior parameters): fall back to the config value
+            if (param_name %in% names(config_sampled)) {
+              default_value <- config_sampled[[param_name]][i]
+              if (verbose) {
+                message("Prior contains NA for ", param_name, " in ", iso,
+                        ", using default value: ", default_value)
+              }
+              sampled_values[i] <- default_value
+            } else {
+              warning("Cannot fall back to default for ", param_name, " in ", iso)
+              sampled_values[i] <- NA
+              failed_locations <- c(failed_locations, iso)
+            }
+          } else {
+            sampled_values[i] <- sampled_value
+          }
 
         } else {
           warning("No prior found for ", param_name, " in location ", iso)
@@ -626,11 +687,14 @@ sample_parameters <- function(
 
 
   # Derive zeta_2 from zeta_1 and zeta_ratio (zeta_2 = zeta_1 / zeta_ratio).
-  # zeta_2 > 0 is guaranteed (ratio of two positive lognormals). zeta_1 > zeta_2
-  # requires zeta_ratio > 1. Under the rev-2 priors (v0.29.0+) the combined
-  # zeta_ratio lognormal has meanlog ~10 and sdlog ~2, so
-  # P(zeta_ratio > 1) = 1 - Phi(-meanlog/sdlog) ~ 1 - 1e-6 -- the constraint
-  # holds with probability essentially 1.
+  # zeta_2 > 0 always holds (ratio of two positive draws). zeta_2 <= zeta_1
+  # holds because the zeta_ratio prior is a lognormal truncated below at 1
+  # (parameters$lower = 1, drawn by sample_from_prior(); see
+  # est_zeta_ratio_prior()). A priors object whose zeta_ratio entry has no
+  # `lower` (priors_default before the rebuild that adds it, or a custom
+  # prior) still puts Phi(-meanlog/sdlog) of its mass below 1 -- about 16%
+  # for the direct channel (meanlog 4.31, sdlog 4.39) -- and nothing here
+  # re-imposes the ordering.
   if ("zeta_1" %in% names(config_sampled) && "zeta_ratio" %in% names(config_sampled)) {
 
     if (verbose) cat("\n  Deriving zeta_2 from zeta_1 and zeta_ratio...\n")
@@ -1094,9 +1158,10 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
                 "epidemic_threshold"),
       type = "vector"
     ),
-    # alpha_1 is dual-mode (priors_default v15.16 / config_default v4.7): it is
-    # now sampled PER-LOCATION (length-nL vector) but a scalar alpha_1 remains
-    # engine-valid (broadcast across patches) for national/legacy configs.
+    # alpha_1 is dual-mode (priors_default v15.16 / config_default v4.7): it has
+    # a per-location prior (length-nL vector when sampled; pinned by default) but
+    # a scalar alpha_1 remains engine-valid (broadcast across patches) for
+    # national/legacy configs.
     # Validated as scalar OR length-nL so both forms pass. alpha_2 stays a strict
     # global scalar above.
     dual = list(
@@ -1207,13 +1272,23 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
   return(NULL)  # No issues
 }
 
+#' Whether a config's psi_jt already carries a psi_star calibration
+#'
+#' True when either the in-memory attribute or the JSON-surviving field
+#' \code{psi_star_applied} is set.
+#' @noRd
+.psi_star_already_applied <- function(config) {
+  isTRUE(attr(config, "psi_star_applied", exact = TRUE)) ||
+    isTRUE(as.logical(unlist(config[["psi_star_applied"]]))[1])
+}
+
 #' Apply psi_star calibration to psi_jt matrix
 #'
 #' @description
 #' Applies location-specific psi_star calibration parameters to transform the
 #' environmental suitability matrix (psi_jt) using the calc_psi_star() function.
-#' Each location gets its own calibration based on sampled psi_star_a, psi_star_b,
-#' psi_star_z, and psi_star_k parameters.
+#' Each location gets its own calibration from the config's psi_star_a,
+#' psi_star_b, psi_star_z and psi_star_k, whether they were drawn or pinned.
 #'
 #' @param config_sampled The configuration object with sampled parameters
 #' @param sampling_flags Named list of sampling flags to determine which parameters were sampled
@@ -1222,12 +1297,21 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 #' @return Updated config_sampled object with calibrated psi_jt matrix
 #'
 #' @details
-#' This function:
-#' - Checks if any psi_star parameters were sampled via sampling flags
-#' - Applies calc_psi_star() calibration to each location's psi_jt time series
-#' - Uses location-specific parameters or defaults if not sampled
-#' - Handles errors gracefully on a per-location basis
-#' - Updates psi_jt matrix in-place for memory efficiency
+#' The calibration is applied when any psi_star flag is TRUE or any config
+#' psi_star value differs from the identity transform (a = 1, b = 0, z = 1,
+#' k = 0). Only when every psi_star parameter is pinned at the identity is
+#' psi_jt returned untouched (calc_psi_star() clips psi away from 0 and 1, so
+#' an identity call is not bit-identical to skipping). This makes a pinned
+#' value such as config_default's psi_star_b = 1 mean the same thing whatever
+#' the sibling flags are.
+#'
+#' A calibrated config is marked with \code{attr(, "psi_star_applied") = TRUE}
+#' and with the field \code{psi_star_applied = TRUE}; the field survives a JSON
+#' round trip (the attribute does not), and either one counts as the mark.
+#' A template that already carries the mark is returned untouched when no
+#' psi_star flag is TRUE (its psi_star values were not redrawn, so its psi_jt
+#' already reflects them) and is rejected when any flag is TRUE, because the
+#' raw psi_jt needed to apply the new draw is no longer available.
 #'
 #' @noRd
 .apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose = FALSE) {
@@ -1238,19 +1322,24 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 
   psi_star_params <- c("psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k")
 
-  # Check if any psi_star parameters were requested for sampling
-  psi_star_flags_exist <- psi_star_params %in% names(sampling_flags)
+  psi_star_enabled <- any(vapply(psi_star_params,
+                                 function(p) isTRUE(sampling_flags[[p]]),
+                                 logical(1)))
 
-  if (!any(psi_star_flags_exist)) {
-    if (verbose) cat("  \u2139 No psi_star sampling flags found, skipping calibration\n")
+  if (.psi_star_already_applied(config_sampled)) {
+    if (psi_star_enabled) {
+      stop("config$psi_jt already carries a psi_star calibration (the template is a ",
+           "config returned by sample_parameters()), so drawing new psi_star values ",
+           "would apply calc_psi_star() twice. Pass the raw base config, e.g. ",
+           "config_default or get_location_config(), or set every sample_psi_star_* ",
+           "flag to FALSE.", call. = FALSE)
+    }
+    if (verbose) cat("  \u2139 psi_jt already calibrated by its own psi_star values, skipping\n")
     return(config_sampled)
   }
 
-  # Check if any psi_star parameters were actually enabled for sampling
-  psi_star_enabled <- any(unlist(sampling_flags[psi_star_params[psi_star_flags_exist]]))
-
-  if (!psi_star_enabled) {
-    if (verbose) cat("  \u2139 No psi_star parameters were enabled for sampling, skipping calibration\n")
+  if (!psi_star_enabled && !.psi_star_is_non_identity(config_sampled)) {
+    if (verbose) cat("  \u2139 psi_star pinned at the identity transform, skipping calibration\n")
     return(config_sampled)
   }
 
@@ -1415,6 +1504,11 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
     })
   }
 
+  if (n_calibrated > 0) {
+    attr(config_sampled, "psi_star_applied") <- TRUE
+    config_sampled$psi_star_applied <- TRUE
+  }
+
   # ============================================================================
   # Report calibration results
   # ============================================================================
@@ -1460,20 +1554,15 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
   return(config_sampled)
 }
 
-#' Get all sampling parameters with defaults
+#' Does the config carry psi_star values other than the identity transform?
 #' @noRd
-.get_all_sampling_params <- function() {
-  # Extract from function formals
-  formals_list <- formals(sample_parameters)
-
-  # Filter to only sample_* parameters
-  sample_params <- names(formals_list)[grep("^sample_", names(formals_list))]
-
-  # Create list with all TRUE values
-  params <- as.list(rep(TRUE, length(sample_params)))
-  names(params) <- sample_params
-
-  return(params)
+.psi_star_is_non_identity <- function(config) {
+  identity_values <- c(psi_star_a = 1, psi_star_b = 0, psi_star_z = 1, psi_star_k = 0)
+  for (p in names(identity_values)) {
+    v <- config[[p]]
+    if (!is.null(v) && any(v != identity_values[[p]], na.rm = TRUE)) return(TRUE)
+  }
+  FALSE
 }
 
 #' Create Sampling Arguments for Common Patterns
@@ -1482,20 +1571,32 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 #' making it easier to work with the many parameters.
 #'
 #' @param pattern Character string specifying the pattern. Options:
-#'   - "all": Sample all parameters (default)
+#'   - "all": The package default flags (every parameter except alpha_1, alpha_2, kappa and rho_deaths, which stay pinned)
 #'   - "none": Don't sample any parameters
-#'   - "disease_only": Sample only disease progression and immunity parameters
-#'   - "transmission_only": Sample only transmission parameters
-#'   - "mobility_only": Sample only mobility parameters
-#'   - "spatial_only": Sample only spatial parameters
+#'   - "disease_only": Sample only disease progression, immunity and reporting parameters
+#'   - "transmission_only": Sample only the transmission rates (beta_j0_tot, p_beta)
+#'   - "mobility_only": Sample only the mobility and diffusion parameters (mobility_omega, mobility_gamma, tau_i)
+#'   - "spatial_only": Same flags as "mobility_only"; the spatial coupling of the model is its mobility network
+#'   - "environmental_only": Sample only shedding and environmental decay (zeta_1, zeta_ratio, decay_*)
 #'   - "initial_conditions_only": Sample only initial condition proportions
 #' @param seed Random seed for sampling
-#' @param custom Named list of custom overrides for specific parameters
+#' @param custom Named list of flag overrides (e.g. \code{list(sample_kappa = TRUE)}) applied after the pattern
 #' @param PATHS Optional PATHS object
 #' @param priors Optional priors object
 #' @param config Optional config object
 #'
-#' @return Named list of arguments suitable for do.call(sample_parameters, ...)
+#' @return Named list of arguments suitable for \code{do.call(sample_parameters, ...)}:
+#'   \code{sample_args} (a complete named list of logical flags), \code{seed},
+#'   and \code{PATHS}, \code{priors} and \code{config} when supplied.
+#'
+#' @details
+#' Every pattern other than "all" sets each \code{sample_*} flag to FALSE except
+#' the ones the pattern names. No pattern turns on a parameter the package pins
+#' by default (\code{alpha_1}, \code{alpha_2}, \code{kappa}, \code{rho_deaths});
+#' re-enable one explicitly through \code{custom}. \code{ic_moment_match} keeps its default (FALSE)
+#' unless set in \code{custom}. With every psi_star flag FALSE, the config's
+#' psi_star values are still applied to \code{psi_jt} when they differ from the
+#' identity transform (see \code{\link{sample_parameters}}).
 #'
 #' @export
 #'
@@ -1522,91 +1623,53 @@ create_sampling_args <- function(pattern = "all",
     stop("seed must be provided and numeric")
   }
 
-  # Get all sampling parameters using function formals
-  all_params <- .get_all_sampling_params()
+  flags <- .mosaic_default_sample_args()
+  flag_names <- setdiff(names(flags), "ic_moment_match")
 
-  # Apply pattern
-  if (pattern == "all") {
-    # Keep all as TRUE (default)
+  mobility_flags <- c("sample_mobility_omega", "sample_mobility_gamma", "sample_tau_i")
+  pattern_flags <- list(
+    disease_only = c("sample_phi_1", "sample_phi_2",
+                     "sample_omega_1", "sample_omega_2",
+                     "sample_gamma_1", "sample_gamma_2",
+                     "sample_epsilon", "sample_chi_endemic",
+                     "sample_chi_epidemic", "sample_rho",
+                     "sample_sigma", "sample_iota"),
+    transmission_only = c("sample_beta_j0_tot", "sample_p_beta"),
+    mobility_only = mobility_flags,
+    spatial_only = mobility_flags,
+    environmental_only = c("sample_zeta_1", "sample_zeta_ratio",
+                           "sample_decay_days_short", "sample_decay_days_spread",
+                           "sample_decay_shape_1", "sample_decay_shape_2"),
+    initial_conditions_only = "sample_initial_conditions"
+  )
 
-  } else if (pattern == "none") {
-    # Set all to FALSE
-    all_params <- lapply(all_params, function(x) FALSE)
-
-  } else if (pattern == "disease_only") {
-    # Only disease progression and immunity
-    disease_params <- c("sample_phi_1", "sample_phi_2",
-                       "sample_omega_1", "sample_omega_2",
-                       "sample_gamma_1", "sample_gamma_2",
-                       "sample_epsilon", "sample_chi_endemic",
-                       "sample_chi_epidemic", "sample_rho", "sample_rho_deaths",
-                       "sample_sigma", "sample_iota")
-    param_names <- names(all_params)
-    all_params <- lapply(param_names, function(n) {
-      n %in% disease_params
-    })
-    names(all_params) <- param_names
-
-  } else if (pattern == "transmission_only") {
-    # Only transmission parameters
-    trans_params <- c("sample_beta_j0_tot", "sample_p_beta",
-                     "sample_alpha_1", "sample_alpha_2")
-    param_names <- names(all_params)
-    all_params <- lapply(param_names, function(n) {
-      n %in% trans_params
-    })
-    names(all_params) <- param_names
-
-  } else if (pattern == "mobility_only") {
-    # Only mobility parameters
-    mobility_params <- c("sample_mobility_omega", "sample_mobility_gamma",
-                        "sample_tau_i")
-    param_names <- names(all_params)
-    all_params <- lapply(param_names, function(n) {
-      n %in% mobility_params
-    })
-    names(all_params) <- param_names
-
-  } else if (pattern == "spatial_only") {
-    # Only spatial parameters
-    spatial_params <- c("sample_zeta_1", "sample_zeta_ratio",
-                       "sample_kappa", "sample_tau_i")
-    param_names <- names(all_params)
-    all_params <- lapply(param_names, function(n) {
-      n %in% spatial_params
-    })
-    names(all_params) <- param_names
-
-  } else if (pattern == "initial_conditions_only") {
-    # Only initial conditions
-    param_names <- names(all_params)
-    all_params <- lapply(param_names, function(n) {
-      n == "sample_initial_conditions"
-    })
-    names(all_params) <- param_names
-
+  if (identical(pattern, "all")) {
+    # Keep the package defaults
+  } else if (identical(pattern, "none")) {
+    flags[flag_names] <- FALSE
+  } else if (length(pattern) == 1L && pattern %in% names(pattern_flags)) {
+    flags[flag_names] <- as.list(flag_names %in% pattern_flags[[pattern]])
   } else {
     stop("Unknown pattern: ", pattern,
          ". Choose from: all, none, disease_only, transmission_only, ",
-         "mobility_only, spatial_only, initial_conditions_only")
+         "mobility_only, spatial_only, environmental_only, initial_conditions_only")
   }
 
   # Apply custom overrides
   for (name in names(custom)) {
-    if (name %in% names(all_params)) {
-      all_params[[name]] <- custom[[name]]
+    if (name %in% names(flags)) {
+      flags[[name]] <- custom[[name]]
     } else {
       warning("Unknown parameter in custom overrides: ", name)
     }
   }
 
-  # Add required arguments
-  all_params$seed <- seed
-  if (!is.null(PATHS)) all_params$PATHS <- PATHS
-  if (!is.null(priors)) all_params$priors <- priors
-  if (!is.null(config)) all_params$config <- config
+  args <- list(sample_args = flags, seed = seed)
+  if (!is.null(PATHS)) args$PATHS <- PATHS
+  if (!is.null(priors)) args$priors <- priors
+  if (!is.null(config)) args$config <- config
 
-  return(all_params)
+  return(args)
 }
 
 #' Check Sampled Parameter Against Prior
@@ -1656,7 +1719,8 @@ check_sampled_parameter <- function(config_sampled, priors,
         result$expected_mean <- params$shape / params$rate
       } else if (prior_info$distribution == "lognormal") {
         if (!is.null(params$meanlog) && !is.null(params$sdlog)) {
-          result$expected_mean <- exp(params$meanlog + params$sdlog^2/2)
+          result$expected_mean <- .lognormal_trunc_mean(params$meanlog, params$sdlog,
+                                                        params$lower, params$upper)
         }
       } else if (prior_info$distribution == "normal") {
         result$expected_mean <- params$mean

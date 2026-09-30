@@ -126,7 +126,9 @@ HEDGEHOG_REMOTE_DIR=MOSAIC/output vm/pull_results.sh --dest ./output MOZ
 - `1_inputs/` — config/priors/control/environment JSON.
 - `2_calibration/` — `samples.parquet`, `posterior/`, `diagnostics/` (`convergence_results.parquet`
   + `convergence_diagnostics.json`), `state/`. Presence of `2_calibration/diagnostics/` = past calibration.
-- `3_results/` — `summary.json` (final R²/bias/ESS verdict), `predictions/`, `figures/`.
+- `3_results/` — `summary.json` (final R²/bias/ESS verdict; a FIXED-mode run reports `converged = FALSE`
+  with `convergence_evaluated = FALSE` and status `completed_fixed` — expected, see run-mosaic §3),
+  `predictions/`, `figures/`.
 
 ## 7. Smoke test before any large run
 Stage a tiny job (`iso="MOZ"`, `n_simulations=100L`, `n_iterations=1L`, `n_cores=8L`), launch via §3,

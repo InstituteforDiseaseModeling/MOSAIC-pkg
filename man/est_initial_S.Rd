@@ -26,8 +26,7 @@ est_initial_S(
 
 \item{t0}{Date object, target date for estimation (default NULL, used for metadata)}
 
-\item{variance_inflation}{Numeric factor to inflate variance of fitted Beta distributions (default 1 = no inflation).
-Values > 1 increase uncertainty while preserving the mean. For example, 2 doubles the variance.}
+\item{variance_inflation}{Multiplier on the SD of the S samples in the method-of-moments Beta refit, which keeps the sample mean (default 0 = no change; 1 is also no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.}
 
 \item{verbose}{Logical, whether to print progress messages (default TRUE)}
 
@@ -41,9 +40,13 @@ List with priors_default-compatible structure containing:
 \itemize{
 \item prop_S_initial: Beta distribution parameters for S/N by location
 }
-Each parameter contains $parameters$location$ISO_CODE with shape1 and shape2
+Each parameter contains $parameters$location$ISO_CODE with shape1, shape2
+and a \code{metadata} list (\code{estimated_from_constraints}, \code{mean},
+\code{ci_lower}, \code{ci_upper}, \code{constraint_violation_rate})
 }
 }
+The object has class \code{c("mosaic_initial_conditions_S",
+"mosaic_initial_conditions", "list")}.
 }
 \description{
 Estimates the initial proportion of the population in the Susceptible (S) compartment
@@ -52,6 +55,15 @@ estimated priors of other compartments and calculates S as the constrained resid
 ensuring mathematical consistency while propagating uncertainty from all compartments.
 }
 \details{
+\strong{Diagnostic prior.} \code{sample_parameters()} does not draw
+\code{prop_S_initial}: it samples V1, V2, E, I and R and sets S to the
+simplex residual (renormalising when the others sum to 1 or more). The Beta
+built here is therefore not a sampling prior. It is a summary of the S
+distribution those draws imply (up to the \code{min_S_proportion} floor used
+here), kept in \code{priors_default} as the reference for prior-vs-posterior
+comparisons of S; tuning \code{variance_inflation} changes that reference
+only, not calibration.
+
 The function implements a constrained residual approach:
 
 \strong{Method Overview:}
@@ -95,7 +107,7 @@ initial_S <- est_initial_S(
   priors = priors_updated,
   config = config_default,
   n_samples = 1000,
-  variance_inflation = 2  # Double the variance for less constrained priors
+  variance_inflation = 2  # Double the SD (4x the variance)
 )
 
 # Access results for a location

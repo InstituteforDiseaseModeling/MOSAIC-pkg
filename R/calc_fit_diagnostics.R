@@ -41,7 +41,7 @@
 #'   \item{shape}{list: \code{peak_timing_error_by_year} (days; positive = model peaks later),
 #'     \code{peak_magnitude_ratio_by_year} (pred/obs), \code{onset_slope_ratio},
 #'     \code{seasonal_corr}, \code{shape_corr}.}
-#'   \item{variance}{list: \code{cv_ratio} (pred CV / obs CV), \code{residual_autocorr_lag7}.}
+#'   \item{variance}{list: \code{cv_ratio} (pred CV / obs CV, both on the paired finite days), \code{residual_autocorr_lag7} (lag in days; NA gaps kept in place).}
 #'   \item{scorecard}{named character vector: \code{bias}, \code{peak_timing},
 #'     \code{peak_shape}, \code{variance}, each "PASS"|"WARN"|"FAIL".}
 #' }
@@ -218,39 +218,52 @@ calc_fit_diagnostics <- function(observed,
   suppressWarnings(stats::cor(o / so, p / sp))
 }
 
-# CV ratio = (sd(pred)/mean(pred)) / (sd(obs)/mean(obs)).
+# CV ratio = (sd(pred)/mean(pred)) / (sd(obs)/mean(obs)), both computed on the
+# SAME paired cells (days where obs and pred are both finite), so the two CVs
+# describe the same period. A series with zero spread has CV 0 whatever its mean.
 .fit_cv_ratio <- function(obs, pred) {
+  ok <- is.finite(obs) & is.finite(pred)
   cv <- function(x) {
-    x <- x[is.finite(x)]
+    if (length(x) < 2L) return(NA_real_)
+    s <- stats::sd(x)
+    if (isTRUE(s == 0)) return(0)
     m <- mean(x)
-    if (length(x) < 2L || !is.finite(m) || m == 0) return(NA_real_)
-    stats::sd(x) / m
+    if (!is.finite(m) || m == 0) return(NA_real_)
+    s / m
   }
-  cv_o <- cv(obs); cv_p <- cv(pred)
+  cv_o <- cv(obs[ok]); cv_p <- cv(pred[ok])
   if (!is.finite(cv_o) || cv_o == 0 || !is.finite(cv_p)) return(NA_real_)
   cv_p / cv_o
 }
 
-# Residual (obs - pred) autocorrelation at a given lag.
+# Residual (obs - pred) autocorrelation at a given lag IN DAYS. Non-finite
+# residuals are kept as NA in place (not concatenated away), so the lag never
+# spans a surveillance gap.
 .fit_residual_autocorr <- function(obs, pred, lag = 7L) {
   r <- obs - pred
-  r <- r[is.finite(r)]
-  if (length(r) <= lag + 1L) return(NA_real_)
-  ac <- tryCatch(stats::acf(r, lag.max = lag, plot = FALSE, demean = TRUE)$acf,
+  r[!is.finite(r)] <- NA_real_
+  if (sum(!is.na(r)) <= lag + 1L) return(NA_real_)
+  ac <- tryCatch(stats::acf(r, lag.max = lag, plot = FALSE, demean = TRUE,
+                            na.action = stats::na.pass)$acf,
                  error = function(e) NULL)
   if (is.null(ac) || length(ac) < lag + 1L) return(NA_real_)
-  as.numeric(ac[lag + 1L])
+  out <- as.numeric(ac[lag + 1L])
+  if (!is.finite(out)) NA_real_ else out
 }
 
 # Symmetric deviation of a ratio-like value from a reference: max(x/ref, ref/x).
-# So 0.5 and 2.0 both map to 2.0. NA-safe (returns Inf so it grades FAIL/NA cleanly).
+# So 0.5 and 2.0 both map to 2.0. A ratio of exactly 0 (e.g. an all-zero or
+# perfectly flat prediction) is the worst possible deviation and returns Inf,
+# which grades FAIL; negative or non-finite input returns NA (grades "NA").
 .fit_dev <- function(x, ref = 1) {
-  if (!is.finite(x) || x <= 0) return(NA_real_)
+  if (!is.finite(x) || x < 0) return(NA_real_)
+  if (x == 0) return(Inf)
   max(x / ref, ref / x)
 }
 
 # Grade a non-negative deviation against PASS/WARN cut points.
 .fit_grade <- function(value, pass, warn) {
+  if (identical(value, Inf)) return("FAIL")
   if (!is.finite(value)) return("NA")
   if (value < pass) return("PASS")
   if (value < warn) return("WARN")

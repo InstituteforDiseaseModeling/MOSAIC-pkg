@@ -10,7 +10,7 @@ set_root_directory(root = NULL)
 \item{root}{A character string representing the path to the root directory. If \code{NULL}, the function will prompt the user to enter the root directory interactively.}
 }
 \value{
-A character string representing the root directory. The root directory is also stored globally in the option \code{root_directory}.
+The root directory (character string), invisibly. It is also stored globally in the option \code{root_directory}.
 }
 \description{
 This function sets the root directory to a user-specified path or, if not provided, prompts the user to enter the root directory interactively. The directory path is stored in a global option called \code{root_directory} and is also returned.

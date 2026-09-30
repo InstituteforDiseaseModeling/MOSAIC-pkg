@@ -11,8 +11,11 @@
 #'   years >= 2021. The plot includes suitability predictions with separate colors for
 #'   historical (black) and future (orange) predictions.
 #'
-#' @details The function reads pred_psi_suitability_week.csv created by est_suitability(),
-#'   which contains the columns: iso_code, year, week, date, cases, cases_binary, and pred.
+#' @details The function reads pred_psi_suitability_week.csv created by est_suitability()
+#'   (columns iso_code, year, date and psi) and plots the canonical \code{psi}
+#'   column (smoothed and bias-corrected), the series that becomes the engine's
+#'   \code{psi_jt}. A pre-v0.34 file without \code{psi} falls back to
+#'   \code{pred_smooth}, with a message.
 #'
 #' @export
 
@@ -32,6 +35,7 @@ plot_suitability_by_country <- function(PATHS) {
      # Load prediction data
      d_all <- read.csv(pred_weekly_file, stringsAsFactors = FALSE)
      d_all$date <- as.Date(d_all$date)
+     d_all$psi_plot <- .mosaic_suitability_series(d_all)
      d_all$country <- convert_iso_to_country(d_all$iso_code)
 
      # Fill in country names for missing entries using first available country name per iso_code
@@ -61,9 +65,9 @@ plot_suitability_by_country <- function(PATHS) {
 
      # Create line plot for predicted values
      combined_plot <- ggplot() +
-          geom_line(data = plot_data, aes(x = date, y = pred), linewidth = 1.75, color = color_pred) +
+          geom_line(data = plot_data, aes(x = date, y = .data$psi_plot), linewidth = 1.75, color = color_pred) +
           geom_line(data = plot_data[plot_data$date <= Sys.Date(), ],
-                    aes(x = date, y = pred), linewidth = 1.75, color = color_actual) +
+                    aes(x = date, y = .data$psi_plot), linewidth = 1.75, color = color_actual) +
           facet_wrap(~ country, ncol = 2) +  # Facet by country
           labs(x = NULL, y = 'Predicted Suitability') +
           scale_y_continuous(limits = c(-0.001, 1), breaks = c(0, 0.5, 1), expand = c(0.1, 0.1)) +

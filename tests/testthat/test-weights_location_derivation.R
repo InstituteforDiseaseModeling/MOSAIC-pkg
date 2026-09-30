@@ -160,7 +160,9 @@ testthat::test_that("absence countries no longer dominate active ones (config_de
           )
      }
 
-     wll <- w * ll
+     # A location with no observations at all (ERI in config_default) scores NA:
+     # it contributes nothing to the total likelihood.
+     wll <- w * ifelse(is.na(ll), 0, ll)
      # The worst (largest-magnitude) absence contribution must fall below the
      # median active contribution -- i.e. absence no longer dominates.
      max_absence <- max(abs(wll[absent]))

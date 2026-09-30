@@ -22,8 +22,8 @@ doubles variance while preserving the mean. Default 2.0.}
 \item{params}{Optional character vector. Base parameter names to inflate.
 When \code{NULL} all non-fixed/frozen parameters are inflated.}
 
-\item{n_samples}{Integer. Number of samples for empirical fallback methods
-(truncnorm fallback, gompertz). Default 10000L.}
+\item{n_samples}{Integer. Number of samples for the empirical methods
+(gompertz and unrecognised distributions). Default 10000L.}
 
 \item{verbose}{Logical. Print per-parameter inflation messages. Default TRUE.}
 }
@@ -53,17 +53,17 @@ Maximum inflatable factor is \code{f_max = s+1}.}
 \item{gamma(shape, rate)}{\code{shape_new = shape/f, rate_new = rate/f}.}
 \item{lognormal(meanlog, sdlog)}{CV² scaled by \code{f}; \code{meanlog}
 adjusted to preserve natural-scale mean.}
-\item{lognormal(mean, sd)}{\code{sd_new = sqrt(f)*sd}.}
+\item{lognormal(mean, sd)}{\code{sd_new = sqrt(f)*sd}. For either
+lognormal form, truncation bounds \code{lower}/\code{upper} are kept and
+apply to the inflated distribution.}
 \item{normal(mean, sd)}{\code{sd_new = sqrt(f)*sd}.}
 \item{uniform(min, max)}{Bounds extended symmetrically around midpoint.
 Skipped with a warning if new bounds violate positivity.}
-}
-
-\strong{Analytic with empirical fallback:}
-\describe{
-\item{truncnorm(mean, sd, a, b)}{Root-finding preserves actual truncated
-mean. Due to active bounds, the achieved variance ratio may be less than
-\code{inflation_factor}. Falls back to empirical refit if root-find fails.}
+\item{truncnorm(mean, sd, a, b)}{\code{sd_new = sqrt(f)*sd}; the
+pre-truncation \code{mean} and the bounds \code{a}, \code{b} are left
+unchanged, so the underlying normal is inflated exactly. When a bound is
+active the truncated distribution's mean shifts (towards the midpoint of
+the bounds) and its variance grows by less than \code{inflation_factor}.}
 }
 
 \strong{Empirical (sample → inflate → refit):}

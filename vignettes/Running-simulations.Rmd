@@ -82,7 +82,7 @@ dev.off()
 cat("Saved: figures/running_mosaic_epidemic.png\n")
 ```
 
-```{r epidemic-plot, echo = FALSE, out.width = "90%", fig.align = "center"}
+```{r epidemic-plot, echo = FALSE, out.width = "90%", fig.align = "center", eval=TRUE}
 knitr::include_graphics("figures/running_mosaic_epidemic.png")
 ```
 
@@ -130,7 +130,7 @@ dev.off()
 cat("Saved: figures/running_mosaic_endemic.png\n")
 ```
 
-```{r endemic-plot, echo = FALSE, out.width = "90%", fig.align = "center"}
+```{r endemic-plot, echo = FALSE, out.width = "90%", fig.align = "center", eval=TRUE}
 knitr::include_graphics("figures/running_mosaic_endemic.png")
 ```
 
@@ -140,7 +140,7 @@ knitr::include_graphics("figures/running_mosaic_endemic.png")
 ```{r multi-location-example, echo=TRUE}
 library(MOSAIC)
 
-iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD'] # Current bug with SSD vaccination data
+iso_codes <- iso_codes_mosaic
 
 config <- get_location_config(iso = iso_codes)
 config$beta_j0_hum <- config$beta_j0_hum*2
@@ -171,7 +171,7 @@ dev.off()
 cat("Saved: figures/multi_location_grid.png\n")
 ```
 
-```{r multi-location-grid-plot, echo = FALSE, out.width = "100%", fig.align = "center"}
+```{r multi-location-grid-plot, echo = FALSE, out.width = "100%", fig.align = "center", eval=TRUE}
 knitr::include_graphics("figures/multi_location_grid.png")
 ```
 

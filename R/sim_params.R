@@ -21,8 +21,9 @@
 #'   compartments \code{Census} sums and which parameters are required.
 #' @param mode \code{"rng"} (production) or \code{"replay"} (the laser-cholera
 #'   parity harness); decides which mortality inputs are read.
-#' @return A list of validated engine parameters, including the original
-#'   (normalised) config under \code{$config}.
+#' @return A list of validated engine parameters, including the config as
+#'   supplied (a file path is parsed, a list is kept unchanged) under
+#'   \code{$config}.
 #' @keywords internal
 sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "replay")) {
 
@@ -73,20 +74,25 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
      par$non_disease_death_prob_jt <- -expm1(-par$d_jt)
 
      # -- initial conditions ---------------------------------------------------
+     # Every compartment in play needs its initial field. An absent (or
+     # misspelled) field is refused, never read as zero: a missing S_j_initial
+     # otherwise runs a complete, silent, all-zero epidemic that calibration
+     # would only ever see as a bad fit. The oracle asserts the same fields
+     # (params.py); .sim_patch_vector() refuses a NULL by name.
      for (nm in intersect(names(.SIM_INITIAL_FIELDS), par$compartments)) {
           field <- .SIM_INITIAL_FIELDS[[nm]]
-          if (!is.null(config[[field]])) {
-               par[[field]] <- .sim_patch_vector(config[[field]], field,
-                                                  par$npatches, integral = TRUE)
-          }
+          par[[field]] <- .sim_patch_vector(config[[field]], field,
+                                             par$npatches, integral = TRUE)
      }
      if (any(c("Isym", "Iasym") %in% par$compartments)) {
           par$I_j_initial <- .sim_patch_vector(config$I_j_initial, "I_j_initial",
                                                par$npatches, integral = TRUE)
           # Scalar in the engine (`params.py` scalars table), not per-patch.
           # Loading it as a patch vector would accept a 40-vector that
-          # `np.float32()` rejects outright. float32 because it multiplies into
-          # `round(sigma * progressing)` -- see .sim_f32().
+          # `np.float32()` rejects outright. float32 because in replay it
+          # multiplies into `round(sigma * progressing)` and the t=0
+          # `round(sigma * I_j_initial)`, both integers -- see .sim_f32(). In rng
+          # mode it is a binomial probability, where the rounding is harmless.
           par$sigma <- .sim_f32(
                .sim_scalar(config$sigma, "sigma", lower = 0, upper = 1))
      }
@@ -106,6 +112,11 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
                par[[nm]] <- .sim_patch_vector(config[[nm]], nm, par$npatches)
           }
           par$p <- .sim_scalar(config$p, "p", positive = TRUE)
+          # The seasonal coefficients a_*/b_* are estimated on calendar
+          # day-of-year (est_seasonal_dynamics(): t = 1 is 1 January), so the
+          # envelope is evaluated at the day-of-year of date_start plus the tick
+          # offset. 0 for a 1 January start, which leaves t = 1:nticks unchanged.
+          par$season_t0 <- as.integer(format(as.Date(config$date_start), "%j")) - 1L
           par$mobility_omega <- .sim_scalar(config$mobility_omega, "mobility_omega")
           par$mobility_gamma <- .sim_scalar(config$mobility_gamma, "mobility_gamma")
 
@@ -116,10 +127,13 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
           # sums the raw `I_j_initial`, NOT the sigma-split Isym/Iasym, so the
           # total is the same either way -- but reading the config field keeps
           # it independent of which components happen to be in the pipeline.
+          # All six fields are required here too, whatever the pipeline subset:
+          # a missing one would otherwise shrink the gravity populations
+          # silently.
           par$N_j_gravity <- Reduce(`+`, lapply(
                c("S_j_initial", "E_j_initial", "I_j_initial", "R_j_initial",
                  "V1_j_initial", "V2_j_initial"),
-               function(nm) .sim_patch_vector(config[[nm]] %||% 0, nm,
+               function(nm) .sim_patch_vector(config[[nm]], nm,
                                               par$npatches, integral = TRUE)))
      }
 
@@ -225,10 +239,15 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
           # ORDER is observable in the results and is not ours to normalise.
           src <- config$nu_jt_sources %||% c("S", "E", "Isym", "Iasym", "R")
           src <- as.character(src)
-          unknown <- setdiff(src, c("S", "E", "Isym", "Iasym", "R", "V1", "V2"))
+          # V1/V2 are not valid donors: the Vaccinated phase reads its donor pool
+          # from row tick + 1, which holds no V1/V2 until the phase itself writes
+          # them at the end, so they would count as zero and silently deliver no
+          # doses. make_simulation_config() accepts the same five.
+          unknown <- setdiff(src, c("S", "E", "Isym", "Iasym", "R"))
           if (length(unknown)) {
-               stop("`nu_jt_sources` names unknown compartment(s): ",
-                    paste(unknown, collapse = ", "), ".", call. = FALSE)
+               stop("`nu_jt_sources` names compartment(s) that cannot donate dose-one ",
+                    "vaccinees: ", paste(unknown, collapse = ", "),
+                    ". Valid sources: S, E, Isym, Iasym, R.", call. = FALSE)
           }
           if (anyDuplicated(src)) {
                stop("`nu_jt_sources` contains duplicates; each donor compartment ",
@@ -274,8 +293,9 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
      }
 
      if ("EnvToHuman" %in% components) {
-          # kappa is the half-saturation constant in W / (kappa + W); it is added
-          # to W, so kappa = 0 with W = 0 is 0/0.
+          # kappa is the half-saturation constant in dose / (kappa + dose), where
+          # dose is the per-capita W / N in rng mode (v0.89.0) and the raw W in
+          # replay; it is added to the dose, so kappa = 0 with W = 0 is 0/0.
           par$kappa <- .sim_scalar(config$kappa, "kappa", positive = TRUE)
      }
 
@@ -298,9 +318,6 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
      sim_precompute(par)
 }
 
-# Validate a scalar parameter. Length > 1 is an error rather than a silent
-# take-the-first, which is how a per-patch vector supplied for a scalar slot
-# would otherwise go unnoticed.
 # Round a double to float32 precision, via a round-trip through a 4-byte IEEE
 # single. R has no float32 type, so this is the only faithful way to reproduce a
 # value the Python engine *stores* as float32.
@@ -318,7 +335,8 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
 # The float32 fields that reach an integer, and where:
 #
 #   local_frac (1 - tau_i)  round(local_frac * S_next)   HumanToHuman, EnvToHuman
-#   sigma                   round(sigma * progressing)   Infectious, and the t=0 split
+#   sigma                   round(sigma * progressing)   Infectious, and the t=0 split (replay;
+#                                                        a binomial probability in rng mode)
 #   phi_1                   round(phi_1 * comp_doses)    Vaccinated, dose one
 #   phi_2                   round(phi_2 * doses2)        Vaccinated, dose two
 #   nu_1_jt, nu_2_jt        round(nu_*_jt[tick])         Vaccinated, both schedules
@@ -335,6 +353,9 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
              size = 4L, n = length(x), endian = .Platform$endian)
 }
 
+# Validate a scalar parameter. Length > 1 is an error rather than a silent
+# take-the-first, which is how a per-patch vector supplied for a scalar slot
+# would otherwise go unnoticed.
 .sim_scalar <- function(x, name, positive = FALSE,
                         lower = NULL, upper = NULL) {
      if (is.null(x)) {
@@ -550,6 +571,17 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
 # E[reported cases] = mu_jt on epidemic-PPV ticks exactly. A probability of 1 or
 # more means the requested reported CFR cannot be produced by these reporting
 # parameters, so it is an error, never a clamp.
+#
+# Indexing. Row r of `p` (tick r - 1) is read during tick r - 1 and
+# applied to the onsets that tick produces. Those onsets are written to state
+# row r + 1, which is results column r of the TRIM_FIRST `new_symptomatic`
+# channel: TRIM_FIRST columns hold the state at the END of a tick, so column r
+# is day r's onsets. By results column, then, onsets in column c are fated at
+# mu_jt[, c] -- no offset -- which is the alignment the integrated deaths
+# likelihood (.mosaic_deaths_exposure()) and the post-hoc redraw
+# (.mosaic_posthoc_deaths()) assume; test-review-engine-p-fatal-alignment.R
+# pins it for the engine and the likelihood's exposure. "Recorded one row later" describes the state layout,
+# not a one-day lag.
 .sim_p_fatal <- function(par) {
      if (par$rho_deaths <= 0) {
           if (any(par$mu_jt > 0)) {
@@ -584,6 +616,9 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
 .sim_patch_vector <- function(x, name, npatches, integral = FALSE,
                               lower = NULL, upper = NULL) {
 
+     if (is.null(x)) {
+          stop(sprintf("Config is missing `%s`.", name), call. = FALSE)
+     }
      if (length(x) == 1L) x <- rep(x, npatches)
      if (length(x) != npatches) {
           stop(sprintf("`%s` has length %d; expected %d (npatches) or 1.",
@@ -635,24 +670,42 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
 #'
 #' @param state State environment from \code{sim_alloc_state()}.
 #' @param par Parameters from \code{sim_params()}.
+#' @param ctl Draw controller from \code{sim_draws()} (required); \code{"replay"} keeps the oracle's deterministic \code{round()} split of \code{I_j_initial}, any other mode draws it.
 #' @return The state environment with row 1 seeded.
 #' @keywords internal
-sim_seed_state <- function(state, par) {
+sim_seed_state <- function(state, par, ctl) {
+
+     # `ctl` is required and has no default: a NULL fallback would be a silent
+     # path back to the biased round() split in production. The branch below
+     # mirrors sim_phase_infectious(): only "replay" is deterministic.
+     if (!(is.list(ctl) || is.environment(ctl)) || is.null(ctl$mode)) {
+          stop("sim_seed_state() requires a draw controller from sim_draws().",
+               call. = FALSE)
+     }
 
      r1 <- state$rows[[1L]]
 
      for (nm in intersect(names(.SIM_INITIAL_FIELDS), par$compartments)) {
-          field <- .SIM_INITIAL_FIELDS[[nm]]
-          if (!is.null(par[[field]])) r1[[nm]] <- par[[field]]
+          r1[[nm]] <- par[[.SIM_INITIAL_FIELDS[[nm]]]]
      }
 
-     # `I_j_initial` splits by sigma, and the split is observable: Isym takes
-     # `round(sigma * I)` and Iasym takes the remainder, so the two always sum
-     # back to I exactly (infectious.py:83-84). Note `as.integer(round(x))`,
-     # never `as.integer(x)` -- NumPy's np.round is round-half-to-even and
-     # agrees with R's round(), but as.integer() truncates.
+     # `I_j_initial` splits by sigma, and the two halves always sum back to I
+     # exactly. MODE-DEPENDENT, for the same reason as the per-tick split in
+     # sim_phase_infectious() (v0.89.0): the oracle seeds Isym with the
+     # deterministic `round(sigma * I)` (infectious.py:83-84), which is wrong in
+     # the mean at small counts -- at sigma = 0.25 every patch seeded with 1 or 2
+     # infections starts with no symptomatic at all. Production ("rng") draws
+     # Binom(I, sigma) at the rng-only site `infectious/sigma_split_t0`; replay
+     # keeps the oracle's form, because drawing here would consume a variate the
+     # fixture never recorded. Note `as.integer(round(x))`, never
+     # `as.integer(x)` -- np.round is round-half-to-even and agrees with R's
+     # round(), but as.integer() truncates.
      if (any(c("Isym", "Iasym") %in% par$compartments)) {
-          isym <- as.integer(round(par$sigma * par$I_j_initial))
+          isym <- if (isTRUE(ctl$mode == "replay")) {
+               as.integer(round(par$sigma * par$I_j_initial))
+          } else {
+               .sim_binom(ctl, "infectious/sigma_split_t0", par$I_j_initial, par$sigma)
+          }
           if ("Isym" %in% par$compartments)  r1$Isym  <- isym
           if ("Iasym" %in% par$compartments) r1$Iasym <- par$I_j_initial - isym
      }

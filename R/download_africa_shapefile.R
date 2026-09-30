@@ -39,9 +39,10 @@ download_africa_shapefile <- function(PATHS) {
      # Define path to save the Africa shapefile
      shp_path <- file.path(path_out, "AFRICA_ADM0.shp")
 
-     # Save the Africa shapefile
-     sf::st_write(africa, dsn = shp_path, delete_dsn = TRUE)
+     # Save the Africa shapefile, leaving the existing files untouched if unchanged
+     changed <- .write_shapefile_if_changed(africa, shp_path)
 
      # Message to confirm where the shapefile was saved
-     message(paste0("Shapefile saved here: ", shp_path))
+     message(if (changed) paste0("Shapefile saved here: ", shp_path)
+             else paste0("Shapefile unchanged: ", shp_path))
 }

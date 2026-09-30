@@ -74,7 +74,15 @@ sim_phase_derived_values <- function(state, par, ctl, tick) {
 
      H <- beta_S * (-expm1(-(S_star / Njt) * y_bar)) / (1 + beta_S)
 
-     for (i in seq_len(nticks)) state$rows[[rows[i]]]$spatial_hazard <- H[i, ]
+     # Bind each row environment, then write into it. The one-line form
+     # `state$rows[[r]]$spatial_hazard <- v` is a nested subassignment into
+     # `state$rows`, which duplicates the whole nticks + 1 pointer list on every
+     # write -- O(nticks^2) per run (CLAUDE.md lesson #18). Row elements are
+     # environments, so writing through the binding copies nothing.
+     for (i in seq_len(nticks)) {
+          e <- state$rows[[rows[i]]]
+          e$spatial_hazard <- H[i, ]
+     }
 
      # Coupling takes the untrimmed series: nticks + 1 observations.
      all_rows <- seq_len(nticks + 1L)

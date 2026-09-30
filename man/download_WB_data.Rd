@@ -29,7 +29,7 @@ the four MOSAIC consumes; see \code{\link{MOSAIC_WB_INDICATORS}}.}
 \item{snapshot_date}{Date stamp for the output filenames. Defaults to today.}
 
 \item{overwrite}{If \code{FALSE} (default), an indicator whose file for
-\code{snapshot_date} already exists is skipped.}
+\code{snapshot_date} already exists is skipped; \code{TRUE} replaces that dated file (use only to repair a bad snapshot).}
 
 \item{per_page}{API page size (default 20000; the API caps near 32767).}
 
@@ -59,7 +59,8 @@ retires four of the six manual sources reported by
 \code{process_WB_*_data()} functions select the newest match for their
 indicator. Existing hand-downloaded portal exports are left in place and
 still readable -- an API pull simply outranks them by date. Nothing is
-deleted.
+deleted. Each file is written atomically (temporary file, then rename) and
+logged as one row in \code{raw/world_bank/PROVENANCE.md}.
 
 \strong{All countries are fetched}, not just the MOSAIC-40: the processors
 do their own ISO filtering, and keeping the full panel means the raw file

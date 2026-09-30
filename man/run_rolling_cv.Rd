@@ -50,7 +50,10 @@ window defines the anchor and projection span.}
 
 \item{control}{\code{run_MOSAIC} control list, or NULL for an experiment-grade
 cheap default (fixed \code{n_simulations}, plots off). See
-\code{\link{mosaic_control_defaults}}.}
+\code{\link{mosaic_control_defaults}}. The harness forces
+\code{paths$clean_output = TRUE}, so each cutoff's \code{runs/cutoff_<T>/}
+directory is wiped before its calibration and simulation shards left by an
+earlier interrupted attempt cannot enter the new posterior.}
 
 \item{optimize_subset}{Logical (default \code{TRUE}); enable
 \code{run_MOSAIC}'s post-ensemble best-subset optimizer
@@ -64,8 +67,13 @@ candidate ensemble.}
 \code{predictions.parquet} (default
 \code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
 (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
-the optimizer-selected subset (only emitted when \code{optimize_subset =
-TRUE} and \code{ensemble_optimized.rds} exists). \code{"medoid"} is
+the optimizer-selected subset, emitted only for cutoffs where the optimizer
+actually ran and selected a subset (\code{subset_opt.rds} present, or a
+finite \code{n_ensemble_params_tier} in \code{summary.json}); with
+\code{optimize_subset = FALSE} it is dropped from \code{models} up front,
+and a cutoff whose optimizer selected nothing is skipped with a warning
+rather than duplicating the candidate ensemble, which
+\code{run_MOSAIC()} saves as a fallback \code{ensemble_optimized.rds}. \code{"medoid"} is
 re-simulated from its saved config (see \code{n_reps_best_medoid}).
 \code{"best"} is accepted for back-compat but is no longer produced by
 \code{run_MOSAIC()} (no \code{config_best.json}); it is skipped with a
@@ -103,8 +111,13 @@ per-cutoff \code{est_suitability()} fit is skipped entirely.}
 in-place (original behavior). When set, the per-cutoff \code{est_suitability()}
 call is skipped and the frozen \code{psi_<T>.csv} is loaded from this cache
 directory instead. The run \strong{hard-errors} if a requested cutoff is
-absent from the cache manifest, or if the run's \code{est_suitability_spec}
-hash does not match the manifest \code{spec_hash} recorded for that cutoff.}
+absent from the cache manifest, if the run's \code{est_suitability_spec}
+hash does not match the manifest \code{spec_hash} recorded for that cutoff,
+or if the cache's prediction window does not cover \code{base_config}'s
+start through the cutoff's last OOS date. When \code{psi_cache} is NULL the
+per-cutoff psi is fitted into a scratch \code{MODEL_INPUT} (the canonical
+\code{pred_psi_suitability_day.csv} is never overwritten) and kept as
+\code{runs/psi_cutoff_<T>.csv}.}
 
 \item{dir_output}{Directory for the experiment artifact (created if needed).}
 
@@ -113,7 +126,10 @@ hash does not match the manifest \code{spec_hash} recorded for that cutoff.}
 \value{
 Invisibly, the manifest list. Side effects: writes
 \code{manifest.json}, \code{predictions.parquet}, and \code{runs/} under
-\code{dir_output}.
+\code{dir_output}. \code{manifest.json} is rewritten atomically after every
+cutoff (\code{status = "running"}, then \code{"complete"}), so the cutoffs
+finished before an interruption can still be compiled with
+\code{\link{compile_rolling_cv_predictions}}.
 }
 \description{
 Runs an expanding-window (fixed-anchor) rolling-origin backtest of the MOSAIC
@@ -134,19 +150,44 @@ done post-hoc by reading \code{predictions.parquet}.
 the calibration likelihood only scores weeks \eqn{\le T} (observations after
 \code{T} are masked to \code{NA}); the post-\code{T} portion of the simulation
 is the forecast. A \code{embargo_weeks} gap separates the IS stop (\code{T})
-from the OOS start (\code{T + embargo}); the embargo week is neither trained
-nor labeled OOS.
+from the OOS start: dates in \code{(T, T + embargo]} are labeled
+\code{"embargo"} (neither trained nor scored) and the first OOS date is
+\code{T + embargo + 1}. \code{weeks_ahead} counts whole weeks from that first
+OOS date (week 1 = its first seven days).
 
-\strong{Leakage discipline.} psi is re-fit per cutoff with
-\code{fit_date_stop = T}; the harness \emph{owns} the leakage-critical date
-arguments to \code{\link{est_suitability}} and overrides any date keys passed
-via \code{est_suitability_spec} (with a warning). \code{est_suitability_spec}
-therefore controls only modeling choices (target, features, architecture), not
-the cutoff window. The reported CFR \code{mu_jt} and its prior are rebuilt per
-cutoff from a WHO-annual GAM fitted only to years up to \code{year(T) - 1}
-(a calendar year's annual total is not known until the year has ended), and
-carried flat past that year's 1 July. So no post-cutoff surveillance year
-reaches the config, the prior centres or the prior widths.
+\strong{Leakage discipline.} What is rebuilt as of each cutoff:
+\itemize{
+\item psi is re-fit per cutoff with \code{fit_date_stop = T}; the harness
+\emph{owns} the leakage-critical date arguments to
+\code{\link{est_suitability}} and overrides any date keys passed via
+\code{est_suitability_spec} (with a warning), so the spec controls only
+modeling choices (target, features, architecture).
+\item The reported CFR \code{mu_jt} and its prior are rebuilt from a
+WHO-annual GAM fitted only to years up to \code{year(T) - 1}, carried flat
+past that year's 1 July. The annual totals used are the final revised
+ones, not the vintage that had been published at \code{T}.
+\item Observed cases and deaths after \code{T} are masked, and epidemic peaks
+whose 14-day peak-shape scoring window reaches past \code{T} are dropped
+from the cutoff config (an empty set is kept as a 0-row table so the
+likelihood never falls back to the full \code{\link{epidemic_peaks}}
+dataset). The remaining peaks were still \emph{detected} on the full record.
+}
+What is \strong{not} as of the cutoff, so the hindcast is only approximately
+leak-free:
+\itemize{
+\item psi fitted in place (\code{psi_cache = NULL}), or from a cache built
+with any feature set other than \code{"v7.4"}, is trained on the canonical
+suitability panel. Its per-country target anchors and its flood-probability
+GAM were fitted on the whole panel, including rows after \code{T}. The run
+warns when this is the case; build the cache with
+\code{\link{prefit_rolling_cv_psi}(est_suitability_spec =
+    list(feature_set = "v7.4", ...))} for per-cutoff leak-free panels.
+\item Every prior other than \code{mu_jt} comes from \code{priors} unchanged.
+\code{priors_default} carries centres derived from surveillance through its
+build date (e.g. the per-country \code{beta_j0_tot} centres, recentred on
+posterior medians of fits to the full record); supply as-of priors for a
+strictly leak-free hindcast.
+}
 
 \strong{Coupled metapopulation.} \code{iso} may be a single country or a vector;
 a vector runs as the coupled metapopulation (one calibration per cutoff covering

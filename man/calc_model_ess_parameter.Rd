@@ -48,8 +48,32 @@ Data frame with columns:
 }
 \description{
 Computes the effective sample size (ESS) for individual parameters using
-one of two methods: binned marginal Kish ESS (default) or KDE-based
-marginal posterior estimation.
+one of two methods: KDE-based marginal posterior estimation (default,
+\code{marginal_method = "kde"}, also the \code{run_MOSAIC()} control
+default \code{ESS_marginal_method}) or binned marginal ESS.
+}
+\details{
+Both methods start from the raw importance weights
+\eqn{w_i \propto \exp(\ell_i - \max \ell)}. The \code{"kde"} method
+estimates each parameter's weighted marginal density on a grid over the range
+of its draws (bandwidth from Silverman's rule on the unweighted draws),
+divides it by a uniform density on that range, applies the configured ESS
+formula to the normalised grid ratios and rescales from grid points to draws
+(\code{n / n_grid}). The \code{"binned"} method applies the ESS formula to
+the weight totals of \code{n_bins} equal-width bins and rescales by
+\code{n / n_occupied}.
+
+\strong{Limitation.} Neither estimate is bounded by the ESS of the importance
+weights themselves. Because the KDE bandwidth does not shrink with the
+weights and both results are rescaled by the number of draws, a weight
+vector that has collapsed onto a single draw (exact IS ESS = 1) still yields
+a marginal ESS that grows with \code{n} (for \code{"kde"} roughly \code{n/5}
+under a uniform prior and \code{n/25} under a lognormal one; for
+\code{"binned"} about \code{n} over the number of occupied bins), and for a
+non-uniform prior the uniform reference mixes the prior's shape into the
+result. Read these values alongside the exact importance-sampling
+diagnostics of \code{\link{calc_is_diagnostics}}, which do detect the
+collapse.
 }
 \examples{
 \dontrun{

@@ -182,6 +182,7 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
 
       # Clean parameters: keep only canonical fields
       clean_entry <- .clean_posterior_entry(post_entry, dist_core_fields)
+      clean_entry <- .carry_lognormal_bounds(clean_entry, updated$parameters_global[[param_name]])
       updated$parameters_global[[param_name]] <- clean_entry
       n_replaced <- n_replaced + 1L
     }
@@ -266,6 +267,8 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
 
         # Clean and replace
         clean_entry <- .clean_posterior_entry(post_entry, dist_core_fields)
+        clean_entry <- .carry_lognormal_bounds(
+          clean_entry, updated$parameters_location[[param_base]]$location[[iso]])
         updated$parameters_location[[param_base]]$location[[iso]] <- clean_entry
         n_loc_replaced <- n_loc_replaced + 1L
       }
@@ -333,6 +336,45 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   }
 
   list(distribution = dist_type, parameters = params)
+}
+
+
+#' Keep a lognormal prior's truncation bounds on the posterior that replaces it
+#'
+#' A truncated lognormal prior (e.g. zeta_ratio, lower = 1, which keeps
+#' zeta_1 >= zeta_2) carries \code{lower}/\code{upper}. A posterior entry that
+#' already carries bounds was fitted in the truncated family by
+#' \code{calc_model_posterior_distributions()} and is kept as is. An entry
+#' without bounds is an untruncated fit to the (truncated) posterior's 95%
+#' interval; re-attaching the bound to it unchanged would truncate twice and
+#' push the distribution away from the bound at every stage, so it is refitted
+#' in the truncated family to the same interval before the bound is attached.
+#' @param entry Cleaned posterior entry.
+#' @param prior_entry The prior entry being replaced (may be \code{NULL}).
+#' @return \code{entry}, with the prior's bounds added when both are lognormal.
+#' @noRd
+.carry_lognormal_bounds <- function(entry, prior_entry) {
+  if (is.null(prior_entry) || !identical(tolower(entry$distribution), "lognormal") ||
+      !identical(tolower(prior_entry$distribution), "lognormal")) {
+    return(entry)
+  }
+  ep <- entry$parameters
+  if (!is.null(ep$lower) || !is.null(ep$upper)) return(entry)
+  lower <- prior_entry$parameters$lower
+  upper <- prior_entry$parameters$upper
+  if (is.null(lower) && is.null(upper)) return(entry)
+  if (is.null(ep$meanlog) || is.null(ep$sdlog)) return(entry)
+  ci <- stats::qlnorm(c(0.025, 0.975), as.numeric(ep$meanlog), as.numeric(ep$sdlog))
+  fit <- tryCatch(.fit_truncated_lognormal_ci(ci[1], ci[2], lower = lower, upper = upper),
+                  error = function(e) NULL)
+  if (!is.null(fit)) {
+    ep$meanlog <- fit$meanlog
+    ep$sdlog <- fit$sdlog
+  }
+  if (!is.null(lower)) ep$lower <- lower
+  if (!is.null(upper)) ep$upper <- upper
+  entry$parameters <- ep
+  entry
 }
 
 

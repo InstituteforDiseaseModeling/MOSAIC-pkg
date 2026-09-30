@@ -113,6 +113,7 @@ test_that("parallel trajectory rendering writes the same files as serial", {
   skip_if_not_installed("parallel")
   # Builds a PSOCK cluster, so it cannot run inside a testthat parallel worker.
   skip_if_testthat_parallel()
+  skip_if_installed_build_stale()
 
   locs <- c("AAA", "BBB", "CCC", "DDD")
   traj <- make_traj(locs)
@@ -137,6 +138,7 @@ test_that("parallel trajectory rendering writes the same files as serial", {
 test_that("the parallel path actually starts workers", {
   skip_on_cran()
   skip_if_testthat_parallel()
+  skip_if_installed_build_stale()
 
   # Output equality alone cannot detect this: a cluster that fails to start
   # falls back to lapply() and produces byte-identical figures. That is exactly

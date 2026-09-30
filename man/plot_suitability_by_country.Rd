@@ -21,6 +21,9 @@ over time. Requires that est_suitability() has been run first to generate the ne
 prediction files.
 }
 \details{
-The function reads pred_psi_suitability_week.csv created by est_suitability(),
-which contains the columns: iso_code, year, week, date, cases, cases_binary, and pred.
+The function reads pred_psi_suitability_week.csv created by est_suitability()
+(columns iso_code, year, date and psi) and plots the canonical \code{psi}
+column (smoothed and bias-corrected), the series that becomes the engine's
+\code{psi_jt}. A pre-v0.34 file without \code{psi} falls back to
+\code{pred_smooth}, with a message.
 }

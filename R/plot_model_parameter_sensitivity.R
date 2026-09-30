@@ -159,8 +159,10 @@ plot_model_parameter_sensitivity <- function(results_file,
     ggplot2::labs(
       title    = "Parameter Sensitivity (HSIC)",
       subtitle = sprintf(
-        "Top %d of %d parameters by R\u00b2-HSIC with log-likelihood (%s, n = %d); %s",
-        top_n, p, subset_label, n_used, sig_note
+        "Top %d of %d parameters by R\u00b2-HSIC with log-likelihood (%s%s); %s",
+        top_n, p, subset_label,
+        if (length(n_used) == 1L && !is.na(n_used)) sprintf(", n = %d", as.integer(n_used)) else "",
+        sig_note
       ),
       x = expression(R^2 * "-HSIC  (kernel independence measure)"),
       y = NULL
