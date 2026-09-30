@@ -4,17 +4,18 @@
 \alias{plot_psi_star_diagnostic}
 \title{Plot Raw vs Calibrated Environmental Suitability (psi vs psi*)}
 \usage{
-plot_psi_star_diagnostic(dirs, PATHS, location_names, verbose = TRUE)
+plot_psi_star_diagnostic(dirs, PATHS = NULL, location_names, verbose = TRUE)
 }
 \arguments{
 \item{dirs}{Named list of output directory paths as returned by the internal
 \code{.mosaic_ensure_dir_tree()} helper inside \code{run_MOSAIC()}. Required
 entries: \code{dirs$res_fig_diag} (output), \code{dirs$inputs} (for
-\code{config.json}), \code{dirs$res_post} (for \code{parameter_estimates.csv}).}
+\code{config.json}), \code{dirs$res_posterior} (for \code{parameter_estimates.csv}).}
 
-\item{PATHS}{Named list of project paths as returned by \code{get_paths()}.
-Used to locate \code{pred_psi_suitability_day.csv} at
-\code{PATHS$MODEL_INPUT}.}
+\item{PATHS}{Optional named list of project paths as returned by
+\code{get_paths()}; used only as a fallback to read
+\code{PATHS$MODEL_INPUT/pred_psi_suitability_day.csv} when the run's
+\code{config.json} carries no usable \code{psi_jt}. Default \code{NULL}.}
 
 \item{location_names}{Character vector of ISO3 location codes (e.g.
 \code{"MOZ"}). One plot is generated per location.}
@@ -40,12 +41,18 @@ suitability psi with the calibrated psi* after applying the posterior psi_star
 parameters (\code{psi_star_a}, \code{psi_star_b}, \code{psi_star_z},
 \code{psi_star_k}) via \code{\link{calc_psi_star}}.
 
-The plot is skipped gracefully (with a warning) for any location where:
+The raw series is the \code{psi_jt} row the run actually calibrated on, read
+from \code{1_inputs/config.json} over its daily \code{date_start}..\code{date_stop}
+grid, so the figure is a pure read of the run directory and renders post-hoc
+on any machine. Only when \code{config.json} has no \code{psi_jt} of matching
+length does it fall back to the \code{psi} column of
+\code{PATHS$MODEL_INPUT/pred_psi_suitability_day.csv}.
+
+The plot is skipped gracefully (with a message) for any location where:
 \itemize{
 \item the psi_star posterior parameters are absent from
 \code{parameter_estimates.csv} (e.g. parameters were frozen or not sampled),
-\item \code{pred_psi_suitability_day.csv} cannot be found at
-\code{PATHS$MODEL_INPUT}, or
+\item neither \code{psi_jt} nor the fallback CSV is available, or
 \item the suitability data contains no rows for the location or calibration
 window.
 }

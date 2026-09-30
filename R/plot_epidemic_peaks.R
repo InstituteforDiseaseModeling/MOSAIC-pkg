@@ -109,20 +109,16 @@ plot_epidemic_peaks <- function(PATHS) {
       next
     }
 
-    # Apply same smoothing as in est_epidemic_peaks
-    window_size <- 21  # 3-week window for better smoothing
-    n <- nrow(loc_data)
-    loc_data$smoothed <- NA
-
-    for (i in 1:n) {
-      start_idx <- max(1, i - floor(window_size/2))
-      end_idx <- min(n, i + floor(window_size/2))
-      loc_data$smoothed[i] <- mean(loc_data$cases[start_idx:end_idx], na.rm = TRUE)
-    }
+    # Same centred running mean, same window, that est_epidemic_peaks() detects
+    # peaks on, so the peak markers sit on the curve they were found on.
+    loc_data$smoothed <- .mosaic_peak_running_mean(loc_data$cases,
+                                                   .EPIDEMIC_PEAKS_SMOOTH_WINDOW)
 
     # Get peaks for this location
     loc_peaks <- peaks_data %>%
       filter(iso_code == loc)
+
+    smooth_lab <- sprintf("Smoothed (%d-day mean)", .EPIDEMIC_PEAKS_SMOOTH_WINDOW)
 
     # Create ggplot
     p <- ggplot(loc_data, aes(x = date)) +
@@ -163,7 +159,7 @@ plot_epidemic_peaks <- function(PATHS) {
       geom_line(aes(y = cases, color = "Reported cases"),
                 linewidth = 0.4, alpha = 0.7) +
       # Smoothed line
-      geom_line(aes(y = smoothed, color = "Smoothed (21-day mean)"),
+      geom_line(aes(y = smoothed, color = smooth_lab),
                 linewidth = 1.2)
 
     # Add peak markers and vertical lines
@@ -194,12 +190,11 @@ plot_epidemic_peaks <- function(PATHS) {
     # Set color scale
     p <- p +
       scale_color_manual(
-        values = c(
-          "Reported cases" = color_reported_cases,
-          "Smoothed (21-day mean)" = color_smooth,
-          "Detected peak" = color_peaks
+        values = stats::setNames(
+          c(color_reported_cases, color_smooth, color_peaks),
+          c("Reported cases", smooth_lab, "Detected peak")
         ),
-        breaks = c("Reported cases", "Smoothed (21-day mean)", "Detected peak")
+        breaks = c("Reported cases", smooth_lab, "Detected peak")
       )
 
     # Add labels
@@ -340,3 +335,16 @@ plot_epidemic_peaks <- function(PATHS) {
 
 }
 
+# Running-mean window (days) est_epidemic_peaks() smooths the daily case series
+# with before detecting peaks. Must equal its `window_size`; a test pins the two.
+.EPIDEMIC_PEAKS_SMOOTH_WINDOW <- 28L
+
+# Centred running mean over +/- floor(window_size / 2) days, truncated at the
+# series ends: the smoother est_epidemic_peaks() applies.
+.mosaic_peak_running_mean <- function(x, window_size) {
+  n <- length(x)
+  half <- floor(window_size / 2)
+  vapply(seq_len(n), function(i) {
+    mean(x[max(1L, i - half):min(n, i + half)], na.rm = TRUE)
+  }, numeric(1L))
+}

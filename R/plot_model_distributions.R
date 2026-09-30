@@ -44,9 +44,6 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
   # All required packages loaded via NAMESPACE
 
-  # Save current warning setting
-  old_warn <- getOption("warn")
-
   # =========================================================================
   # INPUT VALIDATION
   # =========================================================================
@@ -84,7 +81,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # =========================================================================
 
   # Load estimated parameters inventory
-  data("estimated_parameters", package = "MOSAIC")
+  data("estimated_parameters", package = "MOSAIC", envir = environment())
 
   # Unnesting lives at package scope as .mosaic_unnest_json() so
   # render_MOSAIC_figures() can parse the same JSON the same way.
@@ -444,10 +441,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
           x <- seq(x_min, x_max, length.out = 1000)
           y <- truncnorm::dtruncnorm(x, a = a_bound, b = b_bound, mean = mean_param, sd = sd_param)
 
-          # Format bounds for display
-          a_str <- if (is.infinite(a_bound)) "-Inf" else sprintf("%.0f", a_bound)
-          b_str <- if (is.infinite(b_bound)) "Inf" else sprintf("%.0f", b_bound)
-          dist_str <- sprintf("TruncNorm(%.1f, %.1f, [%s, %s])", mean_param, sd_param, a_str, b_str)
+          dist_str <- .mosaic_truncnorm_label(mean_param, sd_param, a_bound, b_bound)
           mean_val <- mean_param
         }
       }
@@ -1065,9 +1059,17 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
   cat("Plot generation completed!\n")
 
-  # Restore original warning setting
-  options(warn = old_warn)
-
   # Return plot objects invisibly
   invisible(plots)
+}
+
+# Legend label for a truncated-normal prior/posterior. Three significant digits
+# keep small-scale parameters (epidemic_threshold ~3e-6) readable; fixed-decimal
+# formats collapsed them to "TruncNorm(0.0, 0.0, [0, 0])".
+.mosaic_truncnorm_label <- function(mean, sd, a = -Inf, b = Inf) {
+  fmt <- function(v) {
+    if (is.infinite(v)) return(if (v < 0) "-Inf" else "Inf")
+    sprintf("%.3g", v)
+  }
+  sprintf("TruncNorm(%s, %s, [%s, %s])", fmt(mean), fmt(sd), fmt(a), fmt(b))
 }

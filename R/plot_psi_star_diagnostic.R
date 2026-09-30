@@ -16,10 +16,11 @@
 #' @param dirs Named list of output directory paths as returned by the internal
 #'   \code{.mosaic_ensure_dir_tree()} helper inside \code{run_MOSAIC()}. Required
 #'   entries: \code{dirs$res_fig_diag} (output), \code{dirs$inputs} (for
-#'   \code{config.json}), \code{dirs$res_post} (for \code{parameter_estimates.csv}).
-#' @param PATHS Named list of project paths as returned by \code{get_paths()}.
-#'   Used to locate \code{pred_psi_suitability_day.csv} at
-#'   \code{PATHS$MODEL_INPUT}.
+#'   \code{config.json}), \code{dirs$res_posterior} (for \code{parameter_estimates.csv}).
+#' @param PATHS Optional named list of project paths as returned by
+#'   \code{get_paths()}; used only as a fallback to read
+#'   \code{PATHS$MODEL_INPUT/pred_psi_suitability_day.csv} when the run's
+#'   \code{config.json} carries no usable \code{psi_jt}. Default \code{NULL}.
 #' @param location_names Character vector of ISO3 location codes (e.g.
 #'   \code{"MOZ"}). One plot is generated per location.
 #' @param verbose Logical; if \code{TRUE} (default) emits progress messages.
@@ -29,12 +30,18 @@
 #'   \code{psi_raw_vs_psi_star_{j}.png}.
 #'
 #' @details
-#' The plot is skipped gracefully (with a warning) for any location where:
+#' The raw series is the \code{psi_jt} row the run actually calibrated on, read
+#' from \code{1_inputs/config.json} over its daily \code{date_start}..\code{date_stop}
+#' grid, so the figure is a pure read of the run directory and renders post-hoc
+#' on any machine. Only when \code{config.json} has no \code{psi_jt} of matching
+#' length does it fall back to the \code{psi} column of
+#' \code{PATHS$MODEL_INPUT/pred_psi_suitability_day.csv}.
+#'
+#' The plot is skipped gracefully (with a message) for any location where:
 #' \itemize{
 #'   \item the psi_star posterior parameters are absent from
 #'     \code{parameter_estimates.csv} (e.g. parameters were frozen or not sampled),
-#'   \item \code{pred_psi_suitability_day.csv} cannot be found at
-#'     \code{PATHS$MODEL_INPUT}, or
+#'   \item neither \code{psi_jt} nor the fallback CSV is available, or
 #'   \item the suitability data contains no rows for the location or calibration
 #'     window.
 #' }
@@ -43,22 +50,21 @@
 #'
 #' @export
 plot_psi_star_diagnostic <- function(dirs,
-                                     PATHS,
+                                     PATHS = NULL,
                                      location_names,
                                      verbose = TRUE) {
 
   # --- Input checks -----------------------------------------------------------
-  stopifnot(is.list(dirs), is.list(PATHS), is.character(location_names))
+  stopifnot(is.list(dirs), is.null(PATHS) || is.list(PATHS),
+            is.character(location_names))
 
-  psi_csv <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
+  if (is.null(dirs$res_posterior) || is.null(dirs$inputs)) {
+    if (verbose) message("plot_psi_star_diagnostic: dirs lacks res_posterior/inputs \u2014 skipping.")
+    return(invisible(NULL))
+  }
   param_csv <- file.path(dirs$res_posterior, "parameter_estimates.csv")
   config_json <- file.path(dirs$inputs, "config.json")
 
-  if (!file.exists(psi_csv)) {
-    if (verbose) message("plot_psi_star_diagnostic: psi CSV not found at ", psi_csv,
-                         " \u2014 skipping.")
-    return(invisible(NULL))
-  }
   if (!file.exists(param_csv)) {
     if (verbose) message("plot_psi_star_diagnostic: parameter_estimates.csv not found \u2014 skipping.")
     return(invisible(NULL))
@@ -71,17 +77,57 @@ plot_psi_star_diagnostic <- function(dirs,
   # --- Load shared data -------------------------------------------------------
   params     <- read.csv(param_csv, stringsAsFactors = FALSE)
   config     <- jsonlite::fromJSON(config_json, simplifyVector = TRUE)
-  psi_raw_all <- read.csv(psi_csv, stringsAsFactors = FALSE)
-
-  # Visualize the SAME series that feeds psi_jt -> the engine: the canonical `psi`
-  # column (smoothed + bias-corrected). Fall back to `pred_smooth` only for a
-  # stale pre-v0.34 CSV so the diagnostic degrades gracefully rather than erroring.
-  psi_col <- if ("psi" %in% names(psi_raw_all)) "psi" else "pred_smooth"
-  if (psi_col != "psi" && verbose)
-    message("plot_psi_star_diagnostic: `psi` column absent; using pre-correction `pred_smooth` (regenerate psi CSV with est_suitability v0.34+).")
 
   date_start <- as.Date(config$date_start)
   date_stop  <- as.Date(config$date_stop)
+  cfg_dates  <- seq(date_start, date_stop, by = "day")
+  cfg_locs   <- as.character(config$location_name %||% config$location)
+
+  # Raw series = the psi_jt the run was calibrated on (rows = locations, one
+  # column per day of the config window). A single-location config may
+  # deserialize as a plain vector, so it is lifted to a 1-row matrix and its row
+  # is taken positionally. Rows must match the config's locations one-to-one: a
+  # 1-row psi_jt in a multi-location config cannot be attributed to any one
+  # location and is discarded.
+  psi_mat <- config$psi_jt
+  if (!is.null(psi_mat)) {
+    if (is.null(dim(psi_mat))) psi_mat <- matrix(as.numeric(psi_mat), nrow = 1L)
+    if (ncol(psi_mat) != length(cfg_dates) ||
+        nrow(psi_mat) != max(1L, length(cfg_locs)))
+      psi_mat <- NULL
+  }
+
+  # Fallback only when config.json carries no usable psi_jt: the canonical `psi`
+  # column of the live MODEL_INPUT CSV (pred_smooth for a pre-v0.34 file).
+  psi_raw_all <- NULL
+  psi_col     <- NULL
+  if (is.null(psi_mat)) {
+    psi_csv <- if (!is.null(PATHS$MODEL_INPUT))
+      file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv") else NA_character_
+    if (is.na(psi_csv) || !file.exists(psi_csv)) {
+      if (verbose) message("plot_psi_star_diagnostic: config.json has no usable psi_jt ",
+                           "and no fallback psi CSV is available \u2014 skipping.")
+      return(invisible(NULL))
+    }
+    if (verbose) message("plot_psi_star_diagnostic: config.json has no usable psi_jt; ",
+                         "falling back to ", psi_csv)
+    psi_raw_all <- read.csv(psi_csv, stringsAsFactors = FALSE)
+    psi_col <- if ("psi" %in% names(psi_raw_all)) "psi" else "pred_smooth"
+    if (psi_col != "psi" && verbose)
+      message("plot_psi_star_diagnostic: `psi` column absent; using pre-correction `pred_smooth` (regenerate psi CSV with est_suitability v0.34+).")
+  }
+
+  .raw_series <- function(j) {
+    if (!is.null(psi_mat)) {
+      row <- if (nrow(psi_mat) == 1L) 1L else match(j, cfg_locs)
+      if (is.na(row)) return(data.frame(date = as.Date(character()), raw = numeric()))
+      return(data.frame(date = cfg_dates, raw = as.numeric(psi_mat[row, ])))
+    }
+    psi_loc <- psi_raw_all[psi_raw_all$iso_code == j, ]
+    psi_loc$date <- as.Date(psi_loc$date)
+    psi_loc <- psi_loc[psi_loc$date >= date_start & psi_loc$date <= date_stop, ]
+    data.frame(date = psi_loc$date, raw = as.numeric(psi_loc[[psi_col]]))
+  }
 
   out_dir <- dirs$res_fig_diag
   if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -111,10 +157,8 @@ plot_psi_star_diagnostic <- function(dirs,
         next
       }
 
-      # Filter psi data to this location and calibration window
-      psi_loc <- psi_raw_all[psi_raw_all$iso_code == j, ]
-      psi_loc$date <- as.Date(psi_loc$date)
-      psi_cal <- psi_loc[psi_loc$date >= date_start & psi_loc$date <= date_stop, ]
+      # Raw psi for this location over the calibration window
+      psi_cal <- .raw_series(j)
 
       if (nrow(psi_cal) == 0L) {
         if (verbose) message(sprintf(
@@ -124,7 +168,7 @@ plot_psi_star_diagnostic <- function(dirs,
 
       # Apply full psi_star transformation via package function
       psi_star_series <- calc_psi_star(
-        psi             = psi_cal[[psi_col]],
+        psi             = psi_cal$raw,
         a               = psi_a,
         b               = psi_b,
         z               = psi_z,
@@ -135,7 +179,7 @@ plot_psi_star_diagnostic <- function(dirs,
       # Build data frame and summary stats
       df <- data.frame(
         date     = psi_cal$date,
-        raw      = psi_cal[[psi_col]],
+        raw      = psi_cal$raw,
         psi_star = psi_star_series
       )
 
