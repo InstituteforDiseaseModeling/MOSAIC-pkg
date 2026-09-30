@@ -81,3 +81,43 @@ test_that("pre-computed target_* columns are unaffected (already NA-propagating)
                 response_var = "target_D_rate_per_country_floored")
      expect_equal(sum(!is.na(b$pool_data$intensity)), sum(!is.na(p$cases)))
 })
+
+test_that("intensity target is NA on leading and interior unobserved weeks too", {
+     # Red-team follow-up: only the trailing tail was excluded; weeks before a
+     # country's first observation and interior NA gaps were still zero-filled
+     # and trained as zero incidence.
+     p <- mk_panel()
+     dts <- sort(unique(p$date))
+     lead_rows <- p$iso_code == "MOZ" & p$date < dts[20]
+     gap_rows  <- p$iso_code == "MWI" & p$date >= dts[100] & p$date < dts[110]
+     p$cases[lead_rows | gap_rows] <- NA
+     p$cases[p$iso_code == "MWI" & p$date == dts[50]] <- 0   # an observed zero
+     csv <- withr::local_tempfile(fileext = ".csv")
+     utils::write.csv(p, csv, row.names = FALSE)
+     cutoff <- max(p$date[!is.na(p$cases)])
+     b <- build(csv, cutoff)
+     pd <- b$pool_data
+     key_pd <- paste(pd$countries, pd$dates)
+     key_p  <- paste(p$iso_code, p$date)
+     unobs  <- key_p[is.na(p$cases)]
+     expect_true(any(key_pd %in% key_p[lead_rows]))
+     expect_true(any(key_pd %in% key_p[gap_rows]))
+     expect_true(all(is.na(pd$intensity[key_pd %in% unobs])))
+     expect_false(anyNA(pd$intensity[!key_pd %in% unobs]))
+     # an observed zero is still a zero-incidence target
+     expect_equal(pd$intensity[key_pd == paste("MWI", dts[50])], 0)
+     # the train-only anchor is computed over observed weeks only
+     obs <- p[!is.na(p$cases) & p$date <= cutoff, ]
+     expect_equal(b$cases_99th, stats::quantile(obs$cases, 0.99, names = FALSE))
+})
+
+test_that("auto pred_date_stop alone needs only ENSO completeness, not cases", {
+     # Red-team follow-up: a caller that supplies fit_date_stop must not be forced
+     # to have a cases column or a cases+ENSO row just to auto-detect the horizon.
+     p <- mk_panel()
+     p$cases <- NULL
+     expect_error(MOSAIC:::.psi_auto_detect_dates(p), "cases")
+     auto <- MOSAIC:::.psi_auto_detect_dates(p, need_fit = FALSE)
+     expect_true(is.na(auto$fit_date_stop))
+     expect_equal(auto$pred_date_stop, max(p$date))
+})
