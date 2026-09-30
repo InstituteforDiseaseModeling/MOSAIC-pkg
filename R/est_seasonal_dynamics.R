@@ -149,17 +149,17 @@ est_seasonal_dynamics <- function(PATHS,
           # of the weekly surveillance file, and key both on the week's start
           # date. Partial weeks at the window edges are dropped so every
           # precipitation value is a full 7-day sum.
-          precip_data <- precip_data %>%
-               dplyr::mutate(week_start = lubridate::floor_date(date, unit = "week",
-                                                                week_start = 1)) %>%
-               dplyr::group_by(week_start) %>%
-               dplyr::summarize(weekly_precipitation_sum = sum(value, na.rm = TRUE),
-                                n_days = dplyr::n(),
-                                .groups = "drop") %>%
-               dplyr::filter(n_days == 7L) %>%
-               dplyr::mutate(iso_code = iso,
-                             year = lubridate::isoyear(week_start),
-                             week = lubridate::isoweek(week_start))
+          week_key <- as.character(lubridate::floor_date(precip_data$date, unit = "week",
+                                                         week_start = 1))
+          week_sum <- tapply(precip_data$value, week_key, sum, na.rm = TRUE)
+          week_len <- tapply(precip_data$value, week_key, length)
+          precip_data <- data.frame(week_start = as.Date(names(week_sum)),
+                                    weekly_precipitation_sum = as.numeric(week_sum),
+                                    n_days = as.integer(week_len[names(week_sum)]))
+          precip_data <- precip_data[precip_data$n_days == 7L, ]
+          precip_data$iso_code <- iso
+          precip_data$year <- lubridate::isoyear(precip_data$week_start)
+          precip_data$week <- lubridate::isoweek(precip_data$week_start)
 
           cholera_sub <- cholera_data[cholera_data$iso_code == iso, c("date_start", "cases")]
           cholera_sub$week_start <- as.Date(cholera_sub$date_start)
