@@ -262,6 +262,7 @@ test_that(".mosaic_reff_resim_ci reduces real engine members into three estimand
                         n_simulations_per_config = nS,
                         location_names = base$location_name,
                         date_start = base$date_start,
+                        cases_mean = apply(ca, c(1, 2), mean),
                         cases_median = apply(ca, c(1, 2), stats::median)),
                    class = "mosaic_ensemble")
   local_mocked_bindings(
@@ -269,9 +270,12 @@ test_that(".mosaic_reff_resim_ci reduces real engine members into three estimand
     .mosaic_clamp_transmission_params = function(cfg) cfg,
     .package = "MOSAIC")
 
-  res <- MOSAIC:::.mosaic_reff_resim_ci(ens, base_config = base, priors = NULL,
-                                        sampling_args = NULL, PATHS = NULL,
-                                        burn_in_days = 10L, verbose = FALSE)
+  # Default cases_central_method is "mean" and the ensemble carries cases_mean
+  # (as calc_model_ensemble() output does), so the medoid target needs no fallback.
+  expect_no_warning(
+    res <- MOSAIC:::.mosaic_reff_resim_ci(ens, base_config = base, priors = NULL,
+                                          sampling_args = NULL, PATHS = NULL,
+                                          burn_in_days = 10L, verbose = FALSE))
   expect_equal(res$gate_rel_err_pct, 0)                 # bitwise-reproducible engine
   expect_named(res$central, c("R_eff", "R_hum", "R_env"))
   expect_equal(dim(res$qmats$R_eff), c(nL, Tn, 3L))

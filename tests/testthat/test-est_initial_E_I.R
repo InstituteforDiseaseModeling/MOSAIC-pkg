@@ -25,28 +25,19 @@ create_mock_population_data <- function() {
 }
 
 create_mock_priors <- function() {
+  # Mirrors the priors_default layout: est_initial_E_I() reads rho,
+  # chi_endemic and delta_reporting_cases from parameters_global and warns
+  # (then uses a fixed fallback) when any is missing.
   list(
     parameters_global = list(
       sigma = list(distribution = "beta", parameters = list(shape1 = 2, shape2 = 8)),
       iota = list(distribution = "gamma", parameters = list(shape = 2, rate = 2.8)),
       gamma_1 = list(distribution = "uniform", parameters = list(min = 0.14, max = 0.33)),
-      gamma_2 = list(distribution = "uniform", parameters = list(min = 0.5, max = 1.0))
-    ),
-    parameters_location = list(
-      rho = list(
-        parameters = list(
-          location = list(
-            TCD = list(distribution = "beta", parameters = list(shape1 = 1, shape2 = 9))
-          )
-        )
-      ),
-      chi = list(
-        parameters = list(
-          location = list(
-            TCD = list(distribution = "beta", parameters = list(shape1 = 5, shape2 = 5))
-          )
-        )
-      )
+      gamma_2 = list(distribution = "uniform", parameters = list(min = 0.5, max = 1.0)),
+      rho = list(distribution = "beta", parameters = list(shape1 = 5.38, shape2 = 7.1)),
+      chi_endemic = list(distribution = "beta", parameters = list(shape1 = 5.43, shape2 = 5.01)),
+      delta_reporting_cases = list(distribution = "truncnorm",
+                                   parameters = list(mean = 1, sd = 1.5, a = 0, b = 7))
     )
   )
 }
@@ -164,14 +155,24 @@ test_that("est_initial_E_I_location handles edge cases", {
   expect_equal(result_zero$E, 0)
   expect_equal(result_zero$I, 0)
   
-  # Test with very high cases (should still work without warning since location function doesn't check multiplier)
+  # Very high cases with a large multiplier still return counts, and the
+  # location function warns that E and I exceed 2% of the population.
   cases_high <- rep(1000, 10)
-  result_high <- est_initial_E_I_location(
-    cases = cases_high, dates = dates, population = population, t0 = t0,
-    sigma = 0.01, rho = 0.01, chi = 1.0, tau_r = 4,  # Parameters that create high multiplier
-    iota = 0.714, gamma_1 = 0.2, gamma_2 = 0.67
+  warns <- character()
+  result_high <- withCallingHandlers(
+    est_initial_E_I_location(
+      cases = cases_high, dates = dates, population = population, t0 = t0,
+      sigma = 0.01, rho = 0.01, chi = 1.0, tau_r = 4,
+      iota = 0.714, gamma_1 = 0.2, gamma_2 = 0.67
+    ),
+    warning = function(w) {
+      warns <<- c(warns, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
   )
-  
+  expect_true(any(grepl("^E estimate .* exceeds 2% of population", warns)))
+  expect_true(any(grepl("^I estimate .* exceeds 2% of population", warns)))
+
   expect_true(result_high$E >= 0)
   expect_true(result_high$I >= 0)
 })
@@ -238,7 +239,9 @@ test_that("est_initial_E_I wrapper function works with mock data", {
     expect_true("TCD" %in% names(E_loc))
     expect_true("TCD" %in% names(I_loc))
     for (fit in list(E_loc$TCD, I_loc$TCD)) {
-      expect_named(fit, c("shape1", "shape2"), ignore.order = TRUE)
+      expect_true(all(c("shape1", "shape2") %in% names(fit)))
+      expect_false("distribution" %in% names(fit))
+      expect_identical(fit$method, "variance_inflation")
       expect_true(is.finite(fit$shape1) && fit$shape1 > 0)
       expect_true(is.finite(fit$shape2) && fit$shape2 > 0)
       beta_mean <- fit$shape1 / (fit$shape1 + fit$shape2)
