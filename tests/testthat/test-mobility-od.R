@@ -26,17 +26,21 @@ test_that("a non-default run cannot write to production filenames", {
 test_that("SCI reader keeps Namibia, whose ISO2 is the string 'NA'", {
      # Regression: read.csv's default na.strings = "NA" silently deleted all
      # 178 Namibian rows before countrycode() saw them, leaving NAM the only
-     # all-zero row and column of the SCI component.
+     # all-zero row and column of the SCI component. Exercises the package
+     # reader .od_sci(), not base read.csv.
+     skip_if_not_installed("countrycode")
      d <- withr::local_tempdir()
-     f <- file.path(d, "meta_sci_country.csv")
      writeLines(c("user_country,friend_country,scaled_sci",
-                  "NA,ZA,500", "ZA,NA,500", "BW,ZA,100"), f)
+                  "NA,ZA,500", "ZA,NA,400", "BW,ZA,100"),
+                file.path(d, "meta_sci_country.csv"))
+     iso <- c("BWA", "NAM", "ZAF")
 
-     bad  <- utils::read.csv(f, stringsAsFactors = FALSE)
-     good <- utils::read.csv(f, stringsAsFactors = FALSE, na.strings = "")
-     expect_equal(sum(is.na(bad$user_country)), 1L)     # the bug
-     expect_equal(sum(is.na(good$user_country)), 0L)    # the fix
-     expect_identical(countrycode::countrycode("NA", "iso2c", "iso3c"), "NAM")
+     M <- MOSAIC:::.od_sci(d, iso, verbose = FALSE, denormalise = FALSE)
+
+     expect_identical(dimnames(M), list(iso, iso))
+     expect_gt(M["NAM", "ZAF"], 0)
+     expect_gt(M["ZAF", "NAM"], 0)
+     expect_gt(M["BWA", "ZAF"], 0)
 })
 
 test_that("Beta prior warns at the real J-shape cliff, not a decorative one", {
@@ -66,26 +70,41 @@ test_that("documented prior interval widths match what the code produces", {
      expect_equal(span(0.75), 29.3, tolerance = 0.5)
 })
 
-test_that("row-only IPF is the closed form, and the rake preserves structure", {
-     # The shipped diagnostics (margin error ~1e-16, structure change ~1e-11)
-     # are tautologies. This is the invariant that actually constrains it.
+test_that("rake_mobility_od_to_tau hits the tau margins and keeps the row structure", {
+     # A row-only IPF has a closed form -- seed rows rescaled to the departure
+     # targets -- so the rake must reproduce the targets exactly while leaving
+     # every row's destination shares untouched.
+     skip_if_not_installed("mipfp")
+     d <- withr::local_tempdir()
+     dir.create(file.path(d, "mobility"))
+     iso <- c("AAA", "BBB", "CCC", "DDD")
      set.seed(1)
-     n <- 5
-     seed <- matrix(runif(n * n), n, dimnames = list(letters[1:n], letters[1:n]))
-     diag(seed) <- 0
-     seed <- seed / rowSums(seed)
-     target <- c(10, 20, 30, 40, 50)
-     closed <- seed * (target / rowSums(seed))
-     expect_equal(unname(rowSums(closed)), target, tolerance = 1e-12)
-     expect_equal(closed / rowSums(closed), seed, tolerance = 1e-12)
+     M <- matrix(runif(16), 4, dimnames = list(iso, iso))
+     diag(M) <- 0
+     utils::write.csv(as.data.frame(M), file.path(d, "mobility", "M_structure_fused.csv"))
+     tau <- stats::setNames(c(1e-3, 2e-3, 5e-4, 4e-3), iso)
+     N   <- stats::setNames(c(1e6, 2e6, 5e5, 3e6), iso)
+
+     R <- rake_mobility_od_to_tau(list(DATA_PROCESSED = d), iso_codes = iso,
+                                  tau_daily = tau, N = N, verbose = FALSE)
+
+     expect_equal(unname(rowSums(R)), unname(tau * N), tolerance = 1e-8)
+     expect_equal(unname(R / rowSums(R)), unname(M / rowSums(M)), tolerance = 1e-8)
+     expect_true(file.exists(file.path(d, "mobility", "M_fused_raked.csv")))
 })
 
-test_that("freshness filter drops docs but keeps data files named README_*", {
-     keep <- function(x) !grepl("^README(\\.|$)|\\.md$", x)
-     expect_true(keep("README_country_counts.csv"))
-     expect_false(keep("README.md"))
-     expect_false(keep("README"))
-     expect_false(keep("notes.md"))
+test_that("freshness scan drops docs but keeps data files named README_*", {
+     root <- withr::local_tempdir()
+     dd <- file.path(root, "MOSAIC-data", "processed", "mobility")
+     dir.create(dd, recursive = TRUE)
+     for (f in c("README.md", "README", "notes.md", "README_country_counts.csv", "data.csv")) {
+          writeLines("x", file.path(dd, f))
+     }
+
+     out <- MOSAIC:::.freshness_outputs(root, stale_days = 30)
+
+     expect_identical(out$directory, "mobility")
+     expect_identical(out$n_files, 2L)
 })
 
 test_that("no roxygen block hand-escapes a percent sign", {

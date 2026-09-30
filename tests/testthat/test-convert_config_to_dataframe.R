@@ -1,8 +1,5 @@
 library(MOSAIC)
 
-# Source the function directly for testing to get the latest version
-if (file.exists("../../R/convert_config_to_dataframe.R")) source("../../R/convert_config_to_dataframe.R")
-
 test_that("convert_config_to_dataframe works with default config", {
      # Test with default config
      df <- convert_config_to_dataframe(config_default)
@@ -38,7 +35,7 @@ test_that("convert_config_to_dataframe works with sampled config", {
      skip_if_not(exists("sample_parameters"))
      
      # Create sampled config with minimal sampling
-     set_root_directory(system.file(package = "MOSAIC"))
+     local_test_root()
      suppressMessages({
           PATHS <- get_paths()
           config_sampled <- sample_parameters(

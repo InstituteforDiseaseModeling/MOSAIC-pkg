@@ -7,7 +7,7 @@ library(MOSAIC)
 # Set root directory (required for the end-to-end sample_parameters() tests,
 # which read default priors/data). The .props_to_counts unit tests below need
 # no data and always run.
-tryCatch(set_root_directory("~/MOSAIC"), error = function(e) NULL)
+local_test_root()  # scoped to this file; see helper-skips.R
 
 props_to_counts <- getFromNamespace(".props_to_counts", "MOSAIC")
 .IC <- c("S", "V1", "V2", "E", "I", "R")

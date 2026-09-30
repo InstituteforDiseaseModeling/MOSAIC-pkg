@@ -1,8 +1,5 @@
 library(MOSAIC)
 
-# Source the function directly for testing to get the latest version
-if (file.exists("../../R/get_location_priors.R")) source("../../R/get_location_priors.R")
-
 test_that("get_location_priors works with default priors and single location", {
      # Extract priors for single location
      eth_priors <- get_location_priors(iso = "ETH")
@@ -16,12 +13,12 @@ test_that("get_location_priors works with default priors and single location", {
      # Check global parameters are preserved
      expect_equal(eth_priors$parameters_global, priors_default$parameters_global)
      
-     # Check location-specific parameters contain only ETH
-     if (length(eth_priors$parameters_location) > 0) {
-          first_param <- eth_priors$parameters_location[[1]]
-          if (!is.null(first_param$parameters$location)) {
-               expect_equal(names(first_param$parameters$location), "ETH")
-          }
+     # Every location-specific parameter must be filtered to ETH alone. Priors
+     # store the per-location entries directly under $location.
+     expect_gt(length(eth_priors$parameters_location), 0)
+     for (nm in names(eth_priors$parameters_location)) {
+          expect_identical(names(eth_priors$parameters_location[[nm]]$location), "ETH",
+                           info = nm)
      }
 })
 
@@ -32,13 +29,11 @@ test_that("get_location_priors works with multiple locations", {
      # Check structure
      expect_type(multi_priors, "list")
      
-     # Check location-specific parameters contain all requested locations
-     if (length(multi_priors$parameters_location) > 0) {
-          first_param <- multi_priors$parameters_location[[1]]
-          if (!is.null(first_param$parameters$location)) {
-               locations <- names(first_param$parameters$location)
-               expect_setequal(locations, c("ETH", "KEN", "UGA"))
-          }
+     # Every location-specific parameter must hold exactly the requested set.
+     expect_gt(length(multi_priors$parameters_location), 0)
+     for (nm in names(multi_priors$parameters_location)) {
+          expect_setequal(names(multi_priors$parameters_location[[nm]]$location),
+                          c("ETH", "KEN", "UGA"))
      }
 })
 
