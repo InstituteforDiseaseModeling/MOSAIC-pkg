@@ -29,8 +29,9 @@ write_trajectory_csv(
 Invisibly, the character vector of written file paths.
 }
 \description{
-Exports the ensemble-median daily trajectory of every captured channel to a
-plain-text CSV, one file per location, as
+Exports the ensemble central daily trajectory of every captured channel (the
+artifact's \code{$summary[[channel]]$median} field, which is not always a
+median; see "What is lost") to a plain-text CSV, one file per location, as
 \code{trajectories_<LOC>.csv}.
 }
 \section{Why this exists}{
@@ -81,10 +82,21 @@ deaths, i.e. reported deaths / \code{rho_deaths}, and rest on the pinned
 
 \section{What is lost}{
 
-The summary carries one central line per channel and no credible intervals:
-\code{disease_deaths} follows the run's deaths \code{central_method} (default
-mean), and every other channel is the weighted \strong{median}. Intervals for these channels
-require the per-member data. \code{reported_cases} and
+The summary carries one central line per channel and no credible intervals.
+The central line is not the same statistic for every column:
+\itemize{
+\item \code{reported_cases} and \code{reported_deaths} follow the run's
+per-channel \code{central_method} (default weighted \strong{mean}), matching
+\code{predicted_central} in the prediction CSVs; \code{disease_deaths}
+follows the deaths \code{central_method}.
+\item \code{mass_balance} is a ratio of the compartments' weighted means,
+\code{CFR} a ratio of 28-day rolling sums of the weighted-mean reported
+deaths and cases, and \code{epidemic_frac} the weighted mean of the
+reconstructed epidemic flag.
+\item \code{I_total} is the sum of the \code{Isym} and \code{Iasym} medians.
+\item Every other channel is the weighted \strong{median}.
+}
+Intervals for these channels require the per-member data. \code{reported_cases} and
 \code{reported_deaths} keep their intervals in the prediction CSVs.
 }
 

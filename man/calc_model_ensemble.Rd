@@ -43,7 +43,7 @@ Mutually exclusive with \code{parameter_seeds}.}
 \code{parameter_seeds} or \code{configs}. Normalized internally to sum to 1.
 If \code{NULL}, all parameter sets are weighted equally.}
 
-\item{n_simulations_per_config}{Integer. Stochastic stochastic reruns per parameter
+\item{n_simulations_per_config}{Integer. Stochastic reruns per parameter
 set. Default \code{10L}.}
 
 \item{envelope_quantiles}{Numeric vector of quantiles for confidence intervals.
@@ -84,16 +84,22 @@ returned series here.}
 
 \item{n_cores}{Integer or \code{NULL}. Number of cores when \code{parallel = TRUE}.}
 
-\item{root_dir}{Character. MOSAIC root directory. Required when \code{parallel = TRUE}.
-Each element must have \code{$param_idx}, \code{$stoch_idx},
-\code{$reported_cases}, \code{$reported_deaths}, and \code{$success}.}
+\item{root_dir}{Character. MOSAIC root directory. Required when \code{parallel = TRUE}.}
 
 \item{capture_trajectories}{Logical. When \code{TRUE}, harvest the
 comprehensive internal-state channels (\code{trajectory_channels}) from each
 member and attach a compact \code{$trajectories} (\code{mosaic_trajectories})
-object -- per-channel weighted median + a uniform-thinned set of actual
-member trajectories + derived series (I_total, mass_balance, CFR, epidemic
-frac). Default \code{FALSE} (\code{run_MOSAIC()} enables it for the posterior
+object -- a per-channel central line (field \code{$median}, kept for schema
+stability) + a uniform-thinned set of actual member trajectories + derived
+series. The central line is the weighted MEAN for \code{reported_cases},
+\code{reported_deaths} and \code{disease_deaths} (the default
+\code{central_method} of the trajectory reducer, matching the prediction
+plots' \code{predicted_central}), and the weighted median for every other
+captured channel; \code{I_total} is the sum of the Isym and Iasym medians,
+\code{mass_balance} a ratio of compartment weighted means, \code{CFR} a
+ratio of 28-day rolling weighted-mean deaths and cases, and
+\code{epidemic_frac} the weighted mean of the reconstructed epidemic flag.
+Default \code{FALSE} (\code{run_MOSAIC()} enables it for the posterior
 ensemble; never for the medoid). RAM/payload is linear in
 \code{length(trajectory_channels)}.}
 
@@ -152,9 +158,23 @@ selection) need not rely on positional alignment with an external vector.}
 \item{n_simulations_per_config}{Stochastic runs per parameter set.}
 \item{n_successful}{Number of successful simulations.}
 \item{location_names}{Character vector of location names.}
+\item{n_locations}{Number of locations (rows of the central matrices).}
+\item{n_time_points}{Number of time steps (columns of the central matrices).}
 \item{date_start}{Simulation start date.}
 \item{date_stop}{Simulation end date.}
 \item{envelope_quantiles}{Quantiles used for CI envelopes.}
+\item{spatial_hazard_ensemble}{Element-wise median over successful members
+of the engine's \code{spatial_hazard} (locations x time), or \code{NULL}.}
+\item{coupling_ensemble}{Element-wise median of the engine's \code{coupling}
+matrix (locations x locations), or \code{NULL}.}
+\item{pi_ij_ensemble}{Element-wise median of the engine's \code{pi_ij}
+mobility matrix (locations x locations), or \code{NULL}.}
+\item{trajectories}{\code{mosaic_trajectories} object when
+\code{capture_trajectories = TRUE} and \code{reduce_trajectories = TRUE}
+(see \code{capture_trajectories}), else \code{NULL}.}
+\item{trajectory_scratch}{Scratch-spill handle when
+\code{capture_trajectories = TRUE} and \code{reduce_trajectories = FALSE},
+for a caller-side reduce over a final subset; else \code{NULL}.}
 \item{artifact_mask}{List recording the engine-artifact masking spec for
 downstream scoring: \code{$cases_warmup} (integer, leading cases timesteps
 to exclude), \code{$deaths_final} (logical, exclude the final deaths

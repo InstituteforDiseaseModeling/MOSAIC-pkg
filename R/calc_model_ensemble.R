@@ -271,7 +271,20 @@
         if (!is.null(pb)) utils::setTxtProgressBar(pb, n_done)
         next
       }
-      results[[task_w]] <- res$value
+      val <- res$value
+      if (inherits(val, "try-error")) {
+        # The task function itself threw (outside any tryCatch of its own):
+        # parallel's workLoop returns a 'snow-try-error' string. Record it as a
+        # failed task -- carrying the task's param_idx/stoch_idx when it has
+        # them -- so one bad task cannot crash the consumers' `r$field` access.
+        tk <- X[[task_w]]
+        val <- list(param_idx = if (is.list(tk)) tk[["param_idx"]] else NULL,
+                    stoch_idx = if (is.list(tk)) tk[["stoch_idx"]] else NULL,
+                    .mosaic_task_error = TRUE,
+                    success = FALSE,
+                    error = paste(as.character(val), collapse = "\n"))
+      }
+      results[[task_w]] <- val
       node_task[w] <- NA_integer_
       n_done <- n_done + 1L
       if (!is.null(pb)) utils::setTxtProgressBar(pb, n_done)
@@ -280,6 +293,22 @@
     dispatch_to_idle()
   }
   results
+}
+
+# Evaluate `expr` under set.seed(seed) and restore the caller's RNG state (or
+# its absence) afterwards, so a reproducible draw never mutates the global
+# stream. Uses the session's current RNG kind.
+.mosaic_with_local_seed <- function(seed, expr) {
+  genv <- globalenv()
+  had_seed <- exists(".Random.seed", envir = genv, inherits = FALSE)
+  old_seed <- if (had_seed) get(".Random.seed", envir = genv, inherits = FALSE) else NULL
+  on.exit({
+    if (had_seed) assign(".Random.seed", old_seed, envir = genv)
+    else if (exists(".Random.seed", envir = genv, inherits = FALSE))
+      rm(".Random.seed", envir = genv)
+  }, add = TRUE)
+  set.seed(seed)
+  expr
 }
 
 #' Compute Weighted Ensemble Predictions from Multiple Parameter Sets
@@ -301,7 +330,7 @@
 #' @param parameter_weights Numeric vector of importance weights, same length as
 #'   \code{parameter_seeds} or \code{configs}. Normalized internally to sum to 1.
 #'   If \code{NULL}, all parameter sets are weighted equally.
-#' @param n_simulations_per_config Integer. Stochastic stochastic reruns per parameter
+#' @param n_simulations_per_config Integer. Stochastic reruns per parameter
 #'   set. Default \code{10L}.
 #' @param envelope_quantiles Numeric vector of quantiles for confidence intervals.
 #'   Must be even length to form lower/upper pairs. Default
@@ -333,14 +362,20 @@
 #' @param parallel Logical. Use parallel cluster for simulations. Default \code{FALSE}.
 #' @param n_cores Integer or \code{NULL}. Number of cores when \code{parallel = TRUE}.
 #' @param root_dir Character. MOSAIC root directory. Required when \code{parallel = TRUE}.
-#'   Each element must have \code{$param_idx}, \code{$stoch_idx},
-#'   \code{$reported_cases}, \code{$reported_deaths}, and \code{$success}.
 #' @param capture_trajectories Logical. When \code{TRUE}, harvest the
 #'   comprehensive internal-state channels (\code{trajectory_channels}) from each
 #'   member and attach a compact \code{$trajectories} (\code{mosaic_trajectories})
-#'   object -- per-channel weighted median + a uniform-thinned set of actual
-#'   member trajectories + derived series (I_total, mass_balance, CFR, epidemic
-#'   frac). Default \code{FALSE} (\code{run_MOSAIC()} enables it for the posterior
+#'   object -- a per-channel central line (field \code{$median}, kept for schema
+#'   stability) + a uniform-thinned set of actual member trajectories + derived
+#'   series. The central line is the weighted MEAN for \code{reported_cases},
+#'   \code{reported_deaths} and \code{disease_deaths} (the default
+#'   \code{central_method} of the trajectory reducer, matching the prediction
+#'   plots' \code{predicted_central}), and the weighted median for every other
+#'   captured channel; \code{I_total} is the sum of the Isym and Iasym medians,
+#'   \code{mass_balance} a ratio of compartment weighted means, \code{CFR} a
+#'   ratio of 28-day rolling weighted-mean deaths and cases, and
+#'   \code{epidemic_frac} the weighted mean of the reconstructed epidemic flag.
+#'   Default \code{FALSE} (\code{run_MOSAIC()} enables it for the posterior
 #'   ensemble; never for the medoid). RAM/payload is linear in
 #'   \code{length(trajectory_channels)}.
 #' @param trajectory_channels Character vector of \code{model$results} channels to
@@ -392,9 +427,23 @@
 #'   \item{n_simulations_per_config}{Stochastic runs per parameter set.}
 #'   \item{n_successful}{Number of successful simulations.}
 #'   \item{location_names}{Character vector of location names.}
+#'   \item{n_locations}{Number of locations (rows of the central matrices).}
+#'   \item{n_time_points}{Number of time steps (columns of the central matrices).}
 #'   \item{date_start}{Simulation start date.}
 #'   \item{date_stop}{Simulation end date.}
 #'   \item{envelope_quantiles}{Quantiles used for CI envelopes.}
+#'   \item{spatial_hazard_ensemble}{Element-wise median over successful members
+#'     of the engine's \code{spatial_hazard} (locations x time), or \code{NULL}.}
+#'   \item{coupling_ensemble}{Element-wise median of the engine's \code{coupling}
+#'     matrix (locations x locations), or \code{NULL}.}
+#'   \item{pi_ij_ensemble}{Element-wise median of the engine's \code{pi_ij}
+#'     mobility matrix (locations x locations), or \code{NULL}.}
+#'   \item{trajectories}{\code{mosaic_trajectories} object when
+#'     \code{capture_trajectories = TRUE} and \code{reduce_trajectories = TRUE}
+#'     (see \code{capture_trajectories}), else \code{NULL}.}
+#'   \item{trajectory_scratch}{Scratch-spill handle when
+#'     \code{capture_trajectories = TRUE} and \code{reduce_trajectories = FALSE},
+#'     for a caller-side reduce over a final subset; else \code{NULL}.}
 #'   \item{artifact_mask}{List recording the engine-artifact masking spec for
 #'     downstream scoring: \code{$cases_warmup} (integer, leading cases timesteps
 #'     to exclude), \code{$deaths_final} (logical, exclude the final deaths
@@ -1131,9 +1180,12 @@ calc_model_ensemble <- function(config,
 #'
 #' \code{reported_cases}/\code{reported_deaths} are taken from the supplied
 #' \code{cases_array}/\code{deaths_array} (already in display order) -- exact
-#' match to the prediction plots, no re-capture (PLAN sec 5.5). Derived series
-#' (\code{I_total}, \code{mass_balance}, \code{CFR}) are formed from the channel
-#' medians; \code{epidemic_frac} is the streaming weighted-MEAN of the
+#' match to the prediction plots, no re-capture (PLAN sec 5.5), reduced with
+#' \code{central_method} per channel (\code{disease_deaths} follows the deaths
+#' method); other channels use the weighted median. Derived series:
+#' \code{I_total} is the sum of the Isym/Iasym medians, \code{mass_balance} a
+#' ratio of compartment weighted means, \code{CFR} a ratio of rolling weighted
+#' means; \code{epidemic_frac} is the streaming weighted-MEAN of the
 #' reconstructed engine epidemic flag over ALL members (DM F5).
 #'
 #' Returns a \code{mosaic_trajectories} object, or \code{NULL} (with a loud
@@ -1208,7 +1260,7 @@ calc_model_ensemble <- function(config,
   # reproducible draw never mutates the caller's global RNG (RNG-purity).
   ps_ok <- which(present_files, arr.ind = TRUE)   # col1 = j, col2 = s
   if (nrow(ps_ok) > n_lines) {
-    keep <- withr::with_seed(
+    keep <- .mosaic_with_local_seed(
       20260625L, sort(sample(seq_len(nrow(ps_ok)), n_lines, replace = FALSE)))
     ps_thin <- ps_ok[keep, , drop = FALSE]
   } else ps_thin <- ps_ok
@@ -1256,8 +1308,12 @@ calc_model_ensemble <- function(config,
       delta <- suppressWarnings(as.numeric(unlist(epi$delta_reporting_cases)))
       thr   <- suppressWarnings(as.numeric(unlist(epi$epidemic_threshold)))
       Isym  <- .rec_mat(traj[["Isym"]])
-      Neff  <- tryCatch(Reduce(`+`, lapply(ef_comp, function(c) .rec_mat(traj[[c]]))),
-                        error = function(e) NULL)
+      # The engine's rng-mode classifier divides by the Census N at the probe
+      # row; fall back to the compartment sum when N was not captured.
+      Neff  <- if ("N" %in% present_ch) .rec_mat(traj[["N"]]) else NULL
+      if (is.null(Neff))
+        Neff <- tryCatch(Reduce(`+`, lapply(ef_comp, function(c) .rec_mat(traj[[c]]))),
+                         error = function(e) NULL)
       if (length(delta) && length(thr) && !is.null(Isym) && !is.null(Neff) &&
           !all(is.na(delta)) && !all(is.na(thr))) {
         delta <- rep(delta, length.out = n_locations)
@@ -1265,12 +1321,16 @@ calc_model_ensemble <- function(config,
         w_m   <- subset_weights[j] / n_stoch
         for (i in seq_len(n_locations)) {
           d <- as.integer(round(delta[i]))
-          lagged <- rep(NA_real_, n_time_points)
+          lagged <- lagged_n <- rep(NA_real_, n_time_points)
           if (!is.na(d) && d >= 0L && d < n_time_points) {
-            if (d == 0L) lagged <- Isym[i, ]
-            else lagged[(d + 1L):n_time_points] <- Isym[i, 1L:(n_time_points - d)]
+            src <- seq_len(n_time_points - d)
+            lagged[src + d]   <- Isym[i, src]
+            lagged_n[src + d] <- Neff[i, src]
           }
-          flag  <- as.numeric(lagged > thr[i] * Neff[i, ])
+          # Same rule as the engine (sim_components.R): epidemic when the
+          # probe-row Isym/N is at or above the threshold, with Isym and N both
+          # read at the lagged probe row.
+          flag  <- as.numeric(lagged >= thr[i] * lagged_n)
           valid <- is.finite(flag)
           wflag[i, valid] <- wflag[i, valid] + w_m * flag[valid]
           wsum[i, valid]  <- wsum[i, valid] + w_m

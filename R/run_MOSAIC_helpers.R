@@ -2330,7 +2330,7 @@
     # counts as a failed sim and the batch degrades gracefully (the lost sim_id is
     # simply re-drawn on resume).
     lapply(res, function(r)
-      if (is.list(r) && isTRUE(r$.mosaic_worker_died)) FALSE else r)
+      if (is.list(r) && (isTRUE(r$.mosaic_worker_died) || isTRUE(r$.mosaic_task_error))) FALSE else r)
   }
 }
 
