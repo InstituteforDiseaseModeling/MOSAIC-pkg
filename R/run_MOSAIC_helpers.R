@@ -167,9 +167,11 @@
 #' \code{mosaic_ensemble} (\code{$trajectories}; comprehensive internal-state
 #' channels — per-channel weighted median + uniform-thinned actual member lines +
 #' derived series) to \code{2_calibration/trajectories_ensemble.rds},
-#' schema-stamped. Persisted off the CANDIDATE ensemble (PLAN sec 14.B B-PERSIST:
-#' the optimized rebuild drops attached fields), so the trajectories reflect the
-#' candidate best subset / \code{weight_best}. A \code{NULL} \code{$trajectories}
+#' schema-stamped. The channels are reduced from the candidate run's scratch over
+#' the FINAL displayed subset and its weights: the optimized subset
+#' (\code{optimal_weights}) when subset optimization succeeded, otherwise the
+#' candidate best subset (\code{weight_best}); see
+#' \code{.mosaic_trajectory_member_map()}. A \code{NULL} \code{$trajectories}
 #' (capture off, or the capability check warned-and-skipped) is silently skipped.
 #'
 #' @param ensemble A \code{mosaic_ensemble} object.
@@ -363,6 +365,38 @@
   mat
 }
 
+#' Distance from each ensemble member to the ensemble central cases trajectory
+#'
+#' The medoid is the member whose predicted cases are closest to the ensemble
+#' central series. Each member is summarised by the median over its stochastic
+#' runs; the distance is the mean absolute difference of \code{log(x + eps)}
+#' over every location and every SCORED time step (the central series is
+#' passed through \code{.mosaic_mask_central_for_scoring()} first, so the
+#' burn-in head and engine artifacts do not count). Every location therefore
+#' carries equal weight, and a single-location run reduces to the per-location
+#' log-MAE.
+#'
+#' @param cases_array Numeric array \code{[n_loc, n_time, n_param, n_stoch]}.
+#' @param central Numeric matrix \code{[n_loc, n_time]}, the central cases series.
+#' @param mask_spec Artifact-mask list (\code{ens$artifact_mask}).
+#' @param eps Offset added before the log.
+#' @return Numeric vector of length \code{n_param}.
+#' @noRd
+.mosaic_medoid_distances <- function(cases_array, central, mask_spec, eps = 1.0) {
+  d <- dim(cases_array)
+  if (length(d) != 4L) stop("cases_array must be [n_loc, n_time, n_param, n_stoch]")
+  if (is.null(dim(central))) central <- matrix(central, nrow = 1L)
+  if (!identical(as.integer(dim(central)), as.integer(d[1:2])))
+    stop("central series dimensions do not match cases_array")
+  member_agg <- apply(cases_array, c(1L, 2L, 3L), stats::median)
+  dim(member_agg) <- d[1:3]
+  target <- .mosaic_mask_central_for_scoring(central, "cases", mask_spec)
+  log_target <- log(target + eps)
+  vapply(seq_len(d[3]), function(i) {
+    mean(abs(log(member_agg[, , i] + eps) - log_target), na.rm = TRUE)
+  }, numeric(1L))
+}
+
 # =============================================================================
 # Per-channel scored-window resolution (burn-in + deaths-era start)
 # =============================================================================
@@ -427,8 +461,10 @@
   burn_in <- if (is.null(burn_in)) 0L else as.integer(round(as.numeric(burn_in)))
   if (is.na(burn_in) || burn_in < 0L) burn_in <- 0L
 
-  # Cases start: explicit score_start_cases (date) overrides burn-in; otherwise
-  # burn_in_days. Index is offset + 1 (1-based scored start).
+  # Cases start: the later of burn_in_days and score_start_cases (a date), so
+  # score_start_cases can only move the start later, never into the burn-in
+  # head. Index is offset + 1 (1-based scored start). Cases may start later
+  # than deaths; the worker then masks the residual cases prefix.
   cases_off <- if (!is.null(lik$score_start_cases)) {
     max(burn_in, date_offset(lik$score_start_cases))
   } else {
@@ -617,17 +653,30 @@
   }
 
   # IO VALIDATION
-  .mosaic_validate_io(def$io)
+  def$io <- .mosaic_validate_io(def$io)
 
   def
 }
 
 #' Validate I/O Settings
+#'
+#' Every shard, combined sample file and resume scan is parquet, so parquet is
+#' the only output format. \code{format = "csv"} (accepted before, and then
+#' silently written as parquet) is coerced to \code{"parquet"} with a warning.
+#'
+#' @param io The merged \code{control$io} list.
+#' @return \code{io}, with \code{format} coerced to \code{"parquet"} if needed.
 #' @noRd
 .mosaic_validate_io <- function(io) {
   # Format check
-  if (!io$format %in% c("csv", "parquet")) {
-    stop("io$format must be 'csv' or 'parquet', got: ", io$format, call. = FALSE)
+  if (identical(io$format, "csv")) {
+    warning("io$format = 'csv' is not supported: calibration output is always parquet ",
+            "(shards, samples.parquet and resume all read parquet). Using 'parquet'.",
+            call. = FALSE, immediate. = TRUE)
+    io$format <- "parquet"
+  }
+  if (!identical(io$format, "parquet")) {
+    stop("io$format must be 'parquet', got: ", paste(io$format, collapse = ", "), call. = FALSE)
   }
 
   # Compression check
@@ -648,14 +697,7 @@
     }
   }
 
-  # Warning for suboptimal choices
-  if (io$format == "csv" && io$compression == "none") {
-    warning("CSV without compression is 2-3x larger and 6-30x slower than parquet.\n",
-            "Consider using mosaic_io_presets('default') for production runs.",
-            call. = FALSE, immediate. = TRUE)
-  }
-
-  invisible(TRUE)
+  invisible(io)
 }
 
 #' Validate Sampling Arguments
@@ -1992,6 +2034,50 @@
 # WEIGHT CALCULATIONS
 # =============================================================================
 
+#' Best-subset posterior weights under control$targets$best_subset_weighting
+#'
+#' The best-subset weights used by the convergence gate (ESS_B, A, CVw) and by
+#' \code{results$weight_best} (which drives the posterior quantiles,
+#' posteriors.json, the ensemble parameter weights and the optimizer), so the
+#' gated weights are the weights the posterior uses. The post-hoc subset-size
+#' tier search (\code{grid_search_best_subset()}) is not covered: it applies
+#' its own dynamic-temperature weighting whatever \code{best_subset_weighting}
+#' is, so under \code{"tempered"} the subset size is chosen with different
+#' weights from those the posterior uses.
+#' \code{"saturated"}: \eqn{w \propto \exp(-0.5 \min(\Delta AIC, 4))};
+#' \code{"tempered"}: adaptive-eta Gibbs weights
+#' (\code{.mosaic_calc_adaptive_gibbs_weights()}).
+#'
+#' @param likelihood Numeric log-likelihoods of the best-subset members.
+#' @param scheme \code{"saturated"} or \code{"tempered"}.
+#' @param verbose Passed to the weight function.
+#' @return \code{list(weights, temperature, effective_range)}; \code{weights}
+#'   is normalised and aligned with \code{likelihood}.
+#' @noRd
+.mosaic_best_subset_weights <- function(likelihood, scheme = "saturated", verbose = FALSE) {
+  if (length(scheme) != 1L || !scheme %in% c("saturated", "tempered")) {
+    stop("control$targets$best_subset_weighting must be 'saturated' or 'tempered'; got '",
+         paste(scheme, collapse = ", "), "'.", call. = FALSE)
+  }
+  if (identical(scheme, "tempered")) {
+    # Adaptive-eta Gibbs weights: eta is chosen so the worst retained draw
+    # sits at `weight_floor`, rather than saturating delta at a fixed 4.
+    # NOTE this is SHARPER than the saturated default, not softer -- see the
+    # warning on control$targets$best_subset_weighting.
+    ad <- .mosaic_calc_adaptive_gibbs_weights(likelihood = likelihood, verbose = verbose)
+    return(list(weights = ad$weights, temperature = ad$temperature,
+                effective_range = ad$effective_range))
+  }
+  # Truncate to effective range. NOTE: this SATURATES delta at 4 rather than
+  # applying the Delta <= 6 cut-off; every draw past 4 receives the same weight
+  # exp(-2), so weight ratios are capped at exp(2) = 7.39 and the subset
+  # posterior is close to uniform regardless of fit.
+  aic <- -2 * likelihood
+  delta <- aic - min(aic[is.finite(aic)])
+  w <- calc_model_weights_gibbs(x = pmin(delta, 4.0), eta = 0.5, verbose = verbose)
+  list(weights = w, temperature = 0.5, effective_range = 4.0)
+}
+
 #' Calculate Adaptive Gibbs Weights
 #'
 #' Unified adaptive weight calculation using Gibbs tempering with automatic
@@ -2218,17 +2304,122 @@
 # EXECUTION
 # =============================================================================
 
-#' Run Simulation Batch (Sequential or Parallel)
+#' Map the final ensemble members to their trajectory scratch keys
 #'
-#' Abstraction layer that runs simulations either sequentially (lapply) or
-#' in parallel (parLapply) depending on whether a cluster object is provided.
+#' Trajectory channels are spilled to scratch during the CANDIDATE ensemble run,
+#' keyed by candidate member index. When the displayed ensemble is the
+#' candidate, member i is key i. When it is the optimized rebuild (re-sorted by
+#' likelihood and subset), members are mapped by seed. If that map cannot be
+#' built (seeds missing, duplicated or unmatched), positional keys would bind
+#' the channel panels to the wrong members, so NULL is returned and the caller
+#' skips the artifact.
 #'
-#' @param sim_ids Vector of simulation IDs to run
-#' @param worker_func Simulation worker function
-#' @param cl Cluster object (NULL for sequential, cluster for parallel)
-#' @param show_progress Logical, whether to show progress bar
-#' @return List of success indicators from worker function
+#' @param is_optimized Logical; whether \code{ensemble} is the optimized rebuild.
+#' @param final_seeds Per-member seeds of the final ensemble.
+#' @param cand_member_seeds Per-member seeds of the candidate ensemble.
+#' @param n_param Number of members in the final ensemble.
+#' @return Integer vector of scratch keys (length \code{n_param}), or NULL.
 #' @noRd
+.mosaic_trajectory_member_map <- function(is_optimized, final_seeds, cand_member_seeds,
+                                          n_param) {
+  if (!isTRUE(is_optimized)) return(seq_len(n_param))
+  if (is.null(final_seeds) || is.null(cand_member_seeds) ||
+      length(final_seeds) != n_param || anyNA(cand_member_seeds) ||
+      anyDuplicated(cand_member_seeds)) return(NULL)
+  idx <- match(final_seeds, cand_member_seeds)
+  if (anyNA(idx)) return(NULL)
+  idx
+}
+
+#' Parallelism for the post-calibration ensembles
+#'
+#' A caller-supplied cluster is consent to parallelise the ensembles and sets
+#' their size, but it is not stopped (the caller owns it), so its workers keep
+#' their connection slots and memory while \code{calc_model_ensemble()} starts
+#' its own cluster. The size is clamped to the free R connections here, with
+#' the same rule \code{calc_model_ensemble()} applies internally, only so the
+#' note can state the size the ensembles will actually get; the note warns
+#' that both clusters are resident. Reusing the caller's cluster would need a
+#' \code{cluster} argument on the exported \code{calc_model_ensemble()} and
+#' is not done.
+#'
+#' @param cluster The \code{cluster} argument of \code{run_MOSAIC()} (or NULL).
+#' @param control The resolved control list.
+#' @return \code{list(parallel, n_cores, note)}; \code{note} is NULL unless a
+#'   caller-supplied cluster is present.
+#' @noRd
+.mosaic_ensemble_parallel_plan <- function(cluster, control) {
+  parallel <- isTRUE(control$parallel$enable) || !is.null(cluster)
+  n_cores  <- if (!is.null(cluster) && length(cluster) > 1L) length(cluster)
+              else control$parallel$n_cores
+  note <- NULL
+  if (!is.null(cluster) && parallel && isTRUE(n_cores > 1L)) {
+    n_req   <- as.integer(n_cores)
+    n_cores <- .mosaic_clamp_psock_workers(n_req, reserve = 2L, verbose = FALSE)
+    note <- sprintf(paste0(
+      "The caller-supplied cluster (%d workers) stays alive during the post-calibration ",
+      "ensembles, which start their own %d-worker cluster%s, so host memory holds both. ",
+      "Pass no cluster to let run_MOSAIC() stop its own before the ensembles."),
+      length(cluster), n_cores,
+      if (n_cores < n_req) sprintf(" (reduced from %d by the R connection budget)", n_req) else "")
+  }
+  list(parallel = parallel, n_cores = n_cores, note = note)
+}
+
+#' Build the function that installs the calibration worker on each PSOCK node
+#'
+#' Returns a function for \code{parallel::clusterCall()} that assigns
+#' \code{.run_sim_worker} and \code{.run_sim_worker_chunk} into each worker's
+#' global environment. Its enclosing environment is \code{globalenv()}: a
+#' closure created inside \code{run_MOSAIC()} would carry (and serialise to
+#' every worker) the whole run frame, ~10 MB per worker at 40 locations, and the
+#' installed workers would read that copy instead of the values sent by
+#' \code{clusterExport()} (\code{n_iterations}, \code{priors}, \code{config},
+#' \code{PATHS}, \code{dirs}, \code{param_names_all}, \code{param_lookup},
+#' \code{sampling_args}, \code{io_settings}, \code{likelihood_settings}).
+#'
+#' @return A zero-argument function with \code{globalenv()} as its environment.
+#' @noRd
+.mosaic_worker_installer <- function() {
+  f <- function() {
+    assign(".run_sim_worker", function(sim_id) {
+      MOSAIC:::.mosaic_run_simulation_worker(
+        sim_id = sim_id,
+        n_iterations = n_iterations,
+        priors = priors,
+        config = config,
+        PATHS = PATHS,
+        dir_cal_samples = dirs$cal_samples,
+        dir_cal_simresults = dirs$cal_simresults,
+        param_names_all = param_names_all,
+        param_lookup = param_lookup,
+        sampling_args = sampling_args,
+        io = io_settings,
+        likelihood_settings = likelihood_settings
+      )
+    }, envir = .GlobalEnv)
+    assign(".run_sim_worker_chunk", function(sim_ids) {
+      MOSAIC:::.mosaic_run_simulation_chunk(
+        sim_ids = sim_ids,
+        n_iterations = n_iterations,
+        priors = priors,
+        config = config,
+        PATHS = PATHS,
+        dir_cal_samples = dirs$cal_samples,
+        dir_cal_simresults = dirs$cal_simresults,
+        param_names_all = param_names_all,
+        param_lookup = param_lookup,
+        sampling_args = sampling_args,
+        io = io_settings,
+        likelihood_settings = likelihood_settings
+      )
+    }, envir = .GlobalEnv)
+    NULL
+  }
+  environment(f) <- globalenv()
+  f
+}
+
 #' Resolve control$io$shard_batch_size to a usable positive integer
 #'
 #' Garbage (NULL, NA, a string, a vector, a negative) falls back to 1, i.e. the
@@ -2281,7 +2472,21 @@
   unname(split(sim_ids, ceiling(seq_along(sim_ids) / size)))
 }
 
-.mosaic_run_batch <- function(sim_ids, worker_func, cl, show_progress) {
+#' Run Simulation Batch (Sequential or Parallel)
+#'
+#' Abstraction layer that runs simulations either sequentially (lapply) or
+#' in parallel (parLapply) depending on whether a cluster object is provided.
+#'
+#' @param sim_ids Vector of simulation IDs to run
+#' @param worker_func Simulation worker function
+#' @param cl Cluster object (NULL for sequential, cluster for parallel)
+#' @param show_progress Logical, whether to show progress bar
+#' @param unit_runs Engine runs per task (\code{n_iterations}, times the shard
+#'   size for chunked tasks); scales the parallel idle timeout.
+#' @return List of success indicators from worker function; a task that raised
+#'   an R-level error on a worker is recorded as \code{FALSE}.
+#' @noRd
+.mosaic_run_batch <- function(sim_ids, worker_func, cl, show_progress, unit_runs = 1L) {
   if (is.null(cl)) {
     # Sequential execution
     if (isTRUE(show_progress)) {
@@ -2306,8 +2511,8 @@
     # Worker-death-robust gather: parLapply()/pblapply(cl=) collect results with a
     # BLOCKING unserialize() that, on Linux, hangs the master FOREVER if a PSOCK
     # worker PROCESS dies mid-task -- an OOM kill, or any other fatal C-level
-    # abort (NOT an R-level error, which the worker already turns into a FALSE
-    # record). The embedded Python interpreter used to be the likeliest source
+    # abort (an R-level error instead comes back as a try-error value, mapped
+    # to FALSE below). The embedded Python interpreter used to be the likeliest source
     # of such an abort; the engine is pure R since v0.68.0, so OOM is now the
     # realistic case, but a blocking gather is just as unrecoverable either way. Calibration runs 10,000s of sims
     # per country, the highest-exposure parallel gather in the package, so route it
@@ -2322,11 +2527,16 @@
     # tiny payload (not the heavy run_MOSAIC frame) while still resolving
     # .run_sim_worker on the worker.
     environment(worker_func) <- globalenv()
+    idle_timeout <- .mosaic_calibration_idle_timeout(unit_runs)
     res <- .mosaic_cluster_lapply_robust(
       cl, sim_ids, worker_func,
-      idle_timeout_sec = getOption("MOSAIC.ensemble_worker_timeout_sec", 1800),
+      idle_timeout_sec = idle_timeout,
       progress = isTRUE(show_progress),
-      label = "run_MOSAIC simulation batch"
+      label = sprintf(paste0(
+        "run_MOSAIC simulation batch (idle timeout %d s for %d engine run(s) per task; if ",
+        "tasks are merely slow, raise options(MOSAIC.calibration_sec_per_engine_run) or ",
+        "options(MOSAIC.ensemble_worker_timeout_sec))."),
+        as.integer(idle_timeout), as.integer(unit_runs))
     )
     # A crashed worker yields a list(.mosaic_worker_died=TRUE, success=FALSE, ...)
     # marker; the calibration success tally expects a scalar logical per sim
@@ -2340,6 +2550,27 @@
     lapply(res, function(r)
       if (is.list(r) && (isTRUE(r$.mosaic_worker_died) || isTRUE(r$.mosaic_task_error))) FALSE else r)
   }
+}
+
+#' Idle timeout for the calibration parallel gather
+#'
+#' The robust gather stops when no busy worker returns a result within the
+#' timeout. A calibration task is \code{unit_runs} engine runs (a shard of
+#' simulations times \code{n_iterations}), so a fixed 1800 s can be exceeded by
+#' a healthy but large task. The timeout is the larger of
+#' \code{getOption("MOSAIC.ensemble_worker_timeout_sec", 1800)} and
+#' \code{unit_runs * getOption("MOSAIC.calibration_sec_per_engine_run", 30)}
+#' (30 s is ~20x a measured 40-location engine run).
+#'
+#' @param unit_runs Engine runs per task.
+#' @return Timeout in seconds.
+#' @noRd
+.mosaic_calibration_idle_timeout <- function(unit_runs = 1L) {
+  base    <- as.numeric(getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
+  per_run <- as.numeric(getOption("MOSAIC.calibration_sec_per_engine_run", 30))
+  unit_runs <- suppressWarnings(as.numeric(unit_runs))
+  if (length(unit_runs) != 1L || !is.finite(unit_runs) || unit_runs < 1) unit_runs <- 1
+  max(base, unit_runs * per_run)
 }
 
 

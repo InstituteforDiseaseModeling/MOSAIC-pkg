@@ -189,6 +189,250 @@
   invisible(success)
 }
 
+#' Move shards left by an earlier run out of a fresh run's samples directory
+#'
+#' A non-resume run starts its sim ids at 1 and later combines every
+#' \code{sim_*.parquet} in \code{2_calibration/samples}, so shards from an
+#' earlier interrupted run (higher ids, or other chunk ranges) would be pooled
+#' into the new posterior without the resume input checks. They are moved,
+#' not deleted, into a timestamped \code{2_calibration/samples_stale_<time>/}
+#' directory so the earlier draws are recoverable.
+#'
+#' @param dirs The directory list from \code{.mosaic_ensure_dir_tree()}.
+#' @param log_warn Logging callback for the warning.
+#' @return Invisibly, the quarantine directory, or \code{NULL} if there was
+#'   nothing to move.
+#' @noRd
+.mosaic_quarantine_stale_shards <- function(dirs, log_warn = function(...) invisible(NULL)) {
+  if (is.null(dirs$cal_samples) || !dir.exists(dirs$cal_samples)) return(invisible(NULL))
+  stale <- list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
+  if (!length(stale)) return(invisible(NULL))
+  qdir <- file.path(dirs$calibration,
+                    paste0("samples_stale_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+  base <- qdir
+  k <- 1L
+  while (dir.exists(qdir)) {
+    qdir <- paste0(base, "_", k)
+    k <- k + 1L
+  }
+  dir.create(qdir, recursive = TRUE, showWarnings = FALSE)
+  moved <- file.rename(stale, file.path(qdir, basename(stale)))
+  if (!all(moved)) {
+    stop(sprintf(paste0(
+      "resume = FALSE but %d shard(s) from an earlier run in %s could not be moved aside; ",
+      "they would be pooled into this run's posterior. Remove them, set resume = TRUE, ",
+      "or use a new dir_output."), sum(!moved), dirs$cal_samples), call. = FALSE)
+  }
+  log_warn(paste0("resume = FALSE: moved %d shard(s) left by an earlier run from ",
+                  "2_calibration/samples to %s so they are not pooled into this run. ",
+                  "Use resume = TRUE to continue an interrupted run."),
+           length(stale), file.path("2_calibration", basename(qdir)))
+  invisible(qdir)
+}
+
+#' Remove post-calibration artifacts left by an earlier run
+#'
+#' The posterior/medoid/trajectory/spatial artifacts, the per-location
+#' prediction CSVs and the fit/optimizer/CFR tables are rebuilt from the
+#' current run's samples, but several writers are conditional (optimizer on,
+#' medoid found, arrays present). Deleting them before they are rebuilt means a
+#' skipped or failed block leaves no file rather than a stale one from a
+#' previous run into the same \code{dir_output}.
+#'
+#' @param dirs The directory list from \code{.mosaic_ensure_dir_tree()}.
+#' @param log_msg Logging callback.
+#' @return Invisibly, the paths that were removed.
+#' @noRd
+.mosaic_clear_posterior_artifacts <- function(dirs, log_msg = function(...) invisible(NULL)) {
+  cal_files <- c("ensemble_candidate.rds", "ensemble_optimized.rds", "subset_opt.rds",
+                 "medoid_ensemble.rds", "trajectories_ensemble.rds",
+                 "spatial_hazard_ensemble.rds", "coupling_ensemble.rds",
+                 "pi_ij_ensemble.rds")
+  paths <- file.path(dirs$calibration, cal_files)
+  if (!is.null(dirs$cal_best_model))
+    paths <- c(paths, file.path(dirs$cal_best_model, "config_medoid.json"))
+  # Conditional 3_results tables. The per-location prediction CSVs matter most:
+  # the combine step globs predictions_<type>_*.csv, so a re-run with fewer
+  # locations would otherwise fold the earlier run's files into *_all.csv.
+  if (!is.null(dirs$res_predictions) && dir.exists(dirs$res_predictions))
+    paths <- c(paths, list.files(dirs$res_predictions,
+                                 pattern = "^predictions_(ensemble|medoid)_.*\\.csv$",
+                                 full.names = TRUE))
+  if (!is.null(dirs$res_fig_diag))
+    paths <- c(paths, file.path(dirs$res_fig_diag,
+                                c("model_fit_windows.csv", "optimization_diagnostics.csv")))
+  if (!is.null(dirs$res_posterior))
+    paths <- c(paths, file.path(dirs$res_posterior, "cfr_posterior.csv"))
+  stale <- paths[file.exists(paths)]
+  if (length(stale)) {
+    unlink(stale)
+    log_msg("Removed %d post-calibration artifact(s) from an earlier run: %s",
+            length(stale), paste(basename(stale), collapse = ", "))
+  }
+  invisible(stale)
+}
+
+#' Calibration convergence and end-of-run status
+#'
+#' The calibration ESS criterion is evaluated only in auto mode. A fixed-mode
+#' run keeps the documented logical \code{converged = FALSE} (the criterion
+#' was not met because it was never tested) but records
+#' \code{convergence_evaluated = FALSE} and its own status rather than
+#' "completed_unconverged". Status tree:
+#' \itemize{
+#'   \item \code{"completed_fixed"} / \code{"completed_fixed_partial"}: fixed
+#'     mode, with / without the posterior-ensemble metrics;
+#'   \item \code{"completed_unconverged"}: auto mode, ESS criterion not met;
+#'   \item \code{"success_partial"}: converged but the posterior-ensemble block
+#'     failed and never populated \code{r2_cases_ensemble};
+#'   \item \code{"success"}: converged and \code{r2_cases_ensemble} populated.
+#' }
+#'
+#' @param state The calibration state (\code{mode}, \code{converged}).
+#' @param outputs_ok Logical; whether the ensemble metrics were populated.
+#' @return \code{.mosaic_run_converged()}: \code{TRUE}/\code{FALSE} (always
+#'   \code{FALSE} in fixed mode). \code{.mosaic_convergence_evaluated()}:
+#'   \code{FALSE} in fixed mode. \code{.mosaic_run_status()}: the status string.
+#' @noRd
+.mosaic_run_converged <- function(state) {
+  !identical(state$mode, "fixed") && isTRUE(state$converged)
+}
+
+#' Whether the calibration ESS criterion was evaluated (FALSE in fixed mode)
+#' @noRd
+.mosaic_convergence_evaluated <- function(state) {
+  !identical(state$mode, "fixed")
+}
+
+#' End-of-run status string (see .mosaic_run_converged() for the tree)
+#' @noRd
+.mosaic_run_status <- function(state, outputs_ok) {
+  if (identical(state$mode, "fixed")) {
+    if (isTRUE(outputs_ok)) "completed_fixed" else "completed_fixed_partial"
+  } else if (!isTRUE(state$converged)) {
+    "completed_unconverged"
+  } else if (!isTRUE(outputs_ok)) {
+    "success_partial"
+  } else {
+    "success"
+  }
+}
+
+#' Write the per-location tau_i credible-interval artifact
+#'
+#' Copies the 95 percent interval of the upstream departure-probability fit
+#' (\code{fit_prob_travel()}, written to
+#' \code{MODEL_INPUT/mobility_travel_prob_params.csv}) into
+#' \code{1_inputs/mobility_tau_ci.csv}, in config location order, so
+#' \code{plot_departure_tau()} can draw interval bars. Written atomically.
+#'
+#' @param params_file Path to \code{mobility_travel_prob_params.csv}.
+#' @param locations Character vector of config location ISO codes.
+#' @param dir_inputs The run's \code{1_inputs} directory.
+#' @return The written path, or \code{NULL} (invisibly) when the source file is
+#'   absent or lacks the \code{iso3} and interval columns; in that case any
+#'   \code{mobility_tau_ci.csv} left by an earlier run is removed.
+#' @noRd
+.mosaic_write_tau_ci <- function(params_file, locations, dir_inputs) {
+  out <- file.path(dir_inputs, "mobility_tau_ci.csv")
+  no_ci <- function() {
+    if (file.exists(out)) unlink(out)
+    invisible(NULL)
+  }
+  if (length(params_file) != 1L || !file.exists(params_file)) return(no_ci())
+  tp <- utils::read.csv(params_file, stringsAsFactors = FALSE)
+  lo_col <- intersect(c("Q2.5", "q2.5", "lower", "ci_lower"), names(tp))[1]
+  hi_col <- intersect(c("Q97.5", "q97.5", "upper", "ci_upper"), names(tp))[1]
+  if (!("iso3" %in% names(tp)) || is.na(lo_col) || is.na(hi_col)) return(no_ci())
+  locs <- as.character(locations)
+  m    <- match(locs, tp$iso3)
+  ci_df <- data.frame(location = locs, lower = tp[[lo_col]][m],
+                      upper = tp[[hi_col]][m], stringsAsFactors = FALSE)
+  tmp <- paste0(out, ".tmp")
+  utils::write.csv(ci_df, tmp, row.names = FALSE)
+  if (!file.rename(tmp, out)) {
+    unlink(tmp)
+    stop("could not move ", tmp, " into place")
+  }
+  out
+}
+
+#' Git provenance of the working directory and of the MOSAIC code
+#'
+#' \code{sha}/\code{branch}/\code{path} describe the git repository of the
+#' working directory -- usually the country repo the run was launched from --
+#' and are omitted when the working directory is not in a git repository. This
+#' is the long-standing meaning of these fields, which downstream tools read
+#' as the country-repo commit (MOSAIC-OCV \code{promote_model.R}).
+#'
+#' \code{mosaic_sha}/\code{mosaic_branch}/\code{mosaic_source} describe the
+#' MOSAIC package that is running: the \code{RemoteSha} (or
+#' \code{GithubSHA1}) recorded by a remotes/pak install when present
+#' (\code{mosaic_source = "remote"}), otherwise the git checkout the package
+#' was loaded from (\code{devtools::load_all()}; the checkout's DESCRIPTION
+#' must name MOSAIC; \code{"checkout"}), otherwise NA (\code{"unknown"}, e.g.
+#' a plain \code{R CMD INSTALL}, whose version is in \code{R$MOSAIC}).
+#'
+#' @param pkg_dir Directory the MOSAIC package was loaded from.
+#' @param cwd Working directory.
+#' @param desc \code{utils::packageDescription("MOSAIC")} (a list), or NULL.
+#' @return Named list.
+#' @noRd
+.mosaic_git_provenance <- function(pkg_dir = system.file(package = "MOSAIC"),
+                                   cwd = getwd(),
+                                   desc = tryCatch(utils::packageDescription("MOSAIC"),
+                                                   error = function(e) NULL)) {
+  out <- list()
+  mosaic <- list(mosaic_sha = NA_character_, mosaic_branch = NA_character_,
+                 mosaic_source = "unknown")
+  if (is.list(desc)) {
+    remote_sha <- desc$RemoteSha %||% desc$GithubSHA1
+    if (!is.null(remote_sha) && nzchar(remote_sha)) {
+      mosaic$mosaic_sha    <- substr(remote_sha, 1L, 9L)
+      mosaic$mosaic_branch <- desc$RemoteRef %||% desc$GithubRef %||% NA_character_
+      mosaic$mosaic_source <- "remote"
+    }
+  }
+  if (!nzchar(Sys.which("git"))) return(c(out, mosaic))
+
+  git_cmd <- function(dir, ...) {
+    res <- tryCatch(
+      system2("git", c("-C", shQuote(dir), ...), stdout = TRUE, stderr = FALSE),
+      error = function(e) NULL, warning = function(w) NULL
+    )
+    if (is.null(res) || !is.character(res) || length(res) == 0) return(NA_character_)
+    trimws(res[1])
+  }
+  in_repo <- function(dir) {
+    length(dir) == 1L && nzchar(dir) && dir.exists(dir) &&
+      identical(git_cmd(dir, "rev-parse", "--is-inside-work-tree"), "true")
+  }
+
+  if (in_repo(cwd)) {
+    out$sha    <- git_cmd(cwd, "rev-parse", "--short", "HEAD")
+    out$branch <- git_cmd(cwd, "rev-parse", "--abbrev-ref", "HEAD")
+    out$path   <- git_cmd(cwd, "rev-parse", "--show-toplevel")
+  }
+
+  # A MOSAIC source checkout: pkg_dir (under load_all, <src>/inst) sits in a
+  # git work tree whose top level is the MOSAIC package itself -- not, say, a
+  # project repo that happens to hold an renv library.
+  is_mosaic_checkout <- function(dir) {
+    if (!in_repo(dir)) return(FALSE)
+    top <- git_cmd(dir, "rev-parse", "--show-toplevel")
+    d <- file.path(top, "DESCRIPTION")
+    !is.na(top) && file.exists(d) &&
+      identical(tryCatch(unname(read.dcf(d, fields = "Package")[1, 1]),
+                         error = function(e) NA_character_), "MOSAIC")
+  }
+  if (!identical(mosaic$mosaic_source, "remote") && is_mosaic_checkout(pkg_dir)) {
+    mosaic$mosaic_sha    <- git_cmd(pkg_dir, "rev-parse", "--short", "HEAD")
+    mosaic$mosaic_branch <- git_cmd(pkg_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    mosaic$mosaic_source <- "checkout"
+  }
+  c(out, mosaic)
+}
+
 #' Capture Full Environment Snapshot
 #'
 #' Records all version, system, and runtime information needed to reproduce
@@ -264,25 +508,7 @@
   }
 
   # --- Git ---
-  git_env <- list()
-  if (nzchar(Sys.which("git"))) {
-    .git_cmd <- function(...) {
-      out <- tryCatch(
-        system2("git", c(...), stdout = TRUE, stderr = FALSE),
-        error = function(e) NULL, warning = function(w) NULL
-      )
-      if (is.null(out) || !is.character(out) || length(out) == 0) return(NA_character_)
-      trimws(out[1])
-    }
-    pkg_dir <- system.file(package = "MOSAIC")
-    git_dir <- if (file.exists(file.path(".", ".git"))) "."
-               else if (file.exists(file.path(pkg_dir, ".git"))) pkg_dir
-               else NA_character_
-    if (!is.na(git_dir)) {
-      git_env$sha    <- .git_cmd("-C", git_dir, "rev-parse", "--short", "HEAD")
-      git_env$branch <- .git_cmd("-C", git_dir, "rev-parse", "--abbrev-ref", "HEAD")
-    }
-  }
+  git_env <- .mosaic_git_provenance()
 
   # --- Data versions ---
   data_env <- list()
@@ -331,38 +557,21 @@
   min(finite_x, na.rm = na.rm)
 }
 
-#' Safe Parse of Simulation ID from Filename
-#'
-#' Robust extraction of sim IDs from filenames.
-#'
-#' @param filenames Vector of filenames
-#' @param pattern Regex pattern
-#' @return Integer vector of sim IDs
-#' @noRd
-.mosaic_parse_sim_ids <- function(filenames, pattern = "^sim_0*([0-9]+)\\.parquet$") {
-  # Extract IDs
-  ids_str <- sub(pattern, "\\1", filenames)
-
-  # Convert to integer
-  ids <- suppressWarnings(as.integer(ids_str))
-
-  # Remove NAs (failed conversions)
-  valid_ids <- ids[!is.na(ids)]
-
-  if (length(valid_ids) < length(filenames)) {
-    warning(
-      "Failed to parse ", length(filenames) - length(valid_ids),
-      " simulation IDs from filenames",
-      call. = FALSE
-    )
-  }
-
-  valid_ids
-}
-
 # =============================================================================
 # OUTPUT GENERATION
 # =============================================================================
+
+#' Coerce a possibly-absent JSON scalar to a rounded numeric
+#' @param x Value read back from convergence_diagnostics.json.
+#' @return Numeric scalar, or NA_real_ when absent/non-finite.
+#' @keywords internal
+#' @noRd
+.mosaic_diag_num <- function(x) {
+  if (is.null(x)) return(NA_real_)
+  x <- suppressWarnings(as.numeric(x))
+  if (length(x) != 1L || !is.finite(x)) return(NA_real_)
+  round(x, 6)
+}
 
 #' Write Summary JSON at Run Completion
 #'
@@ -393,20 +602,9 @@
 #'   median, independent of \code{central_method}, for transition cross-walk.
 #' @param bias_ratio_cases_ensemble_mean,bias_ratio_deaths_ensemble_mean,bias_ratio_cases_ensemble_median,bias_ratio_deaths_ensemble_median
 #'   Ensemble bias ratios against both tendencies (see above).
+#' @param posthoc_criteria_met Whether a post-hoc best-subset tier met all its targets.
 #' @param io I/O settings for JSON writing
 #' @noRd
-#' Coerce a possibly-absent JSON scalar to a rounded numeric
-#' @param x Value read back from convergence_diagnostics.json.
-#' @return Numeric scalar, or NA_real_ when absent/non-finite.
-#' @keywords internal
-#' @noRd
-.mosaic_diag_num <- function(x) {
-  if (is.null(x)) return(NA_real_)
-  x <- suppressWarnings(as.numeric(x))
-  if (length(x) != 1L || !is.finite(x)) return(NA_real_)
-  round(x, 6)
-}
-
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
                                        nb_dispersion = NULL,
                                        r2_cases_ensemble = NA_real_,
@@ -430,6 +628,7 @@
                                        bias_ratio_deaths_ensemble_tier = NA_real_,
                                        n_ensemble_params_tier = NA_integer_,
                                        cfr_implied = NULL,
+                                       posthoc_criteria_met = NA,
                                        io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -505,7 +704,14 @@
     # Convergence and model fit. The pipeline produces the posterior ENSEMBLE
     # and the MEDOID member; the single best-likelihood model is not produced,
     # so summary.json reports ensemble (+ tier) fit metrics only.
-    converged     = isTRUE(state$converged),
+    # `converged` is the calibration ESS stopping criterion, evaluated only in
+    # auto mode; a fixed-mode run never evaluates it, so it stays FALSE (the
+    # field is always logical) with `convergence_evaluated = FALSE`.
+    # `posthoc_criteria_met` is whether a post-hoc best-subset tier met all its
+    # targets (FALSE = fallback subset), in either mode.
+    converged     = .mosaic_run_converged(state),
+    convergence_evaluated = .mosaic_convergence_evaluated(state),
+    posthoc_criteria_met = as.logical(posthoc_criteria_met)[1],
     r2_cases_ensemble  = if (!is.na(r2_cases_ensemble)) round(r2_cases_ensemble, 4) else NA_real_,
     r2_deaths_ensemble = if (!is.na(r2_deaths_ensemble)) round(r2_deaths_ensemble, 4) else NA_real_,
     bias_ratio_cases_ensemble  = if (!is.na(bias_ratio_cases_ensemble)) round(bias_ratio_cases_ensemble, 4) else NA_real_,
@@ -643,50 +849,75 @@
 
 #' Compute R² and Bias Ratio Across Trailing Time Windows
 #'
-#' @param obs_cases Numeric vector of observed cases.
-#' @param est_cases Numeric vector of estimated cases (same length).
-#' @param obs_deaths Numeric vector of observed deaths.
-#' @param est_deaths Numeric vector of estimated deaths.
-#' @param dates Date vector of same length as obs/est vectors.
+#' Series are \code{[n_loc x n_time]} matrices (a vector is one location).
+#' A cell is scored when both its observation and its estimate are finite
+#' (the estimate is NA where the scoring mask removed it). A trailing window
+#' \code{last_<w>obs} is the last \code{w} time steps that carry at least one
+#' scored cell for that channel, pooling every location's scored cells in
+#' those steps; for one location this is the last \code{w} scored
+#' observations. Dates are indexed by time step.
+#'
+#' @param obs_cases Observed cases, \code{[n_loc x n_time]} matrix or vector.
+#' @param est_cases Estimated cases, same shape.
+#' @param obs_deaths Observed deaths, same shape.
+#' @param est_deaths Estimated deaths, same shape.
+#' @param dates Date vector of length \code{n_time}.
 #' @param windows Integer vector of trailing observation counts (e.g. c(365, 120, 90, 60, 30)).
-#' @return data.frame with one row per window plus a "full" row.
+#' @return data.frame with one row per window plus a "full" row; \code{n_obs}
+#'   is the number of scored cells.
 #' @noRd
 .mosaic_compute_windowed_metrics <- function(obs_cases, est_cases,
                                              obs_deaths, est_deaths,
                                              dates, windows = c(365, 120, 90, 60, 30)) {
 
-  valid_idx_c <- which(!is.na(obs_cases) & is.finite(obs_cases))
-  valid_idx_d <- which(!is.na(obs_deaths) & is.finite(obs_deaths))
+  as_mat <- function(x) if (is.null(dim(x))) matrix(x, nrow = 1L) else as.matrix(x)
+  obs_cases  <- as_mat(obs_cases);  est_cases  <- as_mat(est_cases)
+  obs_deaths <- as_mat(obs_deaths); est_deaths <- as_mat(est_deaths)
+  if (!identical(dim(obs_cases), dim(est_cases)) ||
+      !identical(dim(obs_deaths), dim(est_deaths))) {
+    stop("observed and estimated series must have the same dimensions")
+  }
+  n_time <- ncol(obs_cases)
 
-  compute_row <- function(label, idx_c, idx_d) {
-    # Cases
+  ok_c <- is.finite(obs_cases)  & is.finite(est_cases)
+  ok_d <- is.finite(obs_deaths) & is.finite(est_deaths)
+  # Time steps carrying at least one scored cell, per channel.
+  valid_t_c <- which(colSums(ok_c) > 0L)
+  valid_t_d <- which(colSums(ok_d) > 0L)
+
+  date_at <- function(t) {
+    if (length(dates) == n_time) as.character(dates[t]) else NA_character_
+  }
+
+  compute_row <- function(label, t_c, t_d) {
+    sel_c <- ok_c; sel_c[, -t_c] <- FALSE
+    sel_d <- ok_d; sel_d[, -t_d] <- FALSE
+    if (!length(t_c)) sel_c[] <- FALSE
+    if (!length(t_d)) sel_d[] <- FALSE
+    n_c <- sum(sel_c); n_d <- sum(sel_d)
+
     r2_c <- bias_c <- NA_real_
-    if (length(idx_c) > 2) {
-      o <- obs_cases[idx_c]; e <- est_cases[idx_c]
+    if (n_c > 2) {
+      o <- obs_cases[sel_c]; e <- est_cases[sel_c]
       r2_c <- calc_model_R2(o, e)
       bias_c <- calc_bias_ratio(o, e)
     }
-    # Deaths
     r2_d <- bias_d <- NA_real_
-    if (length(idx_d) > 2) {
-      o <- obs_deaths[idx_d]; e <- est_deaths[idx_d]
+    if (n_d > 2) {
+      o <- obs_deaths[sel_d]; e <- est_deaths[sel_d]
       r2_d <- calc_model_R2(o, e)
       bias_d <- calc_bias_ratio(o, e)
     }
 
-    # Date range from cases (primary)
-    idx_all <- sort(unique(c(idx_c, idx_d)))
-    date_start <- if (length(idx_all) > 0) as.character(dates[min(idx_all)]) else NA_character_
-    date_end   <- if (length(idx_all) > 0) as.character(dates[max(idx_all)]) else NA_character_
-
+    t_all <- sort(unique(c(t_c, t_d)))
     data.frame(
-      window     = label,
-      n_obs      = max(length(idx_c), length(idx_d)),
-      date_start = date_start,
-      date_end   = date_end,
-      r2_cases   = round(r2_c, 4),
-      bias_cases = round(bias_c, 4),
-      r2_deaths  = round(r2_d, 4),
+      window      = label,
+      n_obs       = max(n_c, n_d),
+      date_start  = if (length(t_all)) date_at(min(t_all)) else NA_character_,
+      date_end    = if (length(t_all)) date_at(max(t_all)) else NA_character_,
+      r2_cases    = round(r2_c, 4),
+      bias_cases  = round(bias_c, 4),
+      r2_deaths   = round(r2_d, 4),
       bias_deaths = round(bias_d, 4),
       stringsAsFactors = FALSE
     )
@@ -695,18 +926,18 @@
   rows <- list()
 
   # Full series
-  rows[[1]] <- compute_row("full", valid_idx_c, valid_idx_d)
+  rows[[1]] <- compute_row("full", valid_t_c, valid_t_d)
 
   # Trailing windows
   for (w in windows) {
-    idx_c <- if (length(valid_idx_c) >= w) tail(valid_idx_c, w) else integer(0)
-    idx_d <- if (length(valid_idx_d) >= w) tail(valid_idx_d, w) else integer(0)
-    if (length(idx_c) == 0 && length(idx_d) == 0) next
-    # The window measures "last w VALID OBSERVATIONS" (timepoints with finite
-    # cases/deaths), not last w calendar days. For weekly-reporting countries
-    # the temporal span can be ~7x the day count. Label as "last_<w>obs" so
-    # an operator (or AI tail) doesn't mistake it for a day window.
-    rows[[length(rows) + 1]] <- compute_row(paste0("last_", w, "obs"), idx_c, idx_d)
+    t_c <- if (length(valid_t_c) >= w) utils::tail(valid_t_c, w) else integer(0)
+    t_d <- if (length(valid_t_d) >= w) utils::tail(valid_t_d, w) else integer(0)
+    if (length(t_c) == 0 && length(t_d) == 0) next
+    # The window measures "last w time steps with a scored observation", not
+    # last w calendar days. For weekly-reporting countries the temporal span
+    # can be ~7x the day count. Label as "last_<w>obs" so an operator (or AI
+    # tail) doesn't mistake it for a day window.
+    rows[[length(rows) + 1]] <- compute_row(paste0("last_", w, "obs"), t_c, t_d)
   }
 
   do.call(rbind, rows)

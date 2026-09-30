@@ -34,8 +34,10 @@ After detaching:
 \itemize{
 \item The RETICULATE_PYTHON variable is cleared
 \item The current Python session remains active (cannot be changed)
-\item When R restarts, MOSAIC will NOT auto-attach to r-mosaic
-\item You can set a different RETICULATE_PYTHON before loading MOSAIC
+\item Detaching lasts only for this session: in a new session,
+\code{library(MOSAIC)} sets RETICULATE_PYTHON to r-mosaic again whenever
+it is unset and r-mosaic exists
+\item To use a different Python, set RETICULATE_PYTHON before loading MOSAIC
 }
 }
 \examples{

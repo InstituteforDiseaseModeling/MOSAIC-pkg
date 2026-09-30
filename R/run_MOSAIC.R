@@ -177,26 +177,6 @@
 # SIMULATION WORKER FUNCTION
 # =============================================================================
 
-#' Simulation Worker Function
-#'
-#' Runs n_iterations iterations per simulation, samples parameters once per sim_id,
-#' collapses likelihoods via log-mean-exp, and writes parquet files.
-#'
-#' @section Seed Scheme:
-#' \itemize{
-#'   \item \code{sim_id}: Unique simulation ID (1-based integer)
-#'   \item \code{seed_sim}: Parameter sampling seed (equals sim_id)
-#'   \item \code{seed_iter}: engine seed for iteration j
-#'                           = (sim_id - 1) * n_iterations + j
-#' }
-#'
-#' This ensures:
-#' - Same sim_id always gets same parameters
-#' - Different iterations have different stochastic realizations
-#' - Seeds don't overlap between simulations
-#'
-#' @noRd
-
 #' Run several simulations and write them as one shard
 #'
 #' Runs \code{sim_ids} one at a time through
@@ -267,6 +247,25 @@
   ok & written
 }
 
+#' Simulation Worker Function
+#'
+#' Runs n_iterations iterations per simulation, samples parameters once per sim_id,
+#' collapses likelihoods via log-mean-exp, and writes parquet files.
+#'
+#' @section Seed Scheme:
+#' \itemize{
+#'   \item \code{sim_id}: Unique simulation ID (1-based integer)
+#'   \item \code{seed_sim}: Parameter sampling seed (equals sim_id)
+#'   \item \code{seed_iter}: engine seed for iteration j
+#'                           = (sim_id - 1) * n_iterations + j
+#' }
+#'
+#' This ensures:
+#' - Same sim_id always gets same parameters
+#' - Different iterations have different stochastic realizations
+#' - Seeds don't overlap between simulations
+#'
+#' @noRd
 .mosaic_run_simulation_worker <- function(sim_id, n_iterations, priors, config, PATHS,
                                           dir_cal_samples,
                                           dir_cal_simresults = NULL,
@@ -328,6 +327,11 @@
   #   2. zero weights_obs_deaths on the residual prefix s:(idx_deaths-1) so the
   #      later-starting deaths channel is not scored there (the region is
   #      already spike-free, so peak/cumulative are safe);
+  #   2b. mask (NA) the obs/est CASES on the residual prefix s:(idx_cases-1)
+  #      when cases start later than deaths (score_start_cases after the deaths
+  #      start). NA cells drop out of the NB core, its effective-sample gate and
+  #      every shape term, which matches the cases head that the ensemble R2/
+  #      bias mask and the cases dispersion estimate already exclude;
   #   3. pass the SLICED start date (date_start + (s-1)) as config$date_start so
   #      the peak-index date_seq length matches the sliced n_time_steps (else the
   #      length check fails over to weekly and mis-snaps peaks).
@@ -367,6 +371,9 @@
       .wobs_deaths_lik[, seq_len(.deaths_prefix)] <- 0
     }
   }
+  # Residual cases prefix (post-slice columns 1:(idx_cases - s)); 0 unless
+  # cases start later than deaths.
+  .cases_prefix <- if (.slice_lik) .sw$idx_cases - .s_start else 0L
 
   # Run iterations
   for (j in 1:n_iterations) {
@@ -421,6 +428,10 @@
             est_cases  <- est_cases[,  .keep, drop = FALSE]
             obs_deaths <- obs_deaths[, .keep, drop = FALSE]
             est_deaths <- est_deaths[, .keep, drop = FALSE]
+            if (.cases_prefix > 0L) {
+              obs_cases[, seq_len(.cases_prefix)] <- NA_real_
+              est_cases[, seq_len(.cases_prefix)] <- NA_real_
+            }
           }
 
           # Deaths core: the reported CFR integrated out of this path. Computed on
@@ -527,9 +538,19 @@
   # columns cost ~444 KB on disk for ~8 KB of data, so the 100,000-simulation
   # run wrote 52.9 GB of shards for 1.03 GB of data (pipeline plan item 6b).
   # The simulation and scoring above are untouched either way.
+  # A failed write is a failed simulation (FALSE), not an error that would
+  # abort a sequential run or reach the parallel tally as a try-error string.
+  shard_written <- FALSE
   if (isTRUE(write_shard)) {
     output_file <- file.path(dir_cal_samples, sprintf("sim_%07d.parquet", sim_id))
-    .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
+    shard_written <- tryCatch({
+      .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
+      TRUE
+    }, error = function(e) {
+      warning(sprintf("shard write failed for sim %d: %s", sim_id, conditionMessage(e)),
+              call. = FALSE)
+      FALSE
+    })
   }
 
   # Write raw simulation results for validation (when save_simresults = TRUE)
@@ -543,7 +564,11 @@
       }
       simresults_file <- file.path(dir_cal_simresults,
                                    sprintf("simresults_%07d.parquet", sim_id))
-      .mosaic_write_parquet(raw_df, simresults_file, io)
+      # Validation output only: a failed write warns, it does not fail the sim.
+      tryCatch(.mosaic_write_parquet(raw_df, simresults_file, io),
+               error = function(e) warning(sprintf(
+                 "simresults write failed for sim %d: %s", sim_id, conditionMessage(e)),
+                 call. = FALSE))
     }
   }
 
@@ -556,7 +581,7 @@
   # (913 -> 957 MB over 30 sims), which does not move the worker-count budget.
   # Measurements: v0.72.0 NEWS entry.
   if (!isTRUE(write_shard)) return(result_matrix)
-  return(file.exists(output_file))
+  return(shard_written && file.exists(output_file))
 }
 
 # =============================================================================
@@ -610,7 +635,11 @@
 #'   reconstructed from the shards). Behaviour by mode: in adaptive (auto) mode
 #'   the run continues from \code{max(sim_id)+1} and does \emph{not} backfill
 #'   interior gaps (a lost/quarantined shard reduces the pool); in fixed mode any
-#'   missing id within the target is re-run so the exact target is met.
+#'   missing id within the target is re-run so the exact target is met. With
+#'   \code{resume = FALSE}, shards already in the samples directory are moved to
+#'   \code{2_calibration/samples_stale_<time>/} (never pooled), and the
+#'   post-calibration artifacts of an earlier run into the same directory are
+#'   removed before they are rebuilt.
 #'
 #'   Resume is \strong{rejected} (hard error) when:
 #'   \itemize{
@@ -648,7 +677,7 @@
 #' \describe{
 #'   \item{dirs}{Named list of output directories}
 #'   \item{files}{Named list of key output files}
-#'   \item{summary}{Named list with run statistics (batches, sims, converged, runtime)}
+#'   \item{summary}{Named list with run statistics (batches, sims, converged, convergence_evaluated, runtime); fixed mode never evaluates the ESS stopping criterion, so it reports \code{converged = FALSE} with \code{convergence_evaluated = FALSE}}
 #' }
 #'
 #' @section Control Structure:
@@ -709,9 +738,11 @@
 #' config <- get_location_config(iso = "ETH")
 #' priors <- get_location_priors(iso = "ETH")
 #'
-#' # Tighten transmission rate prior
-#' priors$tau_i$shape <- 20
-#' priors$tau_i$rate <- 4
+#' # Tighten the departure-probability (tau_i) prior for ETH. Location priors
+#' # live under priors$parameters_location; tau_i is lognormal(meanlog, sdlog).
+#' tau_eth <- priors$parameters_location$tau_i$location$ETH$parameters
+#' tau_eth$sdlog <- tau_eth$sdlog / 2
+#' priors$parameters_location$tau_i$location$ETH$parameters <- tau_eth
 #'
 #' run_MOSAIC(config, priors, "./output")
 #'
@@ -848,12 +879,8 @@ run_MOSAIC <- function(config,
   # Validate sampling_args
   sampling_args <- .mosaic_validate_sampling_args(sampling_args)
 
-  # ===========================================================================
-  # PYTHON ENVIRONMENT CHECK
-  # ===========================================================================
-
-  check_python_env()
-  Sys.setenv(PYTHONWARNINGS = "ignore::UserWarning")
+  # (No Python environment check: simulation and calibration are pure R since
+  # v0.68.0. check_python_env() remains available for est_suitability() users.)
 
   # ===========================================================================
   # BLAS THREAD CONTROL CHECK (Critical for cluster performance)
@@ -962,6 +989,12 @@ run_MOSAIC <- function(config,
           call. = FALSE)
       }
     }
+  } else {
+    # A fresh (non-resume) run issues sim ids from 1 and the combine step reads
+    # every sim_*.parquet in the samples directory, so shards left by an
+    # earlier interrupted run would be pooled into this posterior unchecked
+    # (possibly from other priors or another config). Move them aside.
+    .mosaic_quarantine_stale_shards(dirs, log_warn)
   }
 
   # Capture full environment snapshot (versions, system, git, data)
@@ -1001,37 +1034,15 @@ run_MOSAIC <- function(config,
   log_msg("  Saved %s", "config.json")
 
   # tau_i 95% CI artifact (Phase B) for the "spatial" figure group (fig 2).
-  # The per-location credible interval comes from the upstream fit_prob_travel()
-  # Beta posterior (MODEL_INPUT/mobility_travel_prob_params.csv), which is NOT in
-  # the config. Copy the per-location CI columns into 1_inputs in config order so
-  # plot_departure_tau() can draw interval bars; absence => point-only tau plot.
-  # Gated by io (unconditional artifact, not gated by plots).
-  if (isTRUE(control$io)) {
-    tryCatch({
-      tp_file <- file.path(PATHS$MODEL_INPUT, "mobility_travel_prob_params.csv")
-      if (file.exists(tp_file)) {
-        tp <- utils::read.csv(tp_file, stringsAsFactors = FALSE)
-        lo_col <- intersect(c("Q2.5", "q2.5", "lower", "ci_lower"), names(tp))[1]
-        hi_col <- intersect(c("Q97.5", "q97.5", "upper", "ci_upper"), names(tp))[1]
-        if ("iso3" %in% names(tp) && !is.na(lo_col) && !is.na(hi_col)) {
-          locs <- as.character(config$location_name)
-          m    <- match(locs, tp$iso3)
-          ci_df <- data.frame(
-            location = locs,
-            lower    = tp[[lo_col]][m],
-            upper    = tp[[hi_col]][m],
-            stringsAsFactors = FALSE
-          )
-          tau_ci_path <- file.path(dirs$inputs, "mobility_tau_ci.csv")
-          tmp_path <- paste0(tau_ci_path, ".tmp")
-          utils::write.csv(ci_df, tmp_path, row.names = FALSE)
-          file.rename(tmp_path, tau_ci_path)
-          log_msg("  Saved %s", "1_inputs/mobility_tau_ci.csv")
-        }
-      }
-    }, error = function(e)
-      log_warn("mobility_tau_ci.csv write skipped: %s", e$message))
-  }
+  # Unconditional (not gated by plots); absence of the upstream fit => no file
+  # and a point-only tau plot.
+  tryCatch({
+    tau_ci_path <- .mosaic_write_tau_ci(
+      file.path(PATHS$MODEL_INPUT, "mobility_travel_prob_params.csv"),
+      config$location_name, dirs$inputs)
+    if (!is.null(tau_ci_path)) log_msg("  Saved %s", "1_inputs/mobility_tau_ci.csv")
+  }, error = function(e)
+    log_warn("mobility_tau_ci.csv write skipped: %s", e$message))
 
   # ===========================================================================
   # PARAMETER NAME DETECTION
@@ -1228,13 +1239,14 @@ run_MOSAIC <- function(config,
   # Downstream consumers read control$likelihood$weights_location, so
   # resolving it here covers both backends in lockstep.
   if (is.null(control$likelihood$weights_location)) {
-    derived_wl <- .mosaic_derive_weights_location(config)
+    wl_floor   <- 0.05
+    derived_wl <- .mosaic_derive_weights_location(config, floor = wl_floor)
     if (!is.null(derived_wl)) {
       control$likelihood$weights_location <- derived_wl
       log_msg(paste0("Derived data-driven weights_location (down-weighting ",
                      "low-signal/absence countries): %d below 0.5, floor %.3f, ",
                      "range [%.3f, %.3f]"),
-              sum(derived_wl < 0.5), min(derived_wl),
+              sum(derived_wl < 0.5), wl_floor,
               min(derived_wl), max(derived_wl))
     }
   }
@@ -1290,7 +1302,11 @@ run_MOSAIC <- function(config,
       type = control$parallel$type
     )
     owns_cluster <- TRUE
-    log_msg("Created %s cluster with %d cores", control$parallel$type, control$parallel$n_cores)
+    # length(cl), not the request: make_mosaic_cluster() may have clamped it
+    # to the free R connections.
+    log_msg("Created %s cluster with %d workers%s", control$parallel$type, length(cl),
+            if (length(cl) < control$parallel$n_cores)
+              sprintf(" (requested %d)", control$parallel$n_cores) else "")
 
     # Register cleanup handler (will be called on normal exit or error)
     on.exit({
@@ -1321,42 +1337,11 @@ run_MOSAIC <- function(config,
         "likelihood_settings", "io_settings"),
       envir = environment())
 
-    # Install worker function using the exported per-run variables
-    parallel::clusterCall(cl, function() {
-      assign(".run_sim_worker", function(sim_id) {
-        MOSAIC:::.mosaic_run_simulation_worker(
-          sim_id = sim_id,
-          n_iterations = n_iterations,
-          priors = priors,
-          config = config,
-          PATHS = PATHS,
-          dir_cal_samples = dirs$cal_samples,
-          dir_cal_simresults = dirs$cal_simresults,
-          param_names_all = param_names_all,
-          param_lookup = param_lookup,
-          sampling_args = sampling_args,
-          io = io_settings,
-          likelihood_settings = likelihood_settings
-        )
-      }, envir = .GlobalEnv)
-      assign(".run_sim_worker_chunk", function(sim_ids) {
-        MOSAIC:::.mosaic_run_simulation_chunk(
-          sim_ids = sim_ids,
-          n_iterations = n_iterations,
-          priors = priors,
-          config = config,
-          PATHS = PATHS,
-          dir_cal_samples = dirs$cal_samples,
-          dir_cal_simresults = dirs$cal_simresults,
-          param_names_all = param_names_all,
-          param_lookup = param_lookup,
-          sampling_args = sampling_args,
-          io = io_settings,
-          likelihood_settings = likelihood_settings
-        )
-      }, envir = .GlobalEnv)
-      NULL
-    })
+    # Install worker functions using the exported per-run variables. The
+    # installer is reparented to globalenv(), so clusterCall serialises the
+    # function alone rather than the whole run_MOSAIC frame, and the installed
+    # closures resolve config/priors/... from the clusterExport'ed globals.
+    parallel::clusterCall(cl, .mosaic_worker_installer())
   }
 
 
@@ -1460,7 +1445,8 @@ run_MOSAIC <- function(config,
           sim_ids = .mosaic_chunk_ids(sim_ids, shard_batch),
           worker_func = function(sim_ids) .run_sim_worker_chunk(sim_ids),
           cl = cl,
-          show_progress = control$parallel$progress
+          show_progress = control$parallel$progress,
+          unit_runs = shard_batch * n_iterations
         )
       } else if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
@@ -1468,7 +1454,8 @@ run_MOSAIC <- function(config,
           sim_ids = sim_ids,
           worker_func = function(sim_id) .run_sim_worker(sim_id),
           cl = cl,
-          show_progress = control$parallel$progress
+          show_progress = control$parallel$progress,
+          unit_runs = n_iterations
         )
       } else {
         # Sequential. shard_batch_size is honoured here too -- a control setting
@@ -1604,7 +1591,8 @@ run_MOSAIC <- function(config,
           sim_ids = .mosaic_chunk_ids(sim_ids, shard_batch),
           worker_func = function(sim_ids) .run_sim_worker_chunk(sim_ids),
           cl = cl,
-          show_progress = control$parallel$progress
+          show_progress = control$parallel$progress,
+          unit_runs = shard_batch * n_iterations
         )
       } else if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
@@ -1612,7 +1600,8 @@ run_MOSAIC <- function(config,
           sim_ids = sim_ids,
           worker_func = function(sim_id) .run_sim_worker(sim_id),
           cl = cl,
-          show_progress = control$parallel$progress
+          show_progress = control$parallel$progress,
+          unit_runs = n_iterations
         )
       } else {
         # Sequential. shard_batch_size is honoured here too -- a control setting
@@ -1706,9 +1695,10 @@ run_MOSAIC <- function(config,
   # in which case the calibration ran on 100+ cores and the ensembles then ran
   # one simulation at a time. Treat a supplied cluster as consent to
   # parallelise, and size the ensemble cluster to it.
-  ens_parallel <- isTRUE(control$parallel$enable) || !is.null(cluster)
-  ens_n_cores  <- if (!is.null(cluster) && length(cluster) > 1L) length(cluster)
-                  else control$parallel$n_cores
+  ens_plan     <- .mosaic_ensemble_parallel_plan(cluster, control)
+  ens_parallel <- ens_plan$parallel
+  ens_n_cores  <- ens_plan$n_cores
+  if (!is.null(ens_plan$note)) log_warn("%s", ens_plan$note)
 
   # ===========================================================================
   # COMBINE RESULTS AND ADD FLAGS
@@ -1923,48 +1913,19 @@ run_MOSAIC <- function(config,
       is_diag_best <- .mosaic_empty_is_diag()
       is_diag_all  <- .mosaic_empty_is_diag()
     } else {
-      # Use truncated Akaike weights with fixed effective range for best subset
-      # Effective AIC = 4 for best subset (5% threshold)
+      # Delta AIC within the best subset (reported below as the actual range).
       aic_final <- -2 * top_subset_final$likelihood
       best_aic_final <- min(aic_final[is.finite(aic_final)])
       delta_aic_final <- aic_final - best_aic_final
 
       weighting_scheme <- control$targets$best_subset_weighting %||% "saturated"
-      if (!weighting_scheme %in% c("saturated", "tempered")) {
-        stop("control$targets$best_subset_weighting must be 'saturated' or 'tempered'; got '",
-             weighting_scheme, "'.", call. = FALSE)
-      }
-
-      if (identical(weighting_scheme, "tempered")) {
-        # Adaptive-eta Gibbs weights: eta is chosen so the worst retained draw
-        # sits at `weight_floor`, rather than saturating delta at a fixed 4.
-        # NOTE this is SHARPER than the saturated default, not softer -- see the
-        # warning on control$targets$best_subset_weighting. The degeneracy check
-        # below exists because this scheme can put ~96% of the mass on one draw.
-        adaptive_final <- .mosaic_calc_adaptive_gibbs_weights(
-          likelihood = top_subset_final$likelihood,
-          verbose    = FALSE
-        )
-        weights_final <- adaptive_final$weights
-        gibbs_temperature_final <- adaptive_final$temperature
-        effective_range_best <- adaptive_final$effective_range
-      } else {
-        # Truncate to effective range. NOTE: this SATURATES delta at 4 rather
-        # than applying the Delta <= 6 cut-off; every draw past 4 receives the
-        # same weight exp(-2), so weight ratios are capped at exp(2) = 7.39 and
-        # the subset posterior is close to uniform regardless of fit. The IS
-        # diagnostics computed below are what reveal that; ESS_B does not.
-        effective_range_best <- 4.0
-        delta_aic_truncated <- pmin(delta_aic_final, effective_range_best)
-
-        # Calculate standard Akaike weights: w prop.to exp(-0.5 * delta_aic)
-        gibbs_temperature_final <- 0.5  # Standard for Akaike weights
-        weights_final <- calc_model_weights_gibbs(
-          x = delta_aic_truncated,
-          eta = gibbs_temperature_final,
-          verbose = FALSE
-        )
-      }
+      # Same helper as results$weight_best below, so the gate metrics describe
+      # the weights the posterior is built from. The degeneracy check below
+      # exists because "tempered" can put ~96% of the mass on one draw.
+      bsw_final <- .mosaic_best_subset_weights(top_subset_final$likelihood, weighting_scheme)
+      weights_final           <- bsw_final$weights
+      gibbs_temperature_final <- bsw_final$temperature
+      effective_range_best    <- bsw_final$effective_range
 
       w_tilde_final <- weights_final
       w_final <- weights_final * length(weights_final)
@@ -2083,17 +2044,15 @@ run_MOSAIC <- function(config,
 
   if (sum(results$is_best_subset) > 0) {
     log_msg("  Computing Akaike weights (best subset: n=%d)...", sum(results$is_best_subset))
-    # Truncated Akaike weights for best subset (effective AIC = 4)
-    aic_best <- -2 * results$likelihood[results$is_best_subset]
-    best_aic_best <- min(aic_best[is.finite(aic_best)])
-    delta_aic_best <- aic_best - best_aic_best
-    delta_aic_best_trunc <- pmin(delta_aic_best, 4.0)
-
-    best_weights <- calc_model_weights_gibbs(
-      x = delta_aic_best_trunc,
-      eta = 0.5,
+    # Best-subset weights under control$targets$best_subset_weighting -- the
+    # same helper the convergence gate used, so weight_best (posterior
+    # quantiles, posteriors.json, ensemble parameter weights, optimizer) and
+    # the gated ESS_B/A/CVw are computed from one weighting.
+    best_weights <- .mosaic_best_subset_weights(
+      results$likelihood[results$is_best_subset],
+      control$targets$best_subset_weighting %||% "saturated",
       verbose = control$logging$verbose
-    )
+    )$weights
     results$weight_best[results$is_best_subset] <- best_weights
 
     # Calculate ESS for reference (using control method)
@@ -2268,6 +2227,13 @@ run_MOSAIC <- function(config,
   # re-analysable raw archive (e.g. re-running subset optimization or the R_eff
   # posterior-resimulation CI path from the saved file).
   .persist_arrays <- isTRUE(control$io$persist_ensemble_arrays)
+
+  # Every post-calibration artifact below is rebuilt from this run's samples.
+  # Remove any left by an earlier run into the same dir_output first, so a
+  # block that is skipped or fails this time cannot leave the previous run's
+  # posterior on disk for render_MOSAIC_figures(), run_rolling_cv() or
+  # MOSAIC-OCV to pick up.
+  .mosaic_clear_posterior_artifacts(dirs, log_msg)
 
   # Initialize metric variables (populated after ensemble is built/resolved)
   r2_cases_ensemble          <- NA_real_
@@ -2472,6 +2438,8 @@ run_MOSAIC <- function(config,
   # driven by the optimized subset via .mosaic_active_subset_cols().
 
   subset_opt <- NULL   # initialised here; assigned inside block below if optimize_subset=TRUE
+  ensemble_opt_saved <- FALSE   # TRUE once the optimizer writes ensemble_optimized.rds
+  ensemble_is_optimized <- FALSE  # TRUE once `ensemble` is the optimized rebuild
 
   if (!is.null(ensemble) && isTRUE(control$predictions$optimize_subset)) {
 
@@ -2564,6 +2532,7 @@ run_MOSAIC <- function(config,
                 else .mosaic_ensemble_drop_arrays(subset_opt$ensemble_optimized)),
               file.path(dirs$calibration, "ensemble_optimized.rds"))
       log_msg("Saved 2_calibration/ensemble_optimized.rds")
+      ensemble_opt_saved <- TRUE
 
       # Persist the full subset-optimization result (Phase 1b / G4) so the
       # renderer can reconstruct plot_model_subset_optimization() from disk.
@@ -2603,6 +2572,7 @@ run_MOSAIC <- function(config,
         calc_bias_ratio(obs_d_flat_tier, cen_d_tier_flat), error = function(e) NA_real_)
 
       ensemble <- subset_opt$ensemble_optimized
+      ensemble_is_optimized <- TRUE
       # Trajectory reduction over the OPTIMIZED subset is handled by the unified
       # stream-to-disk reduce+persist block AFTER this optimize section -- it reads
       # the candidate run's scratch (no re-simulation) over the optimized member
@@ -2697,10 +2667,13 @@ run_MOSAIC <- function(config,
   # disabled (control$predictions$optimize_subset != TRUE) or produced an empty
   # subset, the block above never wrote that file. Fall back to the candidate
   # ensemble so ensemble_optimized.rds always exists whenever an ensemble was
-  # built. Slimmed under the same persist_ensemble_arrays flag; non-fatal.
+  # built. Keyed on whether THIS run's optimizer wrote the file, never on
+  # file.exists(): a file from an earlier run into the same directory must be
+  # overwritten, not kept. Slimmed under the same persist_ensemble_arrays flag;
+  # non-fatal.
   if (!is.null(ensemble)) {
     ensemble_opt_path <- file.path(dirs$calibration, "ensemble_optimized.rds")
-    if (!file.exists(ensemble_opt_path)) {
+    if (!ensemble_opt_saved) {
       tryCatch({
         saveRDS(.mosaic_stamp_artifact(
                   if (.persist_arrays) ensemble
@@ -2727,30 +2700,23 @@ run_MOSAIC <- function(config,
   # a no-op.
   # ===========================================================================
   if (.traj_enabled && !is.null(traj_scratch_handle) && !is.null(ensemble)) {
-    final_pidx    <- NULL
-    final_weights <- NULL
-    if (!is.null(subset_opt) && isTRUE(.optimize_enabled)) {
-      # Optimized: ensemble == ensemble_optimized. Map its per-member seeds to the
-      # candidate scratch param_idx (seed-based, robust to the likelihood sort).
-      opt_seeds <- ensemble$seeds
-      # Seed-based map requires unique candidate seeds (true in normal operation:
-      # one sampling seed per member). If seeds were ever duplicated, match() would
-      # bind channel panels to the wrong member's draws -> fall through to the
-      # positional candidate path instead (anyNA below does not catch duplicates).
-      if (!is.null(opt_seeds) && !is.null(cand_member_seeds) &&
-          !anyDuplicated(cand_member_seeds)) {
-        final_pidx    <- match(opt_seeds, cand_member_seeds)
-        final_weights <- ensemble$parameter_weights
-      }
+    # Scratch keys (candidate param_idx) of the FINAL members, in `ensemble`
+    # order. NULL when an optimized ensemble's seeds cannot be mapped back:
+    # then the artifact is skipped rather than reduced over the wrong members.
+    traj_map <- .mosaic_trajectory_member_map(
+      is_optimized      = ensemble_is_optimized,
+      final_seeds       = ensemble$seeds,
+      cand_member_seeds = cand_member_seeds,
+      n_param           = ensemble$n_param_sets)
+    if (is.null(traj_map)) {
+      log_warn(paste0("trajectory artifact skipped: the optimized ensemble's member seeds ",
+                      "could not be mapped to the candidate scratch (missing, duplicated or ",
+                      "unmatched seeds)"))
     }
-    if (is.null(final_pidx) || anyNA(final_pidx)) {
-      # Candidate (optimize off, or seed-mapping fell through): scratch keys are
-      # 1:n_param in candidate order.
-      final_pidx    <- seq_len(ensemble$n_param_sets)
-      final_weights <- ensemble$parameter_weights
-    }
+    final_pidx    <- traj_map
+    final_weights <- ensemble$parameter_weights
 
-    traj <- tryCatch(
+    traj <- if (is.null(final_pidx)) NULL else tryCatch(
       .mosaic_build_trajectories(
         scratch_dir         = traj_scratch_handle$dir,
         subset_orig_pidx    = final_pidx,
@@ -2805,27 +2771,21 @@ run_MOSAIC <- function(config,
   # (log-scale MAE) to the ensemble CENTRAL trajectory (mean or median per
   # central_method). Computing here ensures it always reflects the FINAL ensemble
   # (optimized when optimize_subset=TRUE, candidate otherwise), using the correct
-  # central series and the matching seed vector. The distance is cases-only by
-  # design (a joint cases+deaths distance is a future refinement).
+  # central series and the matching seed vector. The distance pools every
+  # location and every scored time step (.mosaic_medoid_distances()), so a
+  # multi-location run is not represented by its first location alone. It is
+  # cases-only by design (a joint cases+deaths distance is a future refinement).
 
   medoid_seed_sim <- NULL
 
   if (!is.null(ensemble)) {
     tryCatch({
-      # Aggregate stochastic runs: median over dim 4 -> [n_locs, n_times, n_params]
-      member_cases_agg <- apply(ensemble$cases_array, c(1L, 2L, 3L), stats::median)
-
-      # Log-scale MAE from each member to the ensemble central trajectory
-      # (location 1, cases). Deliberate mix: per-member stochastic spread is
-      # summarized by its MEDIAN (robust to a member's stochastic outliers),
-      # while the ensemble TARGET is the canonical central series (mean by
-      # default) so the chosen representative member tracks the reported curve.
-      cen_cases_target <- .central(ensemble, "cases")
-      eps_med <- 1.0
-      medoid_distances <- vapply(seq_len(ensemble$n_param_sets), function(i) {
-        mean(abs(log(member_cases_agg[1L, , i]   + eps_med) -
-                 log(cen_cases_target[1L, ]      + eps_med)), na.rm = TRUE)
-      }, numeric(1L))
+      # Deliberate mix: per-member stochastic spread is summarized by its MEDIAN
+      # (robust to a member's stochastic outliers), while the ensemble TARGET is
+      # the canonical central series (mean by default) so the chosen
+      # representative member tracks the reported curve.
+      medoid_distances <- .mosaic_medoid_distances(
+        ensemble$cases_array, .central(ensemble, "cases"), ensemble$artifact_mask)
 
       medoid_idx <- which.min(medoid_distances)
 
@@ -3079,10 +3039,12 @@ run_MOSAIC <- function(config,
     obs_d_flat    <- as.numeric(ensemble$obs_deaths)
 
     # Canonical ensemble metrics follow central_method (per channel).
-    cen_c_flat <- as.numeric(.mosaic_mask_central_for_scoring(
-      .central(ensemble, "cases"), "cases", ensemble$artifact_mask))
-    cen_d_flat <- as.numeric(.mosaic_mask_central_for_scoring(
-      .central(ensemble, "deaths"), "deaths", ensemble$artifact_mask))
+    cen_c_mat <- .mosaic_mask_central_for_scoring(
+      .central(ensemble, "cases"), "cases", ensemble$artifact_mask)
+    cen_d_mat <- .mosaic_mask_central_for_scoring(
+      .central(ensemble, "deaths"), "deaths", ensemble$artifact_mask)
+    cen_c_flat <- as.numeric(cen_c_mat)
+    cen_d_flat <- as.numeric(cen_d_mat)
     r2_cases_ensemble  <- calc_model_R2(obs_c_flat, cen_c_flat)
     r2_deaths_ensemble <- calc_model_R2(obs_d_flat, cen_d_flat)
     bias_ratio_cases_ensemble  <- tryCatch(
@@ -3157,17 +3119,18 @@ run_MOSAIC <- function(config,
     }
 
     # Windowed model fit metrics on the canonical ensemble. Uses the chosen
-    # central series (cen_*_flat) so the windowed diagnostic agrees with the
-    # headline r2_*_ensemble + plots; identical to median under
-    # central_method="median".
+    # central series (scoring-masked, as for the headline r2_*_ensemble) so the
+    # windowed diagnostic agrees with the headline metrics + plots. Passed as
+    # [n_loc x n_time] matrices: windows are taken over TIME and pool the
+    # locations within them.
     n_ts      <- ensemble$n_time_points
     dates_vec <- seq.Date(as.Date(config$date_start), by = "day", length.out = n_ts)
 
     windowed_metrics <- .mosaic_compute_windowed_metrics(
-      obs_cases  = obs_c_flat,
-      est_cases  = cen_c_flat,
-      obs_deaths = obs_d_flat,
-      est_deaths = cen_d_flat,
+      obs_cases  = ensemble$obs_cases,
+      est_cases  = cen_c_mat,
+      obs_deaths = ensemble$obs_deaths,
+      est_deaths = cen_d_mat,
       dates      = dates_vec,
       windows    = fit_windows
     )
@@ -3212,13 +3175,13 @@ run_MOSAIC <- function(config,
   # COMBINE PREDICTION CSVs
   # ===========================================================================
 
-  # Combine per-location prediction CSVs by type. Ensemble, best, medoid, and
-  # stochastic each have their own column schema and cannot be rbind'd together.
+  # Combine per-location prediction CSVs by type. Ensemble and medoid each
+  # have their own column schema and cannot be rbind'd together.
   # Per-location files live in dirs$res_predictions alongside the combined
   # file. Pattern: predictions_<type>_<LOC>.csv (per-location) ->
   # predictions_<type>_all.csv (combined, multi-location only). For N=1 the
   # per-location CSV is canonical on its own and no _all.csv is written.
-  for (pred_type in c("ensemble", "medoid", "stochastic")) {
+  for (pred_type in c("ensemble", "medoid")) {
     pred_csvs <- list.files(
       dirs$res_predictions,
       pattern = sprintf("^predictions_%s_.*\\.csv$", pred_type),
@@ -3313,6 +3276,7 @@ run_MOSAIC <- function(config,
                                              bias_ratio_deaths_ensemble_tier = bias_ratio_deaths_ensemble_tier,
                                              n_ensemble_params_tier = n_ensemble_params_tier,
                                              cfr_implied = if (exists("cfr_implied", inherits = FALSE)) cfr_implied else NULL,
+                                             posthoc_criteria_met = if (exists("final_converged", inherits = FALSE)) final_converged else NA,
                                              io = control$io)
   log_msg("  Saved 3_results/summary.json")
 
@@ -3328,7 +3292,9 @@ run_MOSAIC <- function(config,
   best_str <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
   log_msg("=== Run Summary ===")
   log_msg("  Location: %s (%s to %s)", summary_obj$location, summary_obj$date_start, summary_obj$date_stop)
-  log_msg("  Converged: %s", if (isTRUE(summary_obj$converged)) "YES" else "NO")
+  conv_str <- if (!isTRUE(summary_obj$convergence_evaluated)) "NO (fixed mode: ESS criterion not evaluated)"
+              else if (isTRUE(summary_obj$converged)) "YES" else "NO"
+  log_msg("  Converged: %s", conv_str)
   log_msg("  R2 ensemble:   cases = %s | deaths = %s", r2ce_str, r2de_str)
   if (!is.na(summary_obj$ess_n_params)) {
     log_msg("  ESS: %d/%d params (%.0f%%) above target %g (min: %.1f, median: %.1f)",
@@ -3349,27 +3315,24 @@ run_MOSAIC <- function(config,
   # finished AND extract headline metrics in one pass.
   #
   # Status decision tree (don't conflate "calibration converged" with
-  # "end-to-end run succeeded"):
-  #   - "completed_unconverged": calibration ESS criterion not met
-  #   - "success_partial":       converged BUT the posterior-ensemble block
-  #                              failed and never populated r2_cases_ensemble
-  #   - "success":               converged AND r2_cases_ensemble populated
+  # "end-to-end run succeeded"; fixed mode never evaluates convergence): see
+  # .mosaic_run_status(). posthoc_met is the post-hoc best-subset tier result.
   outputs_ok <- !is.na(summary_obj$r2_cases_ensemble)
-  status_str <- if (!isTRUE(state$converged)) {
-    "completed_unconverged"
-  } else if (!outputs_ok) {
-    "success_partial"
-  } else {
-    "success"
-  }
+  status_str <- .mosaic_run_status(state, outputs_ok)
+  run_conv   <- .mosaic_run_converged(state)
+  posthoc_met <- summary_obj$posthoc_criteria_met
 
   log_msg(paste0(
-    "[RUN_SUMMARY] status=%s converged=%s outputs_ok=%s runtime_min=%.2f ",
-    "r2_cases_ensemble=%s r2_deaths_ensemble=%s ",
+    "[RUN_SUMMARY] status=%s mode=%s converged=%s convergence_evaluated=%s ",
+    "posthoc_criteria_met=%s outputs_ok=%s ",
+    "runtime_min=%.2f r2_cases_ensemble=%s r2_deaths_ensemble=%s ",
     "sims_total=%s sims_retained=%s sims_best_subset=%s sims_best_subset_tier=%s ",
     "ess_pct_above_target=%s resumed=%s dir_output=%s"),
     status_str,
-    if (isTRUE(state$converged)) "YES" else "NO",
+    if (is.null(state$mode)) "NA" else state$mode,
+    if (run_conv) "YES" else "NO",
+    if (.mosaic_convergence_evaluated(state)) "YES" else "NO",
+    if (length(posthoc_met) != 1L || is.na(posthoc_met)) "NA" else if (posthoc_met) "YES" else "NO",
     if (outputs_ok) "YES" else "NO",
     as.numeric(runtime),
     if (is.na(summary_obj$r2_cases_ensemble))  "NA" else sprintf("%.4f", summary_obj$r2_cases_ensemble),
@@ -3403,7 +3366,8 @@ run_MOSAIC <- function(config,
       batches = state$batch_number,
       sims_total = state$total_sims_run,
       sims_success = state$total_sims_successful,
-      converged = isTRUE(state$converged),
+      converged = .mosaic_run_converged(state),
+      convergence_evaluated = .mosaic_convergence_evaluated(state),
       resumed = isTRUE(state$resumed),
       sims_reused = state$n_sims_reused %||% 0L,
       runtime_min = as.numeric(runtime)
@@ -3448,14 +3412,14 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param sampling List of parameter sampling flags (what to sample). Default is:
 #'   \itemize{
-#'     \item \code{sample_tau_i}: Sample transmission rate (default: TRUE)
-#'     \item \code{sample_mobility_gamma}: Sample mobility gamma (default: TRUE)
-#'     \item \code{sample_mobility_omega}: Sample mobility omega (default: TRUE)
-#'     \item \code{sample_iota}: Sample importation rate (default: TRUE)
-#'     \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
+#'     \item \code{sample_tau_i}: Sample the daily departure (travel) probability by location (default: TRUE)
+#'     \item \code{sample_mobility_gamma}: Sample the gravity-model distance-decay exponent (default: TRUE)
+#'     \item \code{sample_mobility_omega}: Sample the gravity-model population-scaling exponent (default: TRUE)
+#'     \item \code{sample_iota}: Sample the incubation rate, E to I (default: TRUE)
+#'     \item \code{sample_gamma_2}: Sample the asymptomatic recovery rate (default: TRUE; second-dose vaccine effectiveness is \code{sample_phi_2})
 #'     \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: FALSE, PINNED)
 #'     \item \code{sample_alpha_2}: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)
-#'     \item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
+#'     \item ... (see \code{mosaic_control_defaults()} for complete list of 40 flags)
 #'   }
 #'
 #' @param likelihood List of likelihood calculation settings (how to score model fit). Default is:
@@ -3473,9 +3437,11 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
 #'     \item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
 #'     \item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
-#'     \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
-
+#'     \item \code{min_best_subset}: Smallest best-subset size searched (default: 30)
+#'     \item \code{max_best_subset}: Largest best-subset size searched (default: 1000)
 #'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "perplexity")
+#'     \item \code{ESS_marginal_method}: Per-parameter marginal ESS method, "kde" or "binned" (default: "kde")
+#'     \item \code{best_subset_weighting}: Best-subset posterior weights, "saturated" or "tempered" (default: "saturated"; "tempered" is sharper, not softer)
 #'   }
 #'
 #' @param predictions List of prediction generation settings. Default is:
@@ -3544,7 +3510,7 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param io List of I/O settings (output format). Default is:
 #'   \itemize{
-#'     \item \code{format}: Output format, "parquet" or "csv" (default: "parquet")
+#'     \item \code{format}: Output format; only "parquet" is supported ("csv" is coerced to "parquet" with a warning)
 #'     \item \code{compression}: Compression algorithm (default: "zstd")
 #'     \item \code{compression_level}: Compression level (default: 3L)
 #'     \item \code{persist_ensemble_arrays}: Retain the dense 4-D
@@ -3671,15 +3637,15 @@ mosaic_control_defaults <- function(calibration = NULL,
   default_sampling <- list(
     # === GLOBAL PARAMETERS (21) ===
     # Transmission dynamics
-    sample_iota = TRUE,              # Environmental contamination rate
-    sample_epsilon = TRUE,           # Latent period rate
+    sample_iota = TRUE,              # Incubation rate (E -> I)
+    sample_epsilon = TRUE,           # Waning rate of natural immunity
     sample_gamma_1 = TRUE,           # Recovery rate (symptomatic)
     sample_gamma_2 = TRUE,           # Recovery rate (asymptomatic)
-    sample_rho = TRUE,               # Proportion symptomatic
+    sample_rho = TRUE,               # Care-seeking (reporting) rate
 
     # Mobility
-    sample_mobility_gamma = TRUE,    # Gravity model exponent
-    sample_mobility_omega = TRUE,    # Mobility rate
+    sample_mobility_gamma = TRUE,    # Gravity-model distance-decay exponent
+    sample_mobility_omega = TRUE,    # Gravity-model population-scaling exponent
 
     # Transmission mixing exponents
     sample_alpha_1 = FALSE,          # Within-metapop population mixing exponent: PINNED by default (collinear with beta_j0_tot endemically and
@@ -3688,12 +3654,12 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_alpha_2 = FALSE,          # Frequency-dependence degree: PINNED by default (weakly identified; psi absorbs the signal)
     sample_omega_1 = TRUE,           # Waning rate (1 dose)
     sample_omega_2 = TRUE,           # Waning rate (2 doses)
-    sample_phi_1 = TRUE,             # Vaccine coverage (1 dose)
-    sample_phi_2 = TRUE,             # Vaccine coverage (2 doses)
+    sample_phi_1 = TRUE,             # Vaccine effectiveness (1 dose)
+    sample_phi_2 = TRUE,             # Vaccine effectiveness (2 doses)
 
     # Reporting/observation
-    sample_sigma = TRUE,             # Proportion symptomatic
-    sample_kappa                  = FALSE,             # Overdispersion parameter
+    sample_sigma = TRUE,             # Symptomatic fraction
+    sample_kappa                  = FALSE,             # 50% infectious dose of V. cholerae
     sample_chi_endemic = TRUE,       # PPV among suspected cases (endemic)
     sample_chi_epidemic = TRUE,      # PPV among suspected cases (epidemic)
     sample_rho_deaths = FALSE,       # Death detection rate: PINNED at 0.42 (cancels from reported deaths exactly; sets only true deaths)

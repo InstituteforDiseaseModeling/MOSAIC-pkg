@@ -584,14 +584,18 @@ calc_model_likelihood <- function(obs_cases,
 
 # --- Fast peak helpers using precomputed indices (no date parsing) ---
 
-# Peak timing likelihood from precomputed indices
+# Peak timing likelihood from precomputed indices. A peak whose window holds a
+# non-finite estimate is skipped: the calibration worker masks (NA) the cases
+# head before score_start_cases, and which.max() over a fully masked window is
+# integer(0) (a zero-length LL), while a partly masked one pulls the estimated
+# peak to the unmasked side.
 .calc_peak_timing_from_indices <- function(est_vec, peak_indices, sigma_peak_time = 1,
                                            timestep_to_weeks = 7) {
      ll_total <- 0
      n_ts <- length(est_vec)
      for (peak_idx in peak_indices) {
           window <- max(1L, peak_idx - 14L):min(n_ts, peak_idx + 14L)
-          if (length(window) > 2L) {
+          if (length(window) > 2L && all(is.finite(est_vec[window]))) {
                est_peak_idx <- window[which.max(est_vec[window])]
                time_diff <- (est_peak_idx - peak_idx) / timestep_to_weeks
                ll_total <- ll_total + stats::dnorm(time_diff, 0, sigma_peak_time, log = TRUE)
