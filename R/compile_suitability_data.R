@@ -341,11 +341,11 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # rows from 2015 and 2020. Retained deliberately: removing it is a THREE-site
      # change, and two of those sites are hard stops that fire immediately --
      # R/est_suitability.R:349 and R/compile_suitability_data.R (the `53 %in% d$week`
-     # check near the end of this file), plus R/process_WHO_weekly_data.R:72-82,
-     # which folds every W53 case row into W52 with aggregate(sum). So the cases side
-     # structurally cannot emit W53 while climate and ENSO now can: dropping the
-     # filter today would yield climate+ENSO W53 rows with structurally-NA cases.
-     # All three sides currently agree; the filter just discards a coherent row.
+     # check near the end of this file), plus the cases side: process_WHO_weekly_data
+     # keeps WHO's own epi-week labels (MMWR calendar, not ISO), so a WHO W53 row
+     # (e.g. 2025-W53, dated 2025-12-29) is a real week that does NOT correspond to
+     # an ISO W53. Surveillance must be joined on date_start, not (year, week),
+     # before this filter can be dropped.
      # NOTE: W53 of 2026 IS inside the rebuilt panel window (2000-01-06..2027-02-04)
      # and is being dropped -- the previous claim that the horizon ended before it is
      # no longer true.
@@ -1563,6 +1563,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                output_col     = "drought_prob",
                integrator_col = "drought_prob_26w_mean",
                gam_train_stop = gam_train_stop,
+               climate_obs_stop = MOSAIC:::.drought_climate_obs_stop(PATHS),
                diagnostics    = TRUE,
                diag_dir       = diag_dir_drt,
                verbose        = TRUE

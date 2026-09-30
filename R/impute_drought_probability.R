@@ -59,10 +59,7 @@
 #'   is unaffected -- only the GAM fit-row subset is capped. Default
 #'   \code{NULL} = current full-data fit (back-compatible). Only the fit-row
 #'   subset changes; \code{select=TRUE}/fREML/the formula are identical.
-#' @param climate_obs_stop Date or character (\code{"YYYY-MM-DD"}). Last date of observed
-#'   (not projected) climate. The GAM is never fit on rows after it, because
-#'   the panel's future rows carry climate-model projections and forecast
-#'   teleconnections. Default \code{Sys.Date()}; pass the ERA5 end date when known.
+#' @param climate_obs_stop Date/character, or a Date vector named by \code{iso_code}. Last observed-climate date; rows after it are never fit. \code{NULL} (default) = no cap.
 #' @param integrator_col Character. Name of the slow long-memory integrator
 #'   column. Default \code{"drought_prob_26w_mean"}.
 #' @param integrator_weeks Integer. Trailing window (weeks) for the slow
@@ -133,7 +130,7 @@ impute_drought_probability <- function(d,
                                         integrator_col   = "drought_prob_26w_mean",
                                         integrator_weeks = 26L,
                                         gam_train_stop   = NULL,
-                                        climate_obs_stop = Sys.Date(),
+                                        climate_obs_stop = NULL,
                                         diagnostics      = TRUE,
                                         diag_dir         = NULL,
                                         verbose          = TRUE) {
@@ -219,14 +216,21 @@ impute_drought_probability <- function(d,
                   !is.na(d_aug$temp_anom_ante) &
                   !is.na(d_aug$precip_anom_ante) &
                   !is.na(d_aug$precip_sum_12w_ante) &
-                  # never fit on projected climate / forecast teleconnections
-                  as.Date(d_aug$date) <= as.Date(climate_obs_stop)
+                  !is.na(d_aug$date)
+     row_date <- as.Date(d_aug$date)
+     # Never fit on projected climate / forecast teleconnections. The horizon
+     # is data-derived by the caller (see .drought_climate_obs_stop), so the
+     # fit depends on the inputs, not on the day the code runs. A country
+     # absent from a per-country horizon has no observed climate: not fit.
+     if (!is.null(climate_obs_stop)) {
+          obs_stop <- .drought_row_horizon(climate_obs_stop, d_aug$iso_code)
+          train_idx <- train_idx & ((row_date <= obs_stop) %in% TRUE)
+     }
      # Leakage gate: restrict the FIT to rows on/before the cutoff when
      # gam_train_stop is supplied. The SPEI-deficit label (built above) and
      # the predict step below are unaffected -- only the fit rows are capped.
      if (!is.null(gam_train_stop)) {
-          train_idx <- train_idx &
-               (as.Date(d_aug$date) <= as.Date(gam_train_stop))
+          train_idx <- train_idx & ((row_date <= as.Date(gam_train_stop)) %in% TRUE)
      }
      train <- d_aug[train_idx, , drop = FALSE]
      if (nrow(train) < 100) {
@@ -435,4 +439,88 @@ impute_drought_probability <- function(d,
        "temp_anom", "precip_anom", "precip_sum_12w", "precipitation_sum",
        # Teleconnections (lags computed inline by the imputer)
        "ENSO34", "IOD")
+}
+
+
+#' Per-row observed-climate horizon for impute_drought_probability()
+#'
+#' @param climate_obs_stop Scalar date, or a date vector named by iso_code.
+#' @param iso Character vector of row iso codes.
+#' @return Date vector, one per row (NA where a named horizon lacks the iso).
+#' @keywords internal
+#' @noRd
+.drought_row_horizon <- function(climate_obs_stop, iso) {
+     h <- as.Date(climate_obs_stop)
+     if (is.null(names(climate_obs_stop))) {
+          if (length(h) != 1L || is.na(h)) {
+               stop("climate_obs_stop must be one non-NA date or a date vector named by iso_code.",
+                    call. = FALSE)
+          }
+          return(rep(h, length(iso)))
+     }
+     names(h) <- names(climate_obs_stop)
+     unname(h[as.character(iso)])
+}
+
+
+#' Data-derived observed-climate horizon for the drought GAM fit
+#'
+#' The weekly suitability panel carries ERA5 observations up to each
+#' country's last ERA5 pull and climate-model projections after it
+#' (process_open_meteo_data splices at era5_max_date), plus ENSO/IOD that turn
+#' from observed into forecast values. This returns, per country, the earlier
+#' of (a) the country's last ERA5 date, read from the newest raw historical
+#' parquet under \code{PATHS$OPEN_METEO_REPO/data/historical/<ISO>/}, and
+#' (b) the last week in which every teleconnection index is observed
+#' (\code{data_source} "historical" or "observed" in
+#' \code{PATHS$DATA_ENSO/enso_weekly.csv}). Both inputs are read, never written.
+#'
+#' @param PATHS List from get_paths().
+#' @return Date vector named by iso_code; a scalar Date if the ERA5 archive is
+#'   not available (teleconnection horizon only, with a warning); NULL (with a
+#'   warning) if neither horizon can be determined.
+#' @keywords internal
+#' @noRd
+.drought_climate_obs_stop <- function(PATHS) {
+     tele <- NA
+     enso_file <- file.path(PATHS$DATA_ENSO %||% "", "enso_weekly.csv")
+     if (file.exists(enso_file)) {
+          e <- utils::read.csv(enso_file, stringsAsFactors = FALSE)
+          if (all(c("variable", "data_source", "date_stop") %in% names(e))) {
+               obs <- e[e$data_source %in% c("historical", "observed"), , drop = FALSE]
+               if (nrow(obs)) {
+                    tele <- min(tapply(as.Date(obs$date_stop), obs$variable, max, na.rm = TRUE))
+                    tele <- as.Date(tele, origin = "1970-01-01")
+               }
+          }
+     }
+
+     era5 <- NULL
+     hist_dir <- file.path(PATHS$OPEN_METEO_REPO %||% "", "data", "historical")
+     if (dir.exists(hist_dir)) {
+          isos <- sort(basename(list.dirs(hist_dir, recursive = FALSE)))
+          era5 <- vapply(isos, function(iso) {
+               f <- sort(list.files(file.path(hist_dir, iso), pattern = "\\.parquet$",
+                                    full.names = TRUE), decreasing = TRUE)
+               if (!length(f)) return(NA_real_)
+               dts <- arrow::read_parquet(f[1L], col_select = "date")$date
+               as.numeric(max(as.Date(dts), na.rm = TRUE))
+          }, numeric(1))
+          era5 <- as.Date(era5[!is.na(era5)], origin = "1970-01-01")
+          if (!length(era5)) era5 <- NULL
+     }
+
+     if (is.null(era5)) {
+          if (is.na(tele)) {
+               warning("Observed-climate horizon unknown (no ERA5 archive, no observed ENSO/IOD); ",
+                       "the drought GAM is fit on every labelled row, projections included.",
+                       call. = FALSE)
+               return(NULL)
+          }
+          warning("ERA5 archive not found at ", hist_dir, "; drought GAM fit capped at the ",
+                  "teleconnection horizon ", format(tele), " only.", call. = FALSE)
+          return(tele)
+     }
+     if (!is.na(tele)) era5[] <- pmin(era5, tele)
+     era5
 }

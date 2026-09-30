@@ -12,7 +12,7 @@ impute_drought_probability(
   integrator_col = "drought_prob_26w_mean",
   integrator_weeks = 26L,
   gam_train_stop = NULL,
-  climate_obs_stop = Sys.Date(),
+  climate_obs_stop = NULL,
   diagnostics = TRUE,
   diag_dir = NULL,
   verbose = TRUE
@@ -54,10 +54,7 @@ is unaffected -- only the GAM fit-row subset is capped. Default
 \code{NULL} = current full-data fit (back-compatible). Only the fit-row
 subset changes; \code{select=TRUE}/fREML/the formula are identical.}
 
-\item{climate_obs_stop}{Date or character (\code{"YYYY-MM-DD"}). Last date of observed
-(not projected) climate. The GAM is never fit on rows after it, because
-the panel's future rows carry climate-model projections and forecast
-teleconnections. Default \code{Sys.Date()}; pass the ERA5 end date when known.}
+\item{climate_obs_stop}{Date/character, or a Date vector named by \code{iso_code}. Last observed-climate date; rows after it are never fit. \code{NULL} (default) = no cap.}
 
 \item{diagnostics}{Logical. If \code{TRUE}, fits a rolling-year
 cross-validation and writes diagnostic artefacts to \code{diag_dir}.}
