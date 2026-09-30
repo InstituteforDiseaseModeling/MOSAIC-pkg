@@ -376,7 +376,13 @@ names(lat) <- tmp$iso3
 latitude <- lat[match(j, names(lat))]
 
 .grav_f <- file.path(PATHS$MODEL_INPUT, "mobility_gravity_params_blend.csv")
-if (!file.exists(.grav_f)) .grav_f <- file.path(PATHS$MODEL_INPUT, "mobility_gravity_params.csv")
+if (!file.exists(.grav_f)) {
+     warning("mobility_gravity_params_blend.csv not found; falling back to the air-only ",
+             "mobility_gravity_params.csv, so the config kernel will not match the ",
+             "priors_default blend modes. Re-run est_mobility(od_source = \"blend\").",
+             immediate. = TRUE)
+     .grav_f <- file.path(PATHS$MODEL_INPUT, "mobility_gravity_params.csv")
+}
 message("config gravity source: ", basename(.grav_f))
 tmp <- read.csv(.grav_f, row.names=1)
 mobility_omega <- tmp['omega', 'mean']

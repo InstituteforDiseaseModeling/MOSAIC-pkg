@@ -318,7 +318,13 @@ priors_default$parameters_global$kappa <- list(
 # NOTE tau_i deliberately does NOT follow the blend here -- it is overland-only
 # (see the tau_overland_file block below). Kernel = blend, departure = overland.
 .grav_f <- file.path(PATHS$MODEL_INPUT, "param_gravity_model_blend.csv")
-if (!file.exists(.grav_f)) .grav_f <- file.path(PATHS$MODEL_INPUT, "param_gravity_model.csv")
+if (!file.exists(.grav_f)) {
+     warning("param_gravity_model_blend.csv not found; falling back to the air-only ",
+             "param_gravity_model.csv, so the mobility prior modes will not match the ",
+             "config_default blend kernel. Re-run est_mobility(od_source = \"blend\").",
+             immediate. = TRUE)
+     .grav_f <- file.path(PATHS$MODEL_INPUT, "param_gravity_model.csv")
+}
 message("priors gravity source: ", basename(.grav_f))
 param_gravity <- read.csv(.grav_f)
 mobility_gamma_mode <- param_gravity$parameter_value[param_gravity$variable_name == "mobility_gamma"]
@@ -1349,6 +1355,12 @@ for (iso in j) {
 # Define location-specific variance inflation for E/I compartments
 # Higher values = more uncertainty in initial E/I estimates
 # E/I have higher baseline uncertainty due to short-term dynamics
+# Meaning (v0.99.11): the Beta keeps the Monte Carlo mean m and its spread is
+# fit to the 95% CI [m / VI, m * VI] on the logit scale (shape1 may be < 1).
+# Before v0.99.11 the refit collapsed to a near point mass whatever VI was (a
+# 110x intent came out ~3x wide), so these values only now take effect as
+# documented; for VI ~ 100 the fitted lower 2.5% reaches ~m / 150 and the upper
+# 97.5% ~4.3 m (a Beta with mean m cannot reach m * VI above).
 # Only includes ISO codes in MOSAIC::iso_codes_mosaic
 variance_inflation_E_I <- c(
      "AGO" = 120,  # Angola: Improving surveillance
@@ -1448,161 +1460,32 @@ initial_conditions_E_I <- est_initial_E_I(
      }
 
 
-# =============================================================================
-# POST-ESTIMATION ADJUSTMENT: Lower mean initial E/I for specific countries
-# =============================================================================
-
-# Countries showing systematic overestimation of initial conditions
-# Apply scaling factors to reduce mean E and I while preserving relative uncertainty
-#
-# RE-DERIVE AT THE NEXT REBUILD: these factors were hand-tuned against the
-# pre-v0.99.11 est_initial_E_I(), whose E was built from already-reported cases,
-# used hardcoded rho ~ U(0.2, 0.7) and dropped zero draws before averaging. The
-# v0.99.11 estimator (E in balance with the onset rate, I from observed onsets,
-# model rho / chi_endemic / delta_reporting_cases priors, zero draws kept) moves
-# every country's E/I mean, so the factors below no longer mean what they did.
-
-adjustment_factors_E_I <- list(
-     AGO = 0.01,
-     BEN = 0.01,
-     BFA = 0.01,
-     BWA = 0.00,  # Near-zero: no active cholera at model start (uses Beta(0.01, 99999.99))
-     CAF = 0.01,
-     CIV = 0.01,
-     CMR = 0.01,
-     COD = 0.75,
-     COG = 0.05,
-     ERI = 0.00,  # Near-zero: very limited international data; no active cholera
-     GAB = 0.00,  # Near-zero: no active cholera at model start
-     GHA = 0.001,
-     GIN = 0.001,
-     GMB = 0.001,
-     GNB = 0.001,
-     GNQ = 0.00,  # Near-zero: no active cholera at model start
-     KEN = 1.2,
-     LBR = 0.001,
-     MLI = 0.00,  # Near-zero: no active cholera at model start
-     MOZ = 0.4,
-     MRT = 0.00,  # Near-zero: no active cholera at model start
-     MWI = 0.3,
-     NAM = 0.2,
-     NER = 0.1,
-     NGA = 1.1,
-     RWA = 0.01,
-     SEN = 0.001,
-     SLE = 0.001,
-     SOM = 0.5,
-     SSD = 0.1,
-     SWZ = 0.00,  # Near-zero: no active cholera at model start
-     TCD = 0.001,
-     TGO = 0.1,
-     TZA = 0.05,
-     UGA = 0.3,
-     ZAF = 0.01,
-     ZMB = 0.3,
-     ZWE = 0.075
-)
-
-cat("\nApplying post-estimation mean adjustments for initial E and I:\n")
-
-for (iso in names(adjustment_factors_E_I)) {
-     scaling_factor <- adjustment_factors_E_I[[iso]]
-
-     # Adjust prop_E_initial
-     if (!is.null(priors_default$parameters_location$prop_E_initial$location[[iso]])) {
-          old_params_E <- priors_default$parameters_location$prop_E_initial$location[[iso]]$parameters
-          old_mean_E <- old_params_E$shape1 / (old_params_E$shape1 + old_params_E$shape2)
-
-          if (scaling_factor == 0) {
-               # Zero scaling: no active E at model start.
-               # Cannot compute new Beta via mean/CV rescale (0/0 = NaN).
-               # Use the minimum-mass default prior instead: Beta(0.01, 99999.99)
-               # gives mean ~1e-7, placing virtually all mass at 0.
-               priors_default$parameters_location$prop_E_initial$location[[iso]]$parameters <- list(
-                    shape1 = 0.01,
-                    shape2 = 99999.99
-               )
-               cat(sprintf("  %s E: %.6f -> ~0 (near-zero prior, 100%% reduction)\n",
-                           iso, old_mean_E))
-          } else {
-               # Calculate new mean (scaled down)
-               new_mean_E <- old_mean_E * scaling_factor
-
-               # Preserve relative uncertainty (CV)
-               # CV = sqrt(variance) / mean for Beta distribution
-               old_var_E <- (old_params_E$shape1 * old_params_E$shape2) /
-                            ((old_params_E$shape1 + old_params_E$shape2)^2 *
-                             (old_params_E$shape1 + old_params_E$shape2 + 1))
-               old_cv_E <- sqrt(old_var_E) / old_mean_E
-
-               # Fit new Beta with scaled mean and same CV
-               new_var_E <- (new_mean_E * old_cv_E)^2
-
-               # Beta parameters from mean and variance
-               common_term_E <- new_mean_E * (1 - new_mean_E) / new_var_E - 1
-               new_shape1_E <- max(0.01, new_mean_E * common_term_E)
-               new_shape2_E <- max(0.01, (1 - new_mean_E) * common_term_E)
-
-               priors_default$parameters_location$prop_E_initial$location[[iso]]$parameters <- list(
-                    shape1 = new_shape1_E,
-                    shape2 = new_shape2_E
-               )
-
-               cat(sprintf("  %s E: %.6f -> %.6f (%.0f%% reduction)\n",
-                           iso, old_mean_E, new_mean_E, (1 - scaling_factor) * 100))
-          }
-     }
-
-     # Adjust prop_I_initial
-     if (!is.null(priors_default$parameters_location$prop_I_initial$location[[iso]])) {
-          old_params_I <- priors_default$parameters_location$prop_I_initial$location[[iso]]$parameters
-          old_mean_I <- old_params_I$shape1 / (old_params_I$shape1 + old_params_I$shape2)
-
-          if (scaling_factor == 0) {
-               # Zero scaling: no active I at model start.
-               # Use the minimum-mass default prior: Beta(0.01, 99999.99) ~ mean 1e-7.
-               priors_default$parameters_location$prop_I_initial$location[[iso]]$parameters <- list(
-                    shape1 = 0.01,
-                    shape2 = 99999.99
-               )
-               cat(sprintf("  %s I: %.6f -> ~0 (near-zero prior, 100%% reduction)\n",
-                           iso, old_mean_I))
-          } else {
-               # Calculate new mean (scaled down)
-               new_mean_I <- old_mean_I * scaling_factor
-
-               # Preserve relative uncertainty (CV)
-               old_var_I <- (old_params_I$shape1 * old_params_I$shape2) /
-                            ((old_params_I$shape1 + old_params_I$shape2)^2 *
-                             (old_params_I$shape1 + old_params_I$shape2 + 1))
-               old_cv_I <- sqrt(old_var_I) / old_mean_I
-
-               # Fit new Beta with scaled mean and same CV
-               new_var_I <- (new_mean_I * old_cv_I)^2
-
-               # Beta parameters from mean and variance
-               common_term_I <- new_mean_I * (1 - new_mean_I) / new_var_I - 1
-               new_shape1_I <- max(0.01, new_mean_I * common_term_I)
-               new_shape2_I <- max(0.01, (1 - new_mean_I) * common_term_I)
-
-               priors_default$parameters_location$prop_I_initial$location[[iso]]$parameters <- list(
-                    shape1 = new_shape1_I,
-                    shape2 = new_shape2_I
-               )
-
-               cat(sprintf("  %s I: %.6f -> %.6f (%.0f%% reduction)\n",
-                           iso, old_mean_I, new_mean_I, (1 - scaling_factor) * 100))
-          }
-     }
-}
-
-cat("\nPost-estimation adjustments complete.\n")
+# No post-estimation E/I rescaling (removed v0.99.11). Up to v0.99.10 a table
+# of hand-tuned per-country factors (AGO 0.01, COD 0.75, KEN 1.2, MOZ 0.4, ...,
+# 0 = "no active cholera at t0") multiplied the est_initial_E_I() means. They
+# compensated for defects of that estimator: E built from already-reported
+# cases, a hardcoded rho ~ U(0.2, 0.7) instead of the model's rho / chi_endemic
+# / delta_reporting_cases priors, zero draws dropped before averaging, and a
+# Beta refit that collapsed to a near point mass. The v0.99.11 estimator fixes
+# those at source (E in balance with the onset rate, I from observed onsets,
+# the model's reporting-chain priors, zero draws kept), and a location whose
+# surveillance window has zero reported cases already gets the near-zero
+# Beta(0.01, 99999.99) template prior (method "observed_zero"), which is what
+# the old 0 factors encoded by hand. Re-applying factors tuned against the old
+# estimator would mix the two, so none are applied; any per-country adjustment
+# must be re-derived from calibration evidence against the new estimator.
 
 
 # Update default priors with estimated initial conditions for R
 
 # Define location-specific variance inflation for R compartment
 # Higher values = more uncertainty, allowing for greater variation in estimates
+# Meaning: an SD multiplier in a method-of-moments Beta refit that keeps the
+# Monte Carlo mean (v0.99.11; before that the CI half-widths were scaled
+# linearly, which the old mean/variance refit also treated as an SD scaling, so
+# the tuned values keep their meaning). The R draws now use the model's rho /
+# chi_endemic priors (E[chi / rho] ~ 1.36) instead of the never-resolved
+# fallback chi / rho = 5, so prop_R_initial means fall ~3.7x at this rebuild.
 # Only includes ISO codes in MOSAIC::iso_codes_mosaic
 variance_inflation_R <- c(
      "AGO" = 3,   # Angola: Further reduced
