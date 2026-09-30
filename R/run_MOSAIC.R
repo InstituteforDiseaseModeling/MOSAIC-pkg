@@ -3029,10 +3029,12 @@ run_MOSAIC <- function(config,
     obs_d_flat    <- as.numeric(ensemble$obs_deaths)
 
     # Canonical ensemble metrics follow central_method (per channel).
-    cen_c_flat <- as.numeric(.mosaic_mask_central_for_scoring(
-      .central(ensemble, "cases"), "cases", ensemble$artifact_mask))
-    cen_d_flat <- as.numeric(.mosaic_mask_central_for_scoring(
-      .central(ensemble, "deaths"), "deaths", ensemble$artifact_mask))
+    cen_c_mat <- .mosaic_mask_central_for_scoring(
+      .central(ensemble, "cases"), "cases", ensemble$artifact_mask)
+    cen_d_mat <- .mosaic_mask_central_for_scoring(
+      .central(ensemble, "deaths"), "deaths", ensemble$artifact_mask)
+    cen_c_flat <- as.numeric(cen_c_mat)
+    cen_d_flat <- as.numeric(cen_d_mat)
     r2_cases_ensemble  <- calc_model_R2(obs_c_flat, cen_c_flat)
     r2_deaths_ensemble <- calc_model_R2(obs_d_flat, cen_d_flat)
     bias_ratio_cases_ensemble  <- tryCatch(
@@ -3107,17 +3109,18 @@ run_MOSAIC <- function(config,
     }
 
     # Windowed model fit metrics on the canonical ensemble. Uses the chosen
-    # central series (cen_*_flat) so the windowed diagnostic agrees with the
-    # headline r2_*_ensemble + plots; identical to median under
-    # central_method="median".
+    # central series (scoring-masked, as for the headline r2_*_ensemble) so the
+    # windowed diagnostic agrees with the headline metrics + plots. Passed as
+    # [n_loc x n_time] matrices: windows are taken over TIME and pool the
+    # locations within them.
     n_ts      <- ensemble$n_time_points
     dates_vec <- seq.Date(as.Date(config$date_start), by = "day", length.out = n_ts)
 
     windowed_metrics <- .mosaic_compute_windowed_metrics(
-      obs_cases  = obs_c_flat,
-      est_cases  = cen_c_flat,
-      obs_deaths = obs_d_flat,
-      est_deaths = cen_d_flat,
+      obs_cases  = ensemble$obs_cases,
+      est_cases  = cen_c_mat,
+      obs_deaths = ensemble$obs_deaths,
+      est_deaths = cen_d_mat,
       dates      = dates_vec,
       windows    = fit_windows
     )

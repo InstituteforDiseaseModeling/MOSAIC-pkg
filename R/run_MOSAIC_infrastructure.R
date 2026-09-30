@@ -747,50 +747,75 @@
 
 #' Compute R² and Bias Ratio Across Trailing Time Windows
 #'
-#' @param obs_cases Numeric vector of observed cases.
-#' @param est_cases Numeric vector of estimated cases (same length).
-#' @param obs_deaths Numeric vector of observed deaths.
-#' @param est_deaths Numeric vector of estimated deaths.
-#' @param dates Date vector of same length as obs/est vectors.
+#' Series are \code{[n_loc x n_time]} matrices (a vector is one location).
+#' A cell is scored when both its observation and its estimate are finite
+#' (the estimate is NA where the scoring mask removed it). A trailing window
+#' \code{last_<w>obs} is the last \code{w} time steps that carry at least one
+#' scored cell for that channel, pooling every location's scored cells in
+#' those steps; for one location this is the last \code{w} scored
+#' observations. Dates are indexed by time step.
+#'
+#' @param obs_cases Observed cases, \code{[n_loc x n_time]} matrix or vector.
+#' @param est_cases Estimated cases, same shape.
+#' @param obs_deaths Observed deaths, same shape.
+#' @param est_deaths Estimated deaths, same shape.
+#' @param dates Date vector of length \code{n_time}.
 #' @param windows Integer vector of trailing observation counts (e.g. c(365, 120, 90, 60, 30)).
-#' @return data.frame with one row per window plus a "full" row.
+#' @return data.frame with one row per window plus a "full" row; \code{n_obs}
+#'   is the number of scored cells.
 #' @noRd
 .mosaic_compute_windowed_metrics <- function(obs_cases, est_cases,
                                              obs_deaths, est_deaths,
                                              dates, windows = c(365, 120, 90, 60, 30)) {
 
-  valid_idx_c <- which(!is.na(obs_cases) & is.finite(obs_cases))
-  valid_idx_d <- which(!is.na(obs_deaths) & is.finite(obs_deaths))
+  as_mat <- function(x) if (is.null(dim(x))) matrix(x, nrow = 1L) else as.matrix(x)
+  obs_cases  <- as_mat(obs_cases);  est_cases  <- as_mat(est_cases)
+  obs_deaths <- as_mat(obs_deaths); est_deaths <- as_mat(est_deaths)
+  if (!identical(dim(obs_cases), dim(est_cases)) ||
+      !identical(dim(obs_deaths), dim(est_deaths))) {
+    stop("observed and estimated series must have the same dimensions")
+  }
+  n_time <- ncol(obs_cases)
 
-  compute_row <- function(label, idx_c, idx_d) {
-    # Cases
+  ok_c <- is.finite(obs_cases)  & is.finite(est_cases)
+  ok_d <- is.finite(obs_deaths) & is.finite(est_deaths)
+  # Time steps carrying at least one scored cell, per channel.
+  valid_t_c <- which(colSums(ok_c) > 0L)
+  valid_t_d <- which(colSums(ok_d) > 0L)
+
+  date_at <- function(t) {
+    if (length(dates) == n_time) as.character(dates[t]) else NA_character_
+  }
+
+  compute_row <- function(label, t_c, t_d) {
+    sel_c <- ok_c; sel_c[, -t_c] <- FALSE
+    sel_d <- ok_d; sel_d[, -t_d] <- FALSE
+    if (!length(t_c)) sel_c[] <- FALSE
+    if (!length(t_d)) sel_d[] <- FALSE
+    n_c <- sum(sel_c); n_d <- sum(sel_d)
+
     r2_c <- bias_c <- NA_real_
-    if (length(idx_c) > 2) {
-      o <- obs_cases[idx_c]; e <- est_cases[idx_c]
+    if (n_c > 2) {
+      o <- obs_cases[sel_c]; e <- est_cases[sel_c]
       r2_c <- calc_model_R2(o, e)
       bias_c <- calc_bias_ratio(o, e)
     }
-    # Deaths
     r2_d <- bias_d <- NA_real_
-    if (length(idx_d) > 2) {
-      o <- obs_deaths[idx_d]; e <- est_deaths[idx_d]
+    if (n_d > 2) {
+      o <- obs_deaths[sel_d]; e <- est_deaths[sel_d]
       r2_d <- calc_model_R2(o, e)
       bias_d <- calc_bias_ratio(o, e)
     }
 
-    # Date range from cases (primary)
-    idx_all <- sort(unique(c(idx_c, idx_d)))
-    date_start <- if (length(idx_all) > 0) as.character(dates[min(idx_all)]) else NA_character_
-    date_end   <- if (length(idx_all) > 0) as.character(dates[max(idx_all)]) else NA_character_
-
+    t_all <- sort(unique(c(t_c, t_d)))
     data.frame(
-      window     = label,
-      n_obs      = max(length(idx_c), length(idx_d)),
-      date_start = date_start,
-      date_end   = date_end,
-      r2_cases   = round(r2_c, 4),
-      bias_cases = round(bias_c, 4),
-      r2_deaths  = round(r2_d, 4),
+      window      = label,
+      n_obs       = max(n_c, n_d),
+      date_start  = if (length(t_all)) date_at(min(t_all)) else NA_character_,
+      date_end    = if (length(t_all)) date_at(max(t_all)) else NA_character_,
+      r2_cases    = round(r2_c, 4),
+      bias_cases  = round(bias_c, 4),
+      r2_deaths   = round(r2_d, 4),
       bias_deaths = round(bias_d, 4),
       stringsAsFactors = FALSE
     )
@@ -799,18 +824,18 @@
   rows <- list()
 
   # Full series
-  rows[[1]] <- compute_row("full", valid_idx_c, valid_idx_d)
+  rows[[1]] <- compute_row("full", valid_t_c, valid_t_d)
 
   # Trailing windows
   for (w in windows) {
-    idx_c <- if (length(valid_idx_c) >= w) tail(valid_idx_c, w) else integer(0)
-    idx_d <- if (length(valid_idx_d) >= w) tail(valid_idx_d, w) else integer(0)
-    if (length(idx_c) == 0 && length(idx_d) == 0) next
-    # The window measures "last w VALID OBSERVATIONS" (timepoints with finite
-    # cases/deaths), not last w calendar days. For weekly-reporting countries
-    # the temporal span can be ~7x the day count. Label as "last_<w>obs" so
-    # an operator (or AI tail) doesn't mistake it for a day window.
-    rows[[length(rows) + 1]] <- compute_row(paste0("last_", w, "obs"), idx_c, idx_d)
+    t_c <- if (length(valid_t_c) >= w) utils::tail(valid_t_c, w) else integer(0)
+    t_d <- if (length(valid_t_d) >= w) utils::tail(valid_t_d, w) else integer(0)
+    if (length(t_c) == 0 && length(t_d) == 0) next
+    # The window measures "last w time steps with a scored observation", not
+    # last w calendar days. For weekly-reporting countries the temporal span
+    # can be ~7x the day count. Label as "last_<w>obs" so an operator (or AI
+    # tail) doesn't mistake it for a day window.
+    rows[[length(rows) + 1]] <- compute_row(paste0("last_", w, "obs"), t_c, t_d)
   }
 
   do.call(rbind, rows)
