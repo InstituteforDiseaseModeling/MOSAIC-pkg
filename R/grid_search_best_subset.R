@@ -36,18 +36,23 @@
 #'   \item \code{"saturated"} (default): \eqn{\Delta_i = -2(\ell_i - \max \ell)}{Delta_i = -2 (ll_i - max ll)},
 #'     saturated at 4, and \eqn{w_i \propto \exp(-0.5 \min(\Delta_i, 4))}{w_i ~ exp(-0.5 min(Delta_i, 4))}
 #'     (MOSAIC-docs calibration chapter, equation aic-weights). Weights lie in
-#'     \eqn{[e^{-2}, 1]} before normalisation. This is the scheme of the
-#'     \code{weight_best} posterior, and \code{run_MOSAIC()} always selects the
-#'     subset with it. Once most of the subset is past \eqn{\Delta = 4} the
-#'     weights are nearly flat, so in practice the ESS target alone sets n and
-#'     the A and CVw targets rarely bind.
-#'   \item \code{"tempered"}: the adaptive-eta Gibbs weights that
-#'     \code{run_MOSAIC()} uses for its final ESS_B/A/CVw gate when
-#'     \code{best_subset_weighting = "tempered"}. They place the worst draw of
-#'     the subset at a weight floor of 1e-15, so on production likelihoods the
-#'     ESS stays far below typical targets and the search usually ends at
-#'     \code{max_size} with \code{converged = FALSE}.
+#'     \eqn{[e^{-2}, 1]} before normalisation. Once most of the subset is past
+#'     \eqn{\Delta = 4} the weights are nearly flat, so in practice the ESS
+#'     target alone sets n and the A and CVw targets rarely bind.
+#'   \item \code{"tempered"}: the adaptive-eta Gibbs weights
+#'     (\eqn{\eta} chosen so the worst draw of the subset sits at a weight
+#'     floor of 1e-15). Because \eqn{\eta} is rescaled to each subset's own
+#'     \eqn{\Delta} range, the ESS grows roughly in proportion to n (about
+#'     0.06 n when \eqn{\Delta} rises linearly with rank), so the targets are
+#'     met, if at all, at a much larger n than under \code{"saturated"}.
 #' }
+#'
+#' Weights come from the same helper as \code{results$weight_best} and the
+#' final ESS_B/A/CVw gate in \code{run_MOSAIC()}, which passes
+#' \code{control$targets$best_subset_weighting} here: the size the search
+#' certifies against a tier is then the size at which the posterior's own
+#' weights meet that tier. Searching under one scheme and weighting the
+#' posterior under the other certified a subset the final gate then failed.
 #'
 #' If no size meets criteria, returns results at max_size with converged=FALSE.
 #'
@@ -136,7 +141,7 @@ grid_search_best_subset <- function(
     evaluations <- evaluations + 1
 
     # Weights on the top-n likelihoods (vector slice; no wide-frame copy),
-    # using the same scheme as the final gate in run_MOSAIC().
+    # using the same helper as weight_best and the final gate in run_MOSAIC().
     weights_n <- .mosaic_best_subset_weights(ll_sorted[1:n], scheme = weighting)$weights
 
     # Calculate metrics from the best-subset weights

@@ -93,8 +93,7 @@
 #'   serial path. Must be a \code{"PSOCK"} cluster (FORK is unsafe at this point
 #'   in the pipeline). For trivially small problems the function falls back to
 #'   serial regardless of \code{cl}.
-#' @param weighting Best-subset weighting scheme for the per-N weights:
-#'   \code{"saturated"} (default, the \code{weight_best} scheme) or \code{"tempered"}.
+#' @param weighting Best-subset weighting scheme for the per-N weights, matching \code{control$targets$best_subset_weighting} (the scheme of \code{weight_best}): \code{"saturated"} (default) or \code{"tempered"}.
 #' @param ess_method ESS formula for \code{evaluation_table$ess}: \code{"kish"} (default) or \code{"perplexity"}.
 #' @param verbose Logical; if \code{TRUE}, emit progress messages.
 #'
