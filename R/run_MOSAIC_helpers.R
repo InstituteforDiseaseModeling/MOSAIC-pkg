@@ -2294,17 +2294,60 @@
 # EXECUTION
 # =============================================================================
 
-#' Run Simulation Batch (Sequential or Parallel)
+#' Build the function that installs the calibration worker on each PSOCK node
 #'
-#' Abstraction layer that runs simulations either sequentially (lapply) or
-#' in parallel (parLapply) depending on whether a cluster object is provided.
+#' Returns a function for \code{parallel::clusterCall()} that assigns
+#' \code{.run_sim_worker} and \code{.run_sim_worker_chunk} into each worker's
+#' global environment. Its enclosing environment is \code{globalenv()}: a
+#' closure created inside \code{run_MOSAIC()} would carry (and serialise to
+#' every worker) the whole run frame, ~10 MB per worker at 40 locations, and the
+#' installed workers would read that copy instead of the values sent by
+#' \code{clusterExport()} (\code{n_iterations}, \code{priors}, \code{config},
+#' \code{PATHS}, \code{dirs}, \code{param_names_all}, \code{param_lookup},
+#' \code{sampling_args}, \code{io_settings}, \code{likelihood_settings}).
 #'
-#' @param sim_ids Vector of simulation IDs to run
-#' @param worker_func Simulation worker function
-#' @param cl Cluster object (NULL for sequential, cluster for parallel)
-#' @param show_progress Logical, whether to show progress bar
-#' @return List of success indicators from worker function
+#' @return A zero-argument function with \code{globalenv()} as its environment.
 #' @noRd
+.mosaic_worker_installer <- function() {
+  f <- function() {
+    assign(".run_sim_worker", function(sim_id) {
+      MOSAIC:::.mosaic_run_simulation_worker(
+        sim_id = sim_id,
+        n_iterations = n_iterations,
+        priors = priors,
+        config = config,
+        PATHS = PATHS,
+        dir_cal_samples = dirs$cal_samples,
+        dir_cal_simresults = dirs$cal_simresults,
+        param_names_all = param_names_all,
+        param_lookup = param_lookup,
+        sampling_args = sampling_args,
+        io = io_settings,
+        likelihood_settings = likelihood_settings
+      )
+    }, envir = .GlobalEnv)
+    assign(".run_sim_worker_chunk", function(sim_ids) {
+      MOSAIC:::.mosaic_run_simulation_chunk(
+        sim_ids = sim_ids,
+        n_iterations = n_iterations,
+        priors = priors,
+        config = config,
+        PATHS = PATHS,
+        dir_cal_samples = dirs$cal_samples,
+        dir_cal_simresults = dirs$cal_simresults,
+        param_names_all = param_names_all,
+        param_lookup = param_lookup,
+        sampling_args = sampling_args,
+        io = io_settings,
+        likelihood_settings = likelihood_settings
+      )
+    }, envir = .GlobalEnv)
+    NULL
+  }
+  environment(f) <- globalenv()
+  f
+}
+
 #' Resolve control$io$shard_batch_size to a usable positive integer
 #'
 #' Garbage (NULL, NA, a string, a vector, a negative) falls back to 1, i.e. the
@@ -2357,7 +2400,21 @@
   unname(split(sim_ids, ceiling(seq_along(sim_ids) / size)))
 }
 
-.mosaic_run_batch <- function(sim_ids, worker_func, cl, show_progress) {
+#' Run Simulation Batch (Sequential or Parallel)
+#'
+#' Abstraction layer that runs simulations either sequentially (lapply) or
+#' in parallel (parLapply) depending on whether a cluster object is provided.
+#'
+#' @param sim_ids Vector of simulation IDs to run
+#' @param worker_func Simulation worker function
+#' @param cl Cluster object (NULL for sequential, cluster for parallel)
+#' @param show_progress Logical, whether to show progress bar
+#' @param unit_runs Engine runs per task (\code{n_iterations}, times the shard
+#'   size for chunked tasks); scales the parallel idle timeout.
+#' @return List of success indicators from worker function; a task that raised
+#'   an R-level error on a worker is recorded as \code{FALSE}.
+#' @noRd
+.mosaic_run_batch <- function(sim_ids, worker_func, cl, show_progress, unit_runs = 1L) {
   if (is.null(cl)) {
     # Sequential execution
     if (isTRUE(show_progress)) {
@@ -2382,8 +2439,8 @@
     # Worker-death-robust gather: parLapply()/pblapply(cl=) collect results with a
     # BLOCKING unserialize() that, on Linux, hangs the master FOREVER if a PSOCK
     # worker PROCESS dies mid-task -- an OOM kill, or any other fatal C-level
-    # abort (NOT an R-level error, which the worker already turns into a FALSE
-    # record). The embedded Python interpreter used to be the likeliest source
+    # abort (an R-level error instead comes back as a try-error value, mapped
+    # to FALSE below). The embedded Python interpreter used to be the likeliest source
     # of such an abort; the engine is pure R since v0.68.0, so OOM is now the
     # realistic case, but a blocking gather is just as unrecoverable either way. Calibration runs 10,000s of sims
     # per country, the highest-exposure parallel gather in the package, so route it
@@ -2398,20 +2455,64 @@
     # tiny payload (not the heavy run_MOSAIC frame) while still resolving
     # .run_sim_worker on the worker.
     environment(worker_func) <- globalenv()
+    idle_timeout <- .mosaic_calibration_idle_timeout(unit_runs)
     res <- .mosaic_cluster_lapply_robust(
       cl, sim_ids, worker_func,
-      idle_timeout_sec = getOption("MOSAIC.ensemble_worker_timeout_sec", 1800),
+      idle_timeout_sec = idle_timeout,
       progress = isTRUE(show_progress),
-      label = "run_MOSAIC simulation batch"
+      label = sprintf(paste0(
+        "run_MOSAIC simulation batch (idle timeout %d s for %d engine run(s) per task; if ",
+        "tasks are merely slow, raise options(MOSAIC.calibration_sec_per_engine_run) or ",
+        "options(MOSAIC.ensemble_worker_timeout_sec))."),
+        as.integer(idle_timeout), as.integer(unit_runs))
     )
-    # A crashed worker yields a list(.mosaic_worker_died=TRUE, success=FALSE, ...)
-    # marker; the calibration success tally expects a scalar logical per sim
-    # (sum(unlist(success_indicators))). Coerce a dead-worker task to FALSE: it
-    # counts as a failed sim and the batch degrades gracefully (the lost sim_id is
-    # simply re-drawn on resume).
-    lapply(res, function(r)
-      if (is.list(r) && isTRUE(r$.mosaic_worker_died)) FALSE else r)
+    # The calibration success tally expects a scalar logical per task
+    # (sum(unlist(success_indicators))). Two non-logical results are coerced
+    # to FALSE, so they count as failed sims and the batch degrades gracefully
+    # (the lost sim_id is re-drawn on resume):
+    #   * a crashed worker's list(.mosaic_worker_died=TRUE, ...) marker;
+    #   * a 'try-error' string, which parallel's worker loop returns when the
+    #     task raised an R-level error (e.g. a failed shard write).
+    n_err <- 0L
+    out <- lapply(res, function(r) {
+      if (is.list(r) && isTRUE(r$.mosaic_worker_died)) return(FALSE)
+      if (inherits(r, "try-error")) {
+        n_err <<- n_err + 1L
+        if (n_err == 1L) {
+          warning(sprintf("run_MOSAIC simulation batch: a task failed on a worker: %s",
+                          trimws(as.character(r))), call. = FALSE)
+        }
+        return(FALSE)
+      }
+      r
+    })
+    if (n_err > 1L) {
+      warning(sprintf("run_MOSAIC simulation batch: %d task(s) failed on workers in total",
+                      n_err), call. = FALSE)
+    }
+    out
   }
+}
+
+#' Idle timeout for the calibration parallel gather
+#'
+#' The robust gather stops when no busy worker returns a result within the
+#' timeout. A calibration task is \code{unit_runs} engine runs (a shard of
+#' simulations times \code{n_iterations}), so a fixed 1800 s can be exceeded by
+#' a healthy but large task. The timeout is the larger of
+#' \code{getOption("MOSAIC.ensemble_worker_timeout_sec", 1800)} and
+#' \code{unit_runs * getOption("MOSAIC.calibration_sec_per_engine_run", 30)}
+#' (30 s is ~20x a measured 40-location engine run).
+#'
+#' @param unit_runs Engine runs per task.
+#' @return Timeout in seconds.
+#' @noRd
+.mosaic_calibration_idle_timeout <- function(unit_runs = 1L) {
+  base    <- as.numeric(getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
+  per_run <- as.numeric(getOption("MOSAIC.calibration_sec_per_engine_run", 30))
+  unit_runs <- suppressWarnings(as.numeric(unit_runs))
+  if (length(unit_runs) != 1L || !is.finite(unit_runs) || unit_runs < 1) unit_runs <- 1
+  max(base, unit_runs * per_run)
 }
 
 

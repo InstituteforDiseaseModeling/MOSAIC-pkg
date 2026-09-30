@@ -537,9 +537,19 @@
   # columns cost ~444 KB on disk for ~8 KB of data, so the 100,000-simulation
   # run wrote 52.9 GB of shards for 1.03 GB of data (pipeline plan item 6b).
   # The simulation and scoring above are untouched either way.
+  # A failed write is a failed simulation (FALSE), not an error that would
+  # abort a sequential run or reach the parallel tally as a try-error string.
+  shard_written <- FALSE
   if (isTRUE(write_shard)) {
     output_file <- file.path(dir_cal_samples, sprintf("sim_%07d.parquet", sim_id))
-    .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
+    shard_written <- tryCatch({
+      .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
+      TRUE
+    }, error = function(e) {
+      warning(sprintf("shard write failed for sim %d: %s", sim_id, conditionMessage(e)),
+              call. = FALSE)
+      FALSE
+    })
   }
 
   # Write raw simulation results for validation (when save_simresults = TRUE)
@@ -553,7 +563,11 @@
       }
       simresults_file <- file.path(dir_cal_simresults,
                                    sprintf("simresults_%07d.parquet", sim_id))
-      .mosaic_write_parquet(raw_df, simresults_file, io)
+      # Validation output only: a failed write warns, it does not fail the sim.
+      tryCatch(.mosaic_write_parquet(raw_df, simresults_file, io),
+               error = function(e) warning(sprintf(
+                 "simresults write failed for sim %d: %s", sim_id, conditionMessage(e)),
+                 call. = FALSE))
     }
   }
 
@@ -566,7 +580,7 @@
   # (913 -> 957 MB over 30 sims), which does not move the worker-count budget.
   # Measurements: v0.72.0 NEWS entry.
   if (!isTRUE(write_shard)) return(result_matrix)
-  return(file.exists(output_file))
+  return(shard_written && file.exists(output_file))
 }
 
 # =============================================================================
@@ -1302,42 +1316,11 @@ run_MOSAIC <- function(config,
         "likelihood_settings", "io_settings"),
       envir = environment())
 
-    # Install worker function using the exported per-run variables
-    parallel::clusterCall(cl, function() {
-      assign(".run_sim_worker", function(sim_id) {
-        MOSAIC:::.mosaic_run_simulation_worker(
-          sim_id = sim_id,
-          n_iterations = n_iterations,
-          priors = priors,
-          config = config,
-          PATHS = PATHS,
-          dir_cal_samples = dirs$cal_samples,
-          dir_cal_simresults = dirs$cal_simresults,
-          param_names_all = param_names_all,
-          param_lookup = param_lookup,
-          sampling_args = sampling_args,
-          io = io_settings,
-          likelihood_settings = likelihood_settings
-        )
-      }, envir = .GlobalEnv)
-      assign(".run_sim_worker_chunk", function(sim_ids) {
-        MOSAIC:::.mosaic_run_simulation_chunk(
-          sim_ids = sim_ids,
-          n_iterations = n_iterations,
-          priors = priors,
-          config = config,
-          PATHS = PATHS,
-          dir_cal_samples = dirs$cal_samples,
-          dir_cal_simresults = dirs$cal_simresults,
-          param_names_all = param_names_all,
-          param_lookup = param_lookup,
-          sampling_args = sampling_args,
-          io = io_settings,
-          likelihood_settings = likelihood_settings
-        )
-      }, envir = .GlobalEnv)
-      NULL
-    })
+    # Install worker functions using the exported per-run variables. The
+    # installer is reparented to globalenv(), so clusterCall serialises the
+    # function alone rather than the whole run_MOSAIC frame, and the installed
+    # closures resolve config/priors/... from the clusterExport'ed globals.
+    parallel::clusterCall(cl, .mosaic_worker_installer())
   }
 
 
@@ -1441,7 +1424,8 @@ run_MOSAIC <- function(config,
           sim_ids = .mosaic_chunk_ids(sim_ids, shard_batch),
           worker_func = function(sim_ids) .run_sim_worker_chunk(sim_ids),
           cl = cl,
-          show_progress = control$parallel$progress
+          show_progress = control$parallel$progress,
+          unit_runs = shard_batch * n_iterations
         )
       } else if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
@@ -1449,7 +1433,8 @@ run_MOSAIC <- function(config,
           sim_ids = sim_ids,
           worker_func = function(sim_id) .run_sim_worker(sim_id),
           cl = cl,
-          show_progress = control$parallel$progress
+          show_progress = control$parallel$progress,
+          unit_runs = n_iterations
         )
       } else {
         # Sequential. shard_batch_size is honoured here too -- a control setting
@@ -1585,7 +1570,8 @@ run_MOSAIC <- function(config,
           sim_ids = .mosaic_chunk_ids(sim_ids, shard_batch),
           worker_func = function(sim_ids) .run_sim_worker_chunk(sim_ids),
           cl = cl,
-          show_progress = control$parallel$progress
+          show_progress = control$parallel$progress,
+          unit_runs = shard_batch * n_iterations
         )
       } else if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
@@ -1593,7 +1579,8 @@ run_MOSAIC <- function(config,
           sim_ids = sim_ids,
           worker_func = function(sim_id) .run_sim_worker(sim_id),
           cl = cl,
-          show_progress = control$parallel$progress
+          show_progress = control$parallel$progress,
+          unit_runs = n_iterations
         )
       } else {
         # Sequential. shard_batch_size is honoured here too -- a control setting
