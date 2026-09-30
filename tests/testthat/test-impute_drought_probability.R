@@ -107,3 +107,112 @@ testthat::test_that("errors when a required column is missing", {
           "missing required column"
      )
 })
+
+
+testthat::test_that("predictions follow the input rows when the input is not sorted (review data-pipeline-06)", {
+     d <- .mk_synth_drought()
+     out_sorted <- MOSAIC::impute_drought_probability(d, diagnostics = FALSE, verbose = FALSE)
+     set.seed(11L)
+     perm <- sample.int(nrow(d))
+     out_shuf <- MOSAIC::impute_drought_probability(d[perm, , drop = FALSE],
+                                               diagnostics = FALSE, verbose = FALSE)
+     for (col in c("drought_prob", "drought_prob_26w_mean")) {
+          # Row k of the shuffled output is row perm[k] of the sorted input
+          testthat::expect_equal(out_shuf[[col]], out_sorted[[col]][perm])
+     }
+})
+
+
+testthat::test_that("local-climate predictors never overlap the label window (review data-pipeline-07a)", {
+     d <- .mk_synth_drought()
+     base <- MOSAIC::impute_drought_probability(d, diagnostics = FALSE, verbose = FALSE)
+     # Perturb the concurrent local-climate columns in each country's final 11
+     # weeks. Those values can only enter the fit as predictors for rows that
+     # lie sustain_weeks (12) later -- which do not exist -- so a leakage-free
+     # model is unchanged. A model using concurrent precip/temp would refit.
+     d2 <- d
+     last11 <- unlist(lapply(split(seq_len(nrow(d2)), d2$iso_code), function(ix)
+          utils::tail(ix[order(d2$date[ix])], 11L)))
+     d2$precip_sum_12w[last11] <- d2$precip_sum_12w[last11] * 5
+     d2$precip_anom[last11]    <- d2$precip_anom[last11] + 3
+     d2$temp_anom[last11]      <- d2$temp_anom[last11] - 3
+     pert <- MOSAIC::impute_drought_probability(d2, diagnostics = FALSE, verbose = FALSE)
+     testthat::expect_equal(pert$drought_prob, base$drought_prob)
+})
+
+
+testthat::test_that("the GAM is never fit on rows after climate_obs_stop (review data-pipeline-07c)", {
+     d <- .mk_synth_drought()
+     stop_date <- as.Date("2019-06-30")
+     base <- MOSAIC::impute_drought_probability(d, climate_obs_stop = stop_date,
+                                                diagnostics = FALSE, verbose = FALSE)
+     # Rewrite the "projected" climate after the stop so its drought labels flip
+     d2 <- d
+     fut <- d2$date > stop_date
+     d2$spei_approx[fut] <- -d2$spei_approx[fut]
+     pert <- MOSAIC::impute_drought_probability(d2, climate_obs_stop = stop_date,
+                                                diagnostics = FALSE, verbose = FALSE)
+     testthat::expect_equal(pert$drought_prob, base$drought_prob)
+})
+
+
+testthat::test_that("a per-country horizon caps each country's fit at its own date (review data-pipeline-07c)", {
+     d <- .mk_synth_drought()
+     h <- as.Date(c(A = "2019-06-30", B = "2018-12-31"))
+     base <- MOSAIC::impute_drought_probability(d, climate_obs_stop = h,
+                                                diagnostics = FALSE, verbose = FALSE)
+     d2 <- d
+     fut <- d2$date > h[d2$iso_code]
+     d2$spei_approx[fut] <- -d2$spei_approx[fut]
+     pert <- MOSAIC::impute_drought_probability(d2, climate_obs_stop = h,
+                                                diagnostics = FALSE, verbose = FALSE)
+     testthat::expect_equal(pert$drought_prob, base$drought_prob)
+     testthat::expect_equal(MOSAIC:::.drought_row_horizon(h, c("B", "A", "Z")),
+                            as.Date(c("2018-12-31", "2019-06-30", NA)))
+     testthat::expect_error(MOSAIC:::.drought_row_horizon(as.Date(NA), "A"), "non-NA")
+})
+
+
+testthat::test_that("the default fit does not depend on the run date and NA dates never enter the fit", {
+     testthat::expect_null(formals(MOSAIC::impute_drought_probability)$climate_obs_stop)
+     d <- .mk_synth_drought()
+     d$date[c(3L, 400L)] <- NA
+     msgs <- testthat::capture_messages(
+          out <- MOSAIC::impute_drought_probability(d, climate_obs_stop = as.Date("2019-06-30"),
+                                                    diagnostics = FALSE, verbose = TRUE))
+     act <- grep("active fraction", msgs, value = TRUE)
+     testthat::expect_length(act, 1L)
+     testthat::expect_false(grepl("NA", act))
+     testthat::expect_false(anyNA(out$drought_prob[!is.na(d$date)]))
+})
+
+
+testthat::test_that(".drought_climate_obs_stop takes the earlier of ERA5 end and observed ENSO/IOD end", {
+     tmp <- withr::local_tempdir()
+     enso_dir <- file.path(tmp, "ENSO"); dir.create(enso_dir)
+     enso <- data.frame(
+          variable    = c("ENSO34", "ENSO34", "IOD", "IOD", "IOD"),
+          data_source = c("historical", "forecast", "historical", "observed", "forecast"),
+          date_start  = c("2026-08-24", "2026-09-28", "2026-05-25", "2026-08-10", "2026-12-28"),
+          date_stop   = c("2026-08-30", "2026-10-04", "2026-05-31", "2026-08-16", "2027-01-03"))
+     utils::write.csv(enso, file.path(enso_dir, "enso_weekly.csv"), row.names = FALSE)
+     hist <- file.path(tmp, "om", "data", "historical")
+     for (x in list(c("AGO", "2026-07-31"), c("KEN", "2026-09-20"))) {
+          dir.create(file.path(hist, x[1]), recursive = TRUE)
+          arrow::write_parquet(data.frame(date = as.Date(x[2]) - 0:3),
+                               file.path(hist, x[1], sprintf("historical_%s_2026-07.parquet", x[1])))
+          arrow::write_parquet(data.frame(date = as.Date("2000-01-01")),
+                               file.path(hist, x[1], sprintf("historical_%s_2000-01.parquet", x[1])))
+     }
+     PATHS <- list(DATA_ENSO = enso_dir, OPEN_METEO_REPO = file.path(tmp, "om"))
+     h <- MOSAIC:::.drought_climate_obs_stop(PATHS)
+     # IOD observed ends 2026-08-16 (forecast rows ignored); AGO's ERA5 ends earlier
+     testthat::expect_equal(h, as.Date(c(AGO = "2026-07-31", KEN = "2026-08-16")))
+
+     PATHS$OPEN_METEO_REPO <- file.path(tmp, "absent")
+     testthat::expect_warning(h2 <- MOSAIC:::.drought_climate_obs_stop(PATHS), "teleconnection horizon")
+     testthat::expect_equal(h2, as.Date("2026-08-16"))
+     PATHS$DATA_ENSO <- file.path(tmp, "absent")
+     testthat::expect_warning(h3 <- MOSAIC:::.drought_climate_obs_stop(PATHS), "horizon unknown")
+     testthat::expect_null(h3)
+})

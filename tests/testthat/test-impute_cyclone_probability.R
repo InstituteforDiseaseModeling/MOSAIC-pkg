@@ -75,3 +75,17 @@ testthat::test_that("errors when a required predictor is missing", {
           "missing required column"
      )
 })
+
+
+testthat::test_that("predictions follow the input rows when the input is not sorted (review data-pipeline-06)", {
+     d <- .mk_synth_cyclone()
+     out_sorted <- MOSAIC::impute_cyclone_probability(d, diagnostics = FALSE, verbose = FALSE)
+     set.seed(11L)
+     perm <- sample.int(nrow(d))
+     out_shuf <- MOSAIC::impute_cyclone_probability(d[perm, , drop = FALSE],
+                                               diagnostics = FALSE, verbose = FALSE)
+     for (col in c("emdat_cyclone_prob")) {
+          # Row k of the shuffled output is row perm[k] of the sorted input
+          testthat::expect_equal(out_shuf[[col]], out_sorted[[col]][perm])
+     }
+})

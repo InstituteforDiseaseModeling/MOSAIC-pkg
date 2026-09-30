@@ -54,10 +54,52 @@ download_all_country_shapefiles <- function(PATHS) {
           shp_name <- paste(i, "ADM0.shp", sep = "_")
           shp_path <- file.path(path_out, shp_name)
 
-          # Save the shapefile using sf::st_write (overwrite if exists)
-          sf::st_write(shp, shp_path, delete_layer = TRUE)
-          message(paste0("Shapefile saved here: ", shp_path))
+          # Replace the existing shapefile only if its content changed
+          changed <- .write_shapefile_if_changed(shp, shp_path)
+          message(if (changed) paste0("Shapefile saved here: ", shp_path)
+                  else paste0("Shapefile unchanged: ", shp_path))
      }
 
      message("Done.")
+}
+
+
+#' Write a shapefile only when its content differs from the one on disk
+#'
+#' Writes \code{x} to a temporary directory and compares every component file
+#' with the existing one. The dBASE header stores a last-update date (bytes
+#' 2-4), so a byte comparison would report every rewrite as a change; those
+#' bytes are ignored. When nothing else differs the existing files are left
+#' untouched, so a refresh does not dirty the data repository.
+#'
+#' @param x An \code{sf} object.
+#' @param shp_path Destination \code{.shp} path.
+#' @return Invisibly, \code{TRUE} if files were (re)written, \code{FALSE} if unchanged.
+#' @keywords internal
+#' @noRd
+.write_shapefile_if_changed <- function(x, shp_path) {
+     tmp_dir <- tempfile("shp_")
+     dir.create(tmp_dir)
+     on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+     tmp_shp <- file.path(tmp_dir, basename(shp_path))
+     sf::st_write(x, tmp_shp, quiet = TRUE)
+
+     stem <- tools::file_path_sans_ext(basename(shp_path))
+     new_files <- list.files(tmp_dir, pattern = paste0("^", stem, "\\."), full.names = TRUE)
+     old_files <- file.path(dirname(shp_path), basename(new_files))
+
+     read_cmp <- function(f) {
+          b <- readBin(f, "raw", file.info(f)$size)
+          if (tolower(tools::file_ext(f)) == "dbf" && length(b) >= 4L) b[2:4] <- as.raw(0L)
+          b
+     }
+     unchanged <- all(file.exists(old_files)) &&
+          all(vapply(seq_along(new_files), function(i)
+               identical(read_cmp(new_files[i]), read_cmp(old_files[i])), logical(1)))
+     if (unchanged) return(invisible(FALSE))
+
+     dir.create(dirname(shp_path), recursive = TRUE, showWarnings = FALSE)
+     ok <- file.copy(new_files, old_files, overwrite = TRUE)
+     if (!all(ok)) stop("Could not write shapefile components for ", shp_path, call. = FALSE)
+     invisible(TRUE)
 }

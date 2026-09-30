@@ -90,7 +90,8 @@ get_cases_binary <- function(data, cutoff = 1) {
         
         # Step 2: Mark lead-up periods - one week before any outbreak
         # Only mark previous week as suitable if it has actual data (not originally NA)
-        for (i in 2:nrow(country_data)) {
+        # seq.int(..., length.out = ) is empty for short series (2:n counts backwards when n < 2)
+        for (i in seq.int(2L, length.out = max(0L, nrow(country_data) - 1L))) {
             if (!is.na(country_data$cases_binary[i]) && country_data$cases_binary[i] == 1) {
                 # Only mark previous week if it was not originally missing data
                 if (!original_na[i - 1]) {
@@ -102,7 +103,7 @@ get_cases_binary <- function(data, cutoff = 1) {
         # Step 3: Extended lead-up periods for sustained outbreaks
         # Only mark 2-3 weeks prior if they were not originally missing data
         # More conservative for high cutoffs to prevent excessive expansion
-        for (i in 4:nrow(country_data)) {
+        for (i in seq.int(4L, length.out = max(0L, nrow(country_data) - 3L))) {
             if (!is.na(country_data$cases_binary[i]) && !is.na(country_data$cases_binary[i - 1])) {
                 if (country_data$cases_binary[i] == 1 && country_data$cases_binary[i - 1] == 1) {
                     # Check if both weeks had cases above cutoff (not just marked as suitable)

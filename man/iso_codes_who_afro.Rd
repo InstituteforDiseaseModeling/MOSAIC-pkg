@@ -11,7 +11,8 @@ A character vector of ISO3 country codes.
 iso_codes_who_afro
 }
 \description{
-A character vector containing the ISO3 country codes for 47 countries in the WHO African Region (AFRO).
+A character vector of 50 ISO3 country codes: the 47 member states of the WHO African Region (AFRO)
+plus Djibouti, Somalia and Sudan (WHO EMRO members), which are included for continental coverage.
 }
 \examples{
 # Access ISO3 codes for WHO AFRO Region countries

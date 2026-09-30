@@ -13,7 +13,7 @@
 #' \itemize{
 #'   \item \strong{MODEL_INPUT}: Path to the directory where the parameter data frame will be saved.
 #' }
-#' @return A data frame containing the Beta distribution parameters for chi_endemic
+#' @return Invisibly, a data frame containing the Beta distribution parameters for chi_endemic
 #'   (low/all-settings estimate) and chi_epidemic (high/outbreak estimate).
 #' @export
 
@@ -22,14 +22,16 @@ get_suspected_cases <- function(PATHS) {
      # Estimates manually extracted from Weins et al 2023: https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.1004286
      # "Proportion of suspected cases that are true infections" = PPV = chi
 
+     # Each triple is (2.5%, 50%, 97.5%): the published median and 95% interval.
+
      # chi_endemic: Low estimate (all settings) - endemic/inter-outbreak periods
      probs_all <- c(0.24, 0.52, 0.8)
-     prm_all <- propvacc::get_beta_params(quantiles = c(0.0275, 0.5, 0.975),
+     prm_all <- propvacc::get_beta_params(quantiles = c(0.025, 0.5, 0.975),
                                           probs = probs_all)
 
      # chi_epidemic: High estimate (during outbreaks) - epidemic periods
      probs_outbreak <- c(0.40, 0.78, 0.99)
-     prm_outbreak <- propvacc::get_beta_params(quantiles = c(0.0275, 0.5, 0.975),
+     prm_outbreak <- propvacc::get_beta_params(quantiles = c(0.025, 0.5, 0.975),
                                                probs = probs_outbreak)
 
      # Create a parameter data frame with the distribution parameters
@@ -63,5 +65,5 @@ get_suspected_cases <- function(PATHS) {
      param_path <- file.path(PATHS$MODEL_INPUT, "param_chi_suspected_cases.csv")
      utils::write.csv(param_df, param_path, row.names = FALSE)
      message(paste("Parameter data frame for chi (PPV) saved to:", param_path))
-
+     invisible(param_df)
 }

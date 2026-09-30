@@ -28,8 +28,12 @@
 #' label source, so it (and its rolling mean) is \strong{excluded} from the
 #' predictor set -- predicting the label from its own generator would be
 #' trivially circular and would defeat the entire purpose (the lead-time
-#' mapping). The predictors are exogenous ocean-state teleconnections and
-#' antecedent temperature / precipitation-deficit only.
+#' mapping). The same applies to any local-climate series that overlaps the
+#' label's \code{sustain_weeks} window (precipitation and temperature are the
+#' ingredients of \code{spei_approx}), so every local-climate predictor is
+#' lagged by \code{sustain_weeks} weeks: it describes conditions strictly
+#' \emph{before} the label window. The predictors are exogenous ocean-state
+#' teleconnections and genuinely antecedent temperature / precipitation only.
 #'
 #' @param d A data.frame with one row per (iso_code, year, week). Must
 #'   contain the columns returned by
@@ -55,6 +59,7 @@
 #'   is unaffected -- only the GAM fit-row subset is capped. Default
 #'   \code{NULL} = current full-data fit (back-compatible). Only the fit-row
 #'   subset changes; \code{select=TRUE}/fREML/the formula are identical.
+#' @param climate_obs_stop Date/character, or a Date vector named by \code{iso_code}. Last observed-climate date; rows after it are never fit. \code{NULL} (default) = no cap.
 #' @param integrator_col Character. Name of the slow long-memory integrator
 #'   column. Default \code{"drought_prob_26w_mean"}.
 #' @param integrator_weeks Integer. Trailing window (weeks) for the slow
@@ -81,12 +86,16 @@
 #'   \item Antecedent \code{temp_anom} (heat amplifies evaporative demand),
 #'     \code{precip_anom}, and long-window antecedent precipitation
 #'     \code{precip_sum_12w} / \code{precip_sum_24w} (accumulated rainfall
-#'     deficit; 24w computed inline).
+#'     deficit; 24w computed inline), each lagged by \code{sustain_weeks} so it
+#'     ends the week before the label window begins.
 #'   \item \code{s(iso_code_f, bs = "re")} country random effect (baseline
 #'     aridity / drought propensity).
 #' }
 #' The concurrent \code{spei_approx} and its rolling mean are NOT predictors
-#' (label leakage; see the leakage-control note above).
+#' (label leakage; see the leakage-control note above). Fit rows are limited to
+#' \code{date <= climate_obs_stop} (and \code{<= gam_train_stop} when set). A
+#' warning is raised if \code{bam()} reports non-convergence. The output is
+#' returned in the input's row order, whatever that order is.
 #'
 #' \strong{Slow integrator.} Drought is a persistent state whose cholera
 #' relevance accumulates (WASH strain, water-source concentration, migration).
@@ -121,6 +130,7 @@ impute_drought_probability <- function(d,
                                         integrator_col   = "drought_prob_26w_mean",
                                         integrator_weeks = 26L,
                                         gam_train_stop   = NULL,
+                                        climate_obs_stop = NULL,
                                         diagnostics      = TRUE,
                                         diag_dir         = NULL,
                                         verbose          = TRUE) {
@@ -137,7 +147,11 @@ impute_drought_probability <- function(d,
      # ---- Build the sustained-SPEI-deficit label + inline predictors ----
      # spei_approx is used ONLY to build the label; it and its rolling mean
      # are deliberately kept OUT of the predictor set (leakage control).
-     d_aug <- d %>%
+     # .orig_row carries each row's position in `d` through the per-country
+     # sort, so predictions are written back to the rows they belong to.
+     d_aug <- d
+     d_aug$.orig_row <- seq_len(nrow(d))
+     d_aug <- d_aug %>%
           dplyr::group_by(iso_code) %>%
           dplyr::arrange(date, .by_group = TRUE) %>%
           dplyr::mutate(
@@ -150,7 +164,12 @@ impute_drought_probability <- function(d,
                IOD_lag8       = dplyr::lag(IOD,    n = 8),
                IOD_lag16      = dplyr::lag(IOD,    n = 16),
                precip_sum_24w = slider::slide_dbl(precipitation_sum, sum,
-                                                  .before = 23L, .complete = TRUE)
+                                                  .before = 23L, .complete = TRUE),
+               # Local climate lagged past the label window (see leakage control)
+               temp_anom_ante      = dplyr::lag(temp_anom,      n = sustain_weeks),
+               precip_anom_ante    = dplyr::lag(precip_anom,    n = sustain_weeks),
+               precip_sum_12w_ante = dplyr::lag(precip_sum_12w, n = sustain_weeks),
+               precip_sum_24w_ante = dplyr::lag(precip_sum_24w, n = sustain_weeks)
           ) %>%
           dplyr::ungroup()
 
@@ -184,25 +203,34 @@ impute_drought_probability <- function(d,
           s(IOD) +
           s(IOD_lag8) +
           s(IOD_lag16) +
-          # Antecedent temperature / precip deficit (NOT concurrent SPEI)
-          s(temp_anom) +
-          s(precip_anom) +
-          s(precip_sum_12w) +
-          s(precip_sum_24w)
+          # Antecedent temperature / precip, lagged past the label window
+          s(temp_anom_ante) +
+          s(precip_anom_ante) +
+          s(precip_sum_12w_ante) +
+          s(precip_sum_24w_ante)
 
      train_idx <- !is.na(d_aug$drought_active) &
                   !is.na(d_aug$ENSO34_lag24) &
                   !is.na(d_aug$IOD_lag16) &
-                  !is.na(d_aug$precip_sum_24w) &
-                  !is.na(d_aug$temp_anom) &
-                  !is.na(d_aug$precip_anom) &
-                  !is.na(d_aug$precip_sum_12w)
+                  !is.na(d_aug$precip_sum_24w_ante) &
+                  !is.na(d_aug$temp_anom_ante) &
+                  !is.na(d_aug$precip_anom_ante) &
+                  !is.na(d_aug$precip_sum_12w_ante) &
+                  !is.na(d_aug$date)
+     row_date <- as.Date(d_aug$date)
+     # Never fit on projected climate / forecast teleconnections. The horizon
+     # is data-derived by the caller (see .drought_climate_obs_stop), so the
+     # fit depends on the inputs, not on the day the code runs. A country
+     # absent from a per-country horizon has no observed climate: not fit.
+     if (!is.null(climate_obs_stop)) {
+          obs_stop <- .drought_row_horizon(climate_obs_stop, d_aug$iso_code)
+          train_idx <- train_idx & ((row_date <= obs_stop) %in% TRUE)
+     }
      # Leakage gate: restrict the FIT to rows on/before the cutoff when
      # gam_train_stop is supplied. The SPEI-deficit label (built above) and
      # the predict step below are unaffected -- only the fit rows are capped.
      if (!is.null(gam_train_stop)) {
-          train_idx <- train_idx &
-               (as.Date(d_aug$date) <= as.Date(gam_train_stop))
+          train_idx <- train_idx & ((row_date <= as.Date(gam_train_stop)) %in% TRUE)
      }
      train <- d_aug[train_idx, , drop = FALSE]
      if (nrow(train) < 100) {
@@ -222,6 +250,10 @@ impute_drought_probability <- function(d,
           select   = TRUE,
           discrete = TRUE
      )
+     if (!isTRUE(gam_model$converged)) {
+          warning("impute_drought_probability: mgcv::bam() did not converge; ",
+                  "drought probabilities may be unreliable.")
+     }
      if (verbose) {
           message(sprintf("  Deviance explained: %.1f%%",
                           summary(gam_model)$dev.expl * 100))
@@ -250,7 +282,8 @@ impute_drought_probability <- function(d,
      }
      stopifnot(!any(is.na(preds)), all(preds >= 0), all(preds <= 1))
 
-     d[[output_col]] <- preds
+     d[[output_col]] <- NA_real_
+     d[[output_col]][d_aug$.orig_row] <- preds
 
      # ---- Slow long-memory integrator: trailing-window mean of the prob ----
      # Carry a stable original-row index through the group/arrange so the
@@ -259,7 +292,7 @@ impute_drought_probability <- function(d,
      d_tmp <- data.frame(.orig_row = seq_len(nrow(d)),
                          iso_code  = d$iso_code,
                          date      = d$date,
-                         .dp       = preds,
+                         .dp       = d[[output_col]],
                          stringsAsFactors = FALSE)
      d_tmp <- d_tmp %>%
           dplyr::group_by(iso_code) %>%
@@ -406,4 +439,88 @@ impute_drought_probability <- function(d,
        "temp_anom", "precip_anom", "precip_sum_12w", "precipitation_sum",
        # Teleconnections (lags computed inline by the imputer)
        "ENSO34", "IOD")
+}
+
+
+#' Per-row observed-climate horizon for impute_drought_probability()
+#'
+#' @param climate_obs_stop Scalar date, or a date vector named by iso_code.
+#' @param iso Character vector of row iso codes.
+#' @return Date vector, one per row (NA where a named horizon lacks the iso).
+#' @keywords internal
+#' @noRd
+.drought_row_horizon <- function(climate_obs_stop, iso) {
+     h <- as.Date(climate_obs_stop)
+     if (is.null(names(climate_obs_stop))) {
+          if (length(h) != 1L || is.na(h)) {
+               stop("climate_obs_stop must be one non-NA date or a date vector named by iso_code.",
+                    call. = FALSE)
+          }
+          return(rep(h, length(iso)))
+     }
+     names(h) <- names(climate_obs_stop)
+     unname(h[as.character(iso)])
+}
+
+
+#' Data-derived observed-climate horizon for the drought GAM fit
+#'
+#' The weekly suitability panel carries ERA5 observations up to each
+#' country's last ERA5 pull and climate-model projections after it
+#' (process_open_meteo_data splices at era5_max_date), plus ENSO/IOD that turn
+#' from observed into forecast values. This returns, per country, the earlier
+#' of (a) the country's last ERA5 date, read from the newest raw historical
+#' parquet under \code{PATHS$OPEN_METEO_REPO/data/historical/<ISO>/}, and
+#' (b) the last week in which every teleconnection index is observed
+#' (\code{data_source} "historical" or "observed" in
+#' \code{PATHS$DATA_ENSO/enso_weekly.csv}). Both inputs are read, never written.
+#'
+#' @param PATHS List from get_paths().
+#' @return Date vector named by iso_code; a scalar Date if the ERA5 archive is
+#'   not available (teleconnection horizon only, with a warning); NULL (with a
+#'   warning) if neither horizon can be determined.
+#' @keywords internal
+#' @noRd
+.drought_climate_obs_stop <- function(PATHS) {
+     tele <- NA
+     enso_file <- file.path(PATHS$DATA_ENSO %||% "", "enso_weekly.csv")
+     if (file.exists(enso_file)) {
+          e <- utils::read.csv(enso_file, stringsAsFactors = FALSE)
+          if (all(c("variable", "data_source", "date_stop") %in% names(e))) {
+               obs <- e[e$data_source %in% c("historical", "observed"), , drop = FALSE]
+               if (nrow(obs)) {
+                    tele <- min(tapply(as.Date(obs$date_stop), obs$variable, max, na.rm = TRUE))
+                    tele <- as.Date(tele, origin = "1970-01-01")
+               }
+          }
+     }
+
+     era5 <- NULL
+     hist_dir <- file.path(PATHS$OPEN_METEO_REPO %||% "", "data", "historical")
+     if (dir.exists(hist_dir)) {
+          isos <- sort(basename(list.dirs(hist_dir, recursive = FALSE)))
+          era5 <- vapply(isos, function(iso) {
+               f <- sort(list.files(file.path(hist_dir, iso), pattern = "\\.parquet$",
+                                    full.names = TRUE), decreasing = TRUE)
+               if (!length(f)) return(NA_real_)
+               dts <- arrow::read_parquet(f[1L], col_select = "date")$date
+               as.numeric(max(as.Date(dts), na.rm = TRUE))
+          }, numeric(1))
+          era5 <- as.Date(era5[!is.na(era5)], origin = "1970-01-01")
+          if (!length(era5)) era5 <- NULL
+     }
+
+     if (is.null(era5)) {
+          if (is.na(tele)) {
+               warning("Observed-climate horizon unknown (no ERA5 archive, no observed ENSO/IOD); ",
+                       "the drought GAM is fit on every labelled row, projections included.",
+                       call. = FALSE)
+               return(NULL)
+          }
+          warning("ERA5 archive not found at ", hist_dir, "; drought GAM fit capped at the ",
+                  "teleconnection horizon ", format(tele), " only.", call. = FALSE)
+          return(tele)
+     }
+     if (!is.na(tele)) era5[] <- pmin(era5, tele)
+     era5
 }

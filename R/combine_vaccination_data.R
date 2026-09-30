@@ -25,8 +25,11 @@
 #'     - Identifies truly unique WHO campaigns not present in GTFCC
 #'   \item **Data Combination**:
 #'     - Prioritizes GTFCC data (marked as source = "GTFCC")
-#'     - Adds unique WHO campaigns (marked as source = "WHO")
+#'     - Adds unique WHO campaigns (marked as source = "WHO_only")
 #'     - Includes campaigns present in both (marked as source = "GTFCC_WHO_matched")
+#'     - \code{match_confidence} is "high" (Step 1: +/-7 days, +/-5% doses), "medium"
+#'       (Step 2: within the tolerances), "low" (Step 3: +/-30 days, any dose), or
+#'       "GTFCC_only" / "WHO_only"; each GTFCC campaign absorbs at most one WHO campaign
 #'   \item **Quality Assurance**:
 #'     - Validates data structure matches downstream requirements
 #'     - Ensures all required columns are present
@@ -150,18 +153,20 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      message("\nStep 3: Finding date-only matches (\u00B130 days, any dose difference)...")
      date_matches <- data.frame()
      who_matched_date <- logical(nrow(who_data))
-     
-     # Create subset of unmatched GTFCC data
-     gtfcc_unmatched <- gtfcc_data[!gtfcc_matched_exact & !gtfcc_matched_fuzzy, ]
+     gtfcc_matched_date <- logical(nrow(gtfcc_data))
      
      for (i in which(!who_matched_exact & !who_matched_fuzzy)) {
-          if (nrow(gtfcc_unmatched) > 0) {
-               match <- find_matches(who_data[i,], gtfcc_unmatched,
+          # A GTFCC campaign can absorb at most one WHO campaign: recompute the
+          # unmatched pool each time so a consumed campaign is not matched again
+          # (otherwise a second WHO round would be dropped as a duplicate).
+          open_idx <- which(!gtfcc_matched_exact & !gtfcc_matched_fuzzy & !gtfcc_matched_date)
+          if (length(open_idx) > 0) {
+               match <- find_matches(who_data[i,], gtfcc_data[open_idx, ],
                                    date_tol = 30, dose_tol = Inf)
                if (!is.null(match)) {
                     who_matched_date[i] <- TRUE
-                    # Find actual index in original gtfcc_data
-                    actual_idx <- which(gtfcc_data$id == gtfcc_unmatched$id[match$gtfcc_idx])
+                    actual_idx <- open_idx[match$gtfcc_idx]
+                    gtfcc_matched_date[actual_idx] <- TRUE
                     date_matches <- rbind(date_matches,
                                         data.frame(who_idx = i, gtfcc_idx = actual_idx,
                                                  date_diff = match$date_diff,
@@ -187,17 +192,23 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      # Create combined dataset
      message("\nCreating combined dataset...")
      
-     # Start with all GTFCC data
+     # Start with all GTFCC data. Match confidence is recorded on the GTFCC rows
+     # here, by their position in gtfcc_data (the index space the match tables
+     # use), BEFORE the rbind/re-sort below changes row positions.
      combined_data <- gtfcc_data
+     combined_data$match_confidence <- "GTFCC_only"
+     combined_data$match_confidence[gtfcc_matched_date]  <- "low"
+     combined_data$match_confidence[gtfcc_matched_fuzzy] <- "medium"
+     combined_data$match_confidence[gtfcc_matched_exact] <- "high"
      
      # Update source for matched GTFCC campaigns
-     gtfcc_matched_any <- gtfcc_matched_exact | gtfcc_matched_fuzzy | 
-                         (1:nrow(gtfcc_data) %in% date_matches$gtfcc_idx)
+     gtfcc_matched_any <- gtfcc_matched_exact | gtfcc_matched_fuzzy | gtfcc_matched_date
      combined_data$source[gtfcc_matched_any] <- "GTFCC_WHO_matched"
      
      # Add unmatched WHO campaigns
      who_unique <- who_data[who_unmatched, ]
      who_unique$source <- "WHO_only"
+     who_unique$match_confidence <- "WHO_only"
      
      # Ensure column compatibility
      common_cols <- intersect(names(combined_data), names(who_unique))
@@ -209,27 +220,9 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      # Regenerate ID column
      combined_data$id <- 1:nrow(combined_data)
      
-     # Add match confidence column
-     combined_data$match_confidence <- NA
-     combined_data$match_confidence[combined_data$source == "GTFCC"] <- "GTFCC_only"
-     combined_data$match_confidence[combined_data$source == "WHO_only"] <- "WHO_only"
-     
-     # Add confidence levels for matched campaigns
-     if (nrow(exact_matches) > 0) {
-          gtfcc_exact_ids <- combined_data$id[combined_data$source == "GTFCC_WHO_matched" & 
-                                              1:nrow(combined_data) %in% exact_matches$gtfcc_idx]
-          combined_data$match_confidence[combined_data$id %in% gtfcc_exact_ids] <- "high"
-     }
-     if (nrow(fuzzy_matches) > 0) {
-          gtfcc_fuzzy_ids <- combined_data$id[combined_data$source == "GTFCC_WHO_matched" & 
-                                              1:nrow(combined_data) %in% fuzzy_matches$gtfcc_idx]
-          combined_data$match_confidence[combined_data$id %in% gtfcc_fuzzy_ids] <- "medium"
-     }
-     if (nrow(date_matches) > 0) {
-          gtfcc_date_ids <- combined_data$id[combined_data$source == "GTFCC_WHO_matched" & 
-                                            1:nrow(combined_data) %in% date_matches$gtfcc_idx]
-          combined_data$match_confidence[combined_data$id %in% gtfcc_date_ids] <- "low"
-     }
+     # Move match_confidence to the last column (its position before this fix)
+     combined_data <- combined_data[, c(setdiff(names(combined_data), "match_confidence"),
+                                        "match_confidence")]
      
      # Summary statistics
      message("\n==========================================")

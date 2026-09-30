@@ -36,8 +36,11 @@ The function performs intelligent campaign matching using the following approach
 - Identifies truly unique WHO campaigns not present in GTFCC
 \item \strong{Data Combination}:
 - Prioritizes GTFCC data (marked as source = "GTFCC")
-- Adds unique WHO campaigns (marked as source = "WHO")
+- Adds unique WHO campaigns (marked as source = "WHO_only")
 - Includes campaigns present in both (marked as source = "GTFCC_WHO_matched")
+- \code{match_confidence} is "high" (Step 1: +/-7 days, +/-5\% doses), "medium"
+(Step 2: within the tolerances), "low" (Step 3: +/-30 days, any dose), or
+"GTFCC_only" / "WHO_only"; each GTFCC campaign absorbs at most one WHO campaign
 \item \strong{Quality Assurance}:
 - Validates data structure matches downstream requirements
 - Ensures all required columns are present

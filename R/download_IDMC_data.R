@@ -11,9 +11,7 @@
 #'   \code{MOSAIC::iso_codes_mosaic} (the MOSAIC-40).
 #' @param snapshot_date Date stamp for the archive subdirectory. Defaults to
 #'   \code{Sys.Date()}.
-#' @param overwrite If \code{FALSE} (default) and today's snapshot directory
-#'   already exists with files in it, the download is skipped and the existing
-#'   snapshot is reported. Set \code{TRUE} to re-download.
+#' @param overwrite If \code{FALSE} (default), a complete snapshot for \code{snapshot_date} is reported without downloading and a partial one is topped up (existing files kept). \code{TRUE} re-downloads every country.
 #' @param verbose If \code{TRUE} (default), print a per-country progress line
 #'   and a coverage summary.
 #'
@@ -44,7 +42,11 @@
 #' therefore written to a dated subdirectory and never overwritten in place,
 #' mirroring the EM-DAT and WHO-dashboard conventions elsewhere in MOSAIC.
 #' \code{process_IDMC_data()} reads whichever directory it is pointed at, so
-#' pass \code{source_dir} to reprocess a historical snapshot.
+#' pass \code{source_dir} to reprocess a historical snapshot. Each run writes a
+#' \code{MANIFEST.tsv} completion record into the snapshot (per-country
+#' \code{ok}/\code{note}) and appends a row to \code{raw/IDMC/PROVENANCE.md}; the
+#' automatic resolver in \code{process_IDMC_data()} skips snapshots whose
+#' manifest records a failed download.
 #'
 #' \strong{Coverage.} As of 2026-09-17, 38 of the 40 MOSAIC countries have an
 #' HDX IDU dataset; \strong{ERI and TGO have none}. Most series begin
@@ -87,11 +89,13 @@ download_IDMC_data <- function(PATHS,
      iso_codes <- toupper(unique(iso_codes))
 
      snap_dir <- file.path(PATHS$DATA_IDMC_RAW, paste0("hdx_", format(snapshot_date)))
-     if (dir.exists(snap_dir) && length(list.files(snap_dir, pattern = "\\.csv$")) && !overwrite) {
+     # Only a snapshot whose manifest records every requested country as done is
+     # skipped. A partial one (network failure part-way) is topped up: files
+     # already present are kept, only the missing countries are retried.
+     if (!overwrite && .idmc_snapshot_complete(snap_dir, iso_codes)) {
           if (verbose) {
                message(glue::glue(
-                    "Snapshot already exists at {snap_dir} ",
-                    "({length(list.files(snap_dir, pattern = '\\\\.csv$'))} files). ",
+                    "Complete snapshot already exists at {snap_dir}. ",
                     "Pass overwrite = TRUE to re-download."))
           }
           return(invisible(.idmc_snapshot_summary(snap_dir, iso_codes)))
@@ -107,16 +111,24 @@ download_IDMC_data <- function(PATHS,
                               file = NA_character_, note = NA_character_,
                               stringsAsFactors = FALSE)
 
-          url <- tryCatch(.idmc_hdx_resource_url(iso), error = function(e) NULL)
-          if (is.null(url)) {
-               blank$note <- "no HDX dataset"
-               if (verbose) message(glue::glue("  {iso}: no HDX IDU dataset"))
+          # Only a definite not-found from HDX is a genuine absence (counted as
+          # done in the manifest). A transport or parse failure is a failed
+          # download (ok = FALSE), so the snapshot stays partial and the next
+          # run retries that country instead of freezing it out.
+          hdx <- .idmc_hdx_resource_url(iso)
+          if (is.null(hdx$url)) {
+               blank$note <- hdx$note
+               if (verbose) {
+                    message(glue::glue(if (hdx$absent) "  {iso}: no HDX IDU dataset"
+                                       else "  {iso}: HDX lookup FAILED ({hdx$note})"))
+               }
                return(blank)
           }
+          url <- hdx$url
 
           dest <- file.path(snap_dir, sprintf("%s_idmc_idu_events.csv", tolower(iso)))
           dl <- .mosaic_download(
-               url, dest, min_bytes = 1L, overwrite = TRUE, verbose = FALSE,
+               url, dest, min_bytes = 1L, overwrite = overwrite, verbose = FALSE,
                # reject an HTML error page served with HTTP 200
                validate = function(f) {
                     h <- readLines(f, n = 1L, warn = FALSE)
@@ -152,6 +164,20 @@ download_IDMC_data <- function(PATHS,
 
      out <- do.call(rbind, out)
 
+     # Completion manifest (read by .idmc_snapshot_complete / .idmc_latest_snapshot)
+     # and one provenance row per snapshot run.
+     .write_file_atomic(file.path(snap_dir, .IDMC_MANIFEST), function(tmp) {
+          utils::write.table(out[, c("iso_code", "ok", "n_events", "note")], tmp,
+                             sep = "\t", row.names = FALSE, quote = FALSE, na = "")
+     })
+     .append_raw_provenance(
+          PATHS$DATA_IDMC_RAW, snap_dir, sum(out$n_events, na.rm = TRUE), NA_integer_,
+          sprintf("HDX <iso>-idmc-idu-events CSV mirrors; %d/%d countries ok%s.",
+                  sum(out$ok), nrow(out),
+                  if (any(!out$ok)) paste0("; missing: ", paste(out$iso_code[!out$ok], collapse = ","))
+                  else ""),
+          snapshot_date, title = "IDMC IDU snapshot provenance log")
+
      if (verbose) {
           got  <- sum(out$ok, na.rm = TRUE)
           miss <- out$iso_code[!out$ok]
@@ -166,7 +192,18 @@ download_IDMC_data <- function(PATHS,
 }
 
 
+#' Manifest note that marks a country as genuinely absent from HDX
+#' @keywords internal
+#' @noRd
+.IDMC_ABSENT_NOTE <- "no HDX dataset"
+
+
 #' Resolve the current HDX CSV download URL for one country's IDU dataset
+#'
+#' Returns \code{list(url, absent, note)}. \code{url} is non-NULL on success.
+#' \code{absent = TRUE} only for a definite not-found (HTTP 404, or HDX
+#' answering \code{success = false}); every transport, HTTP or parse failure
+#' returns \code{absent = FALSE} with the error in \code{note}.
 #'
 #' @keywords internal
 #' @noRd
@@ -174,20 +211,37 @@ download_IDMC_data <- function(PATHS,
      api <- sprintf(
           "https://data.humdata.org/api/3/action/package_show?id=%s-idmc-idu-events",
           tolower(iso))
-     txt <- suppressWarnings(tryCatch(
-          paste(readLines(api, warn = FALSE), collapse = ""),
-          error = function(e) NULL))
-     if (is.null(txt)) stop("HDX lookup failed for ", iso, call. = FALSE)
+     resp <- tryCatch(httr::GET(api, httr::timeout(60)), error = function(e) e)
+     if (inherits(resp, "error")) {
+          return(.idmc_classify_hdx_response(NA_integer_, NULL, conditionMessage(resp)))
+     }
+     .idmc_classify_hdx_response(httr::status_code(resp),
+                                 httr::content(resp, as = "text", encoding = "UTF-8"))
+}
 
-     js <- jsonlite::fromJSON(txt, simplifyVector = TRUE)
-     if (!isTRUE(js$success)) stop("HDX returned success=false for ", iso, call. = FALSE)
 
+#' Classify one HDX package_show response (see .idmc_hdx_resource_url)
+#'
+#' @keywords internal
+#' @noRd
+.idmc_classify_hdx_response <- function(status, body, transport_error = NULL) {
+     fail <- function(note) list(url = NULL, absent = FALSE, note = note)
+     if (!is.null(transport_error)) return(fail(paste("HDX lookup failed:", transport_error)))
+     if (identical(as.integer(status), 404L)) {
+          return(list(url = NULL, absent = TRUE, note = .IDMC_ABSENT_NOTE))
+     }
+     if (is.na(status) || status >= 400L) return(fail(paste("HDX lookup HTTP", status)))
+     js <- tryCatch(jsonlite::fromJSON(body, simplifyVector = TRUE), error = function(e) NULL)
+     if (is.null(js) || !is.list(js)) return(fail("HDX response not parseable JSON"))
+     if (identical(js$success, FALSE)) {
+          return(list(url = NULL, absent = TRUE, note = .IDMC_ABSENT_NOTE))
+     }
+     if (!isTRUE(js$success)) return(fail("HDX response has no success flag"))
      res <- js$result$resources
-     if (is.null(res) || !nrow(res)) stop("no resources for ", iso, call. = FALSE)
-
+     if (!is.data.frame(res) || !nrow(res)) return(fail("HDX dataset has no resources"))
      csv <- res[tolower(res$format) == "csv", , drop = FALSE]
-     if (!nrow(csv)) stop("no CSV resource for ", iso, call. = FALSE)
-     csv$url[1L]
+     if (!nrow(csv)) return(fail("HDX dataset has no CSV resource"))
+     list(url = csv$url[1L], absent = FALSE, note = NA_character_)
 }
 
 
@@ -220,4 +274,35 @@ download_IDMC_data <- function(PATHS,
                      date_max = if (length(dts)) format(max(dts)) else NA_character_,
                      file = f, note = NA_character_, stringsAsFactors = FALSE)
      }))
+}
+
+
+#' File name of the per-snapshot IDMC completion manifest
+#' @keywords internal
+#' @noRd
+.IDMC_MANIFEST <- "MANIFEST.tsv"
+
+
+#' Is an IDMC snapshot complete?
+#'
+#' Complete means a \code{MANIFEST.tsv} exists and every row is either a
+#' successful download or a country with no HDX dataset (a genuine absence).
+#' When \code{iso_codes} is given, every one of them must be in the manifest.
+#' Snapshots written before manifests existed have none and are treated as
+#' complete only by the resolver (\code{legacy_ok = TRUE}), never by the
+#' downloader's skip guard.
+#'
+#' @keywords internal
+#' @noRd
+.idmc_snapshot_complete <- function(snap_dir, iso_codes = NULL, legacy_ok = FALSE) {
+     if (!dir.exists(snap_dir)) return(FALSE)
+     f <- file.path(snap_dir, .IDMC_MANIFEST)
+     if (!file.exists(f)) return(isTRUE(legacy_ok))
+     m <- tryCatch(utils::read.delim(f, stringsAsFactors = FALSE, na.strings = ""),
+                   error = function(e) NULL)
+     if (is.null(m) || !all(c("iso_code", "ok", "note") %in% names(m))) return(FALSE)
+     done <- as.logical(m$ok) | (!is.na(m$note) & m$note == .IDMC_ABSENT_NOTE)
+     done[is.na(done)] <- FALSE
+     if (!is.null(iso_codes) && !all(toupper(iso_codes) %in% m$iso_code[done])) return(FALSE)
+     all(done)
 }

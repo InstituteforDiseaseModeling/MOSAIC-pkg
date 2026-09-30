@@ -15,7 +15,7 @@
 #'   the four MOSAIC consumes; see \code{\link{MOSAIC_WB_INDICATORS}}.
 #' @param snapshot_date Date stamp for the output filenames. Defaults to today.
 #' @param overwrite If \code{FALSE} (default), an indicator whose file for
-#'   \code{snapshot_date} already exists is skipped.
+#'   \code{snapshot_date} already exists is skipped; \code{TRUE} replaces that dated file (use only to repair a bad snapshot).
 #' @param per_page API page size (default 20000; the API caps near 32767).
 #' @param verbose Print progress and a summary.
 #'
@@ -33,7 +33,8 @@
 #' \code{process_WB_*_data()} functions select the newest match for their
 #' indicator. Existing hand-downloaded portal exports are left in place and
 #' still readable -- an API pull simply outranks them by date. Nothing is
-#' deleted.
+#' deleted. Each file is written atomically (temporary file, then rename) and
+#' logged as one row in \code{raw/world_bank/PROVENANCE.md}.
 #'
 #' \strong{All countries are fetched}, not just the MOSAIC-40: the processors
 #' do their own ISO filtering, and keeping the full panel means the raw file
@@ -122,6 +123,13 @@ download_WB_data <- function(PATHS,
                              attr(recs, "lastupdated") %||% format(snapshot_date))
 
           yrs <- suppressWarnings(as.integer(sub("^X", "", grep("^X?[0-9]{4}$", names(wide), value = TRUE))))
+          .append_raw_provenance(
+               file.path(PATHS$DATA_RAW, "world_bank"), file.path(subdir, basename(dest)),
+               nrow(wide), ncol(wide),
+               sprintf("World Bank Indicators API v2, indicator %s, all countries, %d-%d; WB lastupdated %s.",
+                       code, min(yrs, na.rm = TRUE), max(yrs, na.rm = TRUE),
+                       attr(recs, "lastupdated") %||% "NA"),
+               snapshot_date, title = "World Bank API snapshot provenance log")
           res <- data.frame(indicator = code, subdir = subdir, ok = TRUE,
                             n_countries = nrow(wide),
                             year_min = min(yrs, na.rm = TRUE),
@@ -252,13 +260,17 @@ MOSAIC_WB_INDICATORS <- c(
 #' @keywords internal
 #' @noRd
 .wb_write_bulk_csv <- function(wide, dest, snapshot_date) {
-     con <- file(dest, "w", encoding = "UTF-8")
-     on.exit(close(con), add = TRUE)
-     writeLines(c('"Data Source","World Development Indicators",',
-                  '',
-                  sprintf('"Last Updated Date","%s",', as.character(snapshot_date)),
-                  ''), con)
-     utils::write.csv(wide, con, row.names = FALSE, na = "")
+     # Atomic: a crash mid-write must not leave a truncated dated file that the
+     # newest-wins resolver would then select.
+     .write_file_atomic(dest, function(tmp) {
+          con <- file(tmp, "w", encoding = "UTF-8")
+          on.exit(close(con), add = TRUE)
+          writeLines(c('"Data Source","World Development Indicators",',
+                       '',
+                       sprintf('"Last Updated Date","%s",', as.character(snapshot_date)),
+                       ''), con)
+          utils::write.csv(wide, con, row.names = FALSE, na = "")
+     })
      invisible(dest)
 }
 
@@ -267,8 +279,13 @@ MOSAIC_WB_INDICATORS <- c(
 #'
 #' Both layouts live side by side in \code{raw/world_bank/<subdir>/}: portal
 #' exports (\code{API_<CODE>_DS2_en_csv_v2_<vintage>.csv}) and API pulls
-#' (\code{..._api_<date>.csv}). Ranking is by file mtime, because the portal's
-#' trailing number is an opaque vintage id, not a date, and cannot be ordered.
+#' (\code{..._api_<date>.csv}). Candidates are ranked by
+#' \code{.rank_raw_candidates()}: any file with a \code{YYYY-MM-DD} date in its
+#' name outranks every undated file, dated files are ordered by that date, and
+#' mtime is used only among undated files (the portal's trailing number is an
+#' opaque vintage id, not a date). Consequence: a hand-downloaded portal export
+#' never beats an API pull, however new -- to use one, rename it with a date
+#' (e.g. \code{..._api_<YYYY-MM-DD>.csv}) or remove the older API pull.
 #'
 #' @param PATHS Paths list providing \code{DATA_RAW}.
 #' @param subdir Subdirectory under \code{raw/world_bank/}.

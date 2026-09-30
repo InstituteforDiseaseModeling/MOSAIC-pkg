@@ -65,10 +65,6 @@ process_UN_demographics_data <- function(PATHS) {
 
      d_population <- dplyr::distinct(d_population)
 
-     if (F) {
-          plot(d_population$year, d_population$total_population, col = factor(d_population$iso_code), main = "Total Population Over Time", xlab = "Year", ylab = "Total Population")
-     }
-
      # Process birth rate data
      d_birth_rate <- data.frame(iso_code = d_birth_rate$Iso3,
                                 year = d_birth_rate$Time,
@@ -76,20 +72,12 @@ process_UN_demographics_data <- function(PATHS) {
 
      d_birth_rate <- dplyr::distinct(d_birth_rate)
 
-     if (F) {
-          plot(d_birth_rate$year, d_birth_rate$births_per_1000, col = factor(d_birth_rate$iso_code), main = "Birth Rate Over Time", xlab = "Year", ylab = "Births per 1000")
-     }
-
      # Process death rate data
      d_death_rate <- data.frame(iso_code = d_death_rate$Iso3,
                                 year = d_death_rate$Time,
                                 deaths_per_1000 = d_death_rate$Value)
 
      d_death_rate <- dplyr::distinct(d_death_rate)
-
-     if (F) {
-          plot(d_death_rate$year, d_death_rate$deaths_per_1000, col = factor(d_death_rate$iso_code), main = "Death Rate Over Time", xlab = "Year", ylab = "Deaths per 1000")
-     }
 
      # Merge data frames
      message("Cleaning and merging into one data frame...")

@@ -25,8 +25,11 @@
 #'   \item Split \code{epiweek} (e.g. "2017-15") into \code{year} and \code{week}.
 #'   \item Create \code{date_start} (Monday) and \code{date_stop} (Sunday) for each ISO week via \code{ISOweek::ISOweek2date()}.
 #'   \item Compute \code{month} from \code{date_start} using \code{lubridate::month()}.
-#'   \item Define \code{cases} using suspected (\code{sCh}) if present, else confirmed (\code{cCh}), defaulting to 0.
-#'   \item Define \code{deaths} (zero if \code{NA}).
+#'   \item Define \code{cases} using suspected (\code{sCh}) if present, else confirmed (\code{cCh}), else \code{NA}.
+#'   \item Keep \code{deaths} as reported; a missing death count stays \code{NA} (it is
+#'     not an observed zero -- about three quarters of country-level rows in the OSF
+#'     archive carry no death count).
+#'   \item Drop rows where both \code{cases} and \code{deaths} are \code{NA} (no observation).
 #'   \item Save a data.frame with columns:
 #'     \code{country, iso_code, year, month, week, date_start, date_stop, cases, deaths}.
 #' }
@@ -78,10 +81,12 @@ process_JHU_weekly_data <- function(PATHS) {
      # month of week-start
      data$month <- lubridate::month(data$date_start)
 
-     # define cases and deaths
-     data$cases  <- ifelse(!is.na(data$sCh), data$sCh,
-                           ifelse(!is.na(data$cCh), data$cCh, 0))
-     data$deaths <- ifelse(is.na(data$deaths), 0, data$deaths)
+     # define cases and deaths. Missing stays NA: a fabricated zero would count as a
+     # complete observation in process_cholera_surveillance_data()'s completeness
+     # tie-break and enter the fit target at full trust.
+     data$cases  <- ifelse(!is.na(data$sCh), data$sCh, data$cCh)
+     data$deaths <- as.numeric(data$deaths)
+     data <- data[!(is.na(data$cases) & is.na(data$deaths)), ]
 
      # select and order columns
      d <- data[, c(
@@ -89,7 +94,6 @@ process_JHU_weekly_data <- function(PATHS) {
           "date_start", "date_stop", "cases", "deaths"
      )]
 
-     print(head(d))
      message("Latest observation: ", max(d$date_stop, na.rm = TRUE))
 
      processed_data_path <- file.path(
@@ -98,4 +102,5 @@ process_JHU_weekly_data <- function(PATHS) {
      )
      utils::write.csv(d, file = processed_data_path, row.names = FALSE)
      message("Processed JHU weekly cholera data saved to: ", processed_data_path)
+     invisible(NULL)
 }

@@ -17,7 +17,7 @@ get_WHO_vaccination_data(PATHS)
 }}
 }
 \value{
-A data frame containing the processed WHO vaccination request data. The function also prints summary information,
+Invisibly, a data frame containing the processed WHO vaccination request data. The function also prints summary information,
 including the total number of observations, total requested doses, approved doses, shipped doses, and the start and end dates of the requests.
 }
 \description{
@@ -33,7 +33,9 @@ The function performs the following steps:
 \item Extracts relevant columns such as Year, Country, Request Number, Status, Context, Decision Date, Doses Requested, Approved, and Shipped.
 \item Handles missing values and checks for duplicated rows, removing duplicates and printing which rows were removed.
 \item Summarizes the data, printing the total number of observations, total doses requested, approved, and shipped, as well as the first and last decision dates.
-\item Saves the processed vaccination data to a CSV file in the location specified by the \code{PATHS} argument.
+\item Saves the table as a new dated snapshot \code{who_vaccination_data_snapshot_<date>.csv} under
+\code{PATHS$DATA_SCRAPE_WHO_VACCINATION} (atomically, logged in \code{PROVENANCE.md}), only when its
+content differs from the newest existing file. Existing files are never modified.
 }
 }
 \examples{
