@@ -27,9 +27,7 @@ download_IDMC_data(
 \item{snapshot_date}{Date stamp for the archive subdirectory. Defaults to
 \code{Sys.Date()}.}
 
-\item{overwrite}{If \code{FALSE} (default) and today's snapshot directory
-already exists with files in it, the download is skipped and the existing
-snapshot is reported. Set \code{TRUE} to re-download.}
+\item{overwrite}{If \code{FALSE} (default), a complete snapshot for \code{snapshot_date} is reported without downloading and a partial one is topped up (existing files kept). \code{TRUE} re-downloads every country.}
 
 \item{verbose}{If \code{TRUE} (default), print a per-country progress line
 and a coverage summary.}
@@ -68,7 +66,11 @@ provisional} product: records age out and figures are revised. Snapshots are
 therefore written to a dated subdirectory and never overwritten in place,
 mirroring the EM-DAT and WHO-dashboard conventions elsewhere in MOSAIC.
 \code{process_IDMC_data()} reads whichever directory it is pointed at, so
-pass \code{source_dir} to reprocess a historical snapshot.
+pass \code{source_dir} to reprocess a historical snapshot. Each run writes a
+\code{MANIFEST.tsv} completion record into the snapshot (per-country
+\code{ok}/\code{note}) and appends a row to \code{raw/IDMC/PROVENANCE.md}; the
+automatic resolver in \code{process_IDMC_data()} skips snapshots whose
+manifest records a failed download.
 
 \strong{Coverage.} As of 2026-09-17, 38 of the 40 MOSAIC countries have an
 HDX IDU dataset; \strong{ERI and TGO have none}. Most series begin

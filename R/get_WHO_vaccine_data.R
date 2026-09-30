@@ -13,7 +13,7 @@
 #' @source The data used by this function is sourced from the WHO ICG (International Coordinating Group on Vaccine Provision) dashboard,
 #' which can be accessed via the following Power BI link: \url{https://app.powerbi.com/view?r=eyJrIjoiYmFmZTBmM2EtYWM3Mi00NWYwLTg3YjgtN2Q0MjM5ZmE1ZjFkIiwidCI6ImY2MTBjMGI3LWJkMjQtNGIzOS04MTBiLTNkYzI4MGFmYjU5MCIsImMiOjh9}
 #'
-#' @return A data frame containing the processed WHO vaccination request data. The function also prints summary information,
+#' @return Invisibly, a data frame containing the processed WHO vaccination request data. The function also prints summary information,
 #' including the total number of observations, total requested doses, approved doses, shipped doses, and the start and end dates of the requests.
 #'
 #' @details
@@ -23,7 +23,8 @@
 #'   \item Extracts relevant columns such as Year, Country, Request Number, Status, Context, Decision Date, Doses Requested, Approved, and Shipped.
 #'   \item Handles missing values and checks for duplicated rows, removing duplicates and printing which rows were removed.
 #'   \item Summarizes the data, printing the total number of observations, total doses requested, approved, and shipped, as well as the first and last decision dates.
-#'   \item Saves the processed vaccination data to a CSV file in the location specified by the \code{PATHS} argument.
+#'   \item Saves the processed vaccination data to a CSV file in the location specified by the \code{PATHS} argument,
+#'     atomically, and only when its content differs from the file already there.
 #' }
 #'
 #' @examples
@@ -415,9 +416,22 @@ message("Processing raw text")
      message("Total doses approved: ", sum(who_data$doses_approved, na.rm = TRUE))
      message("Total doses shipped: ", sum(who_data$doses_shipped, na.rm = TRUE))
 
+     # The table is rebuilt from the strings above, so every run produces the same
+     # bytes unless this function's data changed. Leave the existing file untouched
+     # when identical, and replace it atomically otherwise.
      data_path <- file.path(PATHS$DATA_SCRAPE_WHO_VACCINATION, "who_vaccination_data.csv")
-     write.csv(who_data, data_path, row.names = FALSE)
-     message(paste("Raw vaccination data saved to:", data_path))
+     tmp <- tempfile(fileext = ".csv")
+     on.exit(unlink(tmp), add = TRUE)
+     utils::write.csv(who_data, tmp, row.names = FALSE)
+     if (file.exists(data_path) &&
+         identical(unname(tools::md5sum(tmp)), unname(tools::md5sum(data_path)))) {
+          message(paste("WHO vaccination data unchanged; kept:", data_path))
+     } else {
+          .write_file_atomic(data_path, function(t) file.copy(tmp, t, overwrite = TRUE))
+          message(paste("WHO vaccination data saved to:", data_path))
+     }
+
+     invisible(who_data)
 
 }
 

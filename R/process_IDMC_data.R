@@ -77,6 +77,12 @@
 #' }
 #'
 #' @details
+#' Only rows with \code{role == "Recommended figure"} are used; IDU
+#' \code{"Triangulation"} rows are alternative estimates of displacement the
+#' recommended rows already count (IDMC totals use recommended figures only),
+#' so including them would double-count. Rows from extracts without a
+#' \code{role} column are kept.
+#'
 #' Each event is expanded across the ISO-weeks its
 #' \code{displacement_start_date}:\code{displacement_end_date} range touches.
 #' Records missing a start date are dropped; a missing or earlier end date is
@@ -131,12 +137,23 @@ process_IDMC_data <- function(PATHS, source_dir = NULL, panel_start = "2000-01-0
                warning("Skipping ", basename(f), " (missing: ", paste(miss, collapse = ", "), ")")
                return(NULL)
           }
-          keep <- c(req, "displacement_end_date", "id", "event_name", "type", "subtype")
+          keep <- c(req, "displacement_end_date", "id", "event_name", "type", "subtype", "role")
           x <- x[, intersect(keep, names(x)), drop = FALSE]
           for (cc in setdiff(keep, names(x))) x[[cc]] <- NA
           x[, keep, drop = FALSE]
      }))
      if (is.null(d) || nrow(d) == 0) stop("No usable IDU records after reading ", src)
+
+     # IDU publishes each displacement once as a "Recommended figure"; rows with
+     # role "Triangulation" are secondary estimates of displacement the
+     # recommended rows already cover. Summing both double-counts, so only
+     # recommended figures (or rows from extracts without a role column) count.
+     is_triang <- !is.na(d$role) & d$role != "Recommended figure"
+     if (any(is_triang)) {
+          message(glue::glue("  Dropped {sum(is_triang)} non-recommended (e.g. Triangulation) row(s)"))
+          d <- d[!is_triang, , drop = FALSE]
+     }
+     if (nrow(d) == 0) stop("No 'Recommended figure' IDU records in ", src)
 
      # Per-country mirrors and a global export can overlap -> de-duplicate on event id
      if ("id" %in% names(d)) {
@@ -254,11 +271,15 @@ process_IDMC_data <- function(PATHS, source_dir = NULL, panel_start = "2000-01-0
 }
 
 
-#' Resolve the newest dated IDU snapshot directory
+#' Resolve the newest complete dated IDU snapshot directory
 #'
 #' \code{download_IDMC_data()} writes \code{hdx_<date>/} subdirectories. Pick
-#' the newest by name (ISO dates sort lexicographically). Falls back to the
-#' raw root itself so a flat directory of CSVs still works.
+#' the newest by name (ISO dates sort lexicographically) among snapshots that
+#' are complete -- a \code{MANIFEST.tsv} recording no failed download, or no
+#' manifest at all (snapshots predating manifests). A newer partial snapshot is
+#' skipped with a warning so it cannot silently replace a complete older one;
+#' if no snapshot is complete the newest is used, with a warning. Falls back to
+#' the raw root itself so a flat directory of CSVs still works.
 #'
 #' @keywords internal
 #' @noRd
@@ -269,7 +290,20 @@ process_IDMC_data <- function(PATHS, source_dir = NULL, panel_start = "2000-01-0
      snaps <- snaps[vapply(snaps, function(d)
           length(list.files(d, pattern = "\\.csv$", ignore.case = TRUE)) > 0L, logical(1))]
      if (!length(snaps)) return(raw_dir)
-     newest <- snaps[order(basename(snaps), decreasing = TRUE)][1L]
+     snaps <- snaps[order(basename(snaps), decreasing = TRUE)]
+     complete <- vapply(snaps, .idmc_snapshot_complete, logical(1), legacy_ok = TRUE)
+     if (!any(complete)) {
+          warning("No complete IDU snapshot under ", raw_dir, "; using partial ",
+                  basename(snaps[1L]), " (see its MANIFEST.tsv).", call. = FALSE)
+          return(snaps[1L])
+     }
+     newest <- snaps[complete][1L]
+     skipped <- snaps[seq_len(which(complete)[1L] - 1L)]
+     if (length(skipped)) {
+          warning("Skipping partial IDU snapshot(s) ", paste(basename(skipped), collapse = ", "),
+                  " (failed downloads in MANIFEST.tsv); using ", basename(newest), ".",
+                  call. = FALSE)
+     }
      message("  Using newest IDU snapshot: ", basename(newest))
      newest
 }

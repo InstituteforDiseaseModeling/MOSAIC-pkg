@@ -144,7 +144,12 @@ download_UN_WPP_data <- function(PATHS,
           frame <- data.frame(Iso3 = d$ISO3_code[keep], Time = d$Time[keep],
                               Value = v[keep], IndicatorName = s$name,
                               Variant = "Medium", stringsAsFactors = FALSE)
-          utils::write.csv(frame, dests[i], row.names = FALSE)
+          .write_file_atomic(dests[i], function(tmp) utils::write.csv(frame, tmp, row.names = FALSE))
+          .append_raw_provenance(
+               dir_out, dests[i], nrow(frame), ncol(frame),
+               sprintf("UN WPP%d Demographic Indicators (Medium variant), column %s x %g; %s",
+                       as.integer(revision), s$col, s$scale, url),
+               snapshot_date, title = "UN WPP snapshot provenance log")
           if (verbose) {
                message(glue::glue(
                     "  {s$measure}: {nrow(frame)} rows, {length(unique(frame$Iso3))} countries, ",
@@ -185,7 +190,11 @@ download_UN_WPP_data <- function(PATHS,
 #'
 #' Hand-downloaded Data-Portal exports
 #' (\code{UN_world_population_prospects_1967_2100_<measure>.csv}) and API pulls
-#' (\code{..._<measure>_wpp<rev>_<date>.csv}) coexist; the newest by mtime wins.
+#' (\code{..._<measure>_wpp<rev>_<date>.csv}) coexist. Ranking is by
+#' \code{.rank_raw_candidates()}: dated filenames outrank undated ones and are
+#' ordered by their embedded date; mtime only orders undated files among
+#' themselves. So an undated portal export never beats a dated API pull, however
+#' new -- rename it with a date or remove the older pull to use it.
 #'
 #' @keywords internal
 #' @noRd

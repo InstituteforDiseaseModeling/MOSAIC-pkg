@@ -102,3 +102,66 @@
      }
      fail(last)
 }
+
+
+#' Write a file atomically
+#'
+#' Calls \code{writer(tmp)} on a temporary path in the destination directory,
+#' then renames it onto \code{dest}, so an interrupted write can never leave a
+#' truncated file under the final name (where a newest-wins resolver would pick
+#' it up as canonical).
+#'
+#' @param dest Final destination path.
+#' @param writer Function of one argument (the temporary path) that writes the file.
+#' @return Invisibly, \code{dest}.
+#' @keywords internal
+#' @noRd
+.write_file_atomic <- function(dest, writer) {
+     dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
+     tmp <- tempfile(pattern = paste0(".", basename(dest), "."), tmpdir = dirname(dest),
+                     fileext = paste0(".", tools::file_ext(dest)))
+     on.exit(if (file.exists(tmp)) unlink(tmp), add = TRUE)
+     writer(tmp)
+     if (!file.exists(tmp)) stop("Atomic write produced no file for ", dest, call. = FALSE)
+     if (!file.rename(tmp, dest)) {
+          stop("Could not move ", basename(tmp), " into place as ", dest, call. = FALSE)
+     }
+     invisible(dest)
+}
+
+
+#' Append one row to a raw-source PROVENANCE.md ledger
+#'
+#' Every automated writer into \code{MOSAIC-data/raw/<source>/} logs what it
+#' wrote, so a processed artifact can be traced back to the snapshot that fed
+#' it. One markdown table row per written file.
+#'
+#' @param dir Directory holding (or to hold) \code{PROVENANCE.md}.
+#' @param file File written: an absolute path is logged by its basename, a relative path (e.g. \code{"GDP/API_...csv"}) as given.
+#' @param n_row,n_col Dimensions of what was written (\code{NA} if not tabular).
+#' @param scope Free-text note: source URL / endpoint, filters, revision.
+#' @param snapshot_date Retrieval date.
+#' @param title Heading used when the ledger is created.
+#' @return Invisibly, the ledger path.
+#' @keywords internal
+#' @noRd
+.append_raw_provenance <- function(dir, file, n_row = NA_integer_, n_col = NA_integer_,
+                                   scope = "", snapshot_date = Sys.Date(),
+                                   title = "Automated snapshot provenance log") {
+     dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+     f <- file.path(dir, "PROVENANCE.md")
+     rec <- if (grepl("^(/|~|[A-Za-z]:)", file)) basename(file) else file
+     row <- sprintf("| %s | %s | %s | %s | %s |",
+                    format(snapshot_date), rec,
+                    ifelse(is.na(n_row), "", as.character(n_row)),
+                    ifelse(is.na(n_col), "", as.character(n_col)),
+                    gsub("|", "/", scope, fixed = TRUE))
+     if (!file.exists(f)) {
+          writeLines(c(paste("#", title), "",
+                       "| Retrieved | File | Rows | Cols | Scope notes |",
+                       "|---|---|---|---|---|", row), f)
+     } else {
+          cat(row, "\n", sep = "", file = f, append = TRUE)
+     }
+     invisible(f)
+}

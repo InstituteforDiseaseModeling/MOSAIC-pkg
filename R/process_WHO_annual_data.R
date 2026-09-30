@@ -38,7 +38,16 @@
 #' indicates whether the row is a full-year observation (~1.0) or a partial
 #' snapshot (<1.0). When multiple files have a row for the same
 #' \code{(iso_code, year)} combination, the row with the larger
-#' \code{coverage_days} is kept.
+#' \code{coverage_days} is kept; on equal coverage the row from the newest file
+#' wins (dated snapshots by their date/time stamp, all ranked above undated
+#' hand-placed files), so a WHO revision of the same weeks supersedes the old one.
+#'
+#' \strong{Snapshot writes}: the dashboard CSV is fetched to a temporary file,
+#' validated (complete final line, required columns, at least one row) and only
+#' then moved into the raw directory. A fetch byte-identical to the newest
+#' existing snapshot is discarded, an existing snapshot is never overwritten
+#' (a second, different fetch on the same day gets a \code{_HHMMSS} suffix), and
+#' each new snapshot is logged in \code{who_global_dashboard/PROVENANCE.md}.
 #'
 #' \strong{To refresh through a given calendar year}: place a year-filtered
 #' CSV in \code{raw/WHO/annual/who_global_dashboard/} named
@@ -161,19 +170,7 @@ process_WHO_annual_data <- function(PATHS) {
           list.files(legacy_dir, pattern = "^cholera_adm0_public_.*\\.csv$", full.names = TRUE)
      } else character(0)
 
-     snapshot_path <- file.path(
-          dashboard_dir,
-          sprintf("cholera_adm0_public_snapshot_%s.csv", format(Sys.Date(), "%Y-%m-%d"))
-     )
-     tryCatch({
-          message("Attempting to fetch latest WHO dashboard snapshot...")
-          utils::download.file(dashboard_url, snapshot_path, mode = "wb", quiet = TRUE)
-          message(sprintf("  Saved snapshot: %s", basename(snapshot_path)))
-     }, error = function(e) {
-          message(sprintf("  Download failed: %s", conditionMessage(e)))
-          message("  Falling back to previously downloaded snapshots in raw dir.")
-     })
-
+     .who_dashboard_fetch_snapshot(dashboard_url, dashboard_dir)
      dashboard_files <- list.files(dashboard_dir, pattern = "^cholera_adm0_public_.*\\.csv$", full.names = TRUE)
      all_dashboard_files <- unique(c(dashboard_files, legacy_files))
      if (!length(all_dashboard_files)) {
@@ -213,10 +210,15 @@ process_WHO_annual_data <- function(PATHS) {
      dashboard_rows <- do.call(rbind, lapply(all_dashboard_files, ingest_one))
      dashboard_rows <- dashboard_rows[!is.na(dashboard_rows$year), , drop = FALSE]
 
-     # Dedupe by (iso, year): keep row with max coverage_days
+     # Dedupe by (iso, year): keep the row with max coverage_days; among equal
+     # coverage keep the NEWEST file, so a WHO revision that adds no new weeks
+     # (e.g. revised totals for the same epi-week range) supersedes the older one.
+     dashboard_rows$.recency <- .who_dashboard_file_recency(sub("^dashboard:", "", dashboard_rows$source))
      dashboard_rows <- dashboard_rows[order(
-          dashboard_rows$iso_3_code, dashboard_rows$year, -dashboard_rows$coverage_days
+          dashboard_rows$iso_3_code, dashboard_rows$year, -dashboard_rows$coverage_days,
+          -dashboard_rows$.recency
      ), ]
+     dashboard_rows$.recency <- NULL
      dashboard_rows <- dashboard_rows[
           !duplicated(dashboard_rows[, c("iso_3_code", "year")]), ,
           drop = FALSE
@@ -268,6 +270,7 @@ process_WHO_annual_data <- function(PATHS) {
           dashboard_rows        [, intersect(keep_cols, colnames(dashboard_rows))]
      )
      combined$country[combined$country == "Democratic Republic of the Congo"] <- "Democratic Republic of Congo"
+     combined$country <- .who_annual_canonical_names(combined$iso_code, combined$country)
 
      # CFR + 95% binomial CI per (country, year) row
      combined$cfr    <- combined$deaths_total / combined$cases_total
@@ -292,7 +295,10 @@ process_WHO_annual_data <- function(PATHS) {
           combined$cfr[bad] <- combined$cfr_lo[bad] <- combined$cfr_hi[bad] <- NA
      }
 
-     # AFRO regional totals (full-year only)
+     # AFRO regional totals (full-year only). The formula interface's default
+     # na.action = na.omit is intended here: a country-year missing either count
+     # is excluded from both sums, so the AFRO CFR numerator and denominator
+     # cover the same countries.
      full_year <- combined[!is.na(combined$year_fraction) & combined$year_fraction >= 0.95, ]
      afro_totals <- aggregate(
           cbind(cases_total, deaths_total) ~ year,
@@ -396,4 +402,117 @@ process_WHO_annual_data <- function(PATHS) {
           frac_out[i] <- days_out[i] / 365.25
      }
      list(year = year_out, coverage_days = days_out, year_fraction = frac_out)
+}
+
+
+#' One display name per ISO code
+#'
+#' The dashboard's spelling drifts between snapshots (e.g. "C\u00f4te D\u2019ivoire"
+#' with a curly apostrophe vs the historical "Cote d'Ivoire"), which splits a
+#' country into two groups in anything that aggregates by \code{country}.
+#' Each ISO code gets its most frequent name across all rows (ties broken by
+#' first occurrence), so the historical spelling wins.
+#'
+#' @param iso Character vector of ISO3 codes.
+#' @param country Character vector of names, same length.
+#' @return \code{country} with one name per ISO code.
+#' @noRd
+.who_annual_canonical_names <- function(iso, country) {
+     out <- country
+     for (code in unique(iso[!is.na(iso)])) {
+          idx <- which(iso == code)
+          nm <- country[idx]
+          tab <- table(factor(nm, levels = unique(nm)))
+          out[idx] <- names(tab)[which.max(tab)]
+     }
+     out
+}
+
+
+#' Fetch the WHO dashboard CSV into a new dated raw snapshot
+#'
+#' Downloads to a temporary file via \code{.mosaic_download()} with validation,
+#' discards the fetch if it is byte-identical to the newest existing snapshot,
+#' never overwrites an existing snapshot (a different same-day fetch gets a
+#' \code{_HHMMSS} suffix), moves it into place atomically and logs a
+#' provenance row. A failed fetch leaves the directory untouched.
+#'
+#' @param url Dashboard CSV URL.
+#' @param dashboard_dir Raw snapshot directory.
+#' @param now Retrieval time (for the file stamp).
+#' @return Invisibly, the new snapshot path, or \code{NULL} if nothing was written.
+#' @noRd
+.who_dashboard_fetch_snapshot <- function(url, dashboard_dir, now = Sys.time()) {
+     required_cols <- c("adm0_name", "who_region", "iso_3_code",
+                        "first_epiwk", "last_epiwk", "case_total", "death_total")
+     validate <- function(f) {
+          sz <- file.info(f)$size
+          con <- file(f, "rb")
+          on.exit(close(con))
+          seek(con, sz - 1L)
+          last_byte <- readBin(con, "raw", 1L)
+          if (!identical(last_byte, as.raw(10L))) return(FALSE)   # truncated final line
+          d <- utils::read.csv(f, stringsAsFactors = FALSE)
+          all(required_cols %in% names(d)) && nrow(d) > 0L
+     }
+
+     message("Attempting to fetch latest WHO dashboard snapshot...")
+     tmp <- tempfile(fileext = ".csv")
+     on.exit(unlink(tmp), add = TRUE)
+     dl <- .mosaic_download(url, tmp, min_bytes = 100L, validate = validate,
+                            overwrite = TRUE, verbose = FALSE)
+     if (!isTRUE(dl$ok)) {
+          message(sprintf("  Download failed (%s); using previously downloaded snapshots.", dl$note))
+          return(invisible(NULL))
+     }
+
+     existing <- list.files(dashboard_dir, pattern = "^cholera_adm0_public_snapshot_.*\\.csv$",
+                            full.names = TRUE)
+     if (length(existing)) {
+          newest <- existing[which.max(.who_dashboard_file_recency(basename(existing)))]
+          if (identical(unname(tools::md5sum(tmp)), unname(tools::md5sum(newest)))) {
+               message(sprintf("  Dashboard unchanged since %s; no new snapshot written.",
+                               basename(newest)))
+               return(invisible(NULL))
+          }
+     }
+
+     dest <- file.path(dashboard_dir, sprintf("cholera_adm0_public_snapshot_%s.csv",
+                                              format(now, "%Y-%m-%d")))
+     if (file.exists(dest)) {
+          dest <- file.path(dashboard_dir, sprintf("cholera_adm0_public_snapshot_%s.csv",
+                                                   format(now, "%Y-%m-%d_%H%M%S")))
+     }
+     if (file.exists(dest)) {
+          message(sprintf("  %s already exists; not overwriting.", basename(dest)))
+          return(invisible(NULL))
+     }
+     .write_file_atomic(dest, function(t) file.copy(tmp, t, overwrite = TRUE))
+     d <- utils::read.csv(dest, stringsAsFactors = FALSE)
+     .append_raw_provenance(dashboard_dir, dest, nrow(d), ncol(d),
+                            sprintf("WHO Global Cholera & AWD dashboard (ArcGIS) %s; fetched %s.",
+                                    url, format(now, "%Y-%m-%d %H:%M:%S %Z")),
+                            as.Date(now), title = "WHO dashboard snapshot provenance log")
+     message(sprintf("  Saved snapshot: %s", basename(dest)))
+     invisible(dest)
+}
+
+
+#' Recency rank of WHO dashboard files
+#'
+#' Dated snapshots (\code{..._snapshot_YYYY-MM-DD[_HHMMSS].csv}) rank by their
+#' stamp; undated files (hand-placed year files, legacy directory) rank below
+#' every dated snapshot.
+#'
+#' @param files File names or paths.
+#' @return Integer rank, larger = newer.
+#' @noRd
+.who_dashboard_file_recency <- function(files) {
+     b <- basename(files)
+     m <- regmatches(b, regexec("snapshot_([0-9]{4}-[0-9]{2}-[0-9]{2})(_([0-9]{6}))?", b))
+     key <- vapply(m, function(x) {
+          if (!length(x)) return("0000-00-00_000000")
+          paste0(x[2], "_", if (nzchar(x[4])) x[4] else "000000")
+     }, character(1))
+     match(key, sort(unique(key)))
 }

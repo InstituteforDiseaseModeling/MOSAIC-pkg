@@ -47,7 +47,16 @@ calendar days are covered, and \code{year_fraction = coverage_days/365.25}
 indicates whether the row is a full-year observation (~1.0) or a partial
 snapshot (<1.0). When multiple files have a row for the same
 \code{(iso_code, year)} combination, the row with the larger
-\code{coverage_days} is kept.
+\code{coverage_days} is kept; on equal coverage the row from the newest file
+wins (dated snapshots by their date/time stamp, all ranked above undated
+hand-placed files), so a WHO revision of the same weeks supersedes the old one.
+
+\strong{Snapshot writes}: the dashboard CSV is fetched to a temporary file,
+validated (complete final line, required columns, at least one row) and only
+then moved into the raw directory. A fetch byte-identical to the newest
+existing snapshot is discarded, an existing snapshot is never overwritten
+(a second, different fetch on the same day gets a \code{_HHMMSS} suffix), and
+each new snapshot is logged in \code{who_global_dashboard/PROVENANCE.md}.
 
 \strong{To refresh through a given calendar year}: place a year-filtered
 CSV in \code{raw/WHO/annual/who_global_dashboard/} named

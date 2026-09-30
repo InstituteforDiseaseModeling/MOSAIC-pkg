@@ -105,10 +105,13 @@ process_mobility_od_data <- function(PATHS,
 
      have <- names(comp)[!vapply(comp, is.null, logical(1))]
      if (!length(have)) stop("No mobility OD source could be built.", call. = FALSE)
-     if (length(have) < length(comp) && verbose) {
-          message("  NOTE: missing source(s): ",
-                  paste(setdiff(names(comp), have), collapse = ", "),
-                  " -- weights rescaled over the rest.")
+     missing_src <- setdiff(names(comp), have)
+     missing_src <- missing_src[is.na(weights[missing_src]) | weights[missing_src] > 0]
+     if (length(missing_src)) {
+          warning("Mobility OD source(s) missing from ", basename(snapshot_dir), ": ",
+                  paste(missing_src, collapse = ", "),
+                  " -- fused structure is degraded; weights rescaled over the rest.",
+                  call. = FALSE)
      }
 
      w <- weights[have]
