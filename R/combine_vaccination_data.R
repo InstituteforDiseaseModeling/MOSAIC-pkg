@@ -28,8 +28,20 @@
 #'     - Adds unique WHO campaigns (marked as source = "WHO_only")
 #'     - Includes campaigns present in both (marked as source = "GTFCC_WHO_matched")
 #'     - \code{match_confidence} is "high" (Step 1: +/-7 days, +/-5% doses), "medium"
-#'       (Step 2: within the tolerances), "low" (Step 3: +/-30 days, any dose), or
-#'       "GTFCC_only" / "WHO_only"; each GTFCC campaign absorbs at most one WHO campaign
+#'       (Step 2: within the tolerances), "low" (Step 3: +/-30 days, any dose, or
+#'       Step 4 only), or "GTFCC_only" / "WHO_only"
+#'     - In Steps 1-3 each GTFCC campaign absorbs at most one WHO campaign, so a
+#'       genuinely separate second campaign within 30 days is kept
+#'     - When GTFCC records a campaign under the WHO row's ICG request number,
+#'       only that request's campaign(s) are candidates in every step
+#'     - Step 4 (same ICG request): GTFCC rows are per-request totals (all
+#'       deliveries summed) while WHO rows are per shipment, so a still-unmatched
+#'       WHO shipment is absorbed by the GTFCC campaign with the same ICG request
+#'       number (WHO \code{20174} = GTFCC \code{201704}) as long as the WHO doses
+#'       assigned to that campaign stay within \code{(1 + dose_tolerance)} of its
+#'       GTFCC doses (e.g. MOZ 2017-I04: 709.1K GTFCC vs 329.6K + 354.6K WHO);
+#'       a WHO row whose request number GTFCC does not use is matched on the ICG
+#'       decision date (+/-7 days) within the dose tolerance instead
 #'   \item **Quality Assurance**:
 #'     - Validates data structure matches downstream requirements
 #'     - Ensures all required columns are present
@@ -74,11 +86,28 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      message(glue::glue("WHO data: {nrow(who_data)} campaigns"))
      message(glue::glue("GTFCC data: {nrow(gtfcc_data)} campaigns"))
      
+     # ICG request keys (WHO 20174 and GTFCC 201704 are both request 4 of 2017).
+     # A request number is the strongest identity the two sources share, so when
+     # GTFCC has a campaign with the WHO row's request number, only that request's
+     # campaign(s) are candidates: date/dose proximity to a different request must
+     # not override it (the 2nd round of COD request 2019-05, shipped 2019-10-30,
+     # otherwise matches COD request 2019-14 delivered 15 days later).
+     who_data$request_key <- .vacc_request_key(who_data$request_number)
+     gtfcc_data$request_key <- .vacc_request_key(gtfcc_data$request_number)
+     gtfcc_iso_key <- paste(gtfcc_data$iso_code, gtfcc_data$request_key)[!is.na(gtfcc_data$request_key)]
+
      # Function to find potential matches for a WHO campaign in GTFCC data
      find_matches <- function(who_row, gtfcc_data, date_tol, dose_tol) {
           
           # Filter by country
           country_matches <- gtfcc_data[gtfcc_data$iso_code == who_row$iso_code, ]
+
+          # Restrict to the same ICG request when GTFCC records that request at all
+          if (!is.na(who_row$request_key) &&
+              paste(who_row$iso_code, who_row$request_key) %in% gtfcc_iso_key) {
+               country_matches <- country_matches[!is.na(country_matches$request_key) &
+                                                       country_matches$request_key == who_row$request_key, ]
+          }
           
           if (nrow(country_matches) == 0) return(NULL)
           
@@ -176,9 +205,61 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      }
      
      message(glue::glue("  Found {nrow(date_matches)} date-only matches"))
-     
+
+     # Step 4: remaining shipments of an ICG request GTFCC records as one campaign.
+     # process_GTFCC_vaccination_data() sums every delivery of a request into one
+     # row, whereas the WHO ICG table lists each shipment separately (the raw
+     # WHO file repeats the request number, with NA dates on continuation rows).
+     # Steps 1-3 let a GTFCC campaign absorb one WHO row, so the second shipment
+     # of a two-shipment request would otherwise be added again as WHO_only
+     # (MOZ 2017-I04 and CMR 2019-I03-D01 in the ees-cholera-mapping GTFCC
+     # requests file: 354.6K and 616.6K doses double-counted). A shipment is
+     # absorbed only while the WHO doses assigned to that GTFCC campaign stay
+     # within (1 + dose_tolerance) of its GTFCC total, so a genuinely extra
+     # campaign under the same request is still kept. Rows GTFCC numbers
+     # differently fall back to the decision date (see below).
+     message("\nStep 4: Absorbing further shipments of the same ICG request...")
+     who_matched_request <- logical(nrow(who_data))
+     gtfcc_matched_request <- logical(nrow(gtfcc_data))
+     who_key <- who_data$request_key
+     gtfcc_key <- gtfcc_data$request_key
+     assigned_gtfcc <- rep(NA_integer_, nrow(who_data))
+     for (tbl in list(exact_matches, fuzzy_matches, date_matches)) {
+          if (nrow(tbl) > 0) assigned_gtfcc[tbl$who_idx] <- tbl$gtfcc_idx
+     }
+     n_request <- 0L
+     for (i in which(!who_matched_exact & !who_matched_fuzzy & !who_matched_date)) {
+          same_iso <- gtfcc_data$iso_code == who_data$iso_code[i]
+          cand <- if (is.na(who_key[i])) integer(0) else
+               which(same_iso & !is.na(gtfcc_key) & gtfcc_key == who_key[i])
+          if (length(cand) == 0) {
+               # The sources occasionally number one request differently (MOZ:
+               # WHO 20203 vs GTFCC 2020-I02, both decided 2020-03-12 with 733.5K
+               # doses shipped). Fall back to the ICG decision date (+/-7 days)
+               # plus the dose tolerance.
+               dec_diff <- abs(as.numeric(gtfcc_data$decision_date - who_data$decision_date[i]))
+               dose_rel <- abs(gtfcc_data$doses_shipped - who_data$doses_shipped[i]) /
+                    who_data$doses_shipped[i]
+               cand <- which(same_iso & !is.na(dec_diff) & dec_diff <= 7 &
+                                  !is.na(dose_rel) & dose_rel <= dose_tolerance)
+          }
+          if (length(cand) == 0) next
+          for (j in cand) {
+               assigned_doses <- sum(who_data$doses_shipped[which(assigned_gtfcc == j)], na.rm = TRUE)
+               if (assigned_doses + who_data$doses_shipped[i] <=
+                   (1 + dose_tolerance) * gtfcc_data$doses_shipped[j]) {
+                    who_matched_request[i] <- TRUE
+                    gtfcc_matched_request[j] <- TRUE
+                    assigned_gtfcc[i] <- j
+                    n_request <- n_request + 1L
+                    break
+               }
+          }
+     }
+     message(glue::glue("  Found {n_request} same-request shipment matches"))
+
      # Combine all matches
-     who_matched <- who_matched_exact | who_matched_fuzzy | who_matched_date
+     who_matched <- who_matched_exact | who_matched_fuzzy | who_matched_date | who_matched_request
      who_unmatched <- !who_matched
      
      message("\n==========================================")
@@ -197,22 +278,26 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      # use), BEFORE the rbind/re-sort below changes row positions.
      combined_data <- gtfcc_data
      combined_data$match_confidence <- "GTFCC_only"
+     combined_data$match_confidence[gtfcc_matched_request] <- "low"
      combined_data$match_confidence[gtfcc_matched_date]  <- "low"
      combined_data$match_confidence[gtfcc_matched_fuzzy] <- "medium"
      combined_data$match_confidence[gtfcc_matched_exact] <- "high"
      
      # Update source for matched GTFCC campaigns
-     gtfcc_matched_any <- gtfcc_matched_exact | gtfcc_matched_fuzzy | gtfcc_matched_date
+     gtfcc_matched_any <- gtfcc_matched_exact | gtfcc_matched_fuzzy | gtfcc_matched_date |
+                          gtfcc_matched_request
      combined_data$source[gtfcc_matched_any] <- "GTFCC_WHO_matched"
      
      # Add unmatched WHO campaigns
      who_unique <- who_data[who_unmatched, ]
-     who_unique$source <- "WHO_only"
-     who_unique$match_confidence <- "WHO_only"
+     # rep() so that zero unmatched WHO campaigns yields an empty frame, not an error
+     who_unique$source <- rep("WHO_only", nrow(who_unique))
+     who_unique$match_confidence <- rep("WHO_only", nrow(who_unique))
      
      # Ensure column compatibility
      common_cols <- intersect(names(combined_data), names(who_unique))
      combined_data <- rbind(combined_data[, common_cols], who_unique[, common_cols])
+     combined_data$request_key <- NULL
      
      # Sort by campaign date
      combined_data <- combined_data[order(combined_data$campaign_date), ]
@@ -258,4 +343,21 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      }
      
      return(combined_data)
+}
+
+#' Normalise an ICG request number to a year:sequence key
+#'
+#' WHO writes request 4 of 2017 as \code{20174} and GTFCC-derived rows as
+#' \code{201704}; both map to \code{"2017:4"}. Values that are not a
+#' four-digit year followed by a sequence number return \code{NA}.
+#' @param x Request numbers (numeric or character).
+#' @return Character vector of keys, \code{NA} where \code{x} is not parseable.
+#' @noRd
+.vacc_request_key <- function(x) {
+     x <- trimws(as.character(x))
+     ok <- !is.na(x) & grepl("^(19|20)[0-9]{2}[0-9]+$", x)
+     key <- rep(NA_character_, length(x))
+     key[ok] <- paste0(substr(x[ok], 1, 4), ":",
+                       as.integer(substr(x[ok], 5, nchar(x[ok]))))
+     key
 }

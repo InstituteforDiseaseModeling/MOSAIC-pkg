@@ -686,11 +686,14 @@ sample_parameters <- function(
 
 
   # Derive zeta_2 from zeta_1 and zeta_ratio (zeta_2 = zeta_1 / zeta_ratio).
-  # zeta_2 > 0 is guaranteed (ratio of two positive lognormals); zeta_1 > zeta_2
-  # is NOT. It requires zeta_ratio > 1, and the shipped zeta_ratio prior
-  # (lognormal, meanlog 4.31, sdlog 4.39) gives P(zeta_ratio < 1) =
-  # Phi(-4.31/4.39) ~ 0.16, so about one draw in six has asymptomatic shedding
-  # above symptomatic. Nothing downstream enforces the ordering.
+  # zeta_2 > 0 always holds (ratio of two positive draws). zeta_2 <= zeta_1
+  # holds because the zeta_ratio prior is a lognormal truncated below at 1
+  # (parameters$lower = 1, drawn by sample_from_prior(); see
+  # est_zeta_ratio_prior()). A priors object whose zeta_ratio entry has no
+  # `lower` (priors_default before the rebuild that adds it, or a custom
+  # prior) still puts Phi(-meanlog/sdlog) of its mass below 1 -- about 16%
+  # for the direct channel (meanlog 4.31, sdlog 4.39) -- and nothing here
+  # re-imposes the ordering.
   if ("zeta_1" %in% names(config_sampled) && "zeta_ratio" %in% names(config_sampled)) {
 
     if (verbose) cat("\n  Deriving zeta_2 from zeta_1 and zeta_ratio...\n")

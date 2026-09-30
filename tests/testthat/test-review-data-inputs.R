@@ -58,8 +58,11 @@ test_that("symptomatic-proportion intervals are internally consistent", {
      expect_true(all(df$ci_lo[both] <= df$ci_hi[both]))
      m <- both & !is.na(df$mean)
      expect_true(all(df$mean[m] >= df$ci_lo[m] & df$mean[m] <= df$ci_hi[m]))
+     # Harris et al (2008) Table 1: 127 of 202 culture-confirmed infections
+     # symptomatic; exact binomial 95% CI
      h <- df[df$source == "Harris et al (2008)", ]
-     expect_equal(c(h$ci_lo, h$ci_hi), c(0.112, 0.256))
+     ci <- stats::binom.test(127, 202)$conf.int
+     expect_equal(c(h$mean, h$ci_lo, h$ci_hi), round(c(127 / 202, ci), 3))
 })
 
 test_that("get_cases_binary handles countries with fewer than four weeks", {

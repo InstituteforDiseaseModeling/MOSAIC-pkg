@@ -24,18 +24,24 @@ get_symptomatic_prop_data <- function(PATHS) {
      if (!dir.exists(PATHS$DATA_SYMPTOMATIC)) dir.create(PATHS$DATA_SYMPTOMATIC, recursive = TRUE)
 
      df <- data.frame(
-          mean     = c(0.57, 0.25, NA, 0.238, 0.213, 0.204, 0.371, 0.184, 0.0005996),
-          # Harris et al (2008): bounds were transposed (0.256 / 0.112); the
-          # interval is centred on the 0.184 point estimate.
-          ci_lo    = c(NA, NA, 0.2, 0.227, 0.194, NA, NA, 0.112, 0.0004998),
-          ci_hi    = c(NA, NA, 0.6, 0.25, 0.231, NA, NA, 0.256, 0.0007994),
+          # Harris et al (2008) PLoS NTD 2(4):e221 (PMC2271133), Results and
+          # Table 1: of 944 household contacts followed 21 days, 202 had definite
+          # (culture-confirmed) infection and 127 of those (62.9%) developed
+          # diarrhoea; the interval is the exact binomial 95% CI for 127/202.
+          # The row previously carried 0.184 [0.112, 0.256], which the paper does
+          # not report (its nearest figure, 21%, is the infection attack rate
+          # among contacts, not the symptomatic share of infections).
+          mean     = c(0.57, 0.25, NA, 0.238, 0.213, 0.204, 0.371, 0.629, 0.0005996),
+          ci_lo    = c(NA, NA, 0.2, 0.227, 0.194, NA, NA, 0.558, 0.0004998),
+          ci_hi    = c(NA, NA, 0.6, 0.25, 0.231, NA, NA, 0.695, 0.0007994),
           source   = c("Nelson et al (2009)", "Lueng & Matrajt (2021)", "Harris et al (2012)", "Finger et al (2024)",
                        "Jackson et al (2013)", "Bart et al (1970)", "Bart et al (1970)", "Harris et al (2008)", "Hegde et al (2023)"),
           location = c(NA, NA, "Endemic regions", "Haiti", "Haiti", "Pakistan", "Pakistan", "Bangladesh", "Bangladesh"),
           year     = c(2009, 2021, 2012, 2024, 2013, 1970, 1970, 2008, 2023),
           note     = c("Review", "Review", "Review", "Sero-survey and clinical data", "Cross-sectional sero-survey",
                        "Sero-survey during epidemic; El Tor Ogawa strain", "Sero-survey during epidemic; Inaba strain",
-                       "Household cohort", "Sero-survey and clinical data"),
+                       "Household cohort; culture-confirmed infections (high-dose exposure, rectal-swab detection under-ascertains asymptomatic infection)",
+                       "Sero-survey and clinical data"),
           note2    = c("", "", "", "", "", "El Tor Ogawa", "Inaba", "", "")
      )
 
