@@ -27,6 +27,28 @@ test_that("post-calibration artifacts from an earlier run are removed before reb
   expect_true(all(file.exists(keep)))
 })
 
+test_that("per-location prediction CSVs and 3_results tables from an earlier run are removed", {
+  dirs <- .stale_dirs()
+  for (d in c(dirs$res_predictions, dirs$res_fig_diag, dirs$res_posterior))
+    dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  # Run 1 had three locations; run 2 has two, so AGO's CSVs would otherwise be
+  # pooled into run 2's predictions_*_all.csv by the combine glob.
+  preds <- file.path(dirs$res_predictions,
+                     c(sprintf("predictions_ensemble_%s.csv", c("MOZ", "AGO", "ETH")),
+                       sprintf("predictions_medoid_%s.csv", c("MOZ", "AGO", "ETH")),
+                       "predictions_ensemble_all.csv", "predictions_medoid_all.csv"))
+  tables <- c(file.path(dirs$res_fig_diag, c("model_fit_windows.csv",
+                                             "optimization_diagnostics.csv")),
+              file.path(dirs$res_posterior, "cfr_posterior.csv"))
+  keep <- c(file.path(dirs$res_posterior, "parameter_estimates.csv"),
+            file.path(dirs$res_predictions, "notes.csv"))
+  for (f in c(preds, tables, keep)) writeLines("old", f)
+  removed <- MOSAIC:::.mosaic_clear_posterior_artifacts(dirs)
+  expect_setequal(removed, c(preds, tables))
+  expect_true(all(file.exists(keep)))
+  expect_length(list.files(dirs$res_predictions, pattern = "^predictions_"), 0L)
+})
+
 test_that("run_MOSAIC's ensemble_optimized.rds fallback is not keyed on file.exists()", {
   body_txt <- paste(deparse(body(MOSAIC::run_MOSAIC)), collapse = "\n")
   expect_false(grepl("!file.exists(ensemble_opt_path)", body_txt, fixed = TRUE))

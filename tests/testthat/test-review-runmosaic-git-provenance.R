@@ -1,8 +1,10 @@
 # =============================================================================
 # test-review-runmosaic-git-provenance.R
 #
-# environment.json's git sha/branch described whichever repo the working
-# directory was in (e.g. a country repo), not the MOSAIC code that ran.
+# environment.json recorded only the working directory's repo (git$sha/branch),
+# never the MOSAIC code that ran. git$sha/branch keep their meaning (the cwd
+# repo, read downstream as the country-repo commit); the MOSAIC code sha is
+# added as git$mosaic_sha/mosaic_branch/mosaic_source.
 # =============================================================================
 
 .make_repo <- function(dir, branch) {
@@ -14,7 +16,7 @@
   system2("git", c("-C", shQuote(dir), "rev-parse", "--short", "HEAD"), stdout = TRUE)
 }
 
-test_that("the MOSAIC sha comes from the package checkout, the cwd repo is separate", {
+test_that("git$sha stays the cwd repo; the MOSAIC checkout sha is mosaic_sha", {
   skip_if(!nzchar(Sys.which("git")), "git not available")
   pkg <- withr::local_tempdir(); cwd <- withr::local_tempdir()
   writeLines(c("Package: MOSAIC", "Version: 0.0.1"), file.path(pkg, "DESCRIPTION"))
@@ -23,11 +25,11 @@ test_that("the MOSAIC sha comes from the package checkout, the cwd repo is separ
   # Under load_all, system.file(package = "MOSAIC") is <src>/inst.
   g <- MOSAIC:::.mosaic_git_provenance(pkg_dir = file.path(pkg, "inst"), cwd = cwd,
                                        desc = list())
-  expect_identical(g$source, "checkout")
-  expect_identical(g$sha, pkg_sha)
-  expect_identical(g$branch, "pkgbranch")
-  expect_identical(g$cwd_sha, cwd_sha)
-  expect_identical(g$cwd_branch, "country")
+  expect_identical(g$sha, cwd_sha)
+  expect_identical(g$branch, "country")
+  expect_identical(g$mosaic_source, "checkout")
+  expect_identical(g$mosaic_sha, pkg_sha)
+  expect_identical(g$mosaic_branch, "pkgbranch")
 })
 
 test_that("an installed package without a checkout records no MOSAIC sha", {
@@ -39,17 +41,26 @@ test_that("an installed package without a checkout records no MOSAIC sha", {
   lib <- file.path(cwd, "renv", "library", "MOSAIC"); dir.create(lib, recursive = TRUE)
   g <- MOSAIC:::.mosaic_git_provenance(pkg_dir = pkg, cwd = cwd, desc = list())
   g2 <- MOSAIC:::.mosaic_git_provenance(pkg_dir = lib, cwd = cwd, desc = list())
-  expect_identical(g2$source, "unknown")
-  expect_identical(g$source, "unknown")
-  expect_true(is.na(g$sha))
-  expect_identical(g$cwd_sha, cwd_sha)
+  expect_identical(g2$mosaic_source, "unknown")
+  expect_identical(g$mosaic_source, "unknown")
+  expect_true(is.na(g$mosaic_sha))
+  expect_identical(g$sha, cwd_sha)
 })
 
-test_that("a remotes/pak install uses RemoteSha", {
+test_that("a non-git cwd omits git$sha, as before", {
+  skip_if(!nzchar(Sys.which("git")), "git not available")
+  g <- MOSAIC:::.mosaic_git_provenance(pkg_dir = "", cwd = withr::local_tempdir(),
+                                       desc = list())
+  # MOSAIC-OCV promote_model.R tests !is.null(env$git$sha).
+  expect_null(g$sha)
+  expect_identical(g$mosaic_source, "unknown")
+})
+
+test_that("a remotes/pak install uses RemoteSha for mosaic_sha", {
   g <- MOSAIC:::.mosaic_git_provenance(
     pkg_dir = "", cwd = withr::local_tempdir(),
     desc = list(RemoteSha = "0123456789abcdef", RemoteRef = "main"))
-  expect_identical(g$source, "remote")
-  expect_identical(g$sha, "012345678")
-  expect_identical(g$branch, "main")
+  expect_identical(g$mosaic_source, "remote")
+  expect_identical(g$mosaic_sha, "012345678")
+  expect_identical(g$mosaic_branch, "main")
 })

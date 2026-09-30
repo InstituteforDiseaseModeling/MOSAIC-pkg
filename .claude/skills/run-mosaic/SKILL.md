@@ -96,7 +96,11 @@ reproduces v0.46.1-v0.97.x) sets the ensemble central tendency — see `?calc_mo
 
 **FIXED vs AUTO mode (matters for resumability and for what you can measure):**
 - `n_simulations = <integer>` ⇒ **FIXED**: runs exactly that many simulations in a single batch,
-  regardless of convergence. `converged = FALSE` in `summary.json` is EXPECTED here, not an error.
+  regardless of convergence. The ESS criterion is never evaluated, so `summary.json` has
+  `converged = FALSE` with `convergence_evaluated = FALSE`, and the run ends with
+  `[RUN_SUMMARY] status=completed_fixed mode=fixed` (`completed_fixed_partial` if the ensemble
+  metrics are missing) — EXPECTED, not an error. Whether a post-hoc best-subset tier met all its
+  targets is `posthoc_criteria_met` in both `summary.json` and `[RUN_SUMMARY]`.
   Use it when you want a predictable runtime or a controlled comparison — it is the only mode in
   which two runs do the same amount of work. Note the whole budget dispatches as one batch, so
   mid-run resume is coarse: shards land per simulation, but the adaptive checkpointing that AUTO

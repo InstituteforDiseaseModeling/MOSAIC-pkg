@@ -101,7 +101,7 @@ Invisibly returns a list with:
 \describe{
 \item{dirs}{Named list of output directories}
 \item{files}{Named list of key output files}
-\item{summary}{Named list with run statistics (batches, sims, converged, runtime); \code{converged} is \code{NA} in fixed mode, which never evaluates the ESS stopping criterion}
+\item{summary}{Named list with run statistics (batches, sims, converged, convergence_evaluated, runtime); fixed mode never evaluates the ESS stopping criterion, so it reports \code{converged = FALSE} with \code{convergence_evaluated = FALSE}}
 }
 }
 \description{

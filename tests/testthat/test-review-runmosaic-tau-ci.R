@@ -35,3 +35,11 @@ test_that("run_MOSAIC calls the tau CI writer without an io gate", {
   expect_false(grepl("isTRUE(control$io)", body_txt, fixed = TRUE))
   expect_true(grepl(".mosaic_write_tau_ci(", body_txt, fixed = TRUE))
 })
+
+test_that("a run without the upstream fit removes an earlier run's tau CI file", {
+  dir_in <- withr::local_tempdir()
+  stale <- file.path(dir_in, "mobility_tau_ci.csv")
+  writeLines("location,lower,upper", stale)
+  expect_null(MOSAIC:::.mosaic_write_tau_ci(file.path(dir_in, "nope.csv"), "MOZ", dir_in))
+  expect_false(file.exists(stale))
+})

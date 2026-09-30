@@ -232,7 +232,8 @@
 
 #' Remove post-calibration artifacts left by an earlier run
 #'
-#' The posterior/medoid/trajectory/spatial artifacts are rebuilt from the
+#' The posterior/medoid/trajectory/spatial artifacts, the per-location
+#' prediction CSVs and the fit/optimizer/CFR tables are rebuilt from the
 #' current run's samples, but several writers are conditional (optimizer on,
 #' medoid found, arrays present). Deleting them before they are rebuilt means a
 #' skipped or failed block leaves no file rather than a stale one from a
@@ -250,6 +251,18 @@
   paths <- file.path(dirs$calibration, cal_files)
   if (!is.null(dirs$cal_best_model))
     paths <- c(paths, file.path(dirs$cal_best_model, "config_medoid.json"))
+  # Conditional 3_results tables. The per-location prediction CSVs matter most:
+  # the combine step globs predictions_<type>_*.csv, so a re-run with fewer
+  # locations would otherwise fold the earlier run's files into *_all.csv.
+  if (!is.null(dirs$res_predictions) && dir.exists(dirs$res_predictions))
+    paths <- c(paths, list.files(dirs$res_predictions,
+                                 pattern = "^predictions_(ensemble|medoid)_.*\\.csv$",
+                                 full.names = TRUE))
+  if (!is.null(dirs$res_fig_diag))
+    paths <- c(paths, file.path(dirs$res_fig_diag,
+                                c("model_fit_windows.csv", "optimization_diagnostics.csv")))
+  if (!is.null(dirs$res_posterior))
+    paths <- c(paths, file.path(dirs$res_posterior, "cfr_posterior.csv"))
   stale <- paths[file.exists(paths)]
   if (length(stale)) {
     unlink(stale)
@@ -261,9 +274,11 @@
 
 #' Calibration convergence and end-of-run status
 #'
-#' The calibration ESS criterion is evaluated only in auto mode, so a
-#' fixed-mode run reports \code{converged = NA} and its own status rather
-#' than "completed_unconverged". Status tree:
+#' The calibration ESS criterion is evaluated only in auto mode. A fixed-mode
+#' run keeps the documented logical \code{converged = FALSE} (the criterion
+#' was not met because it was never tested) but records
+#' \code{convergence_evaluated = FALSE} and its own status rather than
+#' "completed_unconverged". Status tree:
 #' \itemize{
 #'   \item \code{"completed_fixed"} / \code{"completed_fixed_partial"}: fixed
 #'     mode, with / without the posterior-ensemble metrics;
@@ -275,11 +290,18 @@
 #'
 #' @param state The calibration state (\code{mode}, \code{converged}).
 #' @param outputs_ok Logical; whether the ensemble metrics were populated.
-#' @return \code{.mosaic_run_converged()}: \code{TRUE}/\code{FALSE}, or
-#'   \code{NA} in fixed mode. \code{.mosaic_run_status()}: the status string.
+#' @return \code{.mosaic_run_converged()}: \code{TRUE}/\code{FALSE} (always
+#'   \code{FALSE} in fixed mode). \code{.mosaic_convergence_evaluated()}:
+#'   \code{FALSE} in fixed mode. \code{.mosaic_run_status()}: the status string.
 #' @noRd
 .mosaic_run_converged <- function(state) {
-  if (identical(state$mode, "fixed")) NA else isTRUE(state$converged)
+  !identical(state$mode, "fixed") && isTRUE(state$converged)
+}
+
+#' Whether the calibration ESS criterion was evaluated (FALSE in fixed mode)
+#' @noRd
+.mosaic_convergence_evaluated <- function(state) {
+  !identical(state$mode, "fixed")
 }
 
 #' End-of-run status string (see .mosaic_run_converged() for the tree)
@@ -298,7 +320,7 @@
 
 #' Write the per-location tau_i credible-interval artifact
 #'
-#' Copies the 95\% interval of the upstream departure-probability fit
+#' Copies the 95 percent interval of the upstream departure-probability fit
 #' (\code{fit_prob_travel()}, written to
 #' \code{MODEL_INPUT/mobility_travel_prob_params.csv}) into
 #' \code{1_inputs/mobility_tau_ci.csv}, in config location order, so
@@ -308,19 +330,24 @@
 #' @param locations Character vector of config location ISO codes.
 #' @param dir_inputs The run's \code{1_inputs} directory.
 #' @return The written path, or \code{NULL} (invisibly) when the source file is
-#'   absent or lacks the \code{iso3} and interval columns.
+#'   absent or lacks the \code{iso3} and interval columns; in that case any
+#'   \code{mobility_tau_ci.csv} left by an earlier run is removed.
 #' @noRd
 .mosaic_write_tau_ci <- function(params_file, locations, dir_inputs) {
-  if (length(params_file) != 1L || !file.exists(params_file)) return(invisible(NULL))
+  out <- file.path(dir_inputs, "mobility_tau_ci.csv")
+  no_ci <- function() {
+    if (file.exists(out)) unlink(out)
+    invisible(NULL)
+  }
+  if (length(params_file) != 1L || !file.exists(params_file)) return(no_ci())
   tp <- utils::read.csv(params_file, stringsAsFactors = FALSE)
   lo_col <- intersect(c("Q2.5", "q2.5", "lower", "ci_lower"), names(tp))[1]
   hi_col <- intersect(c("Q97.5", "q97.5", "upper", "ci_upper"), names(tp))[1]
-  if (!("iso3" %in% names(tp)) || is.na(lo_col) || is.na(hi_col)) return(invisible(NULL))
+  if (!("iso3" %in% names(tp)) || is.na(lo_col) || is.na(hi_col)) return(no_ci())
   locs <- as.character(locations)
   m    <- match(locs, tp$iso3)
   ci_df <- data.frame(location = locs, lower = tp[[lo_col]][m],
                       upper = tp[[hi_col]][m], stringsAsFactors = FALSE)
-  out <- file.path(dir_inputs, "mobility_tau_ci.csv")
   tmp <- paste0(out, ".tmp")
   utils::write.csv(ci_df, tmp, row.names = FALSE)
   if (!file.rename(tmp, out)) {
@@ -330,38 +357,43 @@
   out
 }
 
-#' Git provenance of the MOSAIC code and of the working directory
+#' Git provenance of the working directory and of the MOSAIC code
 #'
-#' \code{sha}/\code{branch} describe the MOSAIC package that is running:
-#' the \code{RemoteSha} (or \code{GithubSHA1}) recorded by a remotes/pak
-#' install when present (\code{source = "remote"}), otherwise the git checkout
-#' the package was loaded from (\code{devtools::load_all()}; the checkout's
-#' DESCRIPTION must name MOSAIC; \code{source = "checkout"}), otherwise NA (\code{source = "unknown"}, e.g.
-#' a plain \code{R CMD INSTALL}, whose version is in \code{R$MOSAIC}). The
-#' repository of the working directory, which is often a country repo rather
-#' than MOSAIC, is recorded separately as \code{cwd_path}/\code{cwd_sha}/
-#' \code{cwd_branch}.
+#' \code{sha}/\code{branch}/\code{path} describe the git repository of the
+#' working directory -- usually the country repo the run was launched from --
+#' and are omitted when the working directory is not in a git repository. This
+#' is the long-standing meaning of these fields, which downstream tools read
+#' as the country-repo commit (MOSAIC-OCV \code{promote_model.R}).
+#'
+#' \code{mosaic_sha}/\code{mosaic_branch}/\code{mosaic_source} describe the
+#' MOSAIC package that is running: the \code{RemoteSha} (or
+#' \code{GithubSHA1}) recorded by a remotes/pak install when present
+#' (\code{mosaic_source = "remote"}), otherwise the git checkout the package
+#' was loaded from (\code{devtools::load_all()}; the checkout's DESCRIPTION
+#' must name MOSAIC; \code{"checkout"}), otherwise NA (\code{"unknown"}, e.g.
+#' a plain \code{R CMD INSTALL}, whose version is in \code{R$MOSAIC}).
 #'
 #' @param pkg_dir Directory the MOSAIC package was loaded from.
 #' @param cwd Working directory.
 #' @param desc \code{utils::packageDescription("MOSAIC")} (a list), or NULL.
-#' @return Named list (empty when git is unavailable).
+#' @return Named list.
 #' @noRd
 .mosaic_git_provenance <- function(pkg_dir = system.file(package = "MOSAIC"),
                                    cwd = getwd(),
                                    desc = tryCatch(utils::packageDescription("MOSAIC"),
                                                    error = function(e) NULL)) {
-  out <- list(sha = NA_character_, branch = NA_character_, source = "unknown")
-  remote_sha <- NULL
+  out <- list()
+  mosaic <- list(mosaic_sha = NA_character_, mosaic_branch = NA_character_,
+                 mosaic_source = "unknown")
   if (is.list(desc)) {
     remote_sha <- desc$RemoteSha %||% desc$GithubSHA1
     if (!is.null(remote_sha) && nzchar(remote_sha)) {
-      out$sha    <- substr(remote_sha, 1L, 9L)
-      out$branch <- desc$RemoteRef %||% desc$GithubRef %||% NA_character_
-      out$source <- "remote"
+      mosaic$mosaic_sha    <- substr(remote_sha, 1L, 9L)
+      mosaic$mosaic_branch <- desc$RemoteRef %||% desc$GithubRef %||% NA_character_
+      mosaic$mosaic_source <- "remote"
     }
   }
-  if (!nzchar(Sys.which("git"))) return(if (identical(out$source, "remote")) out else list())
+  if (!nzchar(Sys.which("git"))) return(c(out, mosaic))
 
   git_cmd <- function(dir, ...) {
     res <- tryCatch(
@@ -376,6 +408,12 @@
       identical(git_cmd(dir, "rev-parse", "--is-inside-work-tree"), "true")
   }
 
+  if (in_repo(cwd)) {
+    out$sha    <- git_cmd(cwd, "rev-parse", "--short", "HEAD")
+    out$branch <- git_cmd(cwd, "rev-parse", "--abbrev-ref", "HEAD")
+    out$path   <- git_cmd(cwd, "rev-parse", "--show-toplevel")
+  }
+
   # A MOSAIC source checkout: pkg_dir (under load_all, <src>/inst) sits in a
   # git work tree whose top level is the MOSAIC package itself -- not, say, a
   # project repo that happens to hold an renv library.
@@ -387,17 +425,12 @@
       identical(tryCatch(unname(read.dcf(d, fields = "Package")[1, 1]),
                          error = function(e) NA_character_), "MOSAIC")
   }
-  if (!identical(out$source, "remote") && is_mosaic_checkout(pkg_dir)) {
-    out$sha    <- git_cmd(pkg_dir, "rev-parse", "--short", "HEAD")
-    out$branch <- git_cmd(pkg_dir, "rev-parse", "--abbrev-ref", "HEAD")
-    out$source <- "checkout"
+  if (!identical(mosaic$mosaic_source, "remote") && is_mosaic_checkout(pkg_dir)) {
+    mosaic$mosaic_sha    <- git_cmd(pkg_dir, "rev-parse", "--short", "HEAD")
+    mosaic$mosaic_branch <- git_cmd(pkg_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    mosaic$mosaic_source <- "checkout"
   }
-  if (in_repo(cwd)) {
-    out$cwd_path   <- git_cmd(cwd, "rev-parse", "--show-toplevel")
-    out$cwd_sha    <- git_cmd(cwd, "rev-parse", "--short", "HEAD")
-    out$cwd_branch <- git_cmd(cwd, "rev-parse", "--abbrev-ref", "HEAD")
-  }
-  out
+  c(out, mosaic)
 }
 
 #' Capture Full Environment Snapshot
@@ -672,10 +705,12 @@
     # and the MEDOID member; the single best-likelihood model is not produced,
     # so summary.json reports ensemble (+ tier) fit metrics only.
     # `converged` is the calibration ESS stopping criterion, evaluated only in
-    # auto mode; a fixed-mode run never evaluates it, so it is NA (null), not
-    # FALSE. `posthoc_criteria_met` is whether a post-hoc best-subset tier met
-    # all its targets (FALSE = fallback subset), in either mode.
+    # auto mode; a fixed-mode run never evaluates it, so it stays FALSE (the
+    # field is always logical) with `convergence_evaluated = FALSE`.
+    # `posthoc_criteria_met` is whether a post-hoc best-subset tier met all its
+    # targets (FALSE = fallback subset), in either mode.
     converged     = .mosaic_run_converged(state),
+    convergence_evaluated = .mosaic_convergence_evaluated(state),
     posthoc_criteria_met = as.logical(posthoc_criteria_met)[1],
     r2_cases_ensemble  = if (!is.na(r2_cases_ensemble)) round(r2_cases_ensemble, 4) else NA_real_,
     r2_deaths_ensemble = if (!is.na(r2_deaths_ensemble)) round(r2_deaths_ensemble, 4) else NA_real_,

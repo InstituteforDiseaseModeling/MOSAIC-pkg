@@ -675,7 +675,7 @@
 #' \describe{
 #'   \item{dirs}{Named list of output directories}
 #'   \item{files}{Named list of key output files}
-#'   \item{summary}{Named list with run statistics (batches, sims, converged, runtime); \code{converged} is \code{NA} in fixed mode, which never evaluates the ESS stopping criterion}
+#'   \item{summary}{Named list with run statistics (batches, sims, converged, convergence_evaluated, runtime); fixed mode never evaluates the ESS stopping criterion, so it reports \code{converged = FALSE} with \code{convergence_evaluated = FALSE}}
 #' }
 #'
 #' @section Control Structure:
@@ -1218,13 +1218,14 @@ run_MOSAIC <- function(config,
   # Downstream consumers read control$likelihood$weights_location, so
   # resolving it here covers both backends in lockstep.
   if (is.null(control$likelihood$weights_location)) {
-    derived_wl <- .mosaic_derive_weights_location(config)
+    wl_floor   <- 0.05
+    derived_wl <- .mosaic_derive_weights_location(config, floor = wl_floor)
     if (!is.null(derived_wl)) {
       control$likelihood$weights_location <- derived_wl
       log_msg(paste0("Derived data-driven weights_location (down-weighting ",
                      "low-signal/absence countries): %d below 0.5, floor %.3f, ",
                      "range [%.3f, %.3f]"),
-              sum(derived_wl < 0.5), formals(.mosaic_derive_weights_location)$floor,
+              sum(derived_wl < 0.5), wl_floor,
               min(derived_wl), max(derived_wl))
     }
   }
@@ -3264,7 +3265,7 @@ run_MOSAIC <- function(config,
   best_str <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
   log_msg("=== Run Summary ===")
   log_msg("  Location: %s (%s to %s)", summary_obj$location, summary_obj$date_start, summary_obj$date_stop)
-  conv_str <- if (is.na(summary_obj$converged)) "NA (fixed mode: ESS criterion not evaluated)"
+  conv_str <- if (!isTRUE(summary_obj$convergence_evaluated)) "NO (fixed mode: ESS criterion not evaluated)"
               else if (isTRUE(summary_obj$converged)) "YES" else "NO"
   log_msg("  Converged: %s", conv_str)
   log_msg("  R2 ensemble:   cases = %s | deaths = %s", r2ce_str, r2de_str)
@@ -3295,13 +3296,15 @@ run_MOSAIC <- function(config,
   posthoc_met <- summary_obj$posthoc_criteria_met
 
   log_msg(paste0(
-    "[RUN_SUMMARY] status=%s mode=%s converged=%s posthoc_criteria_met=%s outputs_ok=%s ",
+    "[RUN_SUMMARY] status=%s mode=%s converged=%s convergence_evaluated=%s ",
+    "posthoc_criteria_met=%s outputs_ok=%s ",
     "runtime_min=%.2f r2_cases_ensemble=%s r2_deaths_ensemble=%s ",
     "sims_total=%s sims_retained=%s sims_best_subset=%s sims_best_subset_tier=%s ",
     "ess_pct_above_target=%s resumed=%s dir_output=%s"),
     status_str,
     if (is.null(state$mode)) "NA" else state$mode,
-    if (is.na(run_conv)) "NA" else if (run_conv) "YES" else "NO",
+    if (run_conv) "YES" else "NO",
+    if (.mosaic_convergence_evaluated(state)) "YES" else "NO",
     if (length(posthoc_met) != 1L || is.na(posthoc_met)) "NA" else if (posthoc_met) "YES" else "NO",
     if (outputs_ok) "YES" else "NO",
     as.numeric(runtime),
@@ -3337,6 +3340,7 @@ run_MOSAIC <- function(config,
       sims_total = state$total_sims_run,
       sims_success = state$total_sims_successful,
       converged = .mosaic_run_converged(state),
+      convergence_evaluated = .mosaic_convergence_evaluated(state),
       resumed = isTRUE(state$resumed),
       sims_reused = state$n_sims_reused %||% 0L,
       runtime_min = as.numeric(runtime)

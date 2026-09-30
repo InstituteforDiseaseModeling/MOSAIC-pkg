@@ -2032,10 +2032,14 @@
 
 #' Best-subset posterior weights under control$targets$best_subset_weighting
 #'
-#' The single source of the best-subset weights: the convergence gate (ESS_B,
-#' A, CVw) and \code{results$weight_best} (which drives the posterior
-#' quantiles, posteriors.json, the ensemble parameter weights and the optimizer)
-#' both call this, so the gated weights are the weights the posterior uses.
+#' The best-subset weights used by the convergence gate (ESS_B, A, CVw) and by
+#' \code{results$weight_best} (which drives the posterior quantiles,
+#' posteriors.json, the ensemble parameter weights and the optimizer), so the
+#' gated weights are the weights the posterior uses. The post-hoc subset-size
+#' tier search (\code{grid_search_best_subset()}) is not covered: it applies
+#' its own dynamic-temperature weighting whatever \code{best_subset_weighting}
+#' is, so under \code{"tempered"} the subset size is chosen with different
+#' weights from those the posterior uses.
 #' \code{"saturated"}: \eqn{w \propto \exp(-0.5 \min(\Delta AIC, 4))};
 #' \code{"tempered"}: adaptive-eta Gibbs weights
 #' (\code{.mosaic_calc_adaptive_gibbs_weights()}).
@@ -2328,8 +2332,12 @@
 #' A caller-supplied cluster is consent to parallelise the ensembles and sets
 #' their size, but it is not stopped (the caller owns it), so its workers keep
 #' their connection slots and memory while \code{calc_model_ensemble()} starts
-#' its own cluster. The ensemble size is therefore clamped to the free R
-#' connections, and a note says both clusters are resident.
+#' its own cluster. The size is clamped to the free R connections here, with
+#' the same rule \code{calc_model_ensemble()} applies internally, only so the
+#' note can state the size the ensembles will actually get; the note warns
+#' that both clusters are resident. Reusing the caller's cluster would need a
+#' \code{cluster} argument on the exported \code{calc_model_ensemble()} and
+#' is not done.
 #'
 #' @param cluster The \code{cluster} argument of \code{run_MOSAIC()} (or NULL).
 #' @param control The resolved control list.
