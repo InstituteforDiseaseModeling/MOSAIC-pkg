@@ -21,6 +21,8 @@
 #' Steps performed:
 #' \itemize{
 #'   \item Load \code{Public_surveillance_dataset.rds} and keep only \code{spatial_scale == "country"}.
+#'   \item Drop rows flagged \code{phantom}: weeks the archive zero-fills without a
+#'     report (no \code{observation_collection_id}). They are unobserved, not zeros.
 #'   \item Extract \code{iso_code} from \code{location_name} (suffix after “::”) and convert to full country name.
 #'   \item Split \code{epiweek} (e.g. "2017-15") into \code{year} and \code{week}.
 #'   \item Create \code{date_start} (Monday) and \code{date_stop} (Sunday) for each ISO week via \code{ISOweek::ISOweek2date()}.
@@ -63,6 +65,20 @@ process_JHU_weekly_data <- function(PATHS) {
      # keep only country-level observations
      data <- data[data$spatial_scale == "country", ]
 
+     # Drop phantom rows. The OSF archive flags as `phantom` the weeks it zero-fills
+     # inside a country's reporting span when no report exists: 4,144 country-level
+     # rows, every one with sCh = 0, cCh and deaths NA, and no
+     # observation_collection_id (phantom holds exactly when the collection id is
+     # missing). They are not observations, so keeping them would enter unreported
+     # weeks as reported zeros at full trust and let them outrank real counts from
+     # other sources in process_cholera_surveillance_data(). A dropped week is simply
+     # unobserved (NA in the combined series).
+     if ("phantom" %in% names(data)) {
+          n_ph <- sum(data$phantom %in% TRUE)
+          data <- data[!(data$phantom %in% TRUE), ]
+          message(sprintf("Dropped %d phantom (zero-filled, unreported) country-weeks", n_ph))
+     }
+
      # extract ISO3 code and full country name
      data$iso_code <- sub(".*::", "", data$location_name)
      data$country  <- MOSAIC::convert_iso_to_country(data$iso_code)
@@ -81,9 +97,8 @@ process_JHU_weekly_data <- function(PATHS) {
      # month of week-start
      data$month <- lubridate::month(data$date_start)
 
-     # define cases and deaths. Missing stays NA: a fabricated zero would count as a
-     # complete observation in process_cholera_surveillance_data()'s completeness
-     # tie-break and enter the fit target at full trust.
+     # define cases and deaths. Missing stays NA: a fabricated zero would enter the
+     # fit target as an observed zero at full trust.
      data$cases  <- ifelse(!is.na(data$sCh), data$sCh, data$cCh)
      data$deaths <- as.numeric(data$deaths)
      data <- data[!(is.na(data$cases) & is.na(data$deaths)), ]

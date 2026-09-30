@@ -234,3 +234,52 @@ test_that("an empty row does not win over an observed row, and imputed rows stil
   expect_equal(out$cases, c(30, 8.5))
   expect_equal(out$disaggregation_method, c("observed", "fourier_country_k2"))
 })
+
+test_that("an observed deaths-only row beats an imputed row that has cases", {
+  P <- make_selection_fixture(
+    who = list(list(w = 1, cases = NA, deaths = 3)),
+    ai  = list(list(w = 1, cases = 55.2, deaths = 1.1, method = "fourier_country_k2")))
+  out <- run_selection(P)
+  expect_equal(out$source, "WHO")
+  expect_true(is.na(out$cases))
+  expect_equal(out$deaths, 3)
+})
+
+test_that("documented_zero counts as observed, as winner and as deaths donor", {
+  # Week 1: JHU zero cases without deaths + AI documented_zero (0, 0) -> JHU row,
+  # deaths 0 completed from the documented zero, weight = min(1.0, 0.9).
+  # Week 2: documented_zero beats a fourier row.
+  P <- make_selection_fixture(
+    jhu = list(list(w = 1, cases = 0, deaths = NA)),
+    ai  = list(list(w = 1, cases = 0, deaths = 0, method = "documented_zero"),
+               list(w = 2, cases = 0, deaths = 0, method = "documented_zero")),
+    supp = list(list(w = 2, cases = NA, deaths = NA)))
+  out <- run_selection(P)
+  expect_equal(out$source, c("JHU", "AI"))
+  expect_equal(out$deaths, c(0, 0))
+  expect_equal(out$source_deaths, c("AI", "AI"))
+  expect_equal(out$confidence_weight, c(0.9, 0.9))
+  expect_equal(out$disaggregation_method, c(NA, "documented_zero"))
+})
+
+test_that("case counts are matched after half-up rounding (JHU half-integers)", {
+  # 12.5 rounds half-up to 13: the WHO-free JHU week takes deaths from the AI
+  # row reporting 13, but not from one reporting 12.
+  P <- make_selection_fixture(
+    jhu = list(list(w = 1, cases = 12.5, deaths = NA), list(w = 2, cases = 12.5, deaths = NA)),
+    ai  = list(list(w = 1, cases = 13, deaths = 2, method = "observed"),
+               list(w = 2, cases = 12, deaths = 2, method = "observed")))
+  out <- run_selection(P)
+  expect_equal(out$source, c("JHU", "JHU"))
+  expect_equal(out$deaths[1], 2)
+  expect_true(is.na(out$deaths[2]))
+})
+
+test_that("same-source duplicate rows collapse to one row per week", {
+  P <- make_selection_fixture(
+    jhu = list(list(w = 1, cases = 20, deaths = NA), list(w = 1, cases = 20, deaths = 1)))
+  out <- run_selection(P)
+  expect_equal(nrow(out), 1L)
+  expect_equal(c(out$cases, out$deaths), c(20, 1))
+  expect_equal(out$source_deaths, "JHU")
+})

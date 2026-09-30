@@ -87,6 +87,27 @@ test_that("process_JHU_weekly_data keeps missing deaths and cases as NA", {
      expect_equal(out$deaths[2:3], c(1, 0))
 })
 
+test_that("process_JHU_weekly_data drops phantom (zero-filled, unreported) weeks", {
+     tmp <- withr::local_tempdir()
+     dir.create(file.path(tmp, "JHU", "osfstorage-archive"), recursive = TRUE)
+     raw <- data.frame(
+          location_name = "AFR::TZA",
+          epiweek = c("2015-31", "2015-32", "2015-33"),
+          sCh     = c(40, 0, 0),
+          cCh     = c(NA, NA, NA),
+          deaths  = c(2, NA, NA),
+          phantom = c(FALSE, TRUE, FALSE),
+          observation_collection_id = c("a1", NA, "a2"),
+          spatial_scale = "country",
+          stringsAsFactors = FALSE)
+     saveRDS(raw, file.path(tmp, "JHU", "osfstorage-archive", "Public_surveillance_dataset.rds"))
+     PATHS <- list(DATA_RAW = tmp, DATA_JHU_WEEKLY = file.path(tmp, "out"))
+     expect_message(process_JHU_weekly_data(PATHS), "Dropped 1 phantom")
+     out <- utils::read.csv(file.path(PATHS$DATA_JHU_WEEKLY, "cholera_country_weekly_processed.csv"))
+     expect_equal(out$week, c(31L, 33L))            # phantom week 32 is gone
+     expect_equal(out$cases, c(40, 0))              # a reported zero (week 33) is kept
+})
+
 test_that(".who_epiweek_start returns NA for missing or non-existent weeks in 'na' mode", {
      f <- MOSAIC:::.who_epiweek_start
      expect_equal(f(c(2025, NA, 2024, 2026), c(53, 5, 53, 1), invalid = "na"),

@@ -74,5 +74,7 @@ whatever the sources; a row with a case count beats a deaths-only row; and
 the fixed priority \strong{WHO > JHU > AI > SUPP} decides the rest. When the
 selected row has no death count, the deaths of the highest-priority other
 observed row reporting the same case count that week are used (the same
-report); \code{source_deaths} names the source of each death count.
+report, compared after half-up rounding) and the week keeps the lower of the
+two rows' \code{confidence_weight}; \code{source_deaths} names the source
+of each death count.
 }

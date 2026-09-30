@@ -29,6 +29,8 @@ for the MOSAIC framework.
 Steps performed:
 \itemize{
 \item Load \code{Public_surveillance_dataset.rds} and keep only \code{spatial_scale == "country"}.
+\item Drop rows flagged \code{phantom}: weeks the archive zero-fills without a
+report (no \code{observation_collection_id}). They are unobserved, not zeros.
 \item Extract \code{iso_code} from \code{location_name} (suffix after “::”) and convert to full country name.
 \item Split \code{epiweek} (e.g. "2017-15") into \code{year} and \code{week}.
 \item Create \code{date_start} (Monday) and \code{date_stop} (Sunday) for each ISO week via \code{ISOweek::ISOweek2date()}.

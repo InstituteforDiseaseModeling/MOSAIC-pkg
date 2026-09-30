@@ -22,7 +22,9 @@
 #'   the fixed priority \strong{WHO > JHU > AI > SUPP} decides the rest. When the
 #'   selected row has no death count, the deaths of the highest-priority other
 #'   observed row reporting the same case count that week are used (the same
-#'   report); \code{source_deaths} names the source of each death count.
+#'   report, compared after half-up rounding) and the week keeps the lower of the
+#'   two rows' \code{confidence_weight}; \code{source_deaths} names the source
+#'   of each death count.
 #' @param include_ai Logical (default \code{FALSE}). When \code{TRUE}, reads the
 #'   AI-mined processed file (\code{DATA_AI_WEEKLY/cholera_country_weekly_processed.csv},
 #'   produced by \code{\link{process_AI_cholera_data}}) as a fourth source, using
@@ -180,29 +182,34 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # Source selection within a key (same country + same Monday across sources).
      # ONE row supplies the week (whole-row selection), chosen by, in order:
      #   (1) a row carrying a count beats an empty row (both fields NA);
-     #   (2) an OBSERVED row beats an IMPUTED one, whatever the sources. Observed =
-     #       a direct WHO/JHU/SUPP row (disaggregation_method NA) or an AI row whose
-     #       method is `observed` or `documented_zero`; every other method
-     #       (`fourier_*`, `assumed_zero`, any future modelled method) is imputed;
-     #   (3) a row with a case count beats a deaths-only row (cases are the
-     #       primary fit target; a row without them does not report the week);
+     #   (2) an OBSERVED row beats an IMPUTED one, whatever the sources and
+     #       whichever fields they carry -- so an observed deaths-only row beats an
+     #       imputed row with cases, and imputed values never fill a field of an
+     #       observed week. Observed = a direct WHO/JHU/SUPP row
+     #       (disaggregation_method NA) or an AI row whose method is `observed` or
+     #       `documented_zero`; every other method (`fourier_*`, `assumed_zero`,
+     #       any future modelled method) is imputed;
+     #   (3) among rows of the same tier, a row with a case count beats a
+     #       deaths-only row (cases are the primary fit target);
      #   (4) source priority WHO > JHU > AI > SUPP.
      # This replaces a completeness tie-break (rows with cases AND deaths first,
      # then priority) inherited from the original keep_source merge, which assumed
-     # every source reports both fields. Since process_JHU_weekly_data() keeps a
-     # missing JHU death count as NA instead of 0 (v0.100.0), that rule let 2,235
-     # observed JHU weeks (2011-2023) lose to AI rows -- 2,037 of them fourier
-     # interpolations -- and inflated those weeks' cases 4.9x (54,248 -> 264,759).
+     # every source reports both fields. Once process_JHU_weekly_data() kept a
+     # missing JHU death count as NA (v0.100.0), that rule handed every JHU week
+     # without deaths to any AI row that had both fields, including fourier
+     # interpolations.
      #
-     # Deaths completion (the case the completeness rule existed for): when the
-     # selected row has cases but no deaths, its deaths are taken from the
-     # highest-priority OTHER observed row that reports the SAME case count for
-     # that week -- the same report, one source having dropped the deaths field.
-     # A row with a different case count is a different report, so its deaths are
-     # not mixed in (on the 2026-09 inputs 157 of the 231 such weeks agree
-     # exactly; the other 74 differ by up to 6,000 cases), and imputed deaths are
-     # never used. `source_deaths` records which source supplied the deaths value
-     # (NA when deaths is NA); it differs from `source` only for completed weeks.
+     # Deaths completion: when the selected row has cases but no deaths, its deaths
+     # are taken from the highest-priority OTHER observed row reporting the same
+     # case count for that week -- the same report, one source having dropped the
+     # deaths field. Counts are compared after half-up rounding (floor(x + 0.5)),
+     # because JHU carries half-integer counts. A row with a different case count
+     # is a different report and is not mixed in, and imputed deaths are never
+     # used. `source_deaths` records the source of the deaths value (NA when
+     # deaths is NA); it differs from `source` only for completed weeks. A
+     # completed week carries the lower of the two rows' confidence_weight, since
+     # the weight scores both channels (make_config_default builds
+     # reported_cases_weight and reported_deaths_weight from it).
      # Vectorized: O(n log n).
      PRIORITY <- c(WHO = 1L, JHU = 2L, AI = 3L, SUPP = 4L)
 
@@ -217,17 +224,20 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      dedup <- all_df[is_winner, ]
      dedup$source_deaths <- ifelse(is.na(dedup$deaths), NA_character_, dedup$source)
 
+     half_up <- function(x) floor(x + 0.5)
      donors <- all_df[!is_winner & !all_df$.imputed &
                       !is.na(all_df$cases) & !is.na(all_df$deaths), ]
      wi <- match(donors$key, dedup$key)
      donors <- donors[is.na(dedup$deaths[wi]) & !is.na(dedup$cases[wi]) &
-                      round(donors$cases) == round(dedup$cases[wi]), ]
+                      half_up(donors$cases) == half_up(dedup$cases[wi]), ]
      donors <- donors[!duplicated(donors$key), ]  # already priority-sorted
      wi <- match(donors$key, dedup$key)
-     dedup$deaths[wi]        <- donors$deaths
-     dedup$source_deaths[wi] <- donors$source
+     dedup$deaths[wi]            <- donors$deaths
+     dedup$source_deaths[wi]     <- donors$source
+     dedup$confidence_weight[wi] <- pmin(dedup$confidence_weight[wi],
+                                         donors$confidence_weight, na.rm = TRUE)
      if (nrow(donors) > 0)
-          message(sprintf("Completed deaths for %d week(s) from a lower-priority source reporting the same case count",
+          message(sprintf("Completed deaths for %d week(s) from another observed row reporting the same case count",
                           nrow(donors)))
 
      dedup$key <- NULL
