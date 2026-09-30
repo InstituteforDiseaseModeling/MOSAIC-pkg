@@ -11,8 +11,9 @@
 #       stopping would over-train and blow up amplitude (plan §8 gate 6b, round-3).
 #
 # Design:
-#   - IS data = everything strictly before cutoff_date; OOS = cutoff..forecast_end
-#     (never touched during fitting).
+#   - IS data = everything on or before cutoff_date (inclusive, matching the
+#     scaler, the bias-correction fit and the "training" label); OOS = the dates
+#     after cutoff_date (never touched during fitting).
 #   - Inside IS: start at midpoint = fit_date_start + (cutoff - fit_date_start)/2;
 #     at step k, train_end = midpoint + k*step_months, test_start = train_end +
 #     gap_weeks (4-week embargo), test_end = min(test_start + test_months, cutoff).
@@ -222,8 +223,9 @@
           n_train = length(seqs_tr$y), n_val = length(seqs_val$y))
 }
 
-#' Slice the pool data to FULL IS (everything strictly before cutoff_date), no
-#' validation set. Used for the final refit.
+#' Slice the pool data to FULL IS (every target dated on or before cutoff_date,
+#' the same inclusive convention as the scaler, the bias-correction fit and the
+#' "training" label), no validation set. Used for the final refit.
 #' @keywords internal
 #' @noRd
 .psi_slice_full_is <- function(data_bundle) {
@@ -232,7 +234,7 @@
      enc <- data_bundle$encoders
      use_cw <- isTRUE(data_bundle$use_confidence_weight)
 
-     is_train <- pd$dates < data_bundle$cutoff_date & !is.na(pd$intensity)
+     is_train <- pd$dates <= data_bundle$cutoff_date & !is.na(pd$intensity)
      seqs_tr <- .psi_build_sequences(
           X         = pd$X[is_train, , drop = FALSE],
           y         = pd$intensity[is_train],

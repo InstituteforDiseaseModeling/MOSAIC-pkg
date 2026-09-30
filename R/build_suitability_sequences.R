@@ -179,7 +179,7 @@
 #' PERIOD statistics only.
 #'
 #' @param source_csv Path to the merged weekly suitability data CSV.
-#' @param cutoff_date Date (or string); IS data is everything < cutoff_date.
+#' @param cutoff_date Date (or string); IS data is everything <= cutoff_date.
 #' @param fit_date_start Start of the data window (default "2015-01-01").
 #' @param pred_date_stop End of the prediction window (default cutoff + ~5 mo).
 #' @param region_map Named character vector iso -> region, or NULL to use the
@@ -505,7 +505,7 @@
 
      # Placeholder full-IS train sequences (RW wrapper overrides per step; this
      # is a sensible fallback for any code reading these slots).
-     is_train_row_full <- d$date < cutoff_date & !is.na(d$intensity)
+     is_train_row_full <- d$date <= cutoff_date & !is.na(d$intensity)
      seqs_full <- .psi_build_sequences(
           X         = X_all[is_train_row_full, , drop = FALSE],
           y         = d$intensity[is_train_row_full],
