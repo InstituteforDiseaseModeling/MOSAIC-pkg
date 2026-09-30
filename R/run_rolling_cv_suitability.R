@@ -177,6 +177,40 @@
      ac
 }
 
+#' Auto-detect the lstm_v2 fit/prediction window from the suitability panel.
+#'
+#' `fit_date_stop` is the last week with BOTH observed cholera cases and complete
+#' ENSO/IOD covariates -- the documented contract, and the legacy path's rule.
+#' Keying on ENSO alone put the cutoff at the end of the covariate horizon
+#' (months past the last surveillance week), so the post-surveillance weeks were
+#' labelled "training" and, under the intensity target, trained as zeros.
+#' `pred_date_stop` is the last ENSO-complete week, extended by `lead` weeks when
+#' a forecast lead is trained (a lead-`h` model's last input week is the last
+#' covariate week, so its last target is `h` weeks later).
+#' @param dd Suitability panel (data.frame with date, cases, IOD, ENSO3, ENSO34, ENSO4).
+#' @param lead Forecast lead in weeks (default 0).
+#' @return list(fit_date_stop, pred_date_stop), both Date.
+#' @keywords internal
+#' @noRd
+.psi_auto_detect_dates <- function(dd, lead = 0L) {
+     enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
+     miss <- setdiff(c("date", "cases", enso_cols), names(dd))
+     if (length(miss))
+          stop("est_suitability: cannot auto-detect dates; panel lacks column(s): ",
+               paste(miss, collapse = ", "), call. = FALSE)
+     enso_ok <- stats::complete.cases(dd[, enso_cols])
+     if (!any(enso_ok))
+          stop("est_suitability: no rows with complete ENSO/IOD data; cannot auto-detect dates.",
+               call. = FALSE)
+     fit_ok <- enso_ok & !is.na(dd$cases)
+     if (!any(fit_ok))
+          stop("est_suitability: no periods found with both cholera case data and complete ENSO data.",
+               call. = FALSE)
+     lead <- as.integer(lead %||% 0L)
+     list(fit_date_stop  = max(as.Date(dd$date[fit_ok])),
+          pred_date_stop = max(as.Date(dd$date[enso_ok])) + 7L * max(0L, lead))
+}
+
 #' lstm_v2 orchestrator (the est_suitability default path).
 #' @keywords internal
 #' @noRd
@@ -233,15 +267,13 @@
           dd <- utils::read.csv(source_csv, stringsAsFactors = FALSE)
           dd$date <- as.Date(dd$date)
           dd <- dd[dd$iso_code %in% MOSAIC::iso_codes_mosaic, ]
-          dd$cases[is.na(dd$cases)] <- 0
-          enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
-          enso_ok <- stats::complete.cases(dd[, enso_cols])
+          auto <- .psi_auto_detect_dates(dd, lead = as.integer(ac$lead %||% 0L))
           if (is.null(fit_date_stop)) {
-               fit_date_stop <- max(dd$date[enso_ok], na.rm = TRUE)
-               if (verbose) message(glue::glue("Auto-detected fit_date_stop (cutoff): {fit_date_stop}"))
+               fit_date_stop <- auto$fit_date_stop
+               if (verbose) message(glue::glue("Auto-detected fit_date_stop (cutoff; last week with cases + complete ENSO): {fit_date_stop}"))
           } else fit_date_stop <- as.Date(fit_date_stop)
           if (is.null(pred_date_stop)) {
-               pred_date_stop <- max(dd$date[enso_ok], na.rm = TRUE)
+               pred_date_stop <- auto$pred_date_stop
                if (verbose) message(glue::glue("Auto-detected pred_date_stop: {pred_date_stop}"))
           } else pred_date_stop <- as.Date(pred_date_stop)
           rm(dd)

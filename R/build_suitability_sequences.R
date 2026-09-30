@@ -211,6 +211,17 @@
      d <- d[d$iso_code %in% pool, ]
      d <- d[d$date >= fit_date_start & d$date <= pred_date_stop, ]
 
+     # Rows after a country's last OBSERVED surveillance week carry no target
+     # information. Flag them BEFORE the NA -> 0 sanitiser below so the intensity
+     # recipe cannot turn them into fabricated zero-incidence training weeks (a
+     # country with no observed week at all is flagged throughout). Interior NA
+     # weeks keep the historical zero-fill.
+     obs_rows <- !is.na(d$cases)
+     last_obs <- if (any(obs_rows))
+          tapply(as.numeric(d$date[obs_rows]), d$iso_code[obs_rows], max) else numeric(0)
+     last_obs_row <- unname(last_obs[d$iso_code])
+     post_surveillance <- is.na(last_obs_row) | as.numeric(d$date) > last_obs_row
+
      # Sanitize cases (mirrors production).
      d$cases[is.na(d$cases)] <- 0
      d$cases[d$cases < 0]    <- 0
@@ -234,7 +245,7 @@
 
      # ---- Target: response variable selection (TRAIN-ONLY anchor) ----------
      if (identical(response_var, "intensity")) {
-          d_train_period <- d[d$date <= cutoff_date, ]
+          d_train_period <- d[d$date <= cutoff_date & !post_surveillance, ]
           cases_99th <- stats::quantile(d_train_period$cases, 0.99, na.rm = TRUE,
                                         names = FALSE)
           if (is.na(cases_99th) || cases_99th < 1) {
@@ -244,6 +255,12 @@
           }
           if (verbose) message(sprintf("  cases_99th (train-only): %.1f", cases_99th))
           d$intensity <- pmin(1.0, log1p(d$cases) / log1p(cases_99th))
+          # No observation => no target (the pre-computed target_* columns
+          # already propagate NA the same way).
+          d$intensity[post_surveillance] <- NA_real_
+          if (verbose && any(post_surveillance & d$date <= cutoff_date))
+               message(sprintf("  intensity: %d row(s) at/before the cutoff lie after their country's last observed week; target set to NA (not trained as zeros)",
+                               sum(post_surveillance & d$date <= cutoff_date)))
      } else {
           valid_targets <- c("target_A_count_global",
                               "target_B_count_per_country",
