@@ -95,6 +95,9 @@ jobs:
       - name: R CMD check (no tests, no vignettes)
         env:
           _R_CHECK_CRAN_INCOMING_: 'false'
+          # A Suggests package that fails to install on a runner should not
+          # fail the check; the test steps exercise the optional paths.
+          _R_CHECK_FORCE_SUGGESTS_: 'false'
         run: |
           R CMD check --no-manual --ignore-vignettes --no-tests MOSAIC_*.tar.gz
           if grep -q "^Status:.*WARNING" MOSAIC.Rcheck/00check.log; then
