@@ -6,14 +6,18 @@
 #' infectious prevalence across all locations.  The formulation is adapted from
 #' Bjørnstad & Grenfell (2008) but (i) folds the gravity weights directly into
 #' the prevalence term instead of using a separate coupling constant, and (ii)
-#' allows for under‑reporting through the location‐specific parameter `tau`.
+#' uses the location-specific departure probability `tau` (\eqn{\tau_j}, the
+#' daily probability that a resident of \eqn{j} travels outside its home
+#' location; see "Spatial dynamics" in the MOSAIC model description) to split
+#' each population into a stay-at-home share \eqn{1-\tau_j} and a travelling
+#' share \eqn{\tau_j}.
 #'
 #' Concretely, for time *t* and destination *j* the hazard is
 #' \deqn{\mathcal H_{jt} \,=\, \frac{\beta_{jt}\,S^{\*}_{jt}
 #'        \bigl[1-\exp\{-(S^{\*}_{jt}/N_{jt})\,\bar y_{jt}\}\bigr]}
 #'       {1+\beta_{jt}\,S^{\*}_{jt}},}
 #' where
-#' * \eqn{S^{\*}_{jt} = (1-\tau_j)\bigl(S_{jt}+V^{\mathrm{sus}}_{1,jt}+V^{\mathrm{sus}}_{2,jt}\bigr)} is the locally susceptible pool (adjusted for under‑reporting when `tau<1`).
+#' * \eqn{S^{\*}_{jt} = (1-\tau_j)\bigl(S_{jt}+V^{\mathrm{sus}}_{1,jt}+V^{\mathrm{sus}}_{2,jt}\bigr)} is the stay-at-home susceptible pool.
 #' * \eqn{\bar y_{jt}} is the **gravity‑weighted prevalence of infection** in the
 #'   entire metapopulation (including the destination):
 #'   \deqn{\bar y_{jt} = \frac{ (1-\tau_j)(I_{1,jt}+I_{2,jt}) +
@@ -24,31 +28,29 @@
 #' paper but has been used in later work where the mobility matrix itself
 #' carries the full coupling strength.
 #'
-#' @param beta Numeric **T × J** matrix. Human force‑of‑infection parameter
-#'   \eqn{\beta_{jt}} for each time step (*rows*) and location (*columns*).
-#' @param tau Numeric vector of length **J**. Reporting proportion
-#'   \eqn{\tau_j \in (0,1]} for each location.  A value of 1 means perfect
-#'   reporting; smaller values down‑weight local susceptibles and up‑weight
-#'   non‑local infections.
+#' @param beta Numeric **J × T** matrix. Human force‑of‑infection parameter
+#'   \eqn{\beta_{jt}} for each location (*rows*) and time step (*columns*).
+#' @param tau Numeric vector of length **J**. Departure probability \eqn{\tau_j \in [0,1]} of each location: larger values shrink the stay-at-home susceptibles and local infections by \eqn{1-\tau_j} and export more of location \eqn{j}'s infections to other destinations.
 #' @param pie Numeric **J × J** matrix of gravity‑model mobility weights
 #'   \eqn{\pi_{ij}} from origin *i* to destination *j*.  Diagonal entries are
 #'   ignored.
-#' @param N Numeric **T × J** matrix of total population \eqn{N_{jt}}.
-#' @param S Numeric **T × J** matrix of fully susceptible individuals
+#' @param N Numeric **J × T** matrix of total population \eqn{N_{jt}}.
+#' @param S Numeric **J × T** matrix of fully susceptible individuals
 #'   \eqn{S_{jt}}.
-#' @param V1_sus Numeric **T × J** matrix of vaccine‑derived susceptibles
+#' @param V1_sus Numeric **J × T** matrix of vaccine‑derived susceptibles
 #'   after one dose.
-#' @param V2_sus Numeric **T × J** matrix of vaccine‑derived susceptibles
+#' @param V2_sus Numeric **J × T** matrix of vaccine‑derived susceptibles
 #'   after two doses.
-#' @param I1 Numeric **T × J** matrix of symptomatic infectives.
-#' @param I2 Numeric **T × J** matrix of asymptomatic infectives.
-#' @param time_names Optional character vector of length **T** for output row
+#' @param I1 Numeric **J × T** matrix of symptomatic infectives.
+#' @param I2 Numeric **J × T** matrix of asymptomatic infectives.
+#' @param time_names Optional character vector of length **T** for output column
 #'   names.
 #' @param location_names Optional character vector of length **J** for output
-#'   column names.
+#'   row names.
 #'
-#' @return A numeric **T × J** matrix `H` with elements in \[0,1\] giving the
-#'   spatial importation hazard for each time–location pair.
+#' @return A numeric **J × T** matrix `H` (rows = locations, columns = time
+#'   steps) with elements in \[0,1\] giving the spatial importation hazard for
+#'   each location–time pair.
 #'
 #' @details
 #' *Diagonal of* `pie` *is set to zero internally.*  All matrices must have
@@ -68,15 +70,15 @@
 #' \dontrun{
 #' set.seed(123)
 #' T_steps <- 10; J <- 5
-#' beta <- matrix(runif(T_steps * J), nrow = T_steps, ncol = J)
-#' tau <- runif(J)
+#' beta <- matrix(runif(J * T_steps), nrow = J, ncol = T_steps)
+#' tau <- runif(J, 0, 0.2)
 #' pie <- matrix(runif(J^2), J, J); diag(pie) <- 0
-#' N <- matrix(sample(200:400, T_steps * J, replace = TRUE), nrow = T_steps, ncol = J)
-#' S <- matrix(sample(100:200, T_steps * J, replace = TRUE), nrow = T_steps, ncol = J)
-#' V1_sus <- matrix(sample(0:50, T_steps * J, replace = TRUE), nrow = T_steps, ncol = J)
-#' V2_sus <- matrix(sample(0:50, T_steps * J, replace = TRUE), nrow = T_steps, ncol = J)
-#' I1 <- matrix(sample(0:10, T_steps * J, replace = TRUE), nrow = T_steps, ncol = J)
-#' I2 <- matrix(sample(0:10, T_steps * J, replace = TRUE), nrow = T_steps, ncol = J)
+#' N <- matrix(sample(200:400, J * T_steps, replace = TRUE), nrow = J, ncol = T_steps)
+#' S <- matrix(sample(100:200, J * T_steps, replace = TRUE), nrow = J, ncol = T_steps)
+#' V1_sus <- matrix(sample(0:50, J * T_steps, replace = TRUE), nrow = J, ncol = T_steps)
+#' V2_sus <- matrix(sample(0:50, J * T_steps, replace = TRUE), nrow = J, ncol = T_steps)
+#' I1 <- matrix(sample(0:10, J * T_steps, replace = TRUE), nrow = J, ncol = T_steps)
+#' I2 <- matrix(sample(0:10, J * T_steps, replace = TRUE), nrow = J, ncol = T_steps)
 #'
 #' H <- calc_spatial_hazard(beta, tau, pie, N, S, V1_sus, V2_sus, I1, I2,
 #'                          time_names = paste0("day_", 1:T_steps),
@@ -103,7 +105,7 @@ calc_spatial_hazard <- function(
 ) {
 
      # Validate dimensions
-     if (!is.matrix(S)) stop("`S` must be a matrix T x J.")
+     if (!is.matrix(S)) stop("`S` must be a matrix J x T.")
      Tt <- ncol(S); J <- nrow(S)
 
      # Validate name args
@@ -111,14 +113,14 @@ calc_spatial_hazard <- function(
      if (!is.null(location_names) && length(location_names) != J) stop("`location_names` must have length J.")
 
      # Validate other inputs
-     if (!is.matrix(beta)    || any(dim(beta)    != c(J, Tt))) stop("`beta` must be a matrix T x J.")
+     if (!is.matrix(beta)    || any(dim(beta)    != c(J, Tt))) stop("`beta` must be a matrix J x T.")
      if (!is.numeric(tau)    || length(tau)      != J)        stop("`tau` must be a vector of length J.")
      if (!is.matrix(pie)     || any(dim(pie)     != c(J, J))) stop("`pie` must be a matrix J x J.")
-     if (!is.matrix(N)       || any(dim(N)       != c(J, Tt))) stop("`N` must be a matrix T x J.")
-     if (!is.matrix(V1_sus)  || any(dim(V1_sus)  != c(J, Tt))) stop("`V1_sus` must be a matrix T x J.")
-     if (!is.matrix(V2_sus)  || any(dim(V2_sus)  != c(J, Tt))) stop("`V2_sus` must be a matrix T x J.")
-     if (!is.matrix(I1)      || any(dim(I1)      != c(J, Tt))) stop("`I1` must be a matrix T x J.")
-     if (!is.matrix(I2)      || any(dim(I2)      != c(J, Tt))) stop("`I2` must be a matrix T x J.")
+     if (!is.matrix(N)       || any(dim(N)       != c(J, Tt))) stop("`N` must be a matrix J x T.")
+     if (!is.matrix(V1_sus)  || any(dim(V1_sus)  != c(J, Tt))) stop("`V1_sus` must be a matrix J x T.")
+     if (!is.matrix(V2_sus)  || any(dim(V2_sus)  != c(J, Tt))) stop("`V2_sus` must be a matrix J x T.")
+     if (!is.matrix(I1)      || any(dim(I1)      != c(J, Tt))) stop("`I1` must be a matrix J x T.")
+     if (!is.matrix(I2)      || any(dim(I2)      != c(J, Tt))) stop("`I2` must be a matrix J x T.")
 
      # Remove self-mobility
      if (sum(diag(pie)) != 0) diag(pie) <- 0
@@ -158,8 +160,8 @@ calc_spatial_hazard <- function(
      if (any(H < 0 | H > 1, na.rm = TRUE)) warning('Some values of spatial hazard are out of bounds')
 
      # Assign names if provided
-     if (!is.null(time_names)) rownames(H) <- time_names
-     if (!is.null(location_names)) colnames(H) <- location_names
+     if (!is.null(location_names)) rownames(H) <- location_names
+     if (!is.null(time_names)) colnames(H) <- time_names
 
      return(H)
 }
