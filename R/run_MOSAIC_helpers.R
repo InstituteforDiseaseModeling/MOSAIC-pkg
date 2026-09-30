@@ -100,37 +100,65 @@
   invisible(wrote)
 }
 
-#' Weighted per-location endemic/epidemic CFR reference levels for the CFR panel
+#' Posterior reported-CFR reference for the trajectory CFR panel
 #'
-#' Computes the best-subset weighted median of the implied surveillance CFR
-#' (\code{cfr_baseline_<iso>} / \code{cfr_epidemic_<iso>} columns written by
-#' \code{calc_implied_cfr()}) per location, for the dashed regime reference lines
-#' on the trajectory CFR(t) panel (DM F4). Uses the candidate best subset
-#' (\code{is_best_subset} / \code{weight_best}) to match the trajectory weighting.
-#' Returns \code{NULL} when neither column family is present (e.g. gamma_1 absent).
+#' The ensemble's posterior reported CFR by location and year
+#' (\code{calc_model_ensemble()$cfr_posterior}), in config location order, for
+#' the dashed reference on the trajectory CFR(t) panel. On epidemic-PPV ticks the
+#' simulated reported CFR should sit on this line. Returns \code{NULL} when the
+#' ensemble carries no posterior (deaths were not redrawn).
 #'
-#' @param results The samples/results data.frame (from samples.parquet).
+#' @param cfr_posterior Data frame from \code{calc_model_ensemble()$cfr_posterior}, or \code{NULL}.
 #' @param location_names Character vector of locations (config order).
-#' @return A data.frame \code{location, cfr_baseline, cfr_epidemic} (weighted
-#'   medians; \code{NA} where a column is absent), or \code{NULL}.
+#' @return A data.frame \code{location, year, cfr_median, cfr_lower, cfr_upper}, or \code{NULL}.
 #' @noRd
-.mosaic_compute_cfr_refs <- function(results, location_names) {
-  if (is.null(results) || !is.data.frame(results) ||
-      !("is_best_subset" %in% names(results))) return(NULL)
-  sub <- results[results$is_best_subset %in% TRUE, , drop = FALSE]
-  if (nrow(sub) == 0L) return(NULL)
-  w <- sub$weight_best
-  if (is.null(w) || all(!is.finite(w)) || sum(w, na.rm = TRUE) == 0) return(NULL)
-  bcols <- paste0("cfr_baseline_", location_names)
-  ecols <- paste0("cfr_epidemic_", location_names)
-  if (!any(c(bcols, ecols) %in% names(sub))) return(NULL)  # no CFR columns at all
-  .wmed <- function(col) if (col %in% names(sub))
-    weighted_quantiles(sub[[col]], w, 0.5) else NA_real_
-  data.frame(
-    location     = location_names,
-    cfr_baseline = vapply(bcols, .wmed, numeric(1)),
-    cfr_epidemic = vapply(ecols, .wmed, numeric(1)),
-    row.names    = NULL, stringsAsFactors = FALSE)
+.mosaic_compute_cfr_refs <- function(cfr_posterior, location_names) {
+  if (is.null(cfr_posterior) || !is.data.frame(cfr_posterior) || !nrow(cfr_posterior)) return(NULL)
+  keep <- cfr_posterior$location %in% location_names
+  if (!any(keep)) return(NULL)
+  out <- cfr_posterior[keep, c("location", "year", "cfr_median", "cfr_lower", "cfr_upper"), drop = FALSE]
+  out <- out[order(match(out$location, location_names), out$year), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+#' Write config_medoid.json with the medoid's posterior reported CFR
+#'
+#' The reported CFR is integrated out, not sampled, so the sampled medoid config
+#' still carries the prior \code{mu_jt}. It is shifted to the medoid's OWN
+#' posterior CFR (\code{medoid_cfr_posterior}, from the medoid ensemble's post-hoc
+#' CFR draws), so a re-simulation of the file -- rolling-CV projections,
+#' scenarios -- reproduces the medoid predictions' deaths level. The run-level
+#' posterior is the fallback when the medoid ensemble failed; it is not the
+#' default because the medoid's conditional CFR differs from the ensemble's by the
+#' medoid path's own case misfit. With neither, or when the shift is refused
+#' (a posterior CFR no per-onset probability can produce), the prior is written.
+#'
+#' @param config_medoid The sampled medoid config.
+#' @param medoid_cfr_posterior,run_cfr_posterior \code{cfr_posterior} data frames, or \code{NULL}.
+#' @param path Output file.
+#' @param log_msg,log_warn Logging functions.
+#' @return The config written (invisibly the same object the file holds).
+#' @noRd
+.mosaic_write_config_medoid <- function(config_medoid, medoid_cfr_posterior, run_cfr_posterior,
+                                        path, log_msg = function(...) invisible(NULL),
+                                        log_warn = function(...) invisible(NULL)) {
+  post <- if (!is.null(medoid_cfr_posterior)) medoid_cfr_posterior else run_cfr_posterior
+  source_lbl <- if (!is.null(medoid_cfr_posterior)) "medoid" else if (!is.null(run_cfr_posterior)) "run" else "none"
+  if (!is.null(post)) {
+    config_medoid <- tryCatch(.mosaic_apply_cfr_posterior(config_medoid, post),
+      error = function(e) {
+        log_warn("medoid config keeps the prior mu_jt: %s", conditionMessage(e))
+        source_lbl <<- "none"
+        config_medoid
+      })
+  }
+  tryCatch({
+    jsonlite::write_json(config_medoid, path, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+    log_msg("Saved %s (reported CFR: %s)", path,
+            switch(source_lbl, medoid = "medoid posterior", run = "run posterior", "prior"))
+  }, error = function(e) log_warn("config_medoid.json write failed: %s", conditionMessage(e)))
+  config_medoid
 }
 
 #' Persist the compact trajectory artifact for the "trajectories" figure group
@@ -166,13 +194,15 @@
 # Transmission-parameter guardrail
 # =============================================================================
 
-#' Clamp transmission parameters into laser-cholera-valid ranges
+#' Clamp transmission parameters into engine-valid ranges
 #'
 #' Applied to every sampled parameter set before it is simulated, so that
 #' calibration scoring and post-calibration prediction (best / medoid /
-#' posterior ensemble) use IDENTICAL clamped values. Prevents the laser-cholera
-#' ValueError where \code{p = -expm1(-rate) > 1} when \code{rate < 0}
-#' (GitHub #24) and keeps probabilities in \[0, 1\]. Idempotent -- clamping an
+#' posterior ensemble) use IDENTICAL clamped values. Prevents the error where
+#' \code{p = -expm1(-rate) > 1} when \code{rate < 0} (originally the
+#' laser-cholera ValueError of GitHub #24; the R engine inherits the same
+#' constraint, since it is a property of the chain-binomial parameterisation
+#' rather than of the implementation) and keeps probabilities in \[0, 1\]. Idempotent -- clamping an
 #' already-clamped config is a no-op -- so it is safe to apply at every sampling
 #' site without changing values that are already in range.
 #'
@@ -200,22 +230,23 @@
 #' trajectory for predictions, plots, ensemble R^2/bias metrics, the medoid
 #' target, and the subset-selection objective. The weighted MEAN is the
 #' unbiased estimator of expected counts (\eqn{E[\sum]=\sum E}) and never
-#' collapses to zero, so it is the package default; \code{"median"} reproduces
-#' historical (pre-feature) runs.
+#' collapses to zero on sparse deaths, so it is the package default (v0.38.0 to
+#' v0.46.0 and again from v0.98.0); \code{"median"}, the default from v0.46.1 to
+#' v0.97.x, reproduces runs made then.
 #'
 #' Accepts a scalar (applies to both channels) or a named vector to set cases
 #' and deaths independently, e.g. \code{c(cases = "median", deaths = "mean")}.
 #'
 #' @param x \code{NULL}, a scalar \code{"mean"}/\code{"median"}, or a named
 #'   vector with \code{"cases"} and/or \code{"deaths"}. \code{NULL} or an
-#'   unset channel falls back to \code{"median"}.
+#'   unset channel falls back to \code{"mean"}.
 #' @return Named character vector \code{c(cases = ., deaths = .)}, each
 #'   \code{"mean"} or \code{"median"}.
 #' @noRd
 .mosaic_resolve_central_method <- function(x = NULL) {
   valid <- c("mean", "median")
   ch    <- c("cases", "deaths")
-  out   <- stats::setNames(rep("median", 2L), ch)
+  out   <- stats::setNames(rep("mean", 2L), ch)
 
   if (is.null(x) || length(x) == 0L) {
     return(out)
@@ -272,14 +303,18 @@
 
 #' Mask engine-artifact time positions in a central series for scoring
 #'
-#' Sets the laser-cholera artifact time-positions to \code{NA} in a central-series
+#' Sets the engine-artifact time-positions to \code{NA} in a central-series
 #' matrix so they are dropped pairwise by \code{calc_model_R2()}/
 #' \code{calc_bias_ratio()} (both \code{na_rm = TRUE} by default). This is applied
 #' to the EST series only; the observed series stays unmasked, and the ensemble's
 #' raw central/array fields are never mutated -- only the matrix passed here is
 #' transformed. Artifacts: (1) the first \code{cases_warmup} cases timesteps are an
-#' initial-condition warm-up transient; (2) the final deaths timestep is a
-#' structural zero (laser issue #82).
+#' initial-condition warm-up transient; (2) when \code{deaths_final} is set, the
+#' final deaths timestep, a structural zero in the laser-cholera engine's output
+#' (reported deaths written at \code{tick} rather than \code{tick + 1}, so the
+#' last row was trimmed; laser-cholera issue #82). The R engine reports deaths on
+#' the cases' row since v0.96.0, so \code{calc_model_ensemble()} records
+#' \code{deaths_final = FALSE}.
 #'
 #' Masks by COLUMN (= time), so it is correct for any number of locations (rows);
 #' scoring sites flatten column-major via \code{as.numeric()}.
@@ -288,8 +323,8 @@
 #'   single-row matrix). The central series to mask.
 #' @param chan \code{"cases"} or \code{"deaths"}.
 #' @param spec Artifact-mask list (\code{ens$artifact_mask}). If \code{NULL},
-#'   falls back to \code{list(cases_warmup = 2L, deaths_final = TRUE)} so older
-#'   ensembles or sub-ensembles lacking the field still mask correctly.
+#'   falls back to \code{list(cases_warmup = 2L, deaths_final = TRUE)}: an
+#'   ensemble saved before the field existed came from the laser-cholera engine.
 #' @return The matrix with artifact columns set to \code{NA}.
 #' @noRd
 .mosaic_mask_central_for_scoring <- function(mat, chan, spec) {
@@ -359,7 +394,7 @@
 #' so this is the explicit opt-out, not the default.) Indices are clamped to
 #' \code{[1L, n_time]}.
 #'
-#' @param config The LASER config list (\code{date_start}, \code{reported_cases}).
+#' @param config The simulation config list (\code{date_start}, \code{reported_cases}).
 #' @param control The resolved control list (reads \code{control$likelihood}).
 #' @return \code{list(idx_cases, idx_deaths, n_time)} with integer indices.
 #' @noRd
@@ -408,169 +443,6 @@
   list(idx_cases = idx_cases, idx_deaths = idx_deaths, n_time = n_time)
 }
 
-# =============================================================================
-# Dask worker count
-# =============================================================================
-
-#' Count active Dask workers via Python (snapshot-staleness-safe)
-#'
-#' \code{client$scheduler_info()$workers} cannot be relied on to count Dask
-#' workers because it is a STALE, lagging client-side snapshot of the workers
-#' dict: when workers join over time (the Coiled spin-up case -- request 800,
-#' scale up gradually) the \code{workers} dict does not reflect the live count
-#' and reports a too-low number (e.g. 5 while hundreds are actually running).
-#' This was verified directly against a local \code{LocalCluster}: scaling
-#' from 1 to 6 workers left \code{len(scheduler_info()['workers'])} reporting 5
-#' while every fresh source (\code{client.nthreads()},
-#' \code{scheduler_info()['n_workers']}, the scheduler's own
-#' \code{len(s.workers)}) correctly reported 6. (An earlier comment here
-#' attributed the bug to a reticulate-conversion "per-worker field count of 5";
-#' that explanation was factually wrong -- on a STATIC cluster
-#' \code{len(scheduler_info()$workers)} returns the correct count. The real
-#' cause is snapshot staleness of the \code{workers} dict as workers join.)
-#'
-#' This helper reads a FRESH source server-side. PRIMARY:
-#' \code{len(client.nthreads())} -- a live scheduler RPC over a stable public
-#' API that returns one entry per worker (chosen over
-#' \code{client.run_on_scheduler(lambda s: len(s.workers))} because it needs no
-#' lambda serialization, which was observed to fail in some environments, and
-#' is a lighter call). FALLBACK 1: \code{scheduler_info()['n_workers']} when
-#' present (also fresh, but counts threads when threads-per-worker > 1).
-#' FALLBACK 2: \code{len(scheduler_info().get('workers', {}))} (the stale
-#' last-resort original behavior). The tiny Python helper returns a plain
-#' \code{int}, which \code{py_run_string(..., convert = TRUE)} reliably
-#' converts to an R integer; \code{-1} signals a Python-side failure that the R
-#' \code{tryCatch} maps to \code{NA_integer_}.
-#'
-#' @param client A reticulated \code{dask.distributed.Client} object.
-#' @return Integer worker count, or \code{NA_integer_} on error.
-#' @keywords internal
-.mosaic_count_dask_workers <- function(client) {
-  tryCatch({
-    py_env <- reticulate::py_run_string(
-      paste0(
-        "def _mosaic_count_workers(client):\n",
-        "    # PRIMARY: fresh scheduler RPC, one entry per live worker.\n",
-        "    try:\n",
-        "        return len(client.nthreads())\n",
-        "    except Exception:\n",
-        "        pass\n",
-        "    # FALLBACK 1: fresh 'n_workers' key when the scheduler exposes it.\n",
-        "    try:\n",
-        "        si = client.scheduler_info()\n",
-        "        if 'n_workers' in si:\n",
-        "            return int(si['n_workers'])\n",
-        "    except Exception:\n",
-        "        pass\n",
-        "    # FALLBACK 2: last-resort stale snapshot (original behavior).\n",
-        "    try:\n",
-        "        return len(client.scheduler_info().get('workers', {}))\n",
-        "    except Exception:\n",
-        "        return -1\n"
-      ),
-      convert = TRUE
-    )
-    n <- as.integer(py_env$"_mosaic_count_workers"(client))
-    if (is.na(n) || n < 0L) NA_integer_ else n
-  }, error = function(e) NA_integer_)
-}
-
-# =============================================================================
-# Dask gather with periodic heartbeat
-# =============================================================================
-
-#' Gather Dask futures while emitting periodic progress lines
-#'
-#' Wraps \code{client$gather(futures)} with a polling loop that wakes up every
-#' \code{interval_sec} seconds, counts completed vs pending futures via a
-#' single round-trip Python helper, and emits one structured
-#' \code{[PROGRESS]} log line per heartbeat. Eliminates the
-#' silent-during-gather window that otherwise leads a tailing operator (human
-#' or AI) to wrongly conclude the pipeline has hung.
-#'
-#' Note: an earlier version used \code{dask.distributed.wait(timeout=...)} to
-#' wake on completion-or-timeout. That API raises \code{TimeoutError} on
-#' timeout (it does NOT return a \code{DoneAndNotDoneFutures} as the docs
-#' suggest at first read), which aborted the gather on the very first
-#' heartbeat. We now poll \code{future.status} from Python in a single batched
-#' call (cheap -- the status is mirrored locally from scheduler push updates,
-#' no round-trip per future) and sleep between iterations.
-#'
-#' On gather error the helper does NOT swallow -- it lets the caller's tryCatch
-#' handle diagnostics (first-future status inspection).
-#'
-#' @param client A reticulated \code{dask.distributed.Client} object.
-#' @param futures List of Dask future objects. Empty list returns empty list.
-#' @param log_fn Logging function compatible with \code{log_msg(msg, ...)}.
-#' @param phase Short slug for the \code{phase=} field of the progress line
-#'   (e.g. \code{"calibration_batch"}, \code{"postca_ensemble"}).
-#' @param interval_sec Heartbeat interval. Defaults to 30 s -- long enough that
-#'   the log isn't spammed during fast gathers, short enough that a hung
-#'   gather is detected within a minute.
-#' @return The list returned by \code{client$gather(futures)}.
-#' @keywords internal
-.mosaic_gather_with_heartbeat <- function(client, futures, log_fn = log_msg,
-                                          phase = "gather",
-                                          interval_sec = 30L) {
-  total <- length(futures)
-  if (total == 0L) return(list())
-
-  # One-shot Python helper: count futures by terminal status in a single call.
-  # `future.status` is mirrored locally from scheduler push updates, so this
-  # does not produce N reticulate round-trips.
-  #
-  # Terminal statuses Dask exposes: 'finished', 'error', 'cancelled', 'lost'
-  # (worker died holding the future). All four must count toward "done",
-  # otherwise the `if (n_pending == 0L) break` below never fires and the
-  # heartbeat loop polls forever while the eventual client$gather() raises.
-  # 'cancelled' and 'lost' are also surfaced as errored so the [PROGRESS]
-  # line distinguishes "completed successfully" from "completed in failure".
-  py_env <- reticulate::py_run_string(
-    paste0(
-      "def _mosaic_count_status(fs):\n",
-      "    done = 0\n",
-      "    errored = 0\n",
-      "    for f in fs:\n",
-      "        s = f.status\n",
-      "        if s == 'finished':\n",
-      "            done += 1\n",
-      "        elif s in ('error', 'cancelled', 'lost'):\n",
-      "            done += 1\n",
-      "            errored += 1\n",
-      "    return (done, errored)\n"
-    ),
-    convert = TRUE
-  )
-  count_status <- py_env$"_mosaic_count_status"
-
-  start <- Sys.time()
-  log_fn("[PROGRESS] phase=%s event=gather_start sims_total=%d interval_sec=%d",
-         phase, total, as.integer(interval_sec))
-
-  repeat {
-    counts    <- count_status(futures)
-    n_done    <- as.integer(counts[[1L]])
-    n_errored <- as.integer(counts[[2L]])
-    n_pending <- total - n_done
-    elapsed   <- as.numeric(difftime(Sys.time(), start, units = "secs"))
-    # Count active workers via a pure-Python helper. See
-    # .mosaic_count_dask_workers() for the rationale -- the obvious
-    # length(client$scheduler_info()$workers) reads a STALE client-side
-    # snapshot that lags the live count as workers join (the Coiled spin-up
-    # case), so it under-reports (e.g. 5 while hundreds run). The helper reads
-    # a fresh source (client.nthreads()) instead.
-    n_workers <- .mosaic_count_dask_workers(client)
-
-    log_fn("[PROGRESS] phase=%s event=gather_wait sims_done=%d sims_pending=%d sims_errored=%d elapsed_sec=%.0f workers=%s",
-           phase, n_done, n_pending, n_errored, elapsed,
-           if (is.na(n_workers)) "?" else as.character(n_workers))
-
-    if (n_pending == 0L) break
-    Sys.sleep(as.integer(interval_sec))
-  }
-
-  client$gather(futures)
-}
 
 # =============================================================================
 # VALIDATION
@@ -592,6 +464,30 @@
       # Top-level: direct replacement
       def[[nm]] <- control[[nm]]
     }
+  }
+
+  # RETIRED (v0.92.0): nb_k_min_cases / nb_k_min_deaths.
+  #
+  # These were a floor on a marginal method-of-moments dispersion estimate that
+  # was mis-specified for a non-stationary series, so the floor bound in 27 of 28
+  # estimable locations and was in practice the dispersion parameter itself.
+  # Dispersion is now estimated per location by est_nb_dispersion(). A floor
+  # would silently override that estimate, which is exactly the failure mode
+  # being removed, so the setting is rejected rather than migrated.
+  #
+  # Detection MUST key off the user's ORIGINAL `control` (lesson #13): the merge
+  # above has already populated `def`, so a test against `def` can never fire.
+  .retired_nbk <- intersect(c("nb_k_min_cases", "nb_k_min_deaths"),
+                            names(control[["likelihood"]]))
+  if (length(.retired_nbk)) {
+    warning(sprintf(
+      paste0("control$likelihood$%s is RETIRED and has been ignored. NB dispersion is now ",
+             "estimated per location from the weekly observations by est_nb_dispersion(). ",
+             "To set the cases dispersion explicitly, use control$likelihood$nb_k_cases, which ",
+             "REPLACES the estimate (scalar or one value per location). nb_k_deaths is not used: ",
+             "run_MOSAIC() scores deaths with the reported CFR integrated out (dispersion phi_j)."),
+      paste(.retired_nbk, collapse = " and ")), call. = FALSE)
+    for (nm in .retired_nbk) def$likelihood[[nm]] <- NULL
   }
 
   # BACKWARD COMPATIBILITY: renamed control parameters (v0.22.16; fixed v0.37.1).
@@ -817,7 +713,7 @@
   }
 
   # Skip known metadata/structural fields that don't need 'distribution'
-  metadata_fields <- c("metadata", "parameters_global", "parameters_location",
+  metadata_fields <- c("metadata", "parameters_global", "parameters_location", "mu_jt",
                        "simulation", "reporting", "climate", "vaccination")
 
   # Check that each prior has distribution field
@@ -893,12 +789,24 @@
   )
 }
 
+#' Significant digits for run-input JSON
+#'
+#' 17 significant digits round-trip every double exactly. jsonlite's
+#' \code{digits = NA} writes 15, which changes values by ~1e-15 relative; that is
+#' enough to change a member re-simulated from \code{1_inputs/config.json} and
+#' \code{priors.json} (integer rounding and binomial draws amplify it), so a
+#' post-hoc reconstruction such as the R_eff re-simulation would not reproduce
+#' the calibration members.
+#' @noRd
+.MOSAIC_JSON_DIGITS <- I(17)
+
 #' Write JSON with Atomic Rename (NFS-Safe)
 #' @noRd
 .mosaic_write_json <- function(obj, path, io) {
   # Define write function
   write_func <- function(data, file) {
-    jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+    jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE,
+                         digits = .MOSAIC_JSON_DIGITS)
   }
 
   # Use NFS-safe atomic write
@@ -950,12 +858,59 @@
       # OOM with 40K+ single-row parquets (10-20KB overhead per file expands to several GB).
       n_files <- length(files)
       if (n_files <= chunk_size) {
-        # Small enough to load in one shot
-        arrow::open_dataset(dir_params, format = "parquet") %>%
+        # Small enough to load in one shot.
+        #
+        # unify_schemas = TRUE is REQUIRED, not an optimisation knob. Without it
+        # open_dataset() adopts the schema of the first file it reads and
+        # silently DROPS any column a later file adds -- no error, no warning,
+        # just missing columns in samples.parquet. The chunked branch below
+        # tolerates that case via rbindlist(fill = TRUE); this branch did not,
+        # and the difference was invisible because both return a data frame of
+        # the right row count.
+        #
+        # This branch became production's normal path in v0.87.0: batching 100
+        # simulations per shard turns a 100,000-simulation run into ~1,000
+        # files, well under chunk_size = 5000. Before that flip the same run
+        # wrote 100,000 files and took the chunked branch, so the gap never
+        # mattered in practice. Flipping the default without fixing this would
+        # have routed every production run onto the one path that can lose
+        # columns -- and run_MOSAIC.R deletes the shards straight after
+        # combining, so the loss would be unrecoverable.
+        #
+        # Cost is bounded by construction: this branch only runs at <= 5,000
+        # files, where the schema scan is a small fraction of the read. (The
+        # chunked branch is a different story -- there unify_schemas measured
+        # 2.1x slower on dugong, which is why v0.86.0 reverted it there.)
+        arrow::open_dataset(dir_params, format = "parquet",
+                            unify_schemas = TRUE) %>%
           dplyr::collect() %>%
           as.data.frame()
       } else {
-        # Chunked approach: rbindlist on batches to reduce working set
+        # Chunked approach: bound the working set by reading `chunk_size` files
+        # at a time and rbindlist each chunk.
+        #
+        # v0.79.0 replaced the per-file read here with
+        # arrow::open_dataset(chunk_files, unify_schemas = TRUE) on the strength
+        # of a LAPTOP measurement (1.57x faster at 1,352 columns). Measured on
+        # dugong -- the hardware production actually runs on -- it is 2.1x
+        # SLOWER, so v0.86.0 reverted it. At 20,000 real shards of 1,355 columns:
+        #
+        #   per-file rbindlist                47.18 ms/shard   ->  78.6 min at 100k
+        #   open_dataset(unify_schemas=TRUE) 100.48 ms/shard   -> 167.5 min at 100k
+        #
+        # The 78.6 min projection agrees with the 82.2 min this path actually
+        # took in the 100,000-simulation production run, which is what makes the
+        # comparison trustworthy. `unify_schemas = TRUE` is the likely cost: it
+        # scans every file's schema footer before reading any data, a second full
+        # traversal that a laptop's page cache hides and a VM disk does not. It
+        # is also not optional -- without it open_dataset silently DROPS columns
+        # a later file adds, which is why the fast path cannot simply skip it.
+        #
+        # Do not re-introduce this without measuring on the target hardware. The
+        # real fix for combine cost is fewer, fatter shards
+        # (control$io$shard_batch_size), which takes the same work to 0.82
+        # ms/shard -- 57x faster than this path and 122x faster than the
+        # open_dataset one.
         n_chunks <- ceiling(n_files / chunk_size)
         if (verbose) log_msg("Loading in %d chunks of up to %d files", n_chunks, chunk_size)
         chunk_list <- vector("list", n_chunks)
@@ -1191,23 +1146,46 @@
   # and we additionally require the load-bearing columns (sim, likelihood) to be
   # present with a numeric likelihood. A footer-valid but data-corrupt or
   # schema-wrong shard would otherwise survive the scan and abort/poison the
-  # downstream combine. Shards are one row, so the read is cheap.
-  bad    <- character(0)
-  ok_ids <- integer(0)
-  for (f in files) {
-    parsed <- .mosaic_parse_sim_ids(f)
-    n_row <- tryCatch({
+  # downstream combine.
+  #
+  # This read is NOT cheap at production scale, whatever an earlier comment here
+  # claimed: a one-row shard with 1,352 columns is ~444 KB on disk (~98% parquet
+  # column framing), so a resume of a 100,000-simulation run re-reads ~53 GB
+  # before doing any work -- the same cost as the combine, paid twice. Shrinking
+  # it is pipeline plan item 6b (fewer, fatter shards), not something this
+  # function can fix on its own.
+  # Ids come from each shard's `sim` COLUMN, not from its filename.
+  #
+  # The column is what the combine and every downstream consumer already treat
+  # as the simulation id, so reading it here removes a second, parallel source
+  # of truth that could disagree with it. It also stops the scan caring how many
+  # rows a shard holds or how it is named, which is what lets a shard carry more
+  # than one simulation (pipeline plan item 6b) without touching this function
+  # again.
+  #
+  # Accumulation is pre-allocated per file rather than grown with c(): at
+  # 100,000 shards the append form is quadratic, which is the pattern CLAUDE.md
+  # calls out under "Memory issues".
+  bad_i  <- logical(length(files))
+  id_acc <- vector("list", length(files))
+  for (i in seq_along(files)) {
+    f <- files[i]
+    ids_f <- tryCatch({
       df <- as.data.frame(arrow::read_parquet(file.path(dir_cal_samples, f)))
-      if (!all(c("sim", "likelihood") %in% names(df))) NA_integer_
-      else if (!is.numeric(df$likelihood)) NA_integer_
-      else nrow(df)
-    }, error = function(e) NA_integer_)
-    if (is.na(n_row) || n_row < 1L || !length(parsed)) {
-      bad <- c(bad, f)
-    } else {
-      ok_ids <- c(ok_ids, parsed)
-    }
+      if (!all(c("sim", "likelihood") %in% names(df))) NULL
+      else if (!is.numeric(df$likelihood)) NULL
+      else if (nrow(df) < 1L) NULL
+      else {
+        sim_ids <- suppressWarnings(as.integer(df$sim))
+        sim_ids <- sim_ids[!is.na(sim_ids)]
+        if (!length(sim_ids)) NULL else sim_ids
+      }
+    }, error = function(e) NULL)
+    if (is.null(ids_f)) bad_i[i] <- TRUE else id_acc[[i]] <- ids_f
   }
+  bad    <- files[bad_i]
+  ok_ids <- unlist(id_acc, use.names = FALSE)
+  if (is.null(ok_ids)) ok_ids <- integer(0)
 
   if (length(bad)) {
     if (quarantine) {
@@ -1361,86 +1339,40 @@
   state
 }
 
-#' Is a laser-cholera Version Pre-v0.13?
+#' Which Transmission Engine Produced a Run Directory?
 #'
-#' Returns TRUE for engine versions before 0.13.0, which used the raw
-#' disease_deaths deaths-likelihood scale (v0.13 switched to rho_deaths-adjusted
-#' reported_deaths). Tolerant of PEP440 suffixes (e.g. "0.12rc1", "0.13.0.dev1",
-#' "0.13.0+local"): each dotted component is reduced to its leading integer.
-#' Returns NA when the version cannot be parsed to at least major.minor.
+#' Classifies a persisted MOSAIC version string as having simulated with the
+#' Python \code{laser-cholera} engine or the pure-R engine. The cutover is
+#' v0.68.0: every earlier version called Python, every later one calls
+#' \code{run_simulation()} in R.
 #'
+#' This replaced a pair of helpers that compared two \emph{laser-cholera}
+#' versions across the v0.12 -> v0.13 deaths-likelihood-scale boundary. That
+#' comparison stopped meaning anything at the v0.68.0 cutover: its "current"
+#' operand was read from \code{importlib.metadata.version("laser-cholera")},
+#' i.e. whichever wheel happened to be installed, which no longer describes what
+#' simulated anything -- and once v0.69.0 dropped the wheel from
+#' \code{environment.yml} it would have been permanently absent, firing the
+#' guard's "SKIPPED" warning on every single resume. The hazard it guarded did
+#' not go away, though; it got larger. A change of engine is a superset of a
+#' change of deaths scale, and the MOSAIC version records it exactly, with no
+#' Python needed.
+#'
+#' Tolerant of suffixes ("0.68.0.9000", "0.67.0-dev"): each dotted component is
+#' reduced to its leading run of digits. Returns NA when the version cannot be
+#' parsed to at least major.minor.
+#'
+#' @param v A MOSAIC version string as recorded in \code{1_inputs/environment.json}.
+#' @return "python", "R", or NA_character_.
 #' @noRd
-.mosaic_lc_pre013 <- function(v) {
-  if (is.null(v) || length(v) != 1L || is.na(v) || !nzchar(v)) return(NA)
-  # Reduce each dotted component to its leading run of digits ("12rc1" -> 12).
-  parts <- strsplit(v, "\\.")[[1]]
+.mosaic_run_engine <- function(v) {
+  if (is.null(v) || length(v) != 1L || is.na(v) || !nzchar(v)) return(NA_character_)
+  parts <- strsplit(as.character(v), "\\.")[[1]]
   nums  <- suppressWarnings(as.integer(sub("^([0-9]+).*$", "\\1", parts)))
-  if (length(nums) < 2L || is.na(nums[1]) || is.na(nums[2])) return(NA)
-  nums[1] < 1L && nums[2] < 13L
+  if (length(nums) < 2L || is.na(nums[1]) || is.na(nums[2])) return(NA_character_)
+  if (nums[1] > 0L || nums[2] >= 68L) "R" else "python"
 }
 
-#' Deaths-Scale Compatibility of Two laser-cholera Versions
-#'
-#' The v0.12 -> v0.13 transition flipped the deaths-likelihood scale, so resuming
-#' across that boundary mixes incompatible scales in the on-disk shards. Two
-#' versions on the SAME side of the boundary are compatible (even if they differ).
-#'
-#' @return "incompatible" if the versions straddle the v0.13 boundary,
-#'   "compatible" if both are on the same side, "unknown" if either cannot be
-#'   classified.
-#' @noRd
-.mosaic_lc_deaths_scale <- function(persisted, current) {
-  pp <- .mosaic_lc_pre013(persisted)
-  pc <- .mosaic_lc_pre013(current)
-  if (is.na(pp) || is.na(pc)) return("unknown")
-  if (!identical(pp, pc)) return("incompatible")
-  "compatible"
-}
-
-#' laser-cholera Likelihood-Value Compatibility (Python / Dask backend)
-#'
-#' On the Dask backend the likelihood is computed on-worker by laser-cholera's
-#' \code{calc_model_likelihood}, so the shard impl_version is the raw engine
-#' version (see \code{.mosaic_likelihood_provenance}). Two Dask-scored shards are
-#' poolable only if BOTH the engine OUTPUT schema (reported_cases/reported_deaths)
-#' AND the likelihood CODE produce identical values. Equal versions are trivially
-#' compatible; different versions are compatible only when explicitly verified
-#' identical and listed here (conservative allow-list, not a forward-looking
-#' "all >= X" rule).
-#'
-#' Verified-identical sets (engine output schema + calc_model_likelihood values
-#' byte-identical across the pair):
-#' \itemize{
-#'   \item \code{{0.14.0, 0.15.0}}: v0.15.0 is a docs/validation-hygiene release;
-#'     \code{calc_model_likelihood.py} differs only in \code{Optional[X]} ->
-#'     \code{X | None} type annotations, and the results schema
-#'     (reported_cases/reported_deaths) is unchanged.
-#' }
-#' v0.16.0 is intentionally NOT added to the {0.14.0, 0.15.0} set: it adds the
-#' per-cell \code{weights_obs_cases}/\code{weights_obs_deaths} arguments to
-#' \code{calc_model_likelihood.py}. When those weights are TRIVIAL (the default)
-#' the values are byte-identical to 0.15.0, but a v0.16.0 Dask shard scored with
-#' NON-trivial weights differs from a 0.15.0 shard (which could not apply them at
-#' all). Since this allow-list is version-keyed and cannot inspect whether the
-#' weights were trivial for a given shard, the conservative choice is to refuse
-#' pooling across the 0.15.0 -> 0.16.0 boundary (resume re-runs rather than
-#' silently mixing weighted and unweighted likelihoods). The engine OUTPUT schema
-#' (reported_cases/reported_deaths) and alpha dual-mode change are value-neutral
-#' for a scalar alpha, so only the likelihood-weighting motivates the exclusion.
-#' @return TRUE if the two versions produce comparable Dask likelihood values.
-#' @noRd
-.mosaic_lc_likelihood_compatible <- function(a, b) {
-  norm <- function(v) {
-    if (is.null(v) || length(v) != 1L || is.na(v) || !nzchar(v)) return(NA_character_)
-    as.character(v)
-  }
-  a <- norm(a); b <- norm(b)
-  if (is.na(a) || is.na(b)) return(FALSE)
-  if (identical(a, b)) return(TRUE)
-  compatible_sets <- list(c("0.14.0", "0.15.0"))
-  for (s in compatible_sets) if (a %in% s && b %in% s) return(TRUE)
-  FALSE
-}
 
 #' R-side Likelihood Implementation Version
 #'
@@ -1449,36 +1381,48 @@
 #' produces (e.g. the v0.22.20-21 N_obs shape-term normalization) so that resume
 #' refuses to pool shards scored by an incompatible likelihood implementation.
 #' @noRd
-.mosaic_likelihood_impl_version <- function() "R/v0.22.21"
+#' @note v0.93.0 replaced the `-y*log(1e6)` zero penalty with an eps-floored
+#'   density -- a change in likelihood VALUES -- but left this string at
+#'   "R/v0.92.0", so a resume could have pooled v0.92 and v0.93 shards. The
+#'   per-channel `eps_rel` change re-bumps it and closes that window too.
+#'   v0.96.0 scores deaths with the reported CFR integrated out
+#'   (\code{calc_log_likelihood_deaths_integrated()}), weekly, instead of the
+#'   eps-floored daily negative binomial on one realisation. v0.97.0 changes that
+#'   score from a negative binomial to quasi-Poisson with a per-location
+#'   dispersion and an additive background, smooths the year deviations, scores
+#'   edge weeks and makes the deaths confidence weights mass-preserving. v0.97.2
+#'   makes the year deviations yearly levels (blended at each 1 January)
+#'   instead of an interpolated curve. v0.98.0 centred each forecast year's
+#'   deviation on the latest observed year's; v0.99.0 centres it instead on a
+#'   fixed shift that run_MOSAIC() sets after calibration (0 while calibrating).
+#'   Either way the values change only where a scored day's blend reaches a
+#'   forecast year (data ending within 30 days of a 1 January).
+.mosaic_likelihood_impl_version <- function() "R/v0.99.0+deaths_forecastshift"
 
 #' Likelihood-Value Provenance Descriptor
 #'
 #' Captures WHO computed the likelihood stored in each shard, and the version of
 #' that implementation, so resume can refuse to pool incomparable likelihoods.
-#' On the local backend the likelihood is computed in R by
-#' \code{calc_model_likelihood()} on the orchestrator, so
-#' \code{engine = "R"} and the version is the R implementation tag.
-#' On the Dask backend (Phase 3 / PR #111) the likelihood is computed
-#' on-worker by laser-cholera's ported \code{calc_model_likelihood} module,
-#' so \code{engine = "python"} and the version is the laser-cholera engine
-#' version passed in via \code{lc_version}.
+#' The likelihood is computed in R by \code{calc_model_likelihood()} on the
+#' orchestrator, so \code{engine} is always \code{"R"} and the version is the R
+#' implementation tag.
 #'
-#' Resume then automatically refuses to pool R-scored and Python-scored
-#' shards (or shards from different engine versions) since the shard files
-#' themselves do not record provenance.
+#' The \code{engine} field is retained rather than dropped because shards
+#' written by the removed Dask backend recorded \code{engine = "python"} with a
+#' laser-cholera version as their \code{impl_version}. Resume must still be able
+#' to read those and refuse to pool them with R-scored draws -- deleting the
+#' field would make an old shard indistinguishable from a current one.
 #'
-#' @param use_dask Logical; TRUE if the run uses the Dask backend
-#'   (engine = "python"), FALSE for the local backend (engine = "R").
-#' @param lc_version Current laser-cholera version. Used as the impl_version
-#'   when engine is "python"; ignored when engine is "R".
+#' The function took an \code{lc_version} argument until v0.69.0. It never read
+#' it: C-1 reduced the body to a constant when scoring became R-only, leaving a
+#' parameter every caller filled and nothing consumed.
+#'
 #' @return list(engine, impl_version)
 #' @noRd
-.mosaic_likelihood_provenance <- function(use_dask = FALSE, lc_version = NA_character_) {
-  engine <- if (isTRUE(use_dask)) "python" else "R"
+.mosaic_likelihood_provenance <- function() {
   list(
-    engine       = engine,
-    impl_version = if (identical(engine, "python")) as.character(lc_version)
-                   else .mosaic_likelihood_impl_version()
+    engine       = "R",
+    impl_version = .mosaic_likelihood_impl_version()
   )
 }
 
@@ -1489,21 +1433,28 @@
 #' new draws, so a mismatch is a hard error. Comparison uses the same serializer
 #' that wrote the files (byte-exact for identical inputs); if serialization
 #' cannot be performed the check downgrades to a warning rather than blocking.
+#' Run directories written before v0.93.1 hold 15-significant-digit JSON, so a
+#' persisted file matching the incoming object at either precision passes.
 #'
-#' Also guards the laser-cholera engine version: resuming across the v0.12 ->
-#' v0.13 deaths-likelihood-scale boundary is a hard error (the on-disk shards
-#' would mix incompatible scales). When \code{control} is supplied, the
+#' Also guards the transmission engine: resuming a run directory created before
+#' MOSAIC v0.68.0 is a hard error, because its shards came from the Python
+#' laser-cholera engine and pooling them with R-engine draws would produce a
+#' posterior from neither simulator. When \code{control} is supplied, the
 #' likelihood target (\code{control$likelihood}) is also compared, since it is
 #' not part of config.json/priors.json but changing it re-scores draws under a
 #' different target.
 #'
 #' @noRd
-.mosaic_resume_check_inputs <- function(dirs, config, priors, control = NULL, use_dask = FALSE) {
-  serialize_obj <- function(obj) {
+.mosaic_resume_check_inputs <- function(dirs, config, priors, control = NULL) {
+  # digits = NA (15 significant) by default: the control sub-objects are
+  # compared after parsing control.json back, and at 15 digits a pre-v0.93.1
+  # file and a current one serialise identically while real changes still
+  # differ. config/priors are compared as raw file text, at both precisions.
+  serialize_obj <- function(obj, digits = NA) {
     tmp <- tempfile(fileext = ".json")
     on.exit(unlink(tmp), add = TRUE)
     ok <- tryCatch({
-      jsonlite::write_json(obj, tmp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+      jsonlite::write_json(obj, tmp, pretty = TRUE, auto_unbox = TRUE, digits = digits)
       TRUE
     }, error = function(e) FALSE)
     if (!ok) return(NA_character_)
@@ -1511,7 +1462,7 @@
   }
   check_one <- function(obj, file, label) {
     if (!file.exists(file)) return(invisible())
-    incoming  <- serialize_obj(obj)
+    incoming  <- serialize_obj(obj, .MOSAIC_JSON_DIGITS)
     persisted <- tryCatch(paste(readLines(file, warn = FALSE), collapse = "\n"),
                           error = function(e) NA_character_)
     if (is.na(incoming) || is.na(persisted)) {
@@ -1519,7 +1470,8 @@
                       label), call. = FALSE)
       return(invisible())
     }
-    if (!identical(incoming, persisted)) {
+    if (!identical(incoming, persisted) &&
+        !identical(serialize_obj(obj), persisted)) {
       stop(sprintf(paste0("resume: supplied %s differs from 1_inputs/%s.json. Changing %s ",
                           "alters the sampling/likelihood target, making the existing shards ",
                           "incomparable to new draws. Resume with identical %s, or start a ",
@@ -1536,7 +1488,7 @@
   # incomparable. control.json nests the full control under $control (plus a
   # per-run timestamp), so compare the relevant sub-objects rather than
   # byte-comparing the whole file:
-  #   - control$likelihood        : weights/sigmas/k_min -> the scoring target
+  #   - control$likelihood        : weights/sigmas -> the scoring target
   #   - control$sampling          : which of the ~301 params are sampled; changing
   #                                 it shifts the RNG stream so sample_parameters(
   #                                 seed = sim_id) yields different draws per id
@@ -1592,107 +1544,79 @@
     }
   }
 
-  # laser-cholera engine version check: the v0.12 -> v0.13 transition flipped
-  # the deaths likelihood scale (raw disease_deaths -> rho_deaths-adjusted
-  # reported_deaths). Resuming a pre-v0.13 run on v0.13+ silently mixes
-  # incompatible scales in the on-disk shards.
+  # Transmission-engine check: v0.68.0 replaced the Python laser-cholera engine
+  # with the pure-R one. The two agree statistically but not draw-for-draw, so
+  # resuming a Python-engine run directory here would pool shards from two
+  # different simulators into one posterior -- a posterior from neither.
+  #
+  # The discriminator is the MOSAIC version persisted in environment.json, not
+  # a laser-cholera version: the engine no longer has a version of its own that
+  # is separable from the package's. This also removes the last reason for this
+  # function to touch Python at all.
   env_file <- file.path(dirs$inputs, "environment.json")
   persisted_env <- NULL
-  persisted_lc <- NA_character_
+  persisted_mosaic <- NA_character_
   if (file.exists(env_file)) {
     persisted_env <- tryCatch(
       jsonlite::fromJSON(env_file, simplifyVector = TRUE),
       error = function(e) NULL
     )
-    persisted_lc <- tryCatch(persisted_env$python$pkg_laser_cholera, error = function(e) NA_character_)
-    if (is.null(persisted_lc) || length(persisted_lc) != 1L) persisted_lc <- NA_character_
+    persisted_mosaic <- tryCatch(persisted_env$R$MOSAIC, error = function(e) NA_character_)
+    if (is.null(persisted_mosaic) || length(persisted_mosaic) != 1L)
+      persisted_mosaic <- NA_character_
   }
-  current_lc <- tryCatch({
-    if (reticulate::py_available(initialize = FALSE)) {
-      importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
-      as.character(importlib$version("laser-cholera"))
-    } else NA_character_
-  }, error = function(e) NA_character_)
+  persisted_engine <- .mosaic_run_engine(persisted_mosaic)
 
-  have_persisted <- !is.na(persisted_lc) && nzchar(persisted_lc)
-  have_current   <- !is.na(current_lc) && nzchar(current_lc)
-
-  if (have_persisted && have_current && persisted_lc != current_lc) {
-    # Hard-error only when the two versions straddle the v0.12 -> v0.13 boundary
-    # (the deaths-likelihood-scale flip). Two versions on the SAME side (both
-    # pre-0.13, or both >= 0.13) keep a compatible deaths scale.
-    verdict <- .mosaic_lc_deaths_scale(persisted_lc, current_lc)
-    if (identical(verdict, "incompatible")) {
-      stop(sprintf(paste0(
-        "resume: laser-cholera engine version mismatch (persisted '%s' vs current '%s'). ",
-        "The v0.12 -> v0.13 transition flipped the deaths likelihood scale (raw disease_deaths ",
-        "-> rho_deaths-adjusted reported_deaths). Resuming would silently mix incompatible ",
-        "scales in 2_calibration/samples/. Start a fresh run in a new directory."),
-        persisted_lc, current_lc), call. = FALSE)
-    } else if (identical(verdict, "unknown")) {
-      warning(sprintf(paste0(
-        "resume: could not classify laser-cholera versions (persisted '%s' vs current '%s') ",
-        "against the v0.13 deaths-scale boundary; proceeding, but verify both are on the same ",
-        "side before trusting the resumed posterior."),
-        persisted_lc, current_lc), call. = FALSE)
-    } else {
-      warning(sprintf(paste0(
-        "resume: laser-cholera engine version differs (persisted '%s' vs current '%s'), ",
-        "but both are on the same side of the v0.13 deaths-scale boundary so the schema is ",
-        "compatible. Minor numerical differences may exist. Proceeding."),
-        persisted_lc, current_lc), call. = FALSE)
-    }
-  } else if (!have_persisted || !have_current) {
-    # Surface a SKIPPED guard rather than passing silently: this is the exact
-    # condition (pre-feature run with no recorded version, or Python not bound)
-    # under which an undetected v0.13 boundary crossing could mix deaths scales.
-    reason <- if (!have_persisted && !have_current)
-      "no version recorded in 1_inputs/environment.json and laser-cholera not available in this session"
-    else if (!have_persisted)
-      "no laser-cholera version recorded in 1_inputs/environment.json"
+  if (identical(persisted_engine, "python")) {
+    stop(sprintf(paste0(
+      "resume: this run directory was created by MOSAIC %s, which simulated with the Python ",
+      "laser-cholera engine. MOSAIC %s simulates in R (run_simulation()). The two engines agree ",
+      "statistically but not draw-for-draw, so pooling their shards in 2_calibration/samples/ ",
+      "would produce a posterior from neither. Start a fresh run in a new directory."),
+      persisted_mosaic, as.character(utils::packageVersion("MOSAIC"))), call. = FALSE)
+  } else if (is.na(persisted_engine)) {
+    # Surface a SKIPPED guard rather than passing silently -- this is the exact
+    # condition (no environment.json, or an unparseable version) under which an
+    # undetected engine change could mix simulators.
+    reason <- if (!file.exists(env_file))
+      "no 1_inputs/environment.json in this run directory"
     else
-      "laser-cholera not available in this session"
+      "no parseable MOSAIC version recorded in 1_inputs/environment.json"
     warning(sprintf(paste0(
-      "resume: the laser-cholera engine deaths-scale guard was SKIPPED (%s). If the engine ",
-      "crossed the v0.13 boundary since this run started, the resumed posterior could mix ",
-      "incompatible deaths scales."), reason), call. = FALSE)
+      "resume: the transmission-engine guard was SKIPPED (%s). If this run was started before ",
+      "MOSAIC v0.68.0 its shards came from the Python engine, and the resumed posterior would ",
+      "mix two simulators."), reason), call. = FALSE)
   }
 
   # Likelihood-value provenance: refuse to pool shards scored by a different
-  # likelihood engine/implementation than the current session would produce
-  # (R vs on-worker Python scoring on the Dask backend, or an R likelihood-code
-  # change that altered values). The shard files do not record provenance, so
-  # this comparison against the persisted environment.json is the only line
-  # of defence. Absent on pre-feature runs (skipped, like above).
+  # likelihood implementation than the current session would produce. The shard
+  # files do not record provenance, so this comparison against the persisted
+  # environment.json is the only line of defence. Absent on pre-feature runs
+  # (skipped, like above).
+  #
+  # There used to be an allow-list here permitting a resume across two
+  # laser-cholera versions whose on-worker Python likelihood values were
+  # verified byte-identical. It went with the Dask backend: scoring is now
+  # always R-side, so the condition `engine == "python"` could never be true
+  # again and the branch was dead. Any run whose shards were scored in Python
+  # now fails this check outright, which is the correct outcome -- those
+  # likelihoods cannot be reproduced by the current code path.
   persisted_prov <- tryCatch(persisted_env$likelihood_provenance, error = function(e) NULL)
   if (!is.null(persisted_prov)) {
-    cur_prov <- .mosaic_likelihood_provenance(use_dask, current_lc)
+    cur_prov <- .mosaic_likelihood_provenance()
     a <- serialize_obj(cur_prov); b <- serialize_obj(persisted_prov)
     if (!is.na(a) && !is.na(b) && !identical(a, b)) {
-      # Before hard-failing, allow the Python (Dask) backend to resume across two
-      # laser-cholera engine versions whose OUTPUT schema and calc_model_likelihood
-      # values are byte-identical (an explicit, verified allow-list). Same engine,
-      # likelihood-compatible impl_version -> the Dask-scored shards stay poolable.
       pers_engine <- persisted_prov$engine %||% "?"
-      likelihood_compatible <-
-        identical(cur_prov$engine, "python") && identical(pers_engine, "python") &&
-        .mosaic_lc_likelihood_compatible(persisted_prov$impl_version, cur_prov$impl_version)
-      if (likelihood_compatible) {
-        warning(sprintf(paste0(
-          "resume: laser-cholera engine version differs (persisted impl '%s' vs current '%s'), ",
-          "but both are in the verified likelihood-compatible set (identical engine ",
-          "calc_model_likelihood + output schema), so the Dask-scored shards remain ",
-          "comparable. Proceeding."),
-          persisted_prov$impl_version %||% "?", cur_prov$impl_version), call. = FALSE)
-      } else {
-        stop(sprintf(paste0(
-          "resume: likelihood provenance differs (persisted engine '%s' / impl '%s' vs current ",
-          "engine '%s' / impl '%s'). The shards on disk were scored by a different likelihood ",
-          "engine or implementation, so pooling them with new draws would mix incomparable ",
-          "likelihoods. Start a fresh run in a new directory."),
-          pers_engine, persisted_prov$impl_version %||% "?",
-          cur_prov$engine, cur_prov$impl_version), call. = FALSE)
-      }
+      extra <- if (identical(pers_engine, "python")) paste0(
+        " These shards were scored on-worker by the removed Python/Dask backend;",
+        " their likelihood values are not reproducible in R.") else ""
+      stop(sprintf(paste0(
+        "resume: likelihood provenance differs (persisted engine '%s' / impl '%s' vs current ",
+        "engine '%s' / impl '%s'). The shards on disk were scored by a different likelihood ",
+        "engine or implementation, so pooling them with new draws would mix incomparable ",
+        "likelihoods.%s Start a fresh run in a new directory."),
+        pers_engine, persisted_prov$impl_version %||% "?",
+        cur_prov$engine, cur_prov$impl_version, extra), call. = FALSE)
     }
   }
 
@@ -2301,6 +2225,58 @@
 #' @param show_progress Logical, whether to show progress bar
 #' @return List of success indicators from worker function
 #' @noRd
+#' Resolve control$io$shard_batch_size to a usable positive integer
+#'
+#' Garbage (NULL, NA, a string, a vector, a negative) falls back to 1, i.e. the
+#' historical one-file-per-simulation behaviour, rather than propagating into
+#' the dispatch. A silently-wrong batch size would change how many simulations a
+#' crash costs, so it degrades to the safe value instead of guessing.
+#'
+#' @param x The raw control value.
+#' @return A single positive integer.
+#' @noRd
+.mosaic_resolve_shard_batch <- function(x, n_sims = NA_integer_,
+                                       n_workers = NA_integer_,
+                                       tasks_per_worker = 4L) {
+  if (is.null(x)) return(1L)
+  n <- suppressWarnings(as.integer(x)[1])
+  if (is.na(n) || n < 1L) return(1L)
+
+  # Cap so the batch never starves the cluster. A fixed batch is a fixed number
+  # of TASKS, and at small budgets that can be fewer tasks than workers: 500
+  # simulations at 100 per shard is 5 tasks, so 5 of 24 workers do anything.
+  # Keep at least `tasks_per_worker` tasks each so the load balancer has
+  # something to balance.
+  #
+  # At production scale this never binds: 100,000 simulations across 80 workers
+  # allows 312 per shard, well above the default of 100.
+  ns <- suppressWarnings(as.integer(n_sims)[1])
+  nw <- suppressWarnings(as.integer(n_workers)[1])
+  if (!is.na(ns) && !is.na(nw) && ns > 0L && nw > 0L) {
+    cap <- as.integer(max(1L, floor(ns / (nw * max(1L, tasks_per_worker)))))
+    n <- min(n, cap)
+  }
+  as.integer(max(1L, n))
+}
+
+#' Split simulation ids into contiguous chunks
+#'
+#' Contiguous on purpose: the shard is named for the \code{min}-\code{max} range
+#' it covers, which is only informative if the ids in it are consecutive.
+#'
+#' @param sim_ids Integer vector of ids, assumed sorted.
+#' @param size Chunk size (>= 1).
+#' @return A list of integer vectors, each of length \code{size} except possibly
+#'   the last.
+#' @noRd
+.mosaic_chunk_ids <- function(sim_ids, size) {
+  sim_ids <- as.integer(sim_ids)
+  if (!length(sim_ids)) return(list())
+  size <- .mosaic_resolve_shard_batch(size)
+  if (size <= 1L) return(as.list(sim_ids))
+  unname(split(sim_ids, ceiling(seq_along(sim_ids) / size)))
+}
+
 .mosaic_run_batch <- function(sim_ids, worker_func, cl, show_progress) {
   if (is.null(cl)) {
     # Sequential execution
@@ -2325,9 +2301,11 @@
     #
     # Worker-death-robust gather: parLapply()/pblapply(cl=) collect results with a
     # BLOCKING unserialize() that, on Linux, hangs the master FOREVER if a PSOCK
-    # worker PROCESS dies mid-task -- a fatal C-level abort in the embedded
-    # Python/numba/laser engine, or an OOM kill (NOT an R-level error, which the
-    # worker already turns into a FALSE record). Calibration runs 10,000s of sims
+    # worker PROCESS dies mid-task -- an OOM kill, or any other fatal C-level
+    # abort (NOT an R-level error, which the worker already turns into a FALSE
+    # record). The embedded Python interpreter used to be the likeliest source
+    # of such an abort; the engine is pure R since v0.68.0, so OOM is now the
+    # realistic case, but a blocking gather is just as unrecoverable either way. Calibration runs 10,000s of sims
     # per country, the highest-exposure parallel gather in the package, so route it
     # through the same socketSelect()-timeout dispatch used by calc_model_ensemble()
     # (.mosaic_cluster_lapply_robust): a dead worker degrades on the survivors with
@@ -2356,889 +2334,4 @@
   }
 }
 
-# =============================================================================
-# DASK BACKEND HELPERS
-# =============================================================================
 
-#' Extract Base Config Fields for Dask Broadcasting
-#'
-#' Returns only the large/fixed fields (matrices, metadata) that are identical
-#' across all simulations and should be broadcast once via client$scatter().
-#' @noRd
-.extract_base_config <- function(config) {
-  keep <- c(
-    # 2-D matrices (n_locations x n_time_steps) -- the bulk of the data
-    "b_jt", "d_jt", "mu_jt", "psi_jt", "nu_1_jt", "nu_2_jt",
-    "reported_cases", "reported_deaths",
-    # Per-observation confidence-weight matrices. Inert today (calc_model_likelihood
-    # does not consume them), but broadcast here so the Dask path stays in lockstep
-    # with the local PSOCK path the moment per-cell weighting is wired in -- omitting
-    # them would silently run Dask unweighted while local runs weighted (Lesson #12).
-    "reported_cases_weight", "reported_deaths_weight",
-    # Structural / metadata
-    "date_start", "date_stop", "location_name",
-    "N_j_initial", "longitude", "latitude",
-    # Likelihood-control + epidemic_peaks + analyzer toggle (issue #100,
-    # plan section3.1, section3.4.1). Only present when injected by
-    # .mosaic_inject_likelihood_settings() on the Dask path; absent on
-    # the local PSOCK/FORK path (no-op).
-    "calc_likelihood",
-    "weight_cases", "weight_deaths",
-    "weights_time", "weights_location",
-    "nb_k_min_cases", "nb_k_min_deaths",
-    "weight_peak_timing", "weight_peak_magnitude",
-    "weight_cumulative_total", "weight_wis",
-    "sigma_peak_time", "sigma_peak_log",
-    "epidemic_peaks",
-    # Per-channel scored-window start indices (1-based). Default 1L => the
-    # Python worker takes the no-slice path. Injected by
-    # .mosaic_inject_likelihood_settings(); absent on the local path (no-op).
-    "score_idx_cases", "score_idx_deaths"
-  )
-  config[names(config) %in% keep]
-}
-
-#' Extract Per-Simulation Sampled Parameters
-#'
-#' Returns only the scalar/vector parameters that sample_parameters() modifies.
-#' Most matrix fields are excluded because they live in the broadcast
-#' base_config. However, psi_jt is INCLUDED here because
-#' .apply_psi_star_calibration() modifies it in-place per simulation -- the
-#' broadcast base_config has stale (uncalibrated) psi_jt.
-#' @noRd
-.extract_sampled_params <- function(params_sim) {
-  # Exclude fields that are in the broadcast base_config AND are never
-  # modified by sample_parameters().  psi_jt is intentionally NOT excluded:
-  # .apply_psi_star_calibration() recalculates it per-sim using psi_star_*
-  # params, so the per-sim version must override the broadcast base_config.
-  base_fields <- c(
-    "b_jt", "d_jt", "mu_jt", "nu_1_jt", "nu_2_jt",
-    "reported_cases", "reported_deaths",
-    # Per-cell confidence-weight matrices (config_default v4.1+). These are
-    # broadcast in base_config via .extract_base_config() and are NEVER modified
-    # by sample_parameters(), so they MUST be excluded here. If left in, two
-    # failures occur on the Dask path: (1) jsonlite::toJSON(digits=NA) serializes
-    # NA_real_ cells as the STRING "NA", and config.update(sampled) on the worker
-    # overwrites the clean float64 base_config arrays with Python lists carrying
-    # "NA" strings -> np.asarray(..., dtype=float) raises "could not convert
-    # string to float: 'NA'" in _weights_obs_matrix_trivial / the scorer, failing
-    # EVERY sim; (2) the full ~1.5 MB weight matrices are re-serialized per sim,
-    # ~30x bloating the per-sim JSON shipped to every worker at 40K-sim scale.
-    "reported_cases_weight", "reported_deaths_weight",
-    "date_start", "date_stop", "location_name", "seed",
-    "N_j_initial", "longitude", "latitude"
-  )
-  params_sim[!names(params_sim) %in% base_fields]
-}
-
-#' Sample, clamp, and JSON-serialize one sim's parameters for the Dask path.
-#'
-#' Per-sim worker function extracted from .mosaic_run_batch_dask() so the
-#' submission sample-and-serialize loop can run in parallel on a PSOCK
-#' parallel::parLapply() cluster. Returns a list:
-#'   $params : the full sampled-config list (NULL on failure)
-#'   $json   : the per-sim JSON string ready for the Coiled worker
-#'             (NULL on failure)
-#'   $error  : NULL on success; a character message on failure
-#'
-#' Reproducibility: sample_parameters() takes `seed = sim_id` and is
-#' internally seeded, so each sim's output depends ONLY on (sim_id,
-#' priors, config, sampling_args). Parallel execution produces output
-#' identical to serial execution regardless of which worker runs it.
-#'
-#' Error handling: the entire body is wrapped in tryCatch so any failure
-#' (in sample_parameters, in the guardrail clamps, in toJSON) is
-#' captured and returned as $error. Callers MUST NOT emit warnings
-#' inside this function -- a warning raised on a PSOCK worker never
-#' reaches the parent. Surface $error in the parent instead.
-#'
-#' Constraint: do NOT touch the parent's reticulate/Coiled state from
-#' inside this function. The parent's `client` and `mosaic_worker`
-#' objects live only in the parent -- they are never exported to the
-#' PSOCK workers, which must stay reticulate-free.
-#' @noRd
-.mosaic_sample_and_serialize <- function(sim_id, PATHS, priors, config,
-                                         sampling_args) {
-  tryCatch({
-    params <- sample_parameters(
-      PATHS       = PATHS,
-      priors      = priors,
-      config      = config,
-      seed        = sim_id,
-      sample_args = sampling_args,
-      verbose     = FALSE,
-      validate    = FALSE
-    )
-
-    # Guardrails: clamp transmission parameters into valid ranges (shared helper).
-    params <- .mosaic_clamp_transmission_params(params)
-
-    # Serialize the sampled (non-base) fields for shipping to the Coiled worker.
-    json <- jsonlite::toJSON(
-      .extract_sampled_params(params),
-      auto_unbox = TRUE,
-      digits     = NA
-    )
-
-    list(params = params, json = as.character(json), error = NULL)
-  }, error = function(e) {
-    list(params = NULL, json = NULL, error = conditionMessage(e))
-  })
-}
-
-
-#' Build and write a single Dask-path parquet shard.
-#'
-#' Per-sim worker function extracted from .mosaic_run_batch_dask() so the
-#' write loop can run in parallel on a PSOCK parallel::parLapply() cluster.
-#' Returns:
-#'   TRUE                   : shard wrote successfully
-#'   character message      : a failure reason for the parent to log
-#'
-#' This dual-type return lets the parent distinguish success from failure
-#' AND surface a diagnostic -- `warning()` calls on a PSOCK worker never
-#' reach the parent, so we propagate failure reasons through the return
-#' value instead.
-#'
-#' Side-effect: writes one parquet file at dirs$cal_samples/sim_NNNNNNN.parquet
-#' on success.
-#'
-#' Pure compute given (sim_id, res). No shared mutable state, no I/O
-#' beyond the single parquet write, no Python calls -- safe to invoke in
-#' parallel on PSOCK workers. The caller (parent process) is
-#' responsible for freeing result_lookup / params_list entries after
-#' each chunk completes.
-#'
-#' Constraint: do NOT touch the parent's reticulate/Coiled state from
-#' inside this function. The parent's `client` and `mosaic_worker`
-#' objects live only in the parent -- they are never exported to the
-#' PSOCK workers, which must stay reticulate-free.
-#' @noRd
-.mosaic_write_one_shard_dask <- function(sim_id, res, n_iterations,
-                                         param_names_all, param_lookup,
-                                         config, dirs, control) {
-  tryCatch({
-    # Skip if param sampling failed (no future submitted) or worker errored
-    if (is.null(res) || !isTRUE(res$success)) {
-      err_msg <- if (!is.null(res) && !is.null(res$error)) res$error else "unknown error"
-      stop("failed on worker: ", err_msg)
-    }
-
-    # Re-inject base_config fields stripped by .extract_sampled_params() that
-    # are needed for ISO-suffixed column generation. See
-    # test-dask_worker_schema_parity.R for the contract.
-    params <- res$params
-    if (is.null(params)) {
-      stop("worker returned no params dict (engine may be < 0.13)")
-    }
-    params$location_name <- config$location_name
-    params$N_j_initial   <- config$N_j_initial
-
-    # Fast path: .mosaic_extract_param_row() uses the precomputed
-    # param_lookup to extract values directly by ISO suffix, avoiding the
-    # O(n^2) c()-accumulation inside convert_config_to_matrix(). At 47
-    # countries / ~60 sampled fields, this saves ~3-5 ms per sim -- adds
-    # up to ~50 s wall over a 100K-sim batch on 8 cores.
-    raw_params <- .mosaic_extract_param_row(params, param_lookup,
-                                            length(param_names_all))
-    names(raw_params) <- param_names_all
-
-    # Collapse multi-iter to a single row via log-mean-exp (matches the
-    # local path: see run_MOSAIC.R ~285-300).
-    iter_list  <- res$iterations
-    n_iter_got <- length(iter_list)
-    if (n_iter_got == 0L) stop("worker returned no iterations")
-
-    lls <- vapply(iter_list, function(it) {
-      v <- suppressWarnings(as.numeric(it$likelihood))
-      if (length(v) == 1L) v else NA_real_
-    }, numeric(1))
-
-    collapsed_ll <- if (n_iter_got > 1L) {
-      valid_lls <- lls[is.finite(lls)]
-      if (length(valid_lls)) calc_log_mean_exp(valid_lls) else NA_real_
-    } else {
-      lls[1L]
-    }
-
-    seed_iter_1 <- as.integer((sim_id - 1L) * n_iterations + 1L)
-
-    row_df <- data.frame(
-      sim        = as.integer(sim_id),
-      iter       = 1L,
-      seed_sim   = as.integer(sim_id),
-      seed_iter  = seed_iter_1,
-      likelihood = collapsed_ll
-    )
-    for (pname in param_names_all) {
-      row_df[[pname]] <- as.numeric(raw_params[pname])
-    }
-
-    out_file <- file.path(dirs$cal_samples,
-                          sprintf("sim_%07d.parquet", sim_id))
-    .mosaic_write_parquet(row_df, out_file, control$io)
-    if (!file.exists(out_file)) stop("parquet write succeeded but file not on disk")
-    TRUE
-  }, error = function(e) conditionMessage(e))
-}
-
-
-#' Run One Dask Batch (sample -> submit -> gather -> write parquets)
-#'
-#' Replaces .mosaic_run_batch() for Dask execution. Workers compute the
-#' likelihood on-worker (issue #101) and return per-iter scalar likelihoods
-#' plus a sim-level params dict; this function writes one parquet row per
-#' sim (likelihood collapsed across iterations via calc_log_mean_exp when
-#' n_iterations > 1, mirroring the local-path semantics in run_MOSAIC.R).
-#'
-#' Two R-side phases run in parallel on a PSOCK cluster (fresh R
-#' processes -- never fork -- so a worker cannot inherit the parent's
-#' reticulate interpreter or live Dask sockets and deadlock the client):
-#'
-#'   - Submission (sample_parameters + JSON serialize) -- chunked in
-#'     batches of `submit_chunk_size` (default 1000) so that one
-#'     `client$map()` RPC handles each chunk's submissions to Coiled.
-#'   - Post-gather parquet write -- chunked in batches of
-#'     `write_chunk_size` (default 1000) for dispatch amortization,
-#'     progress logging, parent-side memory frees, and Dask scheduler
-#'     health pings.
-#'
-#' Both phases honor `control$parallel$n_cores` for the parallelism
-#' budget; default falls back to serial. Returns a logical vector of
-#' per-simulation success indicators (TRUE = parquet written
-#' successfully).
-#' @noRd
-.mosaic_run_batch_dask <- function(sim_ids, n_iterations, priors, config, PATHS,
-                                    sampling_args, dirs, param_names_all,
-                                    param_lookup, control,
-                                    client, base_config_future,
-                                    mosaic_worker) {
-
-  n_sims <- length(sim_ids)
-
-  # PSOCK workers compute paths from their own fresh session. A resolved PATHS
-  # MUST be passed so workers and parent agree: a NULL PATHS would make each
-  # worker's sample_parameters() fall back to get_paths() against an unset root
-  # and silently diverge from the parent. Fail loud instead.
-  if (is.null(PATHS))
-    stop(".mosaic_run_batch_dask(): PATHS must be resolved (non-NULL).", call. = FALSE)
-
-  # ---------------------------------------------------------------------------
-  # 1-3. Sample parameters, serialize, and submit futures (chunked)
-  #      Workers start receiving tasks after the first chunk (~seconds) instead
-  #      of waiting for all N samples. Chunked client$map() avoids overwhelming
-  #      the Dask scheduler with rapid-fire individual submit() calls.
-  # ---------------------------------------------------------------------------
-  # submit_chunk_size: number of sims per client$map() RPC to Coiled.
-  # Controls Dask scheduler load (one RPC per chunk vs. one RPC per sim),
-  # NOT local R-side parallelism -- that's the inner PSOCK parLapply over
-  # each chunk_indices block. 1000 sits inside Dask's documented sweet spot
-  # for client.map() batch sizing
-  # (https://docs.dask.org/en/stable/best-practices.html): individual
-  # submit() calls are discouraged due to per-call RPC overhead, and
-  # batches in the thousands amortize that overhead while keeping the
-  # first chunk's futures dispatchable within ~1 s of submission.
-  # Not a function of n_cores_parallel -- RPC amortization is a network
-  # constant, not a CPU-amortization constant.
-  submit_chunk_size <- 1000L
-  n_chunks <- ceiling(n_sims / submit_chunk_size)
-
-  # R-side parallelism budget. Shared between the submission sample+
-  # serialize phase and the post-gather parquet write phase later in
-  # this function. Both phases are pure CPU work on the orchestrator
-  # host; the caller's control$parallel$n_cores already encodes the
-  # right value for whichever machine the orchestrator runs on.
-  #
-  # NA-safe coercion: %||% only guards NULL, but `detectCores()` can
-  # return NA in restricted sandboxes (Docker without /proc/cpuinfo,
-  # certain CI VMs). Without this guard, NA propagates through `max()`
-  # and bricks `if (n_cores_parallel > 1L)` later with "missing value
-  # where TRUE/FALSE needed".
-  .raw_n_cores <- suppressWarnings(as.integer(control$parallel$n_cores %||% 1L))
-  if (length(.raw_n_cores) != 1L || is.na(.raw_n_cores)) .raw_n_cores <- 1L
-  # Cap to LOCAL hardware: this is the orchestrator-local worker count, never the
-  # remote worker count (that is dask_spec$n_workers).
-  .local_cores <- tryCatch(parallel::detectCores(), error = function(e) NA_integer_)
-  if (is.na(.local_cores) || .local_cores < 1L) .local_cores <- .raw_n_cores
-  n_cores_parallel <- max(1L, min(.raw_n_cores, .local_cores))
-
-  # ---------------------------------------------------------------------------
-  # Orchestrator-local parallelism via PSOCK (NOT fork).
-  #
-  # The sample+serialize and parquet-write phases below are pure-R CPU work on
-  # the orchestrator host. They run on a PSOCK cluster of fresh R processes that
-  # inherit NEITHER the parent's reticulate interpreter NOR its live Dask
-  # scheduler sockets -- so a worker can never deadlock against, or corrupt, the
-  # Dask client. (mclapply/fork here can hang: a fork taken while the client's
-  # comm thread holds a lock inherits that locked mutex.) client$map()/gather()
-  # stay in the parent; workers never import reticulate. One cluster per batch,
-  # reused for both phases; read-only inputs are exported once.
-  # ---------------------------------------------------------------------------
-  psock_cl <- NULL
-  if (n_cores_parallel > 1L) {
-    psock_cl <- tryCatch(
-      parallel::makeCluster(n_cores_parallel, type = "PSOCK"),
-      error = function(e) {
-        log_msg("  [WARN] PSOCK cluster init failed (%s); falling back to serial",
-                conditionMessage(e)); NULL
-      })
-  }
-  use_psock <- !is.null(psock_cl)
-  if (use_psock) {
-    on.exit(try(parallel::stopCluster(psock_cl), silent = TRUE), add = TRUE)
-    # Load the package + pin all thread pools on each worker (single-threaded).
-    parallel::clusterEvalQ(psock_cl, {
-      suppressMessages(library(MOSAIC))
-      Sys.setenv(OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
-                 OPENBLAS_NUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1",
-                 TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1",
-                 ARROW_NUM_THREADS = "1")
-      # Both Arrow pools: library(MOSAIC) loads arrow and initializes its IO pool
-      # before ARROW_NUM_THREADS is read, so the env var alone leaves IO at its
-      # 8-thread default -- set both pools explicitly (mirrors the parent pin).
-      try(arrow::set_cpu_count(1L), silent = TRUE)
-      try(arrow::set_io_thread_count(2L), silent = TRUE)
-      NULL
-    })
-    # Export read-only inputs + the (internal) worker fns to each worker's
-    # global env. Deliberately NOT exported: client, mosaic_worker,
-    # base_config_future (reticulate objects -- they stay in the parent).
-    parallel::clusterExport(
-      psock_cl,
-      varlist = c("sim_ids", "PATHS", "priors", "config", "sampling_args",
-                  "n_iterations", "param_names_all", "param_lookup", "dirs", "control",
-                  ".mosaic_sample_and_serialize", ".mosaic_write_one_shard_dask"),
-      envir = environment())
-  }
-
-  # Worker closures bound to globalenv so they look up the exported inputs on the
-  # worker (and don't drag the large parent frame into each parLapply payload).
-  # Used only on the PSOCK path; the serial path uses inline closures below.
-  .psock_sample_fun <- function(idx) {
-    .mosaic_sample_and_serialize(sim_id = sim_ids[idx], PATHS = PATHS,
-      priors = priors, config = config, sampling_args = sampling_args)
-  }
-  .psock_write_fun <- function(pair) {
-    .mosaic_write_one_shard_dask(pair$sim_id, pair$res, n_iterations,
-      param_names_all, param_lookup, config, dirs, control)
-  }
-  if (use_psock) {
-    environment(.psock_sample_fun) <- globalenv()
-    environment(.psock_write_fun)  <- globalenv()
-  }
-
-  par_label <- if (use_psock) sprintf("PSOCK x %d cores", n_cores_parallel) else "serial"
-  log_msg("  Sampling + submitting %d simulations (%d chunks, %s)...",
-          n_sims, n_chunks, par_label)
-  params_list <- vector("list", n_sims)
-  futures     <- vector("list", n_sims)
-  submit_start <- Sys.time()
-
-  # Log at ~10% intervals (minimum every chunk for small runs)
-  log_interval <- max(1L, floor(n_chunks / 10))
-
-  for (chunk_i in seq_len(n_chunks)) {
-
-    # Determine indices for this chunk
-    idx_start <- (chunk_i - 1L) * submit_chunk_size + 1L
-    idx_end   <- min(chunk_i * submit_chunk_size, n_sims)
-    chunk_indices <- idx_start:idx_end
-
-    # Parallel sample + serialize for the chunk. sample_parameters() is
-    # deterministically seeded by sim_id, so parallel execution produces
-    # output identical to serial regardless of which worker processes each
-    # sim (PSOCK works on all platforms; we fall back to serial lapply when
-    # n_cores == 1 or the cluster failed to start).
-    chunk_results <- if (use_psock) {
-      parallel::parLapply(psock_cl, chunk_indices, .psock_sample_fun)
-    } else {
-      lapply(chunk_indices, function(idx) {
-        .mosaic_sample_and_serialize(
-          sim_id        = sim_ids[idx],
-          PATHS         = PATHS,
-          priors        = priors,
-          config        = config,
-          sampling_args = sampling_args
-        )
-      })
-    }
-
-    # Collect results in deterministic order (parLapply and lapply both
-    # preserve order) and build the client$map() submission arrays.
-    #
-    # Under PSOCK the live failure shape is (1); (2) and (3) are kept as
-    # defensive guards:
-    #   1. `list(params = NULL, json = NULL, error = "...")`
-    #      -- the worker fn's own tryCatch caught an exception (never throws)
-    #   2. NULL -- a worker returned no result (defensive; should not occur
-    #      now that the worker fn always returns the list in (1))
-    #   3. `try-error` -- defensive; a dead PSOCK worker process normally
-    #      makes parLapply raise a cluster error rather than per-item errors
-    map_indices  <- integer(0)    # positions in params_list/futures
-    map_sim_ids  <- integer(0)
-    map_jsons    <- character(0)
-
-    for (k in seq_along(chunk_indices)) {
-      idx <- chunk_indices[k]
-      r   <- chunk_results[[k]]
-
-      if (is.null(r)) {
-        warning("sim ", sim_ids[idx], " worker did not deliver a result",
-                call. = FALSE, immediate. = FALSE)
-        params_list[[idx]] <- NULL
-        next
-      }
-      if (inherits(r, "try-error")) {
-        warning("sim ", sim_ids[idx], " worker crashed: ",
-                as.character(attr(r, "condition")$message),
-                call. = FALSE, immediate. = FALSE)
-        params_list[[idx]] <- NULL
-        next
-      }
-      if (!is.null(r$error)) {
-        warning("Param sampling failed for sim ", sim_ids[idx], ": ",
-                r$error, call. = FALSE, immediate. = FALSE)
-      }
-
-      params_list[[idx]] <- r$params
-      if (is.null(r$params) || is.null(r$json)) next
-
-      map_indices <- c(map_indices, idx)
-      map_sim_ids <- c(map_sim_ids, as.integer(sim_ids[idx]))
-      map_jsons   <- c(map_jsons, r$json)
-    }
-
-    # --- Submit entire chunk via client$map() (single scheduler round-trip).
-    # The Coiled client lives in the parent process only; submission MUST
-    # stay outside the parallel block.
-    if (length(map_sim_ids) > 0L) {
-      chunk_futures <- client$map(
-        mosaic_worker$run_laser_sim,
-        as.list(map_sim_ids),
-        as.list(rep(as.integer(n_iterations), length(map_sim_ids))),
-        as.list(map_jsons),
-        as.list(rep(list(base_config_future), length(map_sim_ids)))
-      )
-      for (fi in seq_along(map_indices)) {
-        futures[[ map_indices[fi] ]] <- chunk_futures[[fi]]
-      }
-    }
-
-    # Compact progress: log at ~10% intervals and at the end
-    if (chunk_i %% log_interval == 0L || chunk_i == n_chunks) {
-      elapsed <- as.numeric(difftime(Sys.time(), submit_start, units = "secs"))
-      pct <- round(100 * idx_end / n_sims)
-      log_msg("    %d/%d submitted (%d%%) | %.0fs | %.0f sims/s",
-              idx_end, n_sims, pct, elapsed, idx_end / max(elapsed, 0.1))
-    }
-  }
-
-  valid_futures <- Filter(Negate(is.null), futures)
-
-  # ---------------------------------------------------------------------------
-  # 4. Gather results (blocking)
-  # ---------------------------------------------------------------------------
-  log_msg("  Waiting for %d Dask futures...", length(valid_futures))
-  gather_start <- Sys.time()
-  gathered <- tryCatch(
-    .mosaic_gather_with_heartbeat(
-      client     = client,
-      futures    = valid_futures,
-      log_fn     = log_msg,
-      phase      = "calibration_batch"
-    ),
-    error = function(e) {
-      log_msg("  [ERROR] client$gather() failed: %s", conditionMessage(e))
-      # Try to retrieve first few future errors for diagnostics
-      tryCatch({
-        first_future <- valid_futures[[1L]]
-        st <- first_future$status
-        log_msg("  First future status: %s", as.character(st))
-        if (identical(st, "error")) {
-          exc <- first_future$exception()
-          log_msg("  First future exception: %s", as.character(exc))
-          tb_str <- first_future$traceback()
-          if (!is.null(tb_str)) log_msg("  First future traceback: %s", as.character(tb_str))
-        }
-      }, error = function(e2) {
-        log_msg("  (Could not inspect futures: %s)", conditionMessage(e2))
-      })
-      stop(e)
-    }
-  )
-  gather_elapsed <- as.numeric(difftime(Sys.time(), gather_start, units = "secs"))
-  log_msg("  Gather complete: %d results in %.1fs", length(gathered), gather_elapsed)
-
-  # Build lookup: sim_id -> worker result
-  result_lookup <- list()
-  n_worker_errors <- 0L
-  for (res in gathered) {
-    key <- as.character(res$sim_id)
-    result_lookup[[key]] <- res
-    if (!isTRUE(res$success) && n_worker_errors < 3L) {
-      n_worker_errors <- n_worker_errors + 1L
-      err_msg <- if (!is.null(res$error)) res$error else "unknown"
-      log_msg("  Worker error (sim %s): %s", key, err_msg)
-    }
-  }
-  if (n_worker_errors > 0L) {
-    total_errors <- sum(!vapply(gathered, function(r) isTRUE(r$success), logical(1)))
-    log_msg("  Total worker errors: %d/%d", total_errors, length(gathered))
-  }
-
-  # ---------------------------------------------------------------------------
-  # 4b. Log per-worker timing summary then free gathered list
-  # ---------------------------------------------------------------------------
-  worker_times <- vapply(gathered, function(res) {
-    if (isTRUE(res$success) && !is.null(res$worker_elapsed_sec))
-      as.numeric(res$worker_elapsed_sec)
-    else
-      NA_real_
-  }, numeric(1))
-  worker_times <- worker_times[is.finite(worker_times)]
-
-  if (length(worker_times) > 0L) {
-    log_msg("  Worker timing (n=%d): mean=%.1fs, median=%.1fs, min=%.1fs, max=%.1fs, total=%.1fs",
-            length(worker_times),
-            mean(worker_times), median(worker_times),
-            min(worker_times), max(worker_times),
-            sum(worker_times))
-  }
-
-  # Free the raw gathered list -- result_lookup holds the same data
-  rm(gathered); gc(verbose = FALSE)
-
-  # ---------------------------------------------------------------------------
-  # 5. Build parquet rows from worker-computed likelihoods (issue #101)
-  #
-  # Workers return per-iter scalar likelihoods alongside a sim-level params
-  # dict (the sampled scalars/vectors echoed back, minus matrix fields and
-  # location_name -- the latter is stripped by .extract_sampled_params()
-  # before JSON serialization). We re-inject location_name here so
-  # convert_config_to_matrix() emits ISO-suffixed column names (e.g.
-  # beta_j0_tot_ETH) instead of falling back to numeric suffixes.
-  # ---------------------------------------------------------------------------
-  write_start <- Sys.time()
-  success_indicators <- logical(n_sims)
-
-  # Parallel parquet write on the same PSOCK cluster. Per-sim work is pure (no
-  # shared mutable state, one file per sim). Each chunk's gathered results are
-  # sent as the task payload -- PSOCK workers can't COW the parent's
-  # result_lookup the way fork did, so we hand them their slice explicitly.
-  log_msg("  Building parquet rows for %d sims (%s)...", n_sims, par_label)
-
-  # write_chunk_size: number of sims per inner parLapply() call in the
-  # write loop. Gates THREE things simultaneously:
-  #   1. PSOCK task batch -- one chunk is dispatched per parLapply round;
-  #      smaller chunks mean more dispatch rounds.
-  #   2. Parent-side memory free cadence -- result_lookup[key] entries
-  #      are nulled out only at chunk boundaries (each chunk's results are
-  #      copied into the parLapply payload, so the parent can only drop
-  #      them safely once that chunk has returned).
-  #   3. Progress log + Dask scheduler health-check cadence -- one
-  #      "X/N elapsed" line per chunk, one client$scheduler_info()
-  #      ping per chunk.
-  # Fixed at 1000 to match `submit_chunk_size` for log-line cadence
-  # consistency across the two phases. Unlike submit_chunk_size -- which
-  # is governed by Dask RPC amortization -- this one is a dispatch+progress
-  # constant; if it ever wants to diverge (e.g. scale with
-  # n_cores_parallel for tighter dispatch amortization, or with n_sims for
-  # progress-line cadence), the two are semantically independent.
-  write_chunk_size <- 1000L
-  chunks <- split(seq_len(n_sims),
-                  ceiling(seq_len(n_sims) / write_chunk_size))
-
-  for (chunk_idxs in chunks) {
-    chunk_out <- if (use_psock) {
-      # PSOCK workers can't COW result_lookup; send each chunk's results as the
-      # task payload (bounded: one chunk of small per-sim result dicts).
-      chunk_pairs <- lapply(chunk_idxs, function(idx) {
-        sid <- sim_ids[[idx]]
-        list(sim_id = sid, res = result_lookup[[as.character(sid)]])
-      })
-      parallel::parLapply(psock_cl, chunk_pairs, .psock_write_fun)
-    } else {
-      lapply(chunk_idxs, function(idx) {
-        sim_id <- sim_ids[[idx]]
-        key    <- as.character(sim_id)
-        .mosaic_write_one_shard_dask(
-          sim_id, result_lookup[[key]], n_iterations,
-          param_names_all, param_lookup, config, dirs, control
-        )
-      })
-    }
-
-    # The helper returns TRUE on success or a character error message on
-    # failure; NULL and try-error are defensive (a dead PSOCK worker makes
-    # parLapply raise a cluster error rather than per-item shapes). isTRUE()
-    # correctly maps all non-TRUE shapes to FALSE in success_indicators.
-    # After accounting for success/failure, surface the failure diagnostic
-    # (which would otherwise be lost -- a warning raised on a PSOCK worker
-    # never reaches the parent).
-    success_indicators[chunk_idxs] <- vapply(chunk_out, isTRUE, logical(1))
-
-    for (k in seq_along(chunk_idxs)) {
-      out <- chunk_out[[k]]
-      if (isTRUE(out)) next
-      sid <- sim_ids[[chunk_idxs[k]]]
-      msg <- if (is.null(out)) {
-        "worker did not deliver a result"
-      } else if (inherits(out, "try-error")) {
-        paste0("worker crashed: ", as.character(attr(out, "condition")$message))
-      } else if (is.character(out)) {
-        out
-      } else {
-        sprintf("unknown failure shape (%s)", paste(class(out), collapse = "/"))
-      }
-      warning("sim ", sid, " parquet write failed: ", msg,
-              call. = FALSE, immediate. = FALSE)
-    }
-
-    # Free parent-side memory for the sims we just wrote
-    for (idx in chunk_idxs) {
-      key <- as.character(sim_ids[[idx]])
-      result_lookup[key] <- list(NULL)
-      params_list[idx]   <- list(NULL)
-    }
-
-    # Progress + Dask scheduler health check
-    written <- max(chunk_idxs)
-    elapsed <- as.numeric(difftime(Sys.time(), write_start, units = "secs"))
-    log_msg("    Parquet write progress: %d/%d (%.0fs elapsed)",
-            written, n_sims, elapsed)
-    tryCatch(client$scheduler_info(), error = function(e) {
-      log_warn("Dask scheduler ping failed at sim %d: %s",
-              written, e$message)
-    })
-  }
-
-  rm(result_lookup, params_list, futures)
-  write_elapsed <- as.numeric(difftime(Sys.time(), write_start, units = "secs"))
-  log_msg("  Parquet writing done: %d sims in %.1fs (%.1f sims/s)",
-          n_sims, write_elapsed, n_sims / max(write_elapsed, 0.1))
-  gc(verbose = FALSE)
-
-  success_indicators
-}
-
-
-
-# =============================================================================
-# Post-calibration Dask dispatch
-# =============================================================================
-
-#' Dispatch post-calibration LASER simulations via an existing Dask client
-#'
-#' Uses a reconnected Dask client to dispatch ensemble and/or stochastic
-#' parameter uncertainty simulations. Returns pre-computed results that can be
-#' passed to calc_model_ensemble() and plot_model_ensemble() via
-#' their precomputed_results argument.
-#'
-#' @param client dask.distributed.Client (already connected).
-#' @param mosaic_worker Python module (mosaic_dask_worker, already imported).
-#' @param param_configs List of config lists for posterior parameter sets (for stochastic sims).
-#'   NULL to skip stochastic dispatch.
-#' @param n_stochastic_per Integer. Number of stochastic sims per param config.
-#' @param log_msg Function. Logging function.
-#' @return Named list with $stochastic_results (or NULL if skipped).
-#' @keywords internal
-.mosaic_postca_dask <- function(client, mosaic_worker,
-                                param_configs = NULL,
-                                n_stochastic_per = 10L,
-                                capture_trajectories = TRUE,
-                                log_msg = message) {
-
-  # Helper: serialize config to JSON + extract large matrix fields
-  .config_to_json_and_matrices <- function(cfg) {
-    matrix_fields <- c("b_jt", "d_jt", "mu_jt", "psi_jt", "nu_1_jt", "nu_2_jt",
-                        "reported_cases", "reported_deaths")
-    matrices <- list()
-    cfg_for_json <- cfg
-    for (f in matrix_fields) {
-      if (!is.null(cfg[[f]])) {
-        matrices[[f]] <- cfg[[f]]
-        cfg_for_json[[f]] <- NULL
-      }
-    }
-    cfg_json <- jsonlite::toJSON(cfg_for_json, auto_unbox = TRUE, digits = NA)
-    list(json = as.character(cfg_json),
-         matrices = reticulate::r_to_py(matrices))
-  }
-
-  stochastic_results  <- NULL
-
-  # --- Stochastic param sims (many configs x many seeds) ---
-  if (!is.null(param_configs) && length(param_configs) > 0 && n_stochastic_per > 0L) {
-    n_param_sets <- length(param_configs)
-    total <- n_param_sets * n_stochastic_per
-    log_msg("Dispatching %d stochastic param sims (%d configs x %d sims)...",
-            total, n_param_sets, n_stochastic_per)
-
-    # Serialize all param configs
-    preps <- lapply(param_configs, .config_to_json_and_matrices)
-
-    # Scatter matrix fields per config (they differ because of psi_jt calibration)
-    matrix_futures <- lapply(preps, function(p) client$scatter(p$matrices))
-
-    futures <- vector("list", total)
-    task_meta <- vector("list", total)
-    idx <- 0L
-    for (p in seq_len(n_param_sets)) {
-      # Seed of the parameter set dispatched at this param_idx, carried through so
-      # each ensemble member can be bound to the config that produced it. This
-      # decouples the member<->seed mapping from any positional ordering of a
-      # separately-passed seed vector (the source of the medoid mis-mapping bug).
-      cfg_seed <- tryCatch(as.integer(param_configs[[p]]$seed)[1], error = function(e) NA_integer_)
-      for (s in seq_len(n_stochastic_per)) {
-        idx <- idx + 1L
-        stoch_seed <- as.integer((p * 1000L) + s)
-        futures[[idx]] <- client$submit(
-          mosaic_worker$run_laser_postca,
-          as.integer(idx),
-          stoch_seed,
-          preps[[p]]$json,
-          matrix_futures[[p]],
-          isTRUE(capture_trajectories)
-        )
-        task_meta[[idx]] <- list(param_idx = p, stoch_idx = s, param_seed = cfg_seed)
-      }
-    }
-
-    raw <- .mosaic_gather_with_heartbeat(
-      client     = client,
-      futures    = futures,
-      log_fn     = log_msg,
-      phase      = "postca_ensemble"
-    )
-    log_msg("Gathered %d stochastic results", length(raw))
-
-    # Convert to format expected by calc_model_ensemble
-    stochastic_results <- lapply(seq_along(raw), function(i) {
-      r <- raw[[i]]
-      meta <- task_meta[[i]]
-      if (isTRUE(r$success)) {
-        # Rebuild a nested-list array returned by the Dask worker
-        # (numpy.tolist()) into an R matrix; NULL when the worker omitted the
-        # field (engine without DerivedValues). spatial_hazard is J x T,
-        # coupling/pi_ij are J x J -- each is a list of `nrow` row-lists, so
-        # byrow = TRUE reproduces the engine orientation, matching the local
-        # PSOCK path (F1 lockstep).
-        .relist <- function(x) {
-          if (is.null(x) || length(x) == 0L) return(NULL)
-          matrix(unlist(x), nrow = length(x), byrow = TRUE)
-        }
-        # Trajectory channels (post-calibration capture; lockstep with the local
-        # PSOCK worker in R/calc_model_ensemble.R and the Dask Python worker). Each
-        # J x T channel is relisted to the engine orientation; traj_epi carries the
-        # per-member epidemic-flag inputs (numeric vectors). NULL when the worker
-        # image predates the feature -> capability check warns+skips downstream.
-        traj <- NULL
-        if (isTRUE(capture_trajectories) && is.list(r$traj) && length(r$traj) > 0L) {
-          traj <- lapply(r$traj, .relist)
-          traj <- traj[!vapply(traj, is.null, logical(1))]
-        }
-        traj_epi <- if (isTRUE(capture_trajectories) && is.list(r$traj_epi)) list(
-          delta_reporting_cases = if (!is.null(r$traj_epi$delta_reporting_cases))
-            as.numeric(unlist(r$traj_epi$delta_reporting_cases)) else NULL,
-          epidemic_threshold = if (!is.null(r$traj_epi$epidemic_threshold))
-            as.numeric(unlist(r$traj_epi$epidemic_threshold)) else NULL
-        ) else NULL
-
-        list(
-          param_idx = meta$param_idx,
-          stoch_idx = meta$stoch_idx,
-          param_seed = meta$param_seed,
-          reported_cases = matrix(unlist(r$reported_cases),
-                                  nrow = length(r$reported_cases), byrow = TRUE),
-          reported_deaths = matrix(unlist(r$reported_deaths),
-                                  nrow = length(r$reported_deaths), byrow = TRUE),
-          spatial_hazard = .relist(r$spatial_hazard),
-          coupling       = .relist(r$coupling),
-          pi_ij          = .relist(r$pi_ij),
-          traj           = traj,
-          traj_epi       = traj_epi,
-          success = TRUE
-        )
-      } else {
-        list(param_idx = meta$param_idx, stoch_idx = meta$stoch_idx,
-             param_seed = meta$param_seed,
-             success = FALSE, error = r$error %||% "unknown")
-      }
-    })
-  }
-
-  list(
-    stochastic_results = stochastic_results
-  )
-}
-
-
-#' Compare orchestrator vs. Coiled-worker laser-cholera versions
-#'
-#' Pure detection helper for the Dask/Coiled parity guard in \code{run_MOSAIC()}.
-#' The remote worker path is pure Python and runs the laser-cholera engine
-#' directly, so a version drift between the orchestrator's reticulate env and the
-#' Coiled worker image silently changes simulation results. This function detects
-#' such drift; the caller decides whether to abort or warn (so it can be unit
-#' tested without a live cluster and never throws).
-#'
-#' @param local_version Character scalar: the orchestrator's laser.cholera
-#'   \code{__version__} (or NULL if it could not be determined).
-#' @param worker_versions Named list keyed by worker address, each element a list
-#'   with a \code{laser_cholera} entry (as returned by the worker
-#'   \code{get_engine_versions()} via \code{client$run()}). May be empty.
-#'
-#' @return A list with:
-#'   \describe{
-#'     \item{ok}{TRUE if no mismatch was proven (all workers match, or the check
-#'       could not run).}
-#'     \item{n_workers}{Number of worker responses inspected.}
-#'     \item{mismatches}{Character vector describing each offending worker
-#'       (empty when \code{ok} and no mismatches).}
-#'     \item{note}{Optional message when the check could not be performed
-#'       (NULL local version or zero worker responses); caller should warn, not
-#'       abort, in this case.}
-#'   }
-#' @keywords internal
-.mosaic_check_worker_versions <- function(local_version, worker_versions) {
-
-  norm <- function(x) {
-    if (is.null(x) || length(x) != 1L || is.na(x)) return(NA_character_)
-    trimws(as.character(x))
-  }
-
-  local_norm <- norm(local_version)
-  n_workers  <- if (is.null(worker_versions)) 0L else length(worker_versions)
-
-  # Infra "cannot verify" conditions: no local version to compare against, or no
-  # worker responded. Not a proven mismatch -> ok = TRUE with an explanatory
-  # note so the caller warns rather than aborts.
-  if (is.na(local_norm)) {
-    return(list(ok = TRUE, n_workers = n_workers, mismatches = character(0),
-                note = "orchestrator laser-cholera version unavailable; skipped worker version check"))
-  }
-  if (n_workers == 0L) {
-    return(list(ok = TRUE, n_workers = 0L, mismatches = character(0),
-                note = "no worker responded to the version query; skipped worker version check"))
-  }
-
-  addrs <- names(worker_versions)
-  if (is.null(addrs)) addrs <- as.character(seq_along(worker_versions))
-
-  mismatches <- character(0)
-  for (i in seq_along(worker_versions)) {
-    wv <- worker_versions[[i]]
-    wver <- norm(if (is.list(wv)) wv$laser_cholera else wv)
-    if (is.na(wver)) wver <- "unknown"
-    if (!identical(wver, local_norm)) {
-      mismatches <- c(mismatches,
-                      sprintf("%s: %s != orchestrator %s",
-                              addrs[[i]], wver, local_norm))
-    }
-  }
-
-  list(ok = length(mismatches) == 0L,
-       n_workers = n_workers,
-       mismatches = mismatches,
-       note = NULL)
-}

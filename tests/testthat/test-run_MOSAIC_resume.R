@@ -1,7 +1,7 @@
 # Tests for run_MOSAIC() resume capability (resume = TRUE).
 #
 # These exercise the factored, engine-free internals so they run without the
-# Python/LASER engine. The full end-to-end interrupt/resume reproducibility
+# Python/simulation engine. The full end-to-end interrupt/resume reproducibility
 # check lives in the smoke test (claude/smoke_test_resume.R) since it needs the
 # simulation engine.
 
@@ -45,7 +45,7 @@ test_that("run_MOSAIC signature adds resume defaulting to FALSE", {
   # Only addition; rest of the public signature is unchanged.
   expect_setequal(
     names(fmls),
-    c("config", "priors", "dir_output", "control", "resume", "cluster", "dask_spec")
+    c("config", "priors", "dir_output", "control", "resume", "cluster", "...")
   )
 })
 
@@ -81,6 +81,82 @@ test_that(".mosaic_resume_scan quarantines bad shards and sweeps temp files", {
   expect_false(file.exists(file.path(d, ".mosaic_tmp_sim_0000009.parquet_abc")))
   expect_true(file.exists(file.path(d, ".quarantine", "sim_0000003.parquet")))
   expect_true(file.exists(file.path(d, ".quarantine", "sim_0000004.parquet")))
+})
+
+# ---- ids come from the `sim` column, not the filename ----------------------
+#
+# The scan reads each shard's `sim` column rather than parsing its name. That is
+# what lets one shard carry many simulations (pipeline plan item 6b) without the
+# resume watermark -- the guarantee that a resumed run never reuses a seed --
+# depending on a filename convention.
+
+# A shard holding several simulations, named for the range it covers.
+make_batch_shard <- function(dir, sim_ids) {
+  df <- data.frame(
+    sim        = as.integer(sim_ids),
+    iter       = 1L,
+    seed_sim   = as.integer(sim_ids),
+    seed_iter  = NA_real_,
+    likelihood = -10
+  )
+  arrow::write_parquet(df, file.path(dir, sprintf("sim_%07d-%07d.parquet",
+                                                  min(sim_ids), max(sim_ids))))
+}
+
+test_that(".mosaic_resume_scan counts every simulation in a multi-row shard", {
+  d <- new_samples_dir()
+  make_batch_shard(d, 1:100)
+  make_batch_shard(d, 101:150)
+
+  scan <- MOSAIC:::.mosaic_resume_scan(d)
+
+  expect_equal(scan$n, 150L)            # simulations, not files
+  expect_equal(scan$watermark, 150L)    # the seed frontier
+  expect_equal(scan$ids, 1:150)
+})
+
+test_that("batched and one-per-file shards give an identical scan", {
+  d1 <- new_samples_dir(); for (id in 1:20) make_shard(d1, id)
+  d2 <- new_samples_dir(); make_batch_shard(d2, 1:20)
+
+  a <- MOSAIC:::.mosaic_resume_scan(d1)
+  b <- MOSAIC:::.mosaic_resume_scan(d2)
+
+  expect_identical(a$ids, b$ids)
+  expect_identical(a$n, b$n)
+  expect_identical(a$watermark, b$watermark)
+})
+
+test_that("the sim column wins when it disagrees with the filename", {
+  # A shard whose name says 9 but whose data says 42. The column is what the
+  # combine and every downstream consumer use, so the scan must agree with them
+  # -- otherwise the frontier could hand out an id that already exists.
+  d <- new_samples_dir()
+  arrow::write_parquet(
+    data.frame(sim = 42L, iter = 1L, seed_sim = 42L, seed_iter = NA_real_,
+               likelihood = -1),
+    file.path(d, "sim_0000009.parquet"))
+
+  scan <- MOSAIC:::.mosaic_resume_scan(d)
+
+  expect_equal(scan$ids, 42L)
+  expect_equal(scan$watermark, 42L)
+})
+
+test_that("a multi-row shard with an unreadable row set is quarantined whole", {
+  d <- new_samples_dir()
+  make_batch_shard(d, 1:10)
+  # no `sim` column at all -> the whole shard is unusable
+  arrow::write_parquet(
+    data.frame(iter = 1L, likelihood = -3),
+    file.path(d, "sim_0000011-0000020.parquet"))
+
+  scan <- MOSAIC:::.mosaic_resume_scan(d)
+
+  expect_equal(scan$ids, 1:10)
+  expect_equal(scan$watermark, 10L)
+  expect_true(file.exists(file.path(d, ".quarantine",
+                                    "sim_0000011-0000020.parquet")))
 })
 
 # ---- shard validation (read data + schema/type, not just num_rows) ---------
@@ -119,7 +195,7 @@ test_that(".mosaic_resume_check_inputs guards control$likelihood drift", {
 
   lik <- list(weight_cases = 1, weight_deaths = 1, weight_wis = 0)
   control <- list(likelihood = lik)
-  # control.json is written as sim_params: list(control = control, ...)
+  # control.json is written as control_record: list(control = control, ...)
   wj(list(control = control, timestamp = "t0"), file.path(inp, "control.json"))
 
   # identical likelihood → passes
@@ -353,86 +429,102 @@ test_that(".mosaic_resume_check_inputs is a no-op when inputs not yet persisted"
   expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, list(x = 1), list(y = 2))))
 })
 
-# ---- engine-version (deaths-scale) guard -----------------------------------
+# ---- transmission-engine guard ----------------------------------------------
+#
+# These replace the v0.12 -> v0.13 laser-cholera deaths-scale tests. The guard
+# they covered was retired in v0.69.0 (its "current" operand was the installed
+# laser-cholera wheel, which stopped describing what simulated anything at the
+# v0.68.0 R cutover), but the two properties those tests actually asserted --
+# tolerant version parsing, and a boundary that separates incompatible shards --
+# are properties of the replacement, so they are re-homed here rather than lost.
 
-test_that(".mosaic_lc_pre013 classifies the v0.13 deaths-scale boundary", {
-  f <- MOSAIC:::.mosaic_lc_pre013
-  expect_true(f("0.12.5"))
-  expect_true(f("0.12"))
-  expect_true(f("0.0.9"))
-  expect_false(f("0.13.0"))
-  expect_false(f("0.13.5"))
-  expect_false(f("1.0.0"))
-  # PEP440 suffixes reduce to the leading integer of each component
-  expect_true(f("0.12rc1"))
-  expect_false(f("0.13.0.dev1"))
-  expect_false(f("0.13.0+local"))
-  # unparseable / degenerate → NA
+test_that(".mosaic_run_engine classifies the v0.68.0 engine boundary", {
+  f <- MOSAIC:::.mosaic_run_engine
+  # before the cutover -> Python laser-cholera
+  expect_equal(f("0.67.0"), "python")
+  expect_equal(f("0.32.0"), "python")
+  expect_equal(f("0.13"),   "python")
+  expect_equal(f("0.0.9"),  "python")
+  # at and after the cutover -> R
+  expect_equal(f("0.68.0"), "R")
+  expect_equal(f("0.69.3"), "R")
+  expect_equal(f("1.0.0"),  "R")
+  # suffixes reduce to the leading integer of each component
+  expect_equal(f("0.67.0-dev"),  "python")
+  expect_equal(f("0.68.0.9000"), "R")
+  expect_equal(f("0.68rc1"),     "R")
+  # unparseable / degenerate -> NA
   expect_true(is.na(f("garbage")))
   expect_true(is.na(f("")))
   expect_true(is.na(f(NA_character_)))
   expect_true(is.na(f("0")))   # major only, no minor
+  expect_true(is.na(f(NULL)))
 })
 
-test_that(".mosaic_lc_deaths_scale flags only boundary-crossing version pairs", {
-  g <- MOSAIC:::.mosaic_lc_deaths_scale
-  # same side of the boundary → compatible (regression for the old || bug:
-  # two different pre-0.13 versions must NOT be flagged incompatible)
-  expect_equal(g("0.12.1", "0.12.5"), "compatible")
-  expect_equal(g("0.13.0", "0.13.5"), "compatible")
-  # straddles the boundary → incompatible (both directions)
-  expect_equal(g("0.12.5", "0.13.0"), "incompatible")
-  expect_equal(g("0.13.0", "0.12.5"), "incompatible")
-  # unclassifiable either side → unknown
-  expect_equal(g("garbage", "0.13.0"), "unknown")
-  expect_equal(g("0.12.0", ""), "unknown")
-})
-
-test_that(".mosaic_resume_check_inputs hard-errors across the v0.13 engine boundary", {
-  # Requires the installed laser-cholera to be classifiable as >= v0.13 so a
-  # persisted 0.12.x crosses the boundary against the live version.
-  current_lc <- tryCatch({
-    if (reticulate::py_available(initialize = FALSE)) {
-      as.character(reticulate::import("importlib.metadata", delay_load = FALSE)$version("laser-cholera"))
-    } else NA_character_
-  }, error = function(e) NA_character_)
-  skip_if(is.na(current_lc) || isTRUE(MOSAIC:::.mosaic_lc_pre013(current_lc)),
-          "installed laser-cholera not classifiable as >= v0.13")
-
-  base <- tempfile("eng_"); inp <- file.path(base, "1_inputs"); dir.create(inp, recursive = TRUE)
+test_that(".mosaic_resume_check_inputs hard-errors on a pre-v0.68.0 run directory", {
+  base <- tempfile("eng_"); inp <- file.path(base, "1_inputs")
+  dir.create(inp, recursive = TRUE)
   dirs <- list(inputs = inp)
   priors <- list(a = 1); config <- list(location_name = "ETH")
   wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
   wj(priors, file.path(inp, "priors.json"))
   wj(config, file.path(inp, "config.json"))
 
-  # persisted pre-0.13 vs current >= 0.13 → boundary crossed → hard error
-  wj(list(python = list(pkg_laser_cholera = "0.12.4")), file.path(inp, "environment.json"))
+  # Shards from the Python engine -> refuse to pool them with R-engine draws.
+  wj(list(R = list(MOSAIC = "0.67.0")), file.path(inp, "environment.json"))
   expect_error(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors),
-               "engine version mismatch")
+               "simulated with the Python")
 
-  # persisted == current → compatible → no error
-  wj(list(python = list(pkg_laser_cholera = current_lc)), file.path(inp, "environment.json"))
-  # suppressWarnings: no environment.json here, so the engine-version guard
-  # correctly emits a "guard SKIPPED" warning that is orthogonal to this test.
-  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
+  # Same engine -> no error and, unlike the old guard, no warning either: the
+  # discriminator is on disk, so there is nothing to be unable to determine.
+  wj(list(R = list(MOSAIC = "0.68.0")), file.path(inp, "environment.json"))
+  expect_silent(expect_true(
+    MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
+
+  # Unparseable version -> guard cannot classify -> warn, do not block.
+  wj(list(R = list(MOSAIC = "garbage")), file.path(inp, "environment.json"))
+  expect_warning(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors),
+                 "transmission-engine guard was SKIPPED")
+
+  # No environment.json at all (pre-feature run) -> warn, do not block.
+  unlink(file.path(inp, "environment.json"))
+  expect_warning(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors),
+                 "no 1_inputs/environment.json")
+})
+
+test_that("the resume guard needs no Python to classify a run directory", {
+  # The point of keying on the MOSAIC version rather than a laser-cholera one:
+  # the check must not depend on what is installed in the Python environment,
+  # which after v0.69.0 no longer contains laser-cholera at all.
+  #
+  # removeSource() first: deparse() on a srcref-carrying closure reproduces the
+  # comments, and the comments here legitimately mention laser-cholera to
+  # explain what was removed. Stripping to code asserts the behaviour (no
+  # Python call) instead of the prose.
+  src <- paste(deparse(removeSource(MOSAIC:::.mosaic_resume_check_inputs)),
+               collapse = "\n")
+  expect_false(grepl("reticulate", src, fixed = TRUE))
+  expect_false(grepl("importlib", src, fixed = TRUE))
+  expect_false(grepl("pkg_laser_cholera", src, fixed = TRUE))
 })
 
 # ---- likelihood-value provenance guard (Phase 3 / PR #111) ----
 
-test_that(".mosaic_likelihood_provenance: R on local path, Python on Dask path (phase 3 / #101)", {
-  p  <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = FALSE)
-  pd <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = TRUE, lc_version = "0.13.0")
-
-  # Local path: R-side scoring via MOSAIC::calc_model_likelihood().
+test_that(".mosaic_likelihood_provenance always reports R-side scoring", {
+  # Scoring used to happen on-worker in Python on the Dask backend, which is
+  # why the descriptor carries an `engine` field at all. With that backend gone
+  # the only producer is MOSAIC::calc_model_likelihood(), so `engine` is always
+  # "R" -- but the field stays, because archived shards recorded
+  # engine = "python" and resume must still be able to tell them apart.
+  p <- MOSAIC:::.mosaic_likelihood_provenance()
   expect_equal(p$engine, "R")
   expect_equal(p$impl_version, MOSAIC:::.mosaic_likelihood_impl_version())
 
-  # Dask path: on-worker Python scoring per phase 3 (#101).  impl_version
-  # is the laser-cholera engine version passed by the caller (which holds
-  # the canonical Python `calc_model_likelihood` implementation).
-  expect_equal(pd$engine, "python")
-  expect_equal(pd$impl_version, "0.13.0")
+  # The descriptor takes no arguments. It carried an unused `lc_version` until
+  # v0.69.0 -- C-1 had already reduced the body to a constant, leaving a
+  # parameter every caller filled and nothing read. Asserted so it cannot creep
+  # back as a silently-ignored knob (CLAUDE.md lesson #13).
+  expect_length(formals(MOSAIC:::.mosaic_likelihood_provenance), 0L)
 })
 
 test_that(".mosaic_resume_check_inputs rejects a different likelihood provenance", {
@@ -442,91 +534,32 @@ test_that(".mosaic_resume_check_inputs rejects a different likelihood provenance
   config <- list(location_name = "ETH"); priors <- list(a = 1)
   wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
 
-  # Pin the persisted laser-cholera version to whatever is *actually*
-  # installed so the deaths-scale engine-version guard does not fire and
-  # mask the likelihood-provenance behavior we are testing here. Without
-  # this, a docker image whose installed laser-cholera lags env.yml will
-  # trigger the engine-version error before this function gets a chance
-  # to evaluate the provenance dict.
-  live_lc <- tryCatch({
-    if (reticulate::py_available(initialize = FALSE)) {
-      importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
-      as.character(importlib$version("laser-cholera"))
-    } else NA_character_
-  }, error = function(e) NA_character_)
-  if (is.na(live_lc) || !nzchar(live_lc)) live_lc <- "0.13.0"  # safe fallback
+  # Stamp the persisted MOSAIC version on the R side of the v0.68.0 engine
+  # boundary so the transmission-engine guard passes and cannot mask the
+  # likelihood-provenance behaviour under test here. This used to require
+  # pinning a live laser-cholera version read out of the Python environment --
+  # a docker image whose wheel lagged env.yml would trip the engine guard first
+  # and never reach the provenance dict. The fixture is now a literal.
+  r_engine_env <- list(R = list(MOSAIC = "0.68.0"))
 
-  cur <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = FALSE)
+  cur <- MOSAIC:::.mosaic_likelihood_provenance()
 
-  # matching provenance -> passes (engine-version guard skip-warning is orthogonal)
-  wj(list(likelihood_provenance = cur,
-          python = list(pkg_laser_cholera = live_lc)),
+  # matching provenance -> passes
+  wj(c(list(likelihood_provenance = cur), r_engine_env),
      file.path(inp, "environment.json"))
-  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
+  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors))
 
-  # different engine (e.g. Python worker-side scoring) -> hard error
-  wj(list(likelihood_provenance = list(engine = "python", impl_version = "0.14.0"),
-          python = list(pkg_laser_cholera = live_lc)),
+  # a shard scored by the removed Python worker path -> hard error
+  wj(c(list(likelihood_provenance = list(engine = "python", impl_version = "0.14.0")),
+       r_engine_env),
      file.path(inp, "environment.json"))
   expect_error(
-    suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)),
+    MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors),
     "likelihood provenance differs")
 
   # absent provenance (pre-feature run) -> skipped, no error
-  wj(list(python = list(pkg_laser_cholera = live_lc)),
-     file.path(inp, "environment.json"))
-  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
+  wj(r_engine_env, file.path(inp, "environment.json"))
+  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors))
 })
 
-test_that(".mosaic_lc_likelihood_compatible allow-lists verified-identical engine pairs", {
-  f <- MOSAIC:::.mosaic_lc_likelihood_compatible
-  # equal versions are trivially compatible
-  expect_true(f("0.15.0", "0.15.0"))
-  # verified-identical set: v0.15.0 changed only docs/type-hints vs v0.14.0
-  expect_true(f("0.14.0", "0.15.0"))
-  expect_true(f("0.15.0", "0.14.0"))
-  # not on the allow-list -> not compatible (must stay conservative)
-  expect_false(f("0.13.0", "0.15.0"))
-  expect_false(f("0.14.0", "0.13.0"))
-  # degenerate inputs -> FALSE (never silently pool)
-  expect_false(f(NA_character_, "0.15.0"))
-  expect_false(f("0.15.0", ""))
-  expect_false(f(NULL, "0.15.0"))
-})
 
-test_that(".mosaic_resume_check_inputs pools verified-compatible Dask engine versions, still rejects others", {
-  current_lc <- tryCatch({
-    if (reticulate::py_available(initialize = FALSE)) {
-      as.character(reticulate::import("importlib.metadata", delay_load = FALSE)$version("laser-cholera"))
-    } else NA_character_
-  }, error = function(e) NA_character_)
-  # This integration assertion needs the live engine to have a verified-compatible
-  # partner version; gate on that rather than hard-coding the installed version.
-  partner <- if (identical(current_lc, "0.15.0")) "0.14.0"
-             else if (identical(current_lc, "0.14.0")) "0.15.0" else NA_character_
-  skip_if(is.na(partner), "installed laser-cholera has no verified-compatible partner version")
-
-  base <- tempfile("provcompat_"); inp <- file.path(base, "1_inputs"); dir.create(inp, recursive = TRUE)
-  dirs <- list(inputs = inp)
-  config <- list(location_name = "ETH"); priors <- list(a = 1)
-  wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
-  wj(priors, file.path(inp, "priors.json"))
-  wj(config, file.path(inp, "config.json"))
-
-  # persisted Dask (python) shards scored by the compatible partner version ->
-  # resume proceeds (warning only) under use_dask = TRUE.
-  wj(list(likelihood_provenance = list(engine = "python", impl_version = partner),
-          python = list(pkg_laser_cholera = partner)),
-     file.path(inp, "environment.json"))
-  expect_true(suppressWarnings(
-    MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, use_dask = TRUE)))
-
-  # persisted Dask shards scored by a NON-compatible engine version (0.13.0) ->
-  # still a hard error (provenance differs); allow-list must not over-reach.
-  wj(list(likelihood_provenance = list(engine = "python", impl_version = "0.13.0"),
-          python = list(pkg_laser_cholera = "0.13.0")),
-     file.path(inp, "environment.json"))
-  expect_error(
-    suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, use_dask = TRUE)),
-    "likelihood provenance differs")
-})

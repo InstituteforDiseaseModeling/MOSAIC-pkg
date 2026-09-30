@@ -1,584 +1,532 @@
-# Tests for the Cori effective reproductive number (R_eff) Phase 1:
-#   - .mosaic_generation_time_pmf()  (two-clock moment-matched kernel)
-#   - .cori_reff()                    (pure renewal core)
-#   - calc_Reff()                     (ensemble-aware wrapper)
-#
-# Canonical theory: MOSAIC-docs/04-model-description.Rmd eq:R / eq:I-star and
-# the generation-interval moment eqs.
+# Tests for the route-decomposed Cori R_eff (R_eff = R_hum + R_env):
+#   - .mosaic_reff_route_kernel()     engine-derived cohort state tables
+#   - .mosaic_reff_infectiousness()   Lambda_hum / Lambda_env (exact filter)
+#   - .mosaic_reff_kernel_pmf()       constant-delta kernels
+#   - .cori_reff()                    route ratio + floor
+#   - .mosaic_reff_init()             initial infectious stocks
+#   - calc_Reff()                     direct path, schema, CI plumbing
+
+kern_default <- function(zeta_1 = 1, zeta_2 = 0.5)
+  MOSAIC:::.mosaic_reff_route_kernel(iota = 1 / 1.4, gamma_1 = 0.1,
+                                     gamma_2 = 0.5, sigma = 0.25,
+                                     zeta_1 = zeta_1, zeta_2 = zeta_2)
 
 # -----------------------------------------------------------------------------
-# Test 1: generation-time kernel -- normalization + moment match
+# Kernel tables and constant-delta kernels
 # -----------------------------------------------------------------------------
-test_that(".mosaic_generation_time_pmf is a normalized pmf summing to 1", {
-  g <- MOSAIC:::.mosaic_generation_time_pmf(
-    iota = 1 / 1.4, gamma_1 = 0.1, gamma_2 = 0.5, sigma = 0.25, max_days = 56L)
-  expect_length(g, 56L)
-  expect_equal(sum(g), 1, tolerance = 1e-12)
-  expect_true(all(g >= 0))
+test_that("route kernel state tables are probabilities and D_h is their sum", {
+  k <- kern_default()
+  expect_true(all(k$Ps >= 0) && all(k$Pa >= 0))
+  expect_true(all(k$Ps + k$Pa <= 1 + 1e-12))
+  expect_equal(k$p_i, -expm1(-1 / 1.4))
+  expect_equal(sum(k$Ps + k$Pa), k$D_h, tolerance = 1e-8)
+  expect_equal(k$w1 + k$w2, 1)
+  expect_equal(k$w1, 1 / 1.5)
 })
 
-test_that(".mosaic_generation_time_pmf moments match E[G] and V[G]", {
-  iota <- 1 / 1.4; gamma_1 <- 0.1; gamma_2 <- 0.5; sigma <- 0.25
-  # Long horizon so daily-binning + truncation error is negligible.
-  g <- MOSAIC:::.mosaic_generation_time_pmf(iota, gamma_1, gamma_2, sigma,
-                                            max_days = 400L)
-
-  gamma_eff <- 1 / (sigma / gamma_1 + (1 - sigma) / gamma_2)
-  E_target  <- 1 / iota + 1 / gamma_eff
-  V_inf     <- sigma / gamma_1^2 + (1 - sigma) / gamma_2^2 +
-    sigma * (1 - sigma) * (1 / gamma_1 - 1 / gamma_2)^2
-  V_target  <- 1 / iota^2 + V_inf
-
-  # Stored provenance attributes equal the analytic moments exactly.
-  expect_equal(attr(g, "mean"), E_target, tolerance = 1e-10)
-  expect_equal(attr(g, "var"),  V_target, tolerance = 1e-10)
-  expect_equal(attr(g, "shape"), E_target^2 / V_target, tolerance = 1e-10)
-  expect_equal(attr(g, "rate"),  E_target / V_target,   tolerance = 1e-10)
-
-  # The mean-preserving (EpiEstim discr_si / Cori 2013) discretization places
-  # mass so the discretized mean equals E[G] EXACTLY at integer lags d = 1, 2,...
-  # (NOT the d - 0.5 bin-midpoint of a naive CDF difference, which would land at
-  # E[G] + ~0.5). With max_days = 400 the truncation error is negligible.
-  d  <- seq_along(g)
-  m1 <- sum(d * g)
-  m2 <- sum((d - m1)^2 * g)
-  expect_equal(m1, E_target, tolerance = 0.005 * E_target)
-  expect_equal(m2, V_target, tolerance = 0.05 * V_target)
+test_that("human kernel mean equals the discrete transmission-weighted mean", {
+  k  <- kern_default()
+  kp <- MOSAIC:::.mosaic_reff_kernel_pmf(k, delta = 0.05)
+  expect_equal(sum(kp$hum), 1, tolerance = 1e-8)
+  # Lag = 1 (infection -> next-day incidence) + arrival day in I (geometric,
+  # mean 1/p_i) + age in I at transmission, transmission-weighted across the
+  # two classes: sum sigma_k (1-p_k)/p_k^2 / sum sigma_k/p_k.
+  num <- 0.25 * (1 - k$p1) / k$p1^2 + 0.75 * (1 - k$p2) / k$p2^2
+  expected <- 1 + 1 / k$p_i + num / k$D_h
+  expect_equal(kp$mean_hum, expected, tolerance = 1e-6)
+  # The old kernel used the duration-weighted mean; the transmission-weighted
+  # one is materially longer for these parameters.
+  expect_gt(kp$mean_hum, 1 / (1 / 1.4) + (0.25 / 0.1 + 0.75 / 0.5))
 })
 
-test_that(".mosaic_generation_time_pmf is mean-preserving (no +0.5 CDF-diff bias)", {
-  # Regression for the de-biasing fix: a naive Gamma-CDF difference F(d)-F(d-1)
-  # over [d-1,d] yields a discretized mean of ~E[G] + 0.5 (here a ~10% inflation
-  # at this low-shape, right-skewed kernel). The mean-preserving discretization
-  # must recover E[G] to a TIGHT tolerance, and put zero mass at lag 0.
-  iota <- 1 / 1.4; gamma_1 <- 0.1; gamma_2 <- 0.5; sigma <- 0.25
-  gamma_eff <- 1 / (sigma / gamma_1 + (1 - sigma) / gamma_2)
-  E_target  <- 1 / iota + 1 / gamma_eff       # 5.4 days
-
-  # Long horizon so truncation does not bias the discretized mean.
-  g <- MOSAIC:::.mosaic_generation_time_pmf(iota, gamma_1, gamma_2, sigma,
-                                            max_days = 600L)
-  d <- seq_along(g)
-  realized_mean <- sum(d * g)
-
-  # Mean-preserving: within 0.1% of target (the analytic discr_si recovers it
-  # exactly; only floating-point + far-tail truncation remain).
-  expect_equal(realized_mean, E_target, tolerance = 1e-3 * E_target)
-
-  # A naive CDF-difference kernel over the SAME target Gamma would sit ~0.5 high;
-  # assert our kernel is demonstrably below that biased value (catches a
-  # regression back to F(d)-F(d-1)).
-  s <- E_target^2 / (1 / iota^2 +
-        sigma / gamma_1^2 + (1 - sigma) / gamma_2^2 +
-        sigma * (1 - sigma) * (1 / gamma_1 - 1 / gamma_2)^2)
-  r <- s / E_target
-  d600 <- seq_len(600L)
-  g_cdfdiff <- stats::pgamma(d600, s, rate = r) -
-    stats::pgamma(d600 - 1, s, rate = r)
-  g_cdfdiff <- g_cdfdiff / sum(g_cdfdiff)
-  mean_cdfdiff <- sum(d600 * g_cdfdiff)
-  expect_gt(mean_cdfdiff - realized_mean, 0.3)   # de-biased by ~0.5 day
-
-  # Lag 1 carries the smallest lag's mass; g must be a finite, normalized pmf.
-  expect_equal(sum(g), 1, tolerance = 1e-12)
-  expect_true(all(g >= 0))
-  expect_true(is.finite(g[1]))
+test_that("environmental kernel sums to 1 and adds the reservoir residence", {
+  k <- kern_default()
+  for (d in c(1 / 16, 1 / 60, 1 / 200)) {
+    kp <- MOSAIC:::.mosaic_reff_kernel_pmf(k, delta = d)
+    expect_equal(sum(kp$env), 1, tolerance = 1e-5)
+    s_num <- k$w1 * 0.25 * (1 - k$p1) / k$p1^2 + k$w2 * 0.75 * (1 - k$p2) / k$p2^2
+    s_den <- k$w1 * 0.25 / k$p1 + k$w2 * 0.75 / k$p2
+    # Shedding day (arrival + age at shedding) -> enters W next day -> residence
+    # (geometric, mean (1-d)/d) -> drives incidence the day after.
+    expected <- 1 / k$p_i + s_num / s_den + 1 + (1 - d) / d + 1
+    expect_equal(kp$mean_env, expected, tolerance = 1e-3 * expected)
+  }
+  # The environmental interval is far longer than the human one.
+  expect_gt(MOSAIC:::.mosaic_reff_kernel_pmf(k, 1 / 16)$mean_env,
+            2 * MOSAIC:::.mosaic_reff_kernel_pmf(k, 1 / 16)$mean_hum)
 })
 
-test_that("V_inf uses the over-dispersed sigma-mixture form (differs from naive)", {
-  # For sigma in (0,1) with gamma_1 != gamma_2 the between-class term is > 0,
-  # so V_inf strictly exceeds the naive 1/gamma_eff^2.
-  gamma_1 <- 0.1; gamma_2 <- 0.5; sigma <- 0.25
-  gamma_eff <- 1 / (sigma / gamma_1 + (1 - sigma) / gamma_2)
-  V_inf     <- sigma / gamma_1^2 + (1 - sigma) / gamma_2^2 +
-    sigma * (1 - sigma) * (1 / gamma_1 - 1 / gamma_2)^2
-  between   <- sigma * (1 - sigma) * (1 / gamma_1 - 1 / gamma_2)^2
-  expect_gt(between, 0)
-  expect_gt(V_inf, 1 / gamma_eff^2)
-
-  # The pmf var attribute reflects this (latent variance is identical either way).
-  g <- MOSAIC:::.mosaic_generation_time_pmf(1 / 1.4, gamma_1, gamma_2, sigma,
-                                            max_days = 400L)
-  V_naive_total <- 1 / (1 / 1.4)^2 + 1 / gamma_eff^2
-  expect_gt(attr(g, "var"), V_naive_total)
-})
-
-test_that(".mosaic_generation_time_pmf validates its inputs", {
-  expect_error(MOSAIC:::.mosaic_generation_time_pmf(-1, 0.1, 0.5, 0.25))
-  expect_error(MOSAIC:::.mosaic_generation_time_pmf(0.7, 0.1, 0.5, 1.5))
-  expect_error(MOSAIC:::.mosaic_generation_time_pmf(0.7, 0.1, 0.5, 0.25, max_days = 0L))
+test_that("route kernel validates inputs", {
+  expect_error(MOSAIC:::.mosaic_reff_route_kernel(-1, 0.1, 0.5, 0.25, 1, 1), "iota")
+  expect_error(MOSAIC:::.mosaic_reff_route_kernel(0.7, 0.1, 0.5, 1.5, 1, 1), "sigma")
+  expect_error(MOSAIC:::.mosaic_reff_route_kernel(0.7, 0.1, 0.5, 0.25, 0, 0), "shedding")
 })
 
 # -----------------------------------------------------------------------------
-# Test 2: Cori estimator on a hand-verifiable synthetic series + known kernel
+# Lambda_env is instantaneous (frozen at t) under time-varying delta
 # -----------------------------------------------------------------------------
-test_that(".cori_reff matches a hand calculation on a tiny series + kernel", {
-  # Kernel over 2 lags: g(1) = 0.6, g(2) = 0.4 (already normalized).
-  g   <- c(0.6, 0.4)
-  inc <- c(10, 20, 30, 40)
-  r   <- MOSAIC:::.cori_reff(inc, g)
+test_that("time-varying Lambda_env matches the frozen-at-t definition by brute force", {
+  set.seed(11)
+  Tn <- 80L
+  k <- kern_default(zeta_1 = 2, zeta_2 = 1)
+  inc <- rpois(Tn, 50)
+  delta <- 1 / (16 + 180 * (0.5 + 0.5 * sin(seq_len(Tn) / 9)))
+  lam <- MOSAIC:::.mosaic_reff_infectiousness(inc, delta, k)
 
-  # t = 1: empty window  -> NA
-  # t = 2: denom = g(1)*inc(1) = 0.6*10 = 6;        R = 20 / 6
-  # t = 3: denom = g(1)*inc(2) + g(2)*inc(1)
-  #              = 0.6*20 + 0.4*10 = 16;             R = 30 / 16
-  # t = 4: denom = 0.6*30 + 0.4*20 = 26;            R = 40 / 26
-  expect_true(is.na(r[1]))
-  expect_equal(r[2], 20 / 6,  tolerance = 1e-10)
-  expect_equal(r[3], 30 / 16, tolerance = 1e-10)
-  expect_equal(r[4], 40 / 26, tolerance = 1e-10)
+  # Brute force, written independently of the filter: each past cohort's cells
+  # present at t - 1 under the ACTUAL past decay path, divided by one
+  # infection's lifetime shedding valued at today's decay rate.
+  cells_at <- function(u, n) {       # cells of a unit cohort infected at u, at n
+    if (n <= u) return(0)
+    tot <- 0
+    for (m in u:(n - 1L)) {          # shed from I at m enters W at m + 1
+      k_age <- m - u
+      if (k_age < 1L || k_age > length(k$Ps)) next
+      shed <- k$w1 * k$Ps[k_age] + k$w2 * k$Pa[k_age]
+      surv <- if (n > m + 1L) prod(1 - delta[(m + 2L):n]) else 1
+      tot <- tot + shed * surv
+    }
+    tot
+  }
+  S_w <- sum(k$w1 * k$Ps + k$w2 * k$Pa)
+  brute <- vapply(seq_len(Tn), function(t) {
+    if (t < 2L) return(0)
+    sum(vapply(seq_len(t - 1L), function(u) inc[u] * cells_at(u, t - 1L), 0)) *
+      delta[t] / S_w
+  }, numeric(1))
+  expect_equal(lam$Lambda_env, brute, tolerance = 1e-8)
 })
 
-test_that(".cori_reff renormalizes a non-normalized kernel before use", {
-  g_raw  <- c(3, 2)            # sums to 5 -> normalized to c(0.6, 0.4)
-  g_norm <- c(0.6, 0.4)
-  inc    <- c(10, 20, 30, 40)
-  expect_equal(MOSAIC:::.cori_reff(inc, g_raw),
-               MOSAIC:::.cori_reff(inc, g_norm), tolerance = 1e-12)
+test_that("R at t does not depend on anything after t (truncation invariance)", {
+  set.seed(12)
+  Tn <- 400L; k <- kern_default()
+  inc_h <- rpois(Tn, 20); inc_e <- rpois(Tn, 80)
+  delta <- 1 / (16 + 180 * (0.5 + 0.5 * sin(seq_len(Tn) / 25)))
+  full <- MOSAIC:::.mosaic_reff_routes(inc_h, inc_e, delta, k)
+  for (T0 in c(150L, 260L)) {
+    cut <- MOSAIC:::.mosaic_reff_routes(inc_h[1:T0], inc_e[1:T0], delta[1:T0], k)
+    for (e in c("R_eff", "R_hum", "R_env"))
+      expect_equal(cut[[e]], full[[e]][1:T0])
+  }
 })
 
-test_that(".cori_reff returns ~1 on a flat incidence series", {
-  g   <- MOSAIC:::.mosaic_generation_time_pmf(1 / 1.4, 0.1, 0.5, 0.25, max_days = 30L)
-  inc <- rep(50, 200)
-  r   <- MOSAIC:::.cori_reff(inc, g)
-  # Once the denominator window is fully populated, flat incidence -> R = 1
-  # (the kernel sums to 1, so denom = mean level = numerator).
-  tail_vals <- r[150:200]
-  expect_equal(tail_vals, rep(1, length(tail_vals)), tolerance = 1e-6)
+test_that("decay rates above 1 are capped at 1, as the engine clamps decay to W", {
+  Tn <- 60L; k <- kern_default()
+  inc <- rep(30, Tn)
+  d_hi <- rep(c(0.05, 2), length.out = Tn)
+  d_1  <- pmin(d_hi, 1)
+  expect_equal(MOSAIC:::.mosaic_reff_infectiousness(inc, d_hi, k)$Lambda_env,
+               MOSAIC:::.mosaic_reff_infectiousness(inc, d_1, k)$Lambda_env)
+  expect_error(MOSAIC:::.mosaic_reff_infectiousness(inc, rep(0, Tn), k), "delta")
+  expect_true(is.finite(MOSAIC:::.mosaic_reff_kernel_pmf(k, 2)$mean_env))
 })
 
-test_that(".cori_reff returns NA for the warm-up steps with an empty window", {
-  g   <- c(0.5, 0.3, 0.2)
-  inc <- c(5, 5, 5, 5, 5)
-  r   <- MOSAIC:::.cori_reff(inc, g, infectiousness_floor = 0)
-  expect_true(is.na(r[1]))           # no history at all
-  expect_false(is.na(r[2]))          # one lag available
-})
-
-# -----------------------------------------------------------------------------
-# Test 2c: infectiousness-floor gate -- IC seed spike + deep-trough guards
-# -----------------------------------------------------------------------------
-test_that(".cori_reff floors the IC-seed spike to NA (not R ~ thousands)", {
-  # Real-series repro: t = 1 is an initial-condition seed (a single large
-  # injection), so the t = 2 denominator = g(1) * 1 is a tiny fraction of an
-  # effective infection and the raw ratio explodes (~3882 in the field report).
-  g   <- MOSAIC:::.mosaic_generation_time_pmf(1 / 1.4, 0.1, 0.5, 0.25, max_days = 30L)
-  inc <- c(1, 977, 990, 1005, 1020, 1011, 998)
-
-  # Without a floor the t = 2 step is a meaningless spike.
-  r_nofloor <- MOSAIC:::.cori_reff(inc, g, infectiousness_floor = 0)
-  expect_gt(r_nofloor[2], 100)                       # the pathological spike
-
-  # With the default floor (~1 effective past infection) the IC-seeded step is NA
-  # because its generation-weighted denominator g(1)*1 << 1.
-  r <- MOSAIC:::.cori_reff(inc, g)                   # default floor = 1
-  expect_true(is.na(r[2]))
-  # g(1) for this kernel is < 1, so denom at t = 2 is below the floor.
-  expect_lt(g[1], 1)
-})
-
-test_that(".cori_reff floor leaves normal-denominator steps unaffected", {
-  # A well-populated series (large counts, full window) has a denominator far
-  # above the floor, so the gate must NOT change those values.
-  g   <- MOSAIC:::.mosaic_generation_time_pmf(1 / 1.4, 0.1, 0.5, 0.25, max_days = 30L)
-  inc <- rep(500, 60)
-  r_floor   <- MOSAIC:::.cori_reff(inc, g)                    # default floor = 1
-  r_nofloor <- MOSAIC:::.cori_reff(inc, g, infectiousness_floor = 0)
-  expect_equal(r_floor[40:60], r_nofloor[40:60], tolerance = 1e-12)
-  expect_true(all(is.finite(r_floor[40:60])))
-})
-
-test_that(".cori_reff floor blanks deep inter-epidemic troughs", {
-  # A deep trough (denominator ~0) otherwise yields meaningless R ~ 0.01.
-  g   <- MOSAIC:::.mosaic_generation_time_pmf(1 / 1.4, 0.1, 0.5, 0.25, max_days = 30L)
-  # Big epidemic, then a long near-zero trough, then a tiny blip.
-  inc <- c(rep(2000, 20), rep(1e-3, 40), 5)
-  r   <- MOSAIC:::.cori_reff(inc, g)                  # default floor = 1
-  # The blip at the end sits on a near-zero past window -> gated to NA.
-  expect_true(is.na(r[length(inc)]))
+test_that("constant-delta Lambda_env equals convolution with the env kernel", {
+  set.seed(3)
+  Tn <- 150L; d <- 1 / 30
+  k <- kern_default()
+  inc <- rpois(Tn, 20)
+  lam <- MOSAIC:::.mosaic_reff_infectiousness(inc, rep(d, Tn), k)
+  kp  <- MOSAIC:::.mosaic_reff_kernel_pmf(k, d, tail = 1e-12)
+  conv <- vapply(seq_len(Tn), function(t) {
+    L <- seq_len(t - 1L)
+    if (!length(L)) return(0)
+    sum(kp$env[L] * inc[t - L])
+  }, numeric(1))
+  expect_equal(lam$Lambda_env, conv, tolerance = 1e-8)
+  conv_h <- vapply(seq_len(Tn), function(t) {
+    L <- seq_len(min(t - 1L, length(kp$hum)))
+    if (!length(L)) return(0)
+    sum(kp$hum[L] * inc[t - L])
+  }, numeric(1))
+  expect_equal(lam$Lambda_hum, conv_h, tolerance = 1e-8)
 })
 
 # -----------------------------------------------------------------------------
-# Test 2b: Euler-Lotka regression on exponential-growth incidence
+# The reconstruction matches the ENGINE (the non-tautological check)
 # -----------------------------------------------------------------------------
-test_that(".cori_reff plateau equals the discrete Euler-Lotka value (self-consistency)", {
-  # I_t = exp(r t); for ANY fixed normalized kernel g the renewal estimator's
-  # post-warm-up plateau equals R = 1 / sum_tau exp(-r*tau) g(tau) BY ALGEBRA.
-  # This checks the estimator's internal self-consistency only -- it is
-  # TAUTOLOGICAL in g (any normalized kernel passes, even a reversed one), so it
-  # canNOT detect a biased discretization. The continuous-truth test below is the
-  # one that catches kernel-mean bias.
-  rate <- 0.05
-  g    <- MOSAIC:::.mosaic_generation_time_pmf(1 / 1.4, 0.1, 0.5, 0.25, max_days = 40L)
-  t    <- seq_len(300)
-  inc  <- exp(rate * t)
-
-  reff <- MOSAIC:::.cori_reff(inc, g, infectiousness_floor = 0)
-
-  tau   <- seq_along(g)
-  R_EL  <- 1 / sum(exp(-rate * tau) * g)
-
-  plateau <- reff[250:300]
-  expect_equal(plateau, rep(R_EL, length(plateau)), tolerance = 1e-6)
+test_that("I and W rebuilt from incidence alone track the simulated stocks", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  cfg <- MOSAIC::config_simulation_epidemic
+  cfg$zeta_1 <- 1e6; cfg$zeta_2 <- 2e5          # large shedding -> smooth W
+  r <- run_simulation(config = cfg, seed = 7L, quiet = TRUE)$results
+  kern <- MOSAIC:::.mosaic_reff_config_kernel(cfg)
+  i <- which.max(rowSums(r$incidence))
+  init <- MOSAIC:::.mosaic_reff_init(r$E[i, 1], r$Isym[i, 1], r$Iasym[i, 1],
+                                     r$incidence[i, 1])
+  lam <- MOSAIC:::.mosaic_reff_infectiousness(
+    r$incidence[i, ], r$delta_jt[i, ], kern, init = init,
+    shed_abs = (1 - cfg$theta_j[i]) * c(cfg$zeta_1, cfg$zeta_2))
+  I_obs <- r$Isym[i, ] + r$Iasym[i, ]
+  W_obs <- r$W[i, ]
+  win <- which(I_obs > 100)
+  expect_gt(length(win), 30L)
+  expect_gt(stats::cor(lam$I_hat[win], I_obs[win]), 0.99)
+  expect_lt(abs(stats::median(lam$I_hat[win] / I_obs[win]) - 1), 0.05)
+  expect_gt(stats::cor(lam$W_hat[win], W_obs[win]), 0.99)
+  expect_lt(abs(stats::median(lam$W_hat[win] / W_obs[win]) - 1), 0.05)
+  # A one-day misalignment would still correlate > 0.99, so also require that
+  # the reconstruction lines up best at zero shift.
+  shift_err <- function(hat, obs, s) {
+    w <- win[win + s >= 1 & win + s <= length(obs)]
+    sqrt(mean((hat[w] - obs[w + s])^2)) / mean(obs[w])
+  }
+  for (pair in list(list(lam$I_hat, I_obs), list(lam$W_hat, W_obs))) {
+    errs <- vapply(-2:2, function(s) shift_err(pair[[1]], pair[[2]], s), 0)
+    expect_equal(which.min(errs), 3L)
+  }
 })
 
-test_that(".cori_reff plateau matches the CONTINUOUS Euler-Lotka value (catches kernel bias)", {
-  # NON-tautological regression: compare the renewal plateau to the value implied
-  # by the underlying CONTINUOUS Gamma generation interval, NOT by the discretized
-  # kernel. For exponential growth I_t = e^{rt}, the continuous Euler-Lotka
-  # identity is  R = 1 / E[e^{-r X}],  X ~ Gamma(shape s, rate rate_g). The Gamma
-  # MGF gives E[e^{-r X}] = (rate_g/(rate_g + r))^s, so
-  #   R_continuous = (1 + r/rate_g)^s.
-  # A mean-preserving discretization reproduces this within a fraction of a
-  # percent (residual = far-tail truncation); a naive CDF-difference kernel
-  # (mean shifted +~0.5 day) misses it by ~2-3% at this growth rate.
-  iota <- 1 / 1.4; gamma_1 <- 0.1; gamma_2 <- 0.5; sigma <- 0.25
-  gamma_eff <- 1 / (sigma / gamma_1 + (1 - sigma) / gamma_2)
-  E_G <- 1 / iota + 1 / gamma_eff
-  V_inf <- sigma / gamma_1^2 + (1 - sigma) / gamma_2^2 +
-    sigma * (1 - sigma) * (1 / gamma_1 - 1 / gamma_2)^2
-  V_G <- 1 / iota^2 + V_inf
-  s      <- E_G^2 / V_G
-  rate_g <- E_G / V_G
+test_that("human R recovers the engine's true instantaneous R (human-only run)", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  cfg <- MOSAIC::config_simulation_epidemic
+  cfg$tau_i <- rep(0, length(cfg$tau_i))
+  kern <- MOSAIC:::.mosaic_reff_config_kernel(cfg)
+  # One realization's median ratio scatters by about +/-5% (seed to seed it runs
+  # 0.91-1.08 here), so the check pools 8 seeds. The kernel ignores the fatal
+  # onsets that never enter Isym (p_fatal 3.3% at this config), which moves the
+  # ratio by about -0.5%.
+  one_seed <- function(seed) {
+    r <- run_simulation(config = cfg, seed = seed, quiet = TRUE)$results
+    i <- which.max(rowSums(r$incidence_human)); t <- 2:ncol(r$incidence)
+    rr <- MOSAIC:::.mosaic_reff_routes(
+      r$incidence_human[i, ], r$incidence_env[i, ], r$delta_jt[i, ], kern,
+      init = MOSAIC:::.mosaic_reff_init(r$E[i, 1], r$Isym[i, 1], r$Iasym[i, 1],
+                                        r$incidence[i, 1]))
+    # Engine FOI per susceptible: beta_jt_human * I^alpha_1 / N^alpha_2, so one
+    # infectious person causes beta * S * I^(alpha_1 - 1) / N^alpha_2 infections a
+    # day for D_h days.
+    I <- (r$Isym + r$Iasym)[i, t - 1L]
+    truth <- r$beta_jt_human[i, t] * r$S[i, t] * I^(cfg$alpha_1 - 1) /
+      r$N[i, t - 1L]^cfg$alpha_2 * kern$D_h
+    ok <- is.finite(rr$R_hum[t]) & I > 100
+    c(n = sum(ok), ratio = stats::median(rr$R_hum[t][ok] / truth[ok]))
+  }
+  res <- vapply(1:8, one_seed, numeric(2))
+  expect_true(all(res["n", ] > 40))
+  expect_lt(abs(stats::median(res["ratio", ]) - 1), 0.05)
+})
 
-  rate <- 0.05
-  R_continuous <- (1 + rate / rate_g)^s
+test_that("human R has the engine's timing (growth phase of a linear human route)", {
+  # Over a whole rise-and-fall a one-day timing error cancels (I[t-1]/I[t] has
+  # median ~1), and at alpha_1 = 0.27 the human FOI barely responds to I. So
+  # use a linear human-only route and score the growth phase, where Lambda_hum
+  # built from I[t] or I[t-2] instead of I[t-1] reads ~7% off (measured).
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  cfg <- MOSAIC::config_simulation_epidemic
+  nl <- length(cfg$tau_i)
+  cfg$tau_i <- rep(0, nl); cfg$alpha_1 <- 1; cfg$alpha_2 <- 1
+  cfg$beta_j0_env <- rep(0, nl); cfg$beta_j0_hum <- rep(0.5, nl)
+  r <- run_simulation(config = cfg, seed = 7L, quiet = TRUE)$results
+  kern <- MOSAIC:::.mosaic_reff_config_kernel(cfg)
+  i <- which.max(rowSums(r$incidence_human)); t <- 2:ncol(r$incidence)
+  rr <- MOSAIC:::.mosaic_reff_routes(
+    r$incidence_human[i, ], r$incidence_env[i, ], r$delta_jt[i, ], kern,
+    init = MOSAIC:::.mosaic_reff_init(r$E[i, 1], r$Isym[i, 1], r$Iasym[i, 1],
+                                      r$incidence[i, 1]))
+  I <- (r$Isym + r$Iasym)[i, t - 1L]
+  truth <- r$beta_jt_human[i, t] * r$S[i, t] / r$N[i, t - 1L] * kern$D_h
+  grow <- is.finite(rr$R_hum[t]) & I > 100 & (r$Isym + r$Iasym)[i, t] > 1.02 * I
+  expect_gt(sum(grow), 15L)
+  expect_lt(abs(stats::median(rr$R_hum[t][grow] / truth[grow]) - 1), 0.03)
+})
 
-  # Long horizon so far-tail truncation is negligible at this skew.
-  g   <- MOSAIC:::.mosaic_generation_time_pmf(iota, gamma_1, gamma_2, sigma,
-                                              max_days = 200L)
-  inc <- exp(rate * seq_len(600))
-  plateau <- MOSAIC:::.cori_reff(inc, g, infectiousness_floor = 0)[550:600]
-
-  # With the de-biased kernel this is well within 0.5%; a CDF-difference kernel
-  # would be off by ~2.5% and fail.
-  expect_equal(mean(plateau), R_continuous, tolerance = 0.005 * R_continuous)
-  expect_lt(abs(mean(plateau) - R_continuous) / R_continuous, 0.005)
+test_that("environmental R recovers the engine's true instantaneous R (linear dose)", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  cfg <- MOSAIC::config_simulation_epidemic
+  cfg$tau_i <- rep(0, length(cfg$tau_i)); cfg$beta_j0_hum <- rep(0, length(cfg$tau_i))
+  cfg$kappa <- 1e12; cfg$zeta_1 <- 1e8; cfg$zeta_2 <- 1e7
+  cfg$beta_j0_env <- rep(1e3, length(cfg$tau_i))
+  r <- run_simulation(config = cfg, seed = 3L, quiet = TRUE)$results
+  kern <- MOSAIC:::.mosaic_reff_config_kernel(cfg)
+  i <- which.max(rowSums(r$incidence_env)); t <- 2:ncol(r$incidence)
+  rr <- MOSAIC:::.mosaic_reff_routes(
+    r$incidence_human[i, ], r$incidence_env[i, ], r$delta_jt[i, ], kern,
+    init = MOSAIC:::.mosaic_reff_init(r$E[i, 1], r$Isym[i, 1], r$Iasym[i, 1],
+                                      r$incidence[i, 1]))
+  # Linear dose (W/N << kappa): per-susceptible hazard beta_env (1-theta) W /
+  # (N kappa); one infection's lifetime reservoir at today's decay is
+  # (1-theta) (zeta_1 sigma/p1 + zeta_2 (1-sigma)/p2) / delta_t cells.
+  th <- cfg$theta_j[i]; d <- pmin(r$delta_jt[i, t], 1)
+  life <- (1 - th) * (cfg$zeta_1 * cfg$sigma / kern$p1 +
+                        cfg$zeta_2 * (1 - cfg$sigma) / kern$p2) / d
+  truth <- r$beta_jt_env[i, t] * (1 - th) * r$S[i, t] /
+    (r$N[i, t - 1L] * cfg$kappa) * life
+  I <- (r$Isym + r$Iasym)[i, t - 1L]
+  ok <- is.finite(rr$R_env[t]) & I > 20 & t > 60
+  expect_gt(sum(ok), 40L)
+  expect_lt(abs(stats::median(rr$R_env[t][ok] / truth[ok]) - 1), 0.1)
 })
 
 # -----------------------------------------------------------------------------
-# Helper: build a minimal mosaic_trajectories fixture
+# Route ratio, additivity, Euler-Lotka
 # -----------------------------------------------------------------------------
-make_traj_fixture <- function(inc_med, lines = NULL, date_start = "2023-01-01") {
-  nL <- nrow(inc_med); Tn <- ncol(inc_med)
-  loc_names <- paste0("LOC", seq_len(nL))
+test_that(".cori_reff divides where the denominator clears the floor", {
+  r <- MOSAIC:::.cori_reff(c(10, 5, NA, 8), c(5, 0.5, 4, 0))
+  expect_equal(r, c(2, NA, NA, NA))
+  expect_equal(MOSAIC:::.cori_reff(c(1, 1), c(0.5, 2), infectiousness_floor = 0),
+               c(2, 0.5))
+  expect_error(MOSAIC:::.cori_reff(1:3, 1:2), "same length")
+  expect_error(MOSAIC:::.cori_reff(1, 1, infectiousness_floor = -1), "floor")
+})
+
+test_that("R_eff is R_hum + R_env; a gated route with no infections counts as 0", {
+  set.seed(5)
+  Tn <- 200L; k <- kern_default()
+  inc_h <- rpois(Tn, 30); inc_e <- rpois(Tn, 70)
+  rr <- MOSAIC:::.mosaic_reff_routes(inc_h, inc_e, rep(1 / 40, Tn), k)
+  ok <- is.finite(rr$R_hum) & is.finite(rr$R_env)
+  expect_true(any(ok))
+  expect_equal(rr$R_eff[ok], rr$R_hum[ok] + rr$R_env[ok])
+
+  rr0 <- MOSAIC:::.mosaic_reff_routes(inc_h + inc_e, numeric(Tn), rep(1 / 40, Tn), k)
+  f <- is.finite(rr0$R_eff)
+  expect_true(all(is.na(rr0$R_env[f]) | rr0$R_env[f] == 0))
+  expect_equal(rr0$R_eff[f], rr0$R_hum[f])
+
+  # Route below the floor: with 0 own infections it contributes 0; with
+  # infections it leaves the total undefined. Total >= each defined route.
+  Lh <- c(5, 5, 5); Le <- c(0.2, 0.2, 0.2)
+  r2 <- local({
+    testthat::local_mocked_bindings(
+      .mosaic_reff_infectiousness = function(...) list(Lambda_hum = Lh, Lambda_env = Le),
+      .package = "MOSAIC")
+    MOSAIC:::.mosaic_reff_routes(c(10, 10, 10), c(0, 3, 0), rep(0.1, 3), k)
+  })
+  expect_equal(r2$R_hum, c(2, 2, 2))
+  expect_true(all(is.na(r2$R_env)))
+  expect_equal(r2$R_eff, c(2, NA, 2))
+})
+
+test_that("route plateaus match the discrete Euler-Lotka values under growth", {
+  Tn <- 1500L; r <- 0.01; f <- 0.3; d <- 1 / 50
+  k <- kern_default()
+  inc <- exp(r * seq_len(Tn))
+  rr <- MOSAIC:::.mosaic_reff_routes(f * inc, (1 - f) * inc, rep(d, Tn), k,
+                                     infectiousness_floor = 0)
+  kp <- MOSAIC:::.mosaic_reff_kernel_pmf(k, d, tail = 1e-12)
+  el <- function(g) 1 / sum(g * exp(-r * seq_along(g)))
+  late <- (Tn - 50L):Tn
+  expect_equal(mean(rr$R_hum[late]), f * el(kp$hum), tolerance = 1e-6)
+  expect_equal(mean(rr$R_env[late]), (1 - f) * el(kp$env), tolerance = 1e-4)
+  # The long environmental interval makes the same growth rate imply a much
+  # larger environmental R than a human-timed kernel would.
+  expect_gt(el(kp$env), 1.5 * el(kp$hum))
+})
+
+test_that("initial infectious stocks enter Lambda, so R is defined from day 2", {
+  Tn <- 40L; k <- kern_default()
+  inc <- rep(0, Tn); inc[10:Tn] <- 5
+  no_init <- MOSAIC:::.mosaic_reff_infectiousness(inc, rep(0.05, Tn), k)
+  with_init <- MOSAIC:::.mosaic_reff_infectiousness(inc, rep(0.05, Tn), k,
+                                                    init = c(10, 50, 100))
+  expect_true(all(no_init$Lambda_hum[2:9] == 0))
+  expect_true(all(with_init$Lambda_hum[2:9] > 1))
+  expect_true(all(with_init$Lambda_env[3:9] > 0))
+  # The initial people are propagated exactly like an incidence cohort: 50
+  # symptomatic and 100 asymptomatic infectious on day 1 give Lambda_hum[2] =
+  # 150 / D_h.
+  expect_equal(MOSAIC:::.mosaic_reff_infectiousness(
+    numeric(Tn), rep(0.05, Tn), k, init = c(0, 50, 100))$Lambda_hum[2], 150 / k$D_h)
+  # Result index 1 already holds one day of shedding from the initial people.
+  k2 <- kern_default(zeta_1 = 3, zeta_2 = 1)
+  lam0 <- MOSAIC:::.mosaic_reff_infectiousness(numeric(5), rep(0.05, 5), k2,
+                                              init = c(0, 8, 4),
+                                              shed_abs = c(3, 1))
+  expect_equal(lam0$W_hat[1], 3 * 8 + 1 * 4)
+  expect_equal(lam0$Lambda_env[2],
+               (k2$w1 * 8 + k2$w2 * 4) * 0.05 /
+                 (k2$w1 * k2$sigma / k2$p1 + k2$w2 * (1 - k2$sigma) / k2$p2))
+  expect_equal(MOSAIC:::.mosaic_reff_init(20, 3, 4, 5), c(15, 3, 4))
+  expect_equal(MOSAIC:::.mosaic_reff_init(NULL, NULL, 4, 5), c(0, 0, 4))
+})
+
+test_that("an initial latent stock propagates in engine order (exact values)", {
+  # Only latent people at the start and no new infections: every Lambda value
+  # comes from the initial E stock, stepped here in the engine's order -- E
+  # progresses from the previous day's stock, arrivals are not recovered on
+  # arrival, incidence at t reads I and W at t - 1, and W[t] decays at delta[t].
+  Tn <- 30L; k <- kern_default(zeta_1 = 3, zeta_2 = 1); E0 <- 40
+  delta <- seq(0.02, 0.2, length.out = Tn)
+  lam <- MOSAIC:::.mosaic_reff_infectiousness(numeric(Tn), delta, k,
+                                              init = c(E0, 0, 0))
+  E <- Is <- Ia <- W <- numeric(Tn)
+  E[1] <- E0
+  for (t in 2:Tn) {
+    prog  <- k$p_i * E[t - 1]
+    E[t]  <- E[t - 1] - prog
+    Is[t] <- Is[t - 1] * (1 - k$p1) + k$sigma * prog
+    Ia[t] <- Ia[t - 1] * (1 - k$p2) + (1 - k$sigma) * prog
+    W[t]  <- W[t - 1] * (1 - delta[t]) + k$w1 * Is[t - 1] + k$w2 * Ia[t - 1]
+  }
+  S_w <- k$w1 * k$sigma / k$p1 + k$w2 * (1 - k$sigma) / k$p2
+  expect_equal(lam$Lambda_hum, c(0, (Is + Ia)[-Tn]) / k$D_h, tolerance = 1e-12)
+  expect_equal(lam$Lambda_env, c(0, W[-Tn]) * delta / S_w, tolerance = 1e-12)
+  expect_gt(lam$Lambda_hum[3], 0)
+})
+
+test_that("a windowed R is the ratio of trailing sums", {
+  Tn <- 60L; k <- kern_default()
+  set.seed(11)
+  ih <- rpois(Tn, 3); ie <- rpois(Tn, 30); d <- rep(0.05, Tn)
+  init <- c(5, 20, 40)
+  lam <- MOSAIC:::.mosaic_reff_infectiousness(ih + ie, d, k, init = init)
+  rw <- MOSAIC:::.mosaic_reff_routes(ih, ie, d, k, infectiousness_floor = 0,
+                                     init = init, window = 7L)
+  expect_true(all(is.na(rw$R_env[1:6])))
+  t <- 20L; w <- (t - 6L):t
+  expect_equal(rw$R_env[t], sum(ie[w]) / sum(lam$Lambda_env[w]))
+  expect_equal(rw$R_hum[t], sum(ih[w]) / sum(lam$Lambda_hum[w]))
+  expect_equal(rw$R_eff[t], rw$R_hum[t] + rw$R_env[t])
+  expect_identical(MOSAIC:::.mosaic_reff_routes(ih, ie, d, k, init = init),
+                   MOSAIC:::.mosaic_reff_routes(ih, ie, d, k, init = init, window = 1L))
+  expect_error(MOSAIC:::.mosaic_reff_routes(ih, ie, d, k, window = 0L), "window")
+})
+
+test_that("cell quantiles need half the member weight defined", {
+  M <- rbind(c(1, NA, 3), c(2, NA, NA), c(3, 5, NA))
+  w <- c(0.2, 0.3, 0.5)
+  q <- MOSAIC:::.mosaic_reff_cell_quantiles(M, w, 0.5)
+  expect_equal(q[1, 1], weighted_quantiles(c(1, 2, 3), w, 0.5))
+  expect_equal(q[2, 1], 5)                 # member 3 alone holds 0.5 of the weight
+  expect_true(is.na(q[3, 1]))              # member 1 alone holds 0.2
+})
+
+# -----------------------------------------------------------------------------
+# calc_Reff() on a real engine trajectory
+# -----------------------------------------------------------------------------
+sim_traj_fixture <- function(lines = NULL) {
+  cfg <- MOSAIC::config_simulation_epidemic
+  cfg$zeta_1 <- 1e6; cfg$zeta_2 <- 2e5
+  r <- run_simulation(config = cfg, seed = 7L, quiet = TRUE)$results
+  nL <- nrow(r$incidence); Tn <- ncol(r$incidence)
+  ch <- c("incidence", "incidence_human", "incidence_env", "E", "Isym", "Iasym")
   if (is.null(lines))
     lines <- data.frame(member_id = integer(0), weight = numeric(0),
                         location = character(0), channel = character(0),
                         t = integer(0), value = numeric(0),
                         stringsAsFactors = FALSE)
-  structure(list(
-    schema         = "mosaic_trajectories",
-    channels       = "incidence",
-    location_names = loc_names,
-    n_locations    = nL,
-    n_time_points  = Tn,
-    date_start     = date_start,
-    date_stop      = as.character(as.Date(date_start) + Tn - 1L),
-    summary        = list(incidence = list(median = inc_med)),
-    lines          = lines
-  ), class = "mosaic_trajectories")
+  traj <- structure(list(
+    schema = "mosaic_trajectories", channels = ch,
+    location_names = cfg$location_name, n_locations = nL, n_time_points = Tn,
+    date_start = cfg$date_start, date_stop = cfg$date_stop,
+    summary = stats::setNames(lapply(ch, function(x)
+      list(median = matrix(as.numeric(r[[x]]), nL, Tn))), ch),
+    lines = lines), class = "mosaic_trajectories")
+  list(traj = traj, cfg = cfg, r = r)
 }
 
-test_config <- function() list(iota = 1 / 1.4, gamma_1 = 0.1,
-                               gamma_2 = 0.5, sigma = 0.25)
-
-# -----------------------------------------------------------------------------
-# Test 3: infection-incidence numerator wiring + per-location vectorization
-# -----------------------------------------------------------------------------
-test_that("calc_Reff central matches the renewal on the median incidence channel", {
-  rate <- 0.04
-  Tn   <- 120L
-  inc1 <- exp(rate * seq_len(Tn))
-  inc2 <- exp(0.02 * seq_len(Tn))    # a different patch -> different R_eff
-  inc_med <- rbind(inc1, inc2)
-  traj <- make_traj_fixture(inc_med)
-  cfg  <- test_config()
-
-  res <- calc_Reff(traj, cfg, max_days = 40L, verbose = FALSE)
-
+test_that("calc_Reff returns the three estimands, matching the route core", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  fx <- sim_traj_fixture()
+  res <- calc_Reff(fx$traj, fx$cfg, verbose = FALSE)
   expect_s3_class(res, "reproductive_numbers")
-  expect_true(all(c("location", "date", "t", "estimand", "central") %in% names(res)))
-  expect_setequal(unique(res$estimand), "R_eff")
-  expect_equal(attr(res, "series"), "infection_incidence")
-  expect_equal(attr(res, "kernel"), "moment_matched")
+  expect_setequal(unique(res$estimand), c("R_eff", "R_hum", "R_env"))
+  nL <- fx$traj$n_locations; Tn <- fx$traj$n_time_points
+  expect_equal(nrow(res), 3L * nL * Tn)
+  expect_equal(attr(res, "kernel"), "route_instantaneous")
 
-  g <- MOSAIC:::.mosaic_generation_time_pmf(cfg$iota, cfg$gamma_1, cfg$gamma_2,
-                                            cfg$sigma, max_days = 40L)
-  exp1 <- MOSAIC:::.cori_reff(inc1, g)
-  exp2 <- MOSAIC:::.cori_reff(inc2, g)
-
-  c1 <- res$central[res$location == "LOC1"]
-  c2 <- res$central[res$location == "LOC2"]
-  expect_equal(c1, exp1, tolerance = 1e-10)
-  expect_equal(c2, exp2, tolerance = 1e-10)
-  # Distinct per-patch incidence -> distinct R_eff (vectorization is real).
-  expect_false(isTRUE(all.equal(c1, c2)))
+  kern <- MOSAIC:::.mosaic_reff_config_kernel(fx$cfg)
+  i <- 3L
+  ref <- MOSAIC:::.mosaic_reff_routes(
+    fx$r$incidence_human[i, ], fx$r$incidence_env[i, ], fx$r$delta_jt[i, ], kern,
+    init = MOSAIC:::.mosaic_reff_init(fx$r$E[i, 1], fx$r$Isym[i, 1],
+                                      fx$r$Iasym[i, 1], fx$r$incidence[i, 1]))
+  loc <- fx$cfg$location_name[i]
+  for (e in c("R_eff", "R_hum", "R_env"))
+    expect_equal(res$central[res$estimand == e & res$location == loc], ref[[e]])
+  expect_equal(attr(res, "central_matrix")[i, ], ref$R_eff)
+  kp <- attr(res, "kernel_params")
+  expect_true(all(c("mean_hum", "mean_env_min", "mean_env_max") %in% names(kp)))
+  expect_gt(kp[["mean_env_max"]], kp[["mean_hum"]])
 })
 
-test_that("calc_Reff errors when the incidence channel is absent", {
-  traj <- make_traj_fixture(matrix(1, 1, 10))
-  traj$summary$incidence <- NULL
-  expect_error(calc_Reff(traj, test_config(), verbose = FALSE),
-               "incidence")
+test_that("calc_Reff errors without the route channels or kernel params", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  fx <- sim_traj_fixture()
+  tr <- fx$traj; tr$summary$incidence_env <- NULL
+  expect_error(calc_Reff(tr, fx$cfg, verbose = FALSE), "incidence_env")
+  cfg <- fx$cfg; cfg$zeta_2 <- NULL
+  expect_error(calc_Reff(fx$traj, cfg, verbose = FALSE), "zeta_2")
+  expect_error(calc_Reff(list(a = 1), fx$cfg, verbose = FALSE), "mosaic_trajectories")
 })
 
-test_that("calc_Reff errors on a non-trajectory ensemble and missing kernel params", {
-  expect_error(calc_Reff(list(foo = 1), test_config(), verbose = FALSE),
-               "mosaic_trajectories")
-  traj <- make_traj_fixture(matrix(1, 1, 10))
-  bad  <- test_config(); bad$sigma <- NULL
-  expect_error(calc_Reff(traj, bad, verbose = FALSE), "sigma")
+test_that("calc_Reff refuses a CI from lines that do not start on day 1", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  lines <- do.call(rbind, lapply(c("incidence_human", "incidence_env"), function(ch)
+    data.frame(member_id = 1L, weight = 1, location = "FOO", channel = ch,
+               t = 21:300, value = 5, stringsAsFactors = FALSE)))
+  fx <- sim_traj_fixture(lines)
+  expect_warning(res <- calc_Reff(fx$traj, fx$cfg, verbose = FALSE), "day 21")
+  expect_equal(attr(res, "ci_source"), "unavailable_lines_not_from_start")
+  expect_true(all(is.na(res$q50)))
 })
 
-test_that("calc_Reff accepts a mosaic_ensemble carrying $trajectories", {
-  traj <- make_traj_fixture(matrix(exp(0.03 * seq_len(60)), nrow = 1))
-  ens  <- list(trajectories = traj)
-  res  <- calc_Reff(ens, test_config(), max_days = 30L, verbose = FALSE)
-  expect_s3_class(res, "reproductive_numbers")
-  expect_equal(nrow(res), 60L)
+test_that("calc_Reff rejects a config whose locations or start date differ", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  fx <- sim_traj_fixture()
+  cfg <- fx$cfg; cfg$location_name <- rev(cfg$location_name)
+  expect_error(calc_Reff(fx$traj, cfg, verbose = FALSE), "location_name")
+  tr <- fx$traj; tr$date_start <- "2019-12-01"
+  expect_error(calc_Reff(tr, fx$cfg, verbose = FALSE), "date_start")
 })
 
-# -----------------------------------------------------------------------------
-# Test 4: posterior reduction matches a brute-force weighted_quantiles reference
-# -----------------------------------------------------------------------------
-test_that("calc_Reff posterior quantiles match a brute-force reference (daily lines)", {
-  set.seed(101)
-  Tn <- 40L
-  nL <- 1L
-  inc_med <- matrix(exp(0.03 * seq_len(Tn)), nrow = nL)
+test_that("calc_Reff warn-skips the CI on strided lines and NA-fills with none", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  fx0 <- sim_traj_fixture()
+  res0 <- calc_Reff(fx0$traj, fx0$cfg, verbose = FALSE)
+  expect_equal(attr(res0, "ci_source"), "unavailable_no_incidence_lines")
+  expect_true(all(is.na(res0$q2.5)))
 
-  # Three weighted members, DAILY-consecutive lines (stride 1) over t = 1..Tn.
-  members <- 1:3
-  mw      <- c(0.2, 0.5, 0.3)
-  member_inc <- list(
-    exp(0.025 * seq_len(Tn)),
-    exp(0.035 * seq_len(Tn)),
-    exp(0.045 * seq_len(Tn)))
-  line_parts <- lapply(seq_along(members), function(mi) {
-    data.frame(member_id = members[mi], weight = mw[mi], location = "LOC1",
-               channel = "incidence", t = seq_len(Tn), value = member_inc[[mi]],
-               stringsAsFactors = FALSE)
-  })
-  lines <- do.call(rbind, line_parts)
-  traj  <- make_traj_fixture(inc_med, lines = lines)
-  cfg   <- test_config()
-  probs <- c(0.025, 0.5, 0.975)
-
-  res <- calc_Reff(traj, cfg, max_days = 30L, probs = probs, verbose = FALSE)
-  expect_equal(attr(res, "ci_source"), "weighted_quantiles_per_member")
-
-  # Brute-force reference at a chosen late time t* (window fully populated).
-  g <- MOSAIC:::.mosaic_generation_time_pmf(cfg$iota, cfg$gamma_1, cfg$gamma_2,
-                                            cfg$sigma, max_days = 30L)
-  reff_m <- vapply(member_inc, function(v) MOSAIC:::.cori_reff(v, g)[35L],
-                   numeric(1))
-  ref_q  <- weighted_quantiles(reff_m, mw, probs)
-
-  row <- res[res$location == "LOC1" & res$t == 35L, , drop = FALSE]
-  got_q <- c(row[["q2.5"]], row[["q50"]], row[["q97.5"]])
-  expect_equal(got_q, ref_q, tolerance = 1e-10)
-
-  # Median quantile column exists and the central (point) column is finite there.
-  expect_true(is.finite(row$central))
-})
-
-# -----------------------------------------------------------------------------
-# Test 6: strided / absent lines -> point estimate with NA CI (no fabrication)
-# -----------------------------------------------------------------------------
-test_that("calc_Reff warn-skips the CI when lines are time-strided", {
-  Tn <- 60L
-  inc_med <- matrix(exp(0.03 * seq_len(Tn)), nrow = 1)
-  # Strided lines: t = 1, 8, 15, ... (stride 7).
-  t_strided <- seq(1L, Tn, by = 7L)
-  lines <- data.frame(member_id = 1L, weight = 1, location = "LOC1",
-                      channel = "incidence", t = t_strided,
-                      value = exp(0.03 * t_strided), stringsAsFactors = FALSE)
-  traj <- make_traj_fixture(inc_med, lines = lines)
-
-  expect_warning(
-    res <- calc_Reff(traj, test_config(), max_days = 30L, verbose = FALSE),
-    "strided")
+  ts <- seq(1L, 300L, by = 7L)
+  lines <- do.call(rbind, lapply(c("incidence_human", "incidence_env"), function(ch)
+    data.frame(member_id = 1L, weight = 1, location = "FOO", channel = ch,
+               t = ts, value = 5, stringsAsFactors = FALSE)))
+  fx <- sim_traj_fixture(lines)
+  expect_warning(res <- calc_Reff(fx$traj, fx$cfg, verbose = FALSE), "strided")
   expect_equal(attr(res, "ci_source"), "unavailable_strided_lines")
-  expect_true(all(is.na(res[["q2.5"]])))
-  # Point estimate still present.
   expect_true(any(is.finite(res$central)))
 })
 
-test_that("calc_Reff returns NA CI when no incidence lines are present", {
-  inc_med <- matrix(exp(0.03 * seq_len(50)), nrow = 1)
-  traj <- make_traj_fixture(inc_med)   # empty lines
-  res  <- calc_Reff(traj, test_config(), max_days = 30L, verbose = FALSE)
-  expect_equal(attr(res, "ci_source"), "unavailable_no_incidence_lines")
-  expect_true(all(is.na(res[["q2.5"]])))
-})
-
-# -----------------------------------------------------------------------------
-# Test 7: weights indexed by MEMBER ID, not per-location position
-# -----------------------------------------------------------------------------
-test_that("calc_Reff `weights` align by member id when a member is dropped in one location", {
-  # Two locations, three members (ids 1,2,3). LOC1 carries all three; LOC2 is
-  # MISSING member 2 entirely (only ids 1,3 present), so the surviving members'
-  # per-location POSITIONS differ: LOC1 (1,2,3) at positions (1,2,3) but LOC2
-  # (1,3) at positions (1,2). A position-indexed weight lookup (`weights[mi]`)
-  # would map LOC2 position 2 to weights[2] -- member 2's tiny weight -- and put
-  # the mass on the WRONG member. An id-indexed lookup must put the big weight on
-  # the SAME member id (3) in both locations.
-  Tn <- 40L
-  inc_med <- rbind(exp(0.03 * seq_len(Tn)), exp(0.02 * seq_len(Tn)))
-
-  member_inc <- list(
-    `1` = exp(0.020 * seq_len(Tn)),
-    `2` = exp(0.030 * seq_len(Tn)),
-    `3` = exp(0.045 * seq_len(Tn)))   # member 3: by far the highest growth -> highest R
-
-  mk_lines <- function(loc, ids) {
-    do.call(rbind, lapply(ids, function(id) {
-      v <- member_inc[[as.character(id)]]
-      data.frame(member_id = id, weight = 1 / length(ids), location = loc,
-                 channel = "incidence", t = seq_len(Tn), value = v,
-                 stringsAsFactors = FALSE)
-    }))
-  }
-  # LOC1 has all 3 members; LOC2 is missing member 2 entirely (positions shift).
-  l1 <- mk_lines("LOC1", c(1, 2, 3))
-  l2 <- mk_lines("LOC2", c(1, 3))
-  lines <- rbind(l1, l2)
-  traj  <- make_traj_fixture(inc_med, lines = lines)
-
-  # Global weights keyed by member id: put essentially ALL mass on member id 3.
+test_that("calc_Reff posterior quantiles align member weights by id", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  fx0 <- sim_traj_fixture()
+  Tn <- fx0$traj$n_time_points
+  # Three members at LOC FOO, member 2 absent at BAR: positions shift there.
+  rates <- c(`1` = 0.004, `2` = 0.008, `3` = 0.02)
+  mk <- function(loc, ids) do.call(rbind, lapply(ids, function(id) {
+    v <- 20 * exp(rates[[as.character(id)]] * seq_len(Tn))
+    rbind(data.frame(member_id = id, weight = 1 / length(ids), location = loc,
+                     channel = "incidence_human", t = seq_len(Tn), value = 0.3 * v,
+                     stringsAsFactors = FALSE),
+          data.frame(member_id = id, weight = 1 / length(ids), location = loc,
+                     channel = "incidence_env", t = seq_len(Tn), value = 0.7 * v,
+                     stringsAsFactors = FALSE))
+  }))
+  lines <- rbind(mk("FOO", c(1, 2, 3)), mk("BAR", c(1, 3)))
+  fx <- sim_traj_fixture(lines)
   w <- c(`1` = 1e-6, `2` = 1e-6, `3` = 1)
   probs <- c(0.025, 0.5, 0.975)
-  res <- calc_Reff(traj, test_config(), max_days = 30L, probs = probs,
-                   weights = w, verbose = FALSE)
+  res <- calc_Reff(fx$traj, fx$cfg, probs = probs, weights = w, verbose = FALSE)
   expect_equal(attr(res, "ci_source"), "weighted_quantiles_per_member")
 
-  # Build the id-aligned (correct) and position-aligned (buggy) references at a
-  # late time. The function must match the id-aligned reference in BOTH
-  # locations, and must DIFFER from the position-aligned reference in LOC2 (where
-  # the missing member 2 shifts member 3 from position 3 to position 2).
-  g <- MOSAIC:::.mosaic_generation_time_pmf(test_config()$iota, test_config()$gamma_1,
-                                            test_config()$gamma_2, test_config()$sigma,
-                                            max_days = 30L)
-  tstar <- 28L
-  probs <- c(0.025, 0.5, 0.975)
-  r_by_id <- c(`1` = MOSAIC:::.cori_reff(member_inc[["1"]], g)[tstar],
-               `2` = MOSAIC:::.cori_reff(member_inc[["2"]], g)[tstar],
-               `3` = MOSAIC:::.cori_reff(member_inc[["3"]], g)[tstar])
-
-  qcols <- c("q2.5", "q50", "q97.5")
-  got1 <- as.numeric(res[res$location == "LOC1" & res$t == tstar, qcols])
-  got2 <- as.numeric(res[res$location == "LOC2" & res$t == tstar, qcols])
-
-  # LOC1 present ids = 1,2,3; LOC2 present ids = 1,3. Correct (id-keyed) weights.
-  ref1_id <- weighted_quantiles(r_by_id[c("1", "2", "3")], w[c("1", "2", "3")], probs)
-  ref2_id <- weighted_quantiles(r_by_id[c("1", "3")],      w[c("1", "3")],      probs)
-  expect_equal(got1, ref1_id, tolerance = 1e-8)
-  expect_equal(got2, ref2_id, tolerance = 1e-8)
-
-  # The position-BUG answer for LOC2 would pair the present members (ids 1,3)
-  # with weights[c(1,2)] = (member1, member2) weights -- putting the big weight
-  # on the WRONG (low-R) member. Assert the function did NOT do that.
-  ref2_pos <- weighted_quantiles(r_by_id[c("1", "3")], unname(w)[c(1, 2)], probs)
-  expect_false(isTRUE(all.equal(got2, ref2_pos)))
-  # And the upper tail is anchored to member 3 (the heavy-weight high-R member).
-  expect_gt(got2[3], r_by_id["1"])
-})
-
-test_that("calc_Reff `weights = NULL` keeps each member's carried weight (member-aligned)", {
-  Tn <- 40L
-  inc_med <- matrix(exp(0.03 * seq_len(Tn)), nrow = 1)
-  members <- 1:3
-  mw      <- c(0.2, 0.5, 0.3)
-  member_inc <- list(exp(0.025 * seq_len(Tn)), exp(0.035 * seq_len(Tn)),
-                     exp(0.045 * seq_len(Tn)))
-  lines <- do.call(rbind, lapply(seq_along(members), function(mi)
-    data.frame(member_id = members[mi], weight = mw[mi], location = "LOC1",
-               channel = "incidence", t = seq_len(Tn), value = member_inc[[mi]],
-               stringsAsFactors = FALSE)))
-  traj <- make_traj_fixture(inc_med, lines = lines)
-  probs <- c(0.025, 0.5, 0.975)
-  res <- calc_Reff(traj, test_config(), max_days = 30L, probs = probs,
-                   verbose = FALSE)
-
-  g <- MOSAIC:::.mosaic_generation_time_pmf(test_config()$iota, test_config()$gamma_1,
-                                            test_config()$gamma_2, test_config()$sigma,
-                                            max_days = 30L)
-  reff_m <- vapply(member_inc, function(v) MOSAIC:::.cori_reff(v, g)[35L], numeric(1))
-  ref_q  <- weighted_quantiles(reff_m, mw, probs)
-  row <- res[res$location == "LOC1" & res$t == 35L, , drop = FALSE]
-  expect_equal(c(row[["q2.5"]], row[["q50"]], row[["q97.5"]]), ref_q, tolerance = 1e-10)
-})
-
-# -----------------------------------------------------------------------------
-# Test 5b: internal (mid-series) non-finite incidence
-# -----------------------------------------------------------------------------
-test_that(".cori_reff treats a mid-series non-finite value as 0 in the denom, NA in the numerator", {
-  # Documented behavior: a non-finite I_t (i) yields NA at its own step (NA
-  # numerator) and (ii) contributes 0 to later denominators (treated as absent
-  # history), so downstream steps still compute from the finite history.
-  g   <- c(0.6, 0.4)
-  inc <- c(10, 20, NA, 40, 50)
-  r   <- MOSAIC:::.cori_reff(inc, g, infectiousness_floor = 0)
-
-  # t = 3 has NA incidence -> NA at that step.
-  expect_true(is.na(r[3]))
-  # t = 4 denom = g(1)*inc(3 as 0) + g(2)*inc(2) = 0.6*0 + 0.4*20 = 8; R = 40/8.
-  expect_equal(r[4], 40 / 8, tolerance = 1e-10)
-  # t = 5 denom = g(1)*inc(4) + g(2)*inc(3 as 0) = 0.6*40 + 0.4*0 = 24; R = 50/24.
-  expect_equal(r[5], 50 / 24, tolerance = 1e-10)
-})
-
-# -----------------------------------------------------------------------------
-# Test 5c: CI window whose daily-consecutive lines start at t_min > 1
-# -----------------------------------------------------------------------------
-test_that("calc_Reff handles a daily-consecutive CI window that starts at t_min > 1", {
-  # The lines are daily-consecutive but only cover t = 21..60 (a forecast-window
-  # capture). History before t_min is unavailable to the member reconstruction,
-  # so: (i) cells before t_min have NA CI, (ii) the per-member renewal restarts
-  # its own warm-up at t_min (the first few in-window steps are NA), and (iii)
-  # later in-window cells get a finite CI.
-  Tn <- 60L
-  t_min <- 21L
-  inc_med <- matrix(exp(0.03 * seq_len(Tn)), nrow = 1)
-  members <- 1:3
-  mw      <- c(0.3, 0.4, 0.3)
-  t_win   <- seq(t_min, Tn, by = 1L)
-  rates   <- c(0.025, 0.035, 0.045)
-  lines <- do.call(rbind, lapply(seq_along(members), function(mi)
-    data.frame(member_id = members[mi], weight = mw[mi], location = "LOC1",
-               channel = "incidence", t = t_win,
-               value = exp(rates[mi] * t_win), stringsAsFactors = FALSE)))
-  traj <- make_traj_fixture(inc_med, lines = lines)
-  res  <- calc_Reff(traj, test_config(), max_days = 30L,
-                    probs = c(0.025, 0.5, 0.975), verbose = FALSE)
-  expect_equal(attr(res, "ci_source"), "weighted_quantiles_per_member")
-
-  # Cells before the window start carry no CI.
-  before <- res[res$location == "LOC1" & res$t < t_min, , drop = FALSE]
-  expect_true(all(is.na(before[["q50"]])))
-
-  # A late in-window cell (well past the window-local warm-up) has a finite CI
-  # matching a brute-force reconstruction on the window-local incidence.
-  g <- MOSAIC:::.mosaic_generation_time_pmf(test_config()$iota, test_config()$gamma_1,
-                                            test_config()$gamma_2, test_config()$sigma,
-                                            max_days = 30L)
-  tstar <- 55L
-  local_idx <- tstar - t_min + 1L
-  reff_m <- vapply(seq_along(members), function(mi)
-    MOSAIC:::.cori_reff(exp(rates[mi] * t_win), g)[local_idx], numeric(1))
-  ref_q <- weighted_quantiles(reff_m, mw, c(0.025, 0.5, 0.975))
-  row <- res[res$location == "LOC1" & res$t == tstar, , drop = FALSE]
-  expect_equal(c(row[["q2.5"]], row[["q50"]], row[["q97.5"]]), ref_q, tolerance = 1e-8)
-  expect_true(is.finite(row[["q50"]]))
-})
-
-# -----------------------------------------------------------------------------
-# Test 8 pointer: the converted TODO stubs from test-lasik_calculations.R now
-# live in this file (kernel + estimator tests above).
-# -----------------------------------------------------------------------------
-test_that("reproductive-number tests have a home (converted lasik TODO stubs)", {
-  expect_true(exists("calc_Reff"))
-  expect_true(is.function(MOSAIC:::.cori_reff))
-  expect_true(is.function(MOSAIC:::.mosaic_generation_time_pmf))
+  kern <- MOSAIC:::.mosaic_reff_config_kernel(fx$cfg)
+  delta <- fx$r$delta_jt
+  tstar <- 300L
+  member_R <- function(id, i) {
+    v <- 20 * exp(rates[[as.character(id)]] * seq_len(Tn))
+    init <- MOSAIC:::.mosaic_reff_init(fx$r$E[i, 1], fx$r$Isym[i, 1], fx$r$Iasym[i, 1],
+                                       fx$r$incidence[i, 1])
+    MOSAIC:::.mosaic_reff_routes(0.3 * v, 0.7 * v, delta[i, ], kern,
+                                 init = init)$R_eff[tstar]
+  }
+  i_bar <- match("BAR", fx$cfg$location_name)
+  got <- as.numeric(res[res$location == "BAR" & res$estimand == "R_eff" &
+                          res$t == tstar, c("q2.5", "q50", "q97.5")])
+  ref <- weighted_quantiles(c(member_R(1, i_bar), member_R(3, i_bar)),
+                            w[c("1", "3")], probs)
+  expect_equal(got, ref, tolerance = 1e-8)
+  bug <- weighted_quantiles(c(member_R(1, i_bar), member_R(3, i_bar)),
+                            unname(w)[c(1, 2)], probs)
+  expect_false(isTRUE(all.equal(got, bug)))
 })

@@ -23,6 +23,7 @@ calc_convergence_diagnostics(
   target_ess_param_prop = 0.95,
   ess_method = c("kish", "perplexity"),
   temperature = 1,
+  is_diagnostics = NULL,
   verbose = TRUE
 )
 }
@@ -73,6 +74,11 @@ workflow.}
 
 \item{temperature}{Numeric temperature parameter used for weight scaling
 (default 1, for documentation purposes)}
+
+\item{is_diagnostics}{Optional list of exact importance-sampling diagnostics
+from \code{\link{calc_is_diagnostics}}, with elements \code{best} and
+\code{all}. Reported under \code{$importance_sampling} but never gated:
+these are untruncated-weight quantities, unlike the gated ESS_B.}
 
 \item{verbose}{Logical indicating whether to print diagnostic messages
 (default TRUE)}
@@ -173,9 +179,9 @@ print(diagnostics$summary$convergence_status)
 \code{\link{calc_model_ess}},
 \code{\link{calc_model_agreement_index}}
 
-Other calibration-metrics: 
-\code{\link{calc_model_agreement_index}()},
-\code{\link{calc_model_cvw}()},
-\code{\link{calc_model_ess}()}
+Other calibration-metrics:
+\code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}},
+\code{\link[=calc_model_cvw]{calc_model_cvw()}},
+\code{\link[=calc_model_ess]{calc_model_ess()}}
 }
 \concept{calibration-metrics}

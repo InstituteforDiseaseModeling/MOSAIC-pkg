@@ -19,9 +19,9 @@ over the retained set \eqn{\mathcal B = \{i : w_i > 0\}}, after normalizing with
 \seealso{
 \code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}}
 
-Other calibration-metrics: 
-\code{\link{calc_convergence_diagnostics}()},
-\code{\link{calc_model_agreement_index}()},
-\code{\link{calc_model_ess}()}
+Other calibration-metrics:
+\code{\link[=calc_convergence_diagnostics]{calc_convergence_diagnostics()}},
+\code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}},
+\code{\link[=calc_model_ess]{calc_model_ess()}}
 }
 \concept{calibration-metrics}

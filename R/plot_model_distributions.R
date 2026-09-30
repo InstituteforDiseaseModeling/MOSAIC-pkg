@@ -8,6 +8,11 @@
 #' @param method_names Vector of method names corresponding to each JSON file (for legends and colors)
 #' @param output_dir Directory to save generated plots
 #' @param custom_colors Optional named vector of colors for each method (e.g., c("Prior" = "#4a4a4a", "BFRS" = "#1f77b4"))
+#' @param locations Optional character vector of ISO codes selecting which
+#'   outputs to draw: \code{NULL} (default) draws the global page and every
+#'   location, \code{character(0)} draws only the global page, and a vector of
+#'   codes draws only those locations. Lets a caller split the work across
+#'   processes; see \code{\link{render_MOSAIC_figures}}.
 #' @param verbose Logical; if \code{TRUE}, print per-parameter diagnostic
 #'   messages while building the plots (default \code{FALSE}).
 #'
@@ -35,7 +40,7 @@
 #' }
 #'
 #' @export
-plot_model_distributions <- function(json_files, method_names, output_dir, custom_colors = NULL, verbose = FALSE) {
+plot_model_distributions <- function(json_files, method_names, output_dir, custom_colors = NULL, verbose = FALSE, locations = NULL) {
 
   # All required packages loaded via NAMESPACE
 
@@ -81,19 +86,9 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # Load estimated parameters inventory
   data("estimated_parameters", package = "MOSAIC")
 
-  # Helper function to unnest single-element lists from JSON
-  unnest_json <- function(x) {
-    if (is.list(x) && length(x) == 1 && !is.null(names(x))) {
-      return(x)  # Keep named lists as-is
-    }
-    if (is.list(x) && length(x) == 1) {
-      return(x[[1]])  # Unnest single-element unnamed lists
-    }
-    if (is.list(x)) {
-      return(lapply(x, unnest_json))  # Recurse for nested lists
-    }
-    return(x)
-  }
+  # Unnesting lives at package scope as .mosaic_unnest_json() so
+  # render_MOSAIC_figures() can parse the same JSON the same way.
+  unnest_json <- .mosaic_unnest_json
 
   # Load all JSON files into a named list
   methods_data <- setNames(vector("list", length(json_files)), method_names)
@@ -187,87 +182,15 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # EXTRACT LOCATIONS FROM FIRST AVAILABLE METHOD
   # =========================================================================
 
-  location_codes <- NULL
-  for (method_name in names(methods_data)) {
-    method_data <- methods_data[[method_name]]
-    if (!is.null(method_data$parameters_location)) {
-      for (param in names(method_data$parameters_location)) {
-        if (!is.null(method_data$parameters_location[[param]]$location)) {
-          location_codes <- names(method_data$parameters_location[[param]]$location)
-          break
-        }
-      }
-      if (!is.null(location_codes)) break
-    }
-  }
+  # Derivation lives in one place so render_MOSAIC_figures() can ask for the
+  # same list without rendering (it needs it to fan locations out to workers).
+  location_codes <- .mosaic_location_codes_from_methods(methods_data)
 
   plots <- list()
 
   # =========================================================================
   # HELPER FUNCTIONS
   # =========================================================================
-
-  # Helper function to calculate KL divergence analytically for known distributions
-  calc_kl_analytical <- function(dist1_type, dist1_params, dist2_type, dist2_params) {
-    if (dist1_type != dist2_type) return(NA)  # Different types, would need numerical
-
-    kl <- NA
-    tryCatch({
-      if (dist1_type == "beta") {
-        a1 <- as.numeric(dist1_params$shape1)
-        b1 <- as.numeric(dist1_params$shape2)
-        a2 <- as.numeric(dist2_params$shape1)
-        b2 <- as.numeric(dist2_params$shape2)
-        kl <- lgamma(a1 + b1) - lgamma(a1) - lgamma(b1) -
-              lgamma(a2 + b2) + lgamma(a2) + lgamma(b2) +
-              (a1 - a2) * (digamma(a1) - digamma(a1 + b1)) +
-              (b1 - b2) * (digamma(b1) - digamma(a1 + b1))
-      } else if (dist1_type == "normal") {
-        mu1 <- as.numeric(dist1_params$mean)
-        sigma1 <- as.numeric(dist1_params$sd)
-        mu2 <- as.numeric(dist2_params$mean)
-        sigma2 <- as.numeric(dist2_params$sd)
-        kl <- log(sigma2/sigma1) + (sigma1^2 + (mu1 - mu2)^2) / (2 * sigma2^2) - 0.5
-      } else if (dist1_type == "gamma") {
-        k1 <- as.numeric(dist1_params$shape)
-        theta1 <- 1/as.numeric(dist1_params$rate)
-        k2 <- as.numeric(dist2_params$shape)
-        theta2 <- 1/as.numeric(dist2_params$rate)
-        kl <- (k1 - k2) * digamma(k1) - lgamma(k1) + lgamma(k2) +
-              k2 * (log(theta2) - log(theta1)) + k1 * (theta1 - theta2) / theta2
-      } else if (dist1_type == "uniform") {
-        a1 <- as.numeric(dist1_params$min)
-        b1 <- as.numeric(dist1_params$max)
-        a2 <- as.numeric(dist2_params$min)
-        b2 <- as.numeric(dist2_params$max)
-
-        # Calculate KL using numerical integration approach
-        # Create a grid over the prior's support
-        n_points <- 1000
-        x <- seq(a1, b1, length.out = n_points)
-        dx <- (b1 - a1) / n_points
-
-        # Prior density (uniform)
-        p_prior <- rep(1 / (b1 - a1), n_points)
-
-        # Posterior density (0 outside [a2, b2])
-        p_post <- ifelse(x >= a2 & x <= b2, 1 / (b2 - a2), 1e-10)
-
-        # Calculate KL divergence using numerical integration
-        kl <- sum(p_prior * log(p_prior / p_post) * dx)
-
-        # Cap at a reasonable maximum to avoid numerical issues
-        if (kl > 20) kl <- 20
-      } else if (dist1_type == "lognormal") {
-        mu1 <- as.numeric(dist1_params$meanlog)
-        sigma1 <- as.numeric(dist1_params$sdlog)
-        mu2 <- as.numeric(dist2_params$meanlog)
-        sigma2 <- as.numeric(dist2_params$sdlog)
-        kl <- log(sigma2/sigma1) + (sigma1^2 + (mu1 - mu2)^2) / (2 * sigma2^2) - 0.5
-      }
-    }, error = function(e) { kl <- NA })
-    return(kl)
-  }
 
   # Parameters whose x-axis spans multiple orders of magnitude and read
   # much better on a log10 scale (matches the kappa_prior.png reference
@@ -803,10 +726,21 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     return(p)
   }
 
+  # `locations` splits this function's two outputs so a caller can render them
+  # on separate workers (see render_MOSAIC_figures()):
+  #   NULL            -- global page + every location  (default, unchanged)
+  #   character(0)    -- global page only
+  #   c("AGO", ...)   -- those locations only, no global page
+  render_global <- is.null(locations) || length(locations) == 0L
+  if (!is.null(locations)) {
+    location_codes <- intersect(location_codes, locations)
+  }
+
   # =========================================================================
   # PLOT 1: Global Parameters (Category-Based Organization)
   # =========================================================================
 
+  if (render_global) {
   cat("Plotting global parameter distributions organized by category...\n")
 
   # Get global parameters from estimated_parameters, ordered appropriately
@@ -979,6 +913,8 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       cat(paste0("  Saved: ", filename, "\n"))
     }
   }
+
+  }  # end render_global
 
   # =========================================================================
   # PLOT 2: Location-Specific Parameters (if any locations exist)

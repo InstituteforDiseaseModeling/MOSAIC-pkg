@@ -1,3 +1,22 @@
+#' Validate the relative epsilon floor used by the count likelihoods
+#'
+#' A silently-ignored or silently-defaulted `eps_rel` would reproduce this
+#' package's most-repeated bug (CLAUDE.md lesson #13), so an unusable value is a
+#' hard error rather than a fallback to 0.02.
+#'
+#' @param eps_rel Candidate value.
+#' @return The validated scalar.
+#' @noRd
+.check_eps_rel <- function(eps_rel) {
+     if (is.null(eps_rel) || length(eps_rel) != 1L || !is.numeric(eps_rel) ||
+         !is.finite(eps_rel) || eps_rel <= 0) {
+          stop("`eps_rel` must be a single finite positive number (fraction of mean(observed)).",
+               call. = FALSE)
+     }
+     as.numeric(eps_rel)
+}
+
+
 ###############################################################################
 ## calc_log_likelihood_beta.R
 ###############################################################################
@@ -321,7 +340,7 @@ calc_log_likelihood_gamma <- function(observed,
 
 
 ###############################################################################
-## calc_log_likelihood_negbin.R  (patched: adds k_min)
+## calc_log_likelihood_negbin.R
 ###############################################################################
 
 #' Calculate log-likelihood for Negative Binomial-distributed count data
@@ -333,23 +352,30 @@ calc_log_likelihood_gamma <- function(observed,
 #' @param observed Integer vector of observed non-negative counts (e.g., cases, deaths).
 #' @param estimated Numeric vector of expected values from the model (same length as \code{observed}).
 #' @param k Numeric scalar; dispersion parameter. If \code{NULL}, it is estimated via method of moments.
-#' @param k_min Numeric scalar; minimum dispersion floor applied when \code{k} is finite
-#'   (either supplied or estimated). Default \code{3}. If \code{k = Inf} (Poisson limit),
+#' @param k_min Deprecated and ignored; retained only so existing calls do not
+#'   error. Dispersion is estimated by \code{\link{est_nb_dispersion}} and
+#'   arrives already bounded. If \code{k = Inf} (Poisson limit),
 #'   no flooring is applied.
 #' @param weights Optional numeric vector of non-negative weights, same length as \code{observed}.
 #'                Default is \code{NULL}, which sets all weights to 1.
+#' @param eps_rel Positive scalar; the predicted mean of every cell is floored at
+#'   \code{max(1e-4, eps_rel * mean(observed))} before the density is evaluated.
+#'   Default \code{0.02}. This floor is the only thing standing between a zero
+#'   prediction and \code{log(0)}, and its SIZE sets how hard a spurious zero is
+#'   punished, so it is channel-specific: see \code{\link{calc_model_likelihood}}
+#'   (\code{eps_rel_cases} / \code{eps_rel_deaths}).
 #' @param verbose Logical; if \code{TRUE}, prints diagnostics including the (floored) dispersion and total log-likelihood.
 #'
 #' @details
 #' If \code{k} is not supplied, it is estimated as \eqn{k = \bar{x}^2 / (s^2 - \bar{x})} from
-#' \code{observed}. When this estimate is finite, it is constrained to be at least \code{k_min}.
+#' \code{observed}.
 #' If \eqn{s^2 \le \bar{x}}, the function uses the Poisson limit (\code{k = Inf}).
 #'
 #' @return A scalar representing the total log-likelihood (numeric).
 #' @export
 #'
 #' @examples
-#' # Default k_min = 3
+#' # k is used as supplied
 #' calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
 #' # Provide k but allow flooring if too small
 #' calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5), k = 1.2)
@@ -358,9 +384,12 @@ calc_log_likelihood_gamma <- function(observed,
 calc_log_likelihood_negbin <- function(observed,
                                        estimated,
                                        k       = NULL,
-                                       k_min   = 3,
+                                       k_min   = NULL,
                                        weights = NULL,
+                                       eps_rel = 0.02,
                                        verbose = TRUE) {
+
+     eps_rel <- .check_eps_rel(eps_rel)
 
      if (length(observed) != length(estimated)) {
           stop("Lengths of observed and estimated must match.")
@@ -410,39 +439,44 @@ calc_log_likelihood_negbin <- function(observed,
      }
 
      # Apply minimum k floor when k is finite
-     if (is.finite(k) && k < k_min) {
-          if (verbose) message(sprintf("k = %.3f < k_min = %.3f; using k_min.", k, k_min))
-          k <- k_min
+     if (!is.null(k_min)) {
+          warning("`k_min` is deprecated and ignored; dispersion now arrives pre-bounded from est_nb_dispersion().",
+                  call. = FALSE)
      }
 
-     # Compute weighted log-likelihood with proportional penalty for zero predictions
+     # Compute weighted log-likelihood. Every cell goes through the density.
+     # A1 (inference lab): epsilon-floored mean instead of a magnitude-proportional
+     # penalty for zero predictions. The old branch returned `-observed[i] *
+     # log(1e6)` -- a loss LINEAR in the observed count, not a log-density. It
+     # carried +100.1% to +100.8% of the log-likelihood's between-draw variance,
+     # so the median delta-AIC of ~9.6e5 described this constant rather than fit.
+     # eps_j follows LIKE-01: a per-location background reporting rate.
+     # A1b: eps must scale with the CHANNEL. LIKE-01's max(0.5, 0.001*mean) was
+     # calibrated on cases (mean ~30/day, so 0.5 is 2% of the signal); on deaths
+     # (ETH mean ~0.39/day) the same constant is 128% of the mean, flooring the
+     # predicted rate ABOVE the typical observed rate and destroying
+     # discrimination exactly where the deaths signal lives. Use a relative
+     # floor that reproduces ~0.5 for cases and scales down for deaths.
+     # R1: `eps_rel` is a per-CHANNEL knob, not a constant -- the 0.02 that is
+     # right for cases is ~12x too small for a low-count deaths series, where a
+     # single stochastic realisation is mostly structural zeros and the Jensen
+     # gap between E_seed[LL(est)] and LL(E_seed[est]) drives the level upward.
+     mo <- mean(observed[is.finite(observed)], na.rm = TRUE)
+     eps_j <- max(1e-4, eps_rel * mo)
+     if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 1e-4
      ll_vec <- numeric(length(observed))
-     
+
      for (i in seq_along(observed)) {
-          # Option 3: Proportional penalty for impossible predictions
-          if (estimated[i] <= 0 && observed[i] > 0) {
-               # Penalty scales with magnitude of failure
-               ll_vec[i] <- -observed[i] * log(1e6)  # -13.8 per observed unit
-               if (verbose && i == 1) {  # Report first occurrence
-                    message(sprintf("NegBin: Applying proportional penalty for zero prediction (obs=%d)", observed[i]))
-               }
-          } else if (estimated[i] <= 0 && observed[i] == 0) {
-               # Perfect match when both are zero
-               ll_vec[i] <- 0
+          # Python port: branch on k == Inf to use scipy.stats.poisson instead
+          # of scipy.stats.nbinom (which does not handle size = Inf).
+          est_safe <- max(estimated[i], eps_j)
+          if (is.infinite(k)) {
+               # Poisson limit
+               ll_vec[i] <- observed[i] * log(est_safe) - est_safe - lgamma(observed[i] + 1)
           } else {
-               # Normal NegBin calculation
-               # Unified epsilon floor (1e-10) matching Poisson path.
-               # Python port: branch on k == Inf to use scipy.stats.poisson
-               # instead of scipy.stats.nbinom (which doesn't handle size=Inf).
-               est_safe <- max(estimated[i], 1e-10)
-               if (is.infinite(k)) {
-                    # Poisson limit
-                    ll_vec[i] <- observed[i] * log(est_safe) - est_safe - lgamma(observed[i] + 1)
-               } else {
-                    ll_vec[i] <- lgamma(observed[i] + k) - lgamma(k) - lgamma(observed[i] + 1) +
-                         k * log(k / (k + est_safe)) +
-                         observed[i] * log(est_safe / (k + est_safe))
-               }
+               ll_vec[i] <- lgamma(observed[i] + k) - lgamma(k) - lgamma(observed[i] + 1) +
+                    k * log(k / (k + est_safe)) +
+                    observed[i] * log(est_safe / (k + est_safe))
           }
      }
 
@@ -584,6 +618,9 @@ calc_log_likelihood_normal <- function(observed,
 #' @param zero_buffer Logical; if \code{TRUE} (default), rounds observed values to integers and
 #'                    adds small buffer to avoid zero estimates. If \code{FALSE}, enforces
 #'                    strict integer requirements.
+#' @param eps_rel Positive scalar; the predicted mean of every cell is floored at
+#'   \code{max(1e-4, eps_rel * mean(observed))} before the density is evaluated.
+#'   Default \code{0.02}. See \code{\link{calc_log_likelihood_negbin}}.
 #' @param verbose Logical; if \code{TRUE}, prints diagnostics and total log-likelihood.
 #'
 #' @details
@@ -602,7 +639,10 @@ calc_log_likelihood_poisson <- function(observed,
                                         estimated,
                                         weights = NULL,
                                         zero_buffer = TRUE,
+                                        eps_rel = 0.02,
                                         verbose = TRUE) {
+
+     eps_rel <- .check_eps_rel(eps_rel)
 
      if (length(observed) != length(estimated)) {
           stop("Lengths of observed and estimated must match.")
@@ -670,25 +710,28 @@ calc_log_likelihood_poisson <- function(observed,
      }
 
 
-     # Compute Poisson log-likelihood with proportional penalty for zero predictions
+     # Compute Poisson log-likelihood. Every cell goes through the density.
+     # A1 (inference lab): epsilon-floored mean instead of a magnitude-proportional
+     # penalty for zero predictions. The old branch returned `-observed[i] *
+     # log(1e6)` -- a loss LINEAR in the observed count, not a log-density. It
+     # carried +100.1% to +100.8% of the log-likelihood's between-draw variance,
+     # so the median delta-AIC of ~9.6e5 described this constant rather than fit.
+     # eps_j follows LIKE-01: a per-location background reporting rate.
+     # A1b: eps must scale with the CHANNEL. LIKE-01's max(0.5, 0.001*mean) was
+     # calibrated on cases (mean ~30/day, so 0.5 is 2% of the signal); on deaths
+     # (ETH mean ~0.39/day) the same constant is 128% of the mean, flooring the
+     # predicted rate ABOVE the typical observed rate and destroying
+     # discrimination exactly where the deaths signal lives. Use a relative
+     # floor that reproduces ~0.5 for cases and scales down for deaths.
+     # R1: `eps_rel` is a per-CHANNEL knob; see calc_log_likelihood_negbin().
+     mo <- mean(observed[is.finite(observed)], na.rm = TRUE)
+     eps_j <- max(1e-4, eps_rel * mo)
+     if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 1e-4
      ll_vec <- numeric(length(observed))
-     
+
      for (i in seq_along(observed)) {
-          # Option 3: Proportional penalty for impossible predictions
-          if (estimated[i] <= 0 && observed[i] > 0) {
-               # Penalty scales with magnitude of failure
-               ll_vec[i] <- -observed[i] * log(1e6)  # -13.8 per observed unit
-               if (verbose && i == 1) {  # Report first occurrence
-                    message(sprintf("Poisson: Applying proportional penalty for zero prediction (obs=%d)", observed[i]))
-               }
-          } else if (estimated[i] <= 0 && observed[i] == 0) {
-               # Perfect match when both are zero
-               ll_vec[i] <- 0
-          } else {
-               # Normal Poisson calculation
-               est_safe <- max(estimated[i], 1e-10)
-               ll_vec[i] <- dpois(observed[i], est_safe, log = TRUE)
-          }
+          est_safe <- max(estimated[i], eps_j)
+          ll_vec[i] <- dpois(observed[i], est_safe, log = TRUE)
      }
      ll <- sum(weights * ll_vec)
 

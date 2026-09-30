@@ -5,7 +5,7 @@
 #
 # The whole experiment is defined by the SPEC block below: units (countries),
 # explicit cutoff dates, horizons, embargo, psi pooling. Re-running with the same
-# SPEC + package + laser version reproduces the experiment (psi is FROZEN to a
+# SPEC + package version reproduces the experiment (psi is FROZEN to a
 # cache so the stochastic LSTM fit is fixed once; see TWO-PHASE below).
 #
 # WHAT IT DOES (red-teamed dev plan: claude/plan_forecast_cv/PLAN.md)
@@ -226,7 +226,23 @@ if (PHASE %in% c("all", "calibrate")) {
                                               n_iterations   = as.integer(Sys.getenv("FORECAST_CV_N_ITER", "3"))))
           ctrl$targets     <- modifyList(ctrl$targets %||% list(), list(ESS_param = 100L))
      }
-     ctrl$parallel <- modifyList(ctrl$parallel %||% list(), list(enable = CORES > 1L, n_cores = CORES))
+     # R fixes its connection table at startup and every PSOCK worker holds one
+     # slot, so the CALIBRATION pool is capped even where the box is far larger.
+     # That ceiling is liftable: R >= 4.4.0 takes `--max-connections=N` (max
+     # 4096) and the VM wrappers (vm/make_wrappers.sh) pass 512, so the cap is
+     # derived from the LIVE budget rather than hard-coded at 120. Explicit
+     # FORECAST_CV_PSOCK_CAP still wins. The psi prefit is unaffected (it uses
+     # only ~parallel_seeds workers).
+     psock_cap   <- Sys.getenv("FORECAST_CV_PSOCK_CAP", "")
+     psock_cap   <- if (nzchar(psock_cap)) as.integer(psock_cap) else
+                         max(1L, as.integer(parallelly::freeConnections()) - 2L)
+     n_cores_cal <- min(CORES, psock_cap)
+     if (CORES > n_cores_cal)
+          message(sprintf(paste0("  calibration n_cores capped at %d of %d (R connection budget: %d of %d slots free).\n",
+                                 "  Raise with `--max-connections=N` at R startup; psi prefit used the full %d-core budget."),
+                          n_cores_cal, CORES, as.integer(parallelly::freeConnections()),
+                          as.integer(parallelly::availableConnections()), CORES))
+     ctrl$parallel <- modifyList(ctrl$parallel %||% list(), list(enable = n_cores_cal > 1L, n_cores = n_cores_cal))
      ctrl$paths    <- modifyList(ctrl$paths %||% list(), list(plots = FALSE))
 
      status <- list()
@@ -290,28 +306,43 @@ if (PHASE %in% c("all", "score")) {
      .write_tab(summ,  file.path(SPEC$out_dir, "leaderboard.parquet"))
 
      if (requireNamespace("ggplot2", quietly = TRUE)) {
-          for (m in SPEC$metrics)
-               tryCatch(MOSAIC::plot_rolling_cv(predictions = preds, metric = m, eval = list(cells = cells),
-                                                dir_output = SPEC$out_dir, file_prefix = "rolling_cv"),
-                        error = function(e) cat("   plot failed (", m, "): ", conditionMessage(e), "\n"))
+          # Time-series plots: plot_rolling_cv has NO country dimension, so call it
+          # PER COUNTRY (one artifact per iso) -- never on the merged multi-iso frame
+          # (that superimposes countries into each panel).
+          tdir <- file.path(SPEC$out_dir, "timeseries")
+          for (iso in unique(preds$iso_code)) {
+               pu <- preds[preds$iso_code == iso, ]; cu <- cells[cells$iso_code == iso, ]
+               for (m in SPEC$metrics)
+                    tryCatch(MOSAIC::plot_rolling_cv(predictions = pu, metric = m, eval = list(cells = cu),
+                                                     dir_output = tdir, file_prefix = paste0("ts_", iso)),
+                             error = function(e) cat("   ts plot failed (", iso, m, "): ", conditionMessage(e), "\n"))
+          }
+          # Headline OOS scoring = R2 and bias per country x origin at the primary
+          # horizon (raw per-origin points + median; no CI at n=3).
+          for (v in c("R2_corr", "bias_ratio"))
+               tryCatch(MOSAIC::plot_forecast_cv_skill(cells, value = v, horizon_months = SPEC$primary_horizon,
+                                                       dir_output = SPEC$out_dir),
+                        error = function(e) cat("   headline plot failed (", v, "): ", conditionMessage(e), "\n"))
      }
 
-     # ESS gate readout (from the predictions `ess` column, per the scoring contract)
-     ess_tab <- unique(cells[, c("unit", "iso_code", "cutoff_date", "metric", "ess", "ess_ok")])
-     cat(sprintf("\nESS gate (floor %g): %d/%d cells pass\n",
-                 SPEC$ess_min, sum(cells$ess_ok, na.rm = TRUE), nrow(cells)))
-     print(utils::head(ess_tab[order(ess_tab$ess), ], 20), row.names = FALSE)
+     # ---- OOS scoring report = R2 + bias (primary horizon) --------------------
+     oos <- cells[cells$model == "ensemble" & cells$window == sprintf("OOS<=%gmo", SPEC$primary_horizon),
+                  c("unit", "metric", "cutoff_date", "R2_corr", "R2_sse", "bias_ratio", "n", "ess_ok", "exploratory")]
+     oos <- oos[order(oos$unit, oos$metric, oos$cutoff_date), ]
+     .write_tab(oos, file.path(SPEC$out_dir, "oos_scores_R2_bias.parquet"))
+     cat(sprintf("\n===== OOS (%g-mo) R2 + bias, ensemble, per country x origin =====\n", SPEC$primary_horizon))
+     print(oos, row.names = FALSE)
+
+     cat(sprintf("\nESS gate (floor %g): %d/%d cells pass\n", SPEC$ess_min, sum(cells$ess_ok, na.rm = TRUE), nrow(cells)))
 
      manifest <- list(
           experiment = "forecast_cv (HINDCAST / conditional model skill, realized covariates -- NOT forecast skill)",
           created = as.character(Sys.time()), mosaic_version = as.character(utils::packageVersion("MOSAIC")),
-          laser_version = tryCatch(as.character(reticulate::py_to_r(reticulate::import("laser.cholera")$`__version__`)),
-                                   error = function(e) NA_character_),
           git_sha = tryCatch(system(paste("git -C", shQuote(file.path(root, "MOSAIC-pkg")), "rev-parse HEAD"), intern = TRUE),
                              error = function(e) NA_character_),
           spec = SPEC, config_window = c(as.character(cfg_start), as.character(cfg_stop)),
-          primary = list(horizon_months = SPEC$primary_horizon, baseline = "seasonal",
-                         verdict = "per-origin win/loss vs climatology + raw per-origin values (n=3 -> NO CI)",
+          primary = list(horizon_months = SPEC$primary_horizon,
+                         verdict = "OOS R2 (corr=shape, sse=scale-aware) + bias_ratio per country x origin (n=3 -> raw values, NO CI)",
                          exploratory_units = "NGA"),
           ic_provenance = list(note = "ICs frozen at build-time ic_t0; D5 places cutoffs downstream"))
      jsonlite::write_json(manifest, file.path(SPEC$out_dir, "spec.json"),
@@ -319,8 +350,8 @@ if (PHASE %in% c("all", "score")) {
 
      cat("\n=========== DONE (HINDCAST / model skill) ===========\n")
      cat("artifacts:", SPEC$out_dir, "\n")
-     cat("  predictions_all.parquet  scores_cells.parquet  leaderboard.parquet  spec.json\n")
-     cat("  rolling_cv_{cases,deaths}_*.png/pdf\n")
+     cat("  predictions_all.parquet  scores_cells.parquet  leaderboard.parquet  oos_scores_R2_bias.parquet  spec.json\n")
+     cat("  timeseries/ts_<iso>_{cases,deaths}_overview.png   forecast_cv_{R2_corr,bias_ratio}_*.png\n")
      cat("REMINDER: realized covariates => conditional/hindcast MODEL skill, NOT forecast skill (D4).\n")
-     cat("PRIMARY verdict = win/loss vs climatology at 6mo; n=3 per country => report raw per-origin values, NO CI. NGA exploratory-only.\n")
+     cat(sprintf("PRIMARY = OOS R2 + bias at %g-mo, per country x origin (n=3 -> raw values, NO CI). NGA exploratory-only.\n", SPEC$primary_horizon))
 }

@@ -6,7 +6,7 @@
 #'
 #' Scores model fits against observed data using a Negative Binomial (NB)
 #' time-series log-likelihood per location and outcome (cases, deaths) with
-#' a weighted MoM dispersion estimate and a \code{k_min} floor.
+#' a per-location NB dispersion estimated by \code{\link{est_nb_dispersion}}.
 #'
 #' Optional shape terms are enabled by setting their weight > 0: peak timing
 #' (Normal), peak magnitude (log-Normal with adaptive sigma), cumulative
@@ -38,9 +38,36 @@
 #'   exact unweighted code path is used, byte-identical to prior behavior). A row
 #'   that is all-1 on finite-obs cells is also routed through the exact unweighted
 #'   path. Only the NB cases/deaths terms are weighted; shape terms are not (v1).
-#' @param config Optional LASER config list (location_name, date_start, date_stop).
-#' @param nb_k_min_cases Minimum NB dispersion floor for cases. Default \code{3}.
-#' @param nb_k_min_deaths Minimum NB dispersion floor for deaths. Default \code{3}.
+#' @param config Optional simulation config list (location_name, date_start, date_stop).
+#' @param nb_k_cases NB dispersion for the cases channel: a scalar applied to
+#'   every location, or a vector with one entry per location. \code{Inf} selects
+#'   the Poisson limit. When \code{NULL} (default) the dispersion is estimated
+#'   from \code{obs_cases} via \code{\link{est_nb_dispersion}}; in
+#'   \code{run_MOSAIC()} it is precomputed once and supplied here.
+#' @param nb_k_deaths NB dispersion for the deaths channel; see
+#'   \code{nb_k_cases}.
+#' @param eps_rel_cases,eps_rel_deaths Positive scalars. Within each location the
+#'   predicted mean is floored at \code{max(1e-4, eps_rel * mean(obs))} before the
+#'   NB density is evaluated, separately per channel. The floor is not cosmetic:
+#'   production scores a SINGLE stochastic realisation, so a low-count series is
+#'   full of cells where the realisation is 0 against a positive observation, and
+#'   the size of the floor is what the likelihood pays for such a cell. Too small a
+#'   floor makes zeros ruinous and the optimum moves to a draw that over-predicts
+#'   the level (a Jensen gap: \code{E_seed[LL(est)]} peaks well above
+#'   \code{LL(E_seed[est])}). Cases default \code{0.02}; deaths default
+#'   \code{0.25}, sized by sweep so the deaths level at the likelihood optimum is
+#'   unbiased. Cases are far less exposed: 13.6 percent of scored deaths cells
+#'   predict zero against a positive observation, versus 1.7 percent of cases
+#'   cells.
+#' @param ll_deaths_core Optional numeric vector, one value per location: the
+#'   deaths log-likelihood computed with the reported case fatality ratio
+#'   integrated out (\code{calc_log_likelihood_deaths_integrated()$ll}). When
+#'   supplied it replaces the negative-binomial deaths core, so
+#'   \code{eps_rel_deaths} and \code{nb_k_deaths} are not used for the core;
+#'   \code{run_MOSAIC()} always supplies it. The level-dependent deaths shape
+#'   terms (peak magnitude, cumulative, WIS) are then dropped, with a warning,
+#'   because \code{est_deaths} is drawn at the prior CFR; deaths peak timing,
+#'   which does not depend on the level, is kept.
 #' @param verbose If \code{TRUE}, prints component summaries per location.
 #' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms
 #'   (T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
@@ -55,6 +82,18 @@
 #' @param wis_quantiles Quantiles for WIS if enabled.
 #' @param cumulative_timepoints Fractions for cumulative progression.
 #'
+# NOTE (v0.95.0): the two percentages just above are SPELLED OUT on purpose.
+# A percent sign written as a backslash-escape inside a roxygen comment is
+# re-escaped by roxygen2 into a double backslash in the generated .Rd, which the
+# Rd parser reads as a literal backslash followed by a COMMENT -- everything
+# after it on that line is silently discarded. Here that line also carried the
+# closing brace of its argument entry, so the arguments block never closed: the
+# generated Rd lost its description, every later argument became an unknown
+# macro, and R CMD check reported it as four separate items (install WARNING,
+# Rd files WARNING, Rd cross-references WARNING, Rd contents NOTE) plus nine
+# spuriously "undocumented" arguments. The same escape appears in ~20 other
+# roxygen blocks in this package; it is merely latent there because no closing
+# brace shares the line, but it still truncates the rendered text.
 #' @return Scalar total log-likelihood (finite), \code{-Inf} if non-finite,
 #'   or \code{NA_real_} if all locations contribute nothing.
 #' @export
@@ -69,8 +108,11 @@ calc_model_likelihood <- function(obs_cases,
                                   weights_obs_cases  = NULL,
                                   weights_obs_deaths = NULL,
                                   config           = NULL,
-                                  nb_k_min_cases   = 3,
-                                  nb_k_min_deaths  = 3,
+                                  nb_k_cases       = NULL,
+                                  nb_k_deaths      = NULL,
+                                  eps_rel_cases    = 0.02,
+                                  eps_rel_deaths   = 0.25,
+                                  ll_deaths_core   = NULL,
                                   verbose          = FALSE,
                                   # ---- shape term weights (0 = OFF; 0.25 = 25% of NB core) ----
                                   weight_peak_timing       = 0,
@@ -110,7 +152,71 @@ calc_model_likelihood <- function(obs_cases,
      if (is.null(weight_cases))     weight_cases     <- 1
      if (is.null(weight_deaths))    weight_deaths    <- 1
 
+     # Per-channel epsilon floor. NULL means "caller did not set it", which for a
+     # scoring knob must resolve to the documented default rather than being
+     # dropped -- run_MOSAIC() forwards control$likelihood entries that may be
+     # absent from an older control list. Anything else non-usable is an error.
+     if (is.null(eps_rel_cases))  eps_rel_cases  <- 0.02
+     if (is.null(eps_rel_deaths)) eps_rel_deaths <- 0.25
+     eps_rel_cases  <- .check_eps_rel(eps_rel_cases)
+     eps_rel_deaths <- .check_eps_rel(eps_rel_deaths)
+
      if (length(weights_location) != n_locations) stop("weights_location must match n_locations.")
+     if (!is.null(ll_deaths_core) &&
+         (!is.numeric(ll_deaths_core) || length(ll_deaths_core) != n_locations))
+          stop("ll_deaths_core must be a numeric vector with one value per location.")
+     if (!is.null(ll_deaths_core) &&
+         (weight_peak_magnitude > 0 || weight_cumulative_total > 0 || weight_wis > 0)) {
+          .mosaic_warn_once("deaths_shape_terms_integrated", paste0(
+               "With the reported CFR integrated out of the deaths likelihood, the deaths ",
+               "components of the peak-magnitude, cumulative and WIS shape terms are dropped: ",
+               "they would score the engine's deaths at the prior mu_jt and put the prior CFR ",
+               "level back into selection. The cases components and deaths peak timing are kept."))
+     }
+
+     # NB dispersion. Accepts a scalar (recycled) or one value per location, the
+     # same contract as weights_location. k depends only on the OBSERVATIONS, so
+     # run_MOSAIC() estimates it once per calibration and passes it in; a
+     # standalone call estimates it here so the function stays self-contained.
+     .expand_k <- function(k, nm) {
+          k <- as.numeric(k)
+          if (length(k) == 1L) k <- rep(k, n_locations)
+          if (length(k) != n_locations)
+               stop(sprintf("%s must be length 1 or n_locations (%d), got %d.",
+                            nm, n_locations, length(k)))
+          # NA or non-positive k would silently drive the whole log-likelihood to
+          # -Inf for every simulation rather than erroring.
+          bad <- !((is.finite(k) & k > 0) | is.infinite(k))
+          if (any(bad))
+               stop(sprintf("%s must be finite and positive, or Inf (Poisson); bad at index %s.",
+                            nm, paste(which(bad), collapse = ", ")))
+          k
+     }
+     if (is.null(nb_k_cases) || is.null(nb_k_deaths)) {
+          .ds <- if (!is.null(config)) config$date_start else NULL
+          if (is.null(.ds)) {
+               # Without dates the series cannot be aggregated to its reporting
+               # cadence, so dispersion is not estimable. Fall back to the
+               # Poisson limit -- the well-defined boundary of the NB family --
+               # and say so. run_MOSAIC() always supplies the precomputed
+               # dispersion, so this path is for standalone/basic use only.
+               warning("calc_model_likelihood(): no nb_k_cases/nb_k_deaths and no config$date_start, ",
+                       "so dispersion cannot be estimated; scoring at the Poisson limit. ",
+                       "Supply nb_k_cases/nb_k_deaths or a config with date_start.",
+                       call. = FALSE)
+               if (is.null(nb_k_cases))  nb_k_cases  <- Inf
+               if (is.null(nb_k_deaths)) nb_k_deaths <- Inf
+          } else {
+               if (is.null(nb_k_cases))
+                    nb_k_cases <- est_nb_dispersion(obs_cases, weights_obs_cases,
+                                                    date_start = .ds)$k
+               if (is.null(nb_k_deaths))
+                    nb_k_deaths <- est_nb_dispersion(obs_deaths, weights_obs_deaths,
+                                                     date_start = .ds)$k
+          }
+     }
+     nb_k_cases  <- .expand_k(nb_k_cases,  "nb_k_cases")
+     nb_k_deaths <- .expand_k(nb_k_deaths, "nb_k_deaths")
      if (length(weights_time)     != n_time_steps) stop("weights_time must match n_time_steps.")
      if (any(weights_location < 0) || any(weights_time < 0)) stop("All weights must be >= 0.")
      if (sum(weights_location) == 0 || sum(weights_time) == 0) stop("weights_location and weights_time must not all be zero.")
@@ -230,44 +336,32 @@ calc_model_likelihood <- function(obs_cases,
                else        .weights_obs_effective(weights_time, wobs_d_row, obs_d, est_d)
           } else NULL
 
-          # Weighted NB dispersion (k) estimated from observed data via method-of-moments.
-          # Note: k is a property of the observation process, not the model-observation
-          # mismatch, so all simulations are evaluated against the same k. This is
-          # intentional -- it ensures the likelihood reflects data noise characteristics
-          # rather than calibration quality. The k_min floor prevents the NB from
-          # collapsing to a near-Poisson kernel for low-variance series.
-          #
-          # k-coherence (red-team M-2): on the trivial/unweighted path k uses the
-          # raw weights_time (exact prior behavior). On the weighted path k uses
-          # the SAME masked, mass-preserving w_eff it is scored under, so the
-          # dispersion is anchored to the cells the LL actually weights.
-          k_c <- if (have_cases) {
-               if (triv_c) .nb_size_from_obs_weighted(obs_c, weights_time, k_min = nb_k_min_cases)
-               else        .nb_size_from_obs_weighted(obs_c, w_eff_c,      k_min = nb_k_min_cases)
-          } else Inf
-          k_d <- if (have_deaths) {
-               if (triv_d) .nb_size_from_obs_weighted(obs_d, weights_time, k_min = nb_k_min_deaths)
-               else        .nb_size_from_obs_weighted(obs_d, w_eff_d,      k_min = nb_k_min_deaths)
-          } else Inf
+          # NB dispersion for this location. k is a property of the OBSERVATION
+          # process, not of the model-observation mismatch, so it is identical
+          # for every simulation and is estimated once (see est_nb_dispersion()).
+          # Inf selects the Poisson limit, which is the intended result for
+          # all-zero and other uninformative series.
+          k_c <- if (have_cases)  nb_k_cases[j]  else Inf
+          k_d <- if (have_deaths) nb_k_deaths[j] else Inf
 
-          # Core NB time series LL (pass k and k_min explicitly)
+          # Core NB time series LL (k supplied explicitly; already bounded)
           ll_cases  <- if (have_cases) MOSAIC::calc_log_likelihood(
                observed  = obs_c,
                estimated = est_c,
                family    = "negbin",
                weights   = w_eff_c,
                k         = k_c,
-               k_min     = nb_k_min_cases,
+               eps_rel   = eps_rel_cases,
                verbose   = FALSE
           ) else 0
 
-          ll_deaths <- if (have_deaths) MOSAIC::calc_log_likelihood(
+          ll_deaths <- if (!is.null(ll_deaths_core)) ll_deaths_core[j] else if (have_deaths) MOSAIC::calc_log_likelihood(
                observed  = obs_d,
                estimated = est_d,
                family    = "negbin",
                weights   = w_eff_d,
                k         = k_d,
-               k_min     = nb_k_min_deaths,
+               eps_rel   = eps_rel_deaths,
                verbose   = FALSE
           ) else 0
 
@@ -351,6 +445,15 @@ calc_model_likelihood <- function(obs_cases,
           #     + (N_obs/N_quantiles)  * w_wis * (wc * wis_c + wd * wis_d)
           #
           # NOTE: weight_cases/weight_deaths apply multiplicatively to EVERY component.
+
+          # With the reported CFR integrated out (ll_deaths_core), the deaths the
+          # engine drew are at the PRIOR mu_jt, so any level-dependent deaths
+          # shape term (peak magnitude, cumulative, WIS) would put the prior CFR
+          # level back into selection. Those deaths components are dropped;
+          # deaths peak timing is level-free and stays.
+          if (!is.null(ll_deaths_core)) {
+               ll_peak_mag_d <- 0; ll_cum_tot_d <- 0; ll_wis_deaths <- 0
+          }
 
           # N_obs: count of timesteps with at least one finite observation
           N_obs <- sum(is.finite(obs_c) | is.finite(obs_d))
@@ -622,24 +725,4 @@ calc_model_likelihood <- function(obs_cases,
      (mae_term + sum_IS) / denom
 }
 
-# Weighted method-of-moments NB dispersion (k) with floor.
-# Uses Bessel-corrected weighted variance: V1^2 / (V1^2 - V2) normalisation,
-# where V1 = sum(w) and V2 = sum(w^2). This avoids underestimating variance
-# (and hence overestimating k) with small or unequal-weight samples.
-#' @keywords internal
-.nb_size_from_obs_weighted <- function(x, w, k_min = 3, k_max = 1e5) {
-     ok <- is.finite(x) & is.finite(w) & (w > 0)
-     if (!any(ok)) return(Inf)
-     x <- x[ok]; w <- w[ok]
-     sw  <- sum(w)
-     sw2 <- sum(w^2)
-     m   <- sum(w * x) / sw
-     # Bessel-corrected weighted variance: unbiased for frequency weights
-     denom <- sw - sw2 / sw
-     v <- if (denom > 0) sum(w * (x - m)^2) / denom else sum(w * (x - m)^2) / sw
-     if (!is.finite(m) || !is.finite(v) || m <= 0 || v <= m) return(Inf)
-     k  <- (m * m) / (v - m)
-     k  <- max(min(k, k_max), k_min)
-     k
-}
 

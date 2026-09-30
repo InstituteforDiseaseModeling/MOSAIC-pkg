@@ -2,7 +2,7 @@
 % Please edit documentation in R/get_default_config.R
 \name{get_default_config}
 \alias{get_default_config}
-\title{Create Default LASER Configuration}
+\title{Create Default Simulation Configuration}
 \usage{
 get_default_config(PATHS = NULL)
 }
@@ -12,13 +12,13 @@ The default config is now located via \code{system.file()} so the function
 works from any installed MOSAIC package.}
 }
 \value{
-A list object containing all necessary parameters and initial conditions for LASER
-model simulation.
+A list object containing all necessary parameters and initial conditions for a
+simulation.
 }
 \description{
-Generates a default configuration for running LASER model simulations.
+Generates a default configuration for running simulations.
 Automatically defines default values of all model parameters and initial
-conditions for the cholera metapopulation transmission model. The function uses \code{\link{make_LASER_config}} to check
+conditions for the cholera metapopulation transmission model. The function uses \code{\link{make_simulation_config}} to check
 that all parameter values meet model specifications.
 }
 \examples{

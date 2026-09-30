@@ -29,13 +29,13 @@
 #' # Basic usage with simulation results
 #' ess_results <- calc_model_ess_parameter(
 #'   results = simulation_results,
-#'   param_names = c("tau_i", "mu_j_baseline", "gamma_2")
+#'   param_names = c("tau_i", "beta_j0_tot", "gamma_2")
 #' )
 #'
 #' # With custom likelihood column name
 #' ess_results <- calc_model_ess_parameter(
 #'   results = simulation_results,
-#'   param_names = c("tau_i", "mu_j_baseline", "gamma_2"),
+#'   param_names = c("tau_i", "beta_j0_tot", "gamma_2"),
 #'   likelihood_col = "log_lik"
 #' )
 #'
@@ -192,17 +192,6 @@ calc_model_ess_parameter <- function(
     if (verbose) {
         log_msg("Global ESS: %.1f (%.1f%% of samples)",
                 ess_global, 100 * ess_global / n_samples)
-    }
-    
-    # ==========================================================================
-    # Helper function for log-sum-exp
-    # ==========================================================================
-    
-    log_sum_exp <- function(x) {
-        if (length(x) == 0) return(-Inf)
-        max_x <- max(x)
-        if (is.infinite(max_x)) return(max_x)
-        return(max_x + log(sum(exp(x - max_x))))
     }
     
     # ==========================================================================

@@ -1,8 +1,8 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.64.3
-Date: 2026-07-09
+Version: 0.99.10
+Date: 2026-09-29
 Authors@R: c(
           person("John R", "Giles",
                  email = "john.giles@gatesfoundation.org",
@@ -32,19 +32,18 @@ Description: Tools for preparing data and models for the MOSAIC framework. The M
 License: file LICENSE
 URL: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/
 BugReports: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues
-SystemRequirements: GDAL (>= 2.0.0), PROJ (>= 4.8.0), GEOS (>= 3.4.0), UDUNITS-2, Python (>= 3.9)
+SystemRequirements: GDAL (>= 2.0.0), PROJ (>= 4.8.0), GEOS (>= 3.4.0), UDUNITS-2, Python (>= 3.9) [optional, only for est_suitability()]
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Remotes:
   gilesjohnr/propvacc,
   COVID-19-Mobility-Data-Network/mobility
 Imports:
   arrow,
   cli,
-  cowplot,
   countrycode,
+  cowplot,
   data.table,
   dbscan,
   dplyr,
@@ -64,9 +63,11 @@ Imports:
   jsonlite,
   lubridate,
   magrittr,
+  MASS,
   methods,
   minpack.lm,
   parallel,
+  parallelly,
   patchwork,
   pbapply,
   propvacc,
@@ -77,14 +78,15 @@ Imports:
   remotes,
   reshape2,
   reticulate,
+  RhpcBLASctl,
   rlang,
   rnaturalearth,
-  RhpcBLASctl,
   scales,
   sensitivity,
   sf,
   slider,
   sp,
+  splines,
   stats,
   stringr,
   tidyr,
@@ -97,6 +99,7 @@ Depends:
   R (>= 4.1.1)
 Suggests:
   testthat (>= 3.0.0),
+  codetools,
   mobility,
   shiny,
   shinyWidgets,
@@ -109,11 +112,17 @@ Suggests:
   ggExtra,
   gtools,
   mockery,
-  keras3  
+  keras3,
+  knitr,
+  rmarkdown,
+  gdistance,
+  malariaAtlas,
+  mipfp
+VignetteBuilder: knitr
 Config/Needs/website: rmarkdown
 Config/testthat/edition: 3
 Config/testthat/parallel: true
-Config/testthat/start-first: dask_worker_schema_parity, dask-psock-orchestrator,
-  est_initial_R_parallel, optimize_ensemble_subset, rolling_cv_empty_val_skip,
-  calc_model_ensemble, est_initial_E_I, dask-local-separation,
+Config/testthat/start-first: est_initial_R_parallel, optimize_ensemble_subset,
+  rolling_cv_empty_val_skip, calc_model_ensemble, est_initial_E_I,
   ensemble_cluster_robust
+Config/roxygen2/version: 8.1.0

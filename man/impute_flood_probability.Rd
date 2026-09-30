@@ -7,6 +7,7 @@
 impute_flood_probability(
   d,
   output_col = "emdat_flood_prob",
+  gam_train_stop = NULL,
   diagnostics = TRUE,
   diag_dir = NULL,
   verbose = TRUE
@@ -30,6 +31,17 @@ long-window precip sums computed inline by the function).}
 
 \item{output_col}{Character. Name of the new probability column.
 Default \code{"emdat_flood_prob"}.}
+
+\item{gam_train_stop}{Date or character (\code{"YYYY-MM-DD"}) or
+\code{NULL}. When non-\code{NULL}, the binomial GAM is FIT only on rows
+with \code{date <= gam_train_stop}; the fitted model then PREDICTS every
+row (so rows \code{<= gam_train_stop} are genuine in-sample and rows
+\code{> gam_train_stop} are leak-free extrapolation). This is the
+leakage-hygiene hook for rolling-origin forecast cross-validation, where
+a fold's hazard covariates must not be informed by that fold's OOS
+future. Default \code{NULL} = current full-data fit (back-compatible).
+Only the fit-row subset changes; \code{select=TRUE}/fREML/the formula are
+identical.}
 
 \item{diagnostics}{Logical. If \code{TRUE}, fits a rolling-year
 cross-validation and writes four artefacts to \code{diag_dir}:
@@ -65,7 +77,7 @@ precip smooth, and a precip-anomaly x soil-moisture-anomaly joint
 interaction -- improve detection of major cyclone-driven flood events
 (Idai 2019, Kenneth 2019, Eloise 2021, Ana 2022, Gombe 2022, Freddy
 2023). On a 10-cyclone benchmark this formulation lands every event
-in the top 21\\% of its country's historical predicted-probability
+in the top 21\% of its country's historical predicted-probability
 distribution (median 93rd percentile), the most reliable cyclone
 detector across the rebuild strategies tested.
 

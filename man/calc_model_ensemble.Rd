@@ -15,18 +15,18 @@ calc_model_ensemble(
   priors = NULL,
   sampling_args = list(),
   n_cases_warmup_mask = 2L,
-  mask_final_deaths_step = TRUE,
+  mask_final_deaths_step = FALSE,
   score_idx_cases = 1L,
   score_idx_deaths = 1L,
   parallel = FALSE,
   n_cores = NULL,
   root_dir = NULL,
-  precomputed_results = NULL,
   capture_trajectories = FALSE,
   trajectory_channels = .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT,
   trajectory_n_lines = 150L,
   trajectory_scratch_dir = NULL,
   reduce_trajectories = TRUE,
+  deaths_integration = NULL,
   verbose = TRUE
 )
 }
@@ -43,7 +43,7 @@ Mutually exclusive with \code{parameter_seeds}.}
 \code{parameter_seeds} or \code{configs}. Normalized internally to sum to 1.
 If \code{NULL}, all parameter sets are weighted equally.}
 
-\item{n_simulations_per_config}{Integer. Stochastic LASER reruns per parameter
+\item{n_simulations_per_config}{Integer. Stochastic stochastic reruns per parameter
 set. Default \code{10L}.}
 
 \item{envelope_quantiles}{Numeric vector of quantiles for confidence intervals.
@@ -65,13 +65,14 @@ returned series here; it is recorded in the returned \code{artifact_mask}
 element so downstream scoring (R2/bias) can exclude these positions. Set to
 \code{0L} to record "no cases warm-up mask".}
 
-\item{mask_final_deaths_step}{Logical. If \code{TRUE} (default, matching
-\code{\link{plot_model_ensemble}}), record that the FINAL deaths timestep is
-a laser-cholera structural zero (\code{reported_deaths} written at tick
-then leading-trimmed, so the last slot is never written; laser issue #82).
-This value is NOT applied to any returned series here; it
-is recorded in the returned \code{artifact_mask} element for downstream
-scoring.}
+\item{mask_final_deaths_step}{Logical. If \code{TRUE}, record that the FINAL
+deaths timestep is a structural zero to exclude from scoring. That was true
+of the laser-cholera engine (\code{reported_deaths} written at tick and
+leading-trimmed, so the last slot was never written; laser-cholera issue #82).
+Since v0.96.0 the R engine reports deaths on the same row as cases, and the
+post-hoc death redraw fills the final column, so the default is \code{FALSE}.
+This value is NOT applied to any returned series here; it is recorded in the
+returned \code{artifact_mask} element for downstream scoring.}
 
 \item{score_idx_cases, score_idx_deaths}{Integer (1-based). Per-channel scored
 time-window START index (burn-in / deaths-era start). Columns strictly
@@ -83,9 +84,7 @@ returned series here.}
 
 \item{n_cores}{Integer or \code{NULL}. Number of cores when \code{parallel = TRUE}.}
 
-\item{root_dir}{Character. MOSAIC root directory. Required when \code{parallel = TRUE}.}
-
-\item{precomputed_results}{Optional list of pre-gathered LASER results (e.g. from Dask).
+\item{root_dir}{Character. MOSAIC root directory. Required when \code{parallel = TRUE}.
 Each element must have \code{$param_idx}, \code{$stoch_idx},
 \code{$reported_cases}, \code{$reported_deaths}, and \code{$success}.}
 
@@ -117,6 +116,18 @@ reduction runs here over all members and is attached as \code{$trajectories}.
 When \code{FALSE}, the channels are spilled to scratch but NOT reduced; the
 scratch handle is returned in \code{$trajectory_scratch} so the caller can
 reduce over a final (e.g. optimized) subset without re-simulating.}
+
+\item{deaths_integration}{Optional run-level setup from
+\code{run_MOSAIC()} (\code{control$likelihood$.deaths_integration}). When
+supplied, each member's deaths are redrawn after its simulation from the
+reported CFR's posterior given that member's path -- the same integration
+calibration scores with -- so predicted deaths, true deaths and forecast
+years carry the calibrated CFR; the ensemble also returns
+\code{cfr_posterior}. When \code{NULL} (default) deaths are the engine's,
+drawn at the config's \code{mu_jt} -- for configs sampled from the priors
+that is the PRIOR reported CFR, not the calibrated one. To reproduce a
+run's calibrated deaths post hoc, pass
+\code{readRDS("<dir_output>/2_calibration/deaths_integration.rds")}.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }
@@ -151,10 +162,22 @@ timestep), and \code{$score_idx_cases}/\code{$score_idx_deaths} (integer,
 1-based per-channel scored-window start; columns before are dropped). The
 central/quantile/array fields above are RAW (unmasked); this spec is the
 contract scoring sites use to drop artifact positions.}
+\item{cfr_posterior}{When \code{deaths_integration} is supplied: a data frame
+with one row per location and calendar year -- \code{location},
+\code{year}, \code{cfr_median}, \code{cfr_lower}, \code{cfr_upper} (the
+weighted median and 95\% interval over members of each member's mean daily
+reported CFR in that year) and \code{prior_cfr} (the prior \code{mu_jt}'s
+mean over the same days). Conditional on each member's modelled cases.
+\code{NULL} otherwise.}
+\item{forecast_shift}{When \code{deaths_integration} is supplied: one value
+per location, the weighted mean over members of the posterior-mode logit
+CFR deviation for the location's latest observed year (\code{NA} for a
+location with no forecast years). \code{run_MOSAIC()} centres forecast
+years on it. \code{NULL} otherwise.}
 }
 }
 \description{
-Runs LASER simulations for multiple parameter sets (with stochastic reruns
+Runs simulations for multiple parameter sets (with stochastic reruns
 per set) and aggregates results using importance weights. Returns a
 \code{mosaic_ensemble} object containing weighted mean, median, and quantile
 envelopes for cases and deaths.

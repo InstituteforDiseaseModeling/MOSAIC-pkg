@@ -10,8 +10,9 @@
 #' @param predictions_files Character vector of specific CSV file paths to use.
 #'   Overrides predictions_dir if provided.
 #' @param locations Character vector of specific locations to plot. NULL (default) uses all locations.
-#' @param model Legacy: A laser-cholera Model object (for backward compatibility).
-#'   Not recommended - use CSV-based inputs instead.
+#' @param model Legacy: a model object as returned by \code{run_simulation()}
+#'   (any list carrying \code{$results}). Not recommended - use CSV-based
+#'   inputs instead.
 #' @param output_dir Directory where PPC plots will be saved. Creates "ppc" subdirectory.
 #' @param verbose Logical indicating whether to print progress messages (default: TRUE)
 #'
@@ -20,8 +21,9 @@
 #' @details
 #' Creates a 6-page multi-page PDF per output file:
 #' \enumerate{
-#'   \item Density overlays of observed vs predicted median distributions
-#'   \item Credible interval coverage analysis (50\% and 95\% CIs vs nominal)
+#'   \item Density overlays of observed vs predicted central (the run's
+#'     \code{central_method}, mean by default) distributions
+#'   \item Credible interval coverage analysis (50% and 95% CIs vs nominal)
 #'   \item Observed vs predicted calibration scatter plots
 #'   \item Quantile-quantile plots
 #'   \item Residuals vs observed
@@ -166,6 +168,16 @@ plot_model_ppc <- function(predictions_dir = NULL,
 
         if (verbose) message("Using prediction column: ", pred_col)
 
+        # Name the plotted central series per metric: predicted_central follows
+        # the run's central_method, which the CSV records on every row.
+        .central_label <- function(metric) {
+            if (pred_col == "predicted_mean") return("Mean")
+            if (pred_col == "predicted_median" || !"central_method" %in% names(all_data)) return("Median")
+            cm <- unique(stats::na.omit(as.character(all_data$central_method[all_data$metric == metric])))
+            if (length(cm) != 1L) return("Central")
+            paste0(toupper(substr(cm, 1L, 1L)), substr(cm, 2L, nchar(cm)))
+        }
+
         # Parse dates if present
         has_dates <- "date" %in% names(all_data)
         if (has_dates) all_data$date <- as.Date(all_data$date)
@@ -180,8 +192,11 @@ plot_model_ppc <- function(predictions_dir = NULL,
 
         if (verbose) message("=== Extracting data from model object (legacy mode) ===")
 
-        if (!inherits(model, "laser.cholera.metapop.model.Model") && !is.list(model)) {
-            stop("model must be a laser-cholera Model object or a list")
+        # Before the R engine this also accepted a reticulate handle to the
+        # Python Model object; run_simulation() now returns a plain list, so the
+        # class test is gone and `is.list()` is the whole contract.
+        if (!is.list(model)) {
+            stop("model must be a list with $params and $results, as returned by run_simulation()")
         }
 
         obs_cases   <- model$params$reported_cases
@@ -273,7 +288,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
         # ======================================================================
         # PAGE 1: Density overlays
         # Compares the marginal distribution of observations to the distribution
-        # of posterior predictive medians. Note: this is not a full PPC density
+        # of the posterior predictive central series. Note: this is not a full PPC density
         # (which would require all ensemble draws); it assesses whether the
         # central tendency of predictions matches the data distribution.
         # ======================================================================
@@ -298,7 +313,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
                 yl <- c(0, max(c(d_obs$y, d_pred$y)) * 1.1)
 
                 plot(d_obs, col = palette$observed, lwd = 2.5,
-                     main = paste0("Observed vs Predicted Median: ", metric),
+                     main = paste0("Observed vs Predicted ", .central_label(metric), ": ", metric),
                      sub  = paste0("n = ", length(obs_v), " non-NA time points"),
                      xlab = paste0("log(", metric, " + 1)"), ylab = "Density",
                      xlim = xl, ylim = yl, type = "n")
@@ -310,7 +325,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
                 lines(d_obs,  col = palette$observed, lwd = 2.5)
                 lines(d_pred, col = col_pred,          lwd = 2.5)
                 legend("topright",
-                       legend = c("Observed", "Predicted Median"),
+                       legend = c("Observed", paste("Predicted", .central_label(metric))),
                        col    = c(palette$observed, col_pred),
                        lwd    = 2.5, bty = "n", cex = 0.9)
             } else {
@@ -708,10 +723,6 @@ plot_model_ppc <- function(predictions_dir = NULL,
 
         # --- Helper to extract vectors for one metric -------------------------
         .get_metric <- function(df, met, col) df[[col]][df$metric == met]
-        .get_ci     <- function(df, met, lo_col, hi_col) {
-            list(vals = df[[lo_col]][df$metric == met],
-                 hivals = df[[hi_col]][df$metric == met])
-        }
 
         # --- Aggregate plot (all locations combined) --------------------------
         obs_cases_flat   <- .get_metric(all_data, "Suspected Cases", "observed")

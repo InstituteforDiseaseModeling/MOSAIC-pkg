@@ -7,32 +7,25 @@
 # setup-python.R (options(mosaic.test.*)) instead of re-probing per test.
 # =============================================================================
 
-# --- Python-capability skips (read cached probe from setup-python.R) ---------
-
-PY_LIKELIHOOD_MODULE <- "laser.cholera.calc_model_likelihood"
-
-# Skip unless the Python laser-cholera likelihood module is importable.
-skip_if_no_python_likelihood <- function() {
-  testthat::skip_if_not_installed("reticulate")
-  testthat::skip_on_cran()
-  if (!isTRUE(getOption("mosaic.test.py_available"))) {
-    testthat::skip("Python not available via reticulate")
-  }
-  if (!isTRUE(getOption("mosaic.test.has_likelihood"))) {
-    testthat::skip(sprintf("%s not installed (requires laser-cholera >= 0.13.1)",
-                           PY_LIKELIHOOD_MODULE))
-  }
-  invisible(TRUE)
-}
-
-# Skip when the Python tensorflow module is unavailable (e.g. the worker image
-# strips it). Keeps the suite portable; a no-op where TF is installed.
+# --- Python-capability skips -------------------------------------------------
 #
-# LAZY PROBE: importing tensorflow costs ~10s, so setup-python.R deliberately
-# does NOT probe it at startup (no fast-tier test reads the flag). The probe is
-# performed here on first call and cached in options(mosaic.test.has_tensorflow)
-# so subsequent calls in the same process are free. Only tests that actually need
-# TF pay the cost, and only when they run.
+# There is exactly one of these left. skip_if_no_python_likelihood() and the
+# PY_LIKELIHOOD_MODULE constant were removed in v0.69.0: they gated the
+# R-vs-Python calc_model_likelihood parity tests, which went with the Python
+# engine, leaving the helper with zero callers. The eager probe in
+# setup-python.R that fed it went at the same time.
+#
+# TensorFlow is the only Python capability the suite still cares about, because
+# it is the only one the package still uses (the suitability model).
+
+# Skip when the Python tensorflow module is unavailable (most machines that are
+# not a suitability box). Keeps the suite portable; a no-op where TF is installed.
+#
+# LAZY PROBE: importing tensorflow costs ~10s, so it is deliberately NOT probed
+# at startup (no fast-tier test reads the flag). The probe is performed here on
+# first call and cached in options(mosaic.test.has_tensorflow) so subsequent
+# calls in the same process are free. Only tests that actually need TF pay the
+# cost, and only when they run.
 skip_without_tensorflow <- function() {
   testthat::skip_if_not_installed("reticulate")
   has_tf <- getOption("mosaic.test.has_tensorflow")  # NULL until first probe
@@ -131,5 +124,24 @@ skip_if_testthat_parallel <- function() {
 skip_if_slow <- function() {
   if (!nzchar(Sys.getenv("MOSAIC_RUN_SLOW_TESTS"))) {
     testthat::skip("slow test (set MOSAIC_RUN_SLOW_TESTS=1 to run)")
+  }
+}
+
+# --- Oracle replay-fixture skips ---------------------------------------------
+
+# The Tier B replay fixtures are frozen recordings of the Python laser-cholera
+# oracle (see fixtures/ORACLE.md). They live here rather than in the test file
+# that consumes most of them because test-sim_params.R needs them too, and a
+# helper defined at the top of one test file is not reliably in scope in
+# another. test-sim_engine_replay.R asserts the full inventory in one place, so
+# a missing fixture fails loudly there rather than only thinning coverage here.
+
+fixture_path <- function(name) {
+  testthat::test_path("fixtures", paste0(name, ".rds"))
+}
+
+skip_if_no_fixture <- function(name) {
+  if (!file.exists(fixture_path(name))) {
+    testthat::skip(sprintf("replay fixture '%s' not committed", name))
   }
 }

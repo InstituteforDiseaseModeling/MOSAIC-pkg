@@ -13,6 +13,15 @@ knitr::opts_chunk$set(
   comment = "#>",
   eval = FALSE
 )
+
+# `code = readLines(...)` is a CHUNK OPTION, so knitr evaluates it even when the
+# chunk itself has eval = FALSE. vm/ is .Rbuildignore'd, so that read fails when
+# R CMD check re-builds this vignette from the tarball. Degrade to a pointer.
+.mosaic_vig_file <- function(path) {
+  if (file.exists(path)) readLines(path) else
+    paste0("# Not available in the installed package. See ",
+           basename(path), " in the MOSAIC-pkg repository.")
+}
 ```
 
 ## Overview
@@ -48,7 +57,11 @@ ssh user@host 'bash -s' < ~/MOSAIC/MOSAIC-pkg/vm/setup_mosaic.sh
 
 ### Script Contents
 
-```{bash, code=readLines('../vm/setup_mosaic.sh'), eval=FALSE}
+`vm/` is not shipped inside the installed package, so this listing appears only
+when the vignette is built from a source checkout. In an installed copy, read
+the script in the repository at `MOSAIC-pkg/vm/setup_mosaic.sh`.
+
+```{bash, code=.mosaic_vig_file('../vm/setup_mosaic.sh'), eval=FALSE}
 ```
 
 ---
@@ -77,7 +90,8 @@ This script is identical to the complete setup but skips R installation (step 2/
 
 - System libraries (GDAL, PROJ, GEOS, UDUNITS, Python)
 - MOSAIC R package from GitHub
-- Python dependencies (laser-cholera)
+- Python dependencies (TensorFlow, for the suitability model only --
+  simulation and calibration are pure R and need no Python)
 - Verifies installation with `check_dependencies()`
 
 ---
@@ -86,7 +100,7 @@ This script is identical to the complete setup but skips R installation (step 2/
 
 For running multiple simulations in parallel on a cluster:
 
-```{r vm-parallel}
+```{r vm-parallel, eval = FALSE}
 library(MOSAIC)
 
 # Enable parallel execution across available cores
@@ -113,14 +127,14 @@ result <- run_MOSAIC(
 
 ## Troubleshooting
 
-**Python issues:**
-```{r troubleshoot}
+**Python issues** (only affects `est_suitability()`; simulation and calibration are pure R):
+```{r troubleshoot, eval = FALSE}
 # Check Python configuration
 reticulate::py_config()
 
 # Reset if needed
-remove_MOSAIC_python_env()
-install_dependencies()
+remove_python_env()
+install_dependencies(force = TRUE)
 ```
 
 ---

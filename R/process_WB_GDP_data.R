@@ -20,7 +20,7 @@
 process_WB_GDP_data <- function(PATHS) {
 
      # Read raw data
-     raw <- utils::read.csv(file.path(PATHS$DATA_RAW, 'world_bank', 'GDP', 'API_NY.GDP.MKTP.CD_DS2_en_csv_v2_132025.csv'), stringsAsFactors = FALSE, skip = 4)
+     raw <- utils::read.csv(.wb_newest_raw(PATHS, "GDP", "NY.GDP.MKTP.CD"), stringsAsFactors = FALSE, skip = 4)
 
      # Identify year columns (XYYYY)
      year_cols <- grep("^X[0-9]{4}$", names(raw), value = TRUE)

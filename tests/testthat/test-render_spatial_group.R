@@ -71,7 +71,7 @@ test_that("spatial group is pure read-render: never trips a simulation path (P5)
   # point, these mocks abort the run and the test fails. A clean pass proves
   # the spatial group rendered entirely from config.json + persisted artifacts.
   testthat::local_mocked_bindings(
-    run_LASER           = function(...) stop("P5 violated: run_LASER called"),
+    run_simulation           = function(...) stop("P5 violated: run_simulation called"),
     calc_model_ensemble = function(...) stop("P5 violated: calc_model_ensemble called"),
     sample_parameters   = function(...) stop("P5 violated: sample_parameters called"),
     .package = "MOSAIC"

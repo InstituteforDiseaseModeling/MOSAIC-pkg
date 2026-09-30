@@ -190,7 +190,9 @@ test_that("get_location_config correctly subsets time-varying parameters", {
      eth_idx <- which(config_default$location_name == "ETH")
      
      # Check time-varying parameters (matrices)
-     time_params <- c("b_jt", "d_jt", "nu_1_jt", "nu_2_jt", "mu_jt", "psi_jt",
+     # mu_jt is the reported CFR by location and day (config_default v5.0).
+     expect_true(is.matrix(config_default$mu_jt))
+     time_params <- c("b_jt", "d_jt", "nu_1_jt", "nu_2_jt", "psi_jt", "mu_jt",
                      "reported_cases", "reported_deaths")
      
      for (param in time_params) {
@@ -245,8 +247,8 @@ test_that("get_location_config works with sampled parameters", {
 
 test_that("get_location_config never returns an empty (0-row) epidemic_peaks", {
      # Regression: a 0-row epidemic_peaks (no-peak location, or filter matched
-     # nothing) JSON-round-trips to a Dask worker WITHOUT its iso_code column and
-     # crashes laser params.py:303 (.iso_code on a column-less DataFrame). The
+     # nothing) JSON-round-trips WITHOUT its iso_code column and
+     # crashes laser-cholera params.py:303 (.iso_code on a column-less DataFrame). The
      # fix nulls an empty result; the invariant is "NULL or nrow > 0", never 0-row.
      for (iso in c("ETH", "KEN", "BFA", "LBR", "NAM", "ZAF")) {
           cfg <- get_location_config(iso = iso)

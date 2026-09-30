@@ -6,7 +6,7 @@
 #' MOSAIC environmental force-of-infection term:
 #' \deqn{\lambda_W \propto W / (\kappa + W)}
 #' where \eqn{W} is the environmental bacterial concentration and \eqn{\kappa}
-#' is the concentration (CFU) at which the probability of infection is 50\%.
+#' is the concentration (CFU) at which the probability of infection is 50%.
 #'
 #' The function assembles a literature table of ID50 estimates spanning direct
 #' human-volunteer challenge studies (Hornick 1971, Cash 1974, Levine 1981/1988,

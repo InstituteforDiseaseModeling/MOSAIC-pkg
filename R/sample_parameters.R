@@ -13,8 +13,8 @@
 #'   Each element should be named as \code{sample_[parameter]} with a logical value.
 #'   Available options include:
 #'   \itemize{
-#'     \item sample_alpha_1: Population mixing within metapops (default TRUE)
-#'     \item sample_alpha_2: Degree of frequency driven transmission (default TRUE)
+#'     \item sample_alpha_1: Population mixing within metapops (default FALSE; PINNED, see Details)
+#'     \item sample_alpha_2: Degree of frequency driven transmission (default FALSE; pinned, weakly identified)
 #'     \item sample_decay_days_short: Minimum V. cholerae survival (default TRUE)
 #'     \item sample_decay_days_spread: Spread between min and max V. cholerae
 #'       survival; decay_days_long is derived as short + spread (default TRUE)
@@ -34,6 +34,14 @@
 #'     \item sample_chi_endemic: PPV among suspected cases during endemic periods (default TRUE)
 #'     \item sample_chi_epidemic: PPV among suspected cases during epidemic periods (default TRUE)
 #'     \item sample_rho: Care-seeking rate (default TRUE)
+#'     \item sample_rho_deaths: Surveillance capture rate of true cholera deaths
+#'       (default FALSE; PINNED at \code{config_default$rho_deaths} = 0.42). The
+#'       engine converts the reported CFR \code{mu_jt} to a per-onset fatality
+#'       probability by dividing by \code{rho_deaths} and then thins true deaths
+#'       by it, so the parameter cancels from reported deaths exactly and carries
+#'       no likelihood information; it sets only the level of true deaths. The
+#'       Beta(36.95, 51.02) prior is retained in \code{priors_default} as the
+#'       literature record and for sensitivity runs; set TRUE to re-enable the draw.
 #'     \item sample_sigma: Symptomatic fraction (default TRUE)
 #'     \item sample_zeta_1: Symptomatic shedding rate (default TRUE)
 #'     \item sample_zeta_ratio: Symptomatic-to-asymptomatic shedding ratio (default TRUE)
@@ -45,23 +53,8 @@
 #'     \item sample_a_2_j: Seasonality (default TRUE)
 #'     \item sample_b_1_j: Seasonality (default TRUE)
 #'     \item sample_b_2_j: Seasonality (default TRUE)
-#'     \item sample_CFR_target: Per-country target reported case-fatality ratio
-#'       (B2 lognormal location prior). When the priors object carries a
-#'       \code{CFR_target} location prior, this gates whether CFR_target is drawn
-#'       (TRUE) or held at its config default / prior median (FALSE) (default TRUE)
-#'     \item sample_mu_j_baseline: Under B2 (priors object has a \code{CFR_target}
-#'       location prior) this gates the \emph{derivation} of \code{mu_j_baseline}
-#'       from \code{CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)}
-#'       (the B2.1 engine-correct chain factor) rather than an
-#'       independent draw; \code{mu_j_baseline} is no longer an independently
-#'       sampled location parameter. Under a legacy priors object (no
-#'       \code{CFR_target} prior) it gates the old independent mu_j_baseline draw.
-#'       (default TRUE)
-#'     \item sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)
-#'     \item sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)
-#'     \item sample_epidemic_threshold: Location-specific epidemic activation threshold (default TRUE)
-#'     \item sample_delta_reporting_cases: Infection-to-case reporting delay in days (default TRUE)
-#'     \item sample_delta_reporting_deaths: Infection-to-death reporting delay in days (default TRUE)
+#'     \item sample_epidemic_threshold: Location-specific case-reporting PPV switch threshold (default TRUE)
+#'     \item sample_delta_reporting_cases: Symptom-onset-to-case reporting delay in days (default TRUE)
 #'     \item sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
 #'     \item sample_psi_star_b: Suitability calibration scale/offset (default TRUE)
 #'     \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)
@@ -72,6 +65,15 @@
 #'       sample_initial_conditions is TRUE. (default FALSE)
 #'   }
 #'   If NULL, all parameters are sampled (default behavior).
+#'
+#'   The reported case fatality ratio \code{mu_jt} is not sampled. It is a
+#'   \[location x day\] matrix carried by the config, and calibration integrates
+#'   its level and year-to-year deviations out of the deaths likelihood
+#'   analytically (\code{\link{calc_log_likelihood_deaths_integrated}}). The
+#'   flags \code{sample_CFR_target}, \code{sample_mu_j_baseline},
+#'   \code{sample_mu_j_epidemic_factor} and \code{sample_delta_reporting_deaths}
+#'   were removed with the parameters they controlled in v0.96.0; supplying one
+#'   raises a warning and has no effect.
 #' @param ... Additional individual sample_* arguments for backward compatibility.
 #'   These override values in sample_args if both are provided.
 #'
@@ -133,8 +135,12 @@ sample_parameters <- function(
   # Define all possible sampling parameters with defaults
   default_sample_args <- list(
     # Global parameter sampling controls (21 parameters)
-    sample_alpha_1 = TRUE,
-    sample_alpha_2 = TRUE,
+    sample_alpha_1 = FALSE,  # PINNED by default: per-location alpha_1 is collinear with
+    # log(beta_j0_tot) in the endemic regime and with any coupling multiplier at
+    # invasion, so 40 free draws buy nothing -- the 250k-draw continental posterior
+    # moved it 0.057 prior SD, inside the 0.146 random-subset null. Set TRUE only
+    # for a deliberate mixing-exponent experiment.
+    sample_alpha_2 = FALSE,  # PINNED by default (weakly identified; psi absorbs the signal)
     sample_decay_days_short = TRUE,
     sample_decay_days_spread = TRUE,
     sample_decay_shape_1 = TRUE,
@@ -153,7 +159,7 @@ sample_parameters <- function(
     sample_chi_endemic = TRUE,
     sample_chi_epidemic = TRUE,
     sample_rho = TRUE,
-    sample_rho_deaths = TRUE,
+    sample_rho_deaths = FALSE,  # PINNED at config_default$rho_deaths = 0.42 (cancels from reported deaths exactly; see roxygen)
     sample_sigma = TRUE,
     sample_zeta_1 = TRUE,
     sample_zeta_ratio = TRUE,
@@ -167,13 +173,8 @@ sample_parameters <- function(
     sample_a_2_j = TRUE,
     sample_b_1_j = TRUE,
     sample_b_2_j = TRUE,
-    sample_CFR_target = TRUE,
-    sample_mu_j_baseline = TRUE,
-    sample_mu_j_slope = TRUE,
-    sample_mu_j_epidemic_factor = TRUE,
     sample_epidemic_threshold = TRUE,
     sample_delta_reporting_cases = TRUE,
-    sample_delta_reporting_deaths = TRUE,
 
     # psi_star calibration parameters
     sample_psi_star_a = TRUE,
@@ -192,10 +193,15 @@ sample_parameters <- function(
   final_sample_args <- default_sample_args
 
   # Override with sample_args if provided
+  removed_flags <- paste0("sample_", .MOSAIC_REMOVED_MORTALITY_PARAMS)
   if (!is.null(sample_args)) {
     for (name in names(sample_args)) {
       if (name %in% names(default_sample_args)) {
         final_sample_args[[name]] <- sample_args[[name]]
+      } else if (name %in% removed_flags) {
+        warning(name, " was removed in MOSAIC v0.96.0 together with the parameter it ",
+                "controlled; it is ignored. The reported CFR mu_jt is integrated out of ",
+                "the deaths likelihood rather than sampled.", call. = FALSE)
       } else {
         warning("Unknown sampling parameter: ", name)
       }
@@ -207,6 +213,9 @@ sample_parameters <- function(
   for (name in names(dots)) {
     if (name %in% names(default_sample_args)) {
       final_sample_args[[name]] <- dots[[name]]
+    } else if (name %in% removed_flags) {
+      warning(name, " was removed in MOSAIC v0.96.0 together with the parameter it ",
+              "controlled; it is ignored.", call. = FALSE)
     }
   }
 
@@ -280,7 +289,7 @@ sample_parameters <- function(
 
   # Derive decay_days_long from decay_days_short + decay_days_spread (v0.27.0).
   # Algebraically guarantees decay_days_short < decay_days_long as required by
-  # make_LASER_config(), replacing the pre-v0.27 post-hoc swap that corrupted
+  # make_simulation_config(), replacing the pre-v0.27 post-hoc swap that corrupted
   # the joint distribution whenever it triggered.
   if (!is.null(config_sampled$decay_days_short) &&
       !is.null(config_sampled$decay_days_spread)) {
@@ -335,7 +344,7 @@ sample_parameters <- function(
     cat(paste(rep("=", 50), collapse = ""), "\n", sep = "")
   }
 
-  # Config is clean and ready for LASER - no R-specific metadata added
+  # Config is clean and ready for the engine - no R-specific metadata added
   return(config_sampled)
 }
 
@@ -405,6 +414,24 @@ sample_parameters <- function(
   })
 }
 
+#' Parameters removed from the model in v0.96.0
+#'
+#' The pre-v0.96.0 mortality model's parameters. A priors object older than
+#' priors_default v16.0 still carries priors for them; the sampler skips them
+#' (with a one-time warning) instead of writing them into the config, where they
+#' would mark it as a pre-v0.96.0 config.
+#' @keywords internal
+.MOSAIC_REMOVED_MORTALITY_PARAMS <- c("CFR_target", "mu_j_baseline", "mu_j_epidemic_factor",
+                                      "mu_j_slope", "delta_reporting_deaths")
+
+.skip_removed_param <- function(param_name) {
+  if (!param_name %in% .MOSAIC_REMOVED_MORTALITY_PARAMS) return(FALSE)
+  .mosaic_warn_once(paste0("removed_prior_", param_name), paste0(
+    "The priors object carries a prior for `", param_name, "`, which was removed from the ",
+    "model in MOSAIC v0.96.0; it is not sampled. Use priors_default v16.0 or later."))
+  TRUE
+}
+
 #' Sample global parameters implementation
 #' @noRd
 .sample_global_parameters_impl <- function(config_sampled, global_params,
@@ -413,6 +440,8 @@ sample_parameters <- function(
   if (verbose) cat("Processing global parameters...\n")
 
   for (param_name in names(global_params)) {
+
+    if (.skip_removed_param(param_name)) next
 
     # Check if we should sample this parameter
     should_sample <- sampling_flags[[param_name]]
@@ -427,8 +456,8 @@ sample_parameters <- function(
         verbose = FALSE
       )
 
-      # delta_reporting_* are integer days; make_LASER_config() rejects non-integers
-      if (param_name %in% c("delta_reporting_cases", "delta_reporting_deaths")) {
+      # delta_reporting_cases is in integer days; make_simulation_config() rejects non-integers
+      if (identical(param_name, "delta_reporting_cases")) {
         sampled_value <- as.integer(round(sampled_value))
       }
 
@@ -470,6 +499,8 @@ sample_parameters <- function(
                      "prop_R_initial", "prop_V1_initial", "prop_V2_initial")
 
   for (param_name in names(location_params)) {
+
+    if (.skip_removed_param(param_name)) next
 
     # Check if we should sample this parameter
     should_sample <- sampling_flags[[param_name]]
@@ -593,123 +624,6 @@ sample_parameters <- function(
     }
   }
 
-  # ---------------------------------------------------------------------------
-  # B2: DERIVE mu_j_baseline from CFR_target and the sampled chain factor.
-  #
-  # Under B2 the priors object carries a `CFR_target` location prior (lognormal)
-  # in place of the old `mu_j_baseline` Gamma location prior. mu_j_baseline is
-  # NO LONGER an independently-sampled location parameter: it is derived from the
-  # already-sampled global chain factor via the B2.1 ENGINE-CORRECT identity
-  # (v0.50.0; statistician memory b2-cfr-chain-factor-diagnosis)
-  #
-  #   mu_j_baseline[j] = CFR_target[j] * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)
-  #
-  # Two corrections vs the OLD-B2 form (gamma_1 and chi_blend): (1) reported_cases
-  # scales with INCIDENCE not prevalence-days so the recovery-tick factor is the
-  # survival complement (1-exp(-gamma_1)) not gamma_1; (2) reported_cases is an Isym
-  # stock-read dominated by epidemic-regime ticks so the effective PPV leans to
-  # chi_epidemic not the 0.5*(chi_endemic+chi_epidemic) blend. Substituting into the
-  # engine read-back reported_CFR = mu * rho_deaths * chi_epidemic / ((1-exp(-gamma_1)) * rho)
-  # cancels the chain factor, so realized implied CFR == CFR_target up to an
-  # irreducible ~1.3-1.5x dynamics-dependent residual (realized epidemic-fraction +
-  # spatial coupling) that no closed form can absorb. This subsumes the per-country
-  # ETH dwell stop-gap structurally.
-  #
-  # Gating contract (SPEC_B2.md sec 3.4):
-  #   - B2 is ACTIVE iff the priors object has a `CFR_target` location prior
-  #     (detected via `location_params$CFR_target`). When ACTIVE, mu_j_baseline
-  #     is NOT in the independent-draw loop above (the priors object has no
-  #     mu_j_baseline location prior), so its value here is the config default
-  #     until this block overwrites it.
-  #   - sample_mu_j_baseline (default TRUE) gates the DERIVATION. TRUE => derive;
-  #     FALSE => leave mu_j_baseline at the config default (engine default).
-  #   - sample_CFR_target (default TRUE) gates the CFR_target DRAW in the loop
-  #     above; when FALSE, CFR_target is held at its config default (prior median)
-  #     and mu_j_baseline is still derived from that frozen CFR (free chain).
-  #
-  # Version-skew guard (Lesson #12, SPEC_B2.md sec 5.3): if B2 derivation is
-  # requested (sample_mu_j_baseline=TRUE) but the priors object lacks a
-  # CFR_target prior AND lacks a legacy mu_j_baseline prior, fail loud rather
-  # than silently shipping the config-default mu_j_baseline. A legacy priors
-  # object (mu_j_baseline Gamma prior present, no CFR_target) is the bit-identical
-  # B2-OFF path: this block is skipped entirely and the loop above sampled
-  # mu_j_baseline exactly as pre-B2.
-  has_cfr_target_prior <- !is.null(location_params$CFR_target)
-  has_mu_baseline_prior <- !is.null(location_params$mu_j_baseline)
-  derive_mu <- isTRUE(sampling_flags[["mu_j_baseline"]])
-  if (is.null(sampling_flags[["mu_j_baseline"]])) derive_mu <- TRUE  # backward-compat default
-
-  if (has_cfr_target_prior) {
-    # B2 ACTIVE path.
-    if (derive_mu) {
-      required_chain <- c("gamma_1", "rho", "rho_deaths", "chi_endemic", "chi_epidemic")
-      missing_chain <- required_chain[!vapply(required_chain,
-        function(nm) !is.null(config_sampled[[nm]]) && length(config_sampled[[nm]]) >= 1,
-        logical(1))]
-      if (length(missing_chain) > 0) {
-        stop("B2 mu_j_baseline derivation requires chain factors in config_sampled but these are missing/empty: ",
-             paste(missing_chain, collapse = ", "),
-             ". The chain factors must be sampled (or carry config defaults) before the location loop.")
-      }
-      if (is.null(config_sampled$CFR_target)) {
-        stop("B2 mu_j_baseline derivation requested (sample_mu_j_baseline=TRUE) but config_sampled$CFR_target is absent. ",
-             "CFR_target must be drawn (or carried as a config default) before mu_j_baseline can be derived.")
-      }
-
-      g1   <- config_sampled$gamma_1[1]
-      rho  <- config_sampled$rho[1]
-      rhod <- config_sampled$rho_deaths[1]
-      # B2.1 (working-tree validation, uncommitted): engine-correct chain factor.
-      #   mu = CFR_target * rho * (1 - exp(-gamma_1)) / (rho_deaths * chi_eff)
-      # Two corrections vs OLD-B2 (which used gamma_1 and chi_blend):
-      #   (1) dwell: engine reported_cases scales with INCIDENCE not prevalence-days,
-      #       so the recovery-tick factor is (1 - exp(-gamma_1)), NOT gamma_1.
-      #   (2) chi_eff: reported_cases is an Isym stock-read dominated by epidemic-
-      #       regime ticks, so the effective PPV leans to chi_epidemic, NOT the
-      #       0.5*(chi_endemic+chi_epidemic) blend.
-      chi  <- config_sampled$chi_epidemic[1]
-      g1_dwell <- 1 - exp(-g1)
-      chain <- g1_dwell * rho / (rhod * chi)   # scalar (all globals)
-
-      mu_derived <- config_sampled$CFR_target * chain
-
-      # Engine [0,1] bound (make_LASER_config L686): mu_j_baseline is a per-day
-      # mortality hazard probability and the engine rejects mu > 1. The wider B2
-      # lognormal CFR_target tail (sdlog 0.787) times a high-gamma_1 / low-chi
-      # chain draw can, for the highest-CFR countries (CIV/COG/MLI/TCD, CFR
-      # median up to ~0.089), push the product above 1 in a rare tail draw
-      # (P(mu>1) ~ 1e-5 at the highest real country; SPEC_B2.md sec 3.5). Clamp the
-      # derived value just below 1 so those rare draws do not hard-error in
-      # make_LASER_config(). The clamp acts only on the extreme upper tail and
-      # does not perturb the bulk of the distribution or the implied-CFR identity
-      # in the operating range.
-      .mu_ceiling <- 1 - 1e-9
-      n_clamped <- sum(mu_derived > .mu_ceiling, na.rm = TRUE)
-      if (n_clamped > 0) mu_derived[mu_derived > .mu_ceiling] <- .mu_ceiling
-
-      config_sampled$mu_j_baseline <- mu_derived
-
-      if (verbose) {
-        cat("\n  B2.1: deriving mu_j_baseline = CFR_target * rho * (1-exp(-gamma_1)) / (rho_deaths * chi_epidemic)\n")
-        cat(sprintf("  - chain factor = %.4f * %.4f / (%.4f * %.4f) = %.5f\n",
-                    g1_dwell, rho, rhod, chi, chain))
-        if (n_clamped > 0)
-          cat(sprintf("  - clamped %d location(s) to the engine [0,1] mu ceiling\n", n_clamped))
-        cat("  - Derived mu_j_baseline =", .format_verbose_value(config_sampled$mu_j_baseline), "\n")
-      }
-    } else {
-      if (verbose) cat("\n  B2: sample_mu_j_baseline=FALSE -> leaving mu_j_baseline at config default\n")
-    }
-  } else if (derive_mu && !has_mu_baseline_prior) {
-    # B2 requested but neither a CFR_target NOR a legacy mu_j_baseline prior is
-    # present -> version skew (stale priors object / Coiled image). Fail loud.
-    stop("mu_j_baseline derivation/sampling requested (sample_mu_j_baseline=TRUE) but the priors object ",
-         "carries neither a CFR_target location prior (B2) nor a mu_j_baseline location prior (legacy). ",
-         "This indicates a stale or mismatched priors object (Lesson #12 version-skew guard, SPEC_B2.md sec 5.3). ",
-         "Rebuild priors_default (>= v15.15 for B2) and ship it to every worker.")
-  }
-  # else: legacy priors object (mu_j_baseline Gamma prior present, no CFR_target)
-  # -> bit-identical B2-OFF path; mu_j_baseline was sampled in the loop above.
 
   # Derive zeta_2 from zeta_1 and zeta_ratio (zeta_2 = zeta_1 / zeta_ratio).
   # zeta_2 > 0 is guaranteed (ratio of two positive lognormals). zeta_1 > zeta_2
@@ -1171,13 +1085,12 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
                 "zeta_1", "zeta_ratio", "zeta_2", "kappa", "alpha_2",
                 "decay_days_short", "decay_days_spread", "decay_days_long",
                 "decay_shape_1", "decay_shape_2",
-                "delta_reporting_cases", "delta_reporting_deaths"),
+                "delta_reporting_cases"),
       type = "scalar"
     ),
     location = list(
       params = c("beta_j0_env", "beta_j0_hum", "tau_i", "theta_j",
                 "a_1_j", "a_2_j", "b_1_j", "b_2_j",
-                "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
                 "epidemic_threshold"),
       type = "vector"
     ),

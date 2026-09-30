@@ -43,10 +43,10 @@ test_that("psi_manifest write/read round-trips per-cutoff entries", {
   entry <- list(list(
     cutoff = "2024-01-01", csv = "psi_2024-01-01.csv",
     sha256 = "abc", spec_hash = "deadbeef", n_seeds = 10L,
-    parallel_seeds = 2L, mosaic_version = "0.0.0", laser_version = "0.0.0"))
+    parallel_seeds = 2L, mosaic_version = "0.0.0"))
   MOSAIC:::.rcv_psi_write_manifest(mpath, entry, spec = spec,
     pred_start = as.Date("2023-01-01"), pred_stop = as.Date("2025-01-01"),
-    mosaic_ver = "0.0.0", laser_ver = "0.0.0")
+    mosaic_ver = "0.0.0")
   expect_true(file.exists(mpath))
 
   man <- MOSAIC:::.rcv_psi_read_manifest(mpath)
@@ -75,12 +75,11 @@ test_that("psi_manifest write/read round-trips per-cutoff entries", {
   entry <- list(list(
     cutoff = T_chr, csv = basename(csv),
     sha256 = MOSAIC:::.rcv_file_hash(csv), spec_hash = spec_hash,
-    n_seeds = 10L, parallel_seeds = 1L,
-    mosaic_version = "0.0.0", laser_version = "0.0.0"))
+    n_seeds = 10L, parallel_seeds = 1L, mosaic_version = "0.0.0"))
   MOSAIC:::.rcv_psi_write_manifest(
     file.path(dir_cache, "psi_manifest.json"), entry, spec = spec_stripped,
     pred_start = as.Date("2023-01-01"), pred_stop = as.Date("2025-01-01"),
-    mosaic_ver = "0.0.0", laser_ver = "0.0.0")
+    mosaic_ver = "0.0.0")
   list(dir = dir_cache, csv = csv)
 }
 
@@ -245,4 +244,50 @@ test_that(".rcv_compile_all_models sets ess = NA when diagnostics are absent", {
 
   expect_true("ess" %in% names(out))
   expect_true(all(is.na(out$ess)))
+})
+
+test_that("each cutoff calibrates with a mu_jt and prior refit on WHO years <= year(T) - 1", {
+  skip_if_not_installed("mgcv")
+  spec <- list(feature_set = "v7.3", arch_control = list(n_seeds = 10L))
+  cutoff <- as.Date("2024-06-01")
+  fx <- .make_fixture_cache(cutoff, spec)
+
+  # Synthetic WHO annual file whose 2024+ years carry a huge CFR jump: none of it
+  # may reach the cutoff's config or prior.
+  set.seed(3)
+  isos <- c("MOZ", MOSAIC::iso_codes_mosaic[1:8])
+  who <- expand.grid(iso_code = isos, year = 2000:2025, stringsAsFactors = FALSE)
+  who$cases_total <- rpois(nrow(who), 3000)
+  eta <- qlogis(0.02) + rnorm(nrow(who), 0, 0.5) + ifelse(who$year >= 2024, 3, 0)
+  who$deaths_total <- rbinom(nrow(who), who$cases_total, plogis(eta))
+  who$country <- who$iso_code
+  who_dir <- tempfile("who_"); dir.create(who_dir)
+  utils::write.csv(who, file.path(who_dir, "who_afro_annual.csv"), row.names = FALSE)
+
+  seen <- new.env()
+  local_mocked_bindings(
+    run_MOSAIC = function(config, priors, dir_output, control, ...) {
+      seen$config <- config; seen$priors <- priors; invisible(NULL)
+    },
+    .rcv_compile_all_models = function(...) NULL,
+    .package = "MOSAIC")
+  suppressWarnings(run_rolling_cv(
+    PATHS = list(MODEL_INPUT = tempdir(), DATA_WHO_ANNUAL = who_dir), iso = "MOZ",
+    n_cutoffs = 1L, latest_cutoff = cutoff, step_months = 1L,
+    horizons_months = 1, embargo_weeks = 1L,
+    base_config = MOSAIC::config_default, priors = MOSAIC::priors_default,
+    est_suitability_spec = spec, psi_cache = fx$dir,
+    dir_output = tempfile("rcv_out_"), verbose = FALSE))
+
+  ref <- MOSAIC:::.rcv_cfr_asof(who[who$year <= 2023, ], last_year = 2023L,
+                                cfg_stop = MOSAIC::config_default$date_stop)
+  dates <- seq(as.Date(MOSAIC::config_default$date_start), as.Date(MOSAIC::config_default$date_stop), by = "day")
+  expect_equal(seen$config$mu_jt, make_mu_jt(ref$predictions, "MOZ", min(dates), max(dates)))
+  expect_true(all(seen$config$mu_jt[1, dates >= as.Date("2023-07-01")] ==
+                    seen$config$mu_jt[1, match(as.Date("2023-07-01"), dates)]))
+  expect_lt(max(seen$config$mu_jt), 0.1)      # the post-2023 jump did not leak in
+  expect_equal(seen$priors$mu_jt$sd_year, ref$sigma)
+  expect_equal(seen$priors$mu_jt$location$MOZ,
+               MOSAIC:::.mosaic_mu_jt_prior(ref$predictions, "MOZ", ref$sigma, ref$tau)$location$MOZ)
+  expect_true(all(is.na(seen$config$reported_deaths[, dates > cutoff])))
 })

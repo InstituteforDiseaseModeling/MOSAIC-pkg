@@ -115,15 +115,6 @@ calc_model_posterior_quantiles <- function(results,
         }
     }
 
-    .lookup_prior_family <- function(param_base, iso = NULL) {
-        entry <- .lookup_prior_entry(param_base, iso)
-        if (!is.null(entry) && !is.null(entry$distribution)) {
-            tolower(entry$distribution)
-        } else {
-            NULL
-        }
-    }
-
 
     # Helper function to calculate mode from KDE
     calc_mode_kde <- function(samples, weights = NULL) {

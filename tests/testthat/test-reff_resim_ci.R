@@ -5,7 +5,7 @@
 #   - .mosaic_build_trajectories() grid: stride = 1 -> full daily-consecutive set
 #
 # The full re-simulation (.mosaic_reff_resim_ci / add_reproductive_numbers
-# recompute_ci) drives the Python laser engine and is exercised by the smoke
+# recompute_ci) drives the simulation engine and is exercised by the smoke
 # test, not the unit suite.
 
 # -----------------------------------------------------------------------------
@@ -132,9 +132,16 @@ test_that("per-member peak R_t = post-burn-in time-max reduced by weighted_quant
   expect_equal(ref[2L], weighted_quantiles(c(2, 3, 4), w, 0.5))
   # Member 3 carries 70% of the mass, so the weighted median is pulled ABOVE the
   # unweighted median 3.0 toward its peak 4.0: the explosivity stat is posterior-
-  # weighted (hand value: weighted_quantiles(c(2,3,4), c(.1,.2,.7), .5) = 3.2857).
+  # weighted. Hand value from the midpoint plotting positions
+  # (cumsum(w) - w/2)/sum(w) = (0.05, 0.20, 0.65): p = 0.5 lands between x = 3
+  # and x = 4, giving 3 + (0.5 - 0.20)/(0.65 - 0.20) = 11/3.
+  #
+  # This was 23/7 = 3.2857 before v0.71.1, when weighted_quantiles() interpolated
+  # against the upper weight-block edge and so under-credited the dominant
+  # member. The corrected value sits closer to 4.0, which is what this test's own
+  # comment asks for.
   expect_gt(ref[2L], 3.0)
-  expect_equal(ref[2L], 23 / 7, tolerance = 1e-6)   # = 3.285714...
+  expect_equal(ref[2L], 11 / 3, tolerance = 1e-6)   # = 3.666666...
   expect_equal(ref[3L], weighted_quantiles(c(2, 3, 4), w, 0.975))
 })
 
@@ -155,4 +162,70 @@ test_that("trajectory time-stride grid yields a full daily-consecutive set at st
   # The OLD buggy form yielded an EMPTY set at stride 1.
   old_stride1 <- which(seq_len(n_time_points) %% 1L == 1L)
   expect_length(old_stride1, 0L)
+})
+
+# -----------------------------------------------------------------------------
+# End to end through the REAL engine: .mosaic_reff_resim_ci on a tiny ensemble
+# -----------------------------------------------------------------------------
+test_that(".mosaic_reff_resim_ci reduces real engine members into three estimands", {
+  skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
+  base <- MOSAIC::config_simulation_epidemic
+  base$zeta_1 <- 1e6; base$zeta_2 <- 2e5
+  nP <- 2L; nS <- 2L
+  # Member configs differ by seed; sample_parameters is replaced by a
+  # deterministic perturbation so the test needs no priors, but the engine,
+  # channel extraction, kernels and reduction are all real.
+  member_cfg <- function(seed) {
+    cfg <- base; cfg$gamma_1 <- base$gamma_1 * (1 + 0.1 * (seed %% 3)); cfg
+  }
+  seeds <- c(11L, 12L)
+  Tn <- 366L; nL <- length(base$location_name)
+  ca <- array(NA_real_, dim = c(nL, Tn, nP, nS))
+  # Each member's 7-day-window peak R_eff at location 1, computed here from the
+  # member's own run, for the peak_Rt check below. Member id m = (s-1)*nP + p.
+  pk1 <- w_m <- numeric(nP * nS)
+  for (p in seq_len(nP)) for (s in seq_len(nS)) {
+    cfg <- member_cfg(seeds[p]); cfg$seed <- p * 1000L + s
+    rs <- run_simulation(config = cfg, seed = cfg$seed, quiet = TRUE)$results
+    ca[, , p, s] <- rs$reported_cases
+    rw <- MOSAIC:::.mosaic_reff_routes(
+      rs$incidence_human[1, ], rs$incidence_env[1, ], rs$delta_jt[1, ],
+      MOSAIC:::.mosaic_reff_config_kernel(cfg), 1,
+      init = MOSAIC:::.mosaic_reff_init(rs$E[1, 1], rs$Isym[1, 1], rs$Iasym[1, 1],
+                                        rs$incidence[1, 1]),
+      window = 7L)$R_eff
+    rw[1:10] <- NA_real_
+    m <- (s - 1L) * nP + p
+    pk1[m] <- max(rw[is.finite(rw)]); w_m[m] <- c(0.6, 0.4)[p] / nS
+  }
+  ens <- structure(list(seeds = seeds, parameter_weights = c(0.6, 0.4),
+                        cases_array = ca, n_param_sets = nP,
+                        n_simulations_per_config = nS,
+                        location_names = base$location_name,
+                        date_start = base$date_start,
+                        cases_median = apply(ca, c(1, 2), stats::median)),
+                   class = "mosaic_ensemble")
+  local_mocked_bindings(
+    sample_parameters = function(PATHS, priors, config, seed, ...) member_cfg(seed),
+    .mosaic_clamp_transmission_params = function(cfg) cfg,
+    .package = "MOSAIC")
+
+  res <- MOSAIC:::.mosaic_reff_resim_ci(ens, base_config = base, priors = NULL,
+                                        sampling_args = NULL, PATHS = NULL,
+                                        burn_in_days = 10L, verbose = FALSE)
+  expect_equal(res$gate_rel_err_pct, 0)                 # bitwise-reproducible engine
+  expect_named(res$central, c("R_eff", "R_hum", "R_env"))
+  expect_equal(dim(res$qmats$R_eff), c(nL, Tn, 3L))
+  both <- is.finite(res$central$R_hum) & is.finite(res$central$R_env)
+  expect_true(any(both))
+  expect_equal(res$central$R_eff[both], res$central$R_hum[both] + res$central$R_env[both])
+  expect_setequal(unique(res$peak_Rt$estimand), c("R_eff", "R_hum", "R_env"))
+  expect_equal(nrow(res$peak_Rt), 3L * nL)
+  expect_equal(res$peak_window, 7L)
+  row1 <- res$peak_Rt[res$peak_Rt$estimand == "R_eff" &
+                        res$peak_Rt$location == base$location_name[1], ]
+  expect_equal(unname(unlist(row1[, c("q2.5", "q50", "q97.5")])),
+               weighted_quantiles(pk1, w_m, c(0.025, 0.5, 0.975)))
+  expect_equal(unname(res$kernel_params[["gamma_1"]]),
+               member_cfg(seeds[res$medoid_member$param_idx])$gamma_1)
 })

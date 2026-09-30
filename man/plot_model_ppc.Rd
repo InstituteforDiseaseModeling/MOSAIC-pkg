@@ -22,8 +22,9 @@ Overrides predictions_dir if provided.}
 
 \item{locations}{Character vector of specific locations to plot. NULL (default) uses all locations.}
 
-\item{model}{Legacy: A laser-cholera Model object (for backward compatibility).
-Not recommended - use CSV-based inputs instead.}
+\item{model}{Legacy: a model object as returned by \code{run_simulation()}
+(any list carrying \code{$results}). Not recommended - use CSV-based
+inputs instead.}
 
 \item{output_dir}{Directory where PPC plots will be saved. Creates "ppc" subdirectory.}
 
@@ -41,8 +42,9 @@ scatter plots, Q-Q plots, residuals vs observed, and temporal residual patterns.
 \details{
 Creates a 6-page multi-page PDF per output file:
 \enumerate{
-\item Density overlays of observed vs predicted median distributions
-\item Credible interval coverage analysis (50\\% and 95\\% CIs vs nominal)
+\item Density overlays of observed vs predicted central (the run's
+\code{central_method}, mean by default) distributions
+\item Credible interval coverage analysis (50\% and 95\% CIs vs nominal)
 \item Observed vs predicted calibration scatter plots
 \item Quantile-quantile plots
 \item Residuals vs observed

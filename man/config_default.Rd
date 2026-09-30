@@ -3,7 +3,7 @@
 \docType{data}
 \name{config_default}
 \alias{config_default}
-\title{Default LASER Configuration}
+\title{Default Simulation Configuration}
 \format{
 A named \strong{list} built by the \code{data-raw/make_config_default.R}
 script and persisted as \code{data/config_default.rda}. Elements include:
@@ -23,15 +23,15 @@ coordinates (\code{longitude}, \code{latitude}), mobility coefficients, etc.;
 config_default
 }
 \description{
-The \strong{canonical} LASER parameter object shipped with MOSAIC.
+The \strong{canonical} simulation parameter object shipped with MOSAIC.
 It contains default values for \emph{all} model parameters, initial state
 vectors, and file-path references required to run the full cholera
 metapopulation transmission model across any number of locations.
 }
 \details{
 Unlike the lightweight \emph{simulation} configs exported in
-\code{make_simulation_epidemic_LASER_config_files.R} and
-\code{make_simulation_endemic_LASER_config_files.R}, the \strong{default}
+\code{make_simulation_epidemic_config_files.R} and
+\code{make_simulation_endemic_config_files.R}, the \strong{default}
 configuration assumes the presence of external data files arranged in
 canonical MOSAIC directories:
 
@@ -53,7 +53,7 @@ without any external dependencies.
 
 \strong{Note on Initial Condition Formats}: This configuration includes both count
 (\verb{*_j_initial}) and proportion (\verb{prop_*_initial}) representations of initial
-conditions. The count fields are required by the LASER model for simulation,
+conditions. The count fields are required by the transmission model for simulation,
 while the proportion fields are optional and provided for statistical analysis
 convenience. Both formats are automatically maintained in sync during
 parameter sampling operations.
@@ -61,7 +61,7 @@ parameter sampling operations.
 \seealso{
 \itemize{
 \item \code{data-raw/make_config_default.R} – the script that builds this object.
-\item \code{\link[=make_LASER_config]{make_LASER_config()}} – the validator/factory function used internally
+\item \code{\link[=make_simulation_config]{make_simulation_config()}} – the validator/factory function used internally
 by the build script to validate every parameter.
 \item \link{config_simulation_epidemic} – one-year outbreak toy data set.
 \item \link{config_simulation_endemic} – 5-year endemic toy data set.

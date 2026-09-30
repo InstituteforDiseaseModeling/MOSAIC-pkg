@@ -62,10 +62,9 @@ Only the first is the backtest; the other two are internals of a single psi fit.
 - `est_suitability_spec` — **modeling** knobs only (architecture, `response_var`, `arch_control`); date keys
   are ignored/harness-owned. Keep `arch_control$parallel_seeds = 1L` (see est-suitability for the RAM math).
 - `control = NULL` → an experiment-grade cheap default (fixed `n_simulations`, plots off).
-- `models = c("ensemble","ensemble_opt","medoid")`, `central_method = "median"`, `optimize_subset = TRUE`,
-  `n_reps_best_medoid = 50` (medoid reruns — see where-to-run). `dask_spec` (optional) sends the per-cutoff
-  *calibration* to Dask/Coiled (the medoid reruns stay local); local PSOCK is usually preferred (Coiled
-  dies on >50 min jobs).
+- `models = c("ensemble","ensemble_opt","medoid")`, `central_method = "mean"` (package default since v0.98.0), `optimize_subset = TRUE`,
+  `n_reps_best_medoid = 50` (medoid reruns — see where-to-run). Everything runs on the local PSOCK
+  cluster; the Dask/Coiled `dask_spec` option was removed (it now hard-errors).
 - **Two staleness/leakage subtleties:** (i) if `config$date_stop` runs past the climate/ENSO horizon, the
   per-cutoff ψ tail is `na.locf` flat-filled in the scored OOS segment (see est-suitability horizon
   ceiling); (ii) ICs are seeded at `ic_t0 = max(date_start, 2023-02-01)`, so cutoffs before 2023 seed
@@ -103,14 +102,14 @@ cutoff×location×date×metric: `segment`=IS/embargo/OOS, held-out `observed`, `
   (model, metric, horizon) cell; treat the rest as exploratory.
 - Honest framing: ψ is a **weak signal** — better shape/phasing than climatology at 3–5 mo, not
   forecast-grade; wins show in WIS/bias after seed-ensemble pooling (the logit-median ψ `n_seeds` in the fit)
-  + calibration reps, not single-run R². `central_method` `"median"` (default) vs `"mean"` changes the deaths
-  central tendency (mean unmasks implied CFR) — relevant when scoring deaths. Validate across ≥3 cutoffs.
+  + calibration reps, not single-run R². `central_method` `"mean"` (default since v0.98.0) vs `"median"`
+  changes the point forecast — the daily median of sparse deaths is 0 on most days. Validate across ≥3 cutoffs.
 
 ## Where to run
 A multi-cutoff coupled CV (each cutoff = one lstm_v2 fit + one full `run_MOSAIC` calibration + ~50 local
-LASER medoid reruns) is a **hedgehog/dugong** job. The `n_reps_best_medoid` reruns execute **locally in the
-calling R process, not on Dask** — size RAM accordingly. Because it runs laser, **forecast-cv REQUIRES the
-`r-mosaic-Rscript` wrapper on dugong** (a standalone TF psi fit would not). Cross-link `hedgehog-run` /
+medoid reruns) is a **hedgehog/dugong** job. The `n_reps_best_medoid` reruns execute **locally in the
+calling R process** — size RAM accordingly. forecast-cv needs dugong's `r-mosaic-Rscript` wrapper for its
+psi fit (TensorFlow/pyexpat), not for its simulations, which are pure R. Cross-link `hedgehog-run` /
 `dugong-run`; apply the TF-thread caps from est-suitability since each cutoff's psi fit has the same
 oversubscription risk.
 

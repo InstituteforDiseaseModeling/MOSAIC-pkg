@@ -7,8 +7,8 @@
 calc_mobility_flux(config)
 }
 \arguments{
-\item{config}{A LASER configuration list (as read from \code{1_inputs/config.json}
-or produced by \code{\link{make_LASER_config}}). Must contain
+\item{config}{A simulation configuration list (as read from \code{1_inputs/config.json}
+or produced by \code{\link{make_simulation_config}}). Must contain
 \code{longitude}, \code{latitude}, \code{N_j_initial}, \code{tau_i},
 \code{location_name}, and the scalars \code{mobility_omega},
 \code{mobility_gamma}.}
@@ -28,7 +28,7 @@ A list with elements, all in config order:
 }
 }
 \description{
-Derives the \strong{model's own implied daily mobility flux} from a LASER
+Derives the \strong{model's own implied daily mobility flux} from a simulation
 configuration's population sizes and calibrated mobility point estimates.
 This is the single source of truth for the four mobility figures in the
 \code{"spatial"} group of \code{\link{render_MOSAIC_figures}} (\eqn{\pi_{ij}}

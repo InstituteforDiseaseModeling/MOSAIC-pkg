@@ -8,7 +8,7 @@
 #'
 #' This function is a \strong{fit-and-forecast engine only}: it produces
 #' calibrations, projections, and one organized predictions artifact. It does
-#' \strong{not} compute evaluation metrics, baselines, or skill scores — those are
+#' \strong{not} compute evaluation metrics, baselines, or skill scores -- those are
 #' done post-hoc by reading \code{predictions.parquet}.
 #'
 #' @details
@@ -26,7 +26,11 @@
 #' arguments to \code{\link{est_suitability}} and overrides any date keys passed
 #' via \code{est_suitability_spec} (with a warning). \code{est_suitability_spec}
 #' therefore controls only modeling choices (target, features, architecture), not
-#' the cutoff window.
+#' the cutoff window. The reported CFR \code{mu_jt} and its prior are rebuilt per
+#' cutoff from a WHO-annual GAM fitted only to years up to \code{year(T) - 1}
+#' (a calendar year's annual total is not known until the year has ended), and
+#' carried flat past that year's 1 July. So no post-cutoff surveillance year
+#' reaches the config, the prior centres or the prior widths.
 #'
 #' \strong{Coupled metapopulation.} \code{iso} may be a single country or a vector;
 #' a vector runs as the coupled metapopulation (one calibration per cutoff covering
@@ -36,7 +40,7 @@
 #' \strong{Outputs.} Under \code{dir_output}: \code{manifest.json} (settings +
 #' per-run index with status), \code{predictions.parquet} (the compiled long
 #' table), and \code{runs/cutoff_<T>/} (the native \code{run_MOSAIC} directory for
-#' each cutoff). \code{predictions.parquet} is a derived view — it can be rebuilt
+#' each cutoff). \code{predictions.parquet} is a derived view -- it can be rebuilt
 #' from the run directories with \code{\link{compile_rolling_cv_predictions}}.
 #'
 #' The predictions table has one row per (cutoff x location x date x metric) with
@@ -81,15 +85,16 @@
 #'   \code{run_MOSAIC()} (no \code{config_best.json}); it is skipped with a
 #'   warning unless an older run dir still carries that file. Each model appears
 #'   as a value of the \code{model} column.
-#' @param n_reps_best_medoid Integer (default 50); number of stochastic LASER
+#' @param n_reps_best_medoid Integer (default 50); number of stochastic
 #'   reruns used to build the predictive median + intervals for the \code{best}
 #'   and \code{medoid} configs. These reruns execute locally in the calling R
-#'   process (not on Dask), so cost scales with this value times the number of
+#'   process, so cost scales with this value times the number of
 #'   cutoffs and locations.
 #' @param central_method Ensemble central tendency used for the compiled
-#'   predictions and the in-sample calibration metrics/medoid: \code{"median"}
-#'   (default; lower calibration bias) or \code{"mean"} (unbiased for expected
-#'   counts, never collapses on sparse deaths). Scalar or per-channel
+#'   predictions and the in-sample calibration metrics/medoid: \code{"mean"}
+#'   (default; the expected count, which never collapses to zero on sparse
+#'   deaths) or \code{"median"} (the typical trajectory; the default from
+#'   v0.46.1 to v0.97.x). Scalar or per-channel
 #'   \code{c(cases=, deaths=)}. The
 #'   predictions table carries \code{pred_central} (this choice) plus
 #'   \code{pred_mean}/\code{pred_median} for cross-walk; WIS/coverage remain
@@ -99,7 +104,7 @@
 #'   \code{feature_set}, \code{response_var}, \code{bias_correct}, and the
 #'   lstm_v2 \code{arch_control} list). Date arguments are ignored (harness-owned).
 #'   Deprecated v0.33 keys (\code{n_splits}, \code{exclude_covariates}) are
-#'   accepted but ignored with a per-cutoff deprecation message — prefer
+#'   accepted but ignored with a per-cutoff deprecation message -- prefer
 #'   \code{arch_control} for lstm_v2 knobs. When \code{psi_cache} is supplied this
 #'   spec is used \emph{only} to recompute the cache spec-hash for validation; the
 #'   per-cutoff \code{est_suitability()} fit is skipped entirely.
@@ -110,7 +115,6 @@
 #'   directory instead. The run \strong{hard-errors} if a requested cutoff is
 #'   absent from the cache manifest, or if the run's \code{est_suitability_spec}
 #'   hash does not match the manifest \code{spec_hash} recorded for that cutoff.
-#' @param dask_spec Optional Dask/Coiled spec passed to \code{run_MOSAIC}.
 #' @param dir_output Directory for the experiment artifact (created if needed).
 #' @param verbose Logical (default TRUE).
 #'
@@ -136,10 +140,9 @@ run_rolling_cv <- function(PATHS,
                            optimize_subset      = TRUE,
                            models               = c("ensemble", "ensemble_opt", "medoid"),
                            n_reps_best_medoid  = 50L,
-                           central_method       = "median",
+                           central_method       = "mean",
                            est_suitability_spec = list(),
                            psi_cache            = NULL,
-                           dask_spec            = NULL,
                            dir_output,
                            verbose              = TRUE) {
 
@@ -210,6 +213,18 @@ run_rolling_cv <- function(PATHS,
                                                est_suitability_spec))
      }
 
+     # WHO annual data for the per-cutoff reported-CFR refit (one GAM per
+     # distinct last data year, shared by the cutoffs in the same calendar year).
+     # Checked before anything is written: without it no cutoff can be built.
+     if (!requireNamespace("mgcv", quietly = TRUE))
+          stop("run_rolling_cv() refits the reported CFR per cutoff with mgcv; install it.")
+     who_annual_path <- file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual.csv")
+     if (is.null(PATHS$DATA_WHO_ANNUAL) || !file.exists(who_annual_path))
+          stop("WHO annual data not found at ", who_annual_path,
+               "; run_rolling_cv() refits the reported CFR per cutoff from it.")
+     who_annual <- utils::read.csv(who_annual_path, stringsAsFactors = FALSE)
+     cfr_asof <- list()
+
      dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
      runs_dir <- file.path(dir_output, "runs")
      dir.create(runs_dir, showWarnings = FALSE)
@@ -254,9 +269,22 @@ run_rolling_cv <- function(PATHS,
                     psi_csv <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
                }
 
-               # 2. build cutoff config: subset loc, swap psi, mask obs > T
+               # 2. build cutoff config: subset loc, swap psi, as-of mu_jt, mask obs > T
                cfg <- MOSAIC::get_location_config(iso = iso, config = base_config)
                cfg$psi_jt <- .rolling_cv_psi_matrix(psi_csv, cfg$location_name, cfg_dates)
+               # The reported CFR and its prior, from WHO annual years <= year(T) - 1
+               # only. Calibration's CFR offset, estimated on deaths <= T, then
+               # carries into the forecast through the post-hoc death redraw.
+               last_cfr_year <- as.integer(format(T_k, "%Y")) - 1L
+               key <- as.character(last_cfr_year)
+               if (is.null(cfr_asof[[key]]))
+                    cfr_asof[[key]] <- .rcv_cfr_asof(who_annual, last_cfr_year, cfg_stop)
+               cfg <- .rcv_apply_cfr_asof(cfg, cfr_asof[[key]], cfg_dates)
+               priors_k <- priors
+               priors_k$mu_jt <- .mosaic_mu_jt_prior(
+                    cfr_asof[[key]]$predictions, location_name = cfg$location_name,
+                    sd_year = cfr_asof[[key]]$sigma, tau = cfr_asof[[key]]$tau,
+                    sd_product = priors$mu_jt$sd_product %||% 0.3)
                nloc <- length(cfg$location_name)
                rc <- .rcv_as_matrix(cfg$reported_cases,  nloc, length(cfg_dates))
                rd <- .rcv_as_matrix(cfg$reported_deaths, nloc, length(cfg_dates))
@@ -265,8 +293,8 @@ run_rolling_cv <- function(PATHS,
                cfg$reported_cases <- rc; cfg$reported_deaths <- rd
 
                # 3. calibrate <= T + project full window
-               MOSAIC::run_MOSAIC(config = cfg, priors = priors, dir_output = dir_k,
-                                  control = control, dask_spec = dask_spec)
+               MOSAIC::run_MOSAIC(config = cfg, priors = priors_k, dir_output = dir_k,
+                                  control = control)
 
                # 4. compile predictions for every requested model type
                #    (ensemble candidate / optimizer subset / best / medoid)
@@ -440,7 +468,7 @@ run_rolling_cv <- function(PATHS,
 #'   \code{"ensemble"}, \code{"opt"}, \code{"best"}, \code{"medoid"}); NULL
 #'   (default) uses the set recorded in each run's manifest.
 #' @param n_reps_best_medoid Integer or NULL (default); number of stochastic
-#'   LASER replicates to draw for the single-config \code{best}/\code{medoid}
+#'   replicates to draw for the single-config \code{best}/\code{medoid}
 #'   models. NULL reuses the value stored in the run manifest.
 #' @param central_method Central tendency for \code{pred_central}: \code{NULL}
 #'   (default) reuses the value recorded in the run manifest (or \code{"mean"}
@@ -507,7 +535,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rolling_cv_compile_run <- function(ensemble, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, model = "ensemble",
-                                    central_method = "median") {
+                                    central_method = "mean") {
      central_method <- .mosaic_resolve_central_method(central_method)
      n_t   <- ensemble$n_time_points
      ds    <- as.Date(ensemble$date_start); de <- as.Date(ensemble$date_stop)
@@ -585,7 +613,7 @@ compile_rolling_cv_predictions <- function(dir_output,
      idx   <- match(T_chr, keys)
      if (is.na(idx))
           stop("psi_cache is missing cutoff ", T_chr,
-               " — present cutoffs: ", paste(keys, collapse = ", "),
+               " \u2014 present cutoffs: ", paste(keys, collapse = ", "),
                ". Re-run prefit_rolling_cv_psi() for this cutoff.", call. = FALSE)
      entry <- cuts[[idx]]
      csv   <- file.path(psi_cache, entry$csv %||%
@@ -594,7 +622,7 @@ compile_rolling_cv_predictions <- function(dir_output,
           stop("psi_cache entry for ", T_chr, " points to a missing file: ", csv,
                call. = FALSE)
      # Recompute the spec hash with the SAME contract prefit used (strip date keys
-     # first) and require an exact match — a mismatch means the run's modeling spec
+     # first) and require an exact match -- a mismatch means the run's modeling spec
      # differs from what produced the frozen psi; that is an error, not a silent NA.
      run_spec  <- .rcv_strip_date_keys(est_suitability_spec)
      run_hash  <- .rcv_psi_spec_hash(cutoff, run_spec)
@@ -633,7 +661,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rcv_compile_all_models <- function(run_dir, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, models, n_reps,
-                                    central_method = "median") {
+                                    central_method = "mean") {
      central_method <- .mosaic_resolve_central_method(central_method)
      cal      <- file.path(run_dir, "2_calibration")
      ens_path <- file.path(cal, "ensemble_candidate.rds")
@@ -697,7 +725,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' Read metrics$ess_best$value from a run's convergence diagnostics.
 #'
 #' Returns the importance-weight effective sample size for the calibration, or
-#' \code{NA_real_} if the diagnostics file or the key is missing. Never errors —
+#' \code{NA_real_} if the diagnostics file or the key is missing. Never errors --
 #' a missing diagnostic is a benign NA on the row, not a fatal condition.
 #' @keywords internal
 #' @noRd
@@ -713,9 +741,39 @@ compile_rolling_cv_predictions <- function(dir_output,
      as.numeric(val)
 }
 
+#' Reported-CFR estimates as of a cutoff
+#'
+#' Fits the WHO-annual GAM to years up to \code{last_year} only, with carry-forward
+#' to the end of the simulation window.
+#' @keywords internal
+#' @noRd
+.rcv_cfr_asof <- function(who_annual, last_year, cfg_stop) {
+     fy <- max(0L, as.integer(format(as.Date(cfg_stop), "%Y")) - as.integer(last_year))
+     est <- .cfr_estimate(who_annual, forecast_years = fy, forecast_method = "carry_forward",
+                          last_year = last_year)
+     if (est$last_data_year != last_year)
+          warning(sprintf("WHO annual data end in %d, before the cutoff's last usable year %d.",
+                          est$last_data_year, last_year), call. = FALSE)
+     list(predictions = est$predictions, sigma = est$fit$sigma, tau = est$fit$tau,
+          last_data_year = est$last_data_year)
+}
+
+#' Put an as-of reported CFR into a cutoff config
+#'
+#' Replaces \code{mu_jt} (and any legacy mortality fields) with the daily matrix
+#' built from \code{.rcv_cfr_asof()} estimates.
+#' @keywords internal
+#' @noRd
+.rcv_apply_cfr_asof <- function(cfg, asof, cfg_dates) {
+     for (f in c(.MOSAIC_LEGACY_MORTALITY_FIELDS, "delta_reporting_deaths")) cfg[[f]] <- NULL
+     cfg$mu_jt <- make_mu_jt(asof$predictions, location_name = cfg$location_name,
+                             date_start = min(cfg_dates), date_stop = max(cfg_dates))
+     cfg
+}
+
 #' Re-simulate a single config to a prediction object matching the ensemble shape
 #'
-#' Runs \code{n_reps} stochastic LASER reruns of the saved config and reduces them
+#' Runs \code{n_reps} stochastic stochastic reruns of the saved config and reduces them
 #' to a predictive median + interval bounds on the template ensemble's date grid,
 #' so the result can be emitted by \code{.rolling_cv_compile_run}. Returns NULL if
 #' the config is absent.
@@ -723,7 +781,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' @noRd
 .rcv_simulate_config <- function(config_path, template, n_reps) {
      if (!file.exists(config_path)) return(NULL)
-     cfg       <- jsonlite::fromJSON(config_path, simplifyVector = TRUE, simplifyMatrix = TRUE)
+     cfg       <- .mosaic_read_json_cached(config_path)
      sim_dates <- seq.Date(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")
      edates    <- seq(as.Date(template$date_start), as.Date(template$date_stop),
                       length.out = template$n_time_points)
@@ -738,9 +796,9 @@ compile_rolling_cv_predictions <- function(dir_output,
      cas <- array(NA_real_, c(length(seeds), nloc, nt))
      dea <- array(NA_real_, c(length(seeds), nloc, nt))
      for (s in seq_along(seeds)) {
-          r  <- MOSAIC::run_LASER(cfg, seed = seeds[s], quiet = TRUE)
-          rc <- reticulate::py_to_r(r$results$reported_cases)
-          rd <- reticulate::py_to_r(r$results$reported_deaths)
+          r  <- MOSAIC::run_simulation(cfg, seed = seeds[s], quiet = TRUE)
+          rc <- r$results$reported_cases
+          rd <- r$results$reported_deaths
           if (!is.matrix(rc)) rc <- matrix(rc, nrow = 1L)
           if (!is.matrix(rd)) rd <- matrix(rd, nrow = 1L)
           cas[s, , ] <- rc[, col_idx, drop = FALSE]

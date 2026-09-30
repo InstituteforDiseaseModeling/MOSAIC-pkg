@@ -5,7 +5,7 @@ description: >
   calibration-actionable parameter/prior recommendations. Use after a calibration run
   returns poor fit (e.g. case/death bias, low R², timing or shape errors) and you want
   to know WHAT to change before paying for another full calibration. Drives fast
-  deterministic single-LASER experiments (MOSAIC::run_fit_sandbox) on the run's medoid
+  deterministic single-simulation experiments (MOSAIC::run_fit_sandbox) on the run's medoid
   config and scores them with MOSAIC::calc_fit_diagnostics. Not a passive metrics summary.
 ---
 
@@ -18,16 +18,17 @@ parameter targets and prior changes for the next calibration. You drive it activ
 decide what to vary next based on what you just observed, like a modeler at a workbench.
 
 > **Engine-version note:** the parameter→behavior facts below (e.g. `beta_j0_tot` is a dead
-> parameter, the `alpha_2 < 0.4` bifurcation) are valid for the current laser-cholera engine.
-> An engine upgrade can flip a field's semantics (it has before — see CLAUDE.md Lesson #12);
-> re-verify against the engine after any laser-cholera bump.
+> parameter, the `alpha_2 < 0.4` bifurcation) were established against the Python laser-cholera
+> engine and carry over to the R engine (v0.68.0), which was ported from it behaviour-for-behaviour.
+> A change to the engine can still flip a field's semantics (it has before — see CLAUDE.md
+> Lesson #12); the engine now lives in `R/sim_engine.R` and its siblings, so re-verify there.
 
 ## The two tools
 
 Both are exported MOSAIC functions; call them from R / `Rscript`.
 
 **`run_fit_sandbox(config, params = list(), seed = 42L, locations = NULL, full_metrics = TRUE, outdir = NULL, run_label = "...")`**
-Runs ONE deterministic `run_LASER()` from a calibration config with point-value overrides
+Runs ONE deterministic `run_simulation()` from a calibration config with point-value overrides
 (~1-2 s), aggregates predicted vs observed across `locations`, and returns
 `$predictions`, `$metrics` (incl. `fit_diagnostics` + merged `scorecard`), and
 `$params_applied`. `config` may be a list or a path to a config JSON (use the run's
@@ -64,15 +65,18 @@ Rscript -e '
    its biologically plausible range. Flag any parameter at/over a bound, piling against a bound,
    drifting outside the plausible range, or taking an impossible value. A good fit does **not**
    clear this — implausible values under a good R² mean overfitting, non-identifiability, or
-   compensation between correlated parameters (cf. `mu_j_baseline`↔`rho_deaths`). When you later
+   compensation between correlated parameters (cf. `beta_j0_tot`↔`alpha_1`). When you later
    recommend parameter targets, keep them inside the plausible range too — never buy fit with an
    implausible value. Carry flagged parameters into the brief.
 2. **Prioritise bias → shape → variance.** Bias is most tractable and often the root cause;
    shape/variance diagnostics are confounded when total scale is wrong. Fix/understand bias first.
 3. **Bias.** If cases bias WARN/FAIL: sweep `beta_j0_hum` and `beta_j0_env` ×{0.25,0.5,0.75,1,1.5,2}.
    If beta fixes scale but reporting looks off, check `sigma`, `rho`. Read `bias$by_year` — uniform
-   or concentrated in specific years? If deaths bias WARN/FAIL with cases OK: `mu_j_baseline`, then
-   `rho_deaths`; check `epidemic_threshold` if deaths cluster in an epidemic year.
+   or concentrated in specific years? If deaths bias WARN/FAIL with cases OK: the reported CFR is
+   integrated out per path (MOSAIC >= v0.96.0), so the deaths LEVEL follows the data given the cases;
+   a deaths bias means the case path is off in those years (read `cfr_posterior.csv` beside the cases
+   fit) or the `mu_jt` prior centre is off for a sparse-deaths country. `rho_deaths` does not move
+   reported deaths.
 4. **Shape** (only once bias is PASS or understood). Peak timing off → `psi_star_k` (±30d in 5d
    steps), Fourier `a_1_j/b_1_j` (±20%). Peak too sharp/broad → `iota` (higher = faster rise),
    `gamma_1` (lower = broader). Poor `seasonal_corr` → Fourier amplitude `a_2_j/b_2_j`, `psi_star_a`.
@@ -91,20 +95,21 @@ country-specific and lives in the calibration-doctor's local memory, not here.)
 **Transmission scale** — `beta_j0_hum` (human transmission): primary cases-scale lever, minimal
 shape. `beta_j0_env` (environmental): primary cases-scale lever, shifts env/human balance, can
 affect onset. `p_beta` (human vs env fraction): secondary; higher → more self-limiting dynamics.
-`beta_j0_tot`: **DEAD PARAMETER — LASER reads `beta_j0_hum`/`beta_j0_env` directly and ignores it.**
+`beta_j0_tot`: **DEAD PARAMETER — the engine reads `beta_j0_hum`/`beta_j0_env` directly and ignores it.**
 
 **Timing / shape** — `psi_star_k` (suitability time offset, days): peak timing, negative shifts
 earlier. `a_1_j,b_1_j` (Fourier phase): seasonal phase. `a_2_j,b_2_j` (Fourier amplitude): seasonal
-contrast + variance. `epidemic_threshold`: epidemic onset / which years are epidemic; affects deaths
-shape. `gamma_1,gamma_2` (recovery): epidemic duration (lower = longer). `iota` (incubation): onset
+contrast + variance. `epidemic_threshold`: epidemic onset / which years are epidemic; switches the
+case-reporting PPV (chi) only — it no longer enters mortality. `gamma_1,gamma_2` (recovery): epidemic duration (lower = longer). `iota` (incubation): onset
 sharpness (higher = faster rise).
 
 **Observation model (cases)** — `sigma` (symptomatic fraction), `rho` (care-seeking → reported):
 linear cases-scale levers, uniform scaling. `chi_endemic,chi_epidemic` (PPV): cases scale with a
 differential endemic/epidemic effect.
 
-**Mortality** — `mu_j_baseline` (baseline IFR): deaths only. `mu_j_epidemic_factor` (epidemic IFR
-multiplier): deaths during epidemics + deaths shape. `rho_deaths` (death detection): deaths only, linear.
+**Mortality** — `mu_jt` (reported CFR by location and day, `config$mu_jt`): deaths only, linear; in a
+sandbox it is the level the engine draws deaths at (calibration integrates it out). `rho_deaths` sets
+only true deaths (it cancels from reported deaths).
 
 **Initial conditions** — `prop_S_initial` (susceptible): early-period bias + early dynamics (high S =
 faster early epidemic). `prop_R_initial` (immune): early-period bias, dampens early dynamics.
@@ -119,7 +124,7 @@ explosive potential. `psi_star_b` (logit offset on suitability): cases (env), un
 
 ## Design principles
 
-- **Deterministic first.** Single LASER runs are the unit of investigation; stochastic averaging is
+- **Deterministic first.** Single simulation runs are the unit of investigation; stochastic averaging is
   for calibration, not diagnosis.
 - **Hypothesize before sweeping.** State the hypothesis before each experiment — no brute force.
 - **Follow leads.** Investigate surprises rather than marching through the plan; the best findings
@@ -136,7 +141,7 @@ explosive potential. `psi_star_b` (logit offset on suitability): cases (env), un
 DIAGNOSE-FIT BRIEF
 ==================
 Run:    <path>
-Model:  MOSAIC <ver> | laser.cholera <ver> | priors v<ver> | config v<ver>
+Model:  MOSAIC <ver> | priors v<ver> | config v<ver>
 
 SCORECARD
   Bias (cases):  {PASS|WARN|FAIL} {x.xx}x      Bias (deaths): {...} {x.xx}x

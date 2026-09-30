@@ -4,7 +4,7 @@ description: >
   Use for epidemiological modeling: prior derivation (data-raw/make_priors_default.R),
   parameter estimation (est_*: zeta/kappa/CFR/seasonality/mobility/vaccine-effectiveness),
   initial-condition compartments (est_initial_*, IC moment-matching), reporting-chain
-  parameters (sigma/rho/chi, CFR mu_j), and the biological plausibility / literature
+  parameters (sigma/rho/chi, reported CFR mu_jt), and the biological plausibility / literature
   anchoring of parameter values. Use PROACTIVELY when a task concerns what a parameter MEANS
   biologically or how a prior value was derived.
 tools: Read, Edit, Write, Bash, Grep, Glob
@@ -34,8 +34,8 @@ reasonable but encodes the wrong derivation is the failure mode you guard agains
 - **Estimation:** all `est_*.R` (e.g. `est_zeta_*`, `est_kappa_prior`, `est_CFR_hierarchical`,
   `est_seasonal_dynamics`, `est_mobility`, `est_vaccine_effectiveness`, `est_initial_*`,
   `est_symptomatic_prop`, `est_WASH_coverage`, `est_demographic_rates`)
-- **Reporting chain:** `calc_cases_from_infections.R`, `calc_deaths_from_infections.R`,
-  `calc_implied_cfr.R`, `calc_cfr_period_implied.R`
+- **Reporting chain:** `calc_cfr_period_implied.R`, `make_mu_jt.R` (the reported-CFR matrix and
+  its prior block), the engine's reporting draws in `sim_components.R`
 - **Prior semantics in sampling:** `sample_parameters.R` (the meaning/constraints of draws),
   literature accessors (`get_*_data.R`)
 
@@ -47,10 +47,12 @@ reasonable but encodes the wrong derivation is the failure mode you guard agains
   initial conditions). This is the authority for what a parameter MEANS — read the relevant section
   before deriving or changing a value rather than inferring meaning from a variable name. Read the
   `.Rmd` (current + inline glossary), not the stale rendered `docs/04-model-description.md`.
-- **`mu_j_baseline` is already v0.13-corrected.** The rho_deaths factor (~2.36×) is baked into
-  `priors_default` v15.6 — **do NOT re-adjust it** (memory `project_mu_j_baseline_already_fixed`).
-- **`delta_reporting_deaths` = death-event-to-report** delay (not symptom-onset-to-report) under
-  the v0.13 engine (Lesson #12c/d).
+- **Mortality is CFR v2.1 (MOSAIC >= v0.96.0).** Each symptomatic onset is fatal with probability
+  `mu_jt * rho / (rho_deaths * chi_epidemic)` (decided at onset; deaths reported on the case lag).
+  `mu_jt` is the reported CFR, a location x day matrix from `est_CFR_hierarchical()` +
+  `make_mu_jt()`, integrated out of the deaths likelihood per path (priors `mu_jt` block).
+  `mu_j_baseline`, `mu_j_epidemic_factor`, `CFR_target` and `delta_reporting_deaths` are retired;
+  `rho_deaths` cancels from reported deaths and sets only true deaths.
 - **Prior label descriptions must match the engine's implementation**, not the analyst's
   intuition — the literature anchor describes what the engine actually does (Lesson #12e).
 - **Initial conditions** normalize proportions to sum to 1.0, then convert to integer counts

@@ -77,8 +77,8 @@ proportions to Beta distributions.
 \details{
 Biological notes:
 \itemize{
-\item V1/V2 in the MOSAIC/LASER model are \emph{administrative} compartments
-(dose received). LASER's \code{vaccinated.py} independently splits the
+\item V1/V2 in the MOSAIC/transmission model are \emph{administrative} compartments
+(dose received). The engine independently splits the
 initial counts into immune (V\emph{k}imm) and susceptible (V\emph{k}sus)
 substates via \code{phi_1}/\code{phi_2}. This function therefore does NOT
 multiply by \code{phi_1}/\code{phi_2} — doing so would double-count

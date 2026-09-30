@@ -66,21 +66,6 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           warning("variance_inflation too low - should be > 1.1 for meaningful variance")
      }
 
-     # ---- Helper: consistent location prior or default ----
-     # Uses consistent defaults across sequential/parallel branches.
-     draw_loc_or_default <- function(priors, name, loc, default, verbose = FALSE) {
-          loc_prior <- tryCatch(priors$parameters_location[[name]]$location[[loc]],
-                                error = function(e) NULL)
-          if (!is.null(loc_prior)) {
-               # With simplified sample_from_prior, just pass n and prior
-               result <- sample_from_prior(n = 1, prior = loc_prior, verbose = verbose)
-               if (is.na(result)) return(default)
-               return(result)
-          }
-          if (verbose) cat("  Using default for", name, "at", loc, "=", default, "\n")
-          default
-     }
-
      # ---- t0 setup ----
      if (is.null(t0)) {
           t0 <- as.Date(config$date_start)
@@ -257,8 +242,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                          gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = FALSE)
 
                          #---------------------------------------------------------------------------------
-                         # Temporary manual patch until observation process updated in LASER model
-                         # TODO: Create proper priors for these parameters when LASER model is updated
+                         # Temporary manual patch until observation process updated in transmission model
+                         # TODO: Create proper priors for these parameters when transmission model is updated
                          rho_prior <- list(distribution = "uniform", parameters = list(min = 0.2, max = 0.7))
                          chi_prior <- list(distribution = "uniform", parameters = list(min = 0.50, max = 0.75))
                          tau_r_prior <- list(distribution = "gamma", parameters = list(shape = 2, rate = 0.5))
@@ -316,8 +301,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                          gamma_1_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_1, verbose = FALSE)
                          gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = FALSE)
 
-                         # Temporary manual patch until observation process updated in LASER model
-                         # TODO: Create proper priors for these parameters when LASER model is updated
+                         # Temporary manual patch until observation process updated in transmission model
+                         # TODO: Create proper priors for these parameters when transmission model is updated
                          rho_prior <- list(distribution = "uniform", parameters = list(min = 0.05, max = 0.30))
                          chi_prior <- list(distribution = "uniform", parameters = list(min = 0.50, max = 0.75))
                          tau_r_prior <- list(distribution = "gamma", parameters = list(shape = 2, rate = 0.5))

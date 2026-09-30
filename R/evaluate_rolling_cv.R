@@ -2,7 +2,7 @@
 #'
 #' Reads a \code{\link{run_rolling_cv}} predictions artifact and computes
 #' out-of-sample forecast skill: per-cell metrics (R2 correlation & SSE, bias
-#' ratio, 50/95\% PI coverage, WIS) for the in-sample fit and for cumulative OOS
+#' ratio, 50/95% PI coverage, WIS) for the in-sample fit and for cumulative OOS
 #' horizons, plus MAE-skill and WIS-skill versus seasonal-climatology and
 #' persistence baselines, aggregated across cutoffs and countries with bootstrap
 #' CIs (suppressed at small cell counts).
@@ -35,7 +35,7 @@
 #' less, the seasonal baseline (and its skill) is \code{NA} (no grand-mean
 #' fallback). \code{"persistence"} (trailing 4-point mean carried forward) and
 #' \code{"persistence_last"} (the single last observed value) are secondary
-#' nulls. Each baseline is also given 50/95\% predictive intervals from empirical
+#' nulls. Each baseline is also given 50/95% predictive intervals from empirical
 #' quantiles of its in-sample residuals, so a genuine \strong{WIS-skill} exists:
 #' \eqn{1 - WIS_{model}/WIS_{baseline}}. \code{mae_skill} is the analogous
 #' MAE ratio. Positive = model beats the baseline; \code{NA} when the baseline

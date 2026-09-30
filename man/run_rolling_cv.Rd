@@ -18,10 +18,9 @@ run_rolling_cv(
   optimize_subset = TRUE,
   models = c("ensemble", "ensemble_opt", "medoid"),
   n_reps_best_medoid = 50L,
-  central_method = "median",
+  central_method = "mean",
   est_suitability_spec = list(),
   psi_cache = NULL,
-  dask_spec = NULL,
   dir_output,
   verbose = TRUE
 )
@@ -66,23 +65,24 @@ candidate ensemble.}
 \code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
 (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 the optimizer-selected subset (only emitted when \code{optimize_subset =
-  TRUE} and \code{ensemble_optimized.rds} exists). \code{"medoid"} is
+TRUE} and \code{ensemble_optimized.rds} exists). \code{"medoid"} is
 re-simulated from its saved config (see \code{n_reps_best_medoid}).
 \code{"best"} is accepted for back-compat but is no longer produced by
 \code{run_MOSAIC()} (no \code{config_best.json}); it is skipped with a
 warning unless an older run dir still carries that file. Each model appears
 as a value of the \code{model} column.}
 
-\item{n_reps_best_medoid}{Integer (default 50); number of stochastic LASER
+\item{n_reps_best_medoid}{Integer (default 50); number of stochastic
 reruns used to build the predictive median + intervals for the \code{best}
 and \code{medoid} configs. These reruns execute locally in the calling R
-process (not on Dask), so cost scales with this value times the number of
+process, so cost scales with this value times the number of
 cutoffs and locations.}
 
 \item{central_method}{Ensemble central tendency used for the compiled
-predictions and the in-sample calibration metrics/medoid: \code{"median"}
-(default; lower calibration bias) or \code{"mean"} (unbiased for expected
-counts, never collapses on sparse deaths). Scalar or per-channel
+predictions and the in-sample calibration metrics/medoid: \code{"mean"}
+(default; the expected count, which never collapses to zero on sparse
+deaths) or \code{"median"} (the typical trajectory; the default from
+v0.46.1 to v0.97.x). Scalar or per-channel
 \code{c(cases=, deaths=)}. The
 predictions table carries \code{pred_central} (this choice) plus
 \code{pred_mean}/\code{pred_median} for cross-walk; WIS/coverage remain
@@ -93,7 +93,7 @@ through to \code{\link{est_suitability}} (e.g. \code{architecture},
 \code{feature_set}, \code{response_var}, \code{bias_correct}, and the
 lstm_v2 \code{arch_control} list). Date arguments are ignored (harness-owned).
 Deprecated v0.33 keys (\code{n_splits}, \code{exclude_covariates}) are
-accepted but ignored with a per-cutoff deprecation message — prefer
+accepted but ignored with a per-cutoff deprecation message -- prefer
 \code{arch_control} for lstm_v2 knobs. When \code{psi_cache} is supplied this
 spec is used \emph{only} to recompute the cache spec-hash for validation; the
 per-cutoff \code{est_suitability()} fit is skipped entirely.}
@@ -105,8 +105,6 @@ call is skipped and the frozen \code{psi_<T>.csv} is loaded from this cache
 directory instead. The run \strong{hard-errors} if a requested cutoff is
 absent from the cache manifest, or if the run's \code{est_suitability_spec}
 hash does not match the manifest \code{spec_hash} recorded for that cutoff.}
-
-\item{dask_spec}{Optional Dask/Coiled spec passed to \code{run_MOSAIC}.}
 
 \item{dir_output}{Directory for the experiment artifact (created if needed).}
 
@@ -127,7 +125,7 @@ up to \code{T}, and (4) projects forward over the out-of-sample (OOS) window.
 \details{
 This function is a \strong{fit-and-forecast engine only}: it produces
 calibrations, projections, and one organized predictions artifact. It does
-\strong{not} compute evaluation metrics, baselines, or skill scores — those are
+\strong{not} compute evaluation metrics, baselines, or skill scores -- those are
 done post-hoc by reading \code{predictions.parquet}.
 
 \strong{Window.} The in-sample (IS) start is fixed at \code{config$date_start}
@@ -144,7 +142,11 @@ nor labeled OOS.
 arguments to \code{\link{est_suitability}} and overrides any date keys passed
 via \code{est_suitability_spec} (with a warning). \code{est_suitability_spec}
 therefore controls only modeling choices (target, features, architecture), not
-the cutoff window.
+the cutoff window. The reported CFR \code{mu_jt} and its prior are rebuilt per
+cutoff from a WHO-annual GAM fitted only to years up to \code{year(T) - 1}
+(a calendar year's annual total is not known until the year has ended), and
+carried flat past that year's 1 July. So no post-cutoff surveillance year
+reaches the config, the prior centres or the prior widths.
 
 \strong{Coupled metapopulation.} \code{iso} may be a single country or a vector;
 a vector runs as the coupled metapopulation (one calibration per cutoff covering
@@ -154,7 +156,7 @@ all listed locations). Thus there is one \code{run_MOSAIC} calibration per cutof
 \strong{Outputs.} Under \code{dir_output}: \code{manifest.json} (settings +
 per-run index with status), \code{predictions.parquet} (the compiled long
 table), and \code{runs/cutoff_<T>/} (the native \code{run_MOSAIC} directory for
-each cutoff). \code{predictions.parquet} is a derived view — it can be rebuilt
+each cutoff). \code{predictions.parquet} is a derived view -- it can be rebuilt
 from the run directories with \code{\link{compile_rolling_cv_predictions}}.
 
 The predictions table has one row per (cutoff x location x date x metric) with

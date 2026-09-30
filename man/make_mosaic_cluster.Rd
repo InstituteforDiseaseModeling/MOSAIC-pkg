@@ -4,12 +4,24 @@
 \alias{make_mosaic_cluster}
 \title{Create a Reusable MOSAIC Parallel Cluster}
 \usage{
-make_mosaic_cluster(n_cores = parallel::detectCores() - 1L, type = "PSOCK")
+make_mosaic_cluster(
+  n_cores = parallel::detectCores() - 1L,
+  type = "PSOCK",
+  require_root = TRUE
+)
 }
 \arguments{
-\item{n_cores}{Integer. Number of worker processes (default: \code{parallel::detectCores() - 1}).}
+\item{n_cores}{Integer. Number of worker processes (default:
+\code{parallel::detectCores() - 1}). Clamped down to the number of free R
+connections if that is smaller, with a message -- see Details.}
 
-\item{type}{Character. Cluster type: \code{"PSOCK"} (default, all platforms) or
+\item{type}{Character. Cluster type: \code{"PSOCK"} (default, all platforms) or}
+
+\item{require_root}{Logical. When \code{TRUE} (default) a root directory must
+be set and is propagated to the workers, which simulation workers need to
+resolve \code{get_paths()}. \code{FALSE} allows a cluster without one, for
+workers handed explicit paths -- \code{\link{render_MOSAIC_figures}} runs
+post-hoc on a finished run directory and may have no MOSAIC tree at all.
 \code{"FORK"} (Linux/Mac only, faster startup).}
 }
 \value{
@@ -19,7 +31,7 @@ pass to \code{run_MOSAIC(cluster = cl)}.
 \description{
 Creates a properly configured parallel cluster for use with \code{run_MOSAIC}.
 The cluster handles all one-time setup: library loading, thread safety,
-Python/LASER import, and root directory propagation. It can be passed to
+and root directory propagation. It can be passed to
 multiple \code{run_MOSAIC} calls (e.g. across staged estimation) to avoid
 the overhead of repeated cluster creation.
 }
@@ -30,13 +42,23 @@ The cluster setup includes:
 \code{TBB_NUM_THREADS}, \code{NUMBA_NUM_THREADS}, \code{OPENBLAS_NUM_THREADS})
 set to 1 in both the main process and each worker to prevent oversubscription.
 \item BLAS threads limited to 1 per worker via \code{.mosaic_set_blas_threads(1L)}.
-\item Libraries loaded on each worker: \code{MOSAIC}, \code{reticulate}, \code{arrow}.
-\item \code{laser.cholera} Python module imported once per worker.
+\item Libraries loaded on each worker: \code{MOSAIC}, \code{arrow}.
 \item Root directory propagated from the main process via \code{set_root_directory()}.
 }
 
+\strong{Connection cap.} Each worker holds one R connection. A default R
+build permits 128 connections in total, three of which are already taken by
+stdin, stdout and stderr, so requesting more than ~126 workers fails inside
+\code{parallel::makeCluster()}. \code{n_cores} is therefore clamped to
+\code{parallelly::freeConnections() - 2} (two held back for worker parquet
+I/O) and a message reports the clamp. R 4.4.0 and later accept
+\code{--max-connections=N} up to 4096 to raise the ceiling.
+
 The caller is responsible for stopping the cluster when done:
-\code{parallel::stopCluster(cl)}.
+\code{parallel::stopCluster(cl)}. The returned object also carries a
+\code{"mosaic_worker_pids"} attribute recorded at creation, which
+\code{run_MOSAIC()} uses to reap any worker that survives
+\code{stopCluster()} -- see \code{?.mosaic_stop_cluster}.
 }
 \examples{
 \dontrun{

@@ -22,7 +22,7 @@ process_WB_poverty_ratio_data <- function(PATHS) {
 
      # Read raw data
      raw <- utils::read.csv(
-          file.path(PATHS$DATA_RAW, 'world_bank', 'poverty_ratio', 'API_SI.POV.DDAY_DS2_en_csv_v2_86770.csv'),
+          .wb_newest_raw(PATHS, "poverty_ratio", "SI.POV.DDAY"),
           stringsAsFactors = FALSE, skip = 4
      )
 

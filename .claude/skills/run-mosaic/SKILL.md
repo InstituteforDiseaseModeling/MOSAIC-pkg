@@ -2,7 +2,7 @@
 name: run-mosaic
 description: >
   Assemble or modify a MOSAIC config + priors + control and launch a run_MOSAIC()
-  calibration (or a single deterministic run_LASER() sim). Covers install/environment,
+  calibration (or a single deterministic run_simulation() sim). Covers install/environment,
   building/subsetting a config (locations, dates, psi_jt), choosing priors and the
   pin-vs-sample lever, the control object (canonical names, weights, ESS/R² targets,
   io presets), where to run (laptop vs hedgehog/dugong), and reading the output tree.
@@ -19,11 +19,11 @@ and versions drift — cite the source of truth (`?fn`, the version-note in `dat
 `.Rmd`) rather than hard-coding a value that will rot.
 
 ## Documentation tiers (consult in this order; cite which repo)
-1. **Roxygen man pages (most version-stable):** `?run_MOSAIC`, `?run_LASER`, `?make_LASER_config`,
+1. **Roxygen man pages (most version-stable):** `?run_MOSAIC`, `?run_simulation`, `?make_simulation_config`,
    `?sample_parameters`, `?mosaic_control_defaults`, `?calc_model_ensemble`. Primary source for
    args + return contracts.
 2. **MOSAIC-pkg vignettes + examples:** `vignettes/Installation.Rmd`, `Running-MOSAIC.Rmd`,
-   `Running-LASER.Rmd`, `Deployment.Rmd`; `inst/examples/simulate_outbreak_settings.R` (5 regimes).
+   `Running-simulations.Rmd`, `Deployment.Rmd`; `inst/examples/simulate_outbreak_settings.R` (5 regimes).
 3. **MOSAIC-docs sibling repo (canonical model/param spec — read the `.Rmd`, not rendered `.md`):**
    `04-model-description.Rmd` ("Table of model parameters" = symbol→meaning for every parameter),
    `05-model-calibration.Rmd` (BFRS methodology), `06-scenarios.Rmd` (scenario construction).
@@ -31,27 +31,46 @@ and versions drift — cite the source of truth (`?fn`, the version-note in `dat
 ## 0. Install & environment (verify first)
 - `MOSAIC::check_dependencies()`; if broken: `MOSAIC::remove_python_env(force = TRUE)` →
   `MOSAIC::install_dependencies(force = TRUE)` → restart R.
-- Python env at `~/.virtualenvs/r-mosaic` (laser-cholera + laser-core + numpy/h5py/pyarrow). System
+- Python env at `~/.virtualenvs/r-mosaic` (numpy + tensorflow). Needed only by `est_suitability()`;
+  simulation and calibration are pure R and run without it. System
   libs: GDAL/PROJ/GEOS. Set the root once: `MOSAIC::set_root_directory("~/MOSAIC")`.
 
 ## 1. Assemble the config
 - Start from `MOSAIC::config_default` (40-country SSA, ψ baked in) or build/subset with
   `get_location_config()` for a single country or a coupled-metapopulation **vector** of ISO3 codes.
 - The config window (`date_start`/`date_stop`) sets the simulation span; `date_start` is the anchor.
-- ψ enters as the `psi_jt` matrix (`locations × dates`). `make_LASER_config()` validates the full
+- ψ enters as the `psi_jt` matrix (`locations × dates`). `make_simulation_config()` validates the full
   config (incl. `ncol(psi_jt) == length(t)`). To use a freshly fit ψ, see the **`est-suitability`**
   skill (it writes `model/input/pred_psi_suitability_day.csv`; the bake path is
   `data-raw/make_config_default.R`).
+
+### Back-history / alternate-ψ config rebuild
+To rebuild `config_default` from an earlier start date (or with an alternate ψ), set the env var and
+rebuild both data objects:
+```bash
+export MOSAIC_BUILD_DATE_START=YYYY-01-01   # priors ic_t0 is data-driven within [date_start, +12mo]
+                                            # (the old hard 2023-02-01 floor is gone)
+Rscript data-raw/make_priors_default.R      # 1. rebuild priors
+Rscript -e 'devtools::install(".")'         # 2. install (config build reads the new priors)
+Rscript data-raw/make_config_default.R      # 3. rebuild config
+Rscript -e 'devtools::install(".")'         # 4. install
+```
+To bake an **alternate ψ** (e.g. NMME), stage the ψ DAY csv at `model/input/pred_psi_suitability_day.csv`
+**before** step 3 — the config build reads it for `date_stop` + `psi_jt`. Do NOT hand-inject `psi_jt`
+into an existing config (→ all -Inf likelihoods); rebuild. See the **`est-suitability`** skill and the
+psi-refit memory.
 
 ## 2. Priors — and the pin-vs-sample lever
 `MOSAIC::priors_default` carries per-country priors. **Always check the live version + inline
 version-note in `data-raw/make_priors_default.R` before trusting a center — do not transcribe
 numbers here.** Key levers (semantics, not values):
-- **Deaths / CFR level → `CFR_target`, NOT `mu_j_baseline`.** `mu_j_baseline` is *derived* at sample
-  time from `CFR_target` (see `?sample_parameters` / the version-note); pinning `mu_j_baseline`
-  directly is silently overwritten when `sample_mu_j_baseline=TRUE` (the default) — set it FALSE to
-  keep the config value. Toggle the deaths chain with `sample_CFR_target` / `sample_mu_j_baseline`. The
-  v0.13 `rho_deaths` factor is already baked in — do not re-apply it.
+- **Deaths / CFR level → `config$mu_jt` (MOSAIC >= v0.96.0), not a sampled prior.** The reported CFR
+  is a location x day matrix built by `make_mu_jt()` from `est_CFR_hierarchical()`; calibration
+  integrates it out per simulated path around that centre (priors `mu_jt` block: `sd_year`,
+  `sd_product`), and the calibrated value is `3_results/posterior/cfr_posterior.csv` (also written into
+  `config_medoid.json`). `mu_j_baseline` / `CFR_target` / `mu_j_epidemic_factor` /
+  `delta_reporting_deaths` and their `sample_*` flags are retired (warn and ignored). `rho_deaths`
+  cancels from reported deaths (it sets only true deaths).
 - **`alpha_1`** is a per-location sampled prior (shared informative Beta) that emulates hierarchical
   shrinkage to starve the `alpha_1 ↔ beta_j0_tot` degeneracy — sampled by default; check the
   version-note for the current center.
@@ -72,16 +91,34 @@ numbers here.** Key levers (semantics, not values):
 unknown-key validator, so a typo'd/legacy key reverts to default with no warning. Common levers:
 `weight_cases` / `weight_deaths`, ESS thresholds, `n_iter_ensemble`, `clean_output`, and the `io`
 preset (`default` / `debug` / `fast` / `archive`; `?mosaic_io_presets`). Multi-location-only samplers:
-`sample_tau_i`, `sample_mobility_*`. `central_method` (`"median"` default vs `"mean"`) sets the
-ensemble central tendency — see `?calc_model_ensemble`; a ~2× deaths bias under `"mean"` is by
-design (unmasks implied CFR), not a regression.
+`sample_tau_i`, `sample_mobility_*`. `central_method` (`"mean"` default since v0.98.0; `"median"`
+reproduces v0.46.1-v0.97.x) sets the ensemble central tendency — see `?calc_model_ensemble`.
+
+**FIXED vs AUTO mode (matters for resumability and for what you can measure):**
+- `n_simulations = <integer>` ⇒ **FIXED**: runs exactly that many simulations in a single batch,
+  regardless of convergence. `converged = FALSE` in `summary.json` is EXPECTED here, not an error.
+  Use it when you want a predictable runtime or a controlled comparison — it is the only mode in
+  which two runs do the same amount of work. Note the whole budget dispatches as one batch, so
+  mid-run resume is coarse: shards land per simulation, but the adaptive checkpointing that AUTO
+  does per batch is absent.
+- `n_simulations = NULL` ⇒ **AUTO** (adaptive + predictive batches): each batch is
+  dispatch→gather→write→checkpoint, so per-batch resume works and the run stops when the ESS/R²
+  targets are met. Prefer AUTO for production fits, with `max_simulations_total = <budget>` as
+  the ceiling.
+- Pinning FIXED pins only the SIMULATIONS. Post-calibration still runs a best-subset grid search
+  plus `n_iter_ensemble` × subset-size and `n_iter_best` medoid re-simulations — hundreds to
+  thousands of extra engine runs. For a like-for-like timing comparison also pin
+  `targets$min_best_subset == targets$max_best_subset`, `predictions$n_iter_ensemble` and
+  `predictions$n_iter_best`.
+- Validation rule: `batch_size_adaptive` must be strictly **<** `max_simulations_total`.
+- Resume: `run_MOSAIC(resume = TRUE)` requires `clean_output = FALSE`.
 
 ## 4. Launch
 ```r
 res <- MOSAIC::run_MOSAIC(config = cfg, priors = MOSAIC::priors_default,
-                          control = ctrl, dask_spec = NULL)   # NULL = local PSOCK
+                          control = ctrl)
 ```
-- **Single deterministic sim** (scenario exploration / teaching): `run_LASER()` with a fixed config +
+- **Single deterministic sim** (scenario exploration / teaching): `run_simulation()` with a fixed config +
   seed.
 - **Output fields:** read `model$results$reported_cases` / `reported_deaths` — NOT raw `disease_*`
   (post-v0.13 convention).
@@ -90,9 +127,9 @@ res <- MOSAIC::run_MOSAIC(config = cfg, priors = MOSAIC::priors_default,
   and `MOSAIC:::.mosaic_set_blas_threads(1L)` (built into `run_MOSAIC()`).
 
 ## 5. Where to run
-A 40-country coupled calibration is a **hedgehog/dugong** job (~2 GB/worker), not a laptop job — use
+A 40-country coupled calibration is a **hedgehog/dugong** job (~1.0 GB/worker as of v0.73.0; the old ~2 GB figure was the Python engine), not a laptop job — use
 the **`hedgehog-run`** / **`dugong-run`** skills for VM mechanics (R wrapper, surviving disconnect,
-pulling results). On dugong, a run that invokes laser **requires** the `r-mosaic-Rscript` wrapper.
+pulling results). The engine is pure R as of v0.68.0, so a calibration no longer touches Python at all; dugong's `r-mosaic-Rscript` wrapper is now only needed for the TensorFlow psi path. Unverified on the VM — test before relying on it.
 
 ## 6. Output tree
 ```

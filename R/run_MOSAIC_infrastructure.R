@@ -156,6 +156,13 @@
     OPENBLAS_NUM_THREADS = n_chr,
     NUMEXPR_NUM_THREADS  = n_chr,
     TBB_NUM_THREADS      = n_chr,
+    # Retained deliberately although numba left the Python environment with
+    # laser-cholera in v0.69.0: this is a generic oversubscription guard and
+    # costs nothing to set for an absent package, so it keeps working if a
+    # future dependency pulls numba back in. Distinct from zzz.R's
+    # NUMBA_THREADING_LAYER = "workqueue", which WAS removed -- that was a
+    # workaround for a specific numba/data.table libiomp5 clash, and a
+    # workaround for a bug in an absent package is dead code, not a guard.
     NUMBA_NUM_THREADS    = n_chr,
     ARROW_NUM_THREADS    = n_chr   # Apache Arrow CPU thread pool (parquet writer)
   )
@@ -180,31 +187,6 @@
   }
 
   invisible(success)
-}
-
-#' Remove laser-cholera's root-logger FileHandler
-#'
-#' laser-cholera/src/laser/cholera/metapop/logsetup.py adds a FileHandler to the
-#' Python root logger at import time, creating a timestamped .log file in cwd.
-#' This pollutes the working directory with empty or Coiled-only log files.
-#' Call once after the first `import("laser.cholera.metapop.model")`.
-#' @noRd
-.mosaic_strip_laser_file_handler <- function() {
-  tryCatch({
-    reticulate::py_run_string("
-import logging as _logging, os as _os
-_root = _logging.getLogger()
-for _h in list(_root.handlers):
-    if isinstance(_h, _logging.FileHandler):
-        _fn = getattr(_h, 'baseFilename', None)
-        _h.close()
-        _root.removeHandler(_h)
-        # Remove the empty log file if it was created
-        if _fn and _os.path.isfile(_fn) and _os.path.getsize(_fn) == 0:
-            _os.remove(_fn)
-", local = FALSE, convert = FALSE)
-  }, error = function(e) NULL)
-  invisible(NULL)
 }
 
 #' Capture Full Environment Snapshot
@@ -242,8 +224,12 @@ for _h in list(_root.handlers):
       sys      <- reticulate::import("sys", delay_load = FALSE)
       py_ver   <- strsplit(as.character(sys$version), " ")[[1]][1]
       importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
-      py_pkgs  <- c("laser-cholera", "laser-core", "numpy", "torch",
-                    "pyarrow", "h5py", "sbi", "zuko", "scikit-learn")
+      # laser-cholera / laser-core left this list in v0.69.0 with the Python
+      # engine. The Python environment now serves the suitability model only,
+      # so what is worth snapshotting is the TensorFlow stack. The transmission
+      # engine's version is the MOSAIC version, recorded under `R` above.
+      py_pkgs  <- c("numpy", "tensorflow", "keras", "torch",
+                    "sbi", "zuko", "scikit-learn")
       pkg_versions <- lapply(py_pkgs, function(pkg) {
         tryCatch(as.character(importlib$version(pkg)), error = function(e) NA_character_)
       })
@@ -383,8 +369,8 @@ for _h in list(_root.handlers):
 #' @param dirs Directory structure
 #' @param state Internal calibration state
 #' @param start_time POSIXct start time for wall-clock calculation
-#' @param config Base LASER config (for provenance fields)
-#' @param r2_cases_ensemble R-squared for cases (central tendency -- median by
+#' @param config Base simulation config (for provenance fields)
+#' @param r2_cases_ensemble R-squared for cases (central tendency -- mean by
 #'   default, per central_method -- of the canonical posterior ensemble;
 #'   tier-selected when optimize_subset = FALSE, optimizer-refined when
 #'   optimize_subset = TRUE)
@@ -409,7 +395,20 @@ for _h in list(_root.handlers):
 #'   Ensemble bias ratios against both tendencies (see above).
 #' @param io I/O settings for JSON writing
 #' @noRd
+#' Coerce a possibly-absent JSON scalar to a rounded numeric
+#' @param x Value read back from convergence_diagnostics.json.
+#' @return Numeric scalar, or NA_real_ when absent/non-finite.
+#' @keywords internal
+#' @noRd
+.mosaic_diag_num <- function(x) {
+  if (is.null(x)) return(NA_real_)
+  x <- suppressWarnings(as.numeric(x))
+  if (length(x) != 1L || !is.finite(x)) return(NA_real_)
+  round(x, 6)
+}
+
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
+                                       nb_dispersion = NULL,
                                        r2_cases_ensemble = NA_real_,
                                        r2_deaths_ensemble = NA_real_,
                                        bias_ratio_cases_ensemble = NA_real_,
@@ -541,6 +540,51 @@ for _h in list(_root.handlers):
     ess_target          = ess_stats$target,
     ess_min             = ess_stats$min_ess,
     ess_median          = ess_stats$median_ess,
+    # Exact (untruncated) importance-sampling diagnostics. REPORTED, NOT GATED.
+    # `ess_best` above is computed on delta-AIC-truncated weights, which bound
+    # every weight into a narrow band and therefore keep ESS_B high regardless
+    # of fit. These fields are the honest IS numbers: ess_is_all is the
+    # effective sample size of the raw likelihood weights over all draws, and
+    # khat_all >= 0.7 means IS estimates are unreliable. A large gap between
+    # ess_best and ess_is_all is expected and is the point of reporting both.
+    # Metrics on the subset the posterior ACTUALLY uses. The gated ess_best /
+    # A / CVw above are scored on the TIER subset; when subset optimization
+    # succeeds, the canonical posterior is built from the smaller optimized
+    # subset instead. A gap between these two groups means the convergence
+    # verdict describes draws the run does not use. Reported, never gated.
+    ess_best_optimized  = .mosaic_diag_num(diag$metrics$ess_best_optimized$value),
+    A_best_optimized    = .mosaic_diag_num(diag$metrics$A_B_optimized$value),
+    cvw_best_optimized  = .mosaic_diag_num(diag$metrics$cvw_B_optimized$value),
+    ess_is_optimized    = .mosaic_diag_num(diag$metrics$ess_is_optimized$value),
+    ess_is_best         = .mosaic_diag_num(diag$importance_sampling$best_subset$ess_is),
+    ess_is_all          = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is),
+    ess_is_all_prop     = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is_prop),
+    khat_all            = .mosaic_diag_num(diag$importance_sampling$all_draws$khat),
+    khat_all_status     = if (!is.null(diag$importance_sampling$all_draws$khat_status)) {
+                              as.character(diag$importance_sampling$all_draws$khat_status)
+                          } else NA_character_,
+    n_positive_ratios_all = if (!is.null(diag$importance_sampling$all_draws$n_positive_ratios)) {
+                              as.integer(diag$importance_sampling$all_draws$n_positive_ratios)
+                          } else NA_integer_,
+    # NB dispersion actually used, estimated once from the weekly observations
+    # by est_nb_dispersion(). bound_binds is a standing diagnostic: in a
+    # well-specified fit the hard bounds should rarely bind.
+    nb_dispersion       = if (!is.null(nb_dispersion)) {
+                              .k <- nb_dispersion$k
+                              .ch <- nb_dispersion$channel
+                              f <- function(ch) {
+                                   v <- .k[.ch == ch]
+                                   list(median_k = if (any(is.finite(v))) round(stats::median(v[is.finite(v)]), 4) else NA_real_,
+                                        n_estimated = sum(is.finite(v)),
+                                        n_poisson   = sum(is.infinite(v)))
+                              }
+                              # report EVERY status, so a new fit path cannot be
+                              # invisible in the diagnostics
+                              .st <- as.list(table(nb_dispersion$status))
+                              c(list(cases = f("cases"), deaths = f("deaths"),
+                                     bound_binds = sum(nb_dispersion$status == "clamped_lower_bound", na.rm = TRUE)),
+                                list(status_counts = .st))
+                          } else NULL,
     # Implied CFR per location (period-weighted from posterior ensemble
     # predictions: sum simulated reported_deaths / sum simulated reported_cases
     # over the calibration window, per ensemble member). Reports median +

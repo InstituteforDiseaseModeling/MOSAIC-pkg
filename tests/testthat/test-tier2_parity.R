@@ -20,11 +20,27 @@
 #    this no-failed-sim fixture; the NA behavior is covered by
 #    test-optimize_ensemble_subset.R), and the optimize path was re-confirmed
 #    bit-identical at tolerance = 0 after the v0.36.9 (R-7) presort-memory refactor.
+#  * Re-baselined in v0.71.1 for the weighted_quantiles() plotting-position fix
+#    (claude/parity/rebaseline_parity_tier2.R). That fix moved the interpolation
+#    from each observation's upper weight-block edge to its midpoint, so every
+#    quantile-derived reference field legitimately changed; the INPUTS (ens, lls,
+#    seeds, ce_inputs) were asserted byte-identical and only the reference
+#    outputs were rewritten. Three things make this a re-baseline rather than a
+#    covered-up break: (i) the independent oracles #2a and #1 pass untouched at
+#    tolerance = 0, so the presorted/naive equivalence this file exists to guard
+#    is unaffected; (ii) calc_model_ensemble()'s weighted MEANS came back
+#    bit-identical (max rel 4.4e-16) and the means for the two objectives whose
+#    optimal subset did not change likewise (~6e-16) -- a quantile fix must not
+#    touch a mean, and the re-baseline script aborts if one moves; (iii) every
+#    changed cell moved UP and none moved down (cases_median 8 up / 0 down;
+#    ci_bounds 47 up / 0 down), which is the only direction correcting a
+#    downward bias can produce. The `mae` objective's optimal subset changed
+#    (optimal_n 7 -> 12) because the objective surface is computed from the
+#    corrected medians; that is a real behavioural change, recorded in NEWS.
 #  * Cross-platform tolerance (v0.36.13): the #1+#2b and #2b fixture comparisons
 #    use testthat::testthat_tolerance() (~1.5e-8), not tolerance = 0. The
-#    fixture was baked on the author's local machine; the docker CI image
-#    (idmmosaicacr.azurecr.io/mosaic-worker:latest, Linux x86_64 + OpenBLAS)
-#    diverges by O(10^3) ULPs (~1e-13) — a length-N float-reduction noise floor
+#    fixture was baked on the author's local machine; a Linux x86_64 + OpenBLAS
+#    CI runner (measured on the since-retired docker worker image) diverges by O(10^3) ULPs (~1e-13) — a length-N float-reduction noise floor
 #    that depends on SIMD lane width and BLAS reduction order, not on code
 #    correctness. The bit-identical guarantee is preserved by the INDEPENDENT
 #    oracles (#2a and #1, which recompute the math from scratch with no fixture
@@ -93,9 +109,14 @@ test_that("#1+#2b: optimize_ensemble_subset is bit-identical to the fixed refere
 test_that("#2b: calc_model_ensemble is bit-identical to the fixed reference", {
   fx <- readRDS(test_path("fixtures", "parity_tier2.rds"))
   ci <- fx$ce_inputs
+  # The fixture's canned engine output used to be injected via
+  # precomputed_results=; that argument went with the Dask backend (v0.67.0), so
+  # it is now served through the mocked per-task worker. The aggregation math the
+  # fixture pins is untouched, so the golden values still apply.
+  local_mocked_ensemble_sims(ci$precomputed)
   new <- calc_model_ensemble(config = ci$config, configs = ci$configs,
             parameter_weights = ci$parameter_weights, n_simulations_per_config = ci$n_stoch,
-            envelope_quantiles = ci$envelope, precomputed_results = ci$precomputed,
+            envelope_quantiles = ci$envelope,
             verbose = FALSE)
   expect_equal(new$cases_median,  fx$ce$cases_median,  tolerance = testthat::testthat_tolerance())
   expect_equal(new$deaths_median, fx$ce$deaths_median, tolerance = testthat::testthat_tolerance())

@@ -5,7 +5,7 @@
 # forward-filled (zoo::na.locf) with the last genuine value, producing a flat
 # constant suitability tail. That flat tail feeds psi_jt and suppresses the
 # environmental force of infection, creating an artificial end-of-series drop
-# in downstream LASER predictions. We DROP those filled tails instead.
+# in downstream simulation predictions. We DROP those filled tails instead.
 #
 # `df` must carry `iso_code` and `date`; `genuine_last` is a data.frame with
 # `iso_code` and `last_genuine_date` (Date), captured BEFORE any fill. Rows
@@ -13,9 +13,41 @@
 # absent from `genuine_last` are passed through unchanged.
 .drop_filled_prediction_tail <- function(df, genuine_last) {
      if (is.null(df) || !all(c("iso_code", "date") %in% names(df))) return(df)
+
+     # DA-02: this guard used to FAIL OPEN. `genuine_last` was never validated, so
+     # NULL, a zero-row frame, or ISO keys differing only in case all produced an
+     # all-NA `cutoff`, hence `keep` all TRUE -- nothing dropped, no warning, and
+     # the caller logged "Dropped 0 rows" as a normal outcome. That is how 98 days
+     # x 40 countries of pure carry-forward psi reached a shipped artefact and,
+     # through it, the last 98 ticks of every default simulation. A guard against
+     # silent corruption must not itself fail silently.
+     if (is.null(genuine_last) || !is.data.frame(genuine_last) ||
+         !all(c("iso_code", "last_genuine_date") %in% names(genuine_last)) ||
+         nrow(genuine_last) == 0L) {
+          stop(".drop_filled_prediction_tail: `genuine_last` must be a non-empty data.frame ",
+               "with `iso_code` and `last_genuine_date`. Received ",
+               if (is.null(genuine_last)) "NULL" else
+                    sprintf("%s with %d row(s) and columns [%s]", class(genuine_last)[1],
+                            nrow(genuine_last), paste(names(genuine_last), collapse = ", ")),
+               ". Failing loudly: passing this through would silently retain a ",
+               "forward-filled psi tail.", call. = FALSE)
+     }
+
+     # Match on upper-cased ISO so a case difference cannot silently disable the
+     # cutoff lookup (one of the original fail-open modes).
      lg <- stats::setNames(as.Date(genuine_last$last_genuine_date),
-                           as.character(genuine_last$iso_code))
-     cutoff <- lg[as.character(df$iso_code)]
+                           toupper(as.character(genuine_last$iso_code)))
+     key    <- toupper(as.character(df$iso_code))
+     cutoff <- lg[key]
+
+     unmatched <- unique(key[is.na(cutoff)])
+     if (length(unmatched)) {
+          warning(sprintf(paste0(".drop_filled_prediction_tail: %d location(s) absent from ",
+                                 "`genuine_last` and passed through UNTRIMMED (%s). Any ",
+                                 "forward-filled tail for these is retained."),
+                          length(unmatched),
+                          paste(utils::head(unmatched, 8), collapse = ", ")), call. = FALSE)
+     }
      keep <- is.na(cutoff) | as.Date(df$date) <= cutoff
      df[keep, , drop = FALSE]
 }
@@ -72,6 +104,13 @@
 #'   \code{partial_pool_lambda}, \code{exclude_covariates} (lstm_v2 ablation
 #'   override), and the execution knob \code{parallel_seeds} (integer, default
 #'   `1L` = serial; not a model parameter). Ignored by the legacy path.
+#' @param source_csv `NULL` (default) or a path to the suitability panel CSV
+#'   that psi fitting should read. `NULL` uses the canonical panel
+#'   \code{file.path(PATHS$DATA_CHOLERA_WEEKLY, "cholera_country_weekly_suitability_data.csv")}.
+#'   A supplied path lets a caller point fitting at an arbitrary panel (e.g. a
+#'   v7.4-tagged or per-cutoff leak-free panel) without renaming files.
+#'   Supported only by the `lstm_v2_hierarchical_film` path; errors if supplied
+#'   with the frozen legacy path.
 #' @param plot_country_diagnostics Logical (default `FALSE`). Per-country base-R
 #'   diagnostic plots during the smoothing loop (legacy path only).
 #' @param ... Absorbs deprecated v0.33 arguments for backward compatibility:
@@ -102,17 +141,17 @@
 #' forecasts. Defaults are pinned to the B4 fixture; override via `arch_control`.
 #'
 #' \emph{Honest framing.} lstm_v2 converts a structurally-collapsed flat psi
-#' (Pearson ~0.09, ~3\% of observed amplitude) into a weak-but-real, better-phased
+#' (Pearson ~0.09, ~3% of observed amplitude) into a weak-but-real, better-phased
 #' directional signal (median cross-country Pearson ~0.22, but a wide per-cell
 #' range with a large anti-correlated minority -- psi can be worse than climatology
 #' for some countries). It strictly dominates the incumbent on shape; it is NOT a
-#' decision-grade forecaster. psi reaches the downstream LASER engine through TWO
+#' decision-grade forecaster. psi reaches the downstream simulation engine through TWO
 #' channels -- a fractional deviation `(psi - psi_bar)/psi_bar` (timing/shape) and
 #' the absolute level (environmental-reservoir decay) -- so the response anchor and
 #' `bias_correct` can move outbreak magnitude, not just timing. Report the
 #' per-country spread, not just the median. The default `response_var` is
 #' `"target_D_rate_per_country_floored"` (per-capita, per-country anchor),
-#' selected over `"transmission_intensity"` by a 15-country psi->LASER calibration
+#' selected over `"transmission_intensity"` by a 15-country psi->simulation calibration
 #' case-skill comparison: D lifts cases-R2 for the priority/saturated cluster
 #' (COD 0.51->0.73, SOM 0.34->0.82, ETH 0.61->0.80) at the cost of regressions on
 #' 5 low-burden countries (RWA/MWI/AGO/NAM/SSD), accepted for the global default.
@@ -222,6 +261,7 @@ est_suitability <- function(PATHS,
                             architecture = c("lstm_v2_hierarchical_film",
                                              "lstm_v1_legacy"),
                             arch_control = NULL,
+                            source_csv = NULL,
                             plot_country_diagnostics = FALSE,
                             ...) {
 
@@ -264,6 +304,9 @@ est_suitability <- function(PATHS,
 
      # ---- Dispatch on architecture ----------------------------------------
      if (identical(architecture, "lstm_v1_legacy")) {
+          if (!is.null(source_csv))
+               stop("est_suitability: `source_csv` override is only supported by the lstm_v2_hierarchical_film path (the legacy path is frozen at its canonical panel).",
+                    call. = FALSE)
           return(.est_suitability_legacy(
                PATHS            = PATHS,
                fit_date_start   = fit_date_start,
@@ -287,6 +330,7 @@ est_suitability <- function(PATHS,
           response_var     = response_var,
           bias_correct     = bias_correct,
           arch_control     = arch_control,
+          source_csv       = source_csv,
           plot_country_diagnostics = plot_country_diagnostics)
 }
 
@@ -1315,7 +1359,7 @@ est_suitability <- function(PATHS,
      # Drop trailing carry-forward-filled predictions so the saved series ends at
      # each location's last genuine (covariate-supported) prediction date. This
      # removes the flat constant tail that otherwise propagates into psi_jt and
-     # produces an artificial end-of-series drop in LASER output. Downstream,
+     # produces an artificial end-of-series drop in simulation output. Downstream,
      # make_config_default truncates the simulation window to the common coverage
      # across modeled locations.
      n_daily_before <- nrow(d_pred_daily)

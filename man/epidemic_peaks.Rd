@@ -33,19 +33,19 @@ smoothing and prominence-based peak detection algorithms.
 surveillance time series (2010+) and is \strong{not} pre-trimmed to any
 particular simulation window. Consumers that score peaks against a
 specific config window (e.g. \code{calc_model_likelihood()}, the Python
-likelihood port, the LASER config builders) must filter against
+likelihood port, the simulation config builders) must filter against
 \verb{[date_start, date_stop]} first -- otherwise \code{which.min(abs(date_seq - peak_date))} silently snaps out-of-window peaks to t=1 or t=N and
 biases the peak-shape likelihood terms. The internal helper
 \code{MOSAIC:::.filter_epidemic_peaks()} is the canonical filter and is
 applied at build time inside \code{make_config_default.R}, at runtime
-inside \code{run_MOSAIC()}'s Dask injector, and defensively inside
+inside \code{get_location_config()}, and defensively inside
 \code{calc_model_likelihood()}.
 
 Epidemic peaks are identified using the following methodology:
 \itemize{
 \item Time series smoothing with 28-day running mean window
 \item Local maxima detection with 10-day comparison windows
-\item Prominence-based filtering (minimum 8\\% of maximum smoothed value
+\item Prominence-based filtering (minimum 8\% of maximum smoothed value
 for most countries; country-specific overrides below)
 \item Minimum peak height threshold of 3 smoothed cases (default)
 \item Minimum 75-day separation between consecutive peaks
@@ -54,9 +54,9 @@ for most countries; country-specific overrides below)
 
 Country-specific adjustments are applied for:
 \itemize{
-\item Niger (NER): Lower prominence threshold (1.5\\%) for gradual peaks
-\item Cameroon (CMR): Adjusted threshold (4\\%) for plateau-shaped peaks
-\item Ethiopia (ETH): Lower threshold (3\\%) for multiple outbreaks
+\item Niger (NER): Lower prominence threshold (1.5\%) for gradual peaks
+\item Cameroon (CMR): Adjusted threshold (4\%) for plateau-shaped peaks
+\item Ethiopia (ETH): Lower threshold (3\%) for multiple outbreaks
 }
 
 Manual corrections have been applied for known issues including:

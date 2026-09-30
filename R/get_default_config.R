@@ -1,8 +1,8 @@
-#' Create Default LASER Configuration
+#' Create Default Simulation Configuration
 #'
-#' Generates a default configuration for running LASER model simulations.
+#' Generates a default configuration for running simulations.
 #' Automatically defines default values of all model parameters and initial
-#' conditions for the cholera metapopulation transmission model. The function uses \code{\link{make_LASER_config}} to check
+#' conditions for the cholera metapopulation transmission model. The function uses \code{\link{make_simulation_config}} to check
 #' that all parameter values meet model specifications.
 #'
 #' @param PATHS Optional. Retained for backwards compatibility; no longer used.
@@ -10,8 +10,8 @@
 #'        works from any installed MOSAIC package.
 #'
 #' @return
-#' A list object containing all necessary parameters and initial conditions for LASER
-#' model simulation.
+#' A list object containing all necessary parameters and initial conditions for a
+#' simulation.
 #'
 #' @examples
 #' \dontrun{

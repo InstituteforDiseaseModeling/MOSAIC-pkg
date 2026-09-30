@@ -21,7 +21,7 @@ mosaic_control_defaults(
 \item{calibration}{List of calibration settings. Default is:
 \itemize{
 \item \code{n_simulations}: NULL for auto mode, or integer for fixed mode
-\item \code{n_iterations}: Number of LASER iterations per simulation (default: 3L)
+\item \code{n_iterations}: Number of stochastic engine iterations per parameter set (default: 3L)
 \item \code{max_simulations_total}: Maximum total simulations across all phases (default: 100000L)
 \item \code{batch_size_adaptive}: Simulations per batch in Phase 1 adaptive calibration (default: 500L)
 \item \code{min_batches_adaptive}: Minimum Phase 1 batches before convergence check (default: 5L)
@@ -36,10 +36,9 @@ mosaic_control_defaults(
 \item \code{sample_tau_i}: Sample transmission rate (default: TRUE)
 \item \code{sample_mobility_gamma}: Sample mobility gamma (default: TRUE)
 \item \code{sample_mobility_omega}: Sample mobility omega (default: TRUE)
-\item \code{sample_mu_j}: Sample recovery rate (default: TRUE)
 \item \code{sample_iota}: Sample importation rate (default: TRUE)
 \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
-\item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: TRUE)
+\item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: FALSE, PINNED)
 \item \code{sample_alpha_2}: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)
 \item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
 }}
@@ -101,10 +100,11 @@ the exhaustive search. Note it may select a slightly different
 \code{optimal_n} than exhaustive and records only the evaluated N's in the
 diagnostics table. (The \code{\link{optimize_ensemble_subset}} function's
 own \code{stride} default remains \code{1L} to preserve bit-identicality.)
-\item \code{central_method}: Ensemble central tendency, \code{"median"}
-(default; lower calibration bias) or \code{"mean"} (unbiased for
-expected counts, never collapses on sparse deaths, unmasks implied-CFR
-bias). Scalar or per-channel \code{c(cases=, deaths=)}. Governs the prediction
+\item \code{central_method}: Ensemble central tendency, \code{"mean"}
+(default; the expected count, which never collapses to zero on sparse
+deaths) or \code{"median"} (the typical trajectory, robust to a few
+explosive members; the default from v0.46.1 to v0.97.x). Scalar or
+per-channel \code{c(cases=, deaths=)}. Governs the prediction
 trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
 the medoid target, and the subset-selection objective consistently.
 }
@@ -121,15 +121,9 @@ The number of parameter sets in the ensemble is determined by the best subset
 \item{parallel}{List of parallelization settings (infrastructure). Default is:
 \itemize{
 \item \code{enable}: Enable parallel execution (default: FALSE)
-\item \code{n_cores}: Number of LOCAL cores (default: 1L). Governs local-machine
-parallelism only: the LASER worker count on the non-Dask path, and the
-orchestrator's sampling/parquet PSOCK worker count on the Dask path. It never sets the
-remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
+\item \code{n_cores}: Number of simulation worker processes (default: 1L)
 \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 \item \code{progress}: Show progress bar (default: TRUE)
-\item \code{strict_worker_version}: Coiled/Dask path only. Abort the run if
-any worker's laser-cholera engine version differs from the orchestrator's
-(default: TRUE). Set FALSE to downgrade a mismatch to a warning.
 }}
 
 \item{io}{List of I/O settings (output format). Default is:
@@ -216,7 +210,7 @@ ctrl <- mosaic_control_defaults(
     sample_tau_i = TRUE,
     sample_mobility_gamma = FALSE,
     sample_mobility_omega = FALSE,
-    sample_mu_j_baseline = TRUE,
+    sample_beta_j0_tot = TRUE,
     sample_iota = FALSE,
     sample_gamma_2 = FALSE,
     sample_alpha_1 = FALSE
@@ -239,7 +233,7 @@ ctrl <- mosaic_control_defaults(
 # Full workflow configuration (demonstrates logical order)
 ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
-  sampling = list(sample_tau_i = TRUE, sample_mu_j_baseline = TRUE), # What to sample
+  sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure

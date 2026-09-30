@@ -4,30 +4,24 @@
      # OpenMP / threading safety
      # ===========================================================================
      #
-     # MOSAIC loads three packages that each bundle their own OpenMP runtime:
+     # MOSAIC can load more than one package that bundles its own OpenMP runtime:
      #
      #   libomp    — Clang/LLVM OpenMP, loaded by data.table (macOS ARM)
-     #   libiomp5  — Intel KMP OpenMP, loaded by numba (laser-cholera JIT)
-     #   libgomp   — GNU OpenMP, loaded by scipy (laser-cholera >= 0.12.1)
+     #   libiomp5  — Intel KMP OpenMP, present in some TensorFlow/MKL builds
      #
      # pip, conda, and R package managers install these independently with no
-     # coordination. Having all three in the same process causes SIGSEGV crashes
+     # coordination. Having several in the same process causes SIGSEGV crashes
      # at __kmp_suspend_initialize_thread when any runtime initialises threads
      # after another has already claimed shared data structures.
      #
-     # KMP_DUPLICATE_LIB_OK=TRUE suppresses "duplicate library" errors (same
-     # library loaded twice) but does NOT prevent GNU + Intel cross-runtime
-     # conflicts. The root fix is to stop numba loading libiomp5 at all by
-     # switching it to the workqueue threading backend, which uses numba's own
-     # built-in thread pool and requires no external OpenMP library.
-
-     # Switch numba to its workqueue threading backend.
-     # This eliminates libiomp5 from the process, leaving only libomp (data.table)
-     # and libgomp (scipy) which coexist without conflict.
-     # Performance impact is negligible for laser-cholera's spatial SEIR kernels.
-     if (Sys.getenv("NUMBA_THREADING_LAYER") == "") {
-          Sys.setenv(NUMBA_THREADING_LAYER = "workqueue")
-     }
+     # The third runtime used to be libgomp via scipy, pulled in by the Python
+     # engine, and the sharpest edge was numba's libiomp5 (the laser-cholera
+     # JIT). Both left with the engine in v0.68.0, and numba left the Python
+     # environment entirely in v0.69.0, so the NUMBA_THREADING_LAYER=workqueue
+     # workaround that used to sit here was setting a variable for a package
+     # that is no longer installed. What remains is the TensorFlow path, which
+     # only the suitability model touches -- calibration workers are now pure R
+     # and start no OpenMP runtime beyond data.table's.
 
      # Allow duplicate loads of the same OpenMP library (belt-and-suspenders for
      # libomp, which data.table and macOS system tools may both load).
@@ -50,13 +44,13 @@
 
      # General OpenMP thread limit — suppresses thread oversubscription and
      # reduces the surface area for cross-runtime conflicts in the main process.
-     # PSOCK workers and Dask cloud workers set their own limits independently.
+     # PSOCK workers set their own limits independently.
      if (Sys.getenv("OMP_NUM_THREADS") == "") {
           Sys.setenv(OMP_NUM_THREADS = "1")
      }
 
      # Suppress Intel KMP informational messages (e.g. "OMP: Info #276" from
-     # deprecated omp_set_nested() calls in older laser-cholera versions).
+     # deprecated omp_set_nested() calls in MKL-linked builds).
      if (Sys.getenv("KMP_WARNINGS") == "") {
           Sys.setenv(KMP_WARNINGS = "0")
      }
@@ -121,38 +115,28 @@
           "|_|  |_| \\___/ |____//_/   \\_\\|___|\\____|          /_____//_/  |_|/____//_____//_/ |_|\n",
           "\n",
           "Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation\n",
-          "for Cholera (MOSAIC) featuring the Light-agent Spatial Model for ERadication (LASER)!\n",
+          "for Cholera (MOSAIC)!\n",
           "\n",
           "Version: ", as.character(pkg_version), "\n"
      )
 
-     # Only actively attach Python in interactive sessions
-     # For scripts/workers, RETICULATE_PYTHON (set in .onLoad) is sufficient
-     # Python will initialize lazily when first used
-     if (interactive()) {
-          # Automatically attach r-mosaic Python environment
-          # This initializes Python and makes laser.cholera available immediately
-          attachment_success <- tryCatch({
-               MOSAIC::attach_mosaic_env(silent = TRUE)
-               TRUE
-          }, error = function(e) {
-               # If auto-attach fails, provide helpful guidance
-               cli::cli_alert_warning("Failed to auto-attach r-mosaic Python environment")
-               cli::cli_text("Error: {e$message}")
-               cli::cli_text("")
-               cli::cli_text("To diagnose: {.run MOSAIC::check_python_env()}")
-               cli::cli_text("To install: {.run MOSAIC::install_dependencies()}")
-               cli::cli_text("")
-               FALSE
-          })
-
-          # Inform users about detachment option if attachment succeeded
-          if (attachment_success) {
-               cli::cli_text("")
-               cli::cli_alert_info("Python environment automatically attached to r-mosaic")
-               cli::cli_text("To use a different Python: {.run MOSAIC::detach_mosaic_env()}")
-               cli::cli_text("")
-          }
-     }
+     # Python is NOT attached here, in any session.
+     #
+     # .onLoad has already set RETICULATE_PYTHON (above), which is the only
+     # thing needed to make reticulate resolve the right interpreter. Attaching
+     # additionally called reticulate::py_config(), and THAT is what forces
+     # Python to initialise -- measured at 5.2 s on every interactive
+     # library(MOSAIC).
+     #
+     # Nothing on the simulation or calibration path touches Python: the
+     # transmission engine has been pure R since v0.68.0 and psi enters the
+     # engine as a precomputed psi_jt matrix baked into the config. The only
+     # consumer is est_suitability() and the keras3 suitability pipeline, which
+     # initialises Python lazily on its first keras3 call and picks up the same
+     # RETICULATE_PYTHON.
+     #
+     # So the cost was paid by every interactive session and the benefit
+     # collected by the few that refit psi. Call MOSAIC::attach_mosaic_env()
+     # explicitly if you want Python up front.
 
 }

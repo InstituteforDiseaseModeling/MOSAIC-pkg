@@ -56,9 +56,9 @@ calc_model_ess(w_conc, method = "perplexity") # ~1.5
 Kish, L. (1965). \emph{Survey Sampling}. Wiley.
 }
 \seealso{
-Other calibration-metrics: 
-\code{\link{calc_convergence_diagnostics}()},
-\code{\link{calc_model_agreement_index}()},
-\code{\link{calc_model_cvw}()}
+Other calibration-metrics:
+\code{\link[=calc_convergence_diagnostics]{calc_convergence_diagnostics()}},
+\code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}},
+\code{\link[=calc_model_cvw]{calc_model_cvw()}}
 }
 \concept{calibration-metrics}

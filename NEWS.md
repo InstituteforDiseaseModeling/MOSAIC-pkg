@@ -1,3 +1,1228 @@
+# MOSAIC 0.99.10
+
+- The pkgdown site carries the Gates Foundation standard footer (legal notice, privacy and terms links) (#121).
+
+# MOSAIC 0.99.9
+
+## Carried-forward CFR years are exactly flat on every BLAS (v0.99.9)
+
+Under `forecast_method = "carry_forward"`, `est_CFR_hierarchical()` gives every year after the last data year the same design row, but OpenBLAS can sum identical rows in different orders, so their `logit_mean` differed in the last bit on Linux and the as-of `mu_jt` was not exactly flat (a CI-only test failure). Those years now copy the first occurrence. On macOS the values were already identical, so no data object changes.
+
+# MOSAIC 0.99.8
+
+Merges #127's 0.93.2 fix. `calc_Reff.R` keeps the v0.96.0 mortality caveat, which never had the escaped percents.
+
+# MOSAIC 0.99.7
+
+## Pre-merge review fixes (v0.99.7)
+
+- `calc_convergence_diagnostics()` documented `is_diagnostics` twice after the v0.99.2 merge, which moved `verbose`'s default under the wrong parameter and dropped the link to `calc_is_diagnostics()`.
+- NEWS now records the removal of `calc_cases_from_infections()` and `calc_deaths_from_infections()`.
+- `write_trajectory_csv()` no longer says the summary is the weighted median throughout: `disease_deaths` follows the deaths `central_method`.
+
+# MOSAIC 0.99.6
+
+## R CMD check hygiene (v0.99.6)
+
+- `test-psi-manifest-provenance.R` read `R/` source before checking it exists, so it errored under R CMD check (where `R/` is absent) instead of skipping. CI never saw it because CI runs `testthat::test_local()` from source.
+- `cfr_pred`, `deviation` (`plot_CFR_hierarchical()`) and `.dp` (`impute_drought_probability()`) are declared in `globals.R`.
+
+# MOSAIC 0.99.5
+
+## Merge the R_eff post-merge fixes (v0.99.5)
+
+Brings in #127 (0.93.1): run inputs written at 17 significant digits, the `peak_window` argument to `calc_Reff()`, and the review's caveat and test fixes. `calc_Reff()` keeps the "mean" cases default and the CFR v2.1 mortality caveat, because deaths now leave at onset rather than at a rate from Isym.
+
+# MOSAIC 0.99.4
+
+## Declare the data pipeline's optional packages (v0.99.4)
+
+`get_travel_time_matrix()` uses gdistance and malariaAtlas, and `rake_mobility_od_to_tau()` uses mipfp, each behind `requireNamespace()`. They were never declared, so R CMD check raised a WARNING on every run; they are now in Suggests. `mosaic_run_suffix()` calls `utils::str()` explicitly, clearing the matching NOTE.
+
+# MOSAIC 0.99.3
+
+## The human-R recovery test pools seeds (v0.99.3)
+
+`test-reproductive_numbers.R` compared one realization's median R_hum ratio with
+a 5% tolerance. That ratio scatters by about +/-5% seed to seed (0.91-1.08 at
+the epidemic fixture), and the merged engine's fatal-onset draws change the
+realization, so seed 3 fell outside it (0.909). The check now pools 8 seeds
+(median ratio 0.98). The route kernel ignores the fatal onsets that never enter
+Isym; at this config (p_fatal 3.3%) that moves the ratio by about -0.5%.
+
+# MOSAIC 0.99.2
+
+## The CFR v2.1 line merges into main (v0.99.2)
+
+This release merges the CFR v2.1 development line into main. That line was
+numbered 0.92.0-0.99.1 in parallel with main's 0.92.1-0.93.0 (route-split R_eff,
+the psi_evolve close-out, the automated data refresh), so both sets of changes
+are listed: the CFR line's under this heading (its own 0.92.0 and 0.93.0 entries
+are labelled), main's under their versions below. What users will notice:
+
+- Deaths come from the fate-at-onset reported-CFR model: `mu_jt` is the reported
+  CFR, integrated out of the deaths likelihood per simulated path, and a config
+  carrying the retired mortality fields (`mu_j_baseline`, `mu_j_epidemic_factor`,
+  `CFR_target`, `delta_reporting_deaths`, `mu_j_slope`) is converted (a
+  `CFR_target` becomes a constant `mu_jt`, with a warning) or refused. Rebuild
+  such configs with `make_config_default()`.
+- The ensemble central line is the weighted mean (`central_method = "median"`
+  restores the previous behaviour), and forecast years carry the ensemble's
+  latest-year CFR shift.
+- The integrated deaths likelihood adds a median 13% (11-25%) to each scored
+  iteration on the 40-location config.
+
+## Pre-merge audit fixes: figures follow the run's central line; stale deaths text (v0.99.1)
+
+- **render_MOSAIC_figures() drew the median for every mean run.** It read
+  `central_method` from the top of `1_inputs/control.json`, but run_MOSAIC()
+  nests the control under `$control`, so the lookup always fell back to the
+  median; since the v0.98.0 default flip every re-rendered prediction figure
+  (and the in-run `plots = TRUE` figures) showed the median while the CSVs and
+  summary metrics used the mean. The lookup is now `.mosaic_run_central_method()`,
+  which reads the nested shape and still treats a control.json without the
+  setting (pre-v0.38.0) as median; the test fixture writes the real shape.
+- **The final deaths step is no longer masked.** `mask_final_deaths_step`
+  defaulted to TRUE for a laser-cholera off-by-one (issue #82) that the R engine
+  does not have: since v0.96.0 deaths are reported on the cases' row and the
+  post-hoc redraw fills the last column, so the mask blanked a real day in the
+  CSVs, plots and R^2/bias. The default is now FALSE in calc_model_ensemble(),
+  plot_model_ensemble() and the prediction table; an ensemble saved without an
+  `artifact_mask` (laser-cholera era) still masks. A regression test checks the
+  engine's final deaths column is populated.
+- **Plot labels.** The PPC names the plotted central series from the CSV's
+  `central_method` ("Predicted Mean"/"Median"); plot_forecast_cv_grid() draws
+  `pred_central` (falling back to `pred_median`); the ensemble caption names the
+  nested intervals correctly ("95% and 50%"); the trajectory true-deaths panel
+  follows the deaths channel's central method and is labelled as fatal onsets
+  dated at onset; plot_model_posteriors_detail() draws truncated-normal priors
+  (delta_reporting_cases, epidemic_threshold, decay_*, psi_star_*).
+- **plot_CFR_hierarchical()** takes its years from the model outputs (it had
+  1970-2024 and 2024 hard-coded), shades and dashes the years each trend is
+  held at its last fitted year, drops in-progress years as the model does,
+  replaces the random-effects page (the country intercept is weakly identified,
+  about 1e-5) with each fitted country curve's deviation from the population
+  trend, keys its summary on iso_code (Cote d'Ivoire was split in two), and says
+  "Case Fatality Ratio".
+- **Docs:** the fatal share of symptomatic onsets is a few percent, not "a
+  fraction of a percent"; the NB deaths dispersion is diagnostic only and the
+  retired-setting warning no longer suggests `nb_k_deaths`; the Deployment
+  vignette's install/run chunks are `eval = FALSE`; skill and agent notes updated
+  (central_method default, the integrated deaths core, retired `nb_k_min_*`).
+- Removed the orphaned `model/input/parameters_inventory.csv` (no reader; its
+  `mu_j` row was the retired mortality model) and `local/calibration/
+  calibration_test_43.R` (it set removed `sample_mu_j_*` flags).
+
+## Forecast years carry the ensemble's shared CFR shift, not each member's own (v0.99.0)
+
+v0.98.0 centred each ensemble member's forecast-year CFR on that member's own
+deviation for the latest observed year. That deviation also absorbs the member's
+case error that year: a member that under-shoots the year's cases gets a high
+CFR, and members like that tend to have larger waves later, so the carried
+error amplified the forecast. In the calibration test SSD's 2026 deaths went
+from 1.05x to 2.50x observed while NGA's improved.
+
+Each forecast year is now centred on one shift per location: the weighted mean,
+over the posterior ensemble's members, of their posterior-mode deviations for
+the latest observed year. The members' shared CFR change carries forward; each
+member's own case error does not, and each member keeps its own location offset.
+`run_MOSAIC()` estimates the shift after calibration from one run per ensemble
+member, logs it, and stores it in the deaths integration, so the ensemble, the
+medoid, `cfr_posterior.csv`, `config_medoid.json` and a post-hoc re-run from
+`deaths_integration.rds` all use it. The forecast-year prior is a normal centred
+on the shift (the v0.98.0 prior coupled forecast years to each member's latest
+year). The calibration likelihood is unchanged except where a scored day's
+blend reaches a forecast year, where it now uses a zero shift.
+`calc_model_ensemble()` returns the shift as `forecast_shift`, and
+`calc_log_likelihood_deaths_integrated()` gains a `forecast_shift` argument
+(default 0: forecast years revert to the prior level). The likelihood version is
+`R/v0.99.0+deaths_forecastshift`. Six test assertions that compared small
+quantities (CFRs near 0.01-0.08) with `expect_equal(tolerance =)` were vacuous,
+because testthat switches to an absolute difference when the values are smaller
+than the tolerance; they now use a relative-error check (`expect_rel_equal()`).
+
+## The ensemble central line is the mean; forecast years continue the latest CFR (v0.98.0)
+
+- **Ensemble central tendency defaults to the mean** for both cases and deaths
+  (`control$predictions$central_method = "mean"`; it was `"median"` from
+  v0.46.1). It drives the prediction line and `predicted_central`, the headline
+  `*_ensemble` R^2/bias, the medoid target and the subset objective. The daily
+  median of sparse deaths is zero on most days in low-count countries, so it
+  read 0x in-sample deaths bias for MOZ and KEN in the CFR-v2.1 calibration test;
+  across the 8 countries the median in-sample deaths bias moves from 0.65x to
+  0.78x and out-of-sample from 0.51x to 1.30x. Cases move from slightly low to
+  slightly high (0.94x to 1.08x in sample). WIS, coverage, the calibration and
+  the posterior are unchanged. **Behaviour change:** the medoid (and so
+  `config_medoid.json`, the medoid plots and the R_eff central line) is now the
+  member closest to the mean cases series. `summary.json` keeps both
+  `*_ensemble_mean` and `*_ensemble_median`, and
+  `central_method = "median"` reproduces the previous behaviour. Completed runs
+  whose `control.json` predates the setting are still read as median by
+  `render_MOSAIC_figures()` and `add_reproductive_numbers()`.
+- **Forecast years continue the latest calibrated CFR.** The integrated CFR's
+  year deviations were independent, so a year past the data reverted to the
+  prior's long-run country level; in the calibration test this under-forecast
+  COD's 2026 deaths after its CFR rose from about 1% to 3%. Each forecast year's
+  deviation is now centred on the latest observed year's, with the same
+  year-to-year spread (`sd_year`). The latest observed year is the year of the
+  last scored day minus 30 days, so data reaching only into a new year's
+  1 January blend leave the year before as the anchor. The prior is a product of
+  conditional densities with unit Jacobian, so the calibration likelihood is
+  unchanged except where a scored day's blend reaches a forecast year (data
+  ending within 30 days of a 1 January). The post-hoc death redraw,
+  `cfr_posterior.csv` and `config_medoid.json` follow. The likelihood version is
+  `R/v0.98.0+deaths_carryforward`. A `deaths_integration.rds` saved by an earlier
+  version re-runs with independent year deviations, as it was calibrated.
+
+## est_CFR_hierarchical() documents the weak identification of tau (v0.97.3)
+
+Documentation only. `?est_CFR_hierarchical` now states that the between-country
+SD `tau` is weakly identified: the per-country factor smooth carries its own
+intercept, so the fit can put the between-country spread in either term (about
+0.003 on the full 1970-2025 data, 0.31 through 2024). Per-country estimates are
+unaffected, and every MOSAIC location is in the WHO annual data, so no MOSAIC
+prior depends on `tau`. The help page also describes the exclusion of
+in-progress years and the per-country carry-forward of forecast years, both
+added in v0.97.0.
+
+## The CFR's year deviations are yearly levels, not an interpolated curve (v0.97.2)
+
+v0.97.0 interpolated the integrated CFR's year deviations linearly between
+1 July anchors. That extrapolates the within-year trend past the end of the
+data. Every calibration ends partway through a year, so the forecast for the
+rest of that year overshot. With the true CFR at 3% through 2024 and 1.5% in
+Jan-May 2025, it forecast June-December 2025 at 1.3%, below the fitted Jan-May
+level. The calibration test showed the effect on NGA (out-of-sample deaths 0.7x).
+
+Each year's deviation is now a level for that calendar year, blended linearly
+over the 60 days centred on each 1 January, so the CFR still has no step at a
+year boundary. A year observed only in part is forecast at the level of its
+observed months. The medoid config's posterior shift uses the same basis. The
+likelihood version is `R/v0.97.2+deaths_yearlevel`.
+
+## posteriors.json no longer copies the prior reported-CFR block (v0.97.1)
+
+- `calc_model_posterior_distributions()` drops the top-level `mu_jt` block that
+  it had copied verbatim from the priors. The reported CFR is integrated out,
+  not sampled, so that block is a prior, and its calibrated value is
+  `3_results/posterior/cfr_posterior.csv`. Staged estimation is unaffected,
+  because `update_priors_from_posteriors()` starts from the priors.
+- The `run_MOSAIC()` log line for the deaths likelihood now names the
+  quasi-Poisson score and reports the median dispersion.
+
+## CFR-v2.1 red-team fixes: a total-preserving deaths score and a corrected prior (v0.97.0)
+
+A line-by-line red-team review of v0.96.1 (engine, likelihood, prior, completeness
+and an end-to-end calibration), then fixes.
+
+- **The integrated deaths score under-predicted deaths.** The negative-binomial
+  score for the CFR level, Σ(D − m)/(k + m) = 0, weights low-count weeks about
+  1/k and peak weeks about 1/m. So whenever a path's weekly shape differed from
+  the data (always), the fitted CFR tracked the low weeks, not the totals.
+  - On ZMB the redrawn deaths came out at 0.6-0.8× observed, and the posterior
+    CFR at half the observed CFR.
+  - The score is now **quasi-Poisson**. The Poisson score preserves totals, so
+    given the path the fitted CFR reproduces observed deaths.
+  - The Poisson log-likelihood is divided by a per-location dispersion φ ≥ 1,
+    estimated from observed weekly deaths regressed on observed cases with
+    year effects.
+  - Implied/observed deaths moved: ZMB 0.74 → 1.00, MOZ 1.09 → 0.95; NGA, COD
+    and ETH stayed at 1.00.
+- **A week with no onsets but observed deaths** used to cost ~23 log-likelihood
+  per death through an arbitrary 1e-10 floor. It now carries an additive
+  background of `eps_rel_cases` × the location's mean scored weekly deaths, the
+  same relative floor as a cases cell with zero prediction.
+- **Smooth year deviations.** The CFR's year deviations interpolate between 1 July
+  anchors (the rule `make_mu_jt()` uses for the prior), so the CFR and the
+  redrawn deaths no longer step on 1 January. Forecast years ease back to the
+  calibrated location level over half a year.
+- **Deaths weighting and windows:**
+  - deaths confidence weights are mass-preserving, like cases;
+  - a reporting week cut by the edge of the scored window is scored on its own
+    days (MWI lost 20% of its scored deaths to the leading partial week);
+  - convergence is judged on the gradient when the line search stalls.
+- **Deaths shape terms.** When the CFR is integrated out, the level-dependent
+  deaths shape terms (peak magnitude, cumulative, WIS) are dropped with a
+  warning: they scored engine deaths drawn at the prior `mu_jt`.
+- **`config_medoid.json`** now carries the medoid's own posterior CFR, from the
+  medoid ensemble. The ensemble's posterior is only the fallback. With the
+  ensemble's, a re-simulation over-predicted the medoid's deaths by 7-12%.
+- **`summary.json` `cfr_implied`** now uses the scored observed window for both
+  predicted and observed totals, and weights the members. Before, predicted
+  totals included the burn-in and the forecast tail, and members were unweighted.
+- **The CFR prior (`est_CFR_hierarchical()`):**
+  - a calendar year still in progress at its dashboard snapshot is excluded;
+  - each country's trend is held at that country's own last WHO-annual year
+    instead of being extrapolated (SOM, BFA, LBR, BEN end in 2022);
+  - the out-of-sample coverage check now scores the observed count against its
+    predictive distribution: 0.95, previously understated as 0.83-0.86;
+  - `config_default` v5.1 and `priors_default` v16.1 rebuild `mu_jt` from it,
+    and nothing else changes (34 of 40 locations move more than 5% in 2026);
+  - `sd_product` is re-described as the centre's residual error against the
+    observed CFR. It is not a product mismatch: the two products agree to
+    sd(log) 0.03.
+- **Displays:**
+  - the trajectory CFR(t) and mass-balance panels use weighted mean series (a
+    ratio of medians showed CFR 0 in sparse countries, and mass balance
+    drifting by 1.6%);
+  - prediction captions total the same days as their bias;
+  - the true-deaths channel is labelled as reported / `rho_deaths`.
+- **Data and docs:**
+  - `estimated_parameters` drops the retired mortality rows (46 rows);
+  - the `priors_default` roxygen matches v16;
+  - the `Installation.Rmd` chunks carry `eval = FALSE` (`R CMD check` executed
+    its installs);
+  - `run_rolling_cv()` checks for mgcv and the WHO annual file before writing
+    anything.
+- **New tests:**
+  - the calibration worker uses the integrated deaths score;
+  - `config_medoid.json` gets the medoid's own CFR;
+  - the fatality conversion uses `chi_epidemic` (threshold-forced arms);
+  - totals are preserved under the redraw;
+  - year boundaries are continuous;
+  - in-progress-year exclusion and per-country carry-forward in the prior.
+- **Resume.** The likelihood version is now `R/v0.97.0+deaths_quasipoisson`.
+
+## Calibrated CFR outside the calibration loop; leak-free rolling CV (v0.96.1)
+
+- **`config_medoid.json` carries the calibrated reported CFR.** Because the CFR
+  is integrated out rather than sampled, the medoid config used to keep the
+  prior `mu_jt`, so re-simulating it (rolling-CV medoid projections, scenarios)
+  drew deaths at the prior level.
+  - Its `mu_jt` is now shifted, per location and calendar year on the logit
+    scale, to the run's posterior (`cfr_posterior`).
+  - The within-year shape is kept.
+  - A shift that needs a per-onset fatality probability >= 1 is refused, not
+    clamped.
+- **`2_calibration/deaths_integration.rds`** is saved, so a post-hoc
+  `calc_model_ensemble(deaths_integration = readRDS(...))` redraws deaths from
+  the calibrated CFR exactly as the run did.
+- **The trajectory CFR reference line survives the subset optimizer.** It
+  vanished when `optimize_subset = TRUE`, because the optimized ensemble carries
+  no `cfr_posterior`. It now reads the candidate ensemble's posterior.
+- **`run_rolling_cv()` no longer leaks post-cutoff CFR information.** Each
+  cutoff T refits the WHO-annual GAM on years <= year(T) - 1 and rebuilds both
+  the config's `mu_jt` and `priors$mu_jt` (centres, SEs, `sd_year`). Values are
+  carried flat past that year's 1 July. The old freeze at T interpolated toward
+  year(T) and year(T)+1 estimates from a fit on all years. It is removed, along
+  with `make_mu_jt(freeze_after =)`.
+- `est_CFR_hierarchical()` now wraps a non-writing core, `.cfr_estimate()`,
+  which takes a `last_year`. Its outputs are unchanged, byte for byte.
+- The priors `mu_jt` block is built by `.mosaic_mu_jt_prior()`, which both
+  `data-raw/make_priors_default.R` and rolling CV use. Only the block's
+  description text changed.
+
+## CFR-v2.1: deaths decided at onset from a time-varying reported CFR (v0.96.0)
+
+**Engine.** Each symptomatic onset is fatal with probability
+`mu_jt * rho / (rho_deaths * chi_epidemic)`, drawn at onset (new rng-only draw
+site `infectious/fatal_onsets`), and fatal onsets never enter Isym. Deaths are
+reported on the case lag, so a death is reported in the same tick as its case.
+`mu_jt` is the reported CFR by location and day, and it replaces
+`mu_j_baseline`, `mu_j_epidemic_factor`, `CFR_target` and
+`delta_reporting_deaths`. At epidemic PPV, expected reported deaths / expected
+reported cases = `mu_jt` exactly. Replay mode keeps the laser-cholera daily
+hazard verbatim for parity. `disease_deaths` now lands one results column after
+the onsets that produced them.
+
+**Deaths likelihood.** `run_MOSAIC()` integrates the reported CFR out of each
+simulated path instead of sampling it. The CFR is `logit mu0_jt + a_j +
+delta_{j,year}`, the deaths are scored with a weekly negative binomial, and a
+Laplace step solves for the offsets
+(`calc_log_likelihood_deaths_integrated()`). The `eps_rel_deaths` floor does not
+apply to this score. The ensemble redraws each member's deaths from the CFR's
+conditional posterior, and writes `3_results/posterior/cfr_posterior.csv`
+(reported CFR by location and year). The `cfr_*` implied-CFR columns in
+`samples.parquet` are removed.
+
+**Prior.** `est_CFR_hierarchical()` is rewritten as a binomial GAM on all
+WHO-annual years. It has a global trend, country intercepts, per-country drift
+(`fs`, k = 10, m = 2) and a country-year random effect. Its widths are
+predictive, and nothing is clamped. `make_mu_jt()` expands the estimates to the
+daily matrix.
+
+**Data objects.**
+- `config_default` v5.0 carries `mu_jt`.
+- `priors_default` v16.0 carries a top-level `mu_jt` block (per-year centres and
+  SEs, `sd_year` 0.70, `sd_product` 0.3). The `CFR_target`,
+  `mu_j_epidemic_factor` and `delta_reporting_deaths` priors are removed.
+- The toy simulation configs use a constant 2% reported CFR.
+- Both defaults were built as v0.95.0 plus these deltas only, not as a full
+  rebuild.
+
+**Legacy configs.** A config carrying `mu_j_baseline`, `mu_j_epidemic_factor`,
+`CFR_target` or `mu_j` is handled the same way by the engine and the likelihood,
+through one resolver:
+- its `CFR_target` becomes a constant `mu_jt`, with a warning;
+- its dead `mu_jt` matrix is ignored;
+- without a `CFR_target` it is refused.
+
+`make_simulation_config()` refuses such configs outright. The retired
+`sample_*` flags and priors warn and are ignored.
+
+**Resume.** The likelihood version is now `R/v0.96.0+deaths_integrated`, so a
+resume refuses to pool shards across this change.
+
+## mu_j_slope is removed (CFR restructure R3)
+
+The per-location `N(0, 0.05)` prior on a linear-in-time trend in baseline IFR is
+deleted, along with the engine term it fed: `run_simulation()` no longer
+multiplies the mortality hazard by `(1 + mu_j_slope * tick/nticks)`, so `mu_jt`
+is now two multiplicative components (per-patch baseline x epidemic escalation)
+rather than three. 40 sampled dimensions go away. No other prior moves.
+
+Four independent lines of evidence agree. It is **not estimable**: posterior
+shrinkage 0.5 would need ~74,300 deaths in one country, the largest shipped
+series is COD at 4,139, and all 40 locations pooled hold ~15,600; measured
+posterior/prior SD on a 50,000-draw reference run is 0.969, i.e. the posterior
+IS the prior. It is **not in the data**: 3 of 21 countries show a significant
+weekly CFR trend and the signs are mixed, the between-country spread of the
+implied trend is 7.3x wider than the prior, and in COD the weekly and annual
+trends have opposite signs. It is **not in the literature**: WHO's own
+Yemen-excluded global series is flat (1.7 / 1.4 / 1.5% for 2017 / 2019 / 2020).
+And it is **double-counted**: `est_CFR_hierarchical()` already fits an `s(year)`
+smooth, so the temporal component of country CFR is inside `CFR_target`.
+
+**Shipped artifacts are bit-identical.** `config_default` has carried
+`mu_j_slope = 0` for every location since the field existed, so `(1 + 0*t) == 1`
+exactly. Verified over 26 scenarios / 722 result-channel digests in both engine
+modes (`rng` and `replay`), at 40 and 1 patches, including the 1,398-tick
+full-length oracle fixture: 25/26 bit-identical, the one difference being a
+deliberate non-zero-slope sentinel that confirms the harness was not blind. The
+golden fixtures therefore did NOT need regenerating -- which matters, because
+they are frozen recordings of the read-only Python engine and could not have
+been regenerated here. `make_simulation_config()` keeps a deprecated, ignored
+`mu_j_slope` formal so pre-v0.95.0 configs on disk still replay.
+
+**A correction to the evidence base.** The pre-registered claim that this term
+"injects +/-30% of uncontrolled deaths level per draw" is NOT reproduced. That
+figure came from a sweep running the slope out to about +/-1.2, which is 24
+prior SD. Measured inside the actual `N(0, 0.05)` 95% interval (+/-0.098), total
+deaths move only +/-4% (`log(deaths ratio) = 0.403 * slope`; the death-weighted
+mean `t_factor` is 0.40). The identifiability report's further prediction that
+the deaths-bias IQR would narrow by >=20% is also falsified (measured -2.6% to
++1.6%, i.e. noise). Removal is justified as deleting dead weight -- 40 sampled
+dimensions carrying ~0.01 nats -- not as removing a large level injection.
+
+Pinning was verified inert before removal (5 national medoids x 24 parameter
+draws x 8 seeds/arm, arms paired at the PARAMETER level because `rbinom`
+rejection sampling desynchronises the RNG stream): deaths ratio geomean 1.0034,
+95% CI [0.9991, 1.0077], sd(log) 0.0239 -- smaller than the 0.0331 Monte-Carlo
+noise floor of the same comparison. Cases pooled ratio 1.0000.
+
+## R CMD check regressions from R6/R1/R2 are fixed
+
+A paired `devtools::check()` at the branch base and at v0.94.0 showed the latter
+had added 5 warnings and 1 note. All traced to two causes, both now fixed: a
+malformed roxygen block in `calc_model_likelihood.R` (bare `\item`s outside any
+container, cascading into the install / Rd files / Rd cross-references warnings
+and the Rd contents note, plus 9 undocumented arguments), and non-ASCII
+characters in shipped description strings. Also fixed: the spurious
+`sample_parameters.Rd` "missing link `1, 14`" from `[1, 14]` parsing as an Rd
+link, and a genuinely missing `@param is_diagnostics`.
+
+Note for contributors: the CLAUDE.md check baseline of `0E/3W/2N` is wrong --
+the real base is `0E/2W/4N` -- and `R CMD check .` cannot pass on this package
+at all, because `Authors@R` is only expanded at build time, so a source-directory
+check always reports `1 ERROR: Required fields missing or empty 'Author'
+'Maintainer'`. Use `devtools::check()`.
+
+
+## The epsilon floor is sized per channel (CFR restructure R1)
+
+0.93.0 put the eps-floored density in place but applied **one constant, 0.02, to
+both channels**. That is the right fraction for cases and roughly 12x too small
+for deaths. Because production scores a **single stochastic realisation** per
+draw, a low-count deaths series is mostly structural zeros; each zero-against-a-
+positive-observation cell is scored at `log NB(y | eps)`, so too small a floor
+makes those cells ruinous and the likelihood optimum moves onto draws that
+**over-predict the deaths level by ~2.5x**. This is a scoring-rule (Jensen)
+artifact -- `E_seed[LL(est)]` peaks far above `LL(E_seed[est])` -- not a CFR
+misspecification: the NB scale-MLE on the mean path is unbiased for every `k`.
+
+`calc_log_likelihood_negbin()` and `calc_log_likelihood_poisson()` gain an
+`eps_rel` argument (default `0.02`, so every existing call is unchanged), and
+`calc_model_likelihood()` gains `eps_rel_cases` (0.02) and `eps_rel_deaths`
+(**0.25**), exposed as `control$likelihood$eps_rel_cases` /
+`eps_rel_deaths`.
+
+**How 0.25 was chosen.** A profile over a multiplicative scale on
+`mu_j_baseline`, on four contrasting countries (ETH, COD high-burden, MOZ,
+KEN degenerate-sparse), 4 accepted base draws x 3 seed groups x 12 stochastic
+replicates each, with a **real 365-day holdout** masked out of the likelihood.
+Every eps arm re-scores the identical cached simulation pool, so the arms are
+exactly paired. Per-block median deaths bias at the likelihood optimum:
+
+| `eps_rel_deaths` | 0.02 | 0.05 | 0.10 | 0.15 | 0.20 | **0.25** | 0.30 | 0.40 | 0.50 |
+|---|---|---|---|---|---|---|---|---|---|
+| in-sample bias  | 2.34 | 2.12 | 1.74 | 1.33 | 1.12 | **0.97** | 0.87 | 0.50 | 0.35 |
+| held-out bias   | 1.43 | 1.40 | 1.39 | 1.29 | 1.20 | **1.11** | 1.10 | 0.98 | 0.80 |
+
+0.25 minimises `|log bias_in| + |log bias_out|` both pooled over all four
+countries and pooled over the three where the mechanism operates. **0.5 is past
+the crossing** (in-sample bias 0.35, a 3x under-prediction) and is not used.
+
+**Cross-check.** Replicate-averaging -- scoring the mean of `n` realisations at
+the *unchanged* 0.02 floor -- moves the same pooled in-sample bias 2.51 (n=1) ->
+1.20 (n=6) -> 1.10 (n=24), landing where the eps route lands. The two
+independent routes agree, as the Jensen diagnosis requires.
+
+**Known limit.** On a very sparse deaths channel (KEN: 0.07 deaths/day, every
+non-zero day equal to 1) `eps_rel` is inert -- the floor never binds -- and the
+bias there is not eps-mediated. Replicate-averaging does move KEN. The eps fix
+is the cheap 90% of the problem, not all of it.
+
+The pinned values in `test-calc_model_likelihood_reference.R` shift by
+0.57-1.12 nats; each is re-derived from an independent hand computation
+carrying the per-channel eps. `.mosaic_likelihood_impl_version()` is bumped so
+resume refuses to pool shards scored under the old floor (it was **not** bumped
+at 0.93.0, which also changed likelihood values).
+
+## The likelihood scores every cell by its density (arm A1b; CFR line 0.93.0)
+
+`calc_log_likelihood_negbin()` and `calc_log_likelihood_poisson()` special-cased
+a zero prediction against a positive observation with
+`ll <- -observed[i] * log(1e6)` -- a loss **linear in the observed count**, not a
+log-density, and a zero-vs-zero cell with a flat `ll <- 0`. The linear term
+carried essentially all of the log-likelihood's between-draw variance, so the
+ensemble's delta-AIC ranking described that constant rather than model fit.
+
+Every cell now goes through the density with the mean floored at
+`eps = max(1e-4, 0.02 * mean(observed))`. The floor is **channel-relative**: a
+fixed absolute floor calibrated on cases (mean ~30/day) sits far above the
+typical deaths rate (ETH ~0.4/day), which would flatten the predicted rate above
+the observations and destroy discrimination exactly where the deaths signal is.
+
+Validated across ETH, MOZ and COD at a 6-month holdout: held-out cases MAE falls
+from 26.4 to 19.7 pooled, and deaths MAE from 1.07 to 0.59, with bias moving
+toward 1 on both channels.
+
+## Note on the two changes in the CFR line's 0.92.0-0.93.0
+
+The conditional dispersion estimator (0.92.0) and the epsilon-floored density
+(0.93.0) were measured together in a 2x2 factorial at a 6-month holdout. A1b
+improves held-out skill on both channels. The estimated dispersion is
+consistently *below* the retired floor of 3 (ETH 1.78 cases, MOZ 0.43, COD 0.98),
+which flattens the likelihood; on that experiment it degraded held-out MAE, most
+sharply for MOZ. Both are retained: the estimator is the statistically correct
+observation model, and the sharpness it removes is a separate concern that
+belongs in an explicit temperature rather than in the dispersion. Set
+`control$likelihood$nb_k_cases` / `nb_k_deaths` to override the estimate if a
+sharper kernel is wanted for a given run.
+
+## NB dispersion is now estimated, not floored (CFR line 0.92.0)
+
+`calc_model_likelihood()` previously estimated the negative-binomial dispersion
+`k` with a marginal method-of-moments form, `k = m^2/(v - m)`, computed across
+the whole observation series. By the law of total variance that estimates
+`Var(mu)` -- the epidemic signal -- rather than the observation dispersion the
+surrounding comment claimed it measured. Consequently the `nb_k_min_*` floor
+bound in **27 of 28** estimable locations for cases and 17 of 20 for deaths, so
+the shipped "estimator" returned the constant 3 almost everywhere. On synthetic
+data with a known `k = 4`, the old form returns 1.10; the new one returns 3.88.
+
+**New:** `est_nb_dispersion()` estimates `k` per location by conditional maximum
+likelihood (`MASS::glm.nb`) at the data's native **weekly** reporting cadence,
+honouring the per-observation `reported_*_weight` confidence weights. The mean is
+modelled with a spline trend plus seasonal harmonics, following the
+Farrington/Noufaily convention used by the `surveillance` package.
+
+* **Weekly aggregation** with the reporting-week boundary **detected** per
+  location, not assumed. All 40 current locations report Monday-Sunday; the
+  estimate is invariant to the config's start weekday.
+* **Computed once per calibration**, not inside the likelihood. `k` depends only
+  on the observations, so the previous code recomputed an identical value roughly
+  7.2 million times per 40-location, 30,000-simulation run.
+* **Edge cases are explicit.** All-zero and otherwise uninformative series, and
+  a dispersion running to the Poisson boundary, resolve to `k = Inf` (Poisson).
+  A six-rung mean-model ladder handles IRLS failures on series with long zero
+  runs. Every location resolves to a finite `k` or Poisson -- never `NA`.
+* **Cross-location shrinkage** toward a mean-dispersion trend (DESeq2-style, with
+  a no-shrink escape) stabilises sparse locations.
+* Diagnostics are written to `2_calibration/diagnostics/nb_dispersion.csv` and
+  summarised in `summary.json`, including the **bound-bind rate** -- in a
+  well-specified fit the hard bounds should rarely bind.
+
+## Breaking changes (CFR line 0.92.0)
+
+* `control$likelihood$nb_k_min_cases` / `nb_k_min_deaths` are **retired**. Setting
+  either now warns and is ignored. To set the dispersion explicitly use
+  `control$likelihood$nb_k_cases` / `nb_k_deaths`, which **replace** the estimate
+  (scalar or one value per location) rather than silently flooring it.
+* `calc_model_likelihood()` gains `nb_k_cases` / `nb_k_deaths` (scalar or
+  length-`n_locations`) in place of `nb_k_min_cases` / `nb_k_min_deaths`. Passing
+  a vector previously either collapsed to `max()` without warning or errored.
+* `calc_log_likelihood_negbin()`'s `k_min` is deprecated and ignored.
+* `check_overdispersion()` and the internal `.nb_size_from_obs_weighted()` are
+  removed; both are superseded by `est_nb_dispersion()`.
+* `calc_cases_from_infections()` and `calc_deaths_from_infections()` are
+  removed. Neither had a caller, and the deaths one was a third, divergent
+  copy of the CFR algebra.
+* **All calibration results change.** Every likelihood value moves, so previous
+  runs are not comparable. The likelihood-provenance string used by the resume
+  guard is bumped accordingly, so resuming a pre-0.92.0 run stops with an
+  actionable error rather than silently mixing two scoring rules.
+* New dependencies: `MASS`, `splines`.
+# MOSAIC 0.93.2
+
+- The `calc_Reff()` kernel caveat no longer hand-escapes its percent signs, which main's roxygen guard (`test-mobility-od.R`) rejects.
+
+# MOSAIC 0.93.1
+
+## Post-merge review of the route-decomposed R_eff
+
+Four independent post-merge reviews of 0.92.1 (maintainer, statistician, swe, disease-modeler) found the estimator correct. This release fixes what they flagged.
+
+- **Run inputs are written at 17 significant digits.** `run_MOSAIC()` wrote `1_inputs/config.json`, `priors.json`, `control.json`, `environment.json` and `summary.json` with jsonlite's `digits = NA`, which keeps 15 significant digits and does not round-trip a double (0.1 + 0.2 comes back as 0.3). A member rebuilt from those files then differs by ~1e-15 relative, and the engine's integer rounding and binomial draws amplify that into a different trajectory. On a 4-location config, 31 of 80 re-simulated members were not bit-identical and the 95th-percentile total-case error was 10%, twice the tolerance of the `add_reproductive_numbers(recompute_ci = TRUE)` faithfulness gate, which would refuse the run. Single-location configs were unaffected. The resume integrity check accepts `1_inputs` written at either precision, so runs started before this release still resume. Run directories written before this release keep 15-digit inputs, and `recompute_ci` can still refuse multi-location runs there.
+- **`peak_Rt` is the time-max of a 7-day Cori window.** It was the time-max of the daily ratio, which lands on low-count days: in 15 of 18 test location-runs the peak fell where route infectiousness was 1-3, and raising the floor from 1 to 10 halved it. Each member's peak is now the maximum of its trailing 7-day R (sum of infections over sum of infectiousness), computed on the worker. The window is recorded in `attr(, "peak_Rt_window")` and shown in the `plot_Reff()` annotation.
+- **The re-simulation survives a dead worker.** It used `parLapplyLB()`, which blocks forever on Linux when a worker is OOM-killed or segfaults. It now uses the same worker-death-robust gather as `calc_model_ensemble()`; a dead worker fails the run with a count.
+- **Documentation:**
+  - The comment claiming that ignoring disease mortality moves the kernel means by under 0.2 day was wrong. With `config_default` rates the human kernel mean is 9.1 d at no mortality, 8.0 d at 0.017/day and 6.5 d at 0.058/day, and on engine runs at those rates R_env reads 2.5% and 6% low. At the median rate (~0.002/day) it is negligible. The kernel still ignores mortality.
+  - The `calc_Reff()` caveat now says that suitability enters R_env twice (transmission rate and reservoir lifetime), so R_env > 1 in a high-suitability season is not a growth threshold, and that R here is not comparable to literature R estimated with a ~5-day serial interval.
+  - `plot_Reff()` describes the stacking rule it uses since 0.92.1.
+- **Tests now pin the timing.** A one-day lag error in the human infectiousness, dropping the initial latent stock, and a one-day shift in the reservoir decay each fail at least one test (checked by mutation); before, the lag errors passed the engine-truth tests and dropping the latent stock passed every test.
+
+# MOSAIC 0.93.0
+
+## New: automated data refresh and the overland mobility OD pipeline
+
+- `update_mosaic_data()` / `list_mosaic_data_steps()` run a registry of every data build that can be refreshed automatically (CLI: `inst/scripts/update_mosaic_data.R`); `check_mosaic_data_freshness()` and `check_mosaic_manual_inputs()` report what is stale and what must be refreshed by hand.
+- Dated-snapshot downloaders `download_EMDAT_data()`, `download_IDMC_data()`, `download_UN_WPP_data()`, `download_WB_data()` and `download_mobility_od_sources()` write atomic, never-overwritten snapshots into `MOSAIC-data/raw/<source>/` with a provenance row, per the root CLAUDE.md exception for automated snapshots.
+- Overland mobility: `get_travel_time_matrix()` builds a least-cost travel-time matrix; `process_mobility_od_data()` fuses four bilateral sources into one OD structure; `rake_mobility_od_to_tau()` rakes it to per-country departure margins; `est_overland_tau_prior()` turns that into a per-country overland departure-rate prior; `plot_mobility_fused()` draws the figures.
+- The shipped `config_default` / `priors_default` are **not** rebuilt in this release. A rebuild that sources `tau_i` from `est_overland_tau_prior()` is held back until it is reconciled with the CFR v2.1 schema change.
+
+## Fixed: hand-escaped percent signs truncated manual pages
+
+Under Roxygen markdown a hand-written `\%` renders as `\\%`, which Rd reads as a comment start, so the rest of the line was silently dropped from ~20 manual pages (e.g. the 95% CIs in `get_rho_care_seeking_params()`). Now plain `%` throughout; `test-mobility-od.R` guards against reintroduction.
+
+## `update_mosaic_data()` builds data and no longer fits models
+
+`est_suitability` (group 4B) is **removed from the registry**. Fitting the suitability LSTM is model fitting, not data building, and it does not belong in the data-update driver: it needs the TensorFlow/keras Python environment, budgets ~6 GB per seed worker, and runs for hours, so it needs its own schedule and its own failure handling. Call `est_suitability()` directly, or run it through the calibration workflow.
+
+`compile_suitability_data` (group 4A) **stays, and is now in the default plan.** It is a data compile — it assembles the LSTM training panel from its 13 upstream producers (climate, ENSO, demographics, the multi-source surveillance combine, mobility, epidemic peaks, EM-DAT, all four World Bank indicators, WASH, elevation) — so an ordinary run now keeps the suitability *data* in step with its inputs. Previously it was held back along with the fit and could silently fall behind.
+
+With no model fit left to hold back, `include_suitability` is **removed** from both `update_mosaic_data()` and `list_mosaic_data_steps()`, the `--suitability` CLI flag is removed from `inst/scripts/update_mosaic_data.R`, and `.mosaic_select_steps()` loses its fourth argument. Nothing is filtered from the default plan any more: every one of the 54 registry steps is a data build. `steps=` / `skip=` are unchanged and still accept `"4"`, `"4A"` or the step id.
+
+That gate had already failed once — it compared `s$group` to `"4"` when the ids are `"4A"`/`"4B"`, matched nothing, and left the multi-hour fit in the *default* plan (fixed in v0.90.6, in two sibling sites). Deleting the step retires the whole class of failure rather than the instance. `test-update_mosaic_data.R` now asserts `est_suitability` appears in no step id **and in no step body**, so it cannot be reintroduced by either route.
+
+## Fixed: the CLI wrapper silently overrode the `date_stop` default
+
+`inst/scripts/update_mosaic_data.R` passed a bare `Sys.Date()` whenever `--date-stop` was omitted, defeating `update_mosaic_data()`'s own `Sys.Date() + 540` default. That is precisely the shortfall the +540 default exists to prevent: it produces a vaccination matrix 139 days shorter than the psi forecast horizon, and `make_config_default.R` then fails validation with `nu_1_jt must be a matrix with ... columns equal to the daily sequence from date_start to date_stop` — an error that names the wrong culprit. The wrapper now matches the function default, and `--help` no longer advertises "default: today".
+
+## `alpha_1` is now PINNED by default
+
+`sample_alpha_1` flips `TRUE` -> `FALSE` in both places that carry the default: `mosaic_control_defaults()$sampling` (`R/run_MOSAIC.R`) and `default_sample_args` (`R/sample_parameters.R`). A 40-country run now draws 640 location-specific values instead of 680 — exactly the 40 per-location `alpha_1` — and `alpha_1` comes through as the shipped `config_default$alpha_1`, seed-invariant. `sample_alpha_1 = TRUE` still works as an explicit override for a deliberate mixing-exponent experiment.
+
+**Why.** `alpha_1` is collinear with `log(beta_j0_tot)` in the endemic regime (`beta * X^alpha_1`) and with any coupling multiplier at invasion, where the bracket collapses to the imported term and `log Lambda = log beta_j + alpha_1(log c + log M_j) - alpha_2 log N_j`. The 250,000-draw continental posterior (`stage3_continental_b21_a1loc`) moved `alpha_1` by a median **0.057 prior SD** against a random-subset null of **0.146** — it was learning nothing while costing 40 free dimensions and destroying cross-country comparability of the `beta_j0_tot` posteriors. The disease-modeler memory `reference_alpha_mixing_exponents.md` recommended pinning both alphas in the 40-country spatial fit; production had been doing the opposite because only one of the two default sites was ever consulted. `alpha_2` was already pinned and is unchanged.
+
+**The value 0.27 is deliberately unchanged.** Pinning is about *freedom*, not level. MOSAIC's patches are whole countries — weakly-coupled aggregates of many sub-populations — so strong sub-linear mixing is the intended national-scale behaviour. The published 0.90–0.98 values (Xia 2004; Giles 2020; `tsiR`) come from community- and city-scale measles models, which are far closer to well-mixed and are not the right comparison class.
+
+**Known consequence, documented not fixed.** Because the exponent applies to the pooled bracket, `alpha_1 < 1` damps imports when local prevalence dominates (~3.7x at 0.27) but *amplifies* them when the bracket is the imported term alone, which is the invasion regime: `x^0.27 > x` for `x < 1`, so an imported pressure of 0.019/day is treated as 0.342 (18x). Invasion probability therefore does not scale linearly with travel volume. This is a property of the FOI's structure, not of pinning, and pinning does not change it — but it now holds at a fixed exponent rather than a sampled one. See `MOSAIC-notes/2026-09-18 spatial FOI coupling research.md`.
+
+`test-alpha1-pinned-default.R` pins the default at both sites and asserts they agree, so the two cannot drift apart again; it also re-checks the engine invariant `alpha_1 in (0, 1]` for the shipped scalar-or-length-nL form.
+
+# MOSAIC 0.92.3
+
+## psi_evolve closed out: the correctness fixes ship, the experimental architectures do not
+
+The psi_evolve programme (waves 0-34 plus a 72-cell downstream A/B on dugong) found no psi variant that beats the production LSTM once psi is pushed through calibration. DLinear, D9b (static-covariate country embedding), N8 (per-country loss balancing) and the D9b+N8 branch defaults all fit in-sample WORSE than production (12/12 cells for DLinear and D9b+N8) and none improved out-of-sample WIS beyond the psi-seed noise floor. None of that experimental code is merged; the full history is kept under the git tag `archive/psi-evolve`.
+
+What does ship are the defects the programme found in the production psi path:
+
+- **The deployed model was trained past its best epoch.** The inner CV recorded the epoch training *stopped* at (best + `patience`), and the full-data refit ran for that many epochs with no early stopping, overshooting the optimum by up to 10 epochs (40-60% on the production schedule). New `.psi_epoch_from_history()` returns `argmin(val_loss)` when best weights were restored.
+- **The leak-free v7.4 panel had a leaking target.** Response variables were normalised by p99 anchors computed over rows after the cutoff. New `compile_suitability_data(target_anchor_stop=)` bounds the anchor rows; `prefit_rolling_cv_psi()` passes the cutoff and folds it into the psi cache key, so a panel built under the old anchor is never silently reused. Default `NULL` leaves the canonical panel unchanged.
+- **ISO-8601 week labelling** was wrong in the surveillance/climate processors, and the RW-CV grid now accepts day-based geometry (a day-based stride is no longer multiplied by `rw_subsample`).
+- **psi RW-CV:** optional forecast `lead` and validation input context; per-fold held-out predictions are retained; the drop-filled-tail guard fails loudly; the psi manifest records fit provenance (and no longer references an undefined `backend`).
+
+# MOSAIC 0.92.1
+
+## R_eff is now decomposed by route: R_eff = R_hum + R_env
+
+`calc_Reff()` used to divide total infection incidence by one generation-interval kernel: latent plus infectious period, moment-matched to a Gamma. That timing describes the human route only. Environmental transmission also passes through shedding and 16-200 days of survival in the reservoir, and it carries 99.4-99.9% of infections in every post-v0.89.0 calibration checked (MOZ, COD, ETH). With a ~3-5 day kernel applied to a ~30-200 day process, the old estimator compressed R strongly toward 1. The kernel's human part also used the mean infectious duration where the renewal needs the transmission-weighted mean infectious age.
+
+Each route now has its own numerator (`incidence_human`, `incidence_env`) and its own infectiousness. Both are driven by total incidence, because every infection is infectious through both routes, and R_eff is their sum. The kernels are derived from the engine's own daily transition probabilities and phase order.
+
+The environmental term is **instantaneous** (Cori: "if conditions stayed as they are at t"). The reservoir is rebuilt from the actual past decay path, and one infection's lifetime reservoir contribution is valued at today's `delta_jt`. Nothing after t enters, so truncating a series (e.g. at a forecast cut-off) leaves earlier values unchanged. People latent or infectious on the first day are included in both infectiousness terms, so no initial-condition mask is needed.
+
+- `calc_Reff()`:
+  - returns rows for `estimand` `"R_eff"`, `"R_hum"` and `"R_env"`;
+  - needs the `incidence_human`/`incidence_env` channels (plus `E`/`Isym`/`Iasym` for the initial stocks) and the config's `zeta_*`, `psi_jt` and `decay_*`;
+  - checks that the config's locations and start date match the trajectories;
+  - caps decay rates above 1, which occur when `decay_days_short < 1` day;
+  - `max_days` is removed;
+  - the caveat now states that the renewal is per location, so in multi-location runs imported human-route spread is credited to the destination.
+- `add_reproductive_numbers()`:
+  - builds the kernel from `2_calibration/best_model/config_medoid.json`, not the input config of prior centres, falling back with a warning; attribute `config_source` records which;
+  - applies the burn-in on both paths;
+  - re-simulated members use their own kernel, engine `delta_jt` and initial stocks;
+  - `peak_Rt` gains an `estimand` column, and cell quantiles need half the member weight defined;
+  - `overwrite = FALSE` no longer keeps an older total-only table;
+  - an explicit `burn_in_days = 0` now disables the burn-in (it used to become 30), and a negative value is an error.
+- `plot_Reff()`:
+  - stacks R_hum on top of an R_env area, and both are smoothed over the same days;
+  - the stack is drawn on every day the total is defined; a silent route counts as 0, as it does in `calc_Reff()`;
+  - the new `routes` argument is last, so existing positional calls are unchanged.
+- The internal `.mosaic_generation_time_pmf()` is removed. `get_generation_time_distribution()` is unchanged.
+
+Tests check against the engine rather than against the code's own algebra:
+- R_hum and R_env recover the engine's true instantaneous R in single-route linear runs (median ratios 0.99 and 0.94 on the test seed). The 0.94 is not a bias: that seed's realized symptomatic share was 0.21 against sigma = 0.24, which a mean-field reconstruction cannot see. Across seeds, R_env against a mortality-aware reference built from the engine's reservoir has a median ratio of about 1.00 (range 0.92-1.05).
+- I and W rebuilt from incidence track the simulated stocks and align best at zero lag.
+- Truncation invariance, and a brute-force check of the frozen-at-t definition.
+- The re-simulation path is exercised end to end through the real engine.
+
+On the post-v0.89.0 MOZ medoid, the 14-day-mean R_eff has an interquartile range of 0.54-1.71 and a p95 of 3.1; the old estimator gave 0.96-1.09 and 1.19. Old and new R_eff files are not comparable.
+
+# MOSAIC 0.83.0
+
+## Every PSOCK cluster now clamps to the connection budget
+
+R allocates its connection table at startup: 128 slots, three already held by `stdin`/`stdout`/`stderr`. Every PSOCK worker holds one slot for its lifetime, so a default R build cannot exceed ~125 workers no matter how many cores the host has. `make_mosaic_cluster()` has clamped to that budget for some time; the package's two other cluster sites did not.
+
+`calc_model_ensemble()` called `parallel::makeCluster()` raw, on an `n_cores` that `run_MOSAIC()` derives straight from `control$parallel$n_cores` — the *unclamped* value, whenever `run_MOSAIC()` builds its own cluster (the `cluster = NULL` path, which is every ordinary run; the `ens_n_cores` derivation added in v0.73.1 only reads the clamped length when a cluster is *supplied*). On dugong at `n_cores = 170` that call threw `all 128 connections are in use`, the `tryCatch` around both ensemble calls turned the throw into a `log_warn`, and the run finished reporting success with **no posterior ensemble, no medoid ensemble, no predictions and no figures** — after paying for the entire calibration. Verified on dugong: the raw call fails at 170 while the clamped one succeeds at 123.
+
+New internal `.mosaic_clamp_psock_workers()` (`R/make_mosaic_cluster.R`) is now the single place that decision is made, wired into all three PSOCK sites — `make_mosaic_cluster()`, `calc_model_ensemble()` and `ensemble_suitability()`. An over-budget request now runs narrower and explains itself, instead of throwing. `run_MOSAIC()` additionally reports the budget once at startup, so a shortfall appears in the log at minute 0 rather than being inferred from a missing artifact hours later. `test-psock-connection-clamp.R` pins the behaviour and asserts that *every* `parallel::makeCluster()` site in `R/` routes through the clamp — guarding the asymmetry, not just this instance of it.
+
+## Raising the ceiling: `--max-connections` in the VM wrappers
+
+R >= 4.4.0 accepts `--max-connections=N` (128 to 4096) to enlarge the table. It is a **startup** option: there is no environment variable, and nothing in-session can change it, so it cannot be fixed from R. The new tracked `vm/make_wrappers.sh` generates `~/bin/r-mosaic-{R,Rscript}` for both compute VMs with `--max-connections=512`, superseding the gitignored `claude/dugong_setup/make_wrappers_dugong.sh`. Every `LD_PRELOAD` in it is `[ -f ]`-guarded, so one generator serves hedgehog's GLIBCXX problem and dugong's libexpat/libssl ones; the generated wrapper reproduces the previous `LD_PRELOAD` chain byte for byte.
+
+Measured on dugong at `n_cores = 170`: **170 workers granted (was 123)**, cluster startup 16.6 s (was 13.6 s), 176 of 1024 file descriptors, 121 GB of 1511 GB resident. The connection table — not memory, not descriptors — was the binding constraint, and ~28% of the machine was being left idle. The flag precedes `"$@"` so a caller's own later value still wins (R takes the last occurrence); a flag placed *after* the script filename is ignored by R entirely. hedgehog (120 cores, `n_cores = 118`) sits under the default ceiling and does not need this; it gets the flag so both VMs behave identically.
+
+`inst/examples/forecast_cv_experiment.R` now derives its calibration cap from the live connection budget instead of a hard-coded `FORECAST_CV_PSOCK_CAP=120`; an explicit env var still overrides.
+
+# MOSAIC 0.73.1
+
+## Leaked PSOCK workers are now reaped in production, not just in tests
+
+v0.73.0 fixed this for the test suite only, and said so. The production path had the same defect: `parallel::stopCluster()` shuts a worker down by writing to its socket, so a worker that is not *reading* that socket — an interrupted run, a task stalled inside `run_simulation()` and abandoned by the gather — survives its own cluster. It then holds the parent's stdout open, so a **finished** `run_MOSAIC()` looks like it is hanging: no output from `tail`, no R master in the process table. It also holds ~1 GB of RSS and one of R's 128 connection slots, which is enough to make a later cluster creation in the same session fail.
+
+New internal `.mosaic_stop_cluster()` (`R/cluster_teardown.R`) calls `stopCluster()` and then SIGKILLs any recorded worker PID whose `/proc/<pid>/cmdline` still contains `RSOCK`. Wired into all four production teardown sites: both in `run_MOSAIC()` (the `on.exit` handler and the explicit post-calibration stop), `calc_model_ensemble()`, and `ensemble_suitability()`. `make_mosaic_cluster()` records the worker PIDs on the cluster object as the `"mosaic_worker_pids"` attribute **at creation**, because they cannot be asked for at teardown time in the one case that needs them — `clusterEvalQ(cl, Sys.getpid())` would queue behind the very task that is stuck. For a cluster built elsewhere it falls back to querying, which is never worse than the old behaviour. Linux-only and `RSOCK`-gated by design; elsewhere, and for `FORK` workers, it degrades to plain `stopCluster()`.
+
+`tests/testthat/helper-cluster.R` is now a set of thin wrappers over the package functions rather than a second copy of the logic, so `test-cluster_teardown.R` (which is the only thing that can catch this becoming a no-op — it did once, see lesson 18) now tests the production code.
+
+## Post-calibration ensembles honour a caller-supplied cluster
+
+`run_MOSAIC(cluster = cl)` ran the calibration on the supplied workers and then ran both post-calibration ensembles **serially**, because `calc_model_ensemble(parallel = )` was read from `control$parallel$enable` alone — a key a caller who has already handed over a cluster has no reason to have set. The dugong recipe does set it, so production was unaffected, but the inconsistency is real. A supplied cluster is now treated as consent to parallelise and sizes the ensemble cluster (`ens_parallel` / `ens_n_cores`). The ensembles still build their own cluster: `cl` has just been stopped, and a caller-provided one is the caller's to manage.
+
+## R is now faster than the Python engine it replaced (measured)
+
+`migrate-laser-r.md` recorded R as 1.69x **slower** than laser-cholera and left the figure flagged as un-repriced after the v0.73.0 win. It has now been measured in the same interleaved paired harness as the rest of this work (6 blocks x 3 reps, both engines reading the same `config_default.json`, both thread-pinned, numba warm-up untimed):
+
+| arm | min (s) | mean (s) | R faster by, per block |
+|---|---|---|---|
+| `py_full` | 0.6765 | 0.7107 | — |
+| `r071_json` (`config = <path>`) | 0.5810 | 0.7233 | 1.15-1.23x |
+| `r071_rda` (`config = <list>`) | 0.4000 | 0.5488 | 1.65-1.72x |
+
+So the migration's headline cost has gone to zero and turned slightly positive. Two things worth carrying forward: the within-arm spread across blocks exceeds the between-arm gap, which is why these are quoted per-block and paired; and the two R arms differ by ~0.18 s of cold config parsing against Python's 0.066 s setup, making **config parsing, not the tick loop, the largest remaining single cost on the cold path**. Recorded as "Addendum 2" in `migrate-laser-r.md`, which also marks the old 1.69x decision paragraph as superseded.
+
+## Documentation
+
+- `perf-next-steps.md` (new) records the two deliberately deferred items — the C++ engine plus the two-engine architecture question, and the step-2 sampling-efficiency findings (objective noise before draw count; the ΔAIC-4 truncation question) — with the reasoning for each and the sequencing if they are picked up.
+- The `~2 GB/worker` figure, which was the *Python* engine's footprint, is corrected to the measured ~1.0 GB in `.claude/skills/dugong-run/SKILL.md` and `.claude/skills/run-mosaic/SKILL.md`. `CLAUDE.md` already carried the right number.
+
+# MOSAIC 0.73.0
+
+## Engine runtime: 2.25x more, from one state write that was copying the whole run
+
+v0.72.0 took the engine 1.156x and reported that the remaining profile was flat. It was not. The single largest cost in the engine was a **copy of the entire per-channel pointer vector on every state write**, and it had been hiding in plain sight for the same reason it hid at the port: the profiler charges it to the phase bodies and to `<GC>`, not to anything that looks like a state write.
+
+Every change here is **bit-identical**: verified across 5 configurations x 20 seeds against the pre-change engine (full `params` + 28 result channels + seed payload, plus the draw-coverage counter), with all 420 assertions in the Tier B oracle-replay suite and all 143 in the results contract passing untouched.
+
+Measured on the default 40-location, 1,398-tick config by an **interleaved paired benchmark** (arms alternate within each block, so drift in machine load cancels rather than being attributed to one arm — see lesson 17):
+
+| | min per run | per-block speedup |
+|---|---|---|
+| v0.72.0 (007c779) | 1.012 s | — |
+| v0.73.0 | **0.452 s** | **2.25x** (range 1.88-2.33 over 6 blocks; 2.04-2.29 over a separate 8) |
+| pre-optimization baseline (1956037) | 1.140 s | **2.41x cumulative** (range 2.01-2.77) |
+
+### The mechanism
+
+Each channel was a list of `nticks + 1` per-tick vectors, and those lists lived on the state environment. So `state$S[[i]] <- v` is a **subassignment into an environment-held list**: R's `*tmp*` fetch raises the list's reference count, and `[[<-` therefore duplicates the whole 1,399-element pointer vector before storing one element. `tracemem()` reports a copy on every write.
+
+Three independent measurements agree:
+
+- **Per-write cost is linear in `nticks`** — 1.5 / 3.3 / 5.9 / 11.6 microseconds at 200 / 700 / 1,399 / 2,800 rows. A write that copies nothing would be flat. This is why the cost was invisible at fixture scale and worst in production.
+- **Padding the channel lists to 4x their length, without touching the dynamics**, moved a 1.02 s run to 2.08 s. The extra rows are never read or written, so the difference is pure copy cost: **0.354 s per 1,399 rows**, about 35% of the run.
+- **Per-write cost is 6.15 microseconds against 0.20** for the replacement.
+
+The engine performs roughly 60 state writes per tick over 1,398 ticks, so this was ~615 MB of garbage per run for ~0.5 MB of useful stores.
+
+### What replaced it
+
+State is now **one environment per tick** (`state$rows[[row]]$S`), holding every channel for that tick. Each phase binds the one or two rows it needs once — `rh` for `here`, `rn` for `nxt` — and then addresses channels by name; the lagged reads spell out `state$rows[[probe]]$Isym`. An environment binding is a pointer store with no copy, and there is no longer any long vector to duplicate: `state$rows` is written once at allocation and never again.
+
+Re-running the padding diagnostic on the new representation confirms the mechanism is gone: the `nticks` slope falls from **0.354 s to 0.025 s** per extra 1,399 rows, a 14x reduction in how much the engine cares how long the run is.
+
+The 2.25x exceeds what the padding diagnostic predicted (1.53x), because that diagnostic measures only the length-proportional part of each copy. It misses the fixed per-subassignment overhead and the collector's share of the churn.
+
+### Costs, and what did not improve
+
+- **Peak RSS rose 5%**, from 945 MB to 992 MB per process over 5 sequential runs (`VmHWM`). 1,399 hashed environments of 23 bindings cost more than 23 lists of 1,399 pointers. CLAUDE.md's ~0.9 GB/worker planning figure still holds, but it is now ~1.0 GB and should be read as such.
+- **Time in the collector fell in absolute terms and rose as a share** — 0.69 s to 0.47 s over 5 runs, but 13.3% to 18.1% of a much smaller wall. Allocation is still where the remaining engine time goes.
+- Allocation at startup rose ~2 ms (1,399 environments instead of 23 lists) and results assembly ~9 ms. Both are once per run against ~560 ms saved.
+
+### `.sim_gather()` is `rbind`, not `vapply`, on purpose
+
+The obvious way to assemble a whole-series `[rows, npatches]` array from row environments is `vapply(rows, ..., state$.proto[[nm]])`, which is faster and self-documenting about storage mode. It is also **wrong here**, in a way the 100-cell bit-identity harness cannot see, because that harness only exercises `rng` mode. `vapply` enforces its prototype's type; `do.call(rbind, ...)` promotes. In `replay` mode the draws come back from a recorded fixture rather than from `rbinom()`, so an integer-allocated channel legitimately holds doubles — and eight Tier B replay tests fail on the `vapply` form. Whether replay ought to preserve storage mode is a real question, but it is a separate one from making the engine faster, so the promotion behaviour is reproduced rather than tightened. `rbind` also gets the `npatches == 1` orientation right for free, where transposing a `vapply` result would have silently returned a single-patch series with time in the columns.
+
+### Correction to the migration record
+
+`migrate-laser-r.md` concluded, after the matrix-to-list fix: *"After that the profile is flat — the hottest single line is 6.9% — so there is no second structural win of that size."* There was: this one, worth more than the fix that prompted that sentence.
+
+The same document already contained the mechanism. It records that holding the channels in an environment *"changed nothing: `env$M[i, ] <- v` still copies, because fetching `M` bumps its reference count before the subassignment."* That is exactly right, and it was then reintroduced one level down — the fix moved the matrices into lists but left the lists on the environment, so the reference-count bump that had just been diagnosed still fired on every write. The diagnosis was correct and was not carried through to the structure that replaced it.
+
+## Test suite: a leaked worker that made a finished run look hung, and a skip condition that could not fire
+
+Two pre-existing defects in the parallel test infrastructure, found while running the suite for the engine work above.
+
+**A wedged PSOCK worker outlived its cluster and held the suite's stdout.** `stopCluster()` asks each worker to shut down by writing to its socket; a worker that is not *reading* that socket never gets the message. `test-ensemble_cluster_robust.R` has a task that calls `Sys.sleep(600)` deliberately -- that is the point of the test, which asserts the gather stops rather than hanging -- so `stopCluster()` returned cleanly while the worker slept on. The orphan inherited the test process's stdout, so the pipe never reached EOF and a suite that had **already finished** looked like it was hanging: `devtools::test() | tail` produced nothing while the R master was already gone from the process table. New `tests/testthat/helper-cluster.R` records worker PIDs at cluster creation and kills any that outlive the shutdown request, wired into all five cluster-creating tests in the two robustness files.
+
+The first version of that helper was a no-op, and every test still passed. It guarded the kill with `grepl("RSOCK", readLines("/proc/<pid>/cmdline"))`, and `/proc/<pid>/cmdline` is NUL-separated: `readLines()` truncates at the first NUL and returns `/usr/lib/R/bin/exec/R` with none of the arguments, so the guard could never match. `tests/testthat/test-cluster_teardown.R` therefore asserts the **leak** first -- that plain `stopCluster()` does leave the worker running -- and only then that the helper reaps it, because without the negative case a helper that kills nothing passes the positive one. It also asserts the PID-reuse guard does not fire on the test runner's own PID.
+
+**`test-optimize_ensemble_subset.R` errored under `devtools::test()`.** Its PSOCK test guards itself with
+
+    skip_if_not(is.function(get(".optimize_eval_cell_block", envir = asNamespace("MOSAIC"))))
+
+whose comment says "skip if the installed package predates this refactor (e.g. running via load_all against a stale install)". Under `devtools::load_all()`, `asNamespace("MOSAIC")` *is* the load_all namespace in the master process, so the symbol is always found, the skip never fires, and the test then died on the worker's `library(MOSAIC)` with "there is no package called 'MOSAIC'". It is a skip condition that cannot detect the thing it names -- the same shape as lesson 13 -- and it asked the master a question only a worker can answer. It now asks a worker via `clusterEvalQ()`. Verified to skip cleanly under `load_all` and to run and pass (88 assertions) against a real 0.73.0 install with `NOT_CRAN=true`.
+
+Note that this test still does not run under a bare `R CMD check`, where `skip_on_cran()` skips it regardless; it needs `NOT_CRAN=true` *and* an install. That is a real coverage gap, but closing it by `load_all`-ing on the workers would stop testing the production path, which is `library(MOSAIC)` (`make_mosaic_cluster()`).
+
+### Also
+
+- `sim_alloc_state()` no longer gives the final row environment the two dose channels. They are `nticks`-shaped in the Python engine and the phases only ever write them at `here` (1..nticks), so a stray read of row `nticks + 1` now returns `NULL` rather than a plausible-looking zero.
+- New `tests/testthat/test-sim_alloc_state.R` (70 assertions) pins the shapes, the per-channel storage modes, the dose contract, the `npatches == 1` orientation, and that the zero prototypes shared across rows are never mutated in place.
+
+# MOSAIC 0.72.0
+
+## Engine and worker runtime: 1.15x on the engine, and the per-simulation `gc()` is gone
+
+The pure-R engine ran about 1.69x slower per simulation than the retired Python engine, a regression accepted knowingly at the port (v0.68.0) on memory and startup grounds and never investigated. This release investigates it. Every change here is **bit-identical**: verified across 5 configurations x 20 seeds against the pre-change engine, comparing the full `params` + 28 result channels + seed payload and the draw-coverage counter, with the Tier B replay fixtures and the results contract passing untouched.
+
+Measured on the default 40-location, 1,398-tick config by an **interleaved paired benchmark** — 8 blocks alternating between this version and a worktree of the previous commit, 4 runs each, so slow drift in machine load cancels instead of being attributed to whichever version happened to run during it:
+
+| | median | min | per-block speedup |
+|---|---|---|---|
+| before (v0.71.1) | 1.144 s | 1.060 s | — |
+| after | **0.994 s** | **0.909 s** | **1.156x** (range 1.07-1.23 over 8 blocks) |
+
+Interleaving is not a formality here. Sequential measurements of the same two versions returned speedups from 1.28x to 1.45x and, on one run, claimed the engine was *faster* with an assertion enabled than disabled. Any unpaired A/B on this class of machine drifts by more than the effect being measured, which is the same defect that made the A-3a scaling curve worth re-running. **Per-change attribution below is therefore reported as indicative only:** the individual figures come from sequential ablation and are inflated by the same drift, in the direction that favours whichever arm ran later. Only the 1.156x total is paired.
+
+Per-simulation worker time falls considerably further than 1.156x, because `n_iterations` defaults to 3 and the `gc()` removal below is per simulation rather than per run.
+
+### Where the time actually was
+
+The premise that motivated this work was wrong in an instructive way. The patch-scaling curve implies ~69% of runtime is fixed per-tick cost and ~31% scales with patch count, and that split holds up on a re-measured, nested-subset curve (intercept 0.758 s, slope 0.0088 s/patch, five points, linear-fit R^2 0.989). But the patch-scaling term was attributed to random variate generation, at an estimated ~325 ns per variate. Measured directly, R's samplers cost **54.5 ns** per variate and **67 ms** per run in total — about 5% of runtime, not 31%. A C harness calling `Rf_rbinom` with one `GetRNGstate()` for the whole loop puts the variate-only floor at **40 ms**.
+
+So variate generation was never the cost. Profiling by function rather than by line put 53% of self time in the phase bodies themselves and 11% in `<GC>`, and the three changes below came out of that.
+
+### 1. `sim_check_invariants()` was the largest single cost, and now costs ~1.7%
+
+The engine's only oracle-independent correctness check — compartments non-negative and NA-free, `N` equal to their sum, `Lambda`/`Psi`/`W` finite and non-negative — runs on every tick of every run (`config$check_invariants` defaults to `TRUE`). It was **20.6%** of engine runtime.
+
+Almost none of that was the checking. It was allocation churn: `Reduce(`+`, lapply(compartments, ...))` built a list of nine vectors plus eight intermediate sums per tick; `intersect(c("Lambda","Psi","W"), names(state))` rebuilt and matched against the whole state environment's name vector per tick to rediscover three names `sim_alloc_state()` always creates; and `anyNA(v)` + `any(v < 0L)` walked each compartment twice, allocating a logical vector each time.
+
+The rewrite keeps every assertion and every error message: one `min()` pass per compartment (an NA anywhere makes `min()` NA, so both checks fall out of one traversal that allocates nothing), an accumulation loop for the compartment sum, `min()`/`max()` for the finiteness checks, and a `NULL` skip for absent channels. `which()` is computed only on failure. The residual cost is now within measurement noise, so **the check stays on by default** — there was no speed-versus-safety trade to make.
+
+It had no direct tests, which is why a rewrite could have silently turned any of these assertions into a no-op with the whole suite still green. `tests/testthat/test-sim_check_invariants.R` now asserts each one *fires*, plus that the engine still calls it and that the default is `TRUE`.
+
+### 2. The draw wrapper
+
+Every stochastic draw passed through four layers. In `"rng"` mode — every production run — the replay machinery is dead weight, and it cost 3.2 microseconds per call against a 2.2 microsecond `rbinom()`: a closure allocated and discarded on each of ~30,750 draws, a `rep()` materialising a length-40 `p` that `rbinom()` recycles for free, a `stats::` namespace resolution per call, and two extra frames.
+
+`sim_draws()` now branches on mode once (`ctl$fast`) and `.sim_binom`/`.sim_pois` carry a thin production path. Parity is exact because recycling happens inside the sampler, so a scalar `p` yields the same variates in the same order as a materialised one.
+
+Coverage counting is **kept** — it is part of the engine's return contract and three tests read `attr(out, "sim_coverage")` off an ordinary run — but the counter moved from a named integer vector to a hashed environment. `coverage[site] <- n` on a named vector copies the whole vector and its name attribute on every draw; that alone was ~9% of runtime. The "unknown draw site" error still fires on the fast path.
+
+`.sim_at()` is now a no-op in `"rng"` mode. It stamps the tick and phase so a *replay* mismatch can say where it happened; nothing in production reads those fields, and two environment writes x 10 phases x 1,398 ticks was 8% of runtime. **Consequence for anyone instrumenting the engine:** `ctl$tick` and `ctl$phase` stay `NA` in `"rng"` mode. Force `mode = "replay"` if you need them.
+
+### 3. No per-simulation `gc()` in the calibration worker
+
+`.mosaic_run_simulation_worker()` called `gc(verbose = FALSE)` twice per simulation — once at the end, once inside the iteration loop at `j == n_iterations`, the latter still commented as preventing "Python object buildup". The Python full GC went with the Python engine in v0.68.0; there is no reticulate finalizer queue or NumPy heap left to sweep, and the rationale left at the same time the code did not.
+
+A forced full collection on a warm worker heap measured **292 ms**, so the pair was **14.8% of the entire per-simulation worker budget** — against 2.1% for `calc_model_likelihood()` and 0.1% for the parquet write. It also defeats R's generational collector. Both calls are removed.
+
+Peak worker RSS does rise, but not enough to matter: 913 MB with the `gc()` against **957 MB** without it, over 30 simulations of the default config, read from the kernel's `VmHWM`. That is 44 MB on a worker the A-3a gate already sized at 926 MB, so the worker-count budget in CLAUDE.md is unaffected.
+
+### What was measured and left alone
+
+- **Parameter matrix orientation.** `sim_params()` transposes the `_jt` matrices out of the patch-major orientation the config delivers and into one that needs a strided read on each of 15,378 row extracts per run. Real, and self-inflicted — but measured at 0.6 ms/run for a contiguous read and 5.2 ms/run for per-tick vector lists, i.e. 0.05% to 0.4%. Not worth the blast radius of flipping 11 call sites and every `_jt` consumer. Left as is.
+- **Worker time outside the engine.** The engine is **83%** of the per-simulation worker budget (3.285 s of 3.956 s at `n_iterations = 3`). Likelihood is 2.1%, the parquet write 0.1%. Sharding the one-row-per-simulation parquet files would not measurably help the worker; its real cost is on the load-and-combine side.
+
+## Config reading: `read_json_to_list()` reads the path, and config paths are cached
+
+`config_default.json` is **5.76 MB**, and 10 of its 79 fields are dense 40x1398 numeric matrices (`b_jt`, `d_jt`, `psi_jt`, `mu_jt`, `nu_1_jt`, `nu_2_jt`, `reported_cases`, `reported_deaths`, and the two weight matrices) -- about 390,000 doubles serialized as decimal text.
+
+`read_json_to_list()` was doing `readLines()` -> `paste(collapse = "\n")` -> `fromJSON(string)`, materialising a 5.76 MB intermediate string on top of the line vector. Handing the path straight to `fromJSON()` gives the identical result (verified by test) in **0.167 s -> 0.125 s**.
+
+The larger cost was re-parsing. `run_simulation(config = "path.json")` is a documented input, and the parse landed inside `sim_params()`, so a loop over a config path re-read 5.76 MB on **every simulation** -- 0.167 s against a 0.94 s simulation, an 18% tax with nothing to indicate it. The same shape appeared in `run_fit_sandbox()` (which the `diagnose-fit` workflow drives repeatedly) and in the rolling-CV per-window config reader.
+
+Those three call sites now go through an internal reader cached on path + size + mtime, so a warm repeat read is **~0 s**. All three previously passed `simplifyVector`/`simplifyMatrix` arguments that are the `fromJSON` defaults, which is what makes one shared reader safe; the test suite asserts that equivalence rather than assuming it.
+
+**Calibration is unaffected either way** -- `run_MOSAIC()`'s worker hands `run_simulation()` an in-memory list and never re-reads a file.
+
+The exported `read_json_to_list()` is deliberately **not** cached: callers of an exported reader should get the file as it is on disk now. Invalidation keys on mtime as well as size, so rewriting a config with different content of the same byte length is still picked up -- there is a regression test for exactly that case.
+
+Not changed: JSON remains the canonical config format. An RDS sidecar would read in 0.005 s at 0.33 MB (33x faster, 17x smaller, bit-identical round trip, no new dependency), but `1_inputs/config.json` and `best_model/config_medoid.json` are documented, human-inspectable interchange artifacts and that is worth more than 0.16 s paid once per run.
+
+## `make_mosaic_cluster()` is capped by available connections
+
+`n_cores` defaulted to `parallel::detectCores() - 1L` with no cap. Every PSOCK worker holds one R connection and a default R build permits 128 in total, three already taken by stdin/stdout/stderr, so on any host with more than ~126 usable cores `parallel::makeCluster()` failed outright. This is not hypothetical: **dugong has 176 cores.**
+
+`n_cores` is now clamped to `parallelly::freeConnections() - 2` (two held back for worker parquet I/O) with a message naming the clamp and R 4.4.0's `--max-connections=N`. New dependency: `parallelly` (Imports).
+
+# MOSAIC 0.71.1
+
+## Bug fix: `weighted_quantiles()` biased every weighted quantile downward
+
+`weighted_quantiles()` and `weighted_quantiles_presorted()` interpolated against each observation's **upper** weight-block edge, `cumsum(w)/sum(w)`, instead of its **midpoint**, `(cumsum(w) - w/2)/sum(w)`. This credits each observation with the whole of its own weight before interpolating to it, so every quantile was pulled toward lower values. The bias is negligible when weights are equal and spread thin, and grows with weight concentration — which is precisely the BFRS posterior regime these functions are used in.
+
+Two cases pin the defect. The function's own documented example, `x = 1:5` with `w = c(.1, .2, .4, .2, .1)`, is symmetric about 3 and returned **2.5**. With `x = c(1, 2)` and 99% of the weight on `x = 2`, it returned **1.49** rather than approaching 2. Equal weights did not reproduce `stats::quantile()`, and splitting one observation's weight across two copies of the same value changed the answer — an invariance any weighted quantile must satisfy.
+
+With the fix, equal weights reduce exactly to the standard Hazen (type-5) quantile.
+
+### What this changes
+
+Every quantile-derived output moves **upward**. Affected paths are `calc_model_ensemble()` (weighted-median central estimate, CI bounds), `optimize_ensemble_subset()`, `calc_Reff()`, `calc_model_posterior_quantiles()` and `add_reproductive_numbers()`. Weighted *means* are untouched.
+
+Size depends entirely on how concentrated the posterior is. On a realistic calibration posterior (487 parameter sets, ESS 65) the ensemble median shifted in 13.7% of cells and totals rose 0.38%. On the small, heavily-concentrated `parity_tier2` test fixture the medians moved 2–63%, and for the `mae` objective the *selected subset* changed (`optimal_n` 7 → 12) because `optimize_ensemble_subset()` scores candidates using these medians. Anyone comparing new ensemble output against runs produced before this release should expect a small upward shift in the central estimate and CI bounds.
+
+### Tie handling
+
+Weights spanning many orders of magnitude (the Gibbs weight floor is 1e-15) make consecutive plotting positions collide in double precision. These are now collapsed explicitly by their **weighted** mean, rather than left to `approx()`'s unweighted tie averaging, which also emitted one warning per call — 46,672 in a single ensemble reduce.
+
+### Verification
+
+The golden fixture `tests/testthat/fixtures/parity_tier2.rds` was re-baselined, inputs asserted byte-identical, by `claude/parity/rebaseline_parity_tier2.R`. Three independent checks distinguish a re-baseline from a covered-up break: the fixture-free oracles in `test-tier2_parity.R` (#2a, #1) pass untouched at `tolerance = 0`; weighted means came back bit-identical at ~4e-16, and the re-baseline script aborts if one moves; and every changed cell moved up with none moving down (`cases_median` 8 up / 0 down, `ci_bounds` 47 up / 0 down), the only direction correcting a downward bias can produce.
+
+Found while running the phase A-5 calibration acceptance; it affected neither arm's comparison, since both were reduced by the same function.
+
+# MOSAIC 0.71.0
+
+## The R engine is accepted
+
+Phase A-5 of `migrate-laser-r.md` is complete: the pure-R transmission engine has passed the acceptance criteria prespecified before the port began. No package code changed in this release — this version marks the acceptance itself, which is A-5's stated exit.
+
+### Tier C — free-running distributional parity
+
+Four configurations (default 40-location, single-location, high-vaccination, epidemic-threshold-crossing), 200 seeds per arm, each config's noise floor measured from a Python-vs-Python replicate pair before the R arm was compared to it. **All 36 configuration × quantity bands pass.**
+
+The three configurations beyond the default were built for this release and each was verified to reach the code path it targets before engine time was spent on it. That check earned its keep: the default configuration's `nu_2_jt` is all zeros and only 17 of 40 patches receive any `nu_1_jt`, so the entire second-dose block had never executed under Tier C until the high-vaccination configuration turned it on.
+
+### Calibration acceptance
+
+500 parameter draws from `sample_parameters()` pushed through both engines from the same config files and scored by the same R `calc_model_likelihood()`, with a Python replicate over the same draws setting the noise floor. **All 32 bands pass** — R², bias ratio, ESS (Kish and perplexity), mean log-likelihood, and the weighted posterior marginals of all 25 sampled scalar parameters.
+
+### One behavioural difference, quantified
+
+NumPy's Poisson sampler raises `ValueError('lam value too large')` above λ ≈ 9.2e18 because it returns `int64`; R's `rpois()` returns a double and samples correctly there. Consequently **13 of 500 prior draws (2.6%) run under the R engine and are rejected by the Python engine** — the same 13 under both Python replicates despite a 100,000 seed offset, so the rejection is deterministic in the draw. All 13 carry an extreme `zeta_2` and overflow at the environmental shedding draw. Their R results are ordinary (no non-finite values; 0.5–6.4M cases against 2–3.8M for the best-fitting ordinary draws), they would carry 3.2% of posterior mass, and one ranks 9th best of 500.
+
+The practical consequence is that the R engine explores a thin band of prior tail that the Python engine silently discarded. R is the correct arm; no change was made.
+
+# MOSAIC 0.70.0
+
+## `LASER` is gone from the names too
+
+The engine has been pure R since v0.68.0 and the `laser-cholera` dependency went in v0.69.0. `LASER` named the Python package MOSAIC used to shell out to, so every `LASER` in the API was pointing at something that no longer exists. This release renames them and clears out what the migration left behind.
+
+### Breaking changes
+
+* **`run_LASER()` is now `run_simulation()`**, **`make_LASER_config()` is now `make_simulation_config()`**, and **`get_default_LASER_config()` is gone** in favour of the identical `get_default_config()` (the two were byte-for-byte duplicates and neither had a caller). The old names are kept as stubs that raise an error naming the new one -- not as silent aliases, which is how a dead name survives for years. Arguments and behaviour are unchanged. The lowercase alias `run_laser()` is likewise a stub.
+* **The engine's internals are `sim_*`, not `laser_*`.** `laser_params()` -> `sim_params()`, `laser_results()` -> `sim_results()`, `LASER_CHANNELS` -> `SIM_CHANNELS`, `LASER_PIPELINE` -> `SIM_PIPELINE`, and so on for every engine symbol; the files follow (`R/laser_engine.R` -> `R/sim_engine.R`). The two attributes on a `run_simulation()` return are now `sim_provenance` and `sim_coverage`.
+* **`check_coiled_workspace()` and `mosaic_dask_presets()` are deleted.** v0.67.0 replaced them with `stop()` stubs "for one minor version after the engine cutover"; the cutover was v0.68.0, so this is when that expires.
+* **The `Running LASER` vignette is now `Running simulations`** (`vignettes/Running-simulations.Rmd`).
+
+### Removed
+
+* **The Docker worker image and its CI.** `.github/workflows/docker-image-update.yaml` built and published `mosaic-worker:latest` and refreshed the Coiled software environment; `.github/workflows/smoke-test.yml` pulled that image on every push. Both existed to serve the Dask/Coiled backend, which went in v0.67.0. The `azure/` tree (the Dask/Coiled scripts, Dockerfile and runbooks) goes with them. The ACR image and the Coiled environment themselves are external and still need deleting by hand.
+* **Dead local helpers,** each defined and never called: `draw_loc_or_default()` in `est_initial_E_I()`, `.get_ci()` in `plot_model_ppc()`, `.lookup_prior_family()` in `calc_model_posterior_quantiles()`, `get_column_names()` in `get_WHO_vaccine_data()`, `log_sum_exp()` in `calc_model_ess_parameter()`, and a 62-line `calc_kl_analytical()` in `plot_model_distributions()` that duplicated the exported `calc_kl_divergence()`.
+* `.Rbuildignore` entries for `deprecated/` and `src/`, neither of which exists.
+
+### Changed
+
+* **CI no longer installs a conda environment on the PR path.** The Miniforge setup plus a ~2-3 GB TensorFlow solve ran on every push to check an environment that only the suitability model uses; it now runs on the nightly schedule and on manual dispatch, where "does `environment.yml` still solve" is the actual question. The `Install MOSAIC from GitHub` step is gone -- it reinstalled the *default branch* over the tarball just built from the PR, after the tests had already run. The macOS Homebrew Python step is gone too: macOS never installed the r-mosaic environment, so it only ever handed reticulate an interpreter with none of MOSAIC's Python packages in it.
+* `install_dependencies()` no longer claims to install "the LASER disease transmission model simulation tool"; its documentation now says what the environment is actually for.
+* The startup banner no longer advertises LASER.
+
+# MOSAIC 0.69.0
+
+## The `laser-cholera` dependency is gone
+
+v0.68.0 made the R engine the only engine. This release removes the Python
+package it replaced. Nothing on the simulation or calibration path touches
+Python any more; `reticulate` survives solely for the keras3 environmental-
+suitability model, which is unchanged.
+
+### Breaking changes
+
+* **Resuming a run directory created before v0.68.0 is now a hard error.** Its
+  shards came from the Python engine, and the two engines agree statistically
+  but not draw-for-draw, so pooling them would produce a posterior from neither
+  simulator. The check reads the MOSAIC version recorded in
+  `1_inputs/environment.json`. Run directories created by v0.68.0 or later
+  resume exactly as before.
+* **`1_inputs/environment.json` no longer records `python$pkg_laser_cholera`**
+  (nor `pkg_laser_core`), and now records `pkg_tensorflow` and `pkg_keras`
+  instead. Readers of the old key get `NULL`; the resume path no longer reads it.
+* **`inst/python/environment.yml` loses `laser-cholera`, `laser-core`, `numba`,
+  `llvmlite` and `pyarrow`,** keeping `python`, `pip`, `numpy`, `packaging` and
+  the pinned `tensorflow`. A fresh `install_dependencies()` builds a
+  TensorFlow-only environment. Nothing in the package imports the removed
+  packages.
+
+### Changed
+
+* **`check_dependencies()` validates a TensorFlow environment, not a LASER
+  one.** Its "core" capability category is gone along with the packages that
+  populated it -- there is no longer a Python capability whose loss breaks
+  simulation -- so it reports one capability, suitability estimation, and says
+  plainly that a broken Python environment costs you `est_suitability()` and
+  not `run_MOSAIC()`.
+* **`lock_python_env()` verifies the environment by importing `tensorflow`**
+  rather than `laser.cholera.metapop.model`.
+* The `psi_manifest.json` written by `prefit_rolling_cv_psi()` no longer
+  carries a `laser_version` field. It was write-only provenance -- cache hits
+  key on `spec_hash` -- and psi is upstream of the transmission engine, so the
+  engine version never bore on whether a frozen psi CSV was reusable.
+
+### Removed
+
+* `.onLoad()` no longer sets `NUMBA_THREADING_LAYER=workqueue`. That workaround
+  stopped numba loading Intel's OpenMP runtime alongside data.table's; numba
+  came in with the engine and is no longer installed, so the setting named a
+  package that is not there. The `KMP_*` and `OMP_NUM_THREADS` settings stay --
+  TensorFlow can still bring its own OpenMP runtime.
+* `.mosaic_lc_pre013()` and `.mosaic_lc_deaths_scale()`, which classified two
+  laser-cholera versions against the v0.13 deaths-likelihood-scale boundary.
+  Their "current" operand was read from the installed wheel, which after the
+  v0.68.0 cutover no longer described what had simulated anything -- and once
+  the wheel left `environment.yml` the guard would have reported itself
+  SKIPPED on every single resume. Replaced by `.mosaic_run_engine()`, which
+  answers the larger question the boundary was a proxy for: which engine
+  produced these shards.
+* `.mosaic_likelihood_provenance()`'s `lc_version` argument. v0.67.0 had
+  already reduced the body to a constant, leaving a parameter every caller
+  filled and nothing read.
+* `skip_if_no_python_likelihood()` and the eager Python probe in
+  `tests/testthat/setup-python.R` that fed it. The helper had no callers left
+  once the R-vs-Python likelihood parity tests went, but the probe still paid a
+  reticulate interpreter init plus two module imports (~6 s) in every test
+  process to cache three flags nothing read. The CI step that installed the
+  wheel so those tests would not skip is gone with them.
+
+# MOSAIC 0.68.0
+
+## The R engine is now the engine
+
+`run_LASER()` runs the pure-R transmission model. It was a `reticulate` bridge
+to `laser.cholera.metapop.model`; it is now the R engine itself, and for the
+first time it is the package's **only** engine entry point. It was not one
+before: `run_MOSAIC()`'s simulation worker, `calc_model_ensemble()`'s per-task
+worker and `calc_Reff()`'s re-simulation each imported the Python module and
+called `run_model()` directly, so "the engine call site" was four places that
+had to be kept in step. All four now go through `run_LASER()`.
+
+### Breaking changes
+
+* **`run_LASER()` returns an R list, not a Python object.** The shape is
+  unchanged -- `$params`, `$results`, `$seed`, with `$results` holding
+  `[location, time]` matrices -- so `model$results$reported_cases` still works,
+  but `reticulate::py_to_r()` around it does not and is no longer needed. The
+  28 channels, their orientation, their per-field storage mode and the absence
+  of dimnames are asserted by `test-laser_results_contract.R`.
+* **Single-location runs return a `1 x nticks` matrix**, where the Python
+  engine returned a bare length-`nticks` vector. Callers that already handled
+  both are unaffected.
+* **`visualize`, `pdf`, `outdir` and `py_module` are gone** from `run_LASER()`.
+  They drove the Python engine's matplotlib Analyzer or passed in a
+  pre-imported module; supplying one now raises an error naming it.
+* `make_mosaic_cluster()` no longer imports `laser.cholera` into each worker,
+  and no longer loads `reticulate` there. This was scheduled for the dependency
+  removal, but keeping it would have meant every calibration worker still paid
+  the 3.3 s import and held the Python heap for a module nothing calls. For the
+  same reason the calibration worker's every-100th-sim `reticulate::import("gc")$collect()`
+  is gone: there is no Python heap left to sweep, and the call would have
+  initialised Python in each worker to collect nothing.
+
+### Fixed
+
+* **`run_fit_sandbox()` was broken and no test could see it.** It called its
+  runner with `visualize`/`pdf`/`outdir`, which `run_LASER()` had already
+  started rejecting -- but every test in the file stubs the runner, and the
+  stubs accepted those arguments. The call is fixed, and a new test asserts the
+  sandbox only ever passes arguments that are formals of the real `run_LASER()`.
+* **`test-lasik_calculations.R` now runs, and three of its assertions were
+  wrong.** The file validates engine output against this package's analytic
+  helpers, and it had been silently inert: gated to the slow tier, and even
+  there its config path was cwd-relative and never resolved. With the R engine
+  the whole file takes ~2 s, so it is un-gated. Running it surfaced that (a)
+  the `pi_ij` comparison applied a `t()` that made it wrong by up to 0.29,
+  where the untransposed comparison agrees to 4e-16; (b) the spatial-hazard
+  check read `V1sus`/`V2sus`, compartments the engine collapsed into `V1`/`V2`
+  in v0.16.1, i.e. it passed `NULL`; (c) the population check's 1% tolerance
+  was never achievable -- the measured drift against UN WPP is 2.23% for the R
+  engine and 2.24% for the pinned Python oracle, so it is engine demography
+  rather than a port artefact, and the tolerance now says so.
+* The **coupling** comparison in the same file no longer needs its `1e-2`
+  fudge. The engine correlates the untrimmed prevalence series (`nticks + 1`
+  observations) while the result channels have the seed row trimmed;
+  reconstructing that observation from `I_j_initial`/`N_j_initial` makes
+  `calc_spatial_correlation_matrix()` reproduce the engine's matrix *exactly*,
+  which proves the trim was the entire difference rather than assuming it.
+* **`expected_cases` no longer exists** in the engine's return and has been
+  removed from `calc_model_ensemble()`'s default trajectory channels and from
+  `plot_model_trajectories()`'s panel spec. It was degrading silently to an
+  absent panel.
+
+### Removed
+
+* `.mosaic_prepare_config_for_python()` and `.mosaic_strip_laser_file_handler()`.
+  The first wrapped length-1 config fields so `reticulate` would pass them as
+  Python lists; the second deleted the log file `laser-cholera` created on
+  import. Neither has anything left to do.
+
+The `laser-cholera` dependency itself is still declared -- `check_dependencies()`,
+`lock_python_env()`, `environment.yml`, the run-provenance keys and CI still
+reference it. Removing those is the next step.
+
+# MOSAIC 0.67.0
+
+## Pure-R transmission engine (ported; cut over in 0.68.0)
+
+The Python `laser-cholera` transmission engine is replaced by a pure-R
+implementation. This release lands the deterministic precomputation, the full
+tick loop and the result contract behind an internal entry point;
+0.68.0 makes it the engine `run_MOSAIC()` actually calls. See
+`migrate-laser-r.md`.
+
+**All ten pipeline components are ported** (`Susceptible`, `Exposed`,
+`Recovered`, `Infectious`, `Vaccinated`, `Census`, `HumanToHuman`,
+`EnvToHuman`, `Environmental`, `DerivedValues`). Correctness is established by
+replaying the Python engine's recorded PRNG draws: **all 22 stochastic draw
+sites, 30,751 draws matched draw-for-draw, and all 19 integer result channels
+bit-identical over a full 1,398-tick 40-patch run**, with the 9 float channels
+inside a measured scale-aware tolerance. The return contract -- 28 channels,
+`[patch, time]` orientation, per-field storage mode, no dimnames -- is asserted
+against an ordinary (non-replayed) run.
+
+`DerivedValues` contributes the two end-of-run diagnostics `spatial_hazard` and
+`coupling`, which `calc_model_ensemble()` and the spatial plots consume. Both
+are computed once, on the final tick, from the whole run. `coupling` is a
+Pearson correlation matrix of per-patch prevalence and is `NaN` for any patch
+whose prevalence never varied (correlation with a constant series is
+undefined); the R and Python engines agree on exactly which patches those are.
+
+Two findings worth flagging:
+
+* **Single precision is observable.** The Python engine stores most parameters
+  and the `W`/`Lambda`/`Psi` state as float32. Where that reaches an integer --
+  `round(sigma * progressing)`, the vaccination pro-rata split, the reported-case
+  divisor, the epidemic-threshold comparisons -- the R port reproduces the stored
+  precision, because an integer differing by one decorrelates the draw sequence.
+  Where it reaches only a float, the R port stays in double and is the more
+  accurate of the two. Details in `tests/testthat/fixtures/ORACLE.md`.
+* **`spatial_hazard` can be negative, in both engines.** The unconstrained
+  two-harmonic seasonal envelope dips below zero for some patches in the low
+  season, so `beta_jt_human` goes negative and the hazard follows it.
+  `HumanToHuman` clamps its own rate with `pmax(..., 0)`; `derivedvalues.py`
+  has no such clamp, and the R port reproduces that rather than quietly
+  changing the model. The same near-zero envelope is why `spatial_hazard`
+  needs a looser parity tolerance than any other float channel.
+* **The engine is 1.69x slower than the Python original**, not faster as the
+  migration plan projected: 1.183 s against 0.698 s for a 1,398-tick 40-patch
+  run. An earlier version was 2.91 s; storing each channel as a list of per-tick
+  vectors rather than a matrix removed ~55% of the runtime, because a matrix row
+  write copies the whole matrix. Whether the remaining gap is an acceptable price
+  for dropping reticulate, the 2 GB-per-worker Python heap and the per-worker
+  import tax is a judgement call, flagged in the plan rather than assumed.
+
+## Dask/Coiled distributed backend removed
+
+The distributed-compute layer existed to make the Python transmission engine
+affordable — that engine costs ~2 GB of RAM per worker and 3.3 s of import time
+per worker process, which on a 20-core fan-out is 66 s of startup tax on every
+batch. With the engine moving to pure R (see `migrate-laser-r.md`), the reason
+for it goes away. It was also already scientifically invalid on Coiled: the
+worker image lagged `laser-cholera`, so hybrid runs completed but produced low
+R² / unconverged results (issue #113).
+
+`run_MOSAIC()` now has exactly one execution path: the local PSOCK/sequential
+cluster, sized by `control$parallel$n_cores`. This is the single largest
+simplification the package has had — ~2,200 lines of production code and ~1,900
+lines of tests removed, and `run_MOSAIC.R` alone dropped from 3,999 to 3,388
+lines.
+
+### Breaking changes
+
+Removed, and **loud** about it — every one raises an error naming what to use
+instead, rather than being silently accepted and ignored:
+
+* `dask_spec` argument to `run_MOSAIC()` and `run_rolling_cv()`. Use
+  `control$parallel$n_cores`.
+* `check_coiled_workspace()`, `mosaic_dask_presets()`.
+* `control$parallel$strict_worker_version` (guarded orchestrator/worker engine
+  version skew, which cannot exist with one process).
+* `precomputed_results` argument to `calc_model_ensemble()` — its only
+  production callers were the Dask gather and the Dask medoid dispatch. It was
+  also the seam four test files used to inject synthetic engine output, so the
+  per-task simulation worker has been hoisted out of `calc_model_ensemble()`'s
+  body into `.mosaic_ensemble_sim_task()` (`R/calc_model_ensemble_task.R`) and
+  the tests now mock that instead. They assert strictly more than before: the
+  real task list, dispatch, gather and worker-side spill-to-scratch all run,
+  where the old argument bypassed them. `optimize_ensemble_subset()` and
+  `calc_model_ensemble()` still reproduce `fixtures/parity_tier2.rds`
+  bit-for-bit through the new seam.
+* The `param_seed` field on a result record, which sat ahead of config `$seed`
+  and positional `parameter_seeds` in `calc_model_ensemble()`'s per-member seed
+  fallback. It existed only because a Dask worker held a config the master did
+  not; the two surviving tiers are unchanged.
+* `run_LASER()`'s `py_module`, `visualize`, `pdf` and `outdir` arguments. The
+  first let a caller hand in a pre-imported module; the other three drove the
+  Python engine's matplotlib `Analyzer`, which is not part of the R contract.
+  All four had zero callers.
+
+`run_MOSAIC()` and `run_LASER()` now also reject **unknown** arguments rather
+than absorbing them into `...`. This is the "unknown key validator" whose
+absence let renamed `control` parameters be silently dropped for fifteen minor
+versions (see CLAUDE.md lesson #13).
+
+`make_mosaic_cluster()` is **not** removed. Despite its Dask-era documentation it
+builds the local PSOCK cluster that the surviving backend runs on.
+
+### Also removed
+
+* `inst/python/mosaic_dask_worker.py` (727 lines), and `dask[distributed]` /
+  `coiled` from `inst/python/environment.yml`. `laser-cholera` is untouched —
+  it is still the engine until the R port lands.
+* `.mosaic_inject_likelihood_settings()` and `.extract_base_config()`, which
+  flattened likelihood settings onto the config for on-worker Python scoring.
+  This also retires the bug in CLAUDE.md lesson #12(a), where the injector
+  overwrote `get_location_config()`'s filtered `epidemic_peaks` with the full
+  unfiltered SSA dataset.
+* A dead allow-list in `.mosaic_resume_check_inputs()` that permitted resuming
+  across two `laser-cholera` versions whose on-worker Python likelihood values
+  were verified byte-identical. With scoring now always R-side its
+  `engine == "python"` condition can never be true. Shards scored by the old
+  Python path now fail the provenance check outright, which is correct — those
+  likelihoods are not reproducible here.
+
+### Tests
+
+Ten Dask test files were retired, but three carried assertions about the
+surviving code and were re-homed rather than deleted:
+
+* `test-samples_parquet_schema.R` keeps the **ISO-suffix parquet column
+  contract** (`beta_j0_tot_ETH`, never `beta_j0_tot_1`) that every downstream
+  posterior join depends on.
+* `test-calc_model_likelihood_regression.R` replaces the R-vs-Python likelihood
+  parity suite with **frozen R baselines** plus monotonicity and orientation
+  properties, guarding the shape-term scaling bugs of lessons #4 and #5.
+* `test-presets.R` keeps `mosaic_io_presets()`.
+
+New `test-removed_dask_api.R` asserts the removed surface errors rather than
+being silently absorbed.
+
 # MOSAIC 0.59.1
 
 ## plot_Reff readability

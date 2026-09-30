@@ -1,6 +1,6 @@
 #' Compute the model-implied mobility flux from a run configuration
 #'
-#' Derives the **model's own implied daily mobility flux** from a LASER
+#' Derives the **model's own implied daily mobility flux** from a simulation
 #' configuration's population sizes and calibrated mobility point estimates.
 #' This is the single source of truth for the four mobility figures in the
 #' \code{"spatial"} group of \code{\link{render_MOSAIC_figures}} (\eqn{\pi_{ij}}
@@ -28,8 +28,8 @@
 #' \code{location_name} element is aligned element-wise to every vector and to
 #' both axes of every matrix. This function never sorts.
 #'
-#' @param config A LASER configuration list (as read from \code{1_inputs/config.json}
-#'   or produced by \code{\link{make_LASER_config}}). Must contain
+#' @param config A simulation configuration list (as read from \code{1_inputs/config.json}
+#'   or produced by \code{\link{make_simulation_config}}). Must contain
 #'   \code{longitude}, \code{latitude}, \code{N_j_initial}, \code{tau_i},
 #'   \code{location_name}, and the scalars \code{mobility_omega},
 #'   \code{mobility_gamma}.
@@ -66,7 +66,7 @@
 calc_mobility_flux <- function(config) {
 
   if (is.null(config) || !is.list(config))
-    stop("`config` must be a LASER configuration list.")
+    stop("`config` must be a simulation configuration list.")
 
   required <- c("longitude", "latitude", "N_j_initial", "tau_i",
                 "location_name", "mobility_omega", "mobility_gamma")

@@ -23,7 +23,7 @@
 .MOSAIC_ENSEMBLE_RAM_FRACTION <- 0.80
 .MOSAIC_ENSEMBLE_GATHERED_LIST_FACTOR <- 2
 
-# Comprehensive default set of internal LASER `model$results` channels captured
+# Comprehensive default set of internal engine `model$results` channels captured
 # for the trajectory figures (the "related quantities" beyond reported cases/
 # deaths). reported_cases/reported_deaths are NOT here -- they are sourced from
 # the ensemble cases_array/deaths_array (no re-capture). Each is harvested
@@ -37,8 +37,9 @@
   "Lambda", "Psi", "beta_jt_human", "beta_jt_env",
   # incidence & infection flows
   "incidence", "incidence_human", "incidence_env", "new_symptomatic",
-  # burden channels (expected_cases = new_symptomatic/rho; disease_deaths = true burden)
-  "expected_cases", "disease_deaths"
+  # true deaths (disease_deaths: fatal onsets before death reporting; reported
+  # deaths / rho_deaths, so they rest on the pinned rho_deaths assumption)
+  "disease_deaths"
 )
 
 #' Drop the heavy 4-D arrays from a mosaic_ensemble (for lightweight persistence)
@@ -62,7 +63,8 @@
 .mosaic_ensemble_ram_projection_gb <- function(n_locations, n_time_points,
                                                n_param_sets, n_stoch,
                                                n_capture_channels = 0L,
-                                               capture_in_gather = FALSE) {
+                                               capture_in_gather = FALSE,
+                                               broadcast_gb = 0) {
   # One dense double array = n_loc * n_time * n_param * n_stoch * 8 bytes.
   one_array_gb <- (as.numeric(n_locations) * as.numeric(n_time_points) *
                      as.numeric(n_param_sets) * as.numeric(n_stoch) * 8) / 2^30
@@ -75,15 +77,48 @@
   # accumulated on the gathered list, so peak capture RAM is ONE transient
   # [n_loc x n_time x n_param x n_stoch] array the channel-by-channel reduce
   # builds-and-frees one channel at a time -- FLAT in the channel count (the
-  # scratch DISK footprint, not RAM, scales with n_capture_channels). On the DASK
-  # path, however, the gathered `precomputed_results` list transiently holds ALL
-  # n_capture_channels per record on the client BEFORE they are streamed to
-  # scratch (capture_in_gather = TRUE), so the honest client-RAM term adds
-  # n_capture_channels * one_array (this is why the OOM warning must see it).
+  # scratch DISK footprint, not RAM, scales with n_capture_channels).
+  #
+  # `capture_in_gather` existed for the removed Dask backend, whose gathered
+  # result list transiently held all n_capture_channels per record on the client
+  # before streaming them to scratch. The local path never does this, so the
+  # term is always zero now; the argument is kept so the RAM model stays
+  # explicit about what it is and is not counting.
   capture_gb <- if (n_capture_channels > 0L) one_array_gb else 0
   if (isTRUE(capture_in_gather))
     list_gb <- list_gb + as.numeric(n_capture_channels) * one_array_gb
-  dense_gb + list_gb + capture_gb
+  # `broadcast_gb` is the clusterExport of param_configs to every worker. It
+  # belongs in the SAME budget as the arrays above because the only backend left
+  # is local PSOCK: the workers are processes on this host, so their copies come
+  # out of this machine's RAM. See .mosaic_ensemble_broadcast_gb().
+  dense_gb + list_gb + capture_gb + as.numeric(broadcast_gb)
+}
+
+#' Projected RAM for broadcasting the sampled configs to PSOCK workers
+#'
+#' \code{calc_model_ensemble()} \code{clusterExport}s the whole
+#' \code{param_configs} list to every worker, so the cost is
+#' (size of one config) x n_param_sets x n_workers, and with local PSOCK every
+#' copy lives on this host.
+#'
+#' Measured at 40 locations: one sampled config is \strong{10.15 MB}, so the
+#' broadcast is 1.13 GB per worker at 114 parameter sets and \strong{9.91 GB per
+#' worker -- 793 GB across 80 workers} at 1,000. That is the cliff this exists to
+#' name: at the subset sizes used so far it is a minor term, and at the sizes the
+#' optimiser is allowed to choose it is the dominant one.
+#'
+#' @param param_configs The list of sampled configs about to be exported.
+#' @param n_workers Number of PSOCK workers that will receive a copy.
+#' @return Projected gigabytes, or 0 when there is nothing to broadcast.
+#' @noRd
+.mosaic_ensemble_broadcast_gb <- function(param_configs, n_workers) {
+  n_workers <- suppressWarnings(as.integer(n_workers))
+  if (length(n_workers) != 1L || is.na(n_workers) || n_workers < 1L) return(0)
+  if (!length(param_configs)) return(0)
+  # Size ONE config and multiply: object.size() on the whole list is O(n) in
+  # deep-list traversal and the configs are structurally identical.
+  one_gb <- as.numeric(utils::object.size(param_configs[[1L]])) / 2^30
+  one_gb * length(param_configs) * n_workers
 }
 
 # Warn (do NOT cap) when the dense-array + gathered-list footprint risks OOM.
@@ -92,23 +127,31 @@
 .mosaic_ensemble_check_ram <- function(n_locations, n_time_points, n_param_sets,
                                        n_stoch, total_ram_gb = NULL,
                                        n_capture_channels = 0L,
-                                       capture_in_gather = FALSE) {
+                                       capture_in_gather = FALSE,
+                                       broadcast_gb = 0) {
   proj_gb <- .mosaic_ensemble_ram_projection_gb(n_locations, n_time_points,
                                                 n_param_sets, n_stoch,
                                                 n_capture_channels,
-                                                capture_in_gather)
+                                                capture_in_gather,
+                                                broadcast_gb)
   if (is.null(total_ram_gb)) total_ram_gb <- .psi_total_system_ram_gb()
   if (is.na(total_ram_gb)) return(invisible(proj_gb))  # un-probed platform: skip
   if (proj_gb > .MOSAIC_ENSEMBLE_RAM_FRACTION * total_ram_gb) {
+    bcast_txt <- if (broadcast_gb > 0) sprintf(
+      " Of that, ~%.1f GB is the clusterExport of %d sampled configs to every ",
+      broadcast_gb, n_param_sets) else ""
+    bcast_txt2 <- if (broadcast_gb > 0)
+      "PSOCK worker, which lands on THIS host because the workers are local processes." else ""
     warning(sprintf(paste0(
       "calc_model_ensemble: the dense prediction arrays + gathered results list ",
       "project to ~%.1f GB on this orchestrator node (2 dense [%d x %d x %d x %d] ",
       "double arrays + the concurrent gathered list), but the system has ~%.0f GB ",
-      "RAM -- this risks an out-of-memory failure. Reduce max_best_subset (fewer ",
+      "RAM -- this risks an out-of-memory failure.%s%s Reduce max_best_subset (fewer ",
       "parameter sets) and/or n_iter_ensemble (fewer stochastic reruns per set), or ",
       "run on a larger-memory host. This is the dominant memory cliff at long ",
       "(e.g. 2015) calibration windows."),
-      proj_gb, n_locations, n_time_points, n_param_sets, n_stoch, total_ram_gb),
+      proj_gb, n_locations, n_time_points, n_param_sets, n_stoch, total_ram_gb,
+      bcast_txt, bcast_txt2),
       immediate. = TRUE, call. = FALSE)
   }
   invisible(proj_gb)
@@ -119,8 +162,8 @@
 # -----------------------------------------------------------------------------
 # `parallel::parLapply()` / `pbapply::pblapply(cl=)` gather results with a
 # BLOCKING `unserialize(node$con)`. If a PSOCK worker PROCESS dies mid-task --
-# a segfault / fatal C-level abort in the embedded Python (numba/laser) runtime,
-# an OOM kill, etc. (NOT an R-level error, which the worker's tryCatch already
+# a fatal C-level abort in compiled code, an OOM kill under memory pressure,
+# etc. (NOT an R-level error, which the worker's tryCatch already
 # turns into a `success = FALSE` record) -- the behaviour is platform-dependent:
 #   * macOS surfaces the half-closed socket as "error reading from connection";
 #   * Linux can BLOCK FOREVER on the dead peer's socket.
@@ -185,9 +228,10 @@
       # No worker holds a task but work remains -> every worker has died.
       stop(sprintf(paste0(
         "%s parallel gather: all %d worker(s) crashed with %d task(s) ",
-        "unfinished. A worker process died (fatal abort in the embedded Python/numba engine ",
-        "or an OOM kill), not an R-level error. Re-run with parallel = FALSE to surface the ",
-        "underlying engine error, or reduce n_cores to lower memory pressure."),
+        "unfinished. A worker process died at the OS level (a segfault in a compiled ",
+        "dependency, or an OOM kill), not an R-level error -- an R error would have been ",
+        "returned as a failed task rather than killing the worker. Re-run with ",
+        "parallel = FALSE to surface it, or reduce n_cores to lower memory pressure."),
         label, n_workers, n - n_done), call. = FALSE)
     }
     cons <- lapply(cl[busy_w], function(node) node$con)
@@ -201,10 +245,9 @@
       stop(sprintf(paste0(
         "%s parallel gather stalled: no worker produced a result ",
         "within %d s. %d task(s) still in flight (indices: %s) on worker(s) that have gone ",
-        "unresponsive -- a worker process most likely crashed (a fatal abort in the embedded ",
-        "Python/numba engine or an OOM kill). The cluster is being torn down. Re-run with ",
-        "parallel = FALSE to surface the underlying engine error, or reduce n_cores to lower ",
-        "memory pressure."),
+        "unresponsive -- a worker process most likely crashed at the OS level (a segfault in ",
+        "a compiled dependency, or an OOM kill). The cluster is being torn down. Re-run ",
+        "with parallel = FALSE to surface it, or reduce n_cores to lower memory pressure."),
         label, as.integer(idle_timeout_sec), length(stalled),
         paste(stalled, collapse = ", ")),
         call. = FALSE)
@@ -242,7 +285,7 @@
 #' Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 #'
 #' @description
-#' Runs LASER simulations for multiple parameter sets (with stochastic reruns
+#' Runs simulations for multiple parameter sets (with stochastic reruns
 #' per set) and aggregates results using importance weights. Returns a
 #' \code{mosaic_ensemble} object containing weighted mean, median, and quantile
 #' envelopes for cases and deaths.
@@ -258,7 +301,7 @@
 #' @param parameter_weights Numeric vector of importance weights, same length as
 #'   \code{parameter_seeds} or \code{configs}. Normalized internally to sum to 1.
 #'   If \code{NULL}, all parameter sets are weighted equally.
-#' @param n_simulations_per_config Integer. Stochastic LASER reruns per parameter
+#' @param n_simulations_per_config Integer. Stochastic stochastic reruns per parameter
 #'   set. Default \code{10L}.
 #' @param envelope_quantiles Numeric vector of quantiles for confidence intervals.
 #'   Must be even length to form lower/upper pairs. Default
@@ -274,13 +317,14 @@
 #'   returned series here; it is recorded in the returned \code{artifact_mask}
 #'   element so downstream scoring (R2/bias) can exclude these positions. Set to
 #'   \code{0L} to record "no cases warm-up mask".
-#' @param mask_final_deaths_step Logical. If \code{TRUE} (default, matching
-#'   \code{\link{plot_model_ensemble}}), record that the FINAL deaths timestep is
-#'   a laser-cholera structural zero (\code{reported_deaths} written at tick
-#'   then leading-trimmed, so the last slot is never written; laser issue #82).
-#'   This value is NOT applied to any returned series here; it
-#'   is recorded in the returned \code{artifact_mask} element for downstream
-#'   scoring.
+#' @param mask_final_deaths_step Logical. If \code{TRUE}, record that the FINAL
+#'   deaths timestep is a structural zero to exclude from scoring. That was true
+#'   of the laser-cholera engine (\code{reported_deaths} written at tick and
+#'   leading-trimmed, so the last slot was never written; laser-cholera issue #82).
+#'   Since v0.96.0 the R engine reports deaths on the same row as cases, and the
+#'   post-hoc death redraw fills the final column, so the default is \code{FALSE}.
+#'   This value is NOT applied to any returned series here; it is recorded in the
+#'   returned \code{artifact_mask} element for downstream scoring.
 #' @param score_idx_cases,score_idx_deaths Integer (1-based). Per-channel scored
 #'   time-window START index (burn-in / deaths-era start). Columns strictly
 #'   BEFORE these indices are unscored and recorded in \code{artifact_mask} so
@@ -289,7 +333,6 @@
 #' @param parallel Logical. Use parallel cluster for simulations. Default \code{FALSE}.
 #' @param n_cores Integer or \code{NULL}. Number of cores when \code{parallel = TRUE}.
 #' @param root_dir Character. MOSAIC root directory. Required when \code{parallel = TRUE}.
-#' @param precomputed_results Optional list of pre-gathered LASER results (e.g. from Dask).
 #'   Each element must have \code{$param_idx}, \code{$stoch_idx},
 #'   \code{$reported_cases}, \code{$reported_deaths}, and \code{$success}.
 #' @param capture_trajectories Logical. When \code{TRUE}, harvest the
@@ -316,6 +359,17 @@
 #'   When \code{FALSE}, the channels are spilled to scratch but NOT reduced; the
 #'   scratch handle is returned in \code{$trajectory_scratch} so the caller can
 #'   reduce over a final (e.g. optimized) subset without re-simulating.
+#' @param deaths_integration Optional run-level setup from
+#'   \code{run_MOSAIC()} (\code{control$likelihood$.deaths_integration}). When
+#'   supplied, each member's deaths are redrawn after its simulation from the
+#'   reported CFR's posterior given that member's path -- the same integration
+#'   calibration scores with -- so predicted deaths, true deaths and forecast
+#'   years carry the calibrated CFR; the ensemble also returns
+#'   \code{cfr_posterior}. When \code{NULL} (default) deaths are the engine's,
+#'   drawn at the config's \code{mu_jt} -- for configs sampled from the priors
+#'   that is the PRIOR reported CFR, not the calibrated one. To reproduce a
+#'   run's calibrated deaths post hoc, pass
+#'   \code{readRDS("<dir_output>/2_calibration/deaths_integration.rds")}.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return S3 object of class \code{"mosaic_ensemble"} containing:
@@ -348,6 +402,18 @@
 #'     1-based per-channel scored-window start; columns before are dropped). The
 #'     central/quantile/array fields above are RAW (unmasked); this spec is the
 #'     contract scoring sites use to drop artifact positions.}
+#'   \item{cfr_posterior}{When \code{deaths_integration} is supplied: a data frame
+#'     with one row per location and calendar year -- \code{location},
+#'     \code{year}, \code{cfr_median}, \code{cfr_lower}, \code{cfr_upper} (the
+#'     weighted median and 95% interval over members of each member's mean daily
+#'     reported CFR in that year) and \code{prior_cfr} (the prior \code{mu_jt}'s
+#'     mean over the same days). Conditional on each member's modelled cases.
+#'     \code{NULL} otherwise.}
+#'   \item{forecast_shift}{When \code{deaths_integration} is supplied: one value
+#'     per location, the weighted mean over members of the posterior-mode logit
+#'     CFR deviation for the location's latest observed year (\code{NA} for a
+#'     location with no forecast years). \code{run_MOSAIC()} centres forecast
+#'     years on it. \code{NULL} otherwise.}
 #' }
 #'
 #' @seealso \code{\link{plot_model_ensemble}} to render plots from this object.
@@ -363,18 +429,18 @@ calc_model_ensemble <- function(config,
                                 priors = NULL,
                                 sampling_args = list(),
                                 n_cases_warmup_mask = 2L,
-                                mask_final_deaths_step = TRUE,
+                                mask_final_deaths_step = FALSE,
                                 score_idx_cases = 1L,
                                 score_idx_deaths = 1L,
                                 parallel = FALSE,
                                 n_cores = NULL,
                                 root_dir = NULL,
-                                precomputed_results = NULL,
                                 capture_trajectories = FALSE,
                                 trajectory_channels = .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT,
                                 trajectory_n_lines = 150L,
                                 trajectory_scratch_dir = NULL,
                                 reduce_trajectories = TRUE,
+                                deaths_integration = NULL,
                                 verbose = TRUE) {
 
   # ===========================================================================
@@ -430,82 +496,54 @@ calc_model_ensemble <- function(config,
 
     n_param_sets <- length(parameter_seeds)
 
-    if (!is.null(precomputed_results)) {
-      # Precomputed mode: skip sampling, metadata comes from base config
-      if (verbose) {
-        message("Precomputed results provided -- skipping parameter sampling for ",
-                n_param_sets, " seeds")
-      }
-      param_configs <- list(config)
+    # Generate configs from seeds for simulation. The Dask backend used to
+    # hand in pre-gathered results here and skip sampling entirely; with
+    # only the local path left, sampling always happens.
+    # Full sampling mode: generate configs from seeds for simulation
+    if (is.null(priors)) stop("priors required when using parameter_seeds")
+    if (is.null(PATHS)) stop("PATHS required when using parameter_seeds")
 
-      # Defensive guard: each precomputed result is tagged with the param_idx
-      # slice it fills; those slices must densely cover 1:n_param_sets so every
-      # prediction pairs with its OWN parameter weight. A gap means configs were
-      # dropped upstream while weights were not (the v0.35.1 misalignment class)
-      # -- warn loudly. Overflow is an outright contract violation (error).
-      pidx <- vapply(precomputed_results, function(r) {
-        if (is.null(r$param_idx)) NA_integer_ else as.integer(r$param_idx)
-      }, integer(1))
-      pidx <- pidx[is.finite(pidx)]
-      if (length(pidx) > 0L) {
-        if (max(pidx) > n_param_sets)
-          stop(sprintf(paste0("precomputed_results param_idx max (%d) exceeds n_param_sets (%d): ",
-                              "predictions and parameter weights are misaligned"),
-                       max(pidx), n_param_sets))
-        missing_p <- setdiff(seq_len(n_param_sets), unique(pidx))
-        if (length(missing_p) > 0L)
-          warning(sprintf(paste0("calc_model_ensemble: %d of %d parameter slices have no precomputed ",
-                                "predictions (param_idx %s); their weights are redistributed"),
-                          length(missing_p), n_param_sets, paste(missing_p, collapse = ",")))
-      }
+    if (verbose) {
+      message("Sampling ", n_param_sets, " parameter sets (",
+              n_param_sets * n_simulations_per_config, " total sims)...")
+    }
 
-    } else {
-      # Full sampling mode: generate configs from seeds for simulation
-      if (is.null(priors)) stop("priors required when using parameter_seeds")
-      if (is.null(PATHS)) stop("PATHS required when using parameter_seeds")
+    param_configs <- vector("list", n_param_sets)
+    if (verbose) {
+      pb <- utils::txtProgressBar(min = 0, max = n_param_sets, style = 1,
+                                  char = "\u2588")
+    }
+    for (i in seq_along(parameter_seeds)) {
+      if (verbose) utils::setTxtProgressBar(pb, i)
+      param_configs[[i]] <- tryCatch(
+        .mosaic_clamp_transmission_params(
+          sample_parameters(PATHS = PATHS, priors = priors, config = config,
+                            seed = parameter_seeds[i], sample_args = sampling_args,
+                            verbose = FALSE)),
+        error = function(e) {
+          warning("Failed to sample parameters with seed ", parameter_seeds[i],
+                  ": ", e$message)
+          NULL
+        }
+      )
+    }
+    if (verbose) close(pb)
 
-      if (verbose) {
-        message("Sampling ", n_param_sets, " parameter sets (",
-                n_param_sets * n_simulations_per_config, " total sims)...")
-      }
+    # Drop failed re-samples AND their seeds/weights in lockstep, then let the
+    # validation block below renormalize. Degrades gracefully to the survivors
+    # instead of erroring on the length mismatch -- one transient sampling
+    # failure must not discard the entire posterior ensemble.
+    keep <- !vapply(param_configs, is.null, logical(1))
+    param_configs <- param_configs[keep]
+    n_param_sets <- length(param_configs)
+    if (n_param_sets == 0) stop("All parameter sampling attempts failed")
 
-      param_configs <- vector("list", n_param_sets)
-      if (verbose) {
-        pb <- utils::txtProgressBar(min = 0, max = n_param_sets, style = 1,
-                                    char = "\u2588")
-      }
-      for (i in seq_along(parameter_seeds)) {
-        if (verbose) utils::setTxtProgressBar(pb, i)
-        param_configs[[i]] <- tryCatch(
-          .mosaic_clamp_transmission_params(
-            sample_parameters(PATHS = PATHS, priors = priors, config = config,
-                              seed = parameter_seeds[i], sample_args = sampling_args,
-                              verbose = FALSE)),
-          error = function(e) {
-            warning("Failed to sample parameters with seed ", parameter_seeds[i],
-                    ": ", e$message)
-            NULL
-          }
-        )
-      }
-      if (verbose) close(pb)
-
-      # Drop failed re-samples AND their seeds/weights in lockstep, then let the
-      # validation block below renormalize. Degrades gracefully to the survivors
-      # instead of erroring on the length mismatch -- one transient sampling
-      # failure must not discard the entire posterior ensemble.
-      keep <- !vapply(param_configs, is.null, logical(1))
-      param_configs <- param_configs[keep]
-      n_param_sets <- length(param_configs)
-      if (n_param_sets == 0) stop("All parameter sampling attempts failed")
-
-      if (any(!keep)) {
-        parameter_seeds <- parameter_seeds[keep]
-        if (!is.null(parameter_weights)) parameter_weights <- parameter_weights[keep]
-        warning(sprintf(
-          "calc_model_ensemble: %d of %d parameter sets failed to sample; proceeding on the %d that succeeded",
-          sum(!keep), length(keep), n_param_sets))
-      }
+    if (any(!keep)) {
+      parameter_seeds <- parameter_seeds[keep]
+      if (!is.null(parameter_weights)) parameter_weights <- parameter_weights[keep]
+      warning(sprintf(
+        "calc_model_ensemble: %d of %d parameter sets failed to sample; proceeding on the %d that succeeded",
+        sum(!keep), length(keep), n_param_sets))
     }
 
   } else {
@@ -556,6 +594,14 @@ calc_model_ensemble <- function(config,
 
   n_locations   <- length(location_names)
   n_time_points <- if (is.matrix(obs_cases)) ncol(obs_cases) else length(obs_cases)
+  if (!is.null(deaths_integration) &&
+      (!identical(as.integer(deaths_integration$setup$nL), as.integer(n_locations)) ||
+       !identical(as.integer(deaths_integration$n_time), as.integer(n_time_points))))
+    stop(sprintf(paste0("deaths_integration was resolved for %d location(s) x %d days, but these ",
+                        "configs have %d x %d; pass the deaths_integration.rds of the run these ",
+                        "configs come from."),
+                 deaths_integration$setup$nL, deaths_integration$n_time, n_locations, n_time_points),
+         call. = FALSE)
   total_sims    <- n_param_sets * n_simulations_per_config
 
   if (verbose) {
@@ -568,18 +614,26 @@ calc_model_ensemble <- function(config,
   # (warn-only, no behavior change) before the large allocation below.
   # ===========================================================================
 
+  # The worker count is resolved properly further down (it is clamped to the
+  # connection budget there). Project against the REQUESTED count: this is a
+  # warning about risk, so the upper bound is the honest input, and a clamp can
+  # only make the real figure smaller.
+  .ram_n_workers <- if (!parallel) 0L
+                    else if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L)
+                    else as.integer(n_cores)
+
   .mosaic_ensemble_check_ram(n_locations, n_time_points, n_param_sets,
                              n_simulations_per_config,
                              n_capture_channels = if (isTRUE(capture_trajectories))
                                length(trajectory_channels) else 0L,
-                             # Dask path: the gathered precomputed_results list holds
-                             # all captured channels on the client before spill (NOT
-                             # flat); local PSOCK spills at sim time (flat).
-                             capture_in_gather = isTRUE(capture_trajectories) &&
-                               !is.null(precomputed_results))
+                             # Local PSOCK spills at sim time (flat), so nothing
+                             # is ever held in a gather step.
+                             capture_in_gather = FALSE,
+                             broadcast_gb = .mosaic_ensemble_broadcast_gb(
+                               param_configs, .ram_n_workers))
 
   # ===========================================================================
-  # Run simulations (precomputed, parallel, or sequential)
+  # Run simulations (parallel or sequential)
   # ===========================================================================
 
   cases_array  <- array(NA_real_, dim = c(n_locations, n_time_points, n_param_sets, n_simulations_per_config))
@@ -590,8 +644,7 @@ calc_model_ensemble <- function(config,
   # each sim's comprehensive internal-state channels are spilled to a per-sim
   # scratch RDS keyed by (param_idx, stoch_idx) AT SIM TIME -- never accumulated
   # in RAM on the gathered list, never re-simulated. The local PSOCK/sequential
-  # workers write scratch directly; the Dask precomputed path streams each
-  # record's channels to scratch as it is consumed and drops them. The reducer
+  # workers write scratch directly. The reducer
   # (.mosaic_build_trajectories) reads the scratch back channel-by-channel,
   # bounding peak RAM to ONE dense array regardless of n_param (scales to 40-loc
   # on local + VM). reported_cases/reported_deaths are NOT captured -- they are
@@ -612,222 +665,134 @@ calc_model_ensemble <- function(config,
     if (.scratch_owned && isTRUE(reduce_trajectories))
       on.exit(unlink(traj_scratch, recursive = TRUE, force = TRUE), add = TRUE)
   }
-  # Spill one sim's captured channels (+ epidemic-flag inputs) to scratch.
-  .spill_traj <- function(param_idx, stoch_idx, traj, traj_epi) {
-    if (!.capture || is.null(traj) || !length(traj)) return(invisible(NULL))
-    saveRDS(list(traj = traj, traj_epi = traj_epi),
-            file.path(traj_scratch, sprintf("sim_%d_%d.rds",
-                                            as.integer(param_idx), as.integer(stoch_idx))))
-    invisible(NULL)
+  # Capture flags resolved once; threaded explicitly into the worker (NOT via
+  # closure capture, which is fragile when the task fn's environment is reset
+  # to .GlobalEnv for PSOCK export).
+  .capture_traj  <- isTRUE(capture_trajectories)
+  .traj_channels <- as.character(trajectory_channels)
+  .traj_scratch  <- traj_scratch   # NULL unless capturing (set above)
+  .deaths_int    <- deaths_integration
+
+  # The per-task simulation worker is the package-level
+  # .mosaic_ensemble_sim_task() (R/calc_model_ensemble_task.R). PSOCK workers
+  # resolve it from the loaded MOSAIC namespace, so it is not exported to them.
+
+  task_list <- expand.grid(param_idx = seq_len(n_param_sets),
+                           stoch_idx = seq_len(n_simulations_per_config))
+
+  if (parallel) {
+    n_cores_use <- if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L) else n_cores
+    # run_MOSAIC() derives this from control$parallel$n_cores, which is NOT
+    # clamped on the way in (it only clamps the calibration cluster it builds
+    # itself). Unclamped, makeCluster() throws "all 128 connections are in
+    # use", run_MOSAIC()'s tryCatch swallows it, and the entire ensemble stage
+    # vanishes from a run that reports success. Clamp instead.
+    n_cores_use <- .mosaic_clamp_psock_workers(n_cores_use, reserve = 2L,
+                                               what = "ensemble workers")
+
+    MOSAIC:::.mosaic_set_all_thread_env(1L)
+
+    cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
+    # Reap workers that outlive the shutdown request -- a leaked worker holds
+    # this process's stdout open. See ?.mosaic_stop_cluster.
+    .worker_pids <- .mosaic_cluster_worker_pids(cl)
+    on.exit(.mosaic_stop_cluster(cl, .worker_pids), add = TRUE)
+
+    # Workers load the same MOSAIC build as this parent (no hardcoded path).
+    .parent_libs <- .libPaths()
+    parallel::clusterExport(cl, ".parent_libs", envir = environment())
+    # The worker preamble is now just "load MOSAIC and pin threads". Before the
+    # R engine it also imported laser.cholera and parked the module in each
+    # worker's .GlobalEnv, which is why .mosaic_ensemble_sim_task() used to
+    # look for an `lc` binding there; the R engine is reached through
+    # run_simulation() from the loaded namespace, so there is nothing to preload.
+    parallel::clusterEvalQ(cl, {
+      .libPaths(unique(c(.parent_libs, .libPaths())))
+      library(MOSAIC)
+      MOSAIC:::.mosaic_set_blas_threads(1L)
+      NULL
+    })
+
+    if (!is.null(root_dir)) {
+      parallel::clusterCall(cl, function(rd) {
+        MOSAIC::set_root_directory(rd)
+        MOSAIC::get_paths()
+      }, root_dir)
+    }
+
+    # Export the configs AND the worker function to each worker's global env
+    # so the per-task dispatch closure (below) carries no payload -- it resolves
+    # both from the worker side. This keeps the robust load-balanced dispatcher
+    # from re-serializing all param_configs on every task.
+    # .ens_sim_task is bound here, inside the namespace, so the worker-side
+    # closure needs neither a MOSAIC::: prefix nor a namespace lookup.
+    .ens_sim_task <- .mosaic_ensemble_sim_task
+    parallel::clusterExport(cl, c("param_configs", ".ens_sim_task",
+                                   ".capture_traj", ".traj_channels",
+                                   ".traj_scratch", ".deaths_int"),
+                            envir = environment())
+
+    if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
+
+    # Worker-death-robust gather (see .mosaic_cluster_lapply_robust): a PSOCK
+    # worker that crashes its process (OS-level abort in a compiled dependency, OOM kill)
+    # would otherwise block the master forever in unserialize() on Linux.
+    # This dispatcher waits on the worker sockets with a finite timeout and
+    # surfaces a diagnostic stop() instead of hanging.
+    .ens_idle_timeout <- as.numeric(
+      getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
+    .ens_task_fun <- function(row) .ens_sim_task(
+      row, param_configs, .capture_traj, .traj_channels, .traj_scratch, .deaths_int)
+    environment(.ens_task_fun) <- .GlobalEnv  # resolve names worker-side
+    results_list <- .mosaic_cluster_lapply_robust(
+      cl = cl,
+      X  = split(task_list, seq_len(nrow(task_list))),
+      fun = .ens_task_fun,
+      idle_timeout_sec = .ens_idle_timeout,
+      progress = isTRUE(verbose)
+    )
+  } else {
+    if (verbose) message("Running ", total_sims, " simulations sequentially...")
+    # Pin BLAS threads so a threaded matrix op inside the engine cannot
+    # oversubscribe the box. The parallel branch pins its workers; run_MOSAIC
+    # pins the orchestrator; pin here too so standalone
+    # calc_model_ensemble(parallel = FALSE) is self-sufficient. Idempotent.
+    MOSAIC:::.mosaic_set_blas_threads(1L)
+    pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
+    on.exit(pbapply::pboptions(pbo), add = TRUE)
+
+    results_list <- pbapply::pblapply(
+      split(task_list, seq_len(nrow(task_list))),
+      function(row) .mosaic_ensemble_sim_task(row, param_configs,
+                                              .capture_traj, .traj_channels,
+                                              .traj_scratch, .deaths_int)
+    )
   }
 
-  if (!is.null(precomputed_results)) {
-    if (verbose) message("Using ", length(precomputed_results), " precomputed LASER results")
-    for (result in precomputed_results) {
-      if (isTRUE(result$success)) {
-        p <- result$param_idx
-        s <- result$stoch_idx
-        if (is.matrix(result$reported_cases)) {
-          cases_array[, , p, s]  <- result$reported_cases
-          deaths_array[, , p, s] <- result$reported_deaths
-        } else {
-          cases_array[1L, , p, s]  <- result$reported_cases
-          deaths_array[1L, , p, s] <- result$reported_deaths
-        }
-        # Dask path: the remote worker has no shared FS, so it returns the
-        # channels in the record; spill them to local scratch HERE as each record
-        # is consumed (the gathered list is freed on the big-RAM Dask client).
-        .spill_traj(p, s, result$traj, result$traj_epi)
-      }
-    }
-  } else {
-    # Capture flags resolved once; threaded explicitly into the worker (NOT via
-    # closure capture, which is fragile when the task fn's environment is reset
-    # to .GlobalEnv for PSOCK export).
-    .capture_traj  <- isTRUE(capture_trajectories)
-    .traj_channels <- as.character(trajectory_channels)
-    .traj_scratch  <- traj_scratch   # NULL unless capturing (set above)
+  # Surface any worker-process deaths recorded by the robust dispatcher (these
+  # carry no param_idx and are skipped by the success check below, but the user
+  # must be told a worker crashed rather than silently losing those slices).
+  n_worker_deaths <- sum(vapply(results_list,
+    function(r) isTRUE(r$.mosaic_worker_died), logical(1)))
+  if (n_worker_deaths > 0L) {
+    warning(sprintf(paste0(
+      "calc_model_ensemble: %d task(s) lost to worker-process crashes (fatal engine ",
+      "abort or OOM in a PSOCK worker); their predictions are dropped and the ensemble ",
+      "proceeds on the survivors. Re-run with parallel = FALSE to surface the underlying ",
+      "engine error."), n_worker_deaths), call. = FALSE)
+  }
 
-    # Worker function (self-contained for parallel execution)
-    run_param_stoch_simulation <- function(task_info, param_configs_list,
-                                           capture_traj = FALSE,
-                                           traj_channels = character(0),
-                                           traj_scratch = NULL) {
-      param_idx <- task_info$param_idx
-      stoch_idx <- task_info$stoch_idx
-      tryCatch({
-        if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
-          lc <- reticulate::import("laser.cholera.metapop.model")
-          MOSAIC:::.mosaic_strip_laser_file_handler()
-        } else {
-          lc <- get("lc", envir = .GlobalEnv)
-        }
-        param_config <- param_configs_list[[param_idx]]
-        param_config$seed <- (param_idx * 1000L) + stoch_idx
-        model <- lc$run_model(
-          paramfile = MOSAIC:::.mosaic_prepare_config_for_python(param_config),
-          quiet = TRUE
-        )
-        # Extract the engine's spatial-structure arrays (J x T hazard, J x J
-        # coupling, J x J pi_ij) BEFORE the model is discarded below (F1). These
-        # are computed by the engine's DerivedValues component at the final tick
-        # and otherwise lost when the model object is gc'd. tryCatch each so an
-        # engine that drops DerivedValues simply yields NULL (warn+skip downstream).
-        sh  <- tryCatch(model$results$spatial_hazard, error = function(e) NULL)
-        cpl <- tryCatch(model$results$coupling,       error = function(e) NULL)
-        pij <- tryCatch(model$results$pi_ij,          error = function(e) NULL)
-        result <- list(param_idx = param_idx, stoch_idx = stoch_idx,
-                       reported_cases = model$results$reported_cases,
-                       reported_deaths = model$results$reported_deaths,
-                       spatial_hazard = sh,
-                       coupling       = cpl,
-                       pi_ij          = pij,
-                       success = TRUE)
-        # Trajectory channels (comprehensive internal-state capture). Harvested
-        # here, where model$results is in hand, at zero marginal sim cost --
-        # NEVER re-simulated downstream (PLAN sec 3, capture-don't-replay). Each
-        # channel tryCatch'd -> omitted if the engine build lacks it. Also carry
-        # the per-member epidemic-flag inputs (sampled per set) so epidemic_frac
-        # is reconstructable on the master regardless of backend (DM F5).
-        if (isTRUE(capture_traj) && length(traj_channels)) {
-          traj <- list()
-          for (ch in traj_channels) {
-            v <- tryCatch(model$results[[ch]], error = function(e) NULL)
-            if (!is.null(v)) traj[[ch]] <- v
-          }
-          traj_epi <- list(
-            delta_reporting_cases = tryCatch(param_config$delta_reporting_cases,
-                                             error = function(e) NULL),
-            epidemic_threshold    = tryCatch(param_config$epidemic_threshold,
-                                             error = function(e) NULL)
-          )
-          # STREAM-TO-DISK: write channels to local scratch (PSOCK workers share
-          # the master's filesystem) and do NOT carry them back on the record --
-          # this is what keeps the gather (and peak RAM) flat regardless of
-          # n_param. If no scratch dir was provided (direct call without spill),
-          # fall back to attaching them to the record for the in-process reduce.
-          if (length(traj) && !is.null(traj_scratch) && nzchar(traj_scratch)) {
-            tryCatch(
-              saveRDS(list(traj = traj, traj_epi = traj_epi),
-                      file.path(traj_scratch, sprintf("sim_%d_%d.rds",
-                                                      param_idx, stoch_idx))),
-              error = function(e) NULL)
-          } else if (length(traj)) {
-            result$traj <- traj
-            result$traj_epi <- traj_epi
-          }
-        }
-        gc(verbose = FALSE)
-        reticulate::import("gc")$collect()
-        result
-      }, error = function(e) {
-        list(param_idx = param_idx, stoch_idx = stoch_idx,
-             success = FALSE, error = as.character(e))
-      })
-    }
-
-    task_list <- expand.grid(param_idx = seq_len(n_param_sets),
-                             stoch_idx = seq_len(n_simulations_per_config))
-
-    if (parallel) {
-      n_cores_use <- if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L) else n_cores
-
-      MOSAIC:::.mosaic_set_all_thread_env(1L)
-
-      cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
-      on.exit(parallel::stopCluster(cl), add = TRUE)
-
-      # Workers load the same MOSAIC build as this parent (no hardcoded path).
-      .parent_libs <- .libPaths()
-      parallel::clusterExport(cl, ".parent_libs", envir = environment())
-      parallel::clusterEvalQ(cl, {
-        .libPaths(unique(c(.parent_libs, .libPaths())))
-        library(MOSAIC)
-        library(reticulate)
-        MOSAIC:::.mosaic_set_blas_threads(1L)
-        lc <- reticulate::import("laser.cholera.metapop.model")
-        MOSAIC:::.mosaic_strip_laser_file_handler()
-        assign("lc", lc, envir = .GlobalEnv)
-        NULL
-      })
-
-      if (!is.null(root_dir)) {
-        parallel::clusterCall(cl, function(rd) {
-          MOSAIC::set_root_directory(rd)
-          MOSAIC::get_paths()
-        }, root_dir)
-      }
-
-      # Export the configs AND the worker function to each worker's global env
-      # so the per-task dispatch closure (below) carries no payload -- it resolves
-      # both from the worker side. This keeps the robust load-balanced dispatcher
-      # from re-serializing all param_configs on every task.
-      parallel::clusterExport(cl, c("param_configs", "run_param_stoch_simulation",
-                                     ".capture_traj", ".traj_channels", ".traj_scratch"),
-                              envir = environment())
-
-      if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
-
-      # Worker-death-robust gather (see .mosaic_cluster_lapply_robust): a PSOCK
-      # worker that crashes its process (fatal Python/numba abort, OOM kill)
-      # would otherwise block the master forever in unserialize() on Linux.
-      # This dispatcher waits on the worker sockets with a finite timeout and
-      # surfaces a diagnostic stop() instead of hanging.
-      .ens_idle_timeout <- as.numeric(
-        getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
-      .ens_task_fun <- function(row) run_param_stoch_simulation(
-        row, param_configs, .capture_traj, .traj_channels, .traj_scratch)
-      environment(.ens_task_fun) <- .GlobalEnv  # resolve names worker-side
-      results_list <- .mosaic_cluster_lapply_robust(
-        cl = cl,
-        X  = split(task_list, seq_len(nrow(task_list))),
-        fun = .ens_task_fun,
-        idle_timeout_sec = .ens_idle_timeout,
-        progress = isTRUE(verbose)
-      )
-    } else {
-      if (verbose) message("Running ", total_sims, " simulations sequentially...")
-      # In-process LASER: pin threads so numba/MKL/OpenBLAS don't oversubscribe.
-      # The parallel branch pins its workers; run_MOSAIC pins the orchestrator;
-      # pin here too so standalone calc_model_ensemble(parallel=FALSE) is
-      # self-sufficient. Idempotent.
-      MOSAIC:::.mosaic_set_blas_threads(1L)
-      pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
-      on.exit(pbapply::pboptions(pbo), add = TRUE)
-
-      results_list <- pbapply::pblapply(
-        split(task_list, seq_len(nrow(task_list))),
-        function(row) run_param_stoch_simulation(row, param_configs,
-                                                 .capture_traj, .traj_channels,
-                                                 .traj_scratch)
-      )
-    }
-
-    # Surface any worker-process deaths recorded by the robust dispatcher (these
-    # carry no param_idx and are skipped by the success check below, but the user
-    # must be told a worker crashed rather than silently losing those slices).
-    n_worker_deaths <- sum(vapply(results_list,
-      function(r) isTRUE(r$.mosaic_worker_died), logical(1)))
-    if (n_worker_deaths > 0L) {
-      warning(sprintf(paste0(
-        "calc_model_ensemble: %d task(s) lost to worker-process crashes (fatal engine ",
-        "abort or OOM in a PSOCK worker); their predictions are dropped and the ensemble ",
-        "proceeds on the survivors. Re-run with parallel = FALSE to surface the underlying ",
-        "engine error."), n_worker_deaths), call. = FALSE)
-    }
-
-    # Fill arrays from results
-    for (result in results_list) {
-      if (isTRUE(result$success)) {
-        p <- result$param_idx
-        s <- result$stoch_idx
-        if (is.matrix(result$reported_cases)) {
-          cases_array[, , p, s]  <- result$reported_cases
-          deaths_array[, , p, s] <- result$reported_deaths
-        } else {
-          cases_array[1L, , p, s]  <- result$reported_cases
-          deaths_array[1L, , p, s] <- result$reported_deaths
-        }
+  # Fill arrays from results
+  for (result in results_list) {
+    if (isTRUE(result$success)) {
+      p <- result$param_idx
+      s <- result$stoch_idx
+      if (is.matrix(result$reported_cases)) {
+        cases_array[, , p, s]  <- result$reported_cases
+        deaths_array[, , p, s] <- result$reported_deaths
+      } else {
+        cases_array[1L, , p, s]  <- result$reported_cases
+        deaths_array[1L, , p, s] <- result$reported_deaths
       }
     }
   }
@@ -848,17 +813,14 @@ calc_model_ensemble <- function(config,
   # Spatial-structure aggregation (figs 5-6): element-wise MEDIAN across the
   # posterior-ensemble members (DM#5). The engine arrays spatial_hazard (J x T),
   # coupling (J x J), and pi_ij (J x J) are extracted inside each worker before
-  # the model is discarded (F1) and carried on every result record on BOTH the
-  # local PSOCK/sequential path (results_list) and the Dask path
-  # (precomputed_results). The member set is exactly the set of successful
-  # records, identical across paths, so Dask and local produce the same
-  # aggregate. pi_ij is deterministic across members (function of N/omega/gamma),
+  # the model is discarded (F1) and carried on every result record. The member
+  # set is exactly the set of successful records.
+  # pi_ij is deterministic across members (function of N/omega/gamma),
   # so its median equals any member's; persisting it lets the renderer prefer the
   # engine pi_ij over an R recompute (F4).
   # ===========================================================================
 
-  spatial_source <- if (!is.null(precomputed_results)) precomputed_results else
-    if (exists("results_list", inherits = FALSE)) results_list else NULL
+  spatial_source <- if (exists("results_list", inherits = FALSE)) results_list else NULL
 
   spatial_hazard_ensemble <- NULL
   coupling_ensemble       <- NULL
@@ -1029,36 +991,75 @@ calc_model_ensemble <- function(config,
   cases_stats  <- calculate_overall_stats(cases_array)
   deaths_stats <- calculate_overall_stats(deaths_array)
 
+  # Posterior reported CFR by location and year -- each member's mean daily CFR
+  # over the year, from the post-hoc death redraw (member weights shared equally
+  # across its stochastic runs, as for the predictions) -- beside the prior's
+  # yearly mean CFR on the same footing. It is conditional on each member's
+  # modelled cases: a year whose cases a member over-predicts gets a lower CFR, so
+  # read it with the cases fit. NULL when deaths were not redrawn.
+  cfr_posterior <- NULL
+  forecast_shift <- NULL
+  if (!is.null(deaths_integration)) {
+    n_infeasible <- sum(vapply(results_list, function(r)
+      if (isTRUE(r$success) && !is.null(r$cfr_infeasible)) as.numeric(r$cfr_infeasible) else 0, numeric(1)))
+    if (n_infeasible > 0)
+      warning(sprintf(paste0("%d member-location(s) needed a reported CFR the reporting parameters ",
+                             "cannot produce (per-onset fatality >= 1: the path has far too few onsets ",
+                             "for the observed deaths); they keep the engine's deaths at the prior mu_jt."),
+                      as.integer(n_infeasible)), call. = FALSE)
+    yrs <- deaths_integration$years
+    cfr_arr <- array(NA_real_, dim = c(n_locations, length(yrs), n_param_sets, n_simulations_per_config))
+    for (result in results_list) {
+      if (isTRUE(result$success) && !is.null(result$cfr_year)) {
+        cfr_arr[, , result$param_idx, result$stoch_idx] <- result$cfr_year
+      }
+    }
+    sim_w <- rep(parameter_weights, times = n_simulations_per_config) / n_simulations_per_config
+    rows <- vector("list", n_locations * length(yrs))
+    r <- 0L
+    for (i in seq_len(n_locations)) for (y in seq_along(yrs)) {
+      v <- as.vector(cfr_arr[i, y, , ])
+      q <- weighted_quantiles(v, sim_w, c(0.5, 0.025, 0.975))
+      r <- r + 1L
+      rows[[r]] <- data.frame(location = location_names[i], year = yrs[y],
+                              cfr_median = q[1], cfr_lower = q[2], cfr_upper = q[3],
+                              prior_cfr = mean(stats::plogis(deaths_integration$base_logit_full[
+                                i, deaths_integration$year_full == yrs[y]])),
+                              stringsAsFactors = FALSE)
+    }
+    cfr_posterior <- do.call(rbind, rows)
+
+    # The members' latest-year CFR shift: the weighted mean over members of each
+    # path's posterior-mode deviation for the location's anchor (latest observed)
+    # year. Each path's own deviation also absorbs its case error that year; the
+    # mean keeps the shift the members share.
+    anc_arr <- array(NA_real_, dim = c(n_locations, n_param_sets, n_simulations_per_config))
+    for (result in results_list) {
+      if (isTRUE(result$success) && !is.null(result$anchor_dev))
+        anc_arr[, result$param_idx, result$stoch_idx] <- result$anchor_dev
+    }
+    forecast_shift <- vapply(seq_len(n_locations), function(i) {
+      v <- as.vector(anc_arr[i, , ]); ok <- is.finite(v) & sim_w > 0
+      if (any(ok)) sum(v[ok] * sim_w[ok]) / sum(sim_w[ok]) else NA_real_
+    }, numeric(1))
+  }
+
   # ===========================================================================
   # Per-member seeds, aligned with cases_array's param dimension (member i <->
   # seeds[i]). Bound to the parameter set that PRODUCED each member so downstream
   # consumers (medoid selection, optimize_ensemble_subset) never have to rely on
   # positional alignment with a separately-passed seed vector -- the failure mode
   # that mis-mapped the medoid to a collapsed member. Precedence:
-  #   (a) precomputed (Dask) results carry their own config seed (param_seed)
-  #       tagged with the param_idx they fill -- ground truth for that member;
-  #   (b) the per-member config seed (local-sampling and direct-config paths build
+  #   (a) the per-member config seed (local-sampling and direct-config paths build
   #       cases_array member i from param_configs[[i]], whose $seed is authoritative);
-  #   (c) last-resort positional fallback to the supplied parameter_seeds.
+  #   (b) last-resort positional fallback to the supplied parameter_seeds.
   # ===========================================================================
 
   member_seeds <- rep(NA_integer_, n_param_sets)
-  if (!is.null(precomputed_results)) {
-    for (r in precomputed_results) {
-      p  <- suppressWarnings(as.integer(r$param_idx)[1])
-      ps <- suppressWarnings(as.integer(r$param_seed)[1])
-      if (length(p) && !is.na(p) && p >= 1L && p <= n_param_sets &&
-          length(ps) && !is.na(ps)) {
-        member_seeds[p] <- ps
-      }
-    }
-  }
-  if (anyNA(member_seeds) && length(param_configs) == n_param_sets) {
+  if (length(param_configs) == n_param_sets) {
     for (i in seq_len(n_param_sets)) {
-      if (is.na(member_seeds[i])) {
-        s <- param_configs[[i]]$seed
-        if (!is.null(s) && length(s)) member_seeds[i] <- suppressWarnings(as.integer(s)[1])
-      }
+      s <- param_configs[[i]]$seed
+      if (!is.null(s) && length(s)) member_seeds[i] <- suppressWarnings(as.integer(s)[1])
     }
   }
   if (anyNA(member_seeds) && !is.null(parameter_seeds) &&
@@ -1099,6 +1100,8 @@ calc_model_ensemble <- function(config,
       pi_ij_ensemble            = pi_ij_ensemble,
       trajectories              = trajectories,
       trajectory_scratch        = trajectory_scratch,
+      cfr_posterior             = cfr_posterior,
+      forecast_shift            = forecast_shift,
       artifact_mask             = list(
         cases_warmup     = as.integer(n_cases_warmup_mask),
         deaths_final     = isTRUE(mask_final_deaths_step),
@@ -1134,8 +1137,8 @@ calc_model_ensemble <- function(config,
 #' reconstructed engine epidemic flag over ALL members (DM F5).
 #'
 #' Returns a \code{mosaic_trajectories} object, or \code{NULL} (with a loud
-#' \code{warning()}) when no scratch files exist -- e.g. an outdated Dask/Coiled
-#' worker image (PLAN sec 14.H capability check). Never silently partial.
+#' \code{warning()}) when no scratch files exist (PLAN sec 14.H capability
+#' check). Never silently partial.
 #' @noRd
 .mosaic_build_trajectories <- function(scratch_dir, subset_orig_pidx,
                                        subset_weights, cases_array, deaths_array,
@@ -1143,8 +1146,8 @@ calc_model_ensemble <- function(config,
                                        location_names, date_start, date_stop,
                                        n_successful, obs_cases, obs_deaths,
                                        trajectory_channels,
-                                       central_method = c(cases = "median",
-                                                          deaths = "median"),
+                                       central_method = c(cases = "mean",
+                                                          deaths = "mean"),
                                        n_lines = 150L,
                                        line_stride = 7L, verbose = TRUE) {
   if (is.null(scratch_dir) || !dir.exists(scratch_dir)) return(NULL)
@@ -1165,14 +1168,12 @@ calc_model_ensemble <- function(config,
   for (s in seq_len(n_stoch)) for (j in seq_len(n_disp))
     present_files[j, s] <- file.exists(sim_file(j, s))
 
-  # Capability check (PLAN 14.H): no scratch at all -> capture produced nothing
-  # (e.g. an outdated Dask/Coiled worker image). Warn loudly, skip -- never
-  # silently emit a one-backend-only artifact.
+  # Capability check (PLAN 14.H): no scratch at all -> capture produced nothing.
+  # Warn loudly and skip rather than emitting a partial artifact.
   if (!any(present_files)) {
     warning("calc_model_ensemble: capture_trajectories = TRUE but no trajectory ",
-            "scratch was produced (likely an outdated Dask/Coiled worker image ",
-            "predating this feature). Skipping the trajectory artifact; rebuild/",
-            "republish the worker image to enable it.", call. = FALSE)
+            "scratch was produced. Skipping the trajectory artifact.",
+            call. = FALSE)
     return(NULL)
   }
 
@@ -1316,6 +1317,11 @@ calc_model_ensemble <- function(config,
   summary_list[["reported_deaths"]] <- list(median = rd$median)
   thin_store[["reported_deaths"]]   <- rd$thin
 
+  # The mass-balance check needs the compartments' weighted MEANS: each member
+  # balances exactly, and a mean of balanced members balances too, while a sum of
+  # per-compartment medians does not (it drifted by up to 1.6%).
+  mb_comp <- c("S", "E", "Isym", "Iasym", "R", "V1", "V2")
+  mean_store <- list()
   for (ch in present_ch) {
     con <- file(file.path(chan_dir, paste0("c_", ch)), "rb")
     arr <- array(NA_real_, dim = c(n_locations, n_time_points, n_disp, n_stoch))
@@ -1324,9 +1330,12 @@ calc_model_ensemble <- function(config,
       if (!is.null(m) && is.matrix(m)) arr[, , j, s] <- m
     }
     close(con)
-    r <- reduce_arr(arr)
+    # True deaths share the reported deaths' central method, so the two deaths
+    # panels are comparable; the other channels use the weighted median.
+    r <- reduce_arr(arr, if (ch == "disease_deaths") central_method[["deaths"]] else "median")
     summary_list[[ch]] <- list(median = r$median)
     thin_store[[ch]]   <- r$thin
+    if (ch %in% c(mb_comp, "N")) mean_store[[ch]] <- reduce_arr(arr, "mean")$median
     rm(arr)
   }
   unlink(chan_dir, recursive = TRUE, force = TRUE)
@@ -1341,17 +1350,18 @@ calc_model_ensemble <- function(config,
     thin_store[["I_total"]] <- thin_store[["Isym"]] + ia_thn
   }
 
-  # mass_balance = (S+E+Isym+Iasym+R+V1+V2)/N -- POINT series, ratio of medians
-  mb_comp <- c("S", "E", "Isym", "Iasym", "R", "V1", "V2")
-  if (all(vapply(mb_comp, function(c) !is.null(.med(c)), logical(1))) &&
-      !is.null(.med("N"))) {
-    num <- Reduce(`+`, lapply(mb_comp, .med))
-    den <- .med("N"); den[den == 0] <- NA_real_
+  # mass_balance = (S+E+Isym+Iasym+R+V1+V2)/N -- POINT series, ratio of the
+  # compartments' weighted means (exactly 1 when every member balances).
+  if (all(vapply(c(mb_comp, "N"), function(c) !is.null(mean_store[[c]]), logical(1)))) {
+    num <- Reduce(`+`, mean_store[mb_comp])
+    den <- mean_store[["N"]]; den[den == 0] <- NA_real_
     summary_list[["mass_balance"]] <- list(median = num / den)
   }
 
-  # CFR(t) = rolling(reported_deaths,W)/rolling(reported_cases,W) from medians;
-  # W = min(28, n_time) so short series don't error.
+  # CFR(t) = rolling(reported_deaths,W)/rolling(reported_cases,W) of the weighted
+  # MEAN series; W = min(28, n_time) so short series don't error. A ratio of
+  # median series is 0 wherever the median daily death count is 0, which is most
+  # days in a sparse-deaths country, so it cannot show the reported CFR.
   if (!is.null(.med("reported_cases")) && !is.null(.med("reported_deaths"))) {
     roll_w <- min(28L, n_time_points)
     roll28 <- function(M) {
@@ -1360,7 +1370,8 @@ calc_model_ensemble <- function(config,
         out[i, ] <- as.numeric(stats::filter(M[i, ], rep(1, roll_w), sides = 1))
       out
     }
-    rc28 <- roll28(.med("reported_cases")); rd28 <- roll28(.med("reported_deaths"))
+    rc28 <- roll28(reduce_arr(cases_array,  "mean")$median)
+    rd28 <- roll28(reduce_arr(deaths_array, "mean")$median)
     cfr <- rd28 / rc28
     cfr[!is.finite(cfr) | rc28 <= 5] <- NA_real_
     summary_list[["CFR"]] <- list(median = cfr)

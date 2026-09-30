@@ -60,7 +60,7 @@ is then fit by maximum-likelihood on the log10 scale.
 \eqn{\zeta_{1,i} = c_i \times V_i} with lower and upper bounds taken from
 the spread of the concentration and volume anchors for that severity class.
 Time-averaged stool volumes are used (\code{V_sev} = 8, \code{V_mod} = 4,
-\code{V_mild} = 0.5 L/day) because the LASER Poisson update multiplies the rate
+\code{V_mild} = 0.5 L/day) because the engine's Poisson update multiplies the rate
 by the current \code{I_sym} compartment, which already integrates the shedding
 course via \eqn{\gamma_1}. Peak purging rates (~1 L/h, ~14-24 L/day) are
 treated as upper-bound sensitivity rows, not the central anchor.
@@ -98,7 +98,7 @@ cumulative stool output per infection, apply the duration multiplier.
 \strong{Relation to documented priors.} Earlier MOSAIC-docs narrative
 states \code{zeta_1 ~ Uniform(10^4, 10^8)}. That range derives from the
 Frame-B calibration rescaling and is superseded by this lognormal
-literature-derived prior. The new prior's 95\\% CI extends to ~10^13,
+literature-derived prior. The new prior's 95\% CI extends to ~10^13,
 well above the stale Uniform upper bound.
 
 Primary source notes are stored in

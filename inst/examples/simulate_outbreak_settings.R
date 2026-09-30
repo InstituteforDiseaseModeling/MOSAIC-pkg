@@ -53,11 +53,12 @@
 # =============================================================================
 
 # =============================================================================
-# SETUP: (optionally) update MOSAIC + the LASER engine, then check the install
+# SETUP: (optionally) update MOSAIC, then check the install
 # -----------------------------------------------------------------------------
 # If you have not updated in a while, set UPDATE_PACKAGES <- TRUE and run this
-# script once. It reinstalls the MOSAIC R package from GitHub, rebuilds the
-# Python environment with the matching laser-cholera engine, and verifies both.
+# script once. It reinstalls the MOSAIC R package from GitHub and verifies it.
+# The transmission engine is pure R and ships inside the package, so there is
+# no separate engine to install or version-match.
 #
 # IMPORTANT: reinstalling an R package that is already loaded does not take
 # effect until you restart. After updating, this script stops and asks you to
@@ -68,20 +69,18 @@
 UPDATE_PACKAGES <- FALSE   # <-- set TRUE to update everything, then restart R
 
 if (isTRUE(UPDATE_PACKAGES)) {
-  message("==> Updating MOSAIC + LASER (this can take several minutes)...")
+  message("==> Updating MOSAIC (this can take several minutes)...")
 
   # 1. MOSAIC R package (latest from GitHub)
   if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
   remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg",
                           upgrade = "never", force = TRUE)
 
-  # 2. Python environment + laser-cholera engine (rebuilt to match this MOSAIC)
-  MOSAIC::install_dependencies(force = TRUE)
-
-  # 3. Verify
+  # 2. Verify. No Python step: the engine is pure R, and this script only
+  #    simulates. Build the TensorFlow env (MOSAIC::install_dependencies())
+  #    only if you also intend to re-fit suitability with est_suitability().
   message("\n==> Verifying installation...")
-  MOSAIC::check_python_env()
-  MOSAIC::check_dependencies()
+  packageVersion("MOSAIC")
 
   message("\n=============================================================\n",
           " Update complete. Now RESTART R, set UPDATE_PACKAGES <- FALSE,\n",
@@ -94,20 +93,8 @@ if (isTRUE(UPDATE_PACKAGES)) {
 suppressMessages(library(MOSAIC))
 
 # --- Check the install before running (fail fast, with guidance, if stale) ---
-message("Checking MOSAIC + LASER installation...")
-MOSAIC::check_dependencies()   # prints engine + key Python package versions
-.laser_version <- tryCatch(
-  as.character(reticulate::import("importlib.metadata")$version("laser-cholera")),
-  error = function(e) NA_character_
-)
-if (is.na(.laser_version)) {
-  stop("The laser-cholera Python engine is not available in this R session.\n",
-       "  Set UPDATE_PACKAGES <- TRUE at the top of this script (or run\n",
-       "  MOSAIC::install_dependencies(force = TRUE)), restart R, then re-run.",
-       call. = FALSE)
-}
-message(sprintf("OK: MOSAIC %s + laser-cholera %s\n",
-                as.character(utils::packageVersion("MOSAIC")), .laser_version))
+message(sprintf("OK: MOSAIC %s (pure-R transmission engine)\n",
+                as.character(utils::packageVersion("MOSAIC"))))
 
 # -----------------------------------------------------------------------------
 # 0. Output directory + global settings
@@ -118,7 +105,7 @@ fig_dir  <- file.path(out_root, "figures")
 data_dir <- file.path(out_root, "data")
 for (d in c(out_root, fig_dir, data_dir)) if (!dir.exists(d)) dir.create(d, recursive = TRUE)
 
-SEED <- 123L   # stochastic LASER draw; fixed for reproducibility
+SEED <- 123L   # stochastic simulation draw; fixed for reproducibility
 
 # Three toy patches shared by all constructed settings (populations differ).
 J     <- c("FOO", "BAR", "BAZ")
@@ -154,9 +141,9 @@ psi_multibump <- function(base, height, peak_days, width) function(idx, tt) {
 day_index <- function(start, when) as.integer(as.Date(when) - as.Date(start)) + 1L
 
 # -----------------------------------------------------------------------------
-# 2. Build a LASER config for a custom transmission setting
+# 2. Build a simulation config for a custom transmission setting
 # -----------------------------------------------------------------------------
-# Returns a validated config list (via make_LASER_config) ready for run_LASER().
+# Returns a validated config list (via make_simulation_config) ready for run_simulation().
 # S_prop / V1_prop may be scalar (shared) or length-3 (per patch).
 
 build_regime_config <- function(date_start, date_stop,
@@ -178,14 +165,13 @@ build_regime_config <- function(date_start, date_stop,
   R_j  <- as.integer(N_J - S_j - V1_j - V2_j - E_j - I_j)
   if (any(R_j < 0)) stop("Initial S + V1 + I exceed N for at least one patch; lower S_prop/V1_prop.")
 
-  # Demography / IFR (held constant across settings)
+  # Demography (held constant across settings)
   b_jt    <- matrix(0.00005, N_LOC, T_len, dimnames = list(J, t))
   d_jt    <- matrix(0.00004, N_LOC, T_len, dimnames = list(J, t))
-  mu_jt   <- matrix(0.01,    N_LOC, T_len, dimnames = list(J, t))
   nu_1_jt <- nu_2_jt <- matrix(0, N_LOC, T_len, dimnames = list(J, t))
 
   # Transmission: split total beta into human + environmental shares so the
-  # make_LASER_config tolerance check (beta_j0_hum == p_beta * beta_j0_tot) holds.
+  # make_simulation_config tolerance check (beta_j0_hum == p_beta * beta_j0_tot) holds.
   beta_tot <- beta_hum + beta_env
   p_beta   <- beta_hum / beta_tot
   a_1_j    <- amp_beta * cos(PHASE)
@@ -209,13 +195,11 @@ build_regime_config <- function(date_start, date_stop,
     b_jt = b_jt, d_jt = d_jt, nu_1_jt = nu_1_jt, nu_2_jt = nu_2_jt,
     phi_1 = 0.64, phi_2 = 0.85, omega_1 = omega_1, omega_2 = omega_2,
     nu_jt_sources = c("S", "E", "Isym", "Iasym", "R"), iota = 1 / 1.4,
-    gamma_1 = 0.2, gamma_2 = 0.1, epsilon = epsilon, mu_jt = mu_jt,
-    mu_j_baseline = setNames(rep(0.01, N_LOC), J),
-    mu_j_slope = setNames(rep(0, N_LOC), J),
-    mu_j_epidemic_factor = setNames(rep(0, N_LOC), J),
+    gamma_1 = 0.2, gamma_2 = 0.1, epsilon = epsilon,
+    mu_jt = 0.02,
     chi_endemic = 0.5, chi_epidemic = 0.75, epidemic_threshold = 0.0001,
     rho = 0.52, rho_deaths = 0.42, sigma = 0.24,
-    delta_reporting_cases = 0, delta_reporting_deaths = 5,
+    delta_reporting_cases = 0,
     longitude = setNames(c(-1.0232, 45.9062, 27.8493), J),
     latitude  = setNames(c(7.9465, -0.0236, -13.1339), J),
     mobility_omega = 2e-6, mobility_gamma = 1.7,
@@ -231,7 +215,7 @@ build_regime_config <- function(date_start, date_stop,
     decay_shape_1 = 1, decay_shape_2 = 1,
     reported_cases = mat_na, reported_deaths = mat_na
   )
-  do.call(MOSAIC::make_LASER_config, args)
+  do.call(MOSAIC::make_simulation_config, args)
 }
 
 # -----------------------------------------------------------------------------
@@ -302,12 +286,12 @@ summary_rows    <- list()
 for (key in names(settings)) {
   s   <- settings[[key]]
   cfg <- s$config
-  message(sprintf("[%s] running LASER (%s) ...", s$label,
+  message(sprintf("[%s] running simulation (%s) ...", s$label,
                   paste(cfg$date_start, "->", cfg$date_stop)))
 
-  model  <- run_LASER(config = cfg, seed = SEED, quiet = TRUE)
-  cases  <- as.matrix(reticulate::py_to_r(model$results$reported_cases))   # [patch x time]
-  deaths <- as.matrix(reticulate::py_to_r(model$results$reported_deaths))
+  model  <- run_simulation(config = cfg, seed = SEED, quiet = TRUE)
+  cases  <- model$results$reported_cases   # [patch x time]
+  deaths <- model$results$reported_deaths
   dates  <- seq.Date(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")
   locs   <- cfg$location_name
 

@@ -20,7 +20,7 @@
 #'     all weeks and mapped back with \code{plogis}, which is monotone and
 #'     bounded in \eqn{(0,1)} by construction — so low predictions map near 0
 #'     without the hard-\eqn{[0,1]}-clip truncation that distorted the
-#'     \code{psi_bar}-relative deviation feeding LASER.
+#'     \code{psi_bar}-relative deviation feeding the engine.
 #' }
 #' A country with fewer than \code{min_train} outbreak weeks (this includes
 #' zero-history countries, which have none) or no logit-pred variance falls back

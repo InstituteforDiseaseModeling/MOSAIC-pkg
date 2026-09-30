@@ -5,16 +5,19 @@
 \alias{priors_default}
 \title{Default prior distributions for MOSAIC model parameters}
 \format{
-A list with 3 main components.
+A list with 4 main components.
 \describe{
 \item{metadata}{Version, build date, and a free-text description listing
 the changes that produced this version of the priors.}
-\item{parameters_global}{Named list of 27 global priors (single value
+\item{parameters_global}{Named list of 25 global priors (single value
 shared across all locations). See \verb{Global parameters} below.}
-\item{parameters_location}{Named list of 22 location-specific prior
+\item{parameters_location}{Named list of 20 location-specific prior
 families. Each entry holds a \code{location} sublist keyed by ISO3 country
 code, so e.g. \code{parameters_location$beta_j0_tot$location$ETH} gives the
 prior for Ethiopia's total baseline transmission rate.}
+\item{mu_jt}{The prior for the reported case fatality ratio, which is
+not sampled but integrated out of the deaths likelihood per simulated
+path. See \verb{Reported case fatality ratio} below.}
 }
 
 Each leaf entry has the shape
@@ -33,7 +36,7 @@ organised into global (single-value) priors and location-specific
 the literature sources and derivation of each prior). Current version:
 \code{priors_default$metadata$version}.
 }
-\section{Global parameters (26)}{
+\section{Global parameters (25)}{
 
 
 Transmission and FOI structure:
@@ -42,7 +45,7 @@ Transmission and FOI structure:
 1 = frequency-dependent transmission; 0 = density-dependent. A single
 global scalar (\code{alpha_1} is now per-location -- see below).
 \item \code{kappa} -- Half-saturation V. cholerae concentration at which
-the environmental dose-response is 50\\% (Lognormal; \emph{not} a carrying
+the environmental dose-response is 50\% (Lognormal; \emph{not} a carrying
 capacity).
 }
 
@@ -62,10 +65,10 @@ Disease progression (rates, per day):
 \item \code{iota} -- Incubation rate \code{E -> I} (Lognormal; \emph{rate}, not
 period). Prior median ~0.71/day.
 \item \code{gamma_1} -- Symptomatic shedding-duration rate \code{I_1 -> R}
-(Lognormal). Prior median 0.1/day (~10-day shedding); 95\\% CI
+(Lognormal). Prior median 0.1/day (~10-day shedding); 95\% CI
 ~3.75 - 26.6 days.
 \item \code{gamma_2} -- Asymptomatic shedding-duration rate \code{I_2 -> R}
-(Lognormal). Prior median 0.5/day (~2-day shedding); 95\\% CI
+(Lognormal). Prior median 0.5/day (~2-day shedding); 95\% CI
 ~0.91 - 4.39 days.
 \item \code{epsilon} -- Natural-infection immunity waning rate \code{R -> S}
 (Lognormal). Prior mean 3.9e-4/day -> ~7-yr immunity (King et al. 2008
@@ -86,28 +89,18 @@ Symptom expression, care-seeking, surveillance:
 \item \code{rho} -- Care-seeking rate: probability a symptomatic
 individual presents to surveillance (Beta; not a reporting fraction).
 \item \code{rho_deaths} -- Surveillance capture rate of true cholera
-deaths (Beta; random-effects meta-analysis of Routh 2017, Shikanga 2009,
-Bwire 2013 — see
-\code{MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md}).
-Consumed by laser-cholera v0.13+ in the deaths likelihood: observed
-surveillance \code{reported_deaths} is compared against simulated
-\code{reported_deaths = round(disease_deaths * rho_deaths)} (lagged
-by \code{delta_reporting_deaths}). Production prior is the recommended
-prediction-interval variant Beta(6.30, 8.52); the informative variant
-Beta(36.95, 51.02) is retained for sensitivity per SYNTHESIS_REPORT
-sec 3.4.
+deaths (Beta(36.95, 51.02); random-effects meta-analysis of Routh 2017,
+Shikanga 2009, Bwire 2013). Pinned at its mean, 0.42, by default: the
+engine's per-onset fatality probability is
+\code{mu_jt * rho / (rho_deaths * chi_epidemic)} and reported deaths are
+thinned by \code{rho_deaths}, so it cancels from reported deaths and sets
+only true (unreported) deaths.
 \item \code{chi_endemic}, \code{chi_epidemic} -- Positive predictive
 value among suspected cases during endemic vs epidemic phases (Beta).
 \item \code{delta_reporting_cases} -- Symptom-onset-to-surveillance-report
 delay (Truncnorm, days). \emph{Not} infection-to-report -- incubation is
-handled separately by the E compartment and \code{iota}.
-\item \code{delta_reporting_deaths} -- Death-event-to-death-report
-delay in days (Truncnorm). This is the time from a true cholera death
-to its appearance in surveillance reports. The symptom-onset-to-death
-interval itself is implicit in the SEIR dynamics
-(\eqn{\gamma_1^{-1}} ~ 5-7 days symptomatic to recovery/death).
-Consumed by laser-cholera v0.13+ at \code{infectious.py:88-92} as
-\code{reported_deaths[t] = round(disease_deaths[t-delta] * rho_deaths)}.
+handled separately by the E compartment and \code{iota}. Deaths are reported
+on the same lag (a death is decided at symptom onset).
 }
 
 Environmental shedding intensity (V. cholerae cells per person per day):
@@ -127,7 +120,7 @@ population-scaling exponents (Gamma).
 }
 }
 
-\section{Location-specific parameters (23)}{
+\section{Location-specific parameters (20)}{
 
 
 Each carries a per-iso prior under
@@ -169,19 +162,11 @@ All Beta priors per iso. Generated by \code{est_initial_S/V1_V2/E_I/R()}
 from demography, surveillance history, OCV campaigns, etc.
 }
 
-Disease-mortality:
-\itemize{
-\item \code{mu_j_baseline} -- Per-iso baseline CFR rate (Gamma).
-\item \code{mu_j_slope} -- Per-iso slope coupling CFR to outbreak
-intensity (Gamma).
-\item \code{mu_j_epidemic_factor} -- Per-iso multiplier applied to
-\code{mu_j_baseline} once epidemic phase is detected (Gamma).
-}
-
-Phase switching:
+Case-reporting phase switch:
 \itemize{
 \item \code{epidemic_threshold} -- Per-iso \code{I_sym / N} threshold above
-which \code{chi_epidemic} and \code{mu_j_epidemic_factor} engage (Truncnorm).
+which the case-reporting PPV switches from \code{chi_endemic} to
+\code{chi_epidemic} (Truncnorm).
 }
 
 Environmental-suitability calibration (used by the LSTM $\\psi$ pipeline):
@@ -191,6 +176,27 @@ Environmental-suitability calibration (used by the LSTM $\\psi$ pipeline):
 \item \code{psi_star_b} -- Logit-scale offset (Normal).
 \item \code{psi_star_z} -- Smoothing weight for the causal EWMA (Beta).
 \item \code{psi_star_k} -- Time-offset (lag) parameter (Truncnorm).
+}
+}
+
+\section{Reported case fatality ratio (\code{mu_jt})}{
+
+
+A top-level block, not a sampled prior. The engine reads the reported CFR as
+\code{config$mu_jt} (location x day); \code{run_MOSAIC()} integrates it out of each
+simulated path's deaths likelihood with
+\verb{logit mu_jt = logit mu0_jt + a_j + delta_\{j,year\}}. The block holds:
+\itemize{
+\item \code{location[[ISO3]]}: \code{year}, \code{logit_mean} (the centre \code{mu0}, the value
+\code{config_default$mu_jt} is built from) and \code{logit_se} (the SE of the
+country-trend mean), from \code{est_CFR_hierarchical()}'s WHO-annual GAM.
+\item \code{sd_year}: the GAM's country-year SD, the prior SD of each
+\verb{delta_\{j,year\}}.
+\item \code{sd_product}: residual error of the GAM centre against the observed
+reported CFR in the calibration window (sd(log) 0.19-0.32 over the 15-17
+countries with at least 50 deaths, 2023-26); the location offset's prior SD
+is \code{sqrt(sd_product^2 + mean(logit_se^2))}.
+\item \code{tau}: the GAM's between-country SD (reference only).
 }
 }
 
@@ -205,7 +211,7 @@ RWA, SEN, SLE, SOM, SSD, SWZ, TCD, TGO, TZA, UGA, ZAF, ZMB, ZWE.
 
 \seealso{
 \itemize{
-\item \link{config_default} -- Default LASER configuration that pairs with these priors.
+\item \link{config_default} -- Default simulation configuration that pairs with these priors.
 \item \code{\link[=sample_parameters]{sample_parameters()}} -- Draws samples from these priors.
 \item \link{config_simulation_epidemic} -- One-year outbreak toy configuration.
 \item \link{config_simulation_endemic} -- Multi-year endemic toy configuration.

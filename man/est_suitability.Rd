@@ -15,6 +15,7 @@ est_suitability(
   bias_correct = TRUE,
   architecture = c("lstm_v2_hierarchical_film", "lstm_v1_legacy"),
   arch_control = NULL,
+  source_csv = NULL,
   plot_country_diagnostics = FALSE,
   ...
 )
@@ -73,6 +74,14 @@ via \code{modifyList} (overrides only the keys provided). Key fields:
 \code{partial_pool_lambda}, \code{exclude_covariates} (lstm_v2 ablation
 override), and the execution knob \code{parallel_seeds} (integer, default
 \code{1L} = serial; not a model parameter). Ignored by the legacy path.}
+
+\item{source_csv}{\code{NULL} (default) or a path to the suitability panel CSV
+that psi fitting should read. \code{NULL} uses the canonical panel
+\code{file.path(PATHS$DATA_CHOLERA_WEEKLY, "cholera_country_weekly_suitability_data.csv")}.
+A supplied path lets a caller point fitting at an arbitrary panel (e.g. a
+v7.4-tagged or per-cutoff leak-free panel) without renaming files.
+Supported only by the \code{lstm_v2_hierarchical_film} path; errors if supplied
+with the frozen legacy path.}
 
 \item{plot_country_diagnostics}{Logical (default \code{FALSE}). Per-country base-R
 diagnostic plots during the smoothing loop (legacy path only).}
@@ -141,17 +150,17 @@ regime fixes the v0.33 random-split temporal leak that collapsed out-of-sample
 forecasts. Defaults are pinned to the B4 fixture; override via \code{arch_control}.
 
 \emph{Honest framing.} lstm_v2 converts a structurally-collapsed flat psi
-(Pearson ~0.09, ~3\\% of observed amplitude) into a weak-but-real, better-phased
+(Pearson ~0.09, ~3\% of observed amplitude) into a weak-but-real, better-phased
 directional signal (median cross-country Pearson ~0.22, but a wide per-cell
 range with a large anti-correlated minority -- psi can be worse than climatology
 for some countries). It strictly dominates the incumbent on shape; it is NOT a
-decision-grade forecaster. psi reaches the downstream LASER engine through TWO
+decision-grade forecaster. psi reaches the downstream simulation engine through TWO
 channels -- a fractional deviation \code{(psi - psi_bar)/psi_bar} (timing/shape) and
 the absolute level (environmental-reservoir decay) -- so the response anchor and
 \code{bias_correct} can move outbreak magnitude, not just timing. Report the
 per-country spread, not just the median. The default \code{response_var} is
 \code{"target_D_rate_per_country_floored"} (per-capita, per-country anchor),
-selected over \code{"transmission_intensity"} by a 15-country psi->LASER calibration
+selected over \code{"transmission_intensity"} by a 15-country psi->simulation calibration
 case-skill comparison: D lifts cases-R2 for the priority/saturated cluster
 (COD 0.51->0.73, SOM 0.34->0.82, ETH 0.61->0.80) at the cost of regressions on
 5 low-burden countries (RWA/MWI/AGO/NAM/SSD), accepted for the global default.

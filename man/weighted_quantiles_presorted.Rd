@@ -18,7 +18,7 @@ finite and positive.}
 Vector of weighted quantiles, one per element of \code{probs}.
 }
 \description{
-Internal core of \code{\link{weighted_quantiles}}: the cumulative-weight
+Internal core of \code{\link{weighted_quantiles}}: the midpoint-position
 interpolation, assuming inputs are already filtered (finite values, positive
 weights) and sorted ascending by value with weights aligned. Exposed so hot
 callers that sort once and reuse the order across many subsets (e.g.

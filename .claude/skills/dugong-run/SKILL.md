@@ -5,7 +5,7 @@ description: >
   (176 cores / 1.5 TiB, Ubuntu 24.04, persistently allocated). Covers the libexpat
   LD_PRELOAD R wrapper (NOT hedgehog's GLIBCXX problem), the IP-pinned SSH alias,
   surviving SSH disconnect (nohup+logfile default / tmux for humans), the local-PSOCK
-  control recipe (Coiled hybrid is #113-invalid), monitoring by tailing the log, and
+  control recipe, monitoring by tailing the log, and
   pulling results (tar-then-scp / pull_results.sh with HEDGEHOG_HOST=dugong).
   Use when the user wants to run, monitor, or fetch a MOSAIC calibration on dugong.
 ---
@@ -14,7 +14,7 @@ description: >
 
 Canonical reference: `vm/DUGONG.md`. Helpers shared with hedgehog: `vm/launch_mosaic.R`
 (single/multi-country), `vm/launch_mosaic_individual.R` (per-country loop with resume + compression),
-`vm/pull_results.sh` (parameterized — set `HEDGEHOG_HOST=dugong`), `R/presets.R`, `R/check_coiled.R`.
+`vm/pull_results.sh` (parameterized — set `HEDGEHOG_HOST=dugong`), `R/presets.R`.
 Provisioning scripts that built this node: `claude/dugong_setup/` (`install_dugong*.sh`,
 `build_venv_dugong.sh`, `make_wrappers_dugong.sh`, `smoke_dugong.R`).
 
@@ -34,10 +34,12 @@ Provisioning scripts that built this node: `claude/dugong_setup/` (`install_dugo
   key / wiped `authorized_keys`) → re-register from the Mac: `ssh-copy-id -i ~/.ssh/id_ed25519.pub dugong`.
 - **MOSAIC version on VM:** `ssh dugong '~/bin/r-mosaic-Rscript -e "cat(as.character(packageVersion(\"MOSAIC\")))"'`
   (note the wrapper — §1). If stale, update via §1a.
-- **Engine version (laser-cholera):** `ssh dugong '~/.virtualenvs/r-mosaic/bin/python -c "import laser.cholera as lc; print(lc.__version__)"'`.
-  Keep this in lockstep with the wheel pinned in `inst/python/environment.yml`. (Updated to 0.16.0 on 2026-06-22.)
+- **Engine version:** there is no separate one to check. The transmission engine is pure R as of
+  MOSAIC v0.68.0, so the MOSAIC version above *is* the engine version. (The old check here imported
+  `laser.cholera` and compared it against the wheel pinned in `inst/python/environment.yml`; the
+  wheel left that file in v0.69.0.)
 
-### 1a. Updating MOSAIC / the engine on dugong
+### 1a. Updating MOSAIC on dugong
 Public repo — no GITHUB_PAT needed. Run via the wrapper (`~/bin/r-mosaic-R` in tmux for a long install):
 ```r
 .libPaths(c("~/R/library", .libPaths()))
@@ -46,12 +48,11 @@ remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg",
 MOSAIC::install_dependencies(force = TRUE)   # rebuilds ~/.virtualenvs/r-mosaic from inst/python/environment.yml
 ```
 `install_dependencies()` requires conda configured **conda-forge-only** or it dies on the Anaconda
-commercial-channel ToS (see `vm/DUGONG.md` Provisioning gotchas). To bump ONLY the engine wheel
-without a full rebuild:
-```bash
-ssh dugong '~/.virtualenvs/r-mosaic/bin/pip install --no-deps --force-reinstall \
-  https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.16.0/laser_cholera-0.16.0-py3-none-any.whl'
-```
+commercial-channel ToS (see `vm/DUGONG.md` Provisioning gotchas). It is also no longer on the
+critical path for a calibration: the Python env it builds now holds only numpy + TensorFlow, which
+`est_suitability()` needs and `run_MOSAIC()` does not. Updating the R package is the whole update.
+(There used to be a `pip install --force-reinstall <laser_cholera wheel>` recipe here for bumping
+the engine without a full rebuild. The engine ships inside the R package now.)
 
 ## 1. The R wrapper — always use it
 dugong is Ubuntu 24.04 (modern `libstdc++`, so NO GLIBCXX problem), but R links the older *system*
@@ -59,26 +60,62 @@ dugong is Ubuntu 24.04 (modern `libstdc++`, so NO GLIBCXX problem), but R links 
 `libexpat 1.12.1`) the loader reuses the system copy and **PSOCK workers die with `undefined symbol:
 XML_SetAllocTrackerActivationThreshold`**. Only an `LD_PRELOAD` of the venv libexpat fixes it. Run R
 via `~/bin/r-mosaic-Rscript` (batch) or `~/bin/r-mosaic-R` (interactive). `check_dependencies()` and
-TensorFlow-only work PASS without the wrapper (they skip the laser/pyexpat worker path) — which masks
+TensorFlow-only work PASS without the wrapper (they skip the pyexpat worker path) — which masks
 the bug, so use the wrapper anyway. Recreate it with `claude/dugong_setup/make_wrappers_dugong.sh` if lost.
 
-## 2. Choose a backend
-### (a) Local PSOCK — everything on dugong. RECOMMENDED.
-LASER sims AND post-processing run on dugong's local cores; nothing leaves the VM. Enabled by
-**omitting `dask_spec`**. `control$parallel$n_cores` IS the sim parallelism — 1.5 TiB RAM at ~2 GB/worker
-means you can run very wide (170+ of 176 cores is comfortable). Engine = dugong's laser-cholera
-end-to-end → VALID.
+> **Unverified, worth testing:** this whole `LD_PRELOAD` dance exists because PSOCK workers imported
+> Python. Since v0.68.0 calibration workers are pure R and import nothing, so the wrapper may be
+> unnecessary for `run_MOSAIC()` — and still required for `est_suitability()`, which does import
+> Python. Nobody has tested this on the VM. Keep using the wrapper until someone does; it is
+> harmless when unneeded.
 
-### (b) Coiled hybrid — sims on a Coiled cloud cluster, dugong is the Dask client.
-**Currently scientifically INVALID** — the worker image lags laser-cholera (issue #113): runs complete
-but give low R²/unconverged results. Use (a) until #113 is resolved. `save_simresults` is rejected on
-this path; you may not switch backends across a `resume`.
+## 2. Execution model — local PSOCK only
+Simulations AND post-processing run on dugong's local cores; nothing leaves the VM.
+`control$parallel$n_cores` IS the sim parallelism — 1.5 TiB RAM at **~1.0 GB/worker** (v0.73.0
+measurement: VmHWM 992 MB, flat from 1 to 19 workers) means you can run very wide. **`n_cores = 170L`
+is correct and now actually granted** — but only because the wrapper raises R's connection ceiling.
+
+### R's connection ceiling (why the wrapper carries `--max-connections`)
+R allocates a FIXED connection table at startup — 128 slots, 3 taken by stdin/stdout/stderr — and
+every PSOCK worker holds one for its lifetime. So a default R build caps a cluster at ~125 workers
+**regardless of core count**. Measured on dugong at `n_cores = 170`:
+
+| | default R | wrapper (`--max-connections=512`) |
+|---|---|---|
+| calibration cluster | silently clamped to **123** | **170 granted** |
+| ensemble cluster | **threw**, ensemble stage lost | **170**, 0.3 s |
+| startup / parent fds / R RSS | 13.6 s / 129 / 84 GB | 16.6 s / 176 of 1024 / 121 GB of 1511 |
+
+`~/bin/r-mosaic-Rscript` sets `--max-connections=512` (generated by the tracked
+`vm/make_wrappers.sh`; regenerate with `bash vm/make_wrappers.sh` if lost). Three consequences:
+- **Use the wrapper, not bare `Rscript`** — bare `Rscript` costs you 28% of the box, silently.
+- It is a **startup-only** option: no env var, nothing in-session can raise it. A caller may
+  override with a *later* flag (`r-mosaic-Rscript --max-connections=1024 my_run.R`); a flag placed
+  after the script filename is ignored.
+- If you ever run without it, `run_MOSAIC()` logs a `[WARN]` naming the budget and the remedy at
+  startup, and every cluster clamps rather than throwing (MOSAIC >= v0.83.0).
+
+The Coiled hybrid backend has been **removed** from the package, along with the worker image and its CI (v0.70.0). It was already scientifically
+invalid (issue #113: the worker image lagged laser-cholera, so runs completed but gave low
+R²/unconverged results), and the pure-R engine migration removes the reason it existed. `dask_spec`,
+`check_coiled_workspace()` and `mosaic_dask_presets()` now raise an error rather than being ignored.
+
+**This skill is on notice.** Per-worker RSS has now been measured (~1.0 GB at v0.73.0, above; the
+old ~2 GB figure was the *Python* engine) and the R engine is ~2.4x faster than its first port, so a
+176-core VM may no longer be needed for calibration. What is still unmeasured is end-to-end
+calibration throughput on dugong itself. Keep the VM for wide sweeps and psi/LSTM training.
 
 ## 3. Stage and launch (run MUST survive SSH disconnect)
 1. Stage the script: `scp my_run.R dugong:~/`.
 2. Launch **detached with a logfile (agent default)** — survives disconnect, captures all output:
    ```bash
    ssh dugong 'cd ~ && nohup ~/bin/r-mosaic-Rscript ~/my_run.R </dev/null >run.log 2>&1 & echo "PID $!"'
+   ```
+   The wrapper already supplies `--max-connections=512`, so nothing extra is needed for a
+   170-worker run. Confirm with the `[WARN]`/`Connection budget OK` line `run_MOSAIC()` logs at
+   startup, or directly:
+   ```bash
+   ssh dugong '~/bin/r-mosaic-Rscript -e "cat(parallelly::availableConnections())"'   # expect 512
    ```
    Interactive humans may prefer `tmux`: `ssh dugong`, `tmux new -s mosaic` (detach Ctrl-b d, reattach
    `tmux attach -t mosaic`). Do NOT run a multi-hour job in a bare foreground SSH session.
@@ -92,7 +129,7 @@ config <- get_location_config(iso = iso); priors <- get_location_priors(iso = is
 ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = 25000L,   # integer = fixed; NULL = adaptive (NOT the string 'auto')
                      n_iterations  = 3L),
-  parallel    = list(enable = TRUE, n_cores = 170L),   # dugong has 176
+  parallel    = list(enable = TRUE, n_cores = 170L),   # dugong has 176; needs the wrapper (§2)
   paths       = list(plots = TRUE)
 )
 # Single-location: disable multi-location params

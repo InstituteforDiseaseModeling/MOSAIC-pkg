@@ -3,28 +3,31 @@
 # directory.
 # -----------------------------------------------------------------------------
 # Reads the captured ensemble trajectories + medoid config from a single model
-# output directory, runs calc_Reff(), writes the tidy reproductive_numbers table
-# (.csv + .rds) to 3_results/posterior/, and (optionally) renders plot_Reff() to
+# output directory, runs calc_Reff() (R_eff = R_hum + R_env), writes the tidy
+# reproductive_numbers table (.csv + .rds) to 3_results/posterior/, and (optionally) renders plot_Reff() to
 # 3_results/figures/reproductive_number/. Designed to be mapped over the per-ISO
 # model tree by an orchestrator; it is robust to missing files / missing
 # incidence channel and returns a status row rather than crashing.
 # -----------------------------------------------------------------------------
 
-#' Add Cori R_eff to an existing MOSAIC model output directory
+#' Add route-decomposed Cori R_eff to an existing MOSAIC model output directory
 #'
-#' Post-hoc driver that applies the Cori (2013) effective reproductive number
-#' reduction (\code{\link{calc_Reff}}) to a \strong{single} MOSAIC model output
+#' Post-hoc driver that applies the route-decomposed Cori (2013) effective
+#' reproductive number reduction (\code{\link{calc_Reff}}: \eqn{R_{eff} =
+#' R_{hum} + R_{env}}) to a \strong{single} MOSAIC model output
 #' directory laid out by \code{\link{run_MOSAIC}}. It loads the captured ensemble
 #' trajectories (\code{2_calibration/trajectories_ensemble.rds}) and the medoid
-#' config (\code{1_inputs/config.json}), computes the per-location R_eff series,
+#' config (\code{2_calibration/best_model/config_medoid.json}, falling back to
+#' \code{1_inputs/config.json} with a warning), computes the per-location R_eff
+#' series,
 #' writes the tidy \code{reproductive_numbers} table to
 #' \code{3_results/posterior/reproductive_numbers.csv} (and \code{.rds}), and
 #' optionally renders \code{\link{plot_Reff}} to
 #' \code{3_results/figures/reproductive_number/}.
 #'
 #' \strong{Robust by design.} Missing files, a trajectory artifact without the
-#' \code{incidence} channel, or a \code{calc_Reff()} error are handled by
-#' skipping with an informative message/warning and returning a status row; the
+#' \code{incidence_human}/\code{incidence_env} channels, or a \code{calc_Reff()}
+#' error are handled by skipping with an informative message/warning and returning a status row; the
 #' function does not crash. It is therefore safe to map over the full per-ISO
 #' model tree.
 #'
@@ -34,36 +37,43 @@
 #' @param recompute_ci Logical. When \code{TRUE}, build a proper posterior
 #'   credible interval by \strong{re-simulating} the saved posterior ensemble
 #'   (\code{2_calibration/ensemble_candidate.rds}) and computing R_eff per member,
-#'   then weighted quantiles (median + 95\% interval). This captures the daily
-#'   S->E infection \code{incidence} channel that the persisted trajectory
-#'   artifact does not retain at a daily grid. A faithfulness gate confirms the
-#'   re-sim reproduces the saved \code{cases_array} before any CI is written.
+#'   then weighted quantiles (median + 95% interval). This captures the daily
+#'   route incidence, stock and decay-rate channels that the persisted
+#'   trajectory artifact does not retain at a daily grid. A faithfulness gate
+#'   confirms the re-sim reproduces the saved \code{cases_array} before any CI is written.
 #'   When \code{FALSE} (default) the cheap point-estimate path is used (renewal on
-#'   the medoid weighted-median incidence from \code{trajectories_ensemble.rds};
+#'   the weighted-median route incidence from \code{trajectories_ensemble.rds};
 #'   CI columns are populated only if the artifact carries daily-consecutive
 #'   per-member lines, otherwise NA).
 #' @param burn_in_days Integer or \code{NULL}. Number of leading days to exclude
 #'   from the R_eff output (set to \code{NA} in the table). \code{NULL} (default)
 #'   reads \code{control$likelihood$burn_in_days} from
 #'   \code{1_inputs/control.json}; if that is \code{0} or absent it defaults to
-#'   \code{30} days. Only consumed on the \code{recompute_ci = TRUE} path.
+#'   \code{30} days. An explicit \code{0} disables the burn-in. Applied on both
+#'   paths: early R reflects the reservoir filling from empty rather than the
+#'   epidemic.
 #' @param infectiousness_floor Numeric scalar \eqn{\ge 0}. Passed to
 #'   \code{\link{calc_Reff}}; minimum generation-weighted past infectiousness
 #'   required to report \eqn{R_t} (guards the initial-condition seed spike and
 #'   deep inter-epidemic troughs). Default \code{1}.
 #' @param plots Logical. Render and save \code{\link{plot_Reff}} (PNG + PDF) to
 #'   \code{3_results/figures/reproductive_number/}. Default \code{TRUE}.
-#' @param overwrite Logical. If \code{FALSE} and the output CSV already exists,
-#'   skip recomputation and return a \code{"skipped_exists"} status. Default
-#'   \code{TRUE}.
+#' @param overwrite Logical. If \code{FALSE} and a route-decomposed output CSV
+#'   already exists, skip recomputation and return a \code{"skipped_exists"}
+#'   status (an older total-only CSV is always recomputed). Default \code{TRUE}.
 #' @param verbose Logical. Emit progress messages. Default \code{TRUE}.
+#' @param n_cores Integer. Workers used for the \code{recompute_ci = TRUE}
+#'   re-simulation, which is the only expensive part of this function
+#'   (~1,000 engine runs at \code{run_MOSAIC()} defaults). Greater than 1 builds
+#'   a PSOCK cluster and stops it before returning; \code{1L} (default) keeps
+#'   the historical serial behaviour. Ignored when \code{recompute_ci = FALSE}.
 #'
 #' @return Invisibly, a one-row \code{data.frame} status with columns:
 #'   \describe{
 #'     \item{dir}{The \code{output_dir}.}
 #'     \item{status}{One of \code{"ok"}, \code{"skipped_exists"},
 #'       \code{"skipped_missing_trajectories"}, \code{"skipped_missing_config"},
-#'       \code{"skipped_no_incidence"}, or \code{"error"}.}
+#'       \code{"skipped_no_incidence"} (no route incidence channels), or \code{"error"}.}
 #'     \item{n_locations}{Number of locations in the artifact (\code{NA} if not
 #'       loaded).}
 #'     \item{ci_available}{Logical; whether the posterior CI columns are
@@ -96,7 +106,8 @@ add_reproductive_numbers <- function(output_dir,
                                      infectiousness_floor = 1,
                                      plots     = TRUE,
                                      overwrite = TRUE,
-                                     verbose   = TRUE) {
+                                     verbose   = TRUE,
+                                     n_cores   = 1L) {
 
   .status <- function(status, n_locations = NA_integer_, ci_available = NA,
                       csv = NA_character_, rds = NA_character_,
@@ -118,13 +129,18 @@ add_reproductive_numbers <- function(output_dir,
 
   traj_path <- file.path(output_dir, "2_calibration", "trajectories_ensemble.rds")
   cfg_path  <- file.path(output_dir, "1_inputs", "config.json")
+  med_path  <- file.path(output_dir, "2_calibration", "best_model",
+                         "config_medoid.json")
   post_dir  <- file.path(output_dir, "3_results", "posterior")
   fig_dir   <- file.path(output_dir, "3_results", "figures", "reproductive_number")
   csv_path  <- file.path(post_dir, "reproductive_numbers.csv")
   rds_path  <- file.path(post_dir, "reproductive_numbers.rds")
 
   # --- Idempotency guard -----------------------------------------------------
-  if (!isTRUE(overwrite) && file.exists(csv_path)) {
+  if (!isTRUE(overwrite) && file.exists(csv_path) &&
+      all(c("R_hum", "R_env") %in%
+          tryCatch(unique(utils::read.csv(csv_path, stringsAsFactors = FALSE)$estimand),
+                   error = function(e) character(0)))) {
     .msg("add_reproductive_numbers: ", csv_path,
          " exists and overwrite=FALSE; skipping.")
     return(invisible(.status("skipped_exists", csv = csv_path,
@@ -162,31 +178,54 @@ add_reproductive_numbers <- function(output_dir,
                                               conditionMessage(cfg)))))
   }
 
-  # --- Guard: incidence channel present? -------------------------------------
-  inc_med <- tryCatch(traj$summary[["incidence"]]$median,
-                      error = function(e) NULL)
-  if (is.null(inc_med) || !is.matrix(inc_med)) {
+  # --- Guard: route incidence channels present? ------------------------------
+  has_route <- all(vapply(c("incidence_human", "incidence_env"), function(ch)
+    is.matrix(tryCatch(traj$summary[[ch]]$median, error = function(e) NULL)),
+    logical(1)))
+  if (!has_route) {
     warning("add_reproductive_numbers: trajectory artifact lacks the ",
-            "`incidence` channel (summary$incidence$median); skipping ",
+            "`incidence_human`/`incidence_env` channels; skipping ",
             output_dir, ".", call. = FALSE)
     n_loc <- tryCatch(as.integer(traj$n_locations), error = function(e) NA_integer_)
     return(invisible(.status("skipped_no_incidence", n_locations = n_loc,
-                             message = "no incidence channel in artifact")))
+                             message = "no route incidence channels in artifact")))
   }
 
   # --- Compute R_eff ---------------------------------------------------------
+  bid <- .add_reff_burn_in(output_dir, burn_in_days, verbose)
   if (isTRUE(recompute_ci)) {
     reff <- tryCatch(
       .add_reff_recompute_ci(output_dir = output_dir, base_config = cfg,
-                             burn_in_days = burn_in_days,
+                             burn_in_days = bid,
                              infectiousness_floor = infectiousness_floor,
-                             verbose = verbose),
+                             verbose = verbose, n_cores = n_cores),
       error = function(e) e)
   } else {
-    reff <- tryCatch(
-      calc_Reff(traj, cfg, infectiousness_floor = infectiousness_floor,
-                verbose = verbose),
-      error = function(e) e)
+    # The kernel and decay rates must be the medoid's: the base config holds
+    # prior centres (zeta, decay_days) that can move R_eff by a factor of two.
+    kcfg <- cfg
+    cfg_source <- "1_inputs/config.json"
+    if (file.exists(med_path)) {
+      cfg_source <- "2_calibration/best_model/config_medoid.json"
+      kcfg <- tryCatch(jsonlite::fromJSON(med_path), error = function(e) e)
+      if (inherits(kcfg, "error")) {
+        warning("add_reproductive_numbers: could not read ", med_path, " (",
+                conditionMessage(kcfg), "); using 1_inputs/config.json.",
+                call. = FALSE)
+        kcfg <- cfg
+        cfg_source <- "1_inputs/config.json"
+      }
+    } else {
+      warning("add_reproductive_numbers: no best_model/config_medoid.json in ",
+              output_dir, "; using 1_inputs/config.json (prior centres) for ",
+              "the kernel and decay rates.", call. = FALSE)
+    }
+    reff <- tryCatch({
+      r <- calc_Reff(traj, kcfg, infectiousness_floor = infectiousness_floor,
+                     verbose = verbose)
+      attr(r, "config_source") <- cfg_source
+      .add_reff_mask_burn_in(r, bid)
+    }, error = function(e) e)
   }
   if (inherits(reff, "error")) {
     warning("add_reproductive_numbers: R_eff computation failed for ", output_dir,
@@ -276,9 +315,10 @@ add_reproductive_numbers <- function(output_dir,
 #' and the calibration \code{control$sampling} + \code{burn_in_days} from
 #' \code{1_inputs/control.json}, re-simulates the posterior members via
 #' \code{\link{.mosaic_reff_resim_ci}} (faithfulness-gated against the saved
-#' \code{cases_array}), computes per-member R_eff with each member's own kernel,
-#' and returns a tidy \code{reproductive_numbers} data.frame with the same schema
-#' as \code{\link{calc_Reff}}. The leading \code{burn_in_days} are set to
+#' \code{cases_array}), computes per-member R_eff = R_hum + R_env with each
+#' member's own kernel and decay rates, and returns a tidy
+#' \code{reproductive_numbers} data.frame with the same schema as
+#' \code{\link{calc_Reff}}. The leading \code{burn_in_days} are set to
 #' \code{NA} in every output column.
 #'
 #' \strong{Column semantics (phase-coherent headline).}
@@ -294,15 +334,17 @@ add_reproductive_numbers <- function(output_dir,
 #'     phase-misaligned so the per-day median regresses toward 1.}
 #' }
 #' The explosivity statistic -- the posterior-weighted quantiles of each member's
-#' TIME-MAX R_t (post-burn-in, floor-gated) -- is carried in attribute
-#' \code{"peak_Rt"} (a per-location \code{data.frame} with \code{location},
-#' \code{q2.5}/\code{q50}/\code{q97.5}, and \code{n_members}; schema pinned with
-#' \code{plot_Reff()}).
+#' TIME-MAX of its 7-day Cori R_t (post-burn-in, floor-gated) -- is carried in
+#' attribute \code{"peak_Rt_window"} (7) and attribute
+#' \code{"peak_Rt"} (a per-location x estimand \code{data.frame} with
+#' \code{location}, \code{estimand}, \code{q2.5}/\code{q50}/\code{q97.5}, and
+#' \code{n_members}; schema pinned with \code{plot_Reff()}).
 #'
 #' @keywords internal
 #' @noRd
-.add_reff_recompute_ci <- function(output_dir, base_config, burn_in_days = NULL,
-                                   infectiousness_floor = 1, verbose = TRUE) {
+.add_reff_recompute_ci <- function(output_dir, base_config, burn_in_days = 30L,
+                                   infectiousness_floor = 1, verbose = TRUE,
+                                   n_cores = 1L) {
   ens_path <- file.path(output_dir, "2_calibration", "ensemble_candidate.rds")
   pri_path <- file.path(output_dir, "1_inputs", "priors.json")
   ctl_path <- file.path(output_dir, "1_inputs", "control.json")
@@ -328,27 +370,36 @@ add_reproductive_numbers <- function(output_dir,
   control <- if (!is.null(ctl$control)) ctl$control else ctl
   sampling_args <- control$sampling
 
-  # Resolve burn_in_days: arg > control$likelihood$burn_in_days > 30 default.
-  bid <- burn_in_days
-  if (is.null(bid)) {
-    bid <- tryCatch(as.integer(control$likelihood$burn_in_days),
-                    error = function(e) NA_integer_)
-  }
-  bid <- suppressWarnings(as.integer(bid))
-  if (length(bid) != 1L || is.na(bid) || bid <= 0L) {
-    if (verbose)
-      message("  burn_in_days resolved to 0/absent; defaulting to 30 days.")
-    bid <- 30L
-  }
+  bid <- as.integer(burn_in_days)
   if (verbose) message("  Excluding first ", bid, " day(s) as burn-in.")
 
-  # Match run_MOSAIC's medoid target: the cases central_method (default median).
+  # Match run_MOSAIC's medoid target: the run's cases central_method. A control
+  # without the setting predates it (v0.38.0), and those runs used the median.
   cases_cm <- tryCatch(
-    .mosaic_resolve_central_method(control$predictions$central_method)[["cases"]],
+    .mosaic_resolve_central_method(control$predictions$central_method %||% "median")[["cases"]],
     error = function(e) "median")
   if (length(cases_cm) != 1L || is.na(cases_cm)) cases_cm <- "median"
 
   PATHS <- get_paths()
+
+  # recompute_ci re-simulates every posterior member, which is the whole cost of
+  # this path: ~1,000 engine runs at run_MOSAIC()'s defaults. Build a cluster for
+  # it when asked. This function is post-hoc and standalone, so nothing else
+  # holds sockets and there is no cluster to borrow.
+  .reff_cl <- NULL
+  n_cores <- suppressWarnings(as.integer(n_cores))
+  if (length(n_cores) != 1L || is.na(n_cores)) n_cores <- 1L
+  if (n_cores > 1L) {
+    .reff_cl <- tryCatch(
+      make_mosaic_cluster(n_cores = n_cores, type = "PSOCK", require_root = FALSE),
+      error = function(e) {
+        warning("add_reproductive_numbers: could not start a cluster (",
+                conditionMessage(e), "); re-simulating serially.", call. = FALSE)
+        NULL
+      })
+    if (!is.null(.reff_cl))
+      on.exit(try(.mosaic_stop_cluster(.reff_cl), silent = TRUE), add = TRUE)
+  }
 
   res <- .mosaic_reff_resim_ci(
     ensemble = ens, base_config = base_config, priors = priors,
@@ -356,7 +407,7 @@ add_reproductive_numbers <- function(output_dir,
     probs = c(0.025, 0.5, 0.975),
     infectiousness_floor = infectiousness_floor, burn_in_days = bid,
     cases_central_method = cases_cm,
-    verbose = verbose)
+    verbose = verbose, cl = .reff_cl)
 
   if (verbose)
     message(sprintf(paste0("  Faithfulness gate PASSED (robust statistical ",
@@ -367,39 +418,29 @@ add_reproductive_numbers <- function(output_dir,
                     res$gate_cor_median, res$gate_n_outliers, res$n_members,
                     res$gate_rel_err_max, res$n_members))
 
-  nL    <- length(ens$location_names)
   Tn    <- dim(ens$cases_array)[2L]
   locs  <- as.character(ens$location_names)
   probs <- res$probs
-  prob_cols <- .mosaic_reff_prob_colnames(probs)   # "q2.5","q50","q97.5"
 
   d0    <- tryCatch(as.Date(ens$date_start), error = function(e) NA)
   dates <- if (!is.na(d0)) d0 + (seq_len(Tn) - 1L) else as.Date(NA) + seq_len(Tn)
 
   burn_idx <- if (bid >= 1L) seq_len(min(bid, Tn)) else integer(0)
-
-  central <- res$central_mat
+  central <- res$central
   qmats   <- res$qmats
-  if (length(burn_idx)) {
-    central[, burn_idx] <- NA_real_
-    qmats[, burn_idx, ] <- NA_real_
+  if (length(burn_idx)) for (e in names(central)) {
+    central[[e]][, burn_idx] <- NA_real_
+    qmats[[e]][, burn_idx, ] <- NA_real_
   }
 
-  parts <- vector("list", nL)
-  for (i in seq_len(nL)) {
-    df <- data.frame(
-      location = locs[i], date = dates, t = seq_len(Tn),
-      estimand = "R_eff", central = central[i, ],
-      stringsAsFactors = FALSE)
-    for (k in seq_along(probs)) df[[prob_cols[k]]] <- qmats[i, , k]
-    parts[[i]] <- df
-  }
-  out <- do.call(rbind, parts)
-  rownames(out) <- NULL
+  out <- .mosaic_reff_assemble(locs, dates, central, qmats, probs)
 
   attr(out, "location_names") <- locs
   attr(out, "dates")          <- dates
-  attr(out, "kernel")         <- "moment_matched_per_member"
+  attr(out, "central_matrix") <- central$R_eff
+  attr(out, "route_central")  <- central[c("R_hum", "R_env")]
+  attr(out, "kernel")         <- "route_instantaneous_per_member"
+  attr(out, "config_source")  <- "per-member (base config + priors, re-sampled by seed)"
   attr(out, "series")         <- "infection_incidence"
   attr(out, "kernel_params")  <- res$kernel_params
   attr(out, "probs")          <- probs
@@ -408,6 +449,7 @@ add_reproductive_numbers <- function(output_dir,
   attr(out, "band_definition")    <-
     "per_calendar_day_cross_member_weighted_quantiles"
   attr(out, "peak_Rt")          <- res$peak_Rt
+  attr(out, "peak_Rt_window")   <- res$peak_window
   attr(out, "medoid_member")    <- res$medoid_member
   attr(out, "burn_in_days")     <- bid
   attr(out, "gate_rel_err_pct") <- res$gate_rel_err_pct
@@ -419,10 +461,58 @@ add_reproductive_numbers <- function(output_dir,
   attr(out, "gate_n_outliers")  <- res$gate_n_outliers
   attr(out, "n_members")        <- res$n_members
   attr(out, "caveat")         <- paste0(
-    "Cori R_eff computed on RE-SIMULATED posterior-member infection incidence; ",
+    "Route-decomposed Cori R_eff (R_hum + R_env) computed on RE-SIMULATED ",
+    "posterior-member infection incidence; ",
     "per-member weighted quantiles (median + 95% CI). Burn-in (", bid,
     " days) excluded. Descriptor of the model trajectory, not a ",
     "first-principles R0.")
   class(out) <- c("reproductive_numbers", "data.frame")
   out
+}
+
+#' Resolve the burn-in: argument > control$likelihood$burn_in_days > 30 days
+#'
+#' An explicit \code{burn_in_days} (including \code{0}, no burn-in) is honoured.
+#' Only when it is \code{NULL} is \code{control.json} read, and a calibration
+#' burn-in of 0 or absent there falls back to 30 days.
+#' @keywords internal
+#' @noRd
+.add_reff_burn_in <- function(output_dir, burn_in_days = NULL, verbose = TRUE) {
+  if (!is.null(burn_in_days)) {
+    bid <- suppressWarnings(as.integer(burn_in_days))
+    if (length(bid) != 1L || is.na(bid) || bid < 0L)
+      stop("add_reproductive_numbers: `burn_in_days` must be NULL or a single ",
+           "integer >= 0.", call. = FALSE)
+    return(bid)
+  }
+  ctl_path <- file.path(output_dir, "1_inputs", "control.json")
+  bid <- if (file.exists(ctl_path)) tryCatch({
+    ctl <- jsonlite::fromJSON(ctl_path)
+    control <- if (!is.null(ctl$control)) ctl$control else ctl
+    as.integer(control$likelihood$burn_in_days)
+  }, error = function(e) NA_integer_) else NA_integer_
+  bid <- suppressWarnings(as.integer(bid))
+  if (length(bid) != 1L || is.na(bid) || bid <= 0L) {
+    if (verbose) message("  burn_in_days resolved to 0/absent; defaulting to 30 days.")
+    bid <- 30L
+  }
+  bid
+}
+
+#' NA the leading burn-in days of every value column of a reproductive_numbers
+#' table
+#' @keywords internal
+#' @noRd
+.add_reff_mask_burn_in <- function(reff, bid) {
+  attr(reff, "burn_in_days") <- bid
+  if (bid < 1L) return(reff)
+  cols <- c("central", grep("^q[0-9.]+$", names(reff), value = TRUE))
+  cm <- attr(reff, "central_matrix"); rc <- attr(reff, "route_central")
+  reff[reff$t <= bid, cols] <- NA_real_
+  if (is.matrix(cm)) cm[, seq_len(min(bid, ncol(cm)))] <- NA_real_
+  if (is.list(rc)) rc <- lapply(rc, function(m) {
+    m[, seq_len(min(bid, ncol(m)))] <- NA_real_; m })
+  attr(reff, "central_matrix") <- cm
+  attr(reff, "route_central")  <- rc
+  reff
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/add_reproductive_numbers.R
 \name{add_reproductive_numbers}
 \alias{add_reproductive_numbers}
-\title{Add Cori R_eff to an existing MOSAIC model output directory}
+\title{Add route-decomposed Cori R_eff to an existing MOSAIC model output directory}
 \usage{
 add_reproductive_numbers(
   output_dir,
@@ -11,7 +11,8 @@ add_reproductive_numbers(
   infectiousness_floor = 1,
   plots = TRUE,
   overwrite = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  n_cores = 1L
 )
 }
 \arguments{
@@ -22,12 +23,12 @@ directory that contains \code{1_inputs/}, \code{2_calibration/}, and
 \item{recompute_ci}{Logical. When \code{TRUE}, build a proper posterior
 credible interval by \strong{re-simulating} the saved posterior ensemble
 (\code{2_calibration/ensemble_candidate.rds}) and computing R_eff per member,
-then weighted quantiles (median + 95\\% interval). This captures the daily
-S->E infection \code{incidence} channel that the persisted trajectory
-artifact does not retain at a daily grid. A faithfulness gate confirms the
-re-sim reproduces the saved \code{cases_array} before any CI is written.
+then weighted quantiles (median + 95\% interval). This captures the daily
+route incidence, stock and decay-rate channels that the persisted
+trajectory artifact does not retain at a daily grid. A faithfulness gate
+confirms the re-sim reproduces the saved \code{cases_array} before any CI is written.
 When \code{FALSE} (default) the cheap point-estimate path is used (renewal on
-the medoid weighted-median incidence from \code{trajectories_ensemble.rds};
+the weighted-median route incidence from \code{trajectories_ensemble.rds};
 CI columns are populated only if the artifact carries daily-consecutive
 per-member lines, otherwise NA).}
 
@@ -35,7 +36,9 @@ per-member lines, otherwise NA).}
 from the R_eff output (set to \code{NA} in the table). \code{NULL} (default)
 reads \code{control$likelihood$burn_in_days} from
 \code{1_inputs/control.json}; if that is \code{0} or absent it defaults to
-\code{30} days. Only consumed on the \code{recompute_ci = TRUE} path.}
+\code{30} days. An explicit \code{0} disables the burn-in. Applied on both
+paths: early R reflects the reservoir filling from empty rather than the
+epidemic.}
 
 \item{infectiousness_floor}{Numeric scalar \eqn{\ge 0}. Passed to
 \code{\link{calc_Reff}}; minimum generation-weighted past infectiousness
@@ -45,11 +48,17 @@ deep inter-epidemic troughs). Default \code{1}.}
 \item{plots}{Logical. Render and save \code{\link{plot_Reff}} (PNG + PDF) to
 \code{3_results/figures/reproductive_number/}. Default \code{TRUE}.}
 
-\item{overwrite}{Logical. If \code{FALSE} and the output CSV already exists,
-skip recomputation and return a \code{"skipped_exists"} status. Default
-\code{TRUE}.}
+\item{overwrite}{Logical. If \code{FALSE} and a route-decomposed output CSV
+already exists, skip recomputation and return a \code{"skipped_exists"}
+status (an older total-only CSV is always recomputed). Default \code{TRUE}.}
 
 \item{verbose}{Logical. Emit progress messages. Default \code{TRUE}.}
+
+\item{n_cores}{Integer. Workers used for the \code{recompute_ci = TRUE}
+re-simulation, which is the only expensive part of this function
+(~1,000 engine runs at \code{run_MOSAIC()} defaults). Greater than 1 builds
+a PSOCK cluster and stops it before returning; \code{1L} (default) keeps
+the historical serial behaviour. Ignored when \code{recompute_ci = FALSE}.}
 }
 \value{
 Invisibly, a one-row \code{data.frame} status with columns:
@@ -57,7 +66,7 @@ Invisibly, a one-row \code{data.frame} status with columns:
 \item{dir}{The \code{output_dir}.}
 \item{status}{One of \code{"ok"}, \code{"skipped_exists"},
 \code{"skipped_missing_trajectories"}, \code{"skipped_missing_config"},
-\code{"skipped_no_incidence"}, or \code{"error"}.}
+\code{"skipped_no_incidence"} (no route incidence channels), or \code{"error"}.}
 \item{n_locations}{Number of locations in the artifact (\code{NA} if not
 loaded).}
 \item{ci_available}{Logical; whether the posterior CI columns are
@@ -69,11 +78,14 @@ populated (\code{FALSE} on production-default strided artifacts).}
 }
 }
 \description{
-Post-hoc driver that applies the Cori (2013) effective reproductive number
-reduction (\code{\link{calc_Reff}}) to a \strong{single} MOSAIC model output
+Post-hoc driver that applies the route-decomposed Cori (2013) effective
+reproductive number reduction (\code{\link{calc_Reff}}: \eqn{R_{eff} =
+R_{hum} + R_{env}}) to a \strong{single} MOSAIC model output
 directory laid out by \code{\link{run_MOSAIC}}. It loads the captured ensemble
 trajectories (\code{2_calibration/trajectories_ensemble.rds}) and the medoid
-config (\code{1_inputs/config.json}), computes the per-location R_eff series,
+config (\code{2_calibration/best_model/config_medoid.json}, falling back to
+\code{1_inputs/config.json} with a warning), computes the per-location R_eff
+series,
 writes the tidy \code{reproductive_numbers} table to
 \code{3_results/posterior/reproductive_numbers.csv} (and \code{.rds}), and
 optionally renders \code{\link{plot_Reff}} to
@@ -81,8 +93,8 @@ optionally renders \code{\link{plot_Reff}} to
 }
 \details{
 \strong{Robust by design.} Missing files, a trajectory artifact without the
-\code{incidence} channel, or a \code{calc_Reff()} error are handled by
-skipping with an informative message/warning and returning a status row; the
+\code{incidence_human}/\code{incidence_env} channels, or a \code{calc_Reff()}
+error are handled by skipping with an informative message/warning and returning a status row; the
 function does not crash. It is therefore safe to map over the full per-ISO
 model tree.
 }

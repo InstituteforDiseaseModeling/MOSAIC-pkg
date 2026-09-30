@@ -4,7 +4,7 @@
 #' predictions artifact for one metric, one panel per cutoff (forecast origin),
 #' restricted to the assessed horizon (default \eqn{\le 5} months). The two
 #' posterior ensembles (\code{ensemble}, \code{ensemble_opt}) are drawn as
-#' "hero" series with 50/95\% prediction-interval ribbons; the two point
+#' "hero" series with 50/95% prediction-interval ribbons; the two point
 #' configurations (\code{best}, \code{medoid}) are drawn as thin reference
 #' lines. Held-out observations are overlaid as points and the forecast origin
 #' is marked with a labelled dashed rule. Each panel is annotated with the
@@ -31,7 +31,7 @@
 #'   panel relative to its cutoff (default 5).
 #' @param context_months Months of in-sample context shown before the cutoff
 #'   (left edge of each panel, default 2).
-#' @param models_ribbon Models drawn with 50/95\% PI ribbons + median line
+#' @param models_ribbon Models drawn with 50/95% PI ribbons + median line
 #'   (default \code{c("ensemble", "ensemble_opt")}).
 #' @param models_line Models drawn as thin reference median lines
 #'   (default \code{c("best", "medoid")}).
@@ -115,6 +115,15 @@ plot_rolling_cv <- function(predictions,
      if (!nrow(d)) stop("no rows remain after horizon truncation")
 
      cutoffs <- sort(unique(d$cutoff_date))
+     # This plotter has NO country dimension: it facets only by forecast origin.
+     # Passing multiple iso_codes superimposes them in each panel (and the title
+     # would pick an arbitrary one). Warn loudly -- callers should plot per iso.
+     if ("iso_code" %in% names(d) && length(unique(d$iso_code)) > 1L)
+          warning("plot_rolling_cv received ", length(unique(d$iso_code)),
+                  " iso_codes (", paste(utils::head(unique(d$iso_code), 5), collapse = ", "),
+                  "...); it has no country facet, so panels will SUPERIMPOSE countries. ",
+                  "Call it once per iso (subset predictions to a single iso_code).",
+                  call. = FALSE)
      iso     <- if ("iso_code" %in% names(d)) d$iso_code[1] else NA_character_
      d$panel <- factor(paste0("Forecast origin: ", format(d$cutoff_date, "%Y-%m-%d")),
                         levels = paste0("Forecast origin: ", format(cutoffs, "%Y-%m-%d")))

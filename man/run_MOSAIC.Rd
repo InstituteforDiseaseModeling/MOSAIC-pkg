@@ -12,7 +12,7 @@ run_MOSAIC(
   control = NULL,
   resume = FALSE,
   cluster = NULL,
-  dask_spec = NULL
+  ...
 )
 
 run_mosaic(
@@ -22,11 +22,11 @@ run_mosaic(
   control = NULL,
   resume = FALSE,
   cluster = NULL,
-  dask_spec = NULL
+  ...
 )
 }
 \arguments{
-\item{config}{Named list of LASER model configuration (REQUIRED). Contains location_name,
+\item{config}{Named list of simulation configuration (REQUIRED). Contains location_name,
 reported_cases, reported_deaths, and all model parameters. Create with custom data
 or obtain via \code{get_location_config()}.}
 
@@ -41,7 +41,7 @@ Controls calibration strategy, parameter sampling, parallelization, and output s
 Key settings:
 \itemize{
 \item \code{calibration$n_simulations}: NULL for auto mode, integer for fixed mode
-\item \code{calibration$n_iterations}: LASER iterations per simulation (default: 3)
+\item \code{calibration$n_iterations}: stochastic engine iterations per parameter set (default: 3)
 \item \code{calibration$max_simulations_total}: Maximum total simulations (default: 100000)
 \item \code{sampling}: Which parameters to sample vs hold fixed
 \item \code{parallel}: Cluster settings for parallel execution
@@ -68,36 +68,29 @@ exists that the on-disk shards would shrink (start fresh, or remove it to recomp
 calibration mode (auto vs fixed) differ from those persisted in
 \code{1_inputs/} (each changes the draws or likelihood, making the pool
 incomparable);
-\item the current \code{laser-cholera} engine version crosses the v0.13
-deaths-scale boundary relative to the original run;
+\item the run directory was created before MOSAIC v0.68.0, so its shards
+came from the Python \code{laser-cholera} engine rather than the R one
+(the two agree statistically but not draw-for-draw, so pooling them
+would give a posterior from neither simulator);
 \item the likelihood-value provenance differs -- i.e. the existing shards
 were scored by a different likelihood engine or implementation than the
-current session would produce (e.g. R \code{calc_model_likelihood} on
-the local backend vs on-worker Python scoring on the Dask backend, or
-an R likelihood-code change that altered values).
+current session would produce (an archived Python-scored shard, or an
+R likelihood-code change that altered values).
 }
-If the engine version cannot be determined (no record / Python not bound) the
-deaths-scale check is skipped with a warning. Has no effect when no shards
-exist (equivalent to a fresh run).}
+If the originating MOSAIC version cannot be determined (no
+\code{1_inputs/environment.json}, or an unparseable version) the engine
+check is skipped with a warning. Has no effect when no shards exist
+(equivalent to a fresh run).}
 
-\item{cluster}{Optional pre-built R parallel cluster from
-\code{\link{make_mosaic_cluster}}. Only used when \code{dask_spec = NULL}.
-When provided, skips cluster creation and teardown, reusing existing workers.
-Useful for staged estimation where multiple \code{run_MOSAIC} calls share a
-cluster. When \code{dask_spec} is provided this argument is not used; the
-caller retains ownership of any cluster passed and is responsible for stopping
-it after \code{run_MOSAIC} returns.}
+\item{cluster}{Optional pre-built R parallel cluster. When provided, skips
+cluster creation and teardown, reusing existing workers. Useful for staged
+estimation where multiple \code{run_MOSAIC} calls share a cluster. The
+caller retains ownership of any cluster passed and is responsible for
+stopping it after \code{run_MOSAIC} returns.}
 
-\item{dask_spec}{Optional named list specifying a Dask/Coiled cluster. When
-provided, simulations are dispatched to Dask workers instead of a local R
-parallel cluster. Required fields: \code{type} ("coiled" or "scheduler").
-Coiled fields: \code{n_workers}, \code{software}, \code{workspace} (required
-for multi-workspace Coiled accounts), \code{vm_types}, \code{scheduler_vm_types},
-\code{region}, \code{idle_timeout}. Scheduler fields: \code{address}.
-Optional Coiled pass-through fields: \code{timeout}, \code{environ},
-\code{scheduler_disk_size}, \code{worker_disk_size}, \code{scheduler_options},
-\code{worker_options}, \code{spot_policy}, \code{host_setup_script}.
-When \code{NULL} (default) the local R parallel backend is used.}
+\item{...}{Reserved. Supplying a removed argument (\code{dask_spec}) or any
+unrecognised argument raises an error naming it rather than silently
+ignoring it. See \link{removed_api}.}
 }
 \value{
 Invisibly returns a list with:
@@ -131,7 +124,7 @@ Executes the full MOSAIC calibration workflow:
 See \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}} for complete documentation. The control structure contains:
 \describe{
 \item{calibration}{n_simulations, n_iterations, max_simulations_total, batch_size_adaptive, etc.}
-\item{sampling}{sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.}
+\item{sampling}{sample_tau_i, sample_mobility_gamma, sample_beta_j0_tot, etc.}
 \item{parallel}{enable, n_cores, type, progress}
 \item{paths}{clean_output, plots}
 \item{targets}{ESS_param, ESS_best, A_best, CVw_best, etc.}
@@ -201,7 +194,7 @@ custom_config <- list(
   location_name = c("Region1", "Region2"),
   reported_cases = my_cases_data,
   reported_deaths = my_deaths_data,
-  # ... all other LASER parameters
+  # ... all other simulation parameters
 )
 
 custom_priors <- list(

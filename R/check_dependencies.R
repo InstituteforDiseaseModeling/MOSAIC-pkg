@@ -6,6 +6,11 @@
 #' configured correctly. It prints the currently active Python configuration and confirms whether the
 #' backend is working.
 #'
+#' Since v0.68.0 the transmission engine is pure R, so the Python environment exists only for the
+#' environmental-suitability (psi) model. What this function validates is therefore a TensorFlow
+#' environment, not a simulation one: a broken Python env costs you `est_suitability()`, not
+#' `run_MOSAIC()`.
+#'
 #' @return No return value. Prints diagnostic messages about environment status and package versions.
 #' @export
 #'
@@ -28,9 +33,10 @@ check_dependencies <- function() {
      paths <- MOSAIC::get_python_paths()
 
      # Check that the desired environment exists.
-     if (!dir.exists(paths$env) || !file.exists(paths$exe)) {
-          cli::cli_alert_danger("Conda environment not found or incomplete at {paths$env}.")
-          cli::cli_text("To finish setup, run {.run MOSAIC::install_dependencies()}. To re-install, run {.run MOSAIC::install_dependencies(force=T)}.")
+     if (!dir.exists(paths$env) || !file.exists(paths$exec)) {
+          cli::cli_alert_info("No Python conda environment at {paths$env}.")
+          cli::cli_text("This is not an error. Simulation and calibration are pure R and need no Python.")
+          cli::cli_text("Install it only to re-fit the suitability model with {.fn MOSAIC::est_suitability}: {.run MOSAIC::install_dependencies()} (or {.run MOSAIC::install_dependencies(force=T)} to rebuild).")
           return(invisible(NULL))
      } else {
           cli::cli_alert_success("Found Python conda environment at {paths$env}.")
@@ -89,13 +95,14 @@ check_dependencies <- function() {
 
      env_yml_path <- system.file("python", "environment.yml", package = pkgname)
 
-     # Track capabilities
-     core_working <- TRUE
+     # Track capabilities. There is no longer a "core" Python capability to lose:
+     # simulation is pure R, so every package in environment.yml serves the
+     # suitability model and there is only one capability left to report. The
+     # "core" category and its core_working flag went with the LASER stack --
+     # with core_packages empty the category could never be assigned again.
      suitability_working <- TRUE
 
-     # Define package categories
-     core_packages <- c("laser.cholera", "laser.core", "numpy", "h5py", "pyarrow")
-     suitability_packages <- c("tensorflow", "keras")
+     suitability_packages <- c("numpy", "tensorflow", "keras")
 
      if (file.exists(env_yml_path)) {
 
@@ -114,12 +121,6 @@ check_dependencies <- function() {
           pkg_names <- unique(pkg_names)
           pkg_names <- pkg_names[!grepl("^python=", pkg_names)]
 
-          sel <- grep("laser-cholera", pkg_names)
-          if (length(sel) > 0) pkg_names[sel] <- "laser.cholera"
-
-          sel <- grep("laser-core", pkg_names)
-          if (length(sel) > 0) pkg_names[sel] <- "laser.core"
-
           for (pkg_spec in pkg_names) {
 
                # Extract package name from version specifications
@@ -130,10 +131,7 @@ check_dependencies <- function() {
                # Handle special import name mappings
                import_map <- c(
                     "pytorch"          = "torch",
-                    "scikit-learn"     = "sklearn",
-                    "laser-cholera"    = "laser.cholera",
-                    "laser-core"       = "laser.core",
-                    "dask[distributed]" = "dask.distributed"
+                    "scikit-learn"     = "sklearn"
                )
 
                if (pkg_import_name %in% names(import_map)) {
@@ -146,19 +144,15 @@ check_dependencies <- function() {
                if (grepl("^libblas", pkg_import_name)) next
 
                # Determine package category
-               pkg_category <- "other"
-               if (pkg_import_name %in% core_packages) {
-                    pkg_category <- "core"
-               } else if (pkg_import_name %in% suitability_packages) {
-                    pkg_category <- "suitability"
-               }
+               pkg_category <- if (pkg_import_name %in% suitability_packages)
+                    "suitability" else "other"
 
                # tensorflow and keras cannot be imported in the same process as torch
                # (segfault due to OpenMP/MKL conflict on macOS arm64). Check via pip show.
                if (pkg_import_name %in% c("tensorflow", "keras")) {
 
                     pip_info <- tryCatch(
-                         system2(paths$exe, c("-m", "pip", "show", pkg_import_name),
+                         system2(paths$exec, c("-m", "pip", "show", pkg_import_name),
                                  stdout = TRUE, stderr = FALSE),
                          error = function(e) character(0)
                     )
@@ -196,20 +190,9 @@ check_dependencies <- function() {
                               cli::cli_alert_success("{pkg_import_name}: {version}")
                          }
 
-                         if (pkg_import_name == "laser.cholera") {
-                              cli::cli_alert_info("LASER built with:")
-                              freeze <- system2(command = paths$exe, args = c("-m", "pip", "freeze"), stdout = TRUE)
-                              laser_lines <- grep("laser", freeze, value = TRUE)
-                              laser_lines <- paste0("   ", laser_lines)
-                              cli::cli_text("{laser_lines}")
-                         }
-
                     }, error = function(e) {
                          # Mark capability as broken
-                         if (pkg_category == "core") {
-                              core_working <<- FALSE
-                              cli::cli_alert_danger("{pkg_import_name} [CORE] cannot be imported: {e$message}")
-                         } else if (pkg_category == "suitability") {
+                         if (pkg_category == "suitability") {
                               suitability_working <<- FALSE
                               cli::cli_alert_warning("{pkg_import_name} [suitability] cannot be imported: {e$message}")
                          } else {
@@ -269,11 +252,9 @@ check_dependencies <- function() {
 
           cli::cli_h2("Capabilities Summary")
 
-          if (core_working) {
-               cli::cli_alert_success("Core functionality: laser-cholera simulations, data processing")
-          } else {
-               cli::cli_alert_danger("Core functionality: BROKEN - laser-cholera cannot run")
-          }
+          # Simulation is reported unconditionally: the transmission engine is R
+          # (run_simulation()), so it cannot be broken by anything checked above.
+          cli::cli_alert_success("Simulation and calibration: pure R, no Python required")
 
           if (suitability_working) {
                cli::cli_alert_success("Suitability estimation: TensorFlow/Keras available")
@@ -283,10 +264,10 @@ check_dependencies <- function() {
           }
 
           cli::cli_text("")
-          if (core_working) {
+          if (suitability_working) {
                cli::cli_alert_success("MOSAIC is ready for use!")
           } else {
-               cli::cli_alert_danger("MOSAIC installation needs attention - core packages failing")
+               cli::cli_alert_warning("MOSAIC can simulate and calibrate, but cannot re-fit suitability")
           }
 
      } else {

@@ -1,11 +1,8 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
-deprecated/
 data-raw/
 local/
-azure/
 model/
-src/
 docs/
 pkgdown/
 ^vignettes/articles$
@@ -32,3 +29,8 @@ __pycache__$
 ^vignettes/figures$
 ^vignettes/articles/cache$
 ^vignettes/articles/figures$
+^output$
+^deprecated$
+^migrate-laser-r\.md$
+^plan-review\.md$
+^pipeline-performance-plan\.md$

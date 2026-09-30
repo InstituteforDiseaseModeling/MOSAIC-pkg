@@ -13,7 +13,8 @@ plot_model_posteriors_detail(
   output_dir = "./results/plots",
   subset_col = "is_best_subset",
   weight_col = "weight_best",
-  verbose = TRUE
+  verbose = TRUE,
+  locations = NULL
 )
 }
 \arguments{
@@ -38,6 +39,12 @@ optimizer-refined subset.}
 \code{subset_col}. Defaults to \code{"weight_best"}.}
 
 \item{verbose}{Logical; print progress messages (default: TRUE)}
+
+\item{locations}{Optional character vector of ISO codes selecting which
+outputs to draw: \code{NULL} (default) draws the global pages and every
+location, \code{character(0)} draws only the global pages, and a vector of
+codes draws only those locations. Lets a caller split the work across
+processes; see \code{\link{render_MOSAIC_figures}}.}
 }
 \value{
 List of plot filenames created (invisible)
