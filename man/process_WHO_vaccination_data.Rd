@@ -9,7 +9,6 @@ process_WHO_vaccination_data(PATHS)
 \arguments{
 \item{PATHS}{A list containing file paths for input and output data. The list should include:
 \itemize{
-\item \strong{DATA_DEMOGRAPHICS}: Path to the directory where demographic data is stored.
 \item \strong{DATA_SCRAPE_WHO_VACCINATION}: Path to the directory containing raw WHO vaccination data.
 \item \strong{MODEL_INPUT}: Path to the directory where processed vaccination data will be saved.
 }}
@@ -18,14 +17,11 @@ process_WHO_vaccination_data(PATHS)
 The function saves the processed vaccination data to a CSV file in the directory specified by \code{PATHS$MODEL_INPUT}. It also returns the processed data as a data frame for further use in R.
 }
 \description{
-This function processes raw vaccination data from WHO and associated population data to create a clean, structured dataset for the MOSAIC model. It handles data cleaning, infers missing campaign dates, validates the dataset, and saves the output for use in modeling cholera vaccination efforts.
+This function processes raw vaccination data from WHO to create a clean, structured dataset for the MOSAIC model. It handles data cleaning, infers missing campaign dates, validates the dataset, and saves the output for use in modeling cholera vaccination efforts.
 }
 \details{
 This function performs the following steps:
 \enumerate{
-\item \strong{Load and Filter Demographic Data}:
-- Reads demographic data for African countries from a CSV file.
-- Filters the data for the year 2023 and retains population sizes.
 \item \strong{Load and Clean Vaccination Data}:
 - Reads raw WHO vaccination data.
 - Converts country names to ISO codes for consistency.
@@ -45,7 +41,6 @@ This function performs the following steps:
 \dontrun{
 # Example usage
 PATHS <- list(
-  DATA_DEMOGRAPHICS = "path/to/demographics",
   DATA_SCRAPE_WHO_VACCINATION = "path/to/who/vaccination",
   MODEL_INPUT = "path/to/model/input"
 )

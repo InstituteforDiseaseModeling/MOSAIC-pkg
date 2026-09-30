@@ -1,10 +1,9 @@
 #' Process Vaccination Data for MOSAIC Model
 #'
-#' This function processes raw vaccination data from WHO and associated population data to create a clean, structured dataset for the MOSAIC model. It handles data cleaning, infers missing campaign dates, validates the dataset, and saves the output for use in modeling cholera vaccination efforts.
+#' This function processes raw vaccination data from WHO to create a clean, structured dataset for the MOSAIC model. It handles data cleaning, infers missing campaign dates, validates the dataset, and saves the output for use in modeling cholera vaccination efforts.
 #'
 #' @param PATHS A list containing file paths for input and output data. The list should include:
 #' \itemize{
-#'   \item \strong{DATA_DEMOGRAPHICS}: Path to the directory where demographic data is stored.
 #'   \item \strong{DATA_SCRAPE_WHO_VACCINATION}: Path to the directory containing raw WHO vaccination data.
 #'   \item \strong{MODEL_INPUT}: Path to the directory where processed vaccination data will be saved.
 #' }
@@ -14,9 +13,6 @@
 #' @details
 #' This function performs the following steps:
 #' \enumerate{
-#'   \item **Load and Filter Demographic Data**:
-#'     - Reads demographic data for African countries from a CSV file.
-#'     - Filters the data for the year 2023 and retains population sizes.
 #'   \item **Load and Clean Vaccination Data**:
 #'     - Reads raw WHO vaccination data.
 #'     - Converts country names to ISO codes for consistency.
@@ -36,7 +32,6 @@
 #' \dontrun{
 #' # Example usage
 #' PATHS <- list(
-#'   DATA_DEMOGRAPHICS = "path/to/demographics",
 #'   DATA_SCRAPE_WHO_VACCINATION = "path/to/who/vaccination",
 #'   MODEL_INPUT = "path/to/model/input"
 #' )
@@ -51,11 +46,7 @@
 
 process_WHO_vaccination_data <- function(PATHS) {
 
-     # Load population data and keep data for the year 2023
-     message('Loading vaccination and population data')
-     pop_data <- read.csv(file.path(PATHS$DATA_DEMOGRAPHICS, 'demographics_africa_2000_2023.csv'), stringsAsFactors = FALSE)
-     pop_data <- pop_data[pop_data$year == 2023, c('iso_code', 'population')]
-     message('NOTE: population sizes based on 2023')
+     message('Loading vaccination data')
 
      # Load vaccination data
      vaccination_data <- read.csv(file.path(PATHS$DATA_SCRAPE_WHO_VACCINATION, 'who_vaccination_data.csv'), stringsAsFactors = FALSE)

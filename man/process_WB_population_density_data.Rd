@@ -9,10 +9,9 @@ process_WB_population_density_data(PATHS)
 \arguments{
 \item{PATHS}{List. Project paths object with components \code{DATA_RAW} and \code{DATA_PROCESSED}.
 \itemize{
-\item Expects the raw file at:
-\code{file.path(PATHS$DATA_RAW, 'world_bank', 'API_EN.POP.DNST_DS2_en_csv_v2_85433.csv')}
-\item Will write output to:
-\code{file.path(PATHS$DATA_PROCESSED, 'world_bank', 'pop_density_data_world_bank.csv')}
+\item Reads the newest raw CSV for indicator \code{EN.POP.DNST} in
+\code{file.path(PATHS$DATA_RAW, 'world_bank', 'population_density')} (see \code{\link[=download_WB_data]{download_WB_data()}}).
+\item Writes \code{file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_population_density_data.csv')}, creating the directory if needed.
 }}
 }
 \value{

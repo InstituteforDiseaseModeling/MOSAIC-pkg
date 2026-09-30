@@ -4,10 +4,9 @@
 #' writes the processed data as a CSV to disk, and returns it. Uses base R functions only.
 #'
 #' @param PATHS List. Project paths object with components `DATA_RAW` and `DATA_PROCESSED`.
-#'   - Expects the raw file located in:
-#'     `file.path(PATHS$DATA_RAW, 'world_bank', '<poverty_ratio_filename>.csv')`
-#'   - Will write output to:
-#'     `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'poverty_ratio_data_world_bank.csv')`
+#'   - Reads the newest raw CSV for indicator `SI.POV.DDAY` in
+#'     `file.path(PATHS$DATA_RAW, 'world_bank', 'poverty_ratio')` (see [download_WB_data()]).
+#'   - Writes `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_poverty_ratio_data.csv')`, creating the directory if needed.
 #' @return A data.frame with columns:
 #'   \describe{
 #'     \item{iso_code}{ISO country code (character)}
@@ -55,8 +54,10 @@ process_WB_poverty_ratio_data <- function(PATHS) {
      }
 
      # Write processed output as CSV
-     out_path <- file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_poverty_ratio_data.csv')
+     out_dir <- file.path(PATHS$DATA_PROCESSED, 'world_bank')
+     if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+     out_path <- file.path(out_dir, 'world_bank_poverty_ratio_data.csv')
      message('Processed World Bank poverty ratio data saved here: ', out_path)
      utils::write.csv(df_long, file = out_path, row.names = FALSE)
-
+     invisible(df_long)
 }
