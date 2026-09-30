@@ -23,13 +23,20 @@
 #' day, the scored predicted total sums only the location-days that carry an
 #' observation, so a location with no surveillance contributes to neither side
 #' (a day with no observation at any selected location is \code{NA}, never 0).
-#' The leading unscored steps -- the likelihood burn-in
-#' (\code{control$likelihood$burn_in_days}, plus \code{score_start_cases} /
-#' \code{deaths_score_start}) and, for cases, the two-step initial-condition
-#' warm-up -- are dropped from both series before any metric is computed. The
-#' returned \code{predictions} are not masked: \code{predicted_*} is the full
-#' aggregate, and \code{observed} is \code{NA} on any day where a selected
-#' location has no observation.
+#' The leading unscored steps -- the default likelihood scored window
+#' ([mosaic_control_defaults()] \code{likelihood}: \code{burn_in_days}, 30 days)
+#' and, for cases, the two-step initial-condition warm-up -- are dropped from
+#' both series before any metric is computed. A run calibrated with a
+#' non-default \code{burn_in_days}/\code{score_start_cases}/\code{deaths_score_start}
+#' is still scored here on the default window.
+#' The returned \code{predictions} use the same pairing but are not windowed:
+#' on a day where at least one selected location is observed, \code{observed}
+#' and \code{predicted_*} are both summed over exactly those observed locations
+#' (\code{n_locations_observed} records how many), so the two columns are always
+#' comparable; on a day with no observation at any selected location,
+#' \code{observed} is \code{NA} and \code{predicted_*} is the full aggregate
+#' over all selected locations. For a single location this is simply its own
+#' observed and predicted series.
 #'
 #' On a config that predates the v0.96.0 mortality model (it carries any of
 #' \code{mu_j_baseline}, \code{mu_j_epidemic_factor}, \code{CFR_target},
@@ -53,12 +60,11 @@
 #' @param run_label Character label for the run (used for the output subdirectory and
 #'   recorded in metrics). Default \code{"fit_sandbox"}.
 #' @param quiet Logical passed to [run_simulation()]. Default \code{TRUE}.
-#' @param control Optional control list; only \code{control$likelihood} (burn-in and scored-window starts) is read, over [mosaic_control_defaults()]. Default \code{NULL} (package defaults).
 #' @param .sim_runner Function used to run the model; defaults to [run_simulation()].
 #'   Exposed as a seam for testing with a stubbed engine.
 #'
 #' @return A named list with \code{predictions} (long data.frame in the standard
-#'   ensemble format), \code{metrics} (top-line metrics, including the 1-based
+#'   ensemble format, plus \code{n_locations_observed}), \code{metrics} (top-line metrics, including the 1-based
 #'   \code{score_idx_cases}/\code{score_idx_deaths} scored-window starts, plus, when
 #'   \code{full_metrics=TRUE}, \code{fit_diagnostics} and a merged \code{scorecard}),
 #'   \code{params_applied} (data.frame of old/new values), and \code{run_label}.
@@ -73,7 +79,6 @@ run_fit_sandbox <- function(config,
                             outdir = NULL,
                             run_label = "fit_sandbox",
                             quiet = TRUE,
-                            control = NULL,
                             .sim_runner = run_simulation) {
 
   # ---- Resolve config ------------------------------------------------------
@@ -151,30 +156,32 @@ run_fit_sandbox <- function(config,
   loc_idx <- loc_idx[loc_idx >= 1L & loc_idx <= nrow(pred_cases_mat)]
   if (!length(loc_idx)) stop("run_fit_sandbox: no valid location rows selected.")
 
-  # Reported series (the predictions table): predicted = full aggregate;
-  # observed = NA on a day where any selected location is unobserved, so a
-  # missing observation is never summed in as a zero.
-  pred_cases  <- .fit_agg(pred_cases_mat, loc_idx)
-  pred_deaths <- .fit_agg(pred_deaths_mat, loc_idx)
-  obs_cases   <- .fit_agg(obs_cases_mat, loc_idx)
-  obs_deaths  <- .fit_agg(obs_deaths_mat, loc_idx)
-  # Scored series: paired on the location-days that carry an observation.
+  # Paired aggregates: per day, observed and predicted are both summed over
+  # only the selected location-days that carry an observation, so a missing
+  # observation is never summed in as a zero and never meets a predicted value
+  # it has no counterpart for. Used for both the scored metrics and the table.
   sc_cases  <- .fit_agg_paired(obs_cases_mat,  pred_cases_mat,  loc_idx)
   sc_deaths <- .fit_agg_paired(obs_deaths_mat, pred_deaths_mat, loc_idx)
+  # Table series: the paired aggregate where any location is observed; on a day
+  # with none, observed is NA and predicted falls back to the full aggregate.
+  tab <- function(sc, pred_m) {
+    full <- colSums(pred_m[loc_idx, seq_along(sc$pred), drop = FALSE])
+    list(obs = sc$obs, pred = ifelse(sc$n_obs > 0L, sc$pred, full), n_obs = sc$n_obs)
+  }
+  tab_cases  <- tab(sc_cases,  pred_cases_mat)
+  tab_deaths <- tab(sc_deaths, pred_deaths_mat)
 
   dates <- seq.Date(as.Date(config$date_start), as.Date(config$date_stop), by = "day")
-  n <- min(length(dates), length(pred_cases), length(obs_cases),
-           length(pred_deaths), length(obs_deaths))
+  n <- min(length(dates), length(sc_cases$obs), length(sc_deaths$obs))
   dates <- dates[seq_len(n)]
-  pred_cases <- pred_cases[seq_len(n)];   obs_cases <- obs_cases[seq_len(n)]
-  pred_deaths <- pred_deaths[seq_len(n)]; obs_deaths <- obs_deaths[seq_len(n)]
+  cut <- function(tb) lapply(tb, function(v) v[seq_len(n)])
+  tab_cases <- cut(tab_cases); tab_deaths <- cut(tab_deaths)
 
   # Drop the unscored head, exactly as run_MOSAIC() does before its R2/bias:
   # the likelihood's scored window (burn-in + per-channel starts) and, for
   # cases, the calc_model_ensemble() initial-condition warm-up (2 steps).
-  lik_ctl <- mosaic_control_defaults()$likelihood
-  if (!is.null(control$likelihood)) lik_ctl <- utils::modifyList(lik_ctl, control$likelihood)
-  sw <- .mosaic_resolve_score_window(config, list(likelihood = lik_ctl))
+  sw <- .mosaic_resolve_score_window(
+    config, list(likelihood = mosaic_control_defaults()$likelihood))
   head_cases  <- max(.FIT_CASES_WARMUP, sw$idx_cases - 1L)
   head_deaths <- sw$idx_deaths - 1L
   mask_head <- function(v, k) { v <- v[seq_len(n)]; if (k > 0L) v[seq_len(min(k, n))] <- NA_real_; v }
@@ -189,15 +196,19 @@ run_fit_sandbox <- function(config,
 
   # ---- Predictions data.frame (standard ensemble format) -------------------
   # One deterministic run is its own mean and median.
-  mk <- function(metric, obs, pred) data.frame(
-    location = loc_label, date = as.character(dates), metric = metric,
-    observed = obs, predicted_central = pred, predicted_mean = pred,
-    predicted_median = pred, central_method = "mean",
-    ci_1_lower = pred, ci_1_upper = pred, ci_2_lower = pred, ci_2_upper = pred,
-    stringsAsFactors = FALSE
-  )
-  predictions <- rbind(mk("Suspected Cases", obs_cases, pred_cases),
-                       mk("Deaths", obs_deaths, pred_deaths))
+  mk <- function(metric, tb) {
+    pred <- tb$pred
+    data.frame(
+      location = loc_label, date = as.character(dates), metric = metric,
+      observed = tb$obs, predicted_central = pred, predicted_mean = pred,
+      predicted_median = pred, central_method = "mean",
+      ci_1_lower = pred, ci_1_upper = pred, ci_2_lower = pred, ci_2_upper = pred,
+      n_locations_observed = as.integer(tb$n_obs),
+      stringsAsFactors = FALSE
+    )
+  }
+  predictions <- rbind(mk("Suspected Cases", tab_cases),
+                       mk("Deaths", tab_deaths))
 
   # ---- Metrics -------------------------------------------------------------
   metrics <- list(
@@ -252,17 +263,11 @@ run_fit_sandbox <- function(config,
 # calc_model_ensemble() default (n_cases_warmup_mask = 2L) that run_MOSAIC() uses.
 .FIT_CASES_WARMUP <- 2L
 
-# Sum rows `loc_idx` of a [location x time] matrix. A day is NA when any
-# selected location is NA on it (no silent zero-fill).
-.fit_agg <- function(m, loc_idx) {
-  if (length(loc_idx) == 1L) return(as.numeric(m[loc_idx, ]))
-  colSums(m[loc_idx, , drop = FALSE])
-}
-
 # Paired aggregate of observed and predicted: per day, sum both over only the
 # selected location-days where BOTH are finite, so the predicted total never
 # includes a location whose observation is missing. A day with no such cell is
-# NA in both. Returns list(obs, pred), each of length ncol.
+# NA in both. Returns list(obs, pred, n_obs), each of length ncol, where n_obs
+# is the number of paired locations summed on each day.
 .fit_agg_paired <- function(obs_m, pred_m, loc_idx) {
   nt <- min(ncol(obs_m), ncol(pred_m))
   o <- obs_m[loc_idx, seq_len(nt), drop = FALSE]
@@ -272,7 +277,7 @@ run_fit_sandbox <- function(config,
   any_ok <- colSums(ok) > 0
   so <- colSums(o); sp <- colSums(p)
   so[!any_ok] <- NA_real_; sp[!any_ok] <- NA_real_
-  list(obs = as.numeric(so), pred = as.numeric(sp))
+  list(obs = as.numeric(so), pred = as.numeric(sp), n_obs = as.integer(colSums(ok)))
 }
 
 # Coerce a run_simulation/config field (matrix or vector) to a numeric matrix with

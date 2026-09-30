@@ -13,7 +13,6 @@ run_fit_sandbox(
   outdir = NULL,
   run_label = "fit_sandbox",
   quiet = TRUE,
-  control = NULL,
   .sim_runner = run_simulation
 )
 }
@@ -42,14 +41,12 @@ recorded in metrics). Default \code{"fit_sandbox"}.}
 
 \item{quiet}{Logical passed to \code{\link[=run_simulation]{run_simulation()}}. Default \code{TRUE}.}
 
-\item{control}{Optional control list; only \code{control$likelihood} (burn-in and scored-window starts) is read, over \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}}. Default \code{NULL} (package defaults).}
-
 \item{.sim_runner}{Function used to run the model; defaults to \code{\link[=run_simulation]{run_simulation()}}.
 Exposed as a seam for testing with a stubbed engine.}
 }
 \value{
 A named list with \code{predictions} (long data.frame in the standard
-ensemble format), \code{metrics} (top-line metrics, including the 1-based
+ensemble format, plus \code{n_locations_observed}), \code{metrics} (top-line metrics, including the 1-based
 \code{score_idx_cases}/\code{score_idx_deaths} scored-window starts, plus, when
 \code{full_metrics=TRUE}, \code{fit_diagnostics} and a merged \code{scorecard}),
 \code{params_applied} (data.frame of old/new values), and \code{run_label}.
@@ -77,13 +74,20 @@ Scoring is paired and windowed the way \code{\link[=run_MOSAIC]{run_MOSAIC()}} s
 day, the scored predicted total sums only the location-days that carry an
 observation, so a location with no surveillance contributes to neither side
 (a day with no observation at any selected location is \code{NA}, never 0).
-The leading unscored steps -- the likelihood burn-in
-(\code{control$likelihood$burn_in_days}, plus \code{score_start_cases} /
-\code{deaths_score_start}) and, for cases, the two-step initial-condition
-warm-up -- are dropped from both series before any metric is computed. The
-returned \code{predictions} are not masked: \code{predicted_*} is the full
-aggregate, and \code{observed} is \code{NA} on any day where a selected
-location has no observation.
+The leading unscored steps -- the default likelihood scored window
+(\code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}} \code{likelihood}: \code{burn_in_days}, 30 days)
+and, for cases, the two-step initial-condition warm-up -- are dropped from
+both series before any metric is computed. A run calibrated with a
+non-default \code{burn_in_days}/\code{score_start_cases}/\code{deaths_score_start}
+is still scored here on the default window.
+The returned \code{predictions} use the same pairing but are not windowed:
+on a day where at least one selected location is observed, \code{observed}
+and \code{predicted_*} are both summed over exactly those observed locations
+(\code{n_locations_observed} records how many), so the two columns are always
+comparable; on a day with no observation at any selected location,
+\code{observed} is \code{NA} and \code{predicted_*} is the full aggregate
+over all selected locations. For a single location this is simply its own
+observed and predicted series.
 
 On a config that predates the v0.96.0 mortality model (it carries any of
 \code{mu_j_baseline}, \code{mu_j_epidemic_factor}, \code{CFR_target},

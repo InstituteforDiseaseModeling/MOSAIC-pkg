@@ -172,6 +172,24 @@ test_that(".add_reff_final_posterior maps ensemble_optimized onto the candidate 
   expect_warning(f2 <- MOSAIC:::.add_reff_final_posterior(d, cand, "mean", verbose = FALSE),
                  "not a subset")
   expect_null(f2$weights)
+
+  # run_MOSAIC's fallback copy (optimize_subset off): all members, same order
+  # and weights -> reported as the candidate, not as an optimized posterior.
+  cp <- cand
+  cp$cases_mean <- matrix(1:10, 1)
+  saveRDS(cp, file.path(d, "2_calibration", "ensemble_optimized.rds"))
+  f3 <- MOSAIC:::.add_reff_final_posterior(d, cand, "mean", verbose = FALSE)
+  expect_identical(f3$source, "ensemble_candidate.rds")
+  expect_equal(f3$weights, as.numeric(cand$parameter_weights))
+
+  # central_method 'mean' with no cases_mean: warn, then use the median.
+  opt$seeds <- c(104L, 102L); opt$cases_mean <- NULL
+  opt$cases_median <- matrix(11:20, 1)
+  saveRDS(opt, file.path(d, "2_calibration", "ensemble_optimized.rds"))
+  expect_warning(f4 <- MOSAIC:::.add_reff_final_posterior(d, cand, "mean", verbose = FALSE),
+                 "no cases_mean")
+  expect_equal(f4$central, matrix(11:20, 1))
+  expect_silent(MOSAIC:::.add_reff_final_posterior(d, cand, "median", verbose = FALSE))
 })
 
 # ---- central_method read back from control.json (reff-02) -------------------
@@ -226,4 +244,18 @@ test_that("recompute_ci = TRUE is not refused for a missing trajectory artifact"
   st2 <- suppressWarnings(add_reproductive_numbers(d, recompute_ci = FALSE, burn_in_days = 0L,
                                                    plots = FALSE, verbose = FALSE))
   expect_identical(st2$status, "skipped_missing_trajectories")
+})
+
+test_that("the documented day-wise generation-time mass (reff-11) matches the file", {
+  d <- file.path(tempdir(), "gt_reff11")
+  dir.create(d, showWarnings = FALSE)
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  suppressMessages(get_generation_time_distribution(
+    list(MODEL_INPUT = d, DOCS_TABLES = d), mean_generation_time = 5))
+  days  <- utils::read.csv(file.path(d, "pred_generation_time_days.csv"))
+  weeks <- utils::read.csv(file.path(d, "pred_generation_time_weeks.csv"))
+  # Gamma(shape 0.5, rate 0.1) density summed over days 1..56 = 0.7424 (the
+  # roxygen says "about 0.74"); only the weekly table is normalised.
+  expect_equal(sum(days$y), 0.7423659, tolerance = 1e-6)
+  expect_equal(sum(weeks$Probability), 1, tolerance = 1e-12)
 })

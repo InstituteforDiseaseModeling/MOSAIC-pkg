@@ -798,7 +798,9 @@ calc_Reff <- function(ensemble,
 #' @return List with \code{qmats}, \code{central} (named lists by estimand),
 #'   \code{central_definition}, \code{peak_Rt} (per location x estimand),
 #'   \code{peak_window},
-#'   \code{medoid_member}, \code{probs}, gate diagnostics, \code{n_members},
+#'   \code{medoid_member}, \code{probs}, gate diagnostics, \code{n_members}
+#'   (members actually re-simulated: final-posterior parameter sets x reruns
+#'   with saved cases, not \code{nP * nS}),
 #'   \code{kernel_params}.
 #' @keywords internal
 #' @noRd
@@ -1026,6 +1028,10 @@ calc_Reff <- function(ensemble,
              !is.null(ensemble$cases_mean)) {
     ensemble$cases_mean
   } else {
+    if (identical(cases_central_method, "mean"))
+      warning(".mosaic_reff_resim_ci: central_method for cases is 'mean' but the ensemble ",
+              "carries no cases_mean; the medoid target uses cases_median instead.",
+              call. = FALSE)
     ensemble$cases_median
   }
   # The medoid is chosen among the parameter sets of the posterior being

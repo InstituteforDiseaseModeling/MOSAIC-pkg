@@ -2329,6 +2329,10 @@
     # (sum(unlist(success_indicators))). Coerce a dead-worker task to FALSE: it
     # counts as a failed sim and the batch degrades gracefully (the lost sim_id is
     # simply re-drawn on resume).
+    # A task function that threw on the worker is likewise a failed sim, but
+    # both kinds are surfaced with their count and first error text so a
+    # systematic worker-side failure is not reduced to "every sim failed".
+    .mosaic_warn_dispatch_failures(res, "run_MOSAIC simulation batch")
     lapply(res, function(r)
       if (is.list(r) && (isTRUE(r$.mosaic_worker_died) || isTRUE(r$.mosaic_task_error))) FALSE else r)
   }

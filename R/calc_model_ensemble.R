@@ -295,6 +295,36 @@
   results
 }
 
+# Warn about the failure records .mosaic_cluster_lapply_robust() substitutes for
+# a crashed worker (.mosaic_worker_died) or a task function that threw
+# (.mosaic_task_error). Each warning carries the count and the first recorded
+# error text, so a systematic worker-side failure is diagnosable from the log.
+# Returns the two counts invisibly.
+.mosaic_warn_dispatch_failures <- function(res, label) {
+  is_flag <- function(flag) vapply(res, function(r)
+    is.list(r) && isTRUE(r[[flag]]), logical(1))
+  first_error <- function(idx) {
+    e <- res[[which(idx)[1]]]$error
+    if (is.null(e) || !nzchar(e[1])) "<no message>" else trimws(e[1])
+  }
+  died <- is_flag(".mosaic_worker_died")
+  errd <- is_flag(".mosaic_task_error")
+  if (any(died)) {
+    warning(sprintf(paste0(
+      "%s: %d task(s) lost to worker-process crashes (fatal engine abort or OOM in a ",
+      "PSOCK worker); they are counted as failed and the run proceeds on the ",
+      "survivors. Re-run with parallel = FALSE to surface the underlying error. ",
+      "First: %s"), label, sum(died), first_error(died)), call. = FALSE)
+  }
+  if (any(errd)) {
+    warning(sprintf(paste0(
+      "%s: %d task(s) failed because the task function threw on the worker; ",
+      "they are counted as failed. First error: %s"),
+      label, sum(errd), first_error(errd)), call. = FALSE)
+  }
+  invisible(c(worker_died = sum(died), task_error = sum(errd)))
+}
+
 # Evaluate `expr` under set.seed(seed) and restore the caller's RNG state (or
 # its absence) afterwards, so a reproducible draw never mutates the global
 # stream. Uses the session's current RNG kind.
@@ -818,18 +848,10 @@ calc_model_ensemble <- function(config,
     )
   }
 
-  # Surface any worker-process deaths recorded by the robust dispatcher (these
-  # carry no param_idx and are skipped by the success check below, but the user
-  # must be told a worker crashed rather than silently losing those slices).
-  n_worker_deaths <- sum(vapply(results_list,
-    function(r) isTRUE(r$.mosaic_worker_died), logical(1)))
-  if (n_worker_deaths > 0L) {
-    warning(sprintf(paste0(
-      "calc_model_ensemble: %d task(s) lost to worker-process crashes (fatal engine ",
-      "abort or OOM in a PSOCK worker); their predictions are dropped and the ensemble ",
-      "proceeds on the survivors. Re-run with parallel = FALSE to surface the underlying ",
-      "engine error."), n_worker_deaths), call. = FALSE)
-  }
+  # Surface worker-process deaths and task-function errors recorded by the
+  # robust dispatcher: both are dropped by the success check below, so the user
+  # must be told (with the first error text) rather than silently losing slices.
+  .mosaic_warn_dispatch_failures(results_list, "calc_model_ensemble")
 
   # Fill arrays from results
   for (result in results_list) {

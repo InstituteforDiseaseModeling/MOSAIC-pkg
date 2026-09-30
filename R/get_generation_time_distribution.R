@@ -9,7 +9,7 @@
 #' The day-wise table (\code{pred_generation_time_days.csv}, column \code{y}) holds
 #' the gamma \strong{density} evaluated at days 1-56, not a probability mass
 #' function: it is not normalised and omits the mass below day 1 and beyond day
-#' 56 (at a mean of 5 days it sums to about 0.6). Only the week-wise table
+#' 56 (at a mean of 5 days it sums to about 0.74). Only the week-wise table
 #' (\code{Probability}) is normalised to sum to 1. This is a legacy kernel: the
 #' reproductive-number calculations (\code{\link{calc_Reff}}) derive their
 #' generation-interval kernels from the model parameters and do not read these

@@ -350,7 +350,13 @@ add_reproductive_numbers <- function(output_dir,
 #' attribute \code{"peak_Rt_window"} (7) and attribute
 #' \code{"peak_Rt"} (a per-location x estimand \code{data.frame} with
 #' \code{location}, \code{estimand}, \code{q2.5}/\code{q50}/\code{q97.5}, and
-#' \code{n_members}; schema pinned with \code{plot_Reff()}).
+#' \code{n_members}; schema pinned with \code{plot_Reff()}). Attribute
+#' \code{"n_members"} is the number of posterior members actually re-simulated
+#' (parameter sets in the final posterior x reruns, excluding members with no
+#' saved cases), not the candidate ensemble size \code{nP * nS}; the per-row
+#' \code{n_members} of \code{"peak_Rt"} further counts only members with a finite
+#' peak and positive weight. Attribute \code{"ensemble_source"} names the file
+#' whose weights define the posterior.
 #'
 #' @keywords internal
 #' @noRd
@@ -530,7 +536,8 @@ add_reproductive_numbers <- function(output_dir,
 #' candidate seed, so they map back by \code{match(seeds)}, as the trajectory
 #' reduce does. Returns \code{weights} (candidate-indexed, 0 outside the final
 #' subset), \code{subset} (candidate indices of the final members), \code{central} (the final ensemble's cases central series) and
-#' \code{source}. Falls back to the candidate itself (\code{weights = NULL})
+#' \code{source} (\code{"ensemble_candidate.rds"} when the file is run_MOSAIC's
+#' fallback copy of the candidate: all members, same order and weights). Falls back to the candidate itself (\code{weights = NULL})
 #' when the file is absent, unreadable, or its seeds do not map uniquely.
 #' @keywords internal
 #' @noRd
@@ -559,12 +566,25 @@ add_reproductive_numbers <- function(output_dir,
     return(fallback)
   }
   w <- numeric(length(cs)); w[idx] <- ow
+  if (identical(cases_cm, "mean") && is.null(opt$cases_mean)) {
+    warning("add_reproductive_numbers: central_method for cases is 'mean' but ",
+            "ensemble_optimized.rds carries no cases_mean; the medoid target uses its ",
+            "cases_median instead.", call. = FALSE)
+  }
   central <- if (identical(cases_cm, "mean") && !is.null(opt$cases_mean)) opt$cases_mean
              else opt$cases_median
+  # run_MOSAIC() writes ensemble_optimized.rds as a verbatim copy of the
+  # candidate when subset optimization is off or empty. Such a file holds every
+  # candidate member, in order, with the candidate's weights: report the
+  # candidate as the source rather than claim an optimized posterior.
+  cw <- as.numeric(cand$parameter_weights)
+  is_copy <- length(idx) == length(cs) && identical(as.integer(idx), seq_along(cs)) &&
+    length(cw) == length(ow) && isTRUE(all.equal(ow, cw, tolerance = 1e-12))
+  src <- if (is_copy) "ensemble_candidate.rds" else "ensemble_optimized.rds"
   if (verbose && length(idx) < length(cs))
     message("  Final posterior = optimized subset: ", length(idx), " of ", length(cs),
             " candidate parameter sets.")
-  list(weights = w, subset = idx, central = central, source = "ensemble_optimized.rds")
+  list(weights = w, subset = idx, central = central, source = src)
 }
 
 #' Resolve the burn-in: argument > control$likelihood$burn_in_days > 30 days

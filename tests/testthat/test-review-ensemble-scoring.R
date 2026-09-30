@@ -26,6 +26,9 @@ test_that("calc_model_R2 aligns full-length weights with the validity mask", {
   yb <- sum(wv * yv) / sum(wv)                      # 17/6
   expected <- 1 - sum(wv * (yv - yhv)^2) / sum(wv * (yv - yb)^2)
   expect_equal(calc_model_R2(y, yh, method = "sse", weights = w2), expected, tolerance = 1e-12)
+  # Pre-filtered weights (length = number of valid pairs) are accepted, the
+  # same contract as calc_model_cor.
+  expect_equal(calc_model_R2(y, yh, method = "sse", weights = wv), expected, tolerance = 1e-12)
   # Wrong-length weights are rejected.
   expect_true(is.na(calc_model_R2(y, yh, method = "sse", weights = c(1, 2))))
 })
@@ -133,18 +136,52 @@ test_that("sandbox aggregation never turns a missing observation into 0", {
   nT <- 200L
   cfg <- .sbx_config(nT)
   cfg$reported_cases[2, 51:150] <- NA          # B unobserved for 100 days
+  cfg$reported_cases[, 181:190] <- NA          # nobody observed for 10 days
   runner <- function(config, seed, quiet) list(results = list(
-    reported_cases  = rbind(rep(10, nT), rep(10, nT)),   # perfect prediction
+    reported_cases  = rbind(rep(10, nT), rep(30, nT)),   # A perfect, B 3x over
     reported_deaths = rbind(rep(1, nT), rep(1, nT))))
-  res <- run_fit_sandbox(cfg, full_metrics = FALSE, .sim_runner = runner,
-                         control = list(likelihood = list(burn_in_days = 0L)))
-  # Old code: obs aggregate 10 on B's missing days vs pred 20 -> bias 1.33.
-  expect_equal(res$metrics$bias_cases, 1, tolerance = 1e-12)
-  # The reported table leaves those days unobserved, not zero-filled.
+  res <- run_fit_sandbox(cfg, full_metrics = FALSE, .sim_runner = runner)
+  # Scored window = days 31..200 minus the 10 unobserved days (160 days):
+  # 100 days with only A observed (days 51-150: obs 10, pred 10) and 60 with
+  # both (days 31-50, 151-180, 191-200: obs 20, pred 40).
+  # Paired bias = (100*10 + 60*40) / (100*10 + 60*20) = 3400/2200 = 17/11.
+  # (A zero-filled observed sum against the full predicted aggregate would
+  # give (160*40) / 2200 = 32/11.)
+  expect_equal(res$metrics$bias_cases, 17 / 11, tolerance = 1e-12)
+
+  # The table is paired too: on B's missing days observed and predicted are
+  # both A-only, so the two columns stay comparable.
   pc <- res$predictions[res$predictions$metric == "Suspected Cases", ]
-  expect_true(all(is.na(pc$observed[51:150])))
+  expect_equal(pc$observed[51:150], rep(10, 100))
+  expect_equal(pc$predicted_central[51:150], rep(10, 100))
+  expect_identical(pc$n_locations_observed[51:150], rep(1L, 100))
   expect_equal(pc$observed[1:50], rep(20, 50))
-  expect_equal(pc$predicted_central, rep(20, nT))
+  expect_equal(pc$predicted_central[1:50], rep(40, 50))
+  expect_identical(pc$n_locations_observed[1:50], rep(2L, 50))
+  # A day with no observation at all: observed NA, predicted = full aggregate.
+  expect_true(all(is.na(pc$observed[181:190])))
+  expect_equal(pc$predicted_central[181:190], rep(40, 10))
+  expect_identical(pc$n_locations_observed[181:190], rep(0L, 10))
+})
+
+test_that("sandbox table keeps observed on realistic staggered coverage", {
+  # Every day has some location unobserved (staggered blocks), as in real
+  # configs; the aggregate observed column must still be populated.
+  nT <- 120L; nL <- 4L
+  obs <- matrix(5, nL, nT)
+  for (j in seq_len(nL)) obs[j, ((j - 1L) * 30L + 1L):(j * 30L)] <- NA
+  cfg <- .sbx_config(nT)
+  cfg$location_name <- LETTERS[seq_len(nL)]
+  cfg$reported_cases <- obs
+  cfg$reported_deaths <- matrix(1, nL, nT)
+  runner <- function(config, seed, quiet) list(results = list(
+    reported_cases = matrix(5, nL, nT), reported_deaths = matrix(1, nL, nT)))
+  res <- run_fit_sandbox(cfg, full_metrics = FALSE, .sim_runner = runner)
+  pc <- res$predictions[res$predictions$metric == "Suspected Cases", ]
+  expect_false(anyNA(pc$observed))
+  expect_equal(pc$observed, rep(15, nT))
+  expect_equal(pc$predicted_central, rep(15, nT))
+  expect_equal(res$metrics$bias_cases, 1, tolerance = 1e-12)
 })
 
 test_that("sandbox drops the likelihood burn-in and cases warm-up before scoring", {
@@ -154,18 +191,17 @@ test_that("sandbox drops the likelihood burn-in and cases warm-up before scoring
   cfg$reported_cases  <- matrix(rep(10, nT), nrow = 1)
   cfg$reported_deaths <- matrix(rep(1, nT), nrow = 1)
   pc <- rep(10, nT); pc[1:3] <- c(5000, 2000, 400)   # IC discharge spike
+  pc[31] <- 40                                       # first scored day
   runner <- function(config, seed, quiet) list(results = list(
     reported_cases = matrix(pc, nrow = 1), reported_deaths = matrix(rep(1, nT), nrow = 1)))
   # Default control: burn_in_days = 30 -> scoring starts at day 31.
   res <- run_fit_sandbox(cfg, full_metrics = FALSE, .sim_runner = runner)
   expect_identical(res$metrics$score_idx_cases, 31L)
-  expect_equal(res$metrics$bias_cases, 1, tolerance = 1e-12)
-  # burn_in_days = 0 still drops the 2-step warm-up, but day 3 is scored.
-  res0 <- run_fit_sandbox(cfg, full_metrics = FALSE, .sim_runner = runner,
-                          control = list(likelihood = list(burn_in_days = 0L)))
-  expect_identical(res0$metrics$score_idx_cases, 3L)
-  expect_equal(res0$metrics$bias_cases, (400 + 10 * (nT - 3)) / (10 * (nT - 2)),
+  expect_identical(res$metrics$score_idx_deaths, 31L)
+  expect_equal(res$metrics$bias_cases, (40 + 10 * (nT - 31)) / (10 * (nT - 30)),
                tolerance = 1e-12)
+  # The sandbox has no control argument: its signature is unchanged.
+  expect_false("control" %in% names(formals(run_fit_sandbox)))
 })
 
 # ---- run_fit_sandbox: legacy CFR override (ensemble-results-02) -------------

@@ -30,9 +30,10 @@
 #'   mismatch), returns \code{NA_real_}.
 #' @param finite_only Logical; if \code{TRUE} (default), also drop non-finite
 #'   values (\code{Inf}, \code{-Inf}, \code{NaN}) during pairwise filtering.
-#' @param weights Optional numeric vector of non-negative weights, length 1
-#'   (recycled) or the input length (subset with the same pairwise validity
-#'   mask). Only used when \code{method = "pearson"}; ignored otherwise.
+#' @param weights Optional numeric vector of non-negative weights: length 1
+#'   (recycled), the input length (subset with the same pairwise validity
+#'   mask), or the number of valid pairs (pre-filtered). Only used when
+#'   \code{method = "pearson"}; ignored otherwise.
 #' @param verbose Logical; if \code{TRUE}, emit brief diagnostic messages.
 #'
 #' @return A single numeric value: the correlation coefficient for the chosen

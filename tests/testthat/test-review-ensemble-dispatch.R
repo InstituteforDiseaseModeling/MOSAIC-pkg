@@ -62,3 +62,27 @@ test_that(".mosaic_with_local_seed is reproducible and restores the caller's RNG
   MOSAIC:::.mosaic_with_local_seed(1L, stats::runif(1))
   expect_false(exists(".Random.seed", envir = globalenv()))
 })
+
+test_that("dispatch failures are surfaced with their count and first error text", {
+  res <- list(
+    list(param_idx = 1L, success = TRUE),
+    list(param_idx = 2L, .mosaic_task_error = TRUE, success = FALSE,
+         error = "Error in .run_sim_worker(sim_id) : could not find function"),
+    list(param_idx = 3L, .mosaic_task_error = TRUE, success = FALSE, error = "second"),
+    list(.mosaic_worker_died = TRUE, success = FALSE, error = "connection reset"),
+    TRUE)
+  w <- testthat::capture_warnings(
+    n <- MOSAIC:::.mosaic_warn_dispatch_failures(res, "run_MOSAIC simulation batch"))
+  expect_identical(n, c(worker_died = 1L, task_error = 2L))
+  expect_length(w, 2L)
+  expect_match(w[1], "1 task\\(s\\) lost to worker-process crashes.*First: connection reset")
+  expect_match(w[2], "2 task\\(s\\) failed because the task function threw.*could not find function")
+  expect_silent(MOSAIC:::.mosaic_warn_dispatch_failures(list(TRUE, FALSE, list(success = TRUE)), "x"))
+})
+
+test_that("the calibration batch warns about task errors instead of dropping them", {
+  src <- paste(deparse(MOSAIC:::.mosaic_run_batch), collapse = " ")
+  expect_true(grepl(".mosaic_warn_dispatch_failures", src, fixed = TRUE))
+  src_e <- paste(deparse(calc_model_ensemble), collapse = " ")
+  expect_true(grepl(".mosaic_warn_dispatch_failures", src_e, fixed = TRUE))
+})
