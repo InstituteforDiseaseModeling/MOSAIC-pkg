@@ -62,7 +62,7 @@ baseline_beta <- c(0.3, 0.5, 0.4)
 amp_beta      <- 0.15
 phase_shift   <- runif(n_loc, 0, 2 * pi)
 
-# laser-cholera v0.13+ requires beta_j0_tot and p_beta. Derive beta_j0_hum and
+# make_simulation_config() requires beta_j0_tot and p_beta. Derive beta_j0_hum and
 # beta_j0_env from them so make_simulation_config()'s tolerance check
 # (|beta_j0_hum - p_beta * beta_j0_tot| < 1e-10) passes.
 beta_j0_tot_sim <- baseline_beta * 1.5                  # hum + env
@@ -133,7 +133,7 @@ sim_args <- list(
      mu_jt            = 0.02,      # Reported CFR (2%, constant); the engine draws deaths at onset from it
      chi_endemic      = 0.5,       # PPV during endemic periods
      chi_epidemic     = 0.75,      # PPV during epidemic periods
-     epidemic_threshold = 0.0001,  # incidence threshold for epidemic definition
+     epidemic_threshold = 0.0001,  # Isym/N prevalence above which reported cases use chi_epidemic
      rho              = 0.52,
      rho_deaths       = 0.42,      # Death detection rate (laser-cholera#49; mean of informative Beta(36.95, 51.02))
      sigma            = 0.24,
