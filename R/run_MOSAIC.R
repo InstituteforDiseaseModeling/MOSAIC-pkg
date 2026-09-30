@@ -1011,37 +1011,15 @@ run_MOSAIC <- function(config,
   log_msg("  Saved %s", "config.json")
 
   # tau_i 95% CI artifact (Phase B) for the "spatial" figure group (fig 2).
-  # The per-location credible interval comes from the upstream fit_prob_travel()
-  # Beta posterior (MODEL_INPUT/mobility_travel_prob_params.csv), which is NOT in
-  # the config. Copy the per-location CI columns into 1_inputs in config order so
-  # plot_departure_tau() can draw interval bars; absence => point-only tau plot.
-  # Gated by io (unconditional artifact, not gated by plots).
-  if (isTRUE(control$io)) {
-    tryCatch({
-      tp_file <- file.path(PATHS$MODEL_INPUT, "mobility_travel_prob_params.csv")
-      if (file.exists(tp_file)) {
-        tp <- utils::read.csv(tp_file, stringsAsFactors = FALSE)
-        lo_col <- intersect(c("Q2.5", "q2.5", "lower", "ci_lower"), names(tp))[1]
-        hi_col <- intersect(c("Q97.5", "q97.5", "upper", "ci_upper"), names(tp))[1]
-        if ("iso3" %in% names(tp) && !is.na(lo_col) && !is.na(hi_col)) {
-          locs <- as.character(config$location_name)
-          m    <- match(locs, tp$iso3)
-          ci_df <- data.frame(
-            location = locs,
-            lower    = tp[[lo_col]][m],
-            upper    = tp[[hi_col]][m],
-            stringsAsFactors = FALSE
-          )
-          tau_ci_path <- file.path(dirs$inputs, "mobility_tau_ci.csv")
-          tmp_path <- paste0(tau_ci_path, ".tmp")
-          utils::write.csv(ci_df, tmp_path, row.names = FALSE)
-          file.rename(tmp_path, tau_ci_path)
-          log_msg("  Saved %s", "1_inputs/mobility_tau_ci.csv")
-        }
-      }
-    }, error = function(e)
-      log_warn("mobility_tau_ci.csv write skipped: %s", e$message))
-  }
+  # Unconditional (not gated by plots); absence of the upstream fit => no file
+  # and a point-only tau plot.
+  tryCatch({
+    tau_ci_path <- .mosaic_write_tau_ci(
+      file.path(PATHS$MODEL_INPUT, "mobility_travel_prob_params.csv"),
+      config$location_name, dirs$inputs)
+    if (!is.null(tau_ci_path)) log_msg("  Saved %s", "1_inputs/mobility_tau_ci.csv")
+  }, error = function(e)
+    log_warn("mobility_tau_ci.csv write skipped: %s", e$message))
 
   # ===========================================================================
   # PARAMETER NAME DETECTION

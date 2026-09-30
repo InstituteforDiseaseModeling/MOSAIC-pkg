@@ -189,6 +189,40 @@
   invisible(success)
 }
 
+#' Write the per-location tau_i credible-interval artifact
+#'
+#' Copies the 95\% interval of the upstream departure-probability fit
+#' (\code{fit_prob_travel()}, written to
+#' \code{MODEL_INPUT/mobility_travel_prob_params.csv}) into
+#' \code{1_inputs/mobility_tau_ci.csv}, in config location order, so
+#' \code{plot_departure_tau()} can draw interval bars. Written atomically.
+#'
+#' @param params_file Path to \code{mobility_travel_prob_params.csv}.
+#' @param locations Character vector of config location ISO codes.
+#' @param dir_inputs The run's \code{1_inputs} directory.
+#' @return The written path, or \code{NULL} (invisibly) when the source file is
+#'   absent or lacks the \code{iso3} and interval columns.
+#' @noRd
+.mosaic_write_tau_ci <- function(params_file, locations, dir_inputs) {
+  if (length(params_file) != 1L || !file.exists(params_file)) return(invisible(NULL))
+  tp <- utils::read.csv(params_file, stringsAsFactors = FALSE)
+  lo_col <- intersect(c("Q2.5", "q2.5", "lower", "ci_lower"), names(tp))[1]
+  hi_col <- intersect(c("Q97.5", "q97.5", "upper", "ci_upper"), names(tp))[1]
+  if (!("iso3" %in% names(tp)) || is.na(lo_col) || is.na(hi_col)) return(invisible(NULL))
+  locs <- as.character(locations)
+  m    <- match(locs, tp$iso3)
+  ci_df <- data.frame(location = locs, lower = tp[[lo_col]][m],
+                      upper = tp[[hi_col]][m], stringsAsFactors = FALSE)
+  out <- file.path(dir_inputs, "mobility_tau_ci.csv")
+  tmp <- paste0(out, ".tmp")
+  utils::write.csv(ci_df, tmp, row.names = FALSE)
+  if (!file.rename(tmp, out)) {
+    unlink(tmp)
+    stop("could not move ", tmp, " into place")
+  }
+  out
+}
+
 #' Capture Full Environment Snapshot
 #'
 #' Records all version, system, and runtime information needed to reproduce
