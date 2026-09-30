@@ -481,88 +481,9 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # restricted. NULL (default) = full window, bit-identical to before.
      is_anchor <- .csd_anchor_rows(d, is_ai, target_anchor_stop)
 
-     # ---- transmission_intensity: reproduction of est_suitability() ----
-     # est_suitability() sets NA cases to 0 and negatives to 0, then normalizes by
-     # log1p of the 99th percentile of cases over MOSAIC countries. Reproduced here
-     # over TRUSTED MOSAIC rows so the column is invariant to include_ai AND remains
-     # bit-identical to production when include_ai = FALSE (all rows trusted).
-     # est_suitability()/the LSTM sandbox recompute their own target from `cases`, so
-     # this column is a diagnostic/back-compat alias and does NOT propagate NA
-     # (the lstm_v2 intensity recipe, unlike this alias, sets unobserved weeks NA).
-     ti_cases <- d$cases
-     ti_cases[is.na(ti_cases)] <- 0
-     ti_cases[ti_cases < 0]    <- 0
-     ti_anchor_mask <- (d$iso_code %in% iso_codes_mosaic) & is_anchor
-     ti_p99 <- stats::quantile(ti_cases[ti_anchor_mask], 0.99, na.rm = TRUE)
-     if (!is.finite(ti_p99) || ti_p99 <= 0) ti_p99 <- 1
-     d$transmission_intensity <- pmin(1.0, log1p(ti_cases) / log1p(ti_p99))
-
-     # ---- Candidate response variables (A/B/C/D/F) ----
-     # These propagate NA where cases (or rate) is NA, so downstream consumers can
-     # drop unobserved weeks during training. Anchors use trusted rows only.
-
-     # Global anchors (trusted rows, within the anchor window).
-     global_p99_count <- stats::quantile(d$cases[is_anchor], 0.99, na.rm = TRUE)
-     if (!is.finite(global_p99_count) || global_p99_count <= 0) global_p99_count <- 1
-     global_p99_rate <- stats::quantile(d$rate[is_anchor], 0.99, na.rm = TRUE)
-     if (!is.finite(global_p99_rate) || global_p99_rate <= 0) global_p99_rate <- 1e-3
-
-     # A: count, global p99
-     d$target_A_count_global <- pmin(1, log1p(d$cases) / log1p(global_p99_count))
-     # C: per-capita rate, global p99
-     d$target_C_rate_global <- pmin(1, log1p(d$rate) / log1p(global_p99_rate))
-
-     # B, D, F: per-country variants
-     d$target_B_count_per_country        <- NA_real_
-     d$target_D_rate_per_country_floored <- NA_real_
-     d$target_F_rank_per_country         <- NA_real_
-
-     for (iso in unique(d$iso_code)) {
-          mask         <- d$iso_code == iso
-          trusted_mask <- mask & is_anchor       # trusted (non-AI) rows, within the anchor window
-          country_cases <- d$cases[mask]
-          country_rate  <- d$rate[mask]
-          # Anchors from trusted rows only (invariant to AI volume). Population is
-          # source-independent; use trusted rows for the same invariance.
-          anchor_cases <- d$cases[trusted_mask]
-          anchor_rate  <- d$rate[trusted_mask]
-          country_pop  <- stats::median(d$total_population[trusted_mask], na.rm = TRUE)
-
-          # cp99c: per-country case p99, floored at 1 (avoids div-by-zero for
-          # non-endemic countries).
-          cp99c <- max(stats::quantile(anchor_cases, 0.99, na.rm = TRUE), 1)
-          if (!is.finite(cp99c) || cp99c <= 0) cp99c <- 1
-
-          # cp99r: per-country rate p99, floored at the "5 cases/wk equivalent
-          # rate" (population-scaled). Keeps full per-country dynamic range even
-          # for low-incidence countries (e.g. TGO) without re-creating the
-          # flat-prediction problem a fixed 0.19/100k floor caused.
-          cases_eq_5 <- if (is.finite(country_pop) && country_pop > 0) {
-               5 / country_pop * 1e5
-          } else {
-               1e-3  # fallback if pop is bad — small floor to avoid log(0)
-          }
-          cp99r <- max(stats::quantile(anchor_rate, 0.99, na.rm = TRUE), cases_eq_5, na.rm = TRUE)
-          if (!is.finite(cp99r) || cp99r <= 0) cp99r <- cases_eq_5
-
-          # B/D applied to ALL rows in the country (incl AI), scored on the trusted anchor.
-          d$target_B_count_per_country[mask] <-
-               pmin(1, log1p(country_cases) / log1p(cp99c))
-          d$target_D_rate_per_country_floored[mask] <-
-               pmin(1, log1p(country_rate) / log1p(cp99r))
-
-          # F: per-country rank over ALL observed weeks (trusted AND AI), so AI
-          # observations receive a rank value like targets A-D. na.last="keep" leaves
-          # empty grid cells NA; divide by (n_obs + 1) so the max is < 1 (keeps
-          # qlogis() finite for any logit-domain consumer).
-          # NOTE: unlike A-D (which anchor on trusted rows and are therefore invariant
-          # to include_ai), F co-ranks the AI rows, so its values reflect the AI weeks
-          # present in the build.
-          n_obs_iso <- sum(!is.na(country_cases))
-          d$target_F_rank_per_country[mask] <-
-               rank(country_cases, ties.method = "average", na.last = "keep") /
-                    (n_obs_iso + 1)
-     }
+     # transmission_intensity + candidate response variables A/B/C/D/F, scaled
+     # by anchors computed over the is_anchor rows (see .csd_response_targets).
+     d <- .csd_response_targets(d, is_anchor, iso_codes_mosaic)
 
      # Record the EFFECTIVE anchor window end (last trusted, observed row that
      # defined the A/B/C/D anchors) as a constant column. Without it a consumer
@@ -1901,6 +1822,110 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      path <- file.path(PATHS$DATA_CHOLERA_WEEKLY, 'cholera_country_weekly_suitability_data.csv')
      write.csv(d, file = path, row.names = FALSE)
      message("Processed suitability data saved here: ", path)
+}
+
+
+# Response-variable columns of the suitability panel: the diagnostic
+# transmission_intensity alias and the candidate targets A/B/C/D/F. Every
+# normalization anchor (ti_p99, the global count/rate p99s, the per-country
+# cp99c/cp99r and median population) is computed over the `is_anchor` rows only
+# (trusted, non-AI rows inside the anchor window; see .csd_anchor_rows), while
+# every row receives a value. Extracted from compile_suitability_data() so the
+# anchor arithmetic is tested on values rather than on a transcribed copy.
+#' @param d Panel with iso_code, date, cases, rate, total_population.
+#' @param is_anchor Logical, one per row: rows that define the anchors.
+#' @param iso_mosaic Character vector of MOSAIC ISO codes (anchor set for ti_p99).
+#' @return `d` with transmission_intensity and the five target_* columns added.
+#' @keywords internal
+#' @noRd
+.csd_response_targets <- function(d, is_anchor, iso_mosaic) {
+     # ---- transmission_intensity: diagnostic alias of the legacy target ----
+     # No package code reads this column: the frozen legacy path recomputes its
+     # own target from `cases`, and lstm_v2 maps response_var =
+     # "transmission_intensity" to its train-only "intensity" recipe. The ANCHOR
+     # reproduces the legacy v0.33 recipe exactly -- NA cases counted as 0 in the
+     # p99, over trusted MOSAIC rows -- so an OBSERVED week carries the value the
+     # legacy target gives it (bit-identical when include_ai = FALSE). An
+     # UNOBSERVED week (NA cases) is NA, like targets A-D: writing 0 there would
+     # publish fabricated "no transmission" weeks for any consumer that trains
+     # on the column directly.
+     ti_cases <- d$cases
+     ti_cases[is.na(ti_cases)] <- 0
+     ti_cases[ti_cases < 0]    <- 0
+     ti_anchor_mask <- (d$iso_code %in% iso_mosaic) & is_anchor
+     ti_p99 <- stats::quantile(ti_cases[ti_anchor_mask], 0.99, na.rm = TRUE)
+     if (!is.finite(ti_p99) || ti_p99 <= 0) ti_p99 <- 1
+     d$transmission_intensity <- pmin(1.0, log1p(ti_cases) / log1p(ti_p99))
+     d$transmission_intensity[is.na(d$cases)] <- NA_real_
+
+     # ---- Candidate response variables (A/B/C/D/F) ----
+     # These propagate NA where cases (or rate) is NA, so downstream consumers can
+     # drop unobserved weeks during training. Anchors use trusted rows only.
+
+     # Global anchors (trusted rows, within the anchor window).
+     global_p99_count <- stats::quantile(d$cases[is_anchor], 0.99, na.rm = TRUE)
+     if (!is.finite(global_p99_count) || global_p99_count <= 0) global_p99_count <- 1
+     global_p99_rate <- stats::quantile(d$rate[is_anchor], 0.99, na.rm = TRUE)
+     if (!is.finite(global_p99_rate) || global_p99_rate <= 0) global_p99_rate <- 1e-3
+
+     # A: count, global p99
+     d$target_A_count_global <- pmin(1, log1p(d$cases) / log1p(global_p99_count))
+     # C: per-capita rate, global p99
+     d$target_C_rate_global <- pmin(1, log1p(d$rate) / log1p(global_p99_rate))
+
+     # B, D, F: per-country variants
+     d$target_B_count_per_country        <- NA_real_
+     d$target_D_rate_per_country_floored <- NA_real_
+     d$target_F_rank_per_country         <- NA_real_
+
+     for (iso in unique(d$iso_code)) {
+          mask         <- d$iso_code == iso
+          trusted_mask <- mask & is_anchor       # trusted (non-AI) rows, within the anchor window
+          country_cases <- d$cases[mask]
+          country_rate  <- d$rate[mask]
+          # Anchors from trusted rows only (invariant to AI volume). Population is
+          # source-independent; use trusted rows for the same invariance.
+          anchor_cases <- d$cases[trusted_mask]
+          anchor_rate  <- d$rate[trusted_mask]
+          country_pop  <- stats::median(d$total_population[trusted_mask], na.rm = TRUE)
+
+          # cp99c: per-country case p99, floored at 1 (avoids div-by-zero for
+          # non-endemic countries).
+          cp99c <- max(stats::quantile(anchor_cases, 0.99, na.rm = TRUE), 1)
+          if (!is.finite(cp99c) || cp99c <= 0) cp99c <- 1
+
+          # cp99r: per-country rate p99, floored at the "5 cases/wk equivalent
+          # rate" (population-scaled). Keeps full per-country dynamic range even
+          # for low-incidence countries (e.g. TGO) without re-creating the
+          # flat-prediction problem a fixed 0.19/100k floor caused.
+          cases_eq_5 <- if (is.finite(country_pop) && country_pop > 0) {
+               5 / country_pop * 1e5
+          } else {
+               1e-3  # fallback if pop is bad — small floor to avoid log(0)
+          }
+          cp99r <- max(stats::quantile(anchor_rate, 0.99, na.rm = TRUE), cases_eq_5, na.rm = TRUE)
+          if (!is.finite(cp99r) || cp99r <= 0) cp99r <- cases_eq_5
+
+          # B/D applied to ALL rows in the country (incl AI), scored on the trusted anchor.
+          d$target_B_count_per_country[mask] <-
+               pmin(1, log1p(country_cases) / log1p(cp99c))
+          d$target_D_rate_per_country_floored[mask] <-
+               pmin(1, log1p(country_rate) / log1p(cp99r))
+
+          # F: per-country rank over ALL observed weeks (trusted AND AI), so AI
+          # observations receive a rank value like targets A-D. na.last="keep" leaves
+          # empty grid cells NA; divide by (n_obs + 1) so the max is < 1 (keeps
+          # qlogis() finite for any logit-domain consumer).
+          # NOTE: unlike A-D (which anchor on trusted rows and are therefore invariant
+          # to include_ai), F co-ranks the AI rows, so its values reflect the AI weeks
+          # present in the build.
+          n_obs_iso <- sum(!is.na(country_cases))
+          d$target_F_rank_per_country[mask] <-
+               rank(country_cases, ties.method = "average", na.last = "keep") /
+                    (n_obs_iso + 1)
+     }
+
+     d
 }
 
 
