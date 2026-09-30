@@ -42,7 +42,7 @@
 #    switched from the range-scaled exp(-2*delta/range(delta)) to the production
 #    weight_best scheme exp(-0.5*min(delta, 4)) (review finding
 #    weighting-posterior-04). The INPUTS (ens, lls, seeds) are still read from
-#    parity_tier2.rds, whose stale `opt` element is no longer used. Before the
+#    parity_tier2.rds; its stale `opt` element was dropped. Before the
 #    new references were written, every objective's optimal_weights was checked
 #    against a hand computation of the saturated weights (tolerance 1e-14).
 #    optimal_n: mae 12 -> 12, r2_bias 12 -> 12, wis 4 -> 12.
