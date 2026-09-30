@@ -98,6 +98,15 @@ plot_CFR_hierarchical <- function(
     obs_data$cfr_observed <- obs_data$deaths_total / obs_data$cases_total
     obs_data$log_cases <- log10(obs_data$cases_total + 1)
 
+    # Locations fitted from their own data. The estimates' `pooled` flag marks a
+    # location absent from the fit (it gets the population curve); files written
+    # before that column existed fall back to having any observed year.
+    own_fit_iso <- if ("pooled" %in% names(estimates)) {
+        unique(estimates$iso_code[!as.logical(estimates$pooled)])
+    } else {
+        unique(obs_data$iso_code)
+    }
+
     # Years come from the model outputs: the trend runs past the data, holding
     # each curve at its last fitted year (is_forecast).
     temporal_trend$is_forecast <- as.logical(temporal_trend$is_forecast %||% FALSE)
@@ -419,8 +428,12 @@ plot_CFR_hierarchical <- function(
         summary_df$n <- 0
     }
     
-    # Add indicator for data availability
+    # Historical mean +/- SD bars need at least one year with >= 20 cases.
     summary_df$has_historical_data <- !is.na(summary_df$mean)
+    # Symbol/legend key: whether the location got its own fitted curve or the
+    # population curve. Read from the estimates' `pooled` flag (a location with
+    # only small-count years is still fitted from its own data).
+    summary_df$own_fit <- summary_df$iso_code %in% own_fit_iso
     
     # Sort by the prediction (check if cfr_pred exists)
     if ("cfr_pred" %in% names(summary_df) && nrow(summary_df) > 0) {
@@ -452,19 +465,19 @@ plot_CFR_hierarchical <- function(
             # last-fitted-year prediction - different symbols for with/without historical data
             ggplot2::geom_point(
                 ggplot2::aes(y = cfr_pred * 100,
-                            shape = has_historical_data,
-                            color = has_historical_data),
+                            shape = .data$own_fit,
+                            color = .data$own_fit),
                 size = 2.5
             ) +
             ggplot2::scale_shape_manual(
                 values = c("TRUE" = 16, "FALSE" = 1),
-                labels = c("TRUE" = "With historical data", "FALSE" = "Population average only"),
-                name = "Data availability"
+                labels = c("TRUE" = "Country-specific fit", "FALSE" = "Population average only"),
+                name = "Estimate"
             ) +
             ggplot2::scale_color_manual(
                 values = c("TRUE" = model_color, "FALSE" = "#E57373"),
-                labels = c("TRUE" = "With historical data", "FALSE" = "Population average only"),
-                name = "Data availability"
+                labels = c("TRUE" = "Country-specific fit", "FALSE" = "Population average only"),
+                name = "Estimate"
             ) +
             ggplot2::coord_flip() +
             ggplot2::scale_y_continuous(
@@ -476,10 +489,10 @@ plot_CFR_hierarchical <- function(
                 subtitle = sprintf("Gray bars: historical mean \u00B1 SD | Points: %d model predictions", yr_fit),
                 x = "",
                 y = "Case Fatality Ratio (%)",
-                caption = sprintf("Total: %d countries | With historical data: %d | Population average: %d",
+                caption = sprintf("Total: %d countries | Country-specific fit: %d | Population average: %d",
                                 n_mosaic_countries,
-                                sum(summary_df$has_historical_data),
-                                sum(!summary_df$has_historical_data))
+                                sum(summary_df$own_fit),
+                                sum(!summary_df$own_fit))
             ) +
             ggplot2::theme_minimal(base_size = 9) +
             ggplot2::theme(
@@ -523,19 +536,19 @@ plot_CFR_hierarchical <- function(
                 # last-fitted-year prediction - different symbols for with/without historical data
                 ggplot2::geom_point(
                     ggplot2::aes(y = cfr_pred * 100,
-                                shape = has_historical_data,
-                                color = has_historical_data),
+                                shape = .data$own_fit,
+                                color = .data$own_fit),
                     size = 2.5
                 ) +
                 ggplot2::scale_shape_manual(
                     values = c("TRUE" = 16, "FALSE" = 1),
-                    labels = c("TRUE" = "With historical data", "FALSE" = "Population average only"),
-                    name = "Data availability"
+                    labels = c("TRUE" = "Country-specific fit", "FALSE" = "Population average only"),
+                    name = "Estimate"
                 ) +
                 ggplot2::scale_color_manual(
                     values = c("TRUE" = model_color, "FALSE" = "#E57373"),
-                    labels = c("TRUE" = "With historical data", "FALSE" = "Population average only"),
-                    name = "Data availability"
+                    labels = c("TRUE" = "Country-specific fit", "FALSE" = "Population average only"),
+                    name = "Estimate"
                 ) +
                 ggplot2::coord_flip() +
                 ggplot2::scale_y_continuous(
@@ -548,10 +561,10 @@ plot_CFR_hierarchical <- function(
                     x = "",
                     y = "Case Fatality Ratio (%)",
                     caption = if (plot_num == 2) {
-                        sprintf("Total: %d countries | With historical data: %d | Population average: %d",
+                        sprintf("Total: %d countries | Country-specific fit: %d | Population average: %d",
                               n_mosaic_countries,
-                              sum(summary_df$has_historical_data),
-                              sum(!summary_df$has_historical_data))
+                              sum(summary_df$own_fit),
+                              sum(!summary_df$own_fit))
                     } else ""
                 ) +
                 ggplot2::theme_minimal(base_size = 9) +
@@ -580,17 +593,17 @@ plot_CFR_hierarchical <- function(
     all_mosaic_estimates <- estimates[estimates$iso_code %in% MOSAIC::iso_codes_mosaic,]
     all_mosaic_obs <- obs_data[obs_data$iso_code %in% MOSAIC::iso_codes_mosaic,]
     
-    # Identify countries with data (at least 20 cases in any year)
-    countries_with_data <- unique(all_mosaic_obs$iso_code[all_mosaic_obs$cases_total >= 20])
-    
-    # Add data availability indicator
+    # Line style and facet tag follow the fit: solid for a location fitted from
+    # its own data, dashed + tag for one that got the population curve. The
+    # >= 20-case threshold only sizes the observed points below.
+    countries_with_data <- own_fit_iso
     all_mosaic_estimates$has_data <- all_mosaic_estimates$iso_code %in% countries_with_data
-    
-    # Create facet labels with data indicator
+
+    # Create facet labels with the fit indicator
     all_mosaic_estimates$facet_label <- paste0(
-        all_mosaic_estimates$country, 
+        all_mosaic_estimates$country,
         "\n(", all_mosaic_estimates$iso_code, ")",
-        ifelse(all_mosaic_estimates$has_data, "", "\n[No data]")
+        ifelse(all_mosaic_estimates$has_data, "", "\n[Population average]")
     )
     
     # Merge facet labels with observations
@@ -684,16 +697,16 @@ plot_CFR_hierarchical <- function(
             # Labels
             ggplot2::labs(
                 title = sprintf("All MOSAIC Countries CFR Trends (Page %d of %d)", page, n_all_pages),
-                subtitle = paste("Solid lines: Countries with sufficient data (\u226520 cases) | ",
-                               "Dashed lines: Population-average estimates\n",
-                               "Points indicate years with observed data | Shaded: trends held at the last fitted year"),
+                subtitle = paste("Solid lines: country-specific fit | ",
+                               "Dashed lines: population average (location absent from the fit)\n",
+                               "Large points: years with \u226520 cases | Shaded: trends held at the last fitted year"),
                 x = "Year",
                 y = "Case Fatality Ratio (%)",
                 caption = if(page == n_all_pages) paste(
-                    sprintf("Total countries: %d | With sufficient data: %d | Without data: %d",
-                           n_all_countries, 
-                           length(countries_with_data),
-                           n_all_countries - length(countries_with_data)),
+                    sprintf("Total countries: %d | Country-specific fit: %d | Population average: %d",
+                           n_all_countries,
+                           sum(unique(all_mosaic_estimates$iso_code) %in% countries_with_data),
+                           sum(!unique(all_mosaic_estimates$iso_code) %in% countries_with_data)),
                     "\nPoint size indicates number of reported cases"
                 ) else ""
             ) +

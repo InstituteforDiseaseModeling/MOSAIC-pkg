@@ -2,7 +2,7 @@
 % Please edit documentation in R/process_CFR_data.R
 \name{process_CFR_data}
 \alias{process_CFR_data}
-\title{Process Cholera Data to Calculate Aggregated Case Fatality Ratios and Fit Beta Distributions (2014-2024)}
+\title{Process Cholera Data to Calculate Aggregated Case Fatality Ratios and Fit Beta Distributions}
 \usage{
 process_CFR_data(PATHS, min_obs)
 }
@@ -16,10 +16,13 @@ process_CFR_data(PATHS, min_obs)
 \item{min_obs}{An integer specifying the minimum number of cases required for a country to have its own CFR. Countries with fewer cases than this threshold will have their CFR set to the value of the AFRO Region.}
 }
 \value{
-A data frame with aggregated CFR, confidence intervals, and Beta distribution parameters for each country.
+Invisibly, a data frame with aggregated CFR, confidence intervals, and Beta distribution parameters for each country (also written to \code{case_fatality_ratio_2014_<end year>.csv} in \code{DOCS_TABLES} and \code{DATA_WHO_ANNUAL}).
 }
 \description{
-This function processes cholera data, aggregates cases and deaths for each country over the period 2014-2024, calculates the aggregated Case Fatality Ratio (CFR), and fits Beta distributions for each country. Countries with fewer cases than \code{min_obs} will have their CFR set to the value of the AFRO Region.
+This function processes WHO annual cholera data, aggregates cases and deaths for each country from 2014 through the last complete year in the data, calculates the aggregated Case Fatality Ratio (CFR), and fits Beta distributions for each country. Countries with fewer cases than \code{min_obs} will have their CFR set to the value of the AFRO Region.
+}
+\details{
+A calendar year still in progress when its dashboard snapshot was taken is dropped before aggregating (its deaths lag its cases), using the same rule as \code{\link{est_CFR_hierarchical}}; the end year of the output (and of its filename) is the last year left after that filter. Country-years with a missing case or death count are left out of both totals, so each CFR is computed over the same years for its numerator and denominator. Rows are aggregated by ISO code, and each country is labelled with its most frequent spelling in the data (the WHO file spells some countries more than one way).
 }
 \examples{
 \dontrun{

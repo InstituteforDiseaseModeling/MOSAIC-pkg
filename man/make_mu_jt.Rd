@@ -48,6 +48,17 @@ logit scale). A simulation that draws deaths directly at \code{mu_jt} -- a
 scenario run or a prior-predictive check -- runs 5-10\% below WHO-annual
 deaths (2018-25); the logit-normal mean would over-predict, because annual
 CFR is lower in high-case years.
+
+The default \code{"linear_logit"} centre and the integrated likelihood's
+year deviations use different time bases on purpose. The deviations are
+calendar-year levels blended over 30 days either side of 1 January
+(\code{.d7_basis()} in \code{calc_log_likelihood_deaths_integrated.R}),
+while the centre interpolates between 1 July anchors, so from January to
+June the centre sits partway toward the previous year's value. The
+resulting offset is at most the year-to-year change in the GAM centre
+(under 0.07 logit, about 3\\% of the CFR, for 2022-26 estimates) and is
+absorbed by the year deviation; years past the last estimate are held flat,
+so forecast windows are unaffected.
 }
 \examples{
 est <- data.frame(iso_code = rep(c("AAA", "BBB"), each = 3),
