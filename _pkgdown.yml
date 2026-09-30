@@ -6,6 +6,13 @@ template:
     primary: "#0054A6"
     link-color: "#0054A6"
 
+footer:
+  structure:
+    left: [developed_by, built_with]
+    right: [legal]
+  components:
+    legal: "© 2024–2026, Gates Foundation. All rights reserved. [Privacy and Cookies Notice](https://www.gatesfoundation.org/Privacy-and-Cookies-Notice) | [Terms of Use](https://www.gatesfoundation.org/Terms-of-Use)"
+
 navbar:
   structure:
     left:  [intro, reference, articles, news]
