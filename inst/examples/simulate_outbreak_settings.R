@@ -17,6 +17,12 @@
 #   4. sporadic   Mostly quiet; several small, self-limiting clusters (5 years).
 #   5. rare       Long quiet period punctuated by ONE large outbreak (8 years).
 #
+#   KNOWN LIMITATION: "sporadic" and "rare" were tuned at v0.37 on the former
+#   Python engine. Under the per-capita environmental dose-response (v0.89.0)
+#   their seeded infections die out before the first suitability trigger for
+#   most seeds, so they produce no outbreaks; the script warns when a setting
+#   returns zero cases. Treat their output as unusable until they are re-tuned.
+#
 #   "epidemic" and "endemic" use the validated configs that ship with MOSAIC
 #   (config_simulation_epidemic / config_simulation_endemic). "recurring",
 #   "sporadic" and "rare" are built here with build_regime_config() to show how
@@ -332,6 +338,17 @@ for (key in names(settings)) {
                   format(round(sum(cases, na.rm = TRUE)), big.mark = ","),
                   format(round(max(colSums(cases, na.rm = TRUE))), big.mark = ","),
                   key, key))
+}
+
+# A regime that goes extinct before its trigger writes an all-zero CSV and a
+# flat figure; say so loudly instead of handing that on as scenario data.
+dead <- vapply(summary_rows, function(r) r$total_cases == 0, logical(1))
+if (any(dead)) {
+  warning(sprintf(paste0(
+    "Setting(s) %s produced zero reported cases: the seeded infections died out ",
+    "before any suitability trigger, so their CSVs and figures are flat. Re-tune ",
+    "the transmission levers for these settings before using their output."),
+    paste(names(summary_rows)[dead], collapse = ", ")), call. = FALSE)
 }
 
 # -----------------------------------------------------------------------------

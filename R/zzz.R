@@ -108,14 +108,14 @@
 
      packageStartupMessage(
           "\n",
-          " __  __   ___   ____     _     ___  ____       __      ___    _____  _____   _____ ___\n",
-          "|  \\/  | / _ \\ / ___|   / \\   |_ _|/ ___|   __/ /_    / /    /   |  / ___/ / ____// __ \\\n",
-          "| |\\/| || | | |\\___ \\  / _ \\   | || |      /_  __/   / /    / /| |  \\__ \\ / __/  / /_/ /\n",
-          "| |  | || |_| | ___) |/ ___ \\  | || |___    /_/     / /___ / ___ | ___/ // /___ / _, _/\n",
-          "|_|  |_| \\___/ |____//_/   \\_\\|___|\\____|          /_____//_/  |_|/____//_____//_/ |_|\n",
+          " __  __   ___   ____     _     ___  ____\n",
+          "|  \\/  | / _ \\ / ___|   / \\   |_ _|/ ___|\n",
+          "| |\\/| || | | |\\___ \\  / _ \\   | || |\n",
+          "| |  | || |_| | ___) |/ ___ \\  | || |___\n",
+          "|_|  |_| \\___/ |____//_/   \\_\\|___|\\____|\n",
           "\n",
-          "Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation\n",
-          "for Cholera (MOSAIC)!\n",
+          "Welcome to MOSAIC: Metapopulation Outbreak Simulation And Interventions\n",
+          "for Cholera!\n",
           "\n",
           "Version: ", as.character(pkg_version), "\n"
      )

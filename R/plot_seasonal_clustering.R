@@ -10,7 +10,7 @@
 #' }
 #' @param use_cases A logical value. If `TRUE`, clustering is based on Fourier series fitted to cholera cases. If `FALSE`, clustering is based on precipitation.
 #' @param set_inferred_to_na A logical value. If `TRUE`, inferred countries are set to `NA` in the clustering. Default is `TRUE` when using precipitation, `FALSE` when using cases.
-#' @param clustering_method A character string specifying the clustering method. Options are `"kmeans"`, `"ward.D2"`, `"dbscan"`, or `"knn"`. Default is `"ward.D2"` for hierarchical clustering.
+#' @param clustering_method A character string specifying the clustering method. One of `"ward.D2"` (hierarchical, the default), `"kmeans"`, `"dbscan"`, or `"knn"`.
 #' @param k An integer specifying the number of clusters for k-means and hierarchical clustering. Default is 4.
 #'
 #' @return The function generates and saves a PNG file showing the clustering of countries based on seasonal dynamics.
@@ -30,8 +30,10 @@
 plot_seasonal_clustering <- function(PATHS,
                                      use_cases = FALSE,
                                      set_inferred_to_na = TRUE,
-                                     clustering_method = "hierarchical",
+                                     clustering_method = c("ward.D2", "kmeans", "dbscan", "knn"),
                                      k = 4) {
+
+     clustering_method <- match.arg(clustering_method)
 
      # Load required data
      combined_fitted_values <- utils::read.csv(file.path(PATHS$DOCS_TABLES, "pred_seasonal_dynamics.csv"), stringsAsFactors = FALSE)
@@ -77,8 +79,6 @@ plot_seasonal_clustering <- function(PATHS,
           knn_distances <- FNN::get.knnx(precip_matrix, k = k)$nn.dist
           knn_clustering <- kmeans(knn_distances, centers = k)
           precip_fitted_df$cluster <- knn_clustering$cluster
-     } else {
-          stop("Invalid clustering method specified.")
      }
 
      # Merge clustering results with spatial data
