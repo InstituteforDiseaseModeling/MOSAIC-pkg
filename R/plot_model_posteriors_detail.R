@@ -259,7 +259,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
           if (!is.null(meanlog_val) && !is.null(sdlog_val) &&
               is.finite(meanlog_val) && is.finite(sdlog_val)) {
-            dlnorm(x_vals, meanlog = meanlog_val, sdlog = sdlog_val)
+            .dlnorm_trunc(x_vals, meanlog_val, sdlog_val, params$lower, params$upper)
           } else {
             rep(0, length(x_vals))
           }

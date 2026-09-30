@@ -342,9 +342,13 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
 #' Keep a lognormal prior's truncation bounds on the posterior that replaces it
 #'
 #' A truncated lognormal prior (e.g. zeta_ratio, lower = 1, which keeps
-#' zeta_1 >= zeta_2) carries \code{lower}/\code{upper}. The posterior fit is
-#' an untruncated lognormal, so without this the next stage could again draw
-#' outside the support the prior encodes.
+#' zeta_1 >= zeta_2) carries \code{lower}/\code{upper}. A posterior entry that
+#' already carries bounds was fitted in the truncated family by
+#' \code{calc_model_posterior_distributions()} and is kept as is. An entry
+#' without bounds is an untruncated fit to the (truncated) posterior's 95\%
+#' interval; re-attaching the bound to it unchanged would truncate twice and
+#' push the distribution away from the bound at every stage, so it is refitted
+#' in the truncated family to the same interval before the bound is attached.
 #' @param entry Cleaned posterior entry.
 #' @param prior_entry The prior entry being replaced (may be \code{NULL}).
 #' @return \code{entry}, with the prior's bounds added when both are lognormal.
@@ -354,11 +358,22 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
       !identical(tolower(prior_entry$distribution), "lognormal")) {
     return(entry)
   }
-  for (b in c("lower", "upper")) {
-    if (!is.null(prior_entry$parameters[[b]])) {
-      entry$parameters[[b]] <- prior_entry$parameters[[b]]
-    }
+  ep <- entry$parameters
+  if (!is.null(ep$lower) || !is.null(ep$upper)) return(entry)
+  lower <- prior_entry$parameters$lower
+  upper <- prior_entry$parameters$upper
+  if (is.null(lower) && is.null(upper)) return(entry)
+  if (is.null(ep$meanlog) || is.null(ep$sdlog)) return(entry)
+  ci <- stats::qlnorm(c(0.025, 0.975), as.numeric(ep$meanlog), as.numeric(ep$sdlog))
+  fit <- tryCatch(.fit_truncated_lognormal_ci(ci[1], ci[2], lower = lower, upper = upper),
+                  error = function(e) NULL)
+  if (!is.null(fit)) {
+    ep$meanlog <- fit$meanlog
+    ep$sdlog <- fit$sdlog
   }
+  if (!is.null(lower)) ep$lower <- lower
+  if (!is.null(upper)) ep$upper <- upper
+  entry$parameters <- ep
   entry
 }
 

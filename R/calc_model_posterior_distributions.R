@@ -544,6 +544,30 @@ calc_model_posterior_distributions <- function(
         } else {
             fitted_dist
         }
+        # A truncated lognormal prior (lower/upper, e.g. zeta_ratio >= 1) gets
+        # a posterior fitted in the same truncated family: its draws are
+        # truncated, so an untruncated fit carrying the bound would truncate
+        # twice. The bounds are persisted so posteriors.json keeps the support.
+        if (dist_type == "lognormal") {
+            tmpl <- if (param_scale == "global") {
+                priors$parameters_global[[param_base]]
+            } else if (!is.null(location)) {
+                priors$parameters_location[[param_base]]$location[[location]]
+            }
+            b_lo <- tmpl$parameters$lower
+            b_hi <- tmpl$parameters$upper
+            if (!is.null(b_lo) || !is.null(b_hi)) {
+                tfit <- tryCatch(.fit_truncated_lognormal_ci(q_low, q_high, lower = b_lo,
+                                                             upper = b_hi),
+                                 error = function(e) NULL)
+                if (!is.null(tfit)) {
+                    clean_params$meanlog <- tfit$meanlog
+                    clean_params$sdlog <- tfit$sdlog
+                }
+                if (!is.null(b_lo)) clean_params$lower <- b_lo
+                if (!is.null(b_hi)) clean_params$upper <- b_hi
+            }
+        }
         structured_dist <- list(
             distribution = dist_type,
             parameters = clean_params

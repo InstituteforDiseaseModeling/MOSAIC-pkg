@@ -140,3 +140,102 @@ fit_lognormal_from_ci <- function(mode_val, ci_lower, ci_upper,
 
   return(output)
 }
+#' Truncated-lognormal helpers
+#'
+#' A lognormal prior may carry \code{lower}/\code{upper} truncation bounds
+#' (e.g. zeta_ratio, lower = 1). \code{meanlog}/\code{sdlog} are then the
+#' parameters of the parent (untruncated) lognormal, and the distribution is
+#' the parent restricted to \code{[lower, upper]}, as \code{sample_from_prior()}
+#' draws it.
+#'
+#' \code{.fit_truncated_lognormal_ci()} solves for the parent
+#' \code{meanlog}/\code{sdlog} whose TRUNCATED distribution has the given
+#' quantiles (two equations, two unknowns). Fitting an untruncated lognormal to
+#' quantiles of truncated draws and then re-attaching the bound would truncate
+#' twice and shift the distribution away from the bound at every stage.
+#'
+#' @param ci_lower,ci_upper Target quantiles of the truncated distribution.
+#' @param lower,upper Truncation bounds (\code{NULL} = 0 / \code{Inf}).
+#' @param probs Probabilities of the two target quantiles.
+#' @param start Optional \code{c(meanlog, sdlog)} starting point.
+#' @return \code{.fit_truncated_lognormal_ci()}: list with \code{meanlog},
+#'   \code{sdlog}, \code{lower}, \code{upper} (as given, \code{NULL} dropped)
+#'   and \code{max_error} (largest absolute log-quantile residual).
+#' @noRd
+.fit_truncated_lognormal_ci <- function(ci_lower, ci_upper, lower = NULL, upper = NULL,
+                                        probs = c(0.025, 0.975), start = NULL) {
+  lo <- if (is.null(lower)) 0 else as.numeric(lower)
+  hi <- if (is.null(upper)) Inf else as.numeric(upper)
+  if (!(is.finite(ci_lower) && is.finite(ci_upper) && ci_lower < ci_upper))
+    stop("ci_lower < ci_upper (finite) required")
+  if (!(ci_lower > lo && ci_upper < hi))
+    stop("target quantiles must lie strictly inside (lower, upper)")
+  target <- unname(log(c(ci_lower, ci_upper)))
+  llo <- if (lo > 0) log(lo) else -Inf
+  lhi <- log(hi)
+  qtrunc <- function(m, s) {
+    a <- stats::pnorm((llo - m) / s); b <- stats::pnorm((lhi - m) / s)
+    m + s * stats::qnorm(a + probs * (b - a))
+  }
+  obj <- function(par) {
+    q <- qtrunc(par[1], exp(par[2]))
+    if (any(!is.finite(q))) return(1e10)
+    sum((q - target)^2)
+  }
+  if (is.null(start)) {
+    start <- c(mean(target), diff(target) / (2 * stats::qnorm(0.975)))
+  }
+  best <- NULL
+  # A few starts: the parent may sit well below the bound when the truncated
+  # mass piles up against it.
+  for (m0 in c(start[1], start[1] - start[2], start[1] - 3 * start[2])) {
+    fit <- stats::optim(c(m0, log(start[2])), obj, method = "Nelder-Mead",
+                        control = list(maxit = 4000, reltol = 1e-14))
+    if (is.null(best) || fit$value < best$value) best <- fit
+  }
+  m <- unname(best$par[1]); s <- unname(exp(best$par[2]))
+  out <- list(meanlog = m, sdlog = s)
+  if (!is.null(lower)) out$lower <- lower
+  if (!is.null(upper)) out$upper <- upper
+  out$max_error <- max(abs(qtrunc(m, s) - target))
+  out
+}
+
+#' @rdname dot-fit_truncated_lognormal_ci
+#' @param meanlog,sdlog Parent lognormal parameters.
+#' @return \code{.lognormal_trunc_mean()}: mean of the truncated distribution.
+#' @noRd
+.lognormal_trunc_mean <- function(meanlog, sdlog, lower = NULL, upper = NULL) {
+  lo <- if (is.null(lower)) 0 else as.numeric(lower)
+  hi <- if (is.null(upper)) Inf else as.numeric(upper)
+  if (lo <= 0 && !is.finite(hi)) return(exp(meanlog + sdlog^2 / 2))
+  zl <- if (lo > 0) (log(lo) - meanlog) / sdlog else -Inf
+  zh <- (log(hi) - meanlog) / sdlog
+  mass <- stats::pnorm(zh) - stats::pnorm(zl)
+  exp(meanlog + sdlog^2 / 2) * (stats::pnorm(zh - sdlog) - stats::pnorm(zl - sdlog)) / mass
+}
+
+#' @rdname dot-fit_truncated_lognormal_ci
+#' @param x Evaluation points.
+#' @return \code{.dlnorm_trunc()}: density of the truncated distribution (zero
+#'   outside the bounds).
+#' @noRd
+.dlnorm_trunc <- function(x, meanlog, sdlog, lower = NULL, upper = NULL) {
+  lo <- if (is.null(lower)) 0 else as.numeric(lower)
+  hi <- if (is.null(upper)) Inf else as.numeric(upper)
+  mass <- stats::plnorm(hi, meanlog, sdlog) - stats::plnorm(lo, meanlog, sdlog)
+  d <- stats::dlnorm(x, meanlog, sdlog) / mass
+  d[x < lo | x > hi] <- 0
+  d
+}
+
+#' @rdname dot-fit_truncated_lognormal_ci
+#' @param p Probabilities.
+#' @return \code{.qlnorm_trunc()}: quantiles of the truncated distribution.
+#' @noRd
+.qlnorm_trunc <- function(p, meanlog, sdlog, lower = NULL, upper = NULL) {
+  lo <- if (is.null(lower)) 0 else as.numeric(lower)
+  hi <- if (is.null(upper)) Inf else as.numeric(upper)
+  a <- stats::plnorm(lo, meanlog, sdlog); b <- stats::plnorm(hi, meanlog, sdlog)
+  stats::qlnorm(a + p * (b - a), meanlog, sdlog)
+}

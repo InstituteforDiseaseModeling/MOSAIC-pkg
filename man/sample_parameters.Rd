@@ -81,11 +81,12 @@ from the identity (a = 1, b = 0, z = 1, k = 0), so pinned values take
 effect too. \code{config} should carry the raw, uncalibrated
 \code{psi_jt}, as \code{config_default} and \code{get_location_config()}
 do. A returned config is marked with the attribute
-\code{psi_star_applied = TRUE}; passed back in as the template, its
+\code{psi_star_applied = TRUE} and carries the field
+\code{config$psi_star_applied = TRUE}, which survives JSON (e.g.
+\code{config_medoid.json}); passed back in as the template, its
 \code{psi_jt} is left as is when every psi_star flag is FALSE, and
 sampling stops with an error when any psi_star flag is TRUE, so the
-transform is never applied twice. The attribute does not survive JSON
-serialization, so a config read back from JSON counts as raw.
+transform is never applied twice.
 \item sample_initial_conditions: Initial condition proportions (default TRUE).
 V1, V2, E, I and R are drawn from their per-location priors and S is
 the residual, so the \code{prop_S_initial} prior is not used.

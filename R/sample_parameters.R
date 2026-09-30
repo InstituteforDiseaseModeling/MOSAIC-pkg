@@ -1719,7 +1719,8 @@ check_sampled_parameter <- function(config_sampled, priors,
         result$expected_mean <- params$shape / params$rate
       } else if (prior_info$distribution == "lognormal") {
         if (!is.null(params$meanlog) && !is.null(params$sdlog)) {
-          result$expected_mean <- exp(params$meanlog + params$sdlog^2/2)
+          result$expected_mean <- .lognormal_trunc_mean(params$meanlog, params$sdlog,
+                                                        params$lower, params$upper)
         }
       } else if (prior_info$distribution == "normal") {
         result$expected_mean <- params$mean

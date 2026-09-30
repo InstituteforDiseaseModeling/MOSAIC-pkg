@@ -10,7 +10,10 @@ get_ggplot_legend(plot)
 \item{plot}{A ggplot object from which the legend should be extracted.}
 }
 \value{
-A grob representing the legend of the ggplot object.
+A grob representing the legend of the ggplot object, or an empty
+\code{grid::nullGrob()} when the plot has no legend (e.g. a mapped layer with
+no rows, such as a single-location flux network), so the result can always
+be passed to \code{gridExtra::grid.arrange()} or \code{cowplot::plot_grid()}.
 }
 \description{
 This function extracts the legend from a ggplot object and returns it as a grob (graphical object).
@@ -18,8 +21,10 @@ The extracted legend can then be used independently, for instance, to combine th
 }
 \details{
 This function converts a ggplot object into a grob using \strong{\code{ggplotGrob()}} and
-extracts the legend, which is stored in the grob under the name "guide-box". The function
-can be used to separate the legend from the plot and combine it with other plots as needed.
+extracts the legend. ggplot2 >= 3.5 lays out one guide-box slot per position
+(\code{"guide-box-right"}, \code{"guide-box-bottom"}, ...), leaving empty slots
+as zero grobs; the first non-empty slot is returned, and the single
+\code{"guide-box"} grob of older ggplot2 versions is matched too.
 }
 \examples{
 # Create a simple ggplot object
