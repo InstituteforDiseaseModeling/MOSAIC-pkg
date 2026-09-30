@@ -451,13 +451,13 @@ testthat::test_that("spatial hazard calculations", {
      # NULL and would have errored the moment it actually ran.
      zeros <- matrix(0, nrow = length(location_names), ncol = length(time_names))
 
-     # calc_spatial_hazard() warns when a hazard falls outside [0, 1], and it
-     # does here: the unclamped two-harmonic seasonal envelope drives
-     # beta_jt_human negative in the low season, so a handful of hazard cells
-     # are negative in BOTH engines (derivedvalues.py has no pmax(., 0), unlike
-     # humantohuman.py). Asserted rather than silenced, so the day the engine
-     # starts clamping this test says so.
-     expect_warning(
+     # calc_spatial_hazard() warns when a hazard falls outside [0, 1]. Up to
+     # config_default v5.1 it did here: the two-harmonic seasonal envelope went
+     # negative in the low season for 29 of 40 countries, so a handful of hazard
+     # cells were negative. Since v6.0 est_seasonal_dynamics() keeps
+     # min(1 + f(t)) >= 0.1 and both builders stop() otherwise, so every hazard
+     # is in [0, 1]; asserted, so a regression to a negative envelope says so.
+     expect_no_warning(
      expected <- MOSAIC::calc_spatial_hazard(
           beta = beta_jt_hum,
           tau = baseline$tau_i,
@@ -472,8 +472,7 @@ testthat::test_that("spatial hazard calculations", {
           I2 = model$results$Iasym,
           time_names = NULL,
           location_names = NULL
-     ),
-     "spatial hazard are out of bounds")
+     ))
 
      actual <- model$results$spatial_hazard
 
