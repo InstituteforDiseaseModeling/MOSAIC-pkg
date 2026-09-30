@@ -17,6 +17,13 @@ This function identifies and characterizes epidemic peaks in cholera incidence
 time series data for all countries with available data. It detects peak timing,
 magnitude, and duration of epidemic periods.
 }
+\details{
+Peaks are detected on observed weeks only: days whose
+\code{disaggregation_method} is set and is not \code{observed} or
+\code{documented_zero} (AI \code{fourier_*} reconstructions,
+\code{assumed_zero}) are treated as missing, and a detected peak whose
+\code{[peak_start, peak_stop]} window is more than half imputed days is dropped.
+}
 \examples{
 \dontrun{
 # Set up paths and run epidemic peak estimation

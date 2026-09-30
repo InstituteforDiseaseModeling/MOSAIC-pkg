@@ -66,6 +66,9 @@ plot_epidemic_peaks <- function(PATHS) {
   }
 
   cholera_data <- read.csv(data_file, stringsAsFactors = FALSE)
+  # Imputed weeks are blanked exactly as est_epidemic_peaks() blanks them.
+  if ("disaggregation_method" %in% names(cholera_data))
+    cholera_data$cases[.epidemic_peaks_imputed_day(cholera_data$disaggregation_method)] <- NA
 
   # Get unique locations from peaks data
   locations <- unique(peaks_data$iso_code)
@@ -348,3 +351,17 @@ plot_epidemic_peaks <- function(PATHS) {
     mean(x[max(1L, i - half):min(n, i + half)], na.rm = TRUE)
   }, numeric(1L))
 }
+
+# Days whose surveillance week was not observed: disaggregation_method set and
+# not `observed` / `documented_zero` (AI `fourier_*` reconstructions,
+# `assumed_zero`). Direct WHO/JHU/SUPP rows carry NA and count as observed.
+# est_epidemic_peaks() detects peaks on observed weeks only, and
+# plot_epidemic_peaks() draws the same series.
+.epidemic_peaks_imputed_day <- function(disaggregation_method) {
+  !is.na(disaggregation_method) &
+    !(disaggregation_method %in% c("observed", "documented_zero"))
+}
+
+# Largest share of a detected peak's [peak_start, peak_stop] window that may be
+# imputed days; a peak above it rests mainly on reconstructed data and is dropped.
+.EPIDEMIC_PEAKS_MAX_IMPUTED_FRACTION <- 0.5
