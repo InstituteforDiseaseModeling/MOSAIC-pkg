@@ -42,8 +42,9 @@ date_start <- if (nzchar(.env_ds)) as.Date(.env_ds) else as.Date(config_default$
 #
 # WHY BREADTH, NOT VOLUME: the criterion deliberately optimizes COVERAGE (how many
 # countries get seeded from REAL surveillance vs the no-data Beta fallback priors), NOT
-# case intensity. est_initial_E_I (R/est_initial_E_I.R:158-164) back-calculates per-
-# country E/I from case VOLUME in [t0-21d, t0); choosing ic_t0 to maximize that volume
+# case intensity. est_initial_E_I() back-calculates per-country E/I from case VOLUME
+# in [t0 - lookback_days, t0) -- lookback_days = 3 in the call below, not the
+# function's default of 21; choosing ic_t0 to maximize that volume
 # was considered and REJECTED because it would pull ic_t0 toward an outbreak PEAK and
 # systematically OVER-SEED E/I in the high-burden countries (an inflated-IC bias that
 # the calibration would then have to absorb). Maximizing breadth keeps the per-country
@@ -117,10 +118,16 @@ if (date_start == as.Date("2023-01-01") && ic_t0 != as.Date("2023-02-01"))
 message(sprintf("IC seeding epoch ic_t0 = %s  (%d active-case countries; date_start = %s)",
                 format(ic_t0), max(.ic_nactive), format(date_start)))
 
+# Annual population by country-year from the maintained UN WPP output of
+# process_UN_demographics_data() (1967-2100, estimates + medium projection).
+# Replaces demographics_mosaic_countries_2000_2024_annual.csv, which no R/
+# function produces; its `population` column is identical to total_population
+# for every country-year in 2000-2024.
 dem_annual <- read.csv(
-     file.path(PATHS$DATA_PROCESSED, "demographics/demographics_mosaic_countries_2000_2024_annual.csv"),
+     file.path(PATHS$DATA_PROCESSED, "demographics/UN_world_population_prospects_annual.csv"),
      stringsAsFactors = FALSE
 )
+dem_annual$population <- dem_annual$total_population
 
 priors_default <- list(
      metadata = list(
@@ -136,6 +143,18 @@ priors_default <- list(
      parameters_global = list(),    # Single parameters used by all locations
      parameters_location = list()   # Location specific parameters
 )
+
+# The changelog head "vX.Y (YYYY-MM-DD)" is hand-written; metadata$date is the
+# build day. Flag a mismatch so provenance keyed on metadata$date is not silently
+# a day off (priors v16.1 shipped date 2026-09-28 under a 2026-09-29 head).
+.changelog_date <- sub("^.*? v[0-9.]+ \\(([0-9]{4}-[0-9]{2}-[0-9]{2})\\).*$", "\\1",
+                       priors_default$metadata$description, perl = TRUE)
+if (grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", .changelog_date) &&
+    .changelog_date != as.character(priors_default$metadata$date)) {
+     warning("priors_default changelog head is dated ", .changelog_date,
+             " but metadata$date (build day) is ", priors_default$metadata$date,
+             "; update the version heading.")
+}
 
 #----------------------------------------
 # Global parameters in alphabetical order
@@ -271,22 +290,37 @@ priors_default$parameters_global$iota <- list(
 
 # No variance inflation for iota (factor = 1)
 
-# kappa - Concentration of V. cholerae which leads to 50% infectious dose
+# kappa - Half-saturation dose of the environmental dose-response D/(kappa + D).
+# Since MOSAIC v0.89.0 the engine's dose is the PER-CAPITA load D = W/N (cells
+# per resident, sim_components.R EnvToHuman), not a water concentration; the
+# volunteer ID50 data below are the literature anchor for its scale.
 # UPDATED v0.28.16: Derived from est_kappa_prior() meta-analysis of 13 literature
 # sources (Hornick 1971, Cash 1974, Levine 1981/1988, Tacket 1999, QMRA synthesis,
-# expert reviews). Weighted lognormal fit anchored on 8 buffered-volunteer-challenge
-# studies (weight=1) with expert reviews downweighted (0 to 0.5 weight).
-# Result: LN(meanlog=11.92, sdlog=1.83), median=1.51e5 CFU, 95% CI [4.15e3, 5.46e6].
+# expert reviews). Weighted lognormal fit anchored on the 5 weight-1
+# buffered-volunteer-challenge rows (Hornick buffered, Cash, Levine 1981,
+# Levine 1988, Tacket) with expert reviews downweighted (0 to 0.5 weight).
+# Result at the current table: LN(meanlog ~11.77, sdlog ~1.82), median ~1.3e5;
+# the exact values are in est_kappa_prior()$fit / model/input/param_kappa_prior.csv.
 kappa_prior_fit <- MOSAIC::est_kappa_prior(PATHS = PATHS)
 priors_default$parameters_global$kappa <- list(
-     description = "Concentration of V. cholerae for 50% infectious dose (meta-analyzed from 13 literature sources)",
+     description = "Half-saturation dose of the environmental dose-response, applied to the per-capita environmental load W/N (anchored on volunteer ID50 data meta-analysed from 13 literature sources)",
      distribution = "lognormal",
      parameters = list(meanlog = kappa_prior_fit$fit$meanlog, sdlog = kappa_prior_fit$fit$sdlog)
 )
 
 
-# load param_gravity_model.csv and get gamma distributions that have mode equal to the values in the .csv
-param_gravity <- read.csv(file.path(PATHS$MODEL_INPUT, "param_gravity_model.csv"))
+# Gravity kernel: prefer the BLEND fit (air + raked overland), matching what
+# data-raw/make_config_default.R writes into config_default$mobility_gamma /
+# $mobility_omega. These Gammas are MODE-matched (shape = mode*rate + 1), so the
+# config point estimate is the prior MODE, not its mean (mean = mode + 1/rate).
+# Leaving this on the air-only file left the prior mode at the air values
+# (1.3622 / 0.6164) while the config shipped the blend (1.8997 / 0.6271).
+# NOTE tau_i deliberately does NOT follow the blend here -- it is overland-only
+# (see the tau_overland_file block below). Kernel = blend, departure = overland.
+.grav_f <- file.path(PATHS$MODEL_INPUT, "param_gravity_model_blend.csv")
+if (!file.exists(.grav_f)) .grav_f <- file.path(PATHS$MODEL_INPUT, "param_gravity_model.csv")
+message("priors gravity source: ", basename(.grav_f))
+param_gravity <- read.csv(.grav_f)
 mobility_gamma_mode <- param_gravity$parameter_value[param_gravity$variable_name == "mobility_gamma"]
 mobility_omega_mode <- param_gravity$parameter_value[param_gravity$variable_name == "mobility_omega"]
 
@@ -678,10 +712,15 @@ priors_default$parameters_global$zeta_2 <- list(
 # zeta_ratio relative to the modelling-convention + household-transmission
 # evidence (Smith 2026 ~1.6x, Chao/Finger ~10, etc.). The direct channel
 # takes Smith 2026, Nelson 2009 paired, Chao 2011, Finger 2018, Sugimoto
-# 2014, etc. as literature anchors (median 763, sdlog 4.807). See
-# plan_zeta_priors_implementation.md Section 7.2 (Table 7.A).
-# zeta_2 is derived: zeta_2 = zeta_1 / zeta_ratio. Guarantees zeta_1 > zeta_2
-# algebraically when zeta_ratio > 1.
+# 2014, etc. as literature anchors (priors v16.1: meanlog 4.31 = median ~74,
+# sdlog 4.39; the fitted values are in model/input/param_zeta_ratio_prior.csv).
+# See plan_zeta_priors_implementation.md Section 7.2 (Table 7.A).
+# est_zeta_ratio_prior()$fit IS the direct channel (since v0.99.11; before that
+# $fit and the CSV carried the combined channel while this block shipped A).
+# zeta_2 is derived: zeta_2 = zeta_1 / zeta_ratio, so zeta_1 > zeta_2 only for
+# draws with zeta_ratio > 1. The direct channel puts ~16% of its mass below 1
+# ($fit$p_below_1), inherited from the Smith 2026 household OR interval
+# (0.11-3.23); the draw is not truncated.
 zeta_ratio_res <- MOSAIC::est_zeta_ratio_prior(
      PATHS,
      zeta_1_fit = zeta_1_res,   # full return list; .extract_fit() unwraps
@@ -690,8 +729,8 @@ zeta_ratio_res <- MOSAIC::est_zeta_ratio_prior(
 priors_default$parameters_global$zeta_ratio <- list(
      description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); direct literature-anchor channel (Smith 2026, Chao 2011, Finger 2018, Nelson 2009 paired, etc.)",
      distribution = "lognormal",
-     parameters = list(meanlog = zeta_ratio_res$diagnostics$fit_direct$meanlog,
-                       sdlog   = zeta_ratio_res$diagnostics$fit_direct$sdlog)
+     parameters = list(meanlog = zeta_ratio_res$fit$meanlog,
+                       sdlog   = zeta_ratio_res$fit$sdlog)
 )
 
 # delta_reporting_cases - Symptom-onset-to-case reporting delay
@@ -854,8 +893,12 @@ for (iso in j) {
 
 
 
-# tau_i - Country-level travel probabilities
-# Beta distribution with parameters loaded from param_tau_departure.csv
+# tau_i - Daily departure probability (per-day away fraction; 1 tick = 1 day).
+# Lognormal, from the evidence-anchored OVERLAND departure prior in
+# param_tau_departure_overland.csv (est_overland_tau_prior(), E3 evidence;
+# tau_daily = tau_weekly / 7). The air-derived Beta prior from
+# param_tau_departure.csv is only the fallback when that file is absent or
+# incomplete (see the tau_overland_file block below).
 
 tau_uncertainty_factor <- 0.001  # Increase tau uncertainty
 
@@ -865,8 +908,43 @@ priors_default$parameters_location$tau_i <- list(
 )
 
 # Load tau parameters from file
+# Overland departure prior (lognormal, evidence-anchored) takes precedence.
+# NOTE tau_uncertainty_factor is deliberately NOT applied to it: that factor
+# exists to widen a Beta fitted to huge OAG counts, and the overland prior's
+# width is specified directly as a 95% span. Applying both would be double
+# counting, and the Beta route's 0.001 factor is what puts the prior mode at
+# ZERO departure for 31 of 40 countries.
+tau_overland_file <- file.path(PATHS$MODEL_INPUT, "param_tau_departure_overland.csv")
+tau_used_overland <- FALSE
+if (file.exists(tau_overland_file)) {
+     tau_ov <- read.csv(tau_overland_file, stringsAsFactors = FALSE)
+     if (all(c("iso_code", "meanlog", "sdlog") %in% names(tau_ov)) &&
+         !all(is.na(tau_ov$meanlog))) {
+          n_set <- 0L
+          for (iso in j) {
+               r <- tau_ov[tau_ov$iso_code == iso, , drop = FALSE]
+               if (nrow(r) == 1L && is.finite(r$meanlog) && is.finite(r$sdlog)) {
+                    priors_default$parameters_location$tau_i$location[[iso]] <- list(
+                         distribution = "lognormal",
+                         parameters = list(meanlog = r$meanlog, sdlog = r$sdlog)
+                    )
+                    n_set <- n_set + 1L
+               }
+          }
+          if (n_set == length(j)) {
+               tau_used_overland <- TRUE
+               message(sprintf("tau_i: overland LOGNORMAL prior for %d locations (median %.3g/day, 95%% span %.0fx)",
+                               n_set, stats::median(exp(tau_ov$meanlog)),
+                               stats::median(tau_ov$ci_hi / tau_ov$ci_lo)))
+          } else {
+               warning("Overland tau covered ", n_set, " of ", length(j),
+                       " locations; falling back to the air-derived Beta prior.")
+          }
+     }
+}
+
 tau_param_file <- file.path(PATHS$MODEL_INPUT, "param_tau_departure.csv")
-if (file.exists(tau_param_file)) {
+if (!tau_used_overland && file.exists(tau_param_file)) {
      param_tau <- read.csv(tau_param_file)
 
      # Extract beta parameters for each location
@@ -920,7 +998,11 @@ if (file.exists(tau_param_file)) {
           }
      }
 
-} else {
+} else if (!tau_used_overland) {
+     # NB the !tau_used_overland guard must be on BOTH branches. Putting it
+     # only on the `if` sends control into this `else` when the overland
+     # prior succeeded, silently overwriting all 40 lognormals with Beta
+     # defaults -- the message reports success and the object says otherwise.
      warning("tau parameter file not found. Using default values.")
      # Set default values for all locations with uncertainty adjustment
      for (iso in j) {
@@ -1080,6 +1162,26 @@ for (param in names(seasonality_csv_lookup)) {
      }
 }
 
+# The engine uses the seasonal coefficients as a multiplicative envelope,
+# beta_j0_hum * (1 + f(t)), and clamps a negative rate to zero, so at the prior
+# means 1 + f(t) must stay positive over the year. est_seasonal_dynamics()
+# (v0.99.11) shrinks the case-fit amplitude to keep min(1 + f) >= 0.1
+# (Keeling & Rohani 2008 section 5.2: |beta_1| < 1 for multiplicative forcing).
+.season_min_envelope <- vapply(j, function(iso) {
+     cf <- vapply(names(seasonality_csv_lookup), function(k)
+          priors_default$parameters_location[[k]]$location[[iso]]$parameters$mean,
+          numeric(1))
+     t <- seq_len(365L)
+     1 + min(cf[["a_1_j"]] * cos(2 * pi * t / 365) + cf[["b_1_j"]] * sin(2 * pi * t / 365) +
+             cf[["a_2_j"]] * cos(4 * pi * t / 365) + cf[["b_2_j"]] * sin(4 * pi * t / 365))
+}, numeric(1))
+if (any(.season_min_envelope <= 0)) {
+     stop("Seasonal prior means give a non-positive transmission envelope min(1 + f(t)) for: ",
+          paste(sprintf("%s (%.2f)", j[.season_min_envelope <= 0],
+                        .season_min_envelope[.season_min_envelope <= 0]), collapse = ", "),
+          ". Re-run est_seasonal_dynamics() (>= v0.99.11) to rebuild param_seasonal_dynamics.csv.")
+}
+
 
 
 #---------------------------------------------------
@@ -1236,8 +1338,9 @@ for (iso in j) {
 
 
 
-# V1/V2 initial conditions are data-driven elsewhere in the pipeline since v0.22.11;
-# est_initial_V1_V2() override removed. Default Beta priors above are retained.
+# V1/V2 initial conditions: the fallback Beta priors above are overridden per
+# country by est_initial_V1_V2() in the v0.28.5 block earlier in this script
+# (OCV campaign history, effective coverage phi * doses since v0.99.11).
 
 
 
@@ -1351,6 +1454,13 @@ initial_conditions_E_I <- est_initial_E_I(
 
 # Countries showing systematic overestimation of initial conditions
 # Apply scaling factors to reduce mean E and I while preserving relative uncertainty
+#
+# RE-DERIVE AT THE NEXT REBUILD: these factors were hand-tuned against the
+# pre-v0.99.11 est_initial_E_I(), whose E was built from already-reported cases,
+# used hardcoded rho ~ U(0.2, 0.7) and dropped zero draws before averaging. The
+# v0.99.11 estimator (E in balance with the onset rate, I from observed onsets,
+# model rho / chi_endemic / delta_reporting_cases priors, zero draws kept) moves
+# every country's E/I mean, so the factors below no longer mean what they did.
 
 adjustment_factors_E_I <- list(
      AGO = 0.01,
@@ -1717,6 +1827,18 @@ cfr_est <- read.csv(cfr_est_file, stringsAsFactors = FALSE)
 cfr_sum <- readRDS(cfr_sum_file)
 if (!is.numeric(cfr_sum$sigma) || !is.finite(cfr_sum$sigma) || cfr_sum$sigma <= 0)
      stop("cfr_model_summary.rds carries no positive country-year SD (sigma).")
+# The shipped mu_jt (priors v16.1 / config v5.1) was built from an
+# est_CFR_hierarchical() run at its DEFAULTS, min_cases = 1 and k_year = 12
+# (recorded in cfr_model_summary.rds). update_mosaic_data() step 2B has passed
+# min_cases = 3, k_year = 15, so a pipeline refresh would silently change the
+# CFR centres; flag any CSV not produced with the defaults.
+if (!isTRUE(all.equal(c(cfr_sum$min_cases_threshold, cfr_sum$k_year), c(1, 12)))) {
+     warning(sprintf(paste0("cfr_hierarchical_estimates.csv was built with min_cases = %s, ",
+                            "k_year = %s; the shipped mu_jt used the est_CFR_hierarchical() ",
+                            "defaults (1, 12). Confirm the change is intended before shipping."),
+                     format(cfr_sum$min_cases_threshold), format(cfr_sum$k_year)),
+             immediate. = TRUE)
+}
 mu_jt_years_min <- 2010L   # the earliest supported build start is 2015 (psi floor 2010)
 priors_default$mu_jt <- MOSAIC:::.mosaic_mu_jt_prior(cfr_est, location_name = j,
                                                      sd_year = cfr_sum$sigma, tau = cfr_sum$tau,
@@ -1762,8 +1884,9 @@ chi_val    <- config_default$chi_endemic
 gamma1_val <- config_default$gamma_1
 
 # Compute per-country median weekly incidence per 100k during outbreak-positive weeks.
-# Cap the population join year at the maximum available year in demographics (2024)
-# to handle surveillance records in 2025 that have no matching population row.
+# Cap the population join year at the maximum available year in demographics so a
+# surveillance record past the demographic horizon still gets a population row
+# (the UN WPP file runs to 2100, so the cap only binds for a truncated file).
 dem_max_year  <- max(dem_annual$year)
 
 # Exclude AI-mined rows from the epidemic_threshold derivation, for parity with
