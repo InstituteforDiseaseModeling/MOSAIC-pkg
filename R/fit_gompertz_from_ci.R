@@ -1,12 +1,26 @@
 #' Fit Gompertz Distribution from Mode and Probability Interval
 #'
 #' This function estimates the parameters of a Gompertz distribution on [0, Inf)
-#' with pdf f(x; b, eta) = b * eta * exp(b*x) * exp(-eta*(exp(b*x) - 1)),
-#' given a target interior mode and a two-sided interval (default: central 95 percent).
-#' The interior mode condition is enforced by eta = b * exp(b*mode), which holds
-#' exactly for the Gompertz mode when eta > b.
+#' with pdf f(x; b, eta) = b * eta * exp(b*x) * exp(-eta*(exp(b*x) - 1))
+#' so that its quantiles at \code{probs} match a target interval (default: the
+#' central 95 percent).
 #'
-#' @param mode_val Numeric greater than 0. Target mode of the distribution (very near zero is allowed).
+#' The two quantiles determine the distribution: the ratio
+#' \eqn{Q(p_2)/Q(p_1) = \log(1 + c_2/\eta) / \log(1 + c_1/\eta)}, with
+#' \eqn{c_k = -\log(1 - p_k)}, depends on \eqn{\eta} alone and increases
+#' monotonically from 1 (\eqn{\eta \to 0}) to \eqn{c_2/c_1} (\eqn{\eta \to \infty},
+#' the exponential limit; about 146 for the central 95 percent), so \eqn{\eta} is
+#' solved from the target ratio and \eqn{b} from the scale. A ratio beyond that
+#' limit (or \code{ci_lower = 0}) is matched as closely as the family allows,
+#' anchored on \code{ci_upper}.
+#'
+#' Setting the derivative of log f to zero gives the mode x* = -log(eta) / b,
+#' which is interior only when eta < 1; for eta >= 1 the density is monotone
+#' decreasing and the mode is 0. \code{mode_val} is validated but does not
+#' constrain the fit (a sample-based mode near zero is poorly determined); the
+#' mode of the fitted density is returned as \code{fitted_mode}.
+#'
+#' @param mode_val Numeric >= 0 inside the interval. Reference mode, checked against the interval and reported next to the fitted mode; it does not constrain the fit.
 #' @param ci_lower Numeric greater than or equal to 0. Lower bound of the target interval (e.g., 2.5 percent quantile).
 #' @param ci_upper Numeric greater than ci_lower. Upper bound of the target interval (e.g., 97.5 percent quantile).
 #' @param probs Numeric length-2 vector in (0, 1). Probability levels for the target bounds. Defaults to c(0.025, 0.975).
@@ -17,7 +31,7 @@
 #'   \item b: Gompertz shape parameter
 #'   \item eta: Gompertz rate parameter
 #'   \item f0: Density at zero (finite and positive)
-#'   \item fitted_mode: The implied mode (matches mode_val up to numeric error)
+#'   \item fitted_mode: The mode of the fitted density, -log(eta)/b (0 when eta >= 1)
 #'   \item fitted_ci: Named vector of fitted quantiles at probs
 #'   \item fitted_mean: Numerical estimate of the expected value via quadrature
 #'   \item fitted_sd: Numerical estimate of the standard deviation via quadrature
@@ -76,32 +90,27 @@ fit_gompertz_from_ci <- function(mode_val,
           ifelse(x < 0, 0, b * eta * exp(b * x) * exp(-eta * (exp(b * x) - 1)))
      }
 
-     # SSE objective over log(b) to avoid numeric pathologies
-     obj_t <- function(t) {
-          b <- exp(t)
-          # eta = b * exp(b * mode) enforces interior mode at mode_val
-          # use expm1 for exp(b * mode) - 1 when small, but we need only exp(...)
-          bm <- b * mode_val
-          if (!is.finite(bm)) return(1e50)
-          eta <- b * exp(bm)
-          if (!is.finite(eta) || eta <= 0) return(1e50)
-
-          # compute quantiles at probs
-          # note: quantities remain well-behaved for very small/large b using log1p
-          xhat <- (1 / b) * log1p((-log1p(-probs)) / eta)
-          if (any(!is.finite(xhat))) return(1e50)
-
-          sum((xhat - targets)^2)
+     # Solve eta from the quantile ratio (a function of eta alone, increasing
+     # from 1 to c2/c1), then b from the scale of the interval.
+     c_p <- -log1p(-probs)
+     ratio_of <- function(eta) log1p(c_p[2] / eta) / log1p(c_p[1] / eta)
+     eta_max <- 1e8
+     target_ratio <- if (targets[1] > 0) targets[2] / targets[1] else Inf
+     if (target_ratio >= ratio_of(eta_max)) {
+          eta_hat <- eta_max
+          b_hat <- log1p(c_p[2] / eta_hat) / targets[2]
+     } else if (target_ratio <= ratio_of(1e-12)) {
+          eta_hat <- 1e-12
+          b_hat <- log1p(c_p[1] / eta_hat) / targets[1]
+     } else {
+          root <- stats::uniroot(function(le) ratio_of(exp(le)) - target_ratio,
+                                 interval = c(log(1e-12), log(eta_max)), tol = 1e-12)
+          eta_hat <- exp(root$root)
+          b_hat <- log1p(c_p[1] / eta_hat) / targets[1]
      }
 
-     # ---- optimize over log(b) ----
-     opt <- optimize(f = obj_t, interval = c(-30, 30))
-     t_hat <- opt$minimum
-     b_hat <- exp(t_hat)
-     eta_hat <- b_hat * exp(b_hat * mode_val)
-
      # ---- fitted summaries ----
-     fitted_mode <- (1 / b_hat) * log(eta_hat / b_hat) # should equal mode_val numerically
+     fitted_mode <- if (eta_hat < 1) -log(eta_hat) / b_hat else 0
      fitted_ci_vals <- qgompertz_(probs, b_hat, eta_hat)
 
      names(fitted_ci_vals) <- if (length(probs) == 2L) {

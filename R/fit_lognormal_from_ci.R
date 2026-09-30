@@ -27,8 +27,19 @@
 #'   \item Variance = (exp(σ²) - 1) * exp(2μ + σ²)
 #' }
 #'
-#' The moment matching method estimates parameters from the mode and CI width
-#' on the log scale, then adjusts for the lognormal relationship.
+#' The moment matching method (default) matches the 95% CI exactly on the
+#' log scale: a lognormal is fully determined by two quantiles, so
+#' \code{meanlog} is the midpoint of \code{log(ci_lower)} and
+#' \code{log(ci_upper)} and \code{sdlog} is their distance divided by
+#' \code{2 * qnorm(0.975)}. \code{mode_val} is validated but does not move
+#' the fit; the implied mode \code{exp(meanlog - sdlog^2)} is returned as
+#' \code{mode}. Anchoring on a sample-based mode (for example a KDE mode of
+#' posterior draws) and then adding \code{sdlog^2} shifted wide CIs upward by
+#' orders of magnitude, which is why the CI is authoritative here.
+#'
+#' The optimization method fits \code{meanlog} and \code{sdlog} jointly to the
+#' mode and both quantiles, with all errors measured on the log scale and the
+#' mode weighted 10x; use it when \code{mode_val} is a trusted anchor.
 #'
 #' @examples
 #' # Example 1: Fit lognormal distribution
@@ -62,77 +73,31 @@ fit_lognormal_from_ci <- function(mode_val, ci_lower, ci_upper,
   }
 
   if (method == "moment_matching") {
-    # Method 1: Moment matching approach
-    # For lognormal: mode = exp(meanlog - sdlog^2)
-    # Therefore: meanlog = log(mode) + sdlog^2
-
-    # Work on log scale
-    log_mode <- log(mode_val)
-    log_ci_lower <- log(ci_lower)
-    log_ci_upper <- log(ci_upper)
-
-    # Estimate sdlog from CI width on log scale
-    # On log scale, 95% CI is approximately meanlog ± 1.96*sdlog
-    sdlog_est <- (log_ci_upper - log_ci_lower) / 3.92
-
-    # Calculate meanlog from mode relationship
-    # mode = exp(meanlog - sdlog^2)
-    # log(mode) = meanlog - sdlog^2
-    # meanlog = log(mode) + sdlog^2
-    meanlog_est <- log_mode + sdlog_est^2
-
-    # Refine estimate by checking fitted quantiles
-    fitted_lower <- qlnorm(0.025, meanlog = meanlog_est, sdlog = sdlog_est)
-    fitted_upper <- qlnorm(0.975, meanlog = meanlog_est, sdlog = sdlog_est)
-
-    # Adjust if needed
-    if (fitted_lower > ci_lower * 1.1 || fitted_upper < ci_upper * 0.9) {
-      # CI too narrow, increase sdlog
-      sdlog_est <- sdlog_est * 1.1
-      meanlog_est <- log_mode + sdlog_est^2
-    } else if (fitted_lower < ci_lower * 0.9 || fitted_upper > ci_upper * 1.1) {
-      # CI too wide, decrease sdlog
-      sdlog_est <- sdlog_est * 0.9
-      meanlog_est <- log_mode + sdlog_est^2
-    }
-
-    meanlog_val <- meanlog_est
-    sdlog_val <- sdlog_est
+    # Two quantiles determine a lognormal exactly (log X ~ Normal).
+    z <- stats::qnorm(0.975)
+    meanlog_val <- (log(ci_lower) + log(ci_upper)) / 2
+    sdlog_val <- (log(ci_upper) - log(ci_lower)) / (2 * z)
 
   } else if (method == "optimization") {
-    # Method 2: Optimization to match mode and quantiles
+    # Joint fit to mode and quantiles, all on the log scale (relative errors).
+    log_targets <- log(c(ci_lower, ci_upper))
+    log_mode <- log(mode_val)
 
     objective <- function(params) {
       meanlog <- params[1]
-      sdlog <- params[2]
-
-      if (sdlog <= 0) return(1e10)
-
-      # Check if mode matches
-      fitted_mode <- exp(meanlog - sdlog^2)
-
-      # Get fitted quantiles
-      fitted_lower <- qlnorm(0.025, meanlog = meanlog, sdlog = sdlog)
-      fitted_upper <- qlnorm(0.975, meanlog = meanlog, sdlog = sdlog)
-
-      # Calculate error (use relative error for lognormal)
-      error_mode <- ((fitted_mode - mode_val) / mode_val)^2
-      error_lower <- ((fitted_lower - ci_lower) / ci_lower)^2
-      error_upper <- ((fitted_upper - ci_upper) / ci_upper)^2
-
-      return(10 * error_mode + error_lower + error_upper)
+      sdlog <- exp(params[2])
+      q <- stats::qnorm(c(0.025, 0.975), mean = meanlog, sd = sdlog)
+      10 * ((meanlog - sdlog^2) - log_mode)^2 + sum((q - log_targets)^2)
     }
 
-    # Initial guess
-    init_sdlog <- (log(ci_upper) - log(ci_lower)) / 3.92
-    init_meanlog <- log(mode_val) + init_sdlog^2
-
-    # Optimize
-    result <- optim(c(init_meanlog, init_sdlog), objective, method = "L-BFGS-B",
-                   lower = c(-Inf, 1e-6))
+    init_sdlog <- (log(ci_upper) - log(ci_lower)) / (2 * stats::qnorm(0.975))
+    init_meanlog <- (log(ci_lower) + log(ci_upper)) / 2
+    result <- stats::optim(c(init_meanlog, log(init_sdlog)), objective,
+                           method = "Nelder-Mead",
+                           control = list(maxit = 2000, reltol = 1e-12))
 
     meanlog_val <- result$par[1]
-    sdlog_val <- result$par[2]
+    sdlog_val <- exp(result$par[2])
 
     if (verbose) {
       message(sprintf("Optimization converged: %s",

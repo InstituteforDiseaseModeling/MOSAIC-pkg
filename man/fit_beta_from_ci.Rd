@@ -40,6 +40,20 @@ A list containing:
 This function calculates the shape parameters (alpha and beta) of a beta distribution
 that best matches a given mode and 95\% confidence intervals.
 }
+\details{
+\code{"moment_matching"} (default) keeps the mode exact: every Beta with
+both shapes above 1 and mode \eqn{m} is \eqn{\mathrm{Beta}(1 + mk, 1 + (1 - m)k)}
+for some concentration \eqn{k > 0}, and \eqn{k} is chosen to minimise the
+squared error of the fitted 2.5\% and 97.5\% quantiles against the CI on the
+logit scale. Logit-scale errors are relative errors for small proportions, so
+a CI around 1e-6 is matched as closely as one around 0.5. When the CI is
+wider than any unimodal Beta with that mode allows, the widest achievable
+interval is returned.
+
+\code{"optimization"} fits both shapes freely to the mode and the two
+quantiles (all on the logit scale, mode weighted 100x), so the mode is matched
+closely but not exactly.
+}
 \examples{
 # Example 1: Fit beta for phi_1 (vaccine effectiveness)
 result <- fit_beta_from_ci(mode_val = 0.788, 

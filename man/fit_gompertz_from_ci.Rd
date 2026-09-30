@@ -13,7 +13,7 @@ fit_gompertz_from_ci(
 )
 }
 \arguments{
-\item{mode_val}{Numeric greater than 0. Target mode of the distribution (very near zero is allowed).}
+\item{mode_val}{Numeric >= 0 inside the interval. Reference mode, checked against the interval and reported next to the fitted mode; it does not constrain the fit.}
 
 \item{ci_lower}{Numeric greater than or equal to 0. Lower bound of the target interval (e.g., 2.5 percent quantile).}
 
@@ -29,7 +29,7 @@ A list containing:
 \item b: Gompertz shape parameter
 \item eta: Gompertz rate parameter
 \item f0: Density at zero (finite and positive)
-\item fitted_mode: The implied mode (matches mode_val up to numeric error)
+\item fitted_mode: The mode of the fitted density, -log(eta)/b (0 when eta >= 1)
 \item fitted_ci: Named vector of fitted quantiles at probs
 \item fitted_mean: Numerical estimate of the expected value via quadrature
 \item fitted_sd: Numerical estimate of the standard deviation via quadrature
@@ -40,10 +40,25 @@ A list containing:
 }
 \description{
 This function estimates the parameters of a Gompertz distribution on [0, Inf)
-with pdf f(x; b, eta) = b * eta * exp(b\emph{x) * exp(-eta}(exp(b\emph{x) - 1)),
-given a target interior mode and a two-sided interval (default: central 95 percent).
-The interior mode condition is enforced by eta = b * exp(b}mode), which holds
-exactly for the Gompertz mode when eta > b.
+with pdf f(x; b, eta) = b * eta * exp(b\emph{x) * exp(-eta}(exp(b*x) - 1))
+so that its quantiles at \code{probs} match a target interval (default: the
+central 95 percent).
+}
+\details{
+The two quantiles determine the distribution: the ratio
+\eqn{Q(p_2)/Q(p_1) = \log(1 + c_2/\eta) / \log(1 + c_1/\eta)}, with
+\eqn{c_k = -\log(1 - p_k)}, depends on \eqn{\eta} alone and increases
+monotonically from 1 (\eqn{\eta \to 0}) to \eqn{c_2/c_1} (\eqn{\eta \to \infty},
+the exponential limit; about 146 for the central 95 percent), so \eqn{\eta} is
+solved from the target ratio and \eqn{b} from the scale. A ratio beyond that
+limit (or \code{ci_lower = 0}) is matched as closely as the family allows,
+anchored on \code{ci_upper}.
+
+Setting the derivative of log f to zero gives the mode x* = -log(eta) / b,
+which is interior only when eta < 1; for eta >= 1 the density is monotone
+decreasing and the mode is 0. \code{mode_val} is validated but does not
+constrain the fit (a sample-based mode near zero is poorly determined); the
+mode of the fitted density is returned as \code{fitted_mode}.
 }
 \examples{
 # Example: Fit Gompertz for small positive quantity
