@@ -3496,7 +3496,7 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param io List of I/O settings (output format). Default is:
 #'   \itemize{
-#'     \item \code{format}: Output format, "parquet" or "csv" (default: "parquet")
+#'     \item \code{format}: Output format; only "parquet" is supported ("csv" is coerced to "parquet" with a warning)
 #'     \item \code{compression}: Compression algorithm (default: "zstd")
 #'     \item \code{compression_level}: Compression level (default: 3L)
 #'     \item \code{persist_ensemble_arrays}: Retain the dense 4-D

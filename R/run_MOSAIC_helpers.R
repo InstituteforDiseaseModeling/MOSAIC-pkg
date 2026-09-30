@@ -651,17 +651,30 @@
   }
 
   # IO VALIDATION
-  .mosaic_validate_io(def$io)
+  def$io <- .mosaic_validate_io(def$io)
 
   def
 }
 
 #' Validate I/O Settings
+#'
+#' Every shard, combined sample file and resume scan is parquet, so parquet is
+#' the only output format. \code{format = "csv"} (accepted before, and then
+#' silently written as parquet) is coerced to \code{"parquet"} with a warning.
+#'
+#' @param io The merged \code{control$io} list.
+#' @return \code{io}, with \code{format} coerced to \code{"parquet"} if needed.
 #' @noRd
 .mosaic_validate_io <- function(io) {
   # Format check
-  if (!io$format %in% c("csv", "parquet")) {
-    stop("io$format must be 'csv' or 'parquet', got: ", io$format, call. = FALSE)
+  if (identical(io$format, "csv")) {
+    warning("io$format = 'csv' is not supported: calibration output is always parquet ",
+            "(shards, samples.parquet and resume all read parquet). Using 'parquet'.",
+            call. = FALSE, immediate. = TRUE)
+    io$format <- "parquet"
+  }
+  if (!identical(io$format, "parquet")) {
+    stop("io$format must be 'parquet', got: ", paste(io$format, collapse = ", "), call. = FALSE)
   }
 
   # Compression check
@@ -682,14 +695,7 @@
     }
   }
 
-  # Warning for suboptimal choices
-  if (io$format == "csv" && io$compression == "none") {
-    warning("CSV without compression is 2-3x larger and 6-30x slower than parquet.\n",
-            "Consider using mosaic_io_presets('default') for production runs.",
-            call. = FALSE, immediate. = TRUE)
-  }
-
-  invisible(TRUE)
+  invisible(io)
 }
 
 #' Validate Sampling Arguments
