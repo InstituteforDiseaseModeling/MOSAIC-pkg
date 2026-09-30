@@ -2790,27 +2790,21 @@ run_MOSAIC <- function(config,
   # (log-scale MAE) to the ensemble CENTRAL trajectory (mean or median per
   # central_method). Computing here ensures it always reflects the FINAL ensemble
   # (optimized when optimize_subset=TRUE, candidate otherwise), using the correct
-  # central series and the matching seed vector. The distance is cases-only by
-  # design (a joint cases+deaths distance is a future refinement).
+  # central series and the matching seed vector. The distance pools every
+  # location and every scored time step (.mosaic_medoid_distances()), so a
+  # multi-location run is not represented by its first location alone. It is
+  # cases-only by design (a joint cases+deaths distance is a future refinement).
 
   medoid_seed_sim <- NULL
 
   if (!is.null(ensemble)) {
     tryCatch({
-      # Aggregate stochastic runs: median over dim 4 -> [n_locs, n_times, n_params]
-      member_cases_agg <- apply(ensemble$cases_array, c(1L, 2L, 3L), stats::median)
-
-      # Log-scale MAE from each member to the ensemble central trajectory
-      # (location 1, cases). Deliberate mix: per-member stochastic spread is
-      # summarized by its MEDIAN (robust to a member's stochastic outliers),
-      # while the ensemble TARGET is the canonical central series (mean by
-      # default) so the chosen representative member tracks the reported curve.
-      cen_cases_target <- .central(ensemble, "cases")
-      eps_med <- 1.0
-      medoid_distances <- vapply(seq_len(ensemble$n_param_sets), function(i) {
-        mean(abs(log(member_cases_agg[1L, , i]   + eps_med) -
-                 log(cen_cases_target[1L, ]      + eps_med)), na.rm = TRUE)
-      }, numeric(1L))
+      # Deliberate mix: per-member stochastic spread is summarized by its MEDIAN
+      # (robust to a member's stochastic outliers), while the ensemble TARGET is
+      # the canonical central series (mean by default) so the chosen
+      # representative member tracks the reported curve.
+      medoid_distances <- .mosaic_medoid_distances(
+        ensemble$cases_array, .central(ensemble, "cases"), ensemble$artifact_mask)
 
       medoid_idx <- which.min(medoid_distances)
 

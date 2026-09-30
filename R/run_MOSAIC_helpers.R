@@ -363,6 +363,38 @@
   mat
 }
 
+#' Distance from each ensemble member to the ensemble central cases trajectory
+#'
+#' The medoid is the member whose predicted cases are closest to the ensemble
+#' central series. Each member is summarised by the median over its stochastic
+#' runs; the distance is the mean absolute difference of \code{log(x + eps)}
+#' over every location and every SCORED time step (the central series is
+#' passed through \code{.mosaic_mask_central_for_scoring()} first, so the
+#' burn-in head and engine artifacts do not count). Every location therefore
+#' carries equal weight, and a single-location run reduces to the per-location
+#' log-MAE.
+#'
+#' @param cases_array Numeric array \code{[n_loc, n_time, n_param, n_stoch]}.
+#' @param central Numeric matrix \code{[n_loc, n_time]}, the central cases series.
+#' @param mask_spec Artifact-mask list (\code{ens$artifact_mask}).
+#' @param eps Offset added before the log.
+#' @return Numeric vector of length \code{n_param}.
+#' @noRd
+.mosaic_medoid_distances <- function(cases_array, central, mask_spec, eps = 1.0) {
+  d <- dim(cases_array)
+  if (length(d) != 4L) stop("cases_array must be [n_loc, n_time, n_param, n_stoch]")
+  if (is.null(dim(central))) central <- matrix(central, nrow = 1L)
+  if (!identical(as.integer(dim(central)), as.integer(d[1:2])))
+    stop("central series dimensions do not match cases_array")
+  member_agg <- apply(cases_array, c(1L, 2L, 3L), stats::median)
+  dim(member_agg) <- d[1:3]
+  target <- .mosaic_mask_central_for_scoring(central, "cases", mask_spec)
+  log_target <- log(target + eps)
+  vapply(seq_len(d[3]), function(i) {
+    mean(abs(log(member_agg[, , i] + eps) - log_target), na.rm = TRUE)
+  }, numeric(1L))
+}
+
 # =============================================================================
 # Per-channel scored-window resolution (burn-in + deaths-era start)
 # =============================================================================
