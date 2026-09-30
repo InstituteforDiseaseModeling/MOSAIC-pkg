@@ -42,6 +42,11 @@
 #'       GTFCC doses (e.g. MOZ 2017-I04: 709.1K GTFCC vs 329.6K + 354.6K WHO);
 #'       a WHO row whose request number GTFCC does not use is matched on the ICG
 #'       decision date (+/-7 days) within the dose tolerance instead
+#'     - Step 5 (repeated WHO-only rows): WHO-only rows sharing country, ICG
+#'       request and decision date are kept in campaign-date order only while
+#'       their summed doses stay within \code{(1 + dose_tolerance)} of the
+#'       request's approved total; further rows are dropped as duplicate listings
+#'       (MWI 20182: two 500,600-dose rows against 500,600 approved)
 #'   \item **Quality Assurance**:
 #'     - Validates data structure matches downstream requirements
 #'     - Ensures all required columns are present
@@ -261,6 +266,36 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      # Combine all matches
      who_matched <- who_matched_exact | who_matched_fuzzy | who_matched_date | who_matched_request
      who_unmatched <- !who_matched
+
+     # Step 5: repeated WHO-only rows of one request. When GTFCC has no row for
+     # a request, its WHO shipments cannot be absorbed by Step 4, and the WHO
+     # table sometimes lists the same shipment twice (MWI 20182: two 500,600-dose
+     # rows, decided 2018-03-02, approved 500,600, dated 2 days apart). Within an
+     # (iso, request, decision date) group, rows are kept in campaign-date order
+     # only while their summed doses stay within (1 + dose_tolerance) of the
+     # approved total; the rest are dropped as duplicates.
+     who_dup <- logical(nrow(who_data))
+     cand_rows <- which(who_unmatched & !is.na(who_key) & !is.na(who_data$decision_date))
+     if (length(cand_rows) > 1L) {
+          grp <- paste(who_data$iso_code[cand_rows], who_key[cand_rows],
+                       who_data$decision_date[cand_rows])
+          for (g in unique(grp[duplicated(grp)])) {
+               rows <- cand_rows[grp == g]
+               rows <- rows[order(who_data$campaign_date[rows])]
+               approved <- suppressWarnings(max(as.numeric(who_data$doses_approved[rows]), na.rm = TRUE))
+               if (!is.finite(approved) || approved <= 0) next
+               cum <- cumsum(ifelse(is.na(who_data$doses_shipped[rows]), 0,
+                                    who_data$doses_shipped[rows]))
+               drop <- rows[cum > (1 + dose_tolerance) * approved]
+               who_dup[drop] <- TRUE
+          }
+     }
+     if (any(who_dup)) {
+          message(glue::glue("  Step 5: dropped {sum(who_dup)} repeated WHO-only shipment(s) ",
+                             "exceeding their request's approved total ",
+                             "({format(sum(who_data$doses_shipped[who_dup], na.rm = TRUE), big.mark = ',')} doses)"))
+     }
+     who_unmatched <- who_unmatched & !who_dup
      
      message("\n==========================================")
      message("Match Summary:")

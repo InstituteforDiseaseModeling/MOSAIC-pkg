@@ -316,10 +316,11 @@ test_that("est_initial_E_I handles missing data gracefully", {
       parallel = FALSE
     )
     
-    # Should still return structure but with default near-zero values
+    # No surveillance for TCD: the near-zero template, as for observed zeros
     tcd_E <- result$parameters_location$prop_E_initial$parameters$location$TCD
-    expect_equal(tcd_E$shape1, 1.0)  # Reverted default
-    expect_equal(tcd_E$shape2, 9999)
+    expect_equal(tcd_E$shape1, 0.01)
+    expect_equal(tcd_E$shape2, 99999.99)
+    expect_identical(tcd_E$method, "no_data_default")
     expect_false(tcd_E$metadata$data_available)
   })
 })

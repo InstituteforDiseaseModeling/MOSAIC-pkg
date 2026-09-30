@@ -53,6 +53,11 @@ assigned to that campaign stay within \code{(1 + dose_tolerance)} of its
 GTFCC doses (e.g. MOZ 2017-I04: 709.1K GTFCC vs 329.6K + 354.6K WHO);
 a WHO row whose request number GTFCC does not use is matched on the ICG
 decision date (+/-7 days) within the dose tolerance instead
+- Step 5 (repeated WHO-only rows): WHO-only rows sharing country, ICG
+request and decision date are kept in campaign-date order only while
+their summed doses stay within \code{(1 + dose_tolerance)} of the
+request's approved total; further rows are dropped as duplicate listings
+(MWI 20182: two 500,600-dose rows against 500,600 approved)
 \item \strong{Quality Assurance}:
 - Validates data structure matches downstream requirements
 - Ensures all required columns are present

@@ -12,10 +12,12 @@
 #' \code{priors$parameters_global} (a missing prior is replaced by a fixed
 #' value with a warning); the parallel and sequential branches run the same
 #' draw function. Draws with E or I = 0 are kept in the mean. Locations with no
-#' surveillance rows in the window, too few usable draws, or an estimation error
-#' all get the same no-data Beta priors (Beta(1, 9999) for E, Beta(0.5, 9999.5)
-#' for I); locations whose surveillance reports zero cases throughout the window
-#' get the near-zero Beta(0.01, 99999.99).
+#' usable surveillance in the window (no rows, or every case count NA) get the
+#' near-zero Beta(0.01, 99999.99) template, the same prior as a window that
+#' reports zero cases throughout: absent surveillance is not evidence of active
+#' infection at t0, so it never seeds more E/I than confirmed zeros. Locations
+#' with surveillance but too few usable draws, or an estimation error, get the
+#' fallback Beta priors (Beta(1, 9999) for E, Beta(0.5, 9999.5) for I).
 #'
 #' @param PATHS List of paths from `get_paths()`.
 #' @param priors Prior distributions for parameters (e.g., `priors_default`).
@@ -513,12 +515,24 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
      sample_from_prior(n = 1, prior = prior, verbose = FALSE)
 }
 
-# No-data / fallback Beta priors (mean ~1e-4 for E and ~5e-5 for I). Every
-# fallback path uses these so a fallback is never larger than the no-data prior.
+# Fallback Beta priors (mean ~1e-4 for E and ~5e-5 for I) for a location WITH
+# surveillance whose Monte Carlo estimate failed or had too few usable draws.
 .est_initial_E_I_default <- function(compartment, n_samples, method, message) {
      shapes <- if (compartment == "E") c(1, 9999) else c(0.5, 9999.5)
      list(shape1 = shapes[1], shape2 = shapes[2], method = method,
           metadata = list(data_available = FALSE, total_cases = 0,
+                          mean_count = 0, sd_count = 0, n_samples = n_samples,
+                          message = message))
+}
+
+# Prior for a location with no usable surveillance in the window (no rows, or
+# every count NA): the near-zero template Beta(0.01, 99999.99) (mean ~1e-7,
+# MOSAIC CLAUDE.md IC defaults), as for an observed-zero window. The fallback
+# above (mean 1e-4 / 5e-5) would seed ~1,000 infections in a country of 20M
+# with no evidence of transmission, more than confirmed zeros get.
+.est_initial_E_I_no_surveillance <- function(n_samples, message) {
+     list(shape1 = 0.01, shape2 = 99999.99, method = "no_data_default",
+          metadata = list(data_available = FALSE, total_cases = NA_real_,
                           mean_count = 0, sd_count = 0, n_samples = n_samples,
                           message = message))
 }
@@ -610,8 +624,8 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
      if (!has_data) {
           if (verbose) cat("no data, using default priors\n")
           msg <- "No surveillance data in lookback window"
-          return(list(E = .est_initial_E_I_default("E", n_samples, "no_data_default", msg),
-                      I = .est_initial_E_I_default("I", n_samples, "no_data_default", msg)))
+          return(list(E = .est_initial_E_I_no_surveillance(n_samples, msg),
+                      I = .est_initial_E_I_no_surveillance(n_samples, msg)))
      }
 
      # Population at ~t0

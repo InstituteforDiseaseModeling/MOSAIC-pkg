@@ -68,3 +68,23 @@ test_that("extra WHO doses beyond the GTFCC request total are kept as WHO_only",
      expect_equal(nrow(who_only), 1L)
      expect_equal(who_only$doses_shipped, 700000)
 })
+
+test_that("a WHO-only request listed twice is not double-counted (MWI 20182)", {
+     gtfcc <- .vacc_req_rows(201801, "ZMB", "2018-01-10", 2e6, decision = "2018-01-05")
+     who <- .vacc_req_rows(c(20182, 20182), "MWI", c("2018-04-15", "2018-04-17"),
+                           c(500600, 500600), decision = "2018-03-02")
+     out <- .run_combine(gtfcc, who)
+     mwi <- out[out$iso_code == "MWI", ]
+     expect_equal(nrow(mwi), 1L)
+     expect_equal(sum(mwi$doses_shipped), 500600)
+     expect_equal(as.character(mwi$campaign_date), "2018-04-15")
+})
+
+test_that("genuine multi-shipment WHO-only requests within the approved total are kept", {
+     gtfcc <- .vacc_req_rows(201801, "ZMB", "2018-01-10", 2e6, decision = "2018-01-05")
+     who <- .vacc_req_rows(c(20185, 20185), "MWI", c("2018-06-01", "2018-06-20"),
+                           c(300000, 300000), decision = "2018-05-20")
+     who$doses_approved <- 600000
+     out <- .run_combine(gtfcc, who)
+     expect_equal(sum(out$doses_shipped[out$iso_code == "MWI"]), 600000)
+})

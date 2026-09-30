@@ -766,7 +766,11 @@ fit_beta_safe <- function(x, label = "") {
 #' \code{variance_inflation} (so the variance scales by its square). Values in
 #' (0, 1) tighten, values > 1 widen, and 0 or 1 leave the spread unchanged. The
 #' concentration is floored at 2 (SD capped at \eqn{\sqrt{m(1-m)/3}}) so a very
-#' large factor cannot produce an invalid Beta; the mean is kept regardless.
+#' large factor cannot produce an invalid Beta, and at \eqn{1/m} so shape1 stays
+#' >= 1: with prop_R means of 1e-3 to 1e-2, a factor of 13-100 otherwise gave
+#' shape1 of ~0.004-0.06, a prior whose median sat tens of decades below its
+#' mean (e.g. ETH median 5.5e-87 against mean 1.8e-3). The mean is kept
+#' regardless; the factor is effectively capped where it would break that floor.
 #'
 #' Before v0.100.0 the half-widths of the sample 95% CI were scaled linearly,
 #' the lower bound floored at 1e-10 and the result passed to
@@ -782,7 +786,7 @@ fit_beta_safe <- function(x, label = "") {
 #' @return List with shape1 and shape2 parameters, or NULL with fewer than two
 #'   usable samples or zero sample variance
 fit_beta_with_variance_inflation_R <- function(samples, variance_inflation=0, label = "") {
-     shapes <- .fit_beta_inflated_samples(samples, variance_inflation)
+     shapes <- .fit_beta_inflated_samples(samples, variance_inflation, min_shape1 = 1)
      if (is.null(shapes)) return(NULL)
      list(shape1 = shapes[1], shape2 = shapes[2])
 }

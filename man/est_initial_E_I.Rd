@@ -66,10 +66,12 @@ engine's reporting chain and maps them to E/I stocks at t0 (see
 \code{priors$parameters_global} (a missing prior is replaced by a fixed
 value with a warning); the parallel and sequential branches run the same
 draw function. Draws with E or I = 0 are kept in the mean. Locations with no
-surveillance rows in the window, too few usable draws, or an estimation error
-all get the same no-data Beta priors (Beta(1, 9999) for E, Beta(0.5, 9999.5)
-for I); locations whose surveillance reports zero cases throughout the window
-get the near-zero Beta(0.01, 99999.99).
+usable surveillance in the window (no rows, or every case count NA) get the
+near-zero Beta(0.01, 99999.99) template, the same prior as a window that
+reports zero cases throughout: absent surveillance is not evidence of active
+infection at t0, so it never seeds more E/I than confirmed zeros. Locations
+with surveillance but too few usable draws, or an estimation error, get the
+fallback Beta priors (Beta(1, 9999) for E, Beta(0.5, 9999.5) for I).
 }
 \examples{
 \dontrun{

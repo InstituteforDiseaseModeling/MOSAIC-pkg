@@ -118,3 +118,21 @@ test_that("fit_beta_with_variance_inflation_R keeps the prop_R sample mean", {
           expect_rel_equal(f$shape1 / (f$shape1 + f$shape2), mean(x[x > 0 & x < 1]), rel = 1e-9)
      }
 })
+
+test_that("a large prop_R variance inflation cannot collapse the Beta onto 0", {
+     # ETH at the rebuild: prop_R mean ~1.8e-3, VI = 13 gave Beta(0.0035, 2.0),
+     # median 5.5e-87 -- a point mass at 0 with rare large draws.
+     set.seed(8)
+     x <- stats::rbeta(100, 1.8e-3 * 4000, (1 - 1.8e-3) * 4000)
+     sh_plain <- MOSAIC:::.fit_beta_inflated_samples(x, 13)
+     expect_lt(sh_plain[1], 0.1)             # the collapse the floor prevents
+     expect_lt(stats::qbeta(0.5, sh_plain[1], sh_plain[2]), 1e-6 * mean(x))
+     f <- fit_beta_with_variance_inflation_R(x, 13)
+     expect_gte(f$shape1, 1 - 1e-12)
+     m <- f$shape1 / (f$shape1 + f$shape2)
+     expect_rel_equal(m, mean(x), rel = 1e-9)
+     expect_gt(stats::qbeta(0.5, f$shape1, f$shape2), 0.1 * m)
+     # Small factors are unaffected by the floor
+     f2 <- fit_beta_with_variance_inflation_R(x, 2)
+     expect_equal(c(f2$shape1, f2$shape2), MOSAIC:::.fit_beta_inflated_samples(x, 2))
+})

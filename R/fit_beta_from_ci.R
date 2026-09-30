@@ -256,9 +256,13 @@ fit_beta_from_ci <- function(mode_val, ci_lower, ci_upper,
 # variance_inflation is an SD multiplier. The concentration
 # nu = m (1 - m) / var - 1 is floored at nu_min (default 2, i.e. the SD is capped
 # at sqrt(m (1 - m) / 3)) because a Beta needs nu > 0; the mean is kept whatever
-# the cap. Returns c(shape1, shape2), or NULL with fewer than 2 samples in (0, 1)
-# or zero sample variance.
-.fit_beta_inflated_samples <- function(samples, variance_inflation, nu_min = 2) {
+# the cap. min_shape1 > 0 additionally floors nu at min_shape1 / m, so the
+# inflation cannot push shape1 below min_shape1: with a small mean and a large
+# factor the plain floor gives shape1 ~ 2m, a point mass at 0 with rare large
+# draws (prior median many decades below the mean). Returns c(shape1, shape2),
+# or NULL with fewer than 2 samples in (0, 1) or zero sample variance.
+.fit_beta_inflated_samples <- function(samples, variance_inflation, nu_min = 2,
+                                       min_shape1 = 0) {
   x <- samples[is.finite(samples) & samples > 0 & samples < 1]
   if (length(x) < 2L) return(NULL)
   m <- mean(x)
@@ -266,6 +270,6 @@ fit_beta_from_ci <- function(mode_val, ci_lower, ci_upper,
   if (!is.finite(s) || s <= 0) return(NULL)
   vi <- if (is.finite(variance_inflation) && variance_inflation > 0) variance_inflation else 1
   v <- (vi * s)^2
-  nu <- max(nu_min, m * (1 - m) / v - 1)
+  nu <- max(nu_min, m * (1 - m) / v - 1, min_shape1 / m)
   c(m * nu, (1 - m) * nu)
 }

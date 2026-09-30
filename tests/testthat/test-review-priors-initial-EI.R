@@ -156,3 +156,22 @@ test_that("each location's E and I fits receive that location's variance inflati
      expect_equal(unlist(seen[c("TCD E", "TCD I", "NER E", "NER I")], use.names = FALSE),
                   c(1.5, 1.5, 50, 50))
 })
+
+test_that("an all-NA surveillance window never gets a larger prior than observed zeros", {
+     # Locations whose window is all NA (MLI, TCD, NER, ... in Jan 2023) used to
+     # get Beta(1, 9999) / Beta(0.5, 9999.5), ~1,000x the observed-zero template,
+     # seeding ~1,000 infections at t0 with no evidence of transmission.
+     fx_na <- .ei_fixture(cases_per_day = NA)
+     fx_0  <- .ei_fixture(cases_per_day = 0)
+     run <- function(fx) suppressWarnings(est_initial_E_I(
+          fx$PATHS, MOSAIC::priors_default, fx$config, n_samples = 10, t0 = fx$t0,
+          verbose = FALSE))$parameters_location
+     na <- run(fx_na); zero <- run(fx_0)
+     for (cmp in c("prop_E_initial", "prop_I_initial")) {
+          e_na <- na[[cmp]]$parameters$location$TCD
+          e_0  <- zero[[cmp]]$parameters$location$TCD
+          expect_identical(e_na$method, "no_data_default")
+          expect_lte(.beta_mean(e_na), .beta_mean(e_0))
+          expect_equal(c(e_na$shape1, e_na$shape2), c(0.01, 99999.99))
+     }
+})
