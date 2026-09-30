@@ -4,9 +4,10 @@
 #' \code{prop_V2_initial} by reading the raw GTFCC OCV request log,
 #' classifying doses by regimen (single-dose Euvichol-S vs. two-dose
 #' Shanchol/Euvichol/Euvichol+), pairing rounds within each campaign,
-#' applying \code{omega_1} / \code{omega_2} waning from administration
-#' date to simulation start, and moment-matching the resulting country-level
-#' proportions to Beta distributions.
+#' converting doses to \emph{effective} immunisations with \code{phi_1} /
+#' \code{phi_2}, applying \code{omega_1} / \code{omega_2} waning from
+#' administration date to simulation start, and moment-matching the resulting
+#' country-level proportions to Beta distributions.
 #'
 #' @param PATHS A list of paths (as returned by \code{\link{get_paths}}).
 #'   Used to locate \code{ees-cholera-mapping/data/cholera/epicentre/gtfcc/cholera_vacc_requests.csv}
@@ -23,11 +24,15 @@
 #'   mean of \code{priors_default$parameters_global$omega_1}.
 #' @param omega_2 Two-dose waning rate (per day). Defaults to the natural-scale
 #'   mean of \code{priors_default$parameters_global$omega_2}.
+#' @param phi_1 One-dose vaccine effectiveness at delivery. Defaults to the mean of \code{priors_default$parameters_global$phi_1}.
+#' @param phi_2 Two-dose vaccine effectiveness at delivery. Defaults to the mean of \code{priors_default$parameters_global$phi_2}.
 #' @param t_lag Protection onset lag (days). Waning starts at
 #'   \code{event_date + t_lag}. Default 14.
-#' @param vacc_ceiling_frac Hard ceiling on combined V1+V2 coverage (fraction
-#'   of population). Default 0.70 (v0.28.7; was 0.60 in v0.28.6). If the waned
-#'   dose sum exceeds this, V1 and V2 are scaled proportionally. Rationale for
+#' @param vacc_ceiling_frac Hard ceiling on combined V1+V2 dose coverage
+#'   (fraction of population). Default 0.70 (v0.28.7; was 0.60 in v0.28.6). If
+#'   the waned dose-recipient sum exceeds this, V1 and V2 are scaled
+#'   proportionally. The ceiling applies to recipients (published coverage),
+#'   before \code{phi_1}/\code{phi_2} are applied. Rationale for
 #'   0.70: published OCV campaigns routinely reach 65-80% coverage
 #'   (Abubakar et al. 2018 DRC 65%; Qadri et al. 2015 BGD 75%; Luquero et al.
 #'   2014 Haiti 80%+). A lower ceiling under-captures real emergency responses.
@@ -46,16 +51,25 @@
 #' @details
 #' Biological notes:
 #' \itemize{
-#'   \item V1/V2 in the MOSAIC/transmission model are \emph{administrative} compartments
-#'     (dose received). The engine independently splits the
-#'     initial counts into immune (V\emph{k}imm) and susceptible (V\emph{k}sus)
-#'     substates via \code{phi_1}/\code{phi_2}. This function therefore does NOT
-#'     multiply by \code{phi_1}/\code{phi_2} — doing so would double-count
-#'     effectiveness, a bug present in the pre-v0.22.11 implementation.
-#'   \item For two-dose regimens, the R01 attendees who return for R02
-#'     transition V1\eqn{\to}V2 at the R02 date. Non-returners (R01_doses
-#'     \eqn{-} R02_doses, when positive) remain in V1 with \code{omega_1} waning
-#'     from R01 onward.
+#'   \item V1/V2 in the engine are \emph{effectively-vaccinated} compartments:
+#'     there is no vaccinated-but-unprotected substate, V1/V2 are not exposed
+#'     to the force of infection, and only the effective fraction of each
+#'     delivered dose enters them (\code{V1 += phi_1 * nu_1 - phi_2 * nu_2},
+#'     \code{V2 += phi_2 * nu_2}; \code{sim_components.R} vaccination step and
+#'     MOSAIC-docs 04-model-description "Table of vaccination model terms").
+#'     The initial conditions use the same convention ("cumulative effective
+#'     coverage", 04-model-description "Vaccinated initial conditions"), so
+#'     pre-t0 doses are multiplied by \code{phi_1}/\code{phi_2}. (Before
+#'     v0.99.11 this function counted raw doses on the premise that the engine
+#'     split V into immune and susceptible substates; that split was removed in
+#'     laser-cholera 0.12 and never existed in the R engine, so raw counts
+#'     overstated the protected mass by 1/phi.)
+#'   \item For two-dose regimens, as in the engine, second doses go to the
+#'     effective first-dose recipients: with R01 and R02 dose counts
+#'     \eqn{d_1, d_2} and \eqn{d_2' = \min(d_2, \phi_1 d_1)},
+#'     V2 receives \eqn{\phi_2 d_2'} (waning with \code{omega_2} from R02) and
+#'     V1 keeps \eqn{\phi_1 d_1 - \phi_2 d_2'} (waning with \code{omega_1}
+#'     from R01).
 #'   \item Single-dose Euvichol-S campaigns contribute only to V1.
 #'   \item Blank/unknown vaccine products are treated conservatively as
 #'     two-dose (most pre-2022 campaigns were two-dose Shanchol).
@@ -82,6 +96,8 @@ est_initial_V1_V2 <- function(PATHS,
                               cv = 0.40,
                               omega_1 = NULL,
                               omega_2 = NULL,
+                              phi_1 = NULL,
+                              phi_2 = NULL,
                               t_lag = 14,
                               vacc_ceiling_frac = 0.70,
                               fallback_shape1_V1 = 0.5,
@@ -99,6 +115,23 @@ est_initial_V1_V2 <- function(PATHS,
     get_gamma_mean <- function(entry) entry$parameters$shape / entry$parameters$rate
     if (is.null(omega_1)) omega_1 <- get_gamma_mean(pd$parameters_global$omega_1)
     if (is.null(omega_2)) omega_2 <- get_gamma_mean(pd$parameters_global$omega_2)
+  }
+
+  # Default effectiveness at delivery: means of the Beta priors (Xu et al. 2024
+  # meta-regression, fitted by est_vaccine_effectiveness()).
+  if (is.null(phi_1) || is.null(phi_2)) {
+    pd <- MOSAIC::priors_default
+    get_beta_mean <- function(entry) {
+      entry$parameters$shape1 / (entry$parameters$shape1 + entry$parameters$shape2)
+    }
+    if (is.null(phi_1)) phi_1 <- get_beta_mean(pd$parameters_global$phi_1)
+    if (is.null(phi_2)) phi_2 <- get_beta_mean(pd$parameters_global$phi_2)
+  }
+  for (nm in c("phi_1", "phi_2")) {
+    v <- get(nm)
+    if (!is.numeric(v) || length(v) != 1L || !is.finite(v) || v < 0 || v > 1) {
+      stop("`", nm, "` must be a single number in [0, 1].")
+    }
   }
 
   # Locate the raw GTFCC CSV
@@ -204,8 +237,20 @@ est_initial_V1_V2 <- function(PATHS,
     })
     ce$req_vaccine <- req_vaccine[ce$req_id]
 
-    V1_count <- 0
-    V2_count <- 0
+    # Dose recipients (for the coverage ceiling) and effective immunisations
+    # (what enters V1/V2), both waned to date_start.
+    V1_raw <- 0; V2_raw <- 0
+    V1_count <- 0; V2_count <- 0
+    add_first <- function(doses, age) {
+      w <- exp(-omega_1 * age)
+      V1_raw   <<- V1_raw   + doses * w
+      V1_count <<- V1_count + phi_1 * doses * w
+    }
+    add_second <- function(doses, age) {
+      w <- exp(-omega_2 * age)
+      V2_raw   <<- V2_raw   + doses * w
+      V2_count <<- V2_count + phi_2 * doses * w
+    }
 
     # Process campaign-by-campaign (req_id × campaign number inside round_id)
     for (req in unique(ce$req_id)) {
@@ -215,15 +260,11 @@ est_initial_V1_V2 <- function(PATHS,
         # No Round rows. Fall back to Delivery rows as a single implicit R01.
         drows <- ce[ce$req_id == req & ce$event_type == "Delivery", , drop = FALSE]
         if (nrow(drows) == 0) next
-        vac <- ce$req_vaccine[ce$req_id == req][1]
-        single <- is_single_dose(vac)
         for (k in seq_len(nrow(drows))) {
-          age_days <- as.numeric(date_start - drows$event_date[k]) - t_lag
-          if (age_days < 0) age_days <- 0
-          dose <- drows$doses[k]
+          age_days <- max(0, as.numeric(date_start - drows$event_date[k]) - t_lag)
           # Without round info we conservatively treat Delivery doses as R1 (V1 only).
           # Two-dose campaigns without Round rows under-count V2, but this is rare.
-          V1_count <- V1_count + dose * exp(-omega_1 * age_days)
+          add_first(drows$doses[k], age_days)
         }
         next
       }
@@ -237,9 +278,8 @@ est_initial_V1_V2 <- function(PATHS,
       bad <- is.na(rc$campaign) | is.na(rc$round)
       if (any(bad)) {
         for (k in which(bad)) {
-          age_days <- as.numeric(date_start - rc$event_date[k]) - t_lag
-          if (age_days < 0) age_days <- 0
-          V1_count <- V1_count + rc$doses[k] * exp(-omega_1 * age_days)
+          age_days <- max(0, as.numeric(date_start - rc$event_date[k]) - t_lag)
+          add_first(rc$doses[k], age_days)
         }
         rc <- rc[!bad, , drop = FALSE]
         if (nrow(rc) == 0) next
@@ -258,52 +298,60 @@ est_initial_V1_V2 <- function(PATHS,
         if (single) {
           # Single-dose regimen: every round contributes to V1 only
           for (k in seq_len(nrow(camp_rows))) {
-            age_days <- as.numeric(date_start - camp_rows$event_date[k]) - t_lag
-            if (age_days < 0) age_days <- 0
-            V1_count <- V1_count + camp_rows$doses[k] * exp(-omega_1 * age_days)
+            age_days <- max(0, as.numeric(date_start - camp_rows$event_date[k]) - t_lag)
+            add_first(camp_rows$doses[k], age_days)
           }
           next
         }
 
         # Two-dose regimen
         if (length(r1_idx) == 1L && length(r2_idx) == 1L) {
-          # Paired R1/R2: R2 attendees transition V1->V2
+          # Paired R1/R2: as in the engine, second doses go to the effective
+          # first-dose recipients (clamped to them), and the phi_2-effective
+          # fraction moves V1 -> V2.
           r1 <- camp_rows[r1_idx, ]
           r2 <- camp_rows[r2_idx, ]
           age1 <- max(0, as.numeric(date_start - r1$event_date) - t_lag)
           age2 <- max(0, as.numeric(date_start - r2$event_date) - t_lag)
+          w1 <- exp(-omega_1 * age1)
+          w2 <- exp(-omega_2 * age2)
           r2_doses <- min(r2$doses, r1$doses)  # safety: R2 can't exceed R1 attendance
-          non_returners <- r1$doses - r2_doses
-          V1_count <- V1_count + non_returners * exp(-omega_1 * age1)
-          V2_count <- V2_count + r2_doses      * exp(-omega_2 * age2)
+          # Recipients (ceiling): R2 attendees in V2, non-returners in V1
+          V1_raw <- V1_raw + (r1$doses - r2_doses) * w1
+          V2_raw <- V2_raw + r2_doses * w2
+          # Effective immunisations
+          r2_eff_pool <- min(r2_doses, phi_1 * r1$doses)
+          V1_count <- V1_count + (phi_1 * r1$doses - phi_2 * r2_eff_pool) * w1
+          V2_count <- V2_count + phi_2 * r2_eff_pool * w2
           # Later rounds (R3+) are rare; treat as V2 booster contribution
           extra <- camp_rows[setdiff(seq_len(nrow(camp_rows)), c(r1_idx, r2_idx)), ]
           for (k in seq_len(nrow(extra))) {
             age_k <- max(0, as.numeric(date_start - extra$event_date[k]) - t_lag)
-            V2_count <- V2_count + extra$doses[k] * exp(-omega_2 * age_k)
+            add_second(extra$doses[k], age_k)
           }
         } else if (length(r1_idx) >= 1L && length(r2_idx) == 0L) {
           # R1 only — campaign incomplete or ongoing. All to V1.
           for (k in r1_idx) {
             age_days <- max(0, as.numeric(date_start - camp_rows$event_date[k]) - t_lag)
-            V1_count <- V1_count + camp_rows$doses[k] * exp(-omega_1 * age_days)
+            add_first(camp_rows$doses[k], age_days)
           }
         } else {
           # Odd configurations (R2 without R1, etc.) — treat each round at face value
           for (k in seq_len(nrow(camp_rows))) {
             age_k <- max(0, as.numeric(date_start - camp_rows$event_date[k]) - t_lag)
             if (camp_rows$round[k] == 1L) {
-              V1_count <- V1_count + camp_rows$doses[k] * exp(-omega_1 * age_k)
+              add_first(camp_rows$doses[k], age_k)
             } else {
-              V2_count <- V2_count + camp_rows$doses[k] * exp(-omega_2 * age_k)
+              add_second(camp_rows$doses[k], age_k)
             }
           }
         }
       }
     }
 
-    # Apply coverage ceiling: cap V1+V2 at vacc_ceiling_frac * N
-    total <- V1_count + V2_count
+    # Apply coverage ceiling to dose recipients: cap V1+V2 recipients at
+    # vacc_ceiling_frac * N and scale the effective counts by the same factor.
+    total <- V1_raw + V2_raw
     ceiling_count <- vacc_ceiling_frac * N
     if (total > ceiling_count && total > 0) {
       scale <- ceiling_count / total
@@ -336,8 +384,8 @@ est_initial_V1_V2 <- function(PATHS,
   }
 
   if (verbose) {
-    message(sprintf("est_initial_V1_V2: %d countries data-driven, %d fallback (omega_1=%.4g, omega_2=%.4g, date_start=%s)",
-                    n_with_data, n_fallback, omega_1, omega_2, as.character(date_start)))
+    message(sprintf("est_initial_V1_V2: %d countries data-driven, %d fallback (phi_1=%.3f, phi_2=%.3f, omega_1=%.4g, omega_2=%.4g, date_start=%s)",
+                    n_with_data, n_fallback, phi_1, phi_2, omega_1, omega_2, as.character(date_start)))
   }
 
   out

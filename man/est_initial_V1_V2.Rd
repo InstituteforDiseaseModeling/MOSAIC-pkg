@@ -11,6 +11,8 @@ est_initial_V1_V2(
   cv = 0.4,
   omega_1 = NULL,
   omega_2 = NULL,
+  phi_1 = NULL,
+  phi_2 = NULL,
   t_lag = 14,
   vacc_ceiling_frac = 0.7,
   fallback_shape1_V1 = 0.5,
@@ -42,12 +44,18 @@ mean of \code{priors_default$parameters_global$omega_1}.}
 \item{omega_2}{Two-dose waning rate (per day). Defaults to the natural-scale
 mean of \code{priors_default$parameters_global$omega_2}.}
 
+\item{phi_1}{One-dose vaccine effectiveness at delivery. Defaults to the mean of \code{priors_default$parameters_global$phi_1}.}
+
+\item{phi_2}{Two-dose vaccine effectiveness at delivery. Defaults to the mean of \code{priors_default$parameters_global$phi_2}.}
+
 \item{t_lag}{Protection onset lag (days). Waning starts at
 \code{event_date + t_lag}. Default 14.}
 
-\item{vacc_ceiling_frac}{Hard ceiling on combined V1+V2 coverage (fraction
-of population). Default 0.70 (v0.28.7; was 0.60 in v0.28.6). If the waned
-dose sum exceeds this, V1 and V2 are scaled proportionally. Rationale for
+\item{vacc_ceiling_frac}{Hard ceiling on combined V1+V2 dose coverage
+(fraction of population). Default 0.70 (v0.28.7; was 0.60 in v0.28.6). If
+the waned dose-recipient sum exceeds this, V1 and V2 are scaled
+proportionally. The ceiling applies to recipients (published coverage),
+before \code{phi_1}/\code{phi_2} are applied. Rationale for
 0.70: published OCV campaigns routinely reach 65-80\% coverage
 (Abubakar et al. 2018 DRC 65\%; Qadri et al. 2015 BGD 75\%; Luquero et al.
 2014 Haiti 80\%+). A lower ceiling under-captures real emergency responses.}
@@ -70,23 +78,33 @@ Builds country-specific Beta priors for \code{prop_V1_initial} and
 \code{prop_V2_initial} by reading the raw GTFCC OCV request log,
 classifying doses by regimen (single-dose Euvichol-S vs. two-dose
 Shanchol/Euvichol/Euvichol+), pairing rounds within each campaign,
-applying \code{omega_1} / \code{omega_2} waning from administration
-date to simulation start, and moment-matching the resulting country-level
-proportions to Beta distributions.
+converting doses to \emph{effective} immunisations with \code{phi_1} /
+\code{phi_2}, applying \code{omega_1} / \code{omega_2} waning from
+administration date to simulation start, and moment-matching the resulting
+country-level proportions to Beta distributions.
 }
 \details{
 Biological notes:
 \itemize{
-\item V1/V2 in the MOSAIC/transmission model are \emph{administrative} compartments
-(dose received). The engine independently splits the
-initial counts into immune (V\emph{k}imm) and susceptible (V\emph{k}sus)
-substates via \code{phi_1}/\code{phi_2}. This function therefore does NOT
-multiply by \code{phi_1}/\code{phi_2} — doing so would double-count
-effectiveness, a bug present in the pre-v0.22.11 implementation.
-\item For two-dose regimens, the R01 attendees who return for R02
-transition V1\eqn{\to}V2 at the R02 date. Non-returners (R01_doses
-\eqn{-} R02_doses, when positive) remain in V1 with \code{omega_1} waning
-from R01 onward.
+\item V1/V2 in the engine are \emph{effectively-vaccinated} compartments:
+there is no vaccinated-but-unprotected substate, V1/V2 are not exposed
+to the force of infection, and only the effective fraction of each
+delivered dose enters them (\code{V1 += phi_1 * nu_1 - phi_2 * nu_2},
+\code{V2 += phi_2 * nu_2}; \code{sim_components.R} vaccination step and
+MOSAIC-docs 04-model-description "Table of vaccination model terms").
+The initial conditions use the same convention ("cumulative effective
+coverage", 04-model-description "Vaccinated initial conditions"), so
+pre-t0 doses are multiplied by \code{phi_1}/\code{phi_2}. (Before
+v0.99.11 this function counted raw doses on the premise that the engine
+split V into immune and susceptible substates; that split was removed in
+laser-cholera 0.12 and never existed in the R engine, so raw counts
+overstated the protected mass by 1/phi.)
+\item For two-dose regimens, as in the engine, second doses go to the
+effective first-dose recipients: with R01 and R02 dose counts
+\eqn{d_1, d_2} and \eqn{d_2' = \min(d_2, \phi_1 d_1)},
+V2 receives \eqn{\phi_2 d_2'} (waning with \code{omega_2} from R02) and
+V1 keeps \eqn{\phi_1 d_1 - \phi_2 d_2'} (waning with \code{omega_1}
+from R01).
 \item Single-dose Euvichol-S campaigns contribute only to V1.
 \item Blank/unknown vaccine products are treated conservatively as
 two-dose (most pre-2022 campaigns were two-dose Shanchol).

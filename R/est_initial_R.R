@@ -10,12 +10,11 @@
 #' @param config List containing model configuration including location codes
 #' @param n_samples Integer, number of Monte Carlo samples for uncertainty quantification (default 1000)
 #' @param t0 Date object, target date for estimation (default NULL uses current date)
-#' @param disaggregate Logical, whether to use Fourier disaggregation (TRUE) or mid-year point estimate (FALSE)
+#' @param disaggregate Logical, whether to spread each year's cases over the year with the location's seasonal priors (\code{priors$parameters_location$a_1_j}, \code{b_1_j}, \code{a_2_j}, \code{b_2_j}; TRUE) or place them at mid-year (FALSE)
 #' @param verbose Logical, whether to print progress messages (default TRUE)
 #' @param parallel Logical, whether to use parallel processing for locations when length(location_codes) >= 8 (default FALSE).
 #'   Uses parallel::mclapply() with all available cores. Note: Not supported on Windows.
-#' @param variance_inflation Numeric factor to inflate variance of fitted Beta distributions (default 1 = no inflation).
-#'   Values > 1 increase uncertainty while preserving the mean. For example, 2 doubles the variance.
+#' @param variance_inflation Multiplier on the half-widths of the 95% CI of the Monte Carlo R/N samples before the Beta refit (default 1 = no change; 0 is also treated as no change). A scalar or a named per-ISO vector. It scales the SD, so the variance scales roughly with its square (2 gives ~4x the variance); values in (0, 1) tighten the prior.
 #'
 #' @return List with structure matching priors_default for prop_R_initial parameters
 #' @export
@@ -118,6 +117,21 @@ est_initial_R <- function(
           default_variance_inflation <- variance_inflation
      }
 
+     # Reporting-chain priors. rho is global; chi is split into chi_endemic /
+     # chi_epidemic (priors_default >= v15.x) -- chi_endemic is used for the
+     # annual endemic totals. A missing prior falls back to the documented
+     # default below, with a warning rather than silently.
+     # [[ ]] not $: `$rho` would partial-match `rho_deaths` if `rho` were absent.
+     rho_prior <- priors$parameters_global[["rho"]]
+     chi_prior <- priors$parameters_global[["chi_endemic"]]
+     if (is.null(chi_prior)) chi_prior <- priors$parameters_global[["chi"]]
+     if (is.null(rho_prior)) {
+          warning("est_initial_R: priors$parameters_global$rho not found; using rho = 0.2")
+     }
+     if (is.null(chi_prior)) {
+          warning("est_initial_R: priors$parameters_global$chi_endemic not found; using chi = 0.66")
+     }
+
      # Define location processing function
      process_location <- function(loc, loc_index = NULL) {
           if (verbose && !parallel && !is.null(loc_index)) {
@@ -185,16 +199,14 @@ est_initial_R <- function(
                return(NULL)
           }
 
-          # Get Fourier parameter priors for location (if disaggregating)
+          # Seasonal (Fourier) priors for this location, if disaggregating: the
+          # per-location a_1_j/b_1_j/a_2_j/b_2_j priors from est_seasonal_dynamics()
           fourier_priors <- NULL
           if (disaggregate) {
-               if (!is.null(priors$parameters_location$fourier_params)) {
-                    fourier_loc <- priors$parameters_location$fourier_params$parameters$location[[loc]]
-                    if (!is.null(fourier_loc)) {
-                         fourier_priors <- fourier_loc
-                    } else {
-                         if (!parallel) warning("No Fourier parameters for ", loc, ", using uniform seasonality")
-                    }
+               fourier_priors <- .est_initial_R_fourier_priors(priors, loc)
+               if (is.null(fourier_priors) && !parallel) {
+                    warning("No seasonal a_1_j/b_1_j/a_2_j/b_2_j priors for ", loc,
+                            "; placing annual cases at mid-year")
                }
           }
 
@@ -210,18 +222,14 @@ est_initial_R <- function(
                gamma_1_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_1, verbose = verbose)
                gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = verbose)
 
-               # Sample location-specific surveillance parameters
-               if (!is.null(priors$parameters_location$rho$parameters$location[[loc]])) {
-                    rho_i <- sample_from_prior(n = 1, prior = priors$parameters_location$rho$parameters$location[[loc]], verbose = verbose)
-               } else {
-                    rho_i <- 0.1  # Default reporting rate
-               }
-
-               if (!is.null(priors$parameters_location$chi$parameters$location[[loc]])) {
-                    chi_i <- sample_from_prior(n = 1, prior = priors$parameters_location$chi$parameters$location[[loc]], verbose = verbose)
-               } else {
-                    chi_i <- 0.5  # Default diagnostic positivity
-               }
+               # Reporting chain: global rho and the endemic PPV chi_endemic
+               # (annual WHO totals are dominated by endemic-regime reporting)
+               rho_i <- if (!is.null(rho_prior)) {
+                    sample_from_prior(n = 1, prior = rho_prior, verbose = verbose)
+               } else NA_real_
+               chi_i <- if (!is.null(chi_prior)) {
+                    sample_from_prior(n = 1, prior = chi_prior, verbose = verbose)
+               } else NA_real_
 
                # Handle missing parameters with defaults
                if (is.na(epsilon_i)) epsilon_i <- 0.0004  # ~4 year half-life
@@ -234,10 +242,10 @@ est_initial_R <- function(
 
                if (disaggregate && !is.null(fourier_priors)) {
                     # Sample Fourier seasonality parameters
-                    a1_i <- sample_from_prior(n = 1, prior = fourier_priors$a1, verbose = verbose)
-                    b1_i <- sample_from_prior(n = 1, prior = fourier_priors$b1, verbose = verbose)
-                    a2_i <- sample_from_prior(n = 1, prior = fourier_priors$a2, verbose = verbose)
-                    b2_i <- sample_from_prior(n = 1, prior = fourier_priors$b2, verbose = verbose)
+                    a1_i <- sample_from_prior(n = 1, prior = fourier_priors$a_1_j, verbose = verbose)
+                    b1_i <- sample_from_prior(n = 1, prior = fourier_priors$b_1_j, verbose = verbose)
+                    a2_i <- sample_from_prior(n = 1, prior = fourier_priors$a_2_j, verbose = verbose)
+                    b2_i <- sample_from_prior(n = 1, prior = fourier_priors$b_2_j, verbose = verbose)
 
                     # Use defaults if sampling failed
                     if (is.na(a1_i)) a1_i <- 0
@@ -732,12 +740,15 @@ fit_beta_safe <- function(x, label = "") {
 #' Helper Function to Fit Beta Distribution with Variance Inflation for est_initial_R
 #'
 #' @description
-#' Fits Beta distribution using CI expansion method with variance inflation.
-#' Uses sqrt(variance_inflation) for CI expansion since variance scales as the square
-#' of standard deviation. Falls back to method of moments with direct variance scaling.
+#' Fits a Beta distribution to the sample mean and a rescaled 95% CI: the
+#' half-widths of the sample CI around the mean are multiplied by
+#' \code{variance_inflation} directly (no square root), so the SD scales by the
+#' factor and the variance by roughly its square. Values in (0, 1) tighten, values
+#' > 1 widen, and 0 or 1 leave the CI unchanged. Falls back to method of moments
+#' with direct variance scaling.
 #'
 #' @param samples Numeric vector of proportions in (0,1)
-#' @param variance_inflation Numeric inflation factor
+#' @param variance_inflation Numeric CI half-width multiplier (0 or 1 = unchanged)
 #' @param label Character string for error messages
 #'
 #' @return List with shape1 and shape2 parameters, or NULL if fitting fails
@@ -797,4 +808,16 @@ fit_beta_with_variance_inflation_R <- function(samples, variance_inflation=0, la
                shape2 = max(1.01, (1 - sample_mean) * precision)
           ))
      })
+}
+
+
+# Per-location seasonal priors for est_initial_R()'s disaggregation: a named
+# list (a_1_j, b_1_j, a_2_j, b_2_j) of prior entries from
+# priors$parameters_location, or NULL when any of the four is missing.
+.est_initial_R_fourier_priors <- function(priors, loc) {
+     nms <- c("a_1_j", "b_1_j", "a_2_j", "b_2_j")
+     out <- lapply(nms, function(nm) priors$parameters_location[[nm]][["location"]][[loc]])
+     names(out) <- nms
+     if (any(vapply(out, is.null, logical(1)))) return(NULL)
+     out
 }

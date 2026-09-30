@@ -27,15 +27,14 @@ est_initial_R(
 
 \item{t0}{Date object, target date for estimation (default NULL uses current date)}
 
-\item{disaggregate}{Logical, whether to use Fourier disaggregation (TRUE) or mid-year point estimate (FALSE)}
+\item{disaggregate}{Logical, whether to spread each year's cases over the year with the location's seasonal priors (\code{priors$parameters_location$a_1_j}, \code{b_1_j}, \code{a_2_j}, \code{b_2_j}; TRUE) or place them at mid-year (FALSE)}
 
 \item{verbose}{Logical, whether to print progress messages (default TRUE)}
 
 \item{parallel}{Logical, whether to use parallel processing for locations when length(location_codes) >= 8 (default FALSE).
 Uses parallel::mclapply() with all available cores. Note: Not supported on Windows.}
 
-\item{variance_inflation}{Numeric factor to inflate variance of fitted Beta distributions (default 1 = no inflation).
-Values > 1 increase uncertainty while preserving the mean. For example, 2 doubles the variance.}
+\item{variance_inflation}{Multiplier on the half-widths of the 95\% CI of the Monte Carlo R/N samples before the Beta refit (default 1 = no change; 0 is also treated as no change). A scalar or a named per-ISO vector. It scales the SD, so the variance scales roughly with its square (2 gives ~4x the variance); values in (0, 1) tighten the prior.}
 }
 \value{
 List with structure matching priors_default for prop_R_initial parameters

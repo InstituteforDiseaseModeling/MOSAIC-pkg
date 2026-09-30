@@ -4,10 +4,18 @@
 #' Infected (I) compartments at model start time using recent surveillance data
 #' through a Monte Carlo simulation approach.
 #'
-#' The method back-calculates true infections from reported cases using the surveillance
-#' cascade, accounts for reporting delays, and estimates E/I compartments based on
-#' epidemiological progression rates. Includes comprehensive parameter validation,
-#' numerical stability protections, and optional parallel processing.
+#' The method back-calculates symptom onsets from reported cases through the
+#' engine's reporting chain and maps them to E/I stocks at t0 (see
+#' \code{\link{est_initial_E_I_location}}). Each Monte Carlo draw samples
+#' \code{sigma}, \code{iota}, \code{gamma_1}, \code{gamma_2}, \code{rho},
+#' \code{chi_endemic} and \code{delta_reporting_cases} from
+#' \code{priors$parameters_global} (a missing prior is replaced by a fixed
+#' value with a warning); the parallel and sequential branches run the same
+#' draw function. Draws with E or I = 0 are kept in the mean. Locations with no
+#' surveillance rows in the window, too few usable draws, or an estimation error
+#' all get the same no-data Beta priors (Beta(1, 9999) for E, Beta(0.5, 9999.5)
+#' for I); locations whose surveillance reports zero cases throughout the window
+#' get the near-zero Beta(0.01, 99999.99).
 #'
 #' @param PATHS List of paths from `get_paths()`.
 #' @param priors Prior distributions for parameters (e.g., `priors_default`).
@@ -20,9 +28,7 @@
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
 #'   `n_samples >= 100` (default FALSE). Uses `parallel::mclapply()` with all
 #'   available cores. Note: Not supported on Windows.
-#' @param variance_inflation Factor to create variance in Beta distributions (default 2).
-#'   Sets ci_lower = mean_val / variance_inflation and ci_upper = mean_val * variance_inflation.
-#'   Values > 1 create wider distributions around the sample mean. Should be > 1.1 for meaningful variance.
+#' @param variance_inflation Multiplicative CI factor for the Beta refit (default 2): the target 95% CI is mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be > 1.1 for meaningful variance.
 #'
 #' @return A list with two main components:
 #' \describe{
@@ -118,7 +124,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      results <- list(
           metadata = list(
                description = "Initial E and I compartment estimates from surveillance data",
-               version = "1.1.0",
+               version = "1.2.0",
                date = Sys.Date(),
                t0 = t0,
                lookback_days = lookback_days,
@@ -180,291 +186,54 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           default_variance_inflation <- variance_inflation
      }
 
+     # ---- Reporting-chain priors (shared by both MC branches) ----
+     # rho (reporting), chi_endemic (PPV of the suspected-case definition) and
+     # delta_reporting_cases (onset-to-report lag) are the engine's own
+     # observation-process priors. [[ ]] avoids `$rho` partial-matching
+     # `rho_deaths` when `rho` is absent.
+     chain_priors <- .est_initial_E_I_chain_priors(priors)
+
      # ---- Monte Carlo method: Per-location processing ----
      for (loc in location_codes) {
           if (verbose) cat(sprintf("Processing %s... ", loc))
 
-          tryCatch({
-               loc_surv <- surveillance_window[surveillance_window$iso_code == loc, ]
-               has_data <- loc %in% countries_with_data && nrow(loc_surv) > 0
+          # Location-specific variance inflation, resolved once per location
+          loc_variance_inflation <- if (!is.null(variance_inflation_lookup) &&
+                                        loc %in% names(variance_inflation_lookup)) {
+               unname(variance_inflation_lookup[loc])
+          } else {
+               default_variance_inflation
+          }
 
-
-               if (!has_data) {
-                    if (verbose) cat("no data, using default priors\n")
-
-                    E_default <- list(shape1 = 1, shape2 = 9999, method = "no_data_default")
-                    E_default$metadata <- list(
-                         data_available = FALSE, total_cases = 0,
-                         mean_count = 0, sd_count = 0, n_samples = n_samples,
-                         message = "No surveillance data in lookback window"
-                    )
-                    results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_default
-
-                    I_default <- list(shape1 = 0.5, shape2 = 9999.5, method = "no_data_default")
-                    I_default$metadata <- list(
-                         data_available = FALSE, total_cases = 0,
-                         mean_count = 0, sd_count = 0, n_samples = n_samples,
-                         message = "No surveillance data in lookback window"
-                    )
-                    results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_default
-                    next
+          loc_res <- tryCatch(
+               .est_initial_E_I_one(
+                    loc = loc,
+                    surveillance_window = surveillance_window,
+                    countries_with_data = countries_with_data,
+                    population_data = population_data,
+                    t0 = t0,
+                    lookback_days = lookback_days,
+                    n_samples = n_samples,
+                    priors = priors,
+                    chain_priors = chain_priors,
+                    loc_variance_inflation = loc_variance_inflation,
+                    parallel = parallel,
+                    verbose = verbose
+               ),
+               error = function(e) {
+                    warning(sprintf("Error processing %s: %s", loc, e$message))
+                    if (verbose) cat(sprintf("error: %s\n", e$message))
+                    list(E = .est_initial_E_I_default("E", n_samples, "error_fallback",
+                                                      paste("Estimation error:", e$message)),
+                         I = .est_initial_E_I_default("I", n_samples, "error_fallback",
+                                                      paste("Estimation error:", e$message)))
                }
+          )
 
-               # Population at ~t0
-               pop_loc <- population_data[population_data$iso_code == loc, ]
-               if (nrow(pop_loc) == 0) {
-                    warning(sprintf("No population data for %s", loc))
-                    if (verbose) cat("no population data\n")
-                    next
-               }
-               time_diffs   <- abs(as.numeric(difftime(pop_loc$date, t0, units = "days")))
-               closest_idx  <- which.min(time_diffs)
-               population_t0 <- pop_loc$total_population[closest_idx]
-               if (is.na(population_t0) || population_t0 <= 0) {
-                    warning(sprintf("Invalid population for %s", loc))
-                    if (verbose) cat("invalid population\n")
-                    next
-               }
-
-               # Sample containers
-               E_samples <- numeric(n_samples)
-               I_samples <- numeric(n_samples)
-
-
-               # -------- Parallel branch --------
-               if (parallel && n_samples >= 100) {
-                    if (verbose) cat(sprintf("  Using parallel processing with %d cores\n",
-                                             parallel::detectCores()))
-                    mc_function <- function(i) {
-                         sigma_i   <- sample_from_prior(n = 1, prior = priors$parameters_global$sigma, verbose = FALSE)
-                         iota_i    <- sample_from_prior(n = 1, prior = priors$parameters_global$iota, verbose = FALSE)
-                         gamma_1_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_1, verbose = FALSE)
-                         gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = FALSE)
-
-                         #---------------------------------------------------------------------------------
-                         # Temporary manual patch until observation process updated in transmission model
-                         # TODO: Create proper priors for these parameters when transmission model is updated
-                         rho_prior <- list(distribution = "uniform", parameters = list(min = 0.2, max = 0.7))
-                         chi_prior <- list(distribution = "uniform", parameters = list(min = 0.50, max = 0.75))
-                         tau_r_prior <- list(distribution = "gamma", parameters = list(shape = 2, rate = 0.5))
-
-                         rho_i <- sample_from_prior(n = 1, prior = rho_prior, verbose = FALSE)  # Reporting rate: 5-30%
-                         chi_i <- sample_from_prior(n = 1, prior = chi_prior, verbose = FALSE)  # Diagnostic accuracy: 50-75%
-                         tau_r_i <- sample_from_prior(n = 1, prior = tau_r_prior, verbose = FALSE)  # Reporting delay ~ mean 4, sd ~= 2.8
-                         #---------------------------------------------------------------------------------
-
-                         # Bounds & fallbacks
-                         if (is.na(sigma_i)   || sigma_i <= 0 || sigma_i > 1) sigma_i   <- 0.35
-                         if (is.na(rho_i)     || rho_i <= 0   || rho_i > 1)   rho_i     <- 0.775
-                         if (is.na(chi_i)     || chi_i <= 0   || chi_i > 1)   chi_i     <- 0.625
-                         if (is.na(iota_i)    || iota_i <= 0)                 iota_i    <- 0.714
-                         if (is.na(gamma_1_i) || gamma_1_i <= 0)              gamma_1_i <- 0.2
-                         if (is.na(gamma_2_i) || gamma_2_i <= 0)              gamma_2_i <- 0.67
-                         if (is.na(tau_r_i)   || tau_r_i < 0)                 tau_r_i   <- 4
-
-                         mult_i <- chi_i / (rho_i * sigma_i)
-                         if (mult_i > 10) {
-                              warning(sprintf("Large infections multiplier chi/(rho*sigma)=%.2f; check priors.", mult_i))
-                         }
-
-                         ei_results <- est_initial_E_I_location(
-                              cases = loc_surv$cases,
-                              dates = loc_surv$date,
-                              population = population_t0,
-                              t0 = t0,
-                              lookback_days = lookback_days,
-                              sigma = sigma_i,
-                              rho = rho_i,
-                              chi = chi_i,
-                              tau_r = tau_r_i,
-                              iota = iota_i,
-                              gamma_1 = gamma_1_i,
-                              gamma_2 = gamma_2_i,
-                              verbose = FALSE
-                         )
-                         c(E = ei_results$E, I = ei_results$I)
-                    }
-
-                    # Pin threads (forks inherit the parent env) and leave one
-                    # core free so the forks don't oversubscribe the host.
-                    .mosaic_set_all_thread_env(1L)
-                    mc_results <- parallel::mclapply(1:n_samples, mc_function,
-                                                     mc.cores = max(1L, parallel::detectCores() - 1L))
-                    E_samples <- sapply(mc_results, function(x) x["E"])
-                    I_samples <- sapply(mc_results, function(x) x["I"])
-
-               } else {
-                    # -------- Sequential branch --------
-                    for (i in 1:n_samples) {
-                         sigma_i   <- sample_from_prior(n = 1, prior = priors$parameters_global$sigma, verbose = FALSE)
-                         iota_i    <- sample_from_prior(n = 1, prior = priors$parameters_global$iota, verbose = FALSE)
-                         gamma_1_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_1, verbose = FALSE)
-                         gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = FALSE)
-
-                         # Temporary manual patch until observation process updated in transmission model
-                         # TODO: Create proper priors for these parameters when transmission model is updated
-                         rho_prior <- list(distribution = "uniform", parameters = list(min = 0.05, max = 0.30))
-                         chi_prior <- list(distribution = "uniform", parameters = list(min = 0.50, max = 0.75))
-                         tau_r_prior <- list(distribution = "gamma", parameters = list(shape = 2, rate = 0.5))
-
-                         rho_i <- sample_from_prior(n = 1, prior = rho_prior, verbose = FALSE)
-                         chi_i <- sample_from_prior(n = 1, prior = chi_prior, verbose = FALSE)
-                         tau_r_i <- sample_from_prior(n = 1, prior = tau_r_prior, verbose = FALSE)
-
-                         if (is.na(sigma_i)   || sigma_i <= 0 || sigma_i > 1) sigma_i   <- 0.35
-                         if (is.na(rho_i)     || rho_i <= 0   || rho_i > 1)   rho_i     <- 0.775
-                         if (is.na(chi_i)     || chi_i <= 0   || chi_i > 1)   chi_i     <- 0.625
-                         if (is.na(iota_i)    || iota_i <= 0)                 iota_i    <- 0.714
-                         if (is.na(gamma_1_i) || gamma_1_i <= 0)              gamma_1_i <- 0.2
-                         if (is.na(gamma_2_i) || gamma_2_i <= 0)              gamma_2_i <- 0.67
-                         if (is.na(tau_r_i)   || tau_r_i < 0)                 tau_r_i   <- 4
-
-                         mult_i <- chi_i / (rho_i * sigma_i)
-                         if (mult_i > 10 && verbose) {
-                              warning(sprintf("Large infections multiplier chi/(rho*sigma)=%.2f; check priors.", mult_i))
-                         }
-
-                         ei_results <- est_initial_E_I_location(
-                              cases = loc_surv$cases,
-                              dates = loc_surv$date,
-                              population = population_t0,
-                              t0 = t0,
-                              lookback_days = lookback_days,
-                              sigma = sigma_i,
-                              rho = rho_i,
-                              chi = chi_i,
-                              tau_r = tau_r_i,
-                              iota = iota_i,
-                              gamma_1 = gamma_1_i,
-                              gamma_2 = gamma_2_i,
-                              verbose = FALSE
-                         )
-                         E_samples[i] <- ei_results$E
-                         I_samples[i] <- ei_results$I
-                    }
-               }
-
-               total_cases <- sum(loc_surv$cases, na.rm = TRUE)
-
-               # Proportions
-               E_prop <- E_samples / population_t0
-               I_prop <- I_samples / population_t0
-
-               # Apply Beta fitting using fit_beta_from_ci with variance inflation
-               # Remove invalid samples and calculate mean
-               E_valid <- E_prop[!is.na(E_prop) & E_prop > 0 & E_prop < 1]
-               I_valid <- I_prop[!is.na(I_prop) & I_prop > 0 & I_prop < 1]
-
-               if (length(E_valid) < 2) {
-                    if (verbose) cat("  Insufficient E data for", loc, "- using default\n")
-                    E_beta <- list(shape1 = 1, shape2 = 999, method = "insufficient_data")
-               } else {
-                    # Get location-specific variance inflation
-                    if (!is.null(variance_inflation_lookup)) {
-                         loc_variance_inflation <- if (loc %in% names(variance_inflation_lookup)) {
-                              variance_inflation_lookup[loc]
-                         } else {
-                              default_variance_inflation
-                         }
-                    } else {
-                         loc_variance_inflation <- default_variance_inflation
-                    }
-
-                    E_mean <- mean(E_valid)
-
-                    # For E/I compartments, always use multiplicative approach
-                    # since values are typically very small
-                    E_ci_lower <- E_mean * (1 / loc_variance_inflation)
-                    E_ci_upper <- E_mean * loc_variance_inflation
-
-                    # Ensure valid Beta bounds
-                    E_ci_lower <- max(1e-10, min(E_ci_lower, 0.999))
-                    E_ci_upper <- max(E_ci_lower + 1e-10, min(E_ci_upper, 0.999))
-
-                    E_fit <- fit_beta_from_ci(
-                         mode_val = E_mean,
-                         ci_lower = E_ci_lower,
-                         ci_upper = E_ci_upper,
-                         method = "moment_matching"
-                    )
-                    E_beta <- list(shape1 = E_fit$shape1, shape2 = E_fit$shape2, method = "variance_inflation")
-               }
-
-               if (length(I_valid) < 2) {
-                    if (verbose) cat("  Insufficient I data for", loc, "- using default\n")
-                    I_beta <- list(shape1 = 1, shape2 = 999, method = "insufficient_data")
-               } else {
-                    # Get location-specific variance inflation if not already set (when E had insufficient data)
-                    if (!exists("loc_variance_inflation")) {
-                         if (!is.null(variance_inflation_lookup)) {
-                              loc_variance_inflation <- if (loc %in% names(variance_inflation_lookup)) {
-                                   variance_inflation_lookup[loc]
-                              } else {
-                                   default_variance_inflation
-                              }
-                         } else {
-                              loc_variance_inflation <- default_variance_inflation
-                         }
-                    }
-                    I_mean <- mean(I_valid)
-
-                    # For E/I compartments, always use multiplicative approach
-                    # since values are typically very small
-                    I_ci_lower <- I_mean * (1 / loc_variance_inflation)
-                    I_ci_upper <- I_mean * loc_variance_inflation
-
-                    # Ensure valid Beta bounds
-                    I_ci_lower <- max(1e-10, min(I_ci_lower, 0.999))
-                    I_ci_upper <- max(I_ci_lower + 1e-10, min(I_ci_upper, 0.999))
-
-                    I_fit <- fit_beta_from_ci(
-                         mode_val = I_mean,
-                         ci_lower = I_ci_lower,
-                         ci_upper = I_ci_upper,
-                         method = "moment_matching"
-                    )
-                    I_beta <- list(shape1 = I_fit$shape1, shape2 = I_fit$shape2, method = "variance_inflation")
-               }
-
-               if (is.null(E_beta)) {
-                    E_beta <- list(shape1 = 1, shape2 = 9999, method = "fitting_failed")
-               }
-               if (is.null(I_beta)) {
-                    I_beta <- list(shape1 = 0.5, shape2 = 9999.5, method = "fitting_failed")
-               }
-
-               # Format results with consistent structure
-               E_result <- list(
-                    shape1 = E_beta$shape1,
-                    shape2 = E_beta$shape2
-               )
-
-               I_result <- list(
-                    shape1 = I_beta$shape1,
-                    shape2 = I_beta$shape2
-               )
-
-               results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_result
-               results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_result
-
-          }, error = function(e) {
-               warning(sprintf("Error processing %s: %s", loc, e$message))
-               if (verbose) cat(sprintf("error: %s\n", e$message))
-
-               results$parameters_location$prop_E_initial$parameters$location[[loc]] <- list(
-                    shape1 = 1,
-                    shape2 = 9999
-               )
-
-               results$parameters_location$prop_I_initial$parameters$location[[loc]] <- list(
-                    shape1 = 0.5,
-                    shape2 = 9999.5
-               )
-          })
-
+          if (is.null(loc_res)) next   # no usable population row (warned)
+          results$parameters_location$prop_E_initial$parameters$location[[loc]] <- loc_res$E
+          results$parameters_location$prop_I_initial$parameters$location[[loc]] <- loc_res$I
      }
-
-     # Note: Beta fitting uses fit_beta_from_ci with custom CI bounds for wider exploration
 
      if (verbose) {
           cat("\n=== Monte Carlo Estimation Complete ===\n")
@@ -508,8 +277,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     I_mean_str <- "0"
                }
 
-               E_beta_str <- sprintf("(%.2f,%.2f)", E_result$parameters$shape1, E_result$parameters$shape2)
-               I_beta_str <- sprintf("(%.2f,%.2f)", I_result$parameters$shape1, I_result$parameters$shape2)
+               E_beta_str <- sprintf("(%.2f,%.2f)", E_result$shape1, E_result$shape2)
+               I_beta_str <- sprintf("(%.2f,%.2f)", I_result$shape1, I_result$shape2)
 
                cat(sprintf("%-4s %-20s %-15s %-20s %-20s %-15s %-20s\n",
                            loc, E_beta_str, E_mean_str, E_ci_str,
@@ -524,23 +293,35 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 #' Estimate E and I Compartments for a Single Location
 #'
 #' This function performs the actual E/I estimation for a single location using
-#' surveillance data and epidemiological parameters. It back-calculates true infections
-#' from reported cases using the surveillance cascade, accounts for infection-to-report
-#' delays, and estimates current E and I compartments based on disease progression.
+#' surveillance data and epidemiological parameters, following the engine's
+#' reporting chain: a report on day d is a symptomatic onset on day
+#' \code{d - tau_r}, and all onsets (symptomatic and asymptomatic) are
+#' \code{reported * chi / (rho * sigma)}.
 #'
-#' The function includes comprehensive parameter validation, numerical stability
-#' protections for exponential calculations, and detailed progress reporting when verbose=TRUE.
-#' Uses exact infectiousness kernels for the I compartment estimation.
+#' \itemize{
+#'   \item \strong{I}: observed onsets that have not yet recovered at t0
+#'     (per-day survival \code{exp(-gamma_1)} for the symptomatic share
+#'     \code{sigma}, \code{exp(-gamma_2)} for the rest), plus the onsets the
+#'     window cannot see, filled in at the window's mean onset rate: those in
+#'     the last \code{tau_r} days before t0 (reported on or after t0) and those
+#'     older than the window.
+#'   \item \strong{E}: people infected before t0 whose onset comes after t0.
+#'     A reported case is already past E, so E is the stock in balance with the
+#'     window's mean onset rate \eqn{\lambda}:
+#'     \eqn{E = \lambda / (1 - e^{-\iota})}, the engine's daily E-to-I
+#'     probability (Azman et al. 2013 for the incubation period behind
+#'     \code{iota}).
+#' }
 #'
 #' @param cases Vector of daily suspected cholera cases (must be same length as dates)
 #' @param dates Vector of dates corresponding to cases (Date class)
 #' @param population Total population of the location (must be positive)
 #' @param t0 Target date for estimation (Date class)
-#' @param lookback_days Days of data to use (default 60, must be positive)
+#' @param lookback_days Days of reports before t0 to use (default 60, must be positive); also the averaging window for the onset rate
 #' @param sigma Symptomatic proportion (must be in (0,1])
 #' @param rho Reporting rate - proportion of symptomatic cases reported (must be in (0,1])
 #' @param chi Diagnostic positivity - proportion of suspected cases that are true cholera (must be in (0,1])
-#' @param tau_r Reporting delay in days from symptom onset to report (must be non-negative)
+#' @param tau_r Reporting delay in days from symptom onset to report (must be non-negative; rounded to whole days as in the engine)
 #' @param iota Incubation rate (1/incubation period, must be positive)
 #' @param gamma_1 Symptomatic recovery rate (must be positive)
 #' @param gamma_2 Asymptomatic recovery rate (must be positive)
@@ -632,52 +413,55 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
     return(list(E = 0, I = 0))
   }
 
-  # ---- Back-calculation: reported cases -> true infections ----
-  # True infections = (reported cases x chi) / (rho x sigma)
+  # ---- Back-calculation through the engine's reporting chain ----
+  # The engine reports a symptomatic onset on day s as a case on day s + tau_r
+  # (tau_r = delta_reporting_cases, whole days) with probability rho, and the
+  # reported suspected count is inflated by 1/chi (PPV). So a report on day d
+  # is a symptomatic onset on day d - tau_r, and
+  #   new symptomatic onsets = reported * chi / rho,
+  #   all new onsets (sym + asym) = reported * chi / (rho * sigma).
+  # (Same inversion as .moment_match_E_I() in sample_parameters.R.)
+  #
+  # A reported case has already left E, so E(t0) is NOT built from reports.
+  # Everyone in E at t0 has their onset after t0; under locally constant
+  # incidence the engine's E stock is in balance with the onset rate lambda:
+  # onsets/day = iota_prob * E, i.e. E = lambda / (1 - exp(-iota))
+  # (iota_prob as in sim_params()).
+  #
+  # I(t0) sums the observed onsets that have not yet recovered, with the
+  # engine's per-day survival exp(-gamma) for symptomatic (gamma_1) and
+  # asymptomatic (gamma_2) infections. Onsets outside the observed window are
+  # filled in at the same rate lambda: those in the last tau_r days before t0
+  # (reported on/after t0) and those older than the window (reported before
+  # it), which matter when the window is short relative to 1/gamma_1.
+  tau <- round(tau_r)
   total_cases <- sum(cases_filtered, na.rm = TRUE)
-  multiplier <- chi / (rho * sigma)
-  total_infections <- total_cases * multiplier
+  onset_mult <- chi / (rho * sigma)
+  lambda <- total_cases * onset_mult / lookback_days   # all onsets per day
 
   if (verbose) {
-    cat(sprintf("  Surveillance multiplier: chi/(rho\u00D7sigma) = %.1f\n", multiplier))
-    cat(sprintf("  Total infections: %.0f cases \u00D7 %.1f = %.0f\n",
-                total_cases, multiplier, total_infections))
+    cat(sprintf("  Onset multiplier: chi/(rho\u00D7sigma) = %.2f\n", onset_mult))
+    cat(sprintf("  Mean onsets per day: %.1f\n", lambda))
   }
 
-  # ---- Account for reporting delay ----
-  # Each day contributes based on its actual case count, not averaged
-
-  # ---- Estimate current E and I compartments ----
-  # E: Exposed individuals who will become infectious
-  # I: Currently infectious individuals
-
-  E_total <- 0
-  I_total <- 0
-
-  # For each day in the lookback period, calculate contribution to current E/I
-  for (i in 1:length(dates_filtered)) {
-    days_since_infection <- as.numeric(t0 - dates_filtered[i] - tau_r)
-
-    if (days_since_infection <= 0) next  # Future infections
-
-    # Proportion still in E (not yet infectious)
-    prob_in_E <- exp(-iota * days_since_infection)
-
-    # Proportion in I (infectious but not yet recovered)
-    # Assumes exponential progression through I compartment
-    if (days_since_infection > 1/iota) {
-      days_infectious <- days_since_infection - 1/iota
-      # Account for both symptomatic and asymptomatic recovery
-      prob_in_I <- exp(-gamma_1 * days_infectious * sigma - gamma_2 * days_infectious * (1-sigma))
-    } else {
-      prob_in_I <- 0
-    }
-
-    # Add contributions from this day's infections
-    daily_inf <- ifelse(is.na(cases_filtered[i]), 0, cases_filtered[i] * multiplier)
-    E_total <- E_total + daily_inf * prob_in_E
-    I_total <- I_total + daily_inf * prob_in_I
+  survival <- function(age) {
+    sigma * exp(-gamma_1 * age) + (1 - sigma) * exp(-gamma_2 * age)
   }
+
+  # Observed onsets: report day t0 - j (j >= 1) -> onset age j + tau at t0
+  onset_age <- as.numeric(t0 - dates_filtered) + tau
+  onsets <- ifelse(is.na(cases_filtered), 0, cases_filtered) * onset_mult
+  I_observed <- sum(onsets * survival(onset_age))
+
+  # Unobserved recent onsets: ages 1..tau
+  I_recent <- if (tau >= 1) lambda * sum(survival(seq_len(tau))) else 0
+  # Onsets older than the window: ages > lookback_days + tau (geometric tail)
+  k_max <- lookback_days + tau
+  tail_sum <- function(g) exp(-g * (k_max + 1)) / (-expm1(-g))
+  I_older <- lambda * (sigma * tail_sum(gamma_1) + (1 - sigma) * tail_sum(gamma_2))
+
+  E_total <- lambda / (-expm1(-iota))
+  I_total <- I_observed + I_recent + I_older
 
   # ---- Numerical stability and bounds checking ----
   E_total <- max(0, round(E_total))
@@ -698,4 +482,170 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
   }
 
   return(list(E = E_total, I = I_total))
+}
+
+# ---- internal helpers for est_initial_E_I() ---------------------------------
+
+# Observation-process priors used by the E/I back-calculation, read from the
+# global priors: rho, chi_endemic (falls back to a single `chi`) and
+# delta_reporting_cases. A missing prior is replaced by a fixed value with a
+# warning (never silently).
+.est_initial_E_I_chain_priors <- function(priors) {
+     pg <- priors$parameters_global
+     get_prior <- function(names_try, default_value, label) {
+          for (nm in names_try) {
+               if (!is.null(pg[[nm]])) return(pg[[nm]])
+          }
+          warning(sprintf("est_initial_E_I: priors$parameters_global$%s not found; using %s = %g",
+                          names_try[1], label, default_value), call. = FALSE)
+          list(distribution = "fixed", value = default_value)
+     }
+     list(
+          rho   = get_prior("rho", 0.43, "rho"),
+          chi   = get_prior(c("chi_endemic", "chi"), 0.52, "chi"),
+          tau_r = get_prior("delta_reporting_cases", 1, "delta_reporting_cases")
+     )
+}
+
+# One draw from a prior entry, honouring the fixed-value placeholder above.
+.est_initial_E_I_sample <- function(prior) {
+     if (identical(prior$distribution, "fixed")) return(prior$value)
+     sample_from_prior(n = 1, prior = prior, verbose = FALSE)
+}
+
+# No-data / fallback Beta priors (mean ~1e-4 for E and ~5e-5 for I). Every
+# fallback path uses these so a fallback is never larger than the no-data prior.
+.est_initial_E_I_default <- function(compartment, n_samples, method, message) {
+     shapes <- if (compartment == "E") c(1, 9999) else c(0.5, 9999.5)
+     list(shape1 = shapes[1], shape2 = shapes[2], method = method,
+          metadata = list(data_available = FALSE, total_cases = 0,
+                          mean_count = 0, sd_count = 0, n_samples = n_samples,
+                          message = message))
+}
+
+# One Monte Carlo draw of (E, I) counts for a location. Shared by the parallel
+# and sequential branches so both use identical priors.
+.est_initial_E_I_draw <- function(priors, chain_priors, loc_surv, population_t0,
+                                  t0, lookback_days) {
+     pg <- priors$parameters_global
+     sigma_i   <- sample_from_prior(n = 1, prior = pg[["sigma"]],   verbose = FALSE)
+     iota_i    <- sample_from_prior(n = 1, prior = pg[["iota"]],    verbose = FALSE)
+     gamma_1_i <- sample_from_prior(n = 1, prior = pg[["gamma_1"]], verbose = FALSE)
+     gamma_2_i <- sample_from_prior(n = 1, prior = pg[["gamma_2"]], verbose = FALSE)
+     rho_i     <- .est_initial_E_I_sample(chain_priors$rho)
+     chi_i     <- .est_initial_E_I_sample(chain_priors$chi)
+     # The engine applies the case lag in whole days (make_simulation_config
+     # rounds delta_reporting_cases), so the back-calculation does too.
+     tau_r_i   <- round(.est_initial_E_I_sample(chain_priors$tau_r))
+
+     # Bounds & fallbacks for failed draws (NA or out of support)
+     if (is.na(sigma_i)   || sigma_i <= 0 || sigma_i > 1) sigma_i   <- 0.35
+     if (is.na(rho_i)     || rho_i <= 0   || rho_i > 1)   rho_i     <- 0.43
+     if (is.na(chi_i)     || chi_i <= 0   || chi_i > 1)   chi_i     <- 0.52
+     if (is.na(iota_i)    || iota_i <= 0)                 iota_i    <- 0.714
+     if (is.na(gamma_1_i) || gamma_1_i <= 0)              gamma_1_i <- 0.1
+     if (is.na(gamma_2_i) || gamma_2_i <= 0)              gamma_2_i <- 0.67
+     if (is.na(tau_r_i)   || tau_r_i < 0)                 tau_r_i   <- 1
+
+     ei <- est_initial_E_I_location(
+          cases = loc_surv$cases, dates = loc_surv$date,
+          population = population_t0, t0 = t0, lookback_days = lookback_days,
+          sigma = sigma_i, rho = rho_i, chi = chi_i, tau_r = tau_r_i,
+          iota = iota_i, gamma_1 = gamma_1_i, gamma_2 = gamma_2_i,
+          verbose = FALSE
+     )
+     c(E = ei$E, I = ei$I)
+}
+
+# Beta prior for one compartment from its Monte Carlo counts. Zero draws are
+# real outcomes and stay in the mean; the CI is mean / VI to mean * VI.
+.est_initial_E_I_fit <- function(counts, population_t0, compartment, loc,
+                                 loc_variance_inflation, n_samples, total_cases,
+                                 verbose) {
+     counts <- counts[is.finite(counts) & counts >= 0]
+     prop <- counts / population_t0
+     prop <- prop[prop < 1]
+     if (length(prop) >= 2 && total_cases == 0) {
+          # Surveillance reported zero cases throughout the window: every draw is
+          # E = I = 0. Use the near-zero template prior (Beta(0.01, 99999.99),
+          # mean ~1e-7; MOSAIC CLAUDE.md IC defaults), not the no-data guess.
+          return(list(shape1 = 0.01, shape2 = 99999.99, method = "observed_zero",
+                      metadata = list(data_available = TRUE, total_cases = 0,
+                                      mean_count = 0, sd_count = 0,
+                                      n_samples = length(counts),
+                                      message = "Zero reported cases in lookback window")))
+     }
+     if (length(prop) < 2 || mean(prop) <= 0) {
+          if (verbose) cat(sprintf("  Insufficient %s data for %s - using no-data default\n",
+                                   compartment, loc))
+          return(.est_initial_E_I_default(compartment, n_samples, "insufficient_data",
+                                          "Fewer than 2 usable Monte Carlo draws"))
+     }
+     m <- mean(prop)
+     ci_lower <- max(1e-10, min(m / loc_variance_inflation, 0.999))
+     ci_upper <- max(ci_lower + 1e-10, min(m * loc_variance_inflation, 0.999))
+     fit <- fit_beta_from_ci(mode_val = m, ci_lower = ci_lower, ci_upper = ci_upper,
+                             method = "moment_matching")
+     list(shape1 = fit$shape1, shape2 = fit$shape2, method = "variance_inflation",
+          metadata = list(data_available = TRUE, total_cases = total_cases,
+                          mean_count = mean(counts), sd_count = stats::sd(counts),
+                          n_samples = length(counts)))
+}
+
+# E/I priors for one location: list(E = <entry>, I = <entry>), or NULL when the
+# location has no usable population row (a warning is raised).
+.est_initial_E_I_one <- function(loc, surveillance_window, countries_with_data,
+                                 population_data, t0, lookback_days, n_samples,
+                                 priors, chain_priors, loc_variance_inflation,
+                                 parallel, verbose) {
+
+     loc_surv <- surveillance_window[surveillance_window$iso_code == loc, ]
+     has_data <- loc %in% countries_with_data && nrow(loc_surv) > 0
+     if (!has_data) {
+          if (verbose) cat("no data, using default priors\n")
+          msg <- "No surveillance data in lookback window"
+          return(list(E = .est_initial_E_I_default("E", n_samples, "no_data_default", msg),
+                      I = .est_initial_E_I_default("I", n_samples, "no_data_default", msg)))
+     }
+
+     # Population at ~t0
+     pop_loc <- population_data[population_data$iso_code == loc, ]
+     if (nrow(pop_loc) == 0) {
+          warning(sprintf("No population data for %s", loc))
+          if (verbose) cat("no population data\n")
+          return(NULL)
+     }
+     time_diffs    <- abs(as.numeric(difftime(pop_loc$date, t0, units = "days")))
+     population_t0 <- pop_loc$total_population[which.min(time_diffs)]
+     if (is.na(population_t0) || population_t0 <= 0) {
+          warning(sprintf("Invalid population for %s", loc))
+          if (verbose) cat("invalid population\n")
+          return(NULL)
+     }
+
+     draw <- function(i) {
+          .est_initial_E_I_draw(priors, chain_priors, loc_surv, population_t0,
+                                t0, lookback_days)
+     }
+     if (parallel && n_samples >= 100) {
+          if (verbose) cat(sprintf("  Using parallel processing with %d cores\n",
+                                   parallel::detectCores()))
+          # Pin threads (forks inherit the parent env) and leave one core free
+          # so the forks don't oversubscribe the host.
+          .mosaic_set_all_thread_env(1L)
+          mc_results <- parallel::mclapply(seq_len(n_samples), draw,
+                                           mc.cores = max(1L, parallel::detectCores() - 1L))
+     } else {
+          mc_results <- lapply(seq_len(n_samples), draw)
+     }
+     E_samples <- vapply(mc_results, function(x) unname(x["E"]), numeric(1))
+     I_samples <- vapply(mc_results, function(x) unname(x["I"]), numeric(1))
+
+     total_cases <- sum(loc_surv$cases, na.rm = TRUE)
+     E <- .est_initial_E_I_fit(E_samples, population_t0, "E", loc, loc_variance_inflation,
+                               n_samples, total_cases, verbose)
+     I <- .est_initial_E_I_fit(I_samples, population_t0, "I", loc, loc_variance_inflation,
+                               n_samples, total_cases, verbose)
+     if (verbose) cat("done\n")
+     list(E = E, I = I)
 }

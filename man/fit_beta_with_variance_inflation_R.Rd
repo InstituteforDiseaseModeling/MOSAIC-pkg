@@ -9,7 +9,7 @@ fit_beta_with_variance_inflation_R(samples, variance_inflation = 0, label = "")
 \arguments{
 \item{samples}{Numeric vector of proportions in (0,1)}
 
-\item{variance_inflation}{Numeric inflation factor}
+\item{variance_inflation}{Numeric CI half-width multiplier (0 or 1 = unchanged)}
 
 \item{label}{Character string for error messages}
 }
@@ -17,7 +17,8 @@ fit_beta_with_variance_inflation_R(samples, variance_inflation = 0, label = "")
 List with shape1 and shape2 parameters, or NULL if fitting fails
 }
 \description{
-Fits Beta distribution using CI expansion method with variance inflation.
-Uses sqrt(variance_inflation) for CI expansion since variance scales as the square
-of standard deviation. Falls back to method of moments with direct variance scaling.
+Fits a Beta distribution to the sample mean and a rescaled 95\% CI: the
+half-widths of the sample CI around the mean are multiplied by
+\code{variance_inflation} directly (no square root), so the SD scales by the
+factor and the variance by roughly its square. Values in (0, 1) tighten, values1 widen, and 0 or 1 leave the CI unchanged. Falls back to method of momentswith direct variance scaling.
 }
