@@ -370,7 +370,7 @@
 #' @param state Internal calibration state
 #' @param start_time POSIXct start time for wall-clock calculation
 #' @param config Base simulation config (for provenance fields)
-#' @param r2_cases_ensemble R-squared for cases (central tendency -- median by
+#' @param r2_cases_ensemble R-squared for cases (central tendency -- mean by
 #'   default, per central_method -- of the canonical posterior ensemble;
 #'   tier-selected when optimize_subset = FALSE, optimizer-refined when
 #'   optimize_subset = TRUE)
@@ -408,6 +408,7 @@
 }
 
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
+                                       nb_dispersion = NULL,
                                        r2_cases_ensemble = NA_real_,
                                        r2_deaths_ensemble = NA_real_,
                                        bias_ratio_cases_ensemble = NA_real_,
@@ -565,6 +566,25 @@
     n_positive_ratios_all = if (!is.null(diag$importance_sampling$all_draws$n_positive_ratios)) {
                               as.integer(diag$importance_sampling$all_draws$n_positive_ratios)
                           } else NA_integer_,
+    # NB dispersion actually used, estimated once from the weekly observations
+    # by est_nb_dispersion(). bound_binds is a standing diagnostic: in a
+    # well-specified fit the hard bounds should rarely bind.
+    nb_dispersion       = if (!is.null(nb_dispersion)) {
+                              .k <- nb_dispersion$k
+                              .ch <- nb_dispersion$channel
+                              f <- function(ch) {
+                                   v <- .k[.ch == ch]
+                                   list(median_k = if (any(is.finite(v))) round(stats::median(v[is.finite(v)]), 4) else NA_real_,
+                                        n_estimated = sum(is.finite(v)),
+                                        n_poisson   = sum(is.infinite(v)))
+                              }
+                              # report EVERY status, so a new fit path cannot be
+                              # invisible in the diagnostics
+                              .st <- as.list(table(nb_dispersion$status))
+                              c(list(cases = f("cases"), deaths = f("deaths"),
+                                     bound_binds = sum(nb_dispersion$status == "clamped_lower_bound", na.rm = TRUE)),
+                                list(status_counts = .st))
+                          } else NULL,
     # Implied CFR per location (period-weighted from posterior ensemble
     # predictions: sum simulated reported_deaths / sum simulated reported_cases
     # over the calibration window, per ensemble member). Reports median +

@@ -7,9 +7,9 @@
 # in principle. This test pins the contract so it cannot silently regress.
 
 test_that("the manifest provenance contract lists every field needed to reproduce a fit", {
-     src <- readLines(testthat::test_path("..", "..", "R", "run_rolling_cv_suitability.R"),
-                      warn = FALSE)
-     skip_if(length(src) == 0L, "R/ source not available (installed check)")
+     src_file <- testthat::test_path("..", "..", "R", "run_rolling_cv_suitability.R")
+     skip_if_not(file.exists(src_file), "R/ source not available (installed check)")
+     src <- readLines(src_file, warn = FALSE)
      blk <- paste(src, collapse = "\n")
      required <- c(
           # what data went in
@@ -28,10 +28,9 @@ test_that("the manifest provenance contract lists every field needed to reproduc
 })
 
 test_that("provenance is additive -- the pre-existing manifest keys are still written", {
-     src <- paste(readLines(testthat::test_path("..", "..", "R",
-                                                "run_rolling_cv_suitability.R"),
-                            warn = FALSE), collapse = "\n")
-     skip_if(!nzchar(src), "R/ source not available")
+     src_file <- testthat::test_path("..", "..", "R", "run_rolling_cv_suitability.R")
+     skip_if_not(file.exists(src_file), "R/ source not available (installed check)")
+     src <- paste(readLines(src_file, warn = FALSE), collapse = "\n")
      legacy <- c("architecture", "fit_date_start", "fit_date_stop", "feature_set",
                  "response_var", "bias_correct", "region_map", "n_seeds", "seeds",
                  "n_countries", "n_features", "fit_info", "rw_diagnostics")

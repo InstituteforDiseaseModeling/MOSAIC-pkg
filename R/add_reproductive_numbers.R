@@ -373,9 +373,10 @@ add_reproductive_numbers <- function(output_dir,
   bid <- as.integer(burn_in_days)
   if (verbose) message("  Excluding first ", bid, " day(s) as burn-in.")
 
-  # Match run_MOSAIC's medoid target: the cases central_method (default median).
+  # Match run_MOSAIC's medoid target: the run's cases central_method. A control
+  # without the setting predates it (v0.38.0), and those runs used the median.
   cases_cm <- tryCatch(
-    .mosaic_resolve_central_method(control$predictions$central_method)[["cases"]],
+    .mosaic_resolve_central_method(control$predictions$central_method %||% "median")[["cases"]],
     error = function(e) "median")
   if (length(cases_cm) != 1L || is.na(cases_cm)) cases_cm <- "median"
 

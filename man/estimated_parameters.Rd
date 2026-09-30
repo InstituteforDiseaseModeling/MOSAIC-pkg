@@ -5,7 +5,7 @@
 \alias{estimated_parameters}
 \title{Estimated Parameters Inventory}
 \format{
-A data frame with 54 rows and 14 columns:
+A data frame with 46 rows and 14 columns:
 \describe{
 \item{parameter_name}{Character. Parameter names as used in configuration files and sampling functions}
 \item{display_name}{Character. Human-readable display names for plotting and reporting}
@@ -24,7 +24,7 @@ A data frame with 54 rows and 14 columns:
 }
 }
 \source{
-Created by \code{data-raw/make_parameters_inventory.R}
+Created by \code{data-raw/make_estimated_parameters_inventory.R}
 }
 \usage{
 estimated_parameters
@@ -49,9 +49,14 @@ It does not include:
 
 The inventory is organized hierarchically:
 \itemize{
-\item \strong{Global parameters} (22): Same value across all locations
-\item \strong{Location-specific parameters} (21): Vary by geographic location
+\item \strong{Global parameters} (27): Same value across all locations
+\item \strong{Location-specific parameters} (19): Vary by geographic location
 }
+
+The reported case fatality ratio \code{mu_jt} is not listed: it is not
+sampled but integrated out of the deaths likelihood (see
+\code{\link{calc_log_likelihood_deaths_integrated}}), and its calibrated value
+is \code{3_results/posterior/cfr_posterior.csv}.
 
 Categories reflect biological processes in cholera transmission:
 \itemize{
@@ -59,7 +64,7 @@ Categories reflect biological processes in cholera transmission:
 \item \strong{environmental}: V. cholerae survival, shedding, dose-response
 \item \strong{disease}: Recovery rates, incubation, symptom proportions
 \item \strong{immunity}: Natural and vaccine-induced protection
-\item \strong{surveillance}: Reporting rates and delays
+\item \strong{surveillance}: Reporting rates, delays and the case-reporting PPV switch
 \item \strong{mobility}: Human movement parameters
 \item \strong{spatial}: Geographic covariates (WASH coverage)
 \item \strong{initial_conditions}: Starting compartment proportions

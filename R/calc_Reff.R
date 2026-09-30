@@ -86,11 +86,11 @@
 #' engine's discrete-time transitions: after entering E on day 0 it progresses
 #' with probability \code{1 - exp(-iota)} per day, splits symptomatic with
 #' probability \code{sigma}, and recovers with \code{1 - exp(-gamma_k)} per day.
-#' Disease mortality is ignored. At the median mortality rate (~0.002/day) that
-#' is negligible, but at high rates it overstates the symptomatic dwell: with
-#' \code{config_default} rates the human kernel mean is 9.1 d at mu = 0,
-#' 8.0 d at 0.017/day and 6.5 d at 0.058/day. Measured on engine runs at those
-#' two rates, R_env reads 2.5% and 6% low and R_hum 7-24% low (median).
+#' Mortality is ignored. Since v0.96.0 a fraction \code{p_fatal} of symptomatic
+#' onsets dies at onset and never enters Isym, while survivors' dwell is
+#' unchanged; omitting it is exact at constant incidence and biases R_hum by
+#' +0.2-0.4% in growth at the median \code{p_fatal} (2.8%), R_env by under
+#' 0.1%.
 #'
 #' @param iota,gamma_1,gamma_2 Positive scalar daily rates.
 #' @param sigma Scalar in \[0, 1\], symptomatic proportion.
@@ -776,7 +776,7 @@ calc_Reff <- function(ensemble,
                                   infectiousness_floor = 1,
                                   burn_in_days = 0L,
                                   peak_window = 7L,
-                                  cases_central_method = "median",
+                                  cases_central_method = "mean",
                                   gate_rel_tol = 0.05, gate_frac = 0.95,
                                   gate_cor_min = 0.95, verbose = TRUE,
                                   cl = NULL) {

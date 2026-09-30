@@ -43,8 +43,12 @@ The function creates a multi-page PDF containing:
 \itemize{
 \item Page 1: Overview plot with temporal trend and data summary
 \item Following pages: Faceted plots of country-specific CFR trends
-\item Each panel shows observed CFR (points) and model predictions (lines with CI)
-\item Color coding indicates data quality and model fit
+\item Each panel shows observed CFR (points) and model predictions (lines with 95\% predictive intervals for one year's CFR)
+\item Years after a country's last fitted year (\code{is_forecast}) are drawn dashed on
+a shaded background: the model holds each trend at its last fitted year there
+\item A page of each country's deviation from the population trend (the model's
+country intercept is weakly identified, so the deviation is taken from the
+fitted country curve)
 }
 }
 \examples{

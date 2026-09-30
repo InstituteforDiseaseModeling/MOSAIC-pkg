@@ -14,7 +14,9 @@ testthat::test_that("zero data returns finite log-likelihood", {
           est_deaths    = est_zero,
      )
      expect_true(is.finite(ll))  # Zero data is a valid perfect match, not "no information"
-     expect_equal(ll, 0, tolerance = 1e-8)  # Near zero with all auxiliary terms off
+     # A1b scores every cell by its density, so an all-zero channel contributes a
+     # small negative value rather than the retired special-case exactly 0.
+     expect_equal(ll, 0, tolerance = 1e-2)
 })
 # 2. Weight scaling: non-default weight_cases and weight_deaths still yields finite for zero data
 testthat::test_that("weights do not affect zero-data result", {
@@ -27,7 +29,9 @@ testthat::test_that("weights do not affect zero-data result", {
           weight_deaths = 3,
      )
      expect_true(is.finite(ll))  # Still finite regardless of weights
-     expect_equal(ll, 0, tolerance = 1e-8)  # Near zero with all auxiliary terms off
+     # A1b scores every cell by its density, so an all-zero channel contributes a
+     # small negative value rather than the retired special-case exactly 0.
+     expect_equal(ll, 0, tolerance = 1e-2)
 })
 # 3. Dimension errors: non-matrix inputs
 testthat::test_that("errors on non-matrix inputs", {

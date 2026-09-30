@@ -100,37 +100,65 @@
   invisible(wrote)
 }
 
-#' Weighted per-location endemic/epidemic CFR reference levels for the CFR panel
+#' Posterior reported-CFR reference for the trajectory CFR panel
 #'
-#' Computes the best-subset weighted median of the implied surveillance CFR
-#' (\code{cfr_baseline_<iso>} / \code{cfr_epidemic_<iso>} columns written by
-#' \code{calc_implied_cfr()}) per location, for the dashed regime reference lines
-#' on the trajectory CFR(t) panel (DM F4). Uses the candidate best subset
-#' (\code{is_best_subset} / \code{weight_best}) to match the trajectory weighting.
-#' Returns \code{NULL} when neither column family is present (e.g. gamma_1 absent).
+#' The ensemble's posterior reported CFR by location and year
+#' (\code{calc_model_ensemble()$cfr_posterior}), in config location order, for
+#' the dashed reference on the trajectory CFR(t) panel. On epidemic-PPV ticks the
+#' simulated reported CFR should sit on this line. Returns \code{NULL} when the
+#' ensemble carries no posterior (deaths were not redrawn).
 #'
-#' @param results The samples/results data.frame (from samples.parquet).
+#' @param cfr_posterior Data frame from \code{calc_model_ensemble()$cfr_posterior}, or \code{NULL}.
 #' @param location_names Character vector of locations (config order).
-#' @return A data.frame \code{location, cfr_baseline, cfr_epidemic} (weighted
-#'   medians; \code{NA} where a column is absent), or \code{NULL}.
+#' @return A data.frame \code{location, year, cfr_median, cfr_lower, cfr_upper}, or \code{NULL}.
 #' @noRd
-.mosaic_compute_cfr_refs <- function(results, location_names) {
-  if (is.null(results) || !is.data.frame(results) ||
-      !("is_best_subset" %in% names(results))) return(NULL)
-  sub <- results[results$is_best_subset %in% TRUE, , drop = FALSE]
-  if (nrow(sub) == 0L) return(NULL)
-  w <- sub$weight_best
-  if (is.null(w) || all(!is.finite(w)) || sum(w, na.rm = TRUE) == 0) return(NULL)
-  bcols <- paste0("cfr_baseline_", location_names)
-  ecols <- paste0("cfr_epidemic_", location_names)
-  if (!any(c(bcols, ecols) %in% names(sub))) return(NULL)  # no CFR columns at all
-  .wmed <- function(col) if (col %in% names(sub))
-    weighted_quantiles(sub[[col]], w, 0.5) else NA_real_
-  data.frame(
-    location     = location_names,
-    cfr_baseline = vapply(bcols, .wmed, numeric(1)),
-    cfr_epidemic = vapply(ecols, .wmed, numeric(1)),
-    row.names    = NULL, stringsAsFactors = FALSE)
+.mosaic_compute_cfr_refs <- function(cfr_posterior, location_names) {
+  if (is.null(cfr_posterior) || !is.data.frame(cfr_posterior) || !nrow(cfr_posterior)) return(NULL)
+  keep <- cfr_posterior$location %in% location_names
+  if (!any(keep)) return(NULL)
+  out <- cfr_posterior[keep, c("location", "year", "cfr_median", "cfr_lower", "cfr_upper"), drop = FALSE]
+  out <- out[order(match(out$location, location_names), out$year), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+#' Write config_medoid.json with the medoid's posterior reported CFR
+#'
+#' The reported CFR is integrated out, not sampled, so the sampled medoid config
+#' still carries the prior \code{mu_jt}. It is shifted to the medoid's OWN
+#' posterior CFR (\code{medoid_cfr_posterior}, from the medoid ensemble's post-hoc
+#' CFR draws), so a re-simulation of the file -- rolling-CV projections,
+#' scenarios -- reproduces the medoid predictions' deaths level. The run-level
+#' posterior is the fallback when the medoid ensemble failed; it is not the
+#' default because the medoid's conditional CFR differs from the ensemble's by the
+#' medoid path's own case misfit. With neither, or when the shift is refused
+#' (a posterior CFR no per-onset probability can produce), the prior is written.
+#'
+#' @param config_medoid The sampled medoid config.
+#' @param medoid_cfr_posterior,run_cfr_posterior \code{cfr_posterior} data frames, or \code{NULL}.
+#' @param path Output file.
+#' @param log_msg,log_warn Logging functions.
+#' @return The config written (invisibly the same object the file holds).
+#' @noRd
+.mosaic_write_config_medoid <- function(config_medoid, medoid_cfr_posterior, run_cfr_posterior,
+                                        path, log_msg = function(...) invisible(NULL),
+                                        log_warn = function(...) invisible(NULL)) {
+  post <- if (!is.null(medoid_cfr_posterior)) medoid_cfr_posterior else run_cfr_posterior
+  source_lbl <- if (!is.null(medoid_cfr_posterior)) "medoid" else if (!is.null(run_cfr_posterior)) "run" else "none"
+  if (!is.null(post)) {
+    config_medoid <- tryCatch(.mosaic_apply_cfr_posterior(config_medoid, post),
+      error = function(e) {
+        log_warn("medoid config keeps the prior mu_jt: %s", conditionMessage(e))
+        source_lbl <<- "none"
+        config_medoid
+      })
+  }
+  tryCatch({
+    jsonlite::write_json(config_medoid, path, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+    log_msg("Saved %s (reported CFR: %s)", path,
+            switch(source_lbl, medoid = "medoid posterior", run = "run posterior", "prior"))
+  }, error = function(e) log_warn("config_medoid.json write failed: %s", conditionMessage(e)))
+  config_medoid
 }
 
 #' Persist the compact trajectory artifact for the "trajectories" figure group
@@ -202,22 +230,23 @@
 #' trajectory for predictions, plots, ensemble R^2/bias metrics, the medoid
 #' target, and the subset-selection objective. The weighted MEAN is the
 #' unbiased estimator of expected counts (\eqn{E[\sum]=\sum E}) and never
-#' collapses to zero, so it is the package default; \code{"median"} reproduces
-#' historical (pre-feature) runs.
+#' collapses to zero on sparse deaths, so it is the package default (v0.38.0 to
+#' v0.46.0 and again from v0.98.0); \code{"median"}, the default from v0.46.1 to
+#' v0.97.x, reproduces runs made then.
 #'
 #' Accepts a scalar (applies to both channels) or a named vector to set cases
 #' and deaths independently, e.g. \code{c(cases = "median", deaths = "mean")}.
 #'
 #' @param x \code{NULL}, a scalar \code{"mean"}/\code{"median"}, or a named
 #'   vector with \code{"cases"} and/or \code{"deaths"}. \code{NULL} or an
-#'   unset channel falls back to \code{"median"}.
+#'   unset channel falls back to \code{"mean"}.
 #' @return Named character vector \code{c(cases = ., deaths = .)}, each
 #'   \code{"mean"} or \code{"median"}.
 #' @noRd
 .mosaic_resolve_central_method <- function(x = NULL) {
   valid <- c("mean", "median")
   ch    <- c("cases", "deaths")
-  out   <- stats::setNames(rep("median", 2L), ch)
+  out   <- stats::setNames(rep("mean", 2L), ch)
 
   if (is.null(x) || length(x) == 0L) {
     return(out)
@@ -280,10 +309,12 @@
 #' to the EST series only; the observed series stays unmasked, and the ensemble's
 #' raw central/array fields are never mutated -- only the matrix passed here is
 #' transformed. Artifacts: (1) the first \code{cases_warmup} cases timesteps are an
-#' initial-condition warm-up transient; (2) the final deaths timestep is a
-#' structural zero (reported deaths are written at \code{tick} rather than
-#' \code{tick + 1}, so the last row is trimmed -- laser-cholera issue #82,
-#' reproduced by the R engine because the trim rule was ported verbatim).
+#' initial-condition warm-up transient; (2) when \code{deaths_final} is set, the
+#' final deaths timestep, a structural zero in the laser-cholera engine's output
+#' (reported deaths written at \code{tick} rather than \code{tick + 1}, so the
+#' last row was trimmed; laser-cholera issue #82). The R engine reports deaths on
+#' the cases' row since v0.96.0, so \code{calc_model_ensemble()} records
+#' \code{deaths_final = FALSE}.
 #'
 #' Masks by COLUMN (= time), so it is correct for any number of locations (rows);
 #' scoring sites flatten column-major via \code{as.numeric()}.
@@ -292,8 +323,8 @@
 #'   single-row matrix). The central series to mask.
 #' @param chan \code{"cases"} or \code{"deaths"}.
 #' @param spec Artifact-mask list (\code{ens$artifact_mask}). If \code{NULL},
-#'   falls back to \code{list(cases_warmup = 2L, deaths_final = TRUE)} so older
-#'   ensembles or sub-ensembles lacking the field still mask correctly.
+#'   falls back to \code{list(cases_warmup = 2L, deaths_final = TRUE)}: an
+#'   ensemble saved before the field existed came from the laser-cholera engine.
 #' @return The matrix with artifact columns set to \code{NA}.
 #' @noRd
 .mosaic_mask_central_for_scoring <- function(mat, chan, spec) {
@@ -433,6 +464,30 @@
       # Top-level: direct replacement
       def[[nm]] <- control[[nm]]
     }
+  }
+
+  # RETIRED (v0.92.0): nb_k_min_cases / nb_k_min_deaths.
+  #
+  # These were a floor on a marginal method-of-moments dispersion estimate that
+  # was mis-specified for a non-stationary series, so the floor bound in 27 of 28
+  # estimable locations and was in practice the dispersion parameter itself.
+  # Dispersion is now estimated per location by est_nb_dispersion(). A floor
+  # would silently override that estimate, which is exactly the failure mode
+  # being removed, so the setting is rejected rather than migrated.
+  #
+  # Detection MUST key off the user's ORIGINAL `control` (lesson #13): the merge
+  # above has already populated `def`, so a test against `def` can never fire.
+  .retired_nbk <- intersect(c("nb_k_min_cases", "nb_k_min_deaths"),
+                            names(control[["likelihood"]]))
+  if (length(.retired_nbk)) {
+    warning(sprintf(
+      paste0("control$likelihood$%s is RETIRED and has been ignored. NB dispersion is now ",
+             "estimated per location from the weekly observations by est_nb_dispersion(). ",
+             "To set the cases dispersion explicitly, use control$likelihood$nb_k_cases, which ",
+             "REPLACES the estimate (scalar or one value per location). nb_k_deaths is not used: ",
+             "run_MOSAIC() scores deaths with the reported CFR integrated out (dispersion phi_j)."),
+      paste(.retired_nbk, collapse = " and ")), call. = FALSE)
+    for (nm in .retired_nbk) def$likelihood[[nm]] <- NULL
   }
 
   # BACKWARD COMPATIBILITY: renamed control parameters (v0.22.16; fixed v0.37.1).
@@ -658,7 +713,7 @@
   }
 
   # Skip known metadata/structural fields that don't need 'distribution'
-  metadata_fields <- c("metadata", "parameters_global", "parameters_location",
+  metadata_fields <- c("metadata", "parameters_global", "parameters_location", "mu_jt",
                        "simulation", "reporting", "climate", "vaccination")
 
   # Check that each prior has distribution field
@@ -1326,7 +1381,23 @@
 #' produces (e.g. the v0.22.20-21 N_obs shape-term normalization) so that resume
 #' refuses to pool shards scored by an incompatible likelihood implementation.
 #' @noRd
-.mosaic_likelihood_impl_version <- function() "R/v0.22.21"
+#' @note v0.93.0 replaced the `-y*log(1e6)` zero penalty with an eps-floored
+#'   density -- a change in likelihood VALUES -- but left this string at
+#'   "R/v0.92.0", so a resume could have pooled v0.92 and v0.93 shards. The
+#'   per-channel `eps_rel` change re-bumps it and closes that window too.
+#'   v0.96.0 scores deaths with the reported CFR integrated out
+#'   (\code{calc_log_likelihood_deaths_integrated()}), weekly, instead of the
+#'   eps-floored daily negative binomial on one realisation. v0.97.0 changes that
+#'   score from a negative binomial to quasi-Poisson with a per-location
+#'   dispersion and an additive background, smooths the year deviations, scores
+#'   edge weeks and makes the deaths confidence weights mass-preserving. v0.97.2
+#'   makes the year deviations yearly levels (blended at each 1 January)
+#'   instead of an interpolated curve. v0.98.0 centred each forecast year's
+#'   deviation on the latest observed year's; v0.99.0 centres it instead on a
+#'   fixed shift that run_MOSAIC() sets after calibration (0 while calibrating).
+#'   Either way the values change only where a scored day's blend reaches a
+#'   forecast year (data ending within 30 days of a 1 January).
+.mosaic_likelihood_impl_version <- function() "R/v0.99.0+deaths_forecastshift"
 
 #' Likelihood-Value Provenance Descriptor
 #'
@@ -1417,7 +1488,7 @@
   # incomparable. control.json nests the full control under $control (plus a
   # per-run timestamp), so compare the relevant sub-objects rather than
   # byte-comparing the whole file:
-  #   - control$likelihood        : weights/sigmas/k_min -> the scoring target
+  #   - control$likelihood        : weights/sigmas -> the scoring target
   #   - control$sampling          : which of the ~301 params are sampled; changing
   #                                 it shifts the RNG stream so sample_parameters(
   #                                 seed = sim_id) yields different draws per id

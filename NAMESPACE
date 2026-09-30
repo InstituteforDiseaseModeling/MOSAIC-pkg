@@ -54,3 +54,4 @@ importFrom("stats", "AIC", "IQR", "approx", "binomial", "dbinom",
            "smooth.spline", "time", "var")
 importFrom("utils", "capture.output", "data", "modifyList",
            "object.size", "packageVersion", "tail")
+importFrom("splines", "ns")

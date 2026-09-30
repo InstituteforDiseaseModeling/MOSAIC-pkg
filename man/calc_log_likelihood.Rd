@@ -34,7 +34,12 @@ Default is \code{NULL}, which sets all weights to 1.}
 \itemize{
 \item \code{mean_precision} (for \code{\link{calc_log_likelihood_beta}})
 \item \code{trials} (for \code{\link{calc_log_likelihood_binomial}})
-\item \code{k}, \code{k_min} (for \code{\link{calc_log_likelihood_negbin}})
+\item \code{k} (for \code{\link{calc_log_likelihood_negbin}})
+\item \code{eps_rel} (for \code{\link{calc_log_likelihood_negbin}} and
+\code{\link{calc_log_likelihood_poisson}}) -- the relative floor on the
+predicted mean. Passing it with any other \code{family} is an error,
+which is deliberate: a scoring knob that is silently dropped is worse
+than one that fails loudly.
 \item \code{verbose} (common to all distributions)
 }}
 }

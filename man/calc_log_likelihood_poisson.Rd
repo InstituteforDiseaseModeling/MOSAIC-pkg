@@ -9,6 +9,7 @@ calc_log_likelihood_poisson(
   estimated,
   weights = NULL,
   zero_buffer = TRUE,
+  eps_rel = 0.02,
   verbose = TRUE
 )
 }
@@ -23,6 +24,10 @@ Default is \code{NULL}, which sets all weights to 1.}
 \item{zero_buffer}{Logical; if \code{TRUE} (default), rounds observed values to integers and
 adds small buffer to avoid zero estimates. If \code{FALSE}, enforces
 strict integer requirements.}
+
+\item{eps_rel}{Positive scalar; the predicted mean of every cell is floored at
+\code{max(1e-4, eps_rel * mean(observed))} before the density is evaluated.
+Default \code{0.02}. See \code{\link{calc_log_likelihood_negbin}}.}
 
 \item{verbose}{Logical; if \code{TRUE}, prints diagnostics and total log-likelihood.}
 }

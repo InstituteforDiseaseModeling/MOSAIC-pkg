@@ -40,7 +40,7 @@ without ever installing it. See [Optional: Python for environmental suitability]
 Install the R package from GitHub. This is all you need to run models with pre-configured
 parameters and data - there is no Python step.
 
-```{r basic-install}
+```{r basic-install, eval = FALSE}
 # Install remotes if not already installed
 if (!require("remotes")) install.packages("remotes")
 
@@ -77,7 +77,7 @@ Skip this section unless you intend to re-fit the environmental-suitability (psi
 package that touches Python. Everything else - including `run_MOSAIC()` - reads psi from
 pre-computed values and never initialises a Python interpreter.
 
-```{r psi-python}
+```{r psi-python, eval = FALSE}
 library(MOSAIC)
 
 # Build the conda environment (installs Miniconda if you do not have conda)
@@ -125,7 +125,7 @@ git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
 
 ### Install and Configure
 
-```{r dev-install}
+```{r dev-install, eval = FALSE}
 # Install R package from source (upgrade = "never" avoids prompts)
 devtools::install("~/MOSAIC/MOSAIC-pkg", upgrade = "never")
 
@@ -140,7 +140,7 @@ set_root_directory("~/MOSAIC")
 
 ### Development Workflow
 
-```{r dev-workflow}
+```{r dev-workflow, eval = FALSE}
 # Load for development
 devtools::load_all("~/MOSAIC/MOSAIC-pkg")
 
@@ -156,7 +156,7 @@ pkgdown::build_site()
 
 The `mobility` package is only needed if you want to regenerate mobility estimates from scratch. Most users can skip this - pre-computed mobility files are included in `model/input/`.
 
-```{r mobility-install}
+```{r mobility-install, eval = FALSE}
 # Only install if you need to regenerate mobility data
 # Requires JAGS system library
 
@@ -178,7 +178,7 @@ remotes::install_github("COVID-19-Mobility-Data-Network/mobility")
 ## Troubleshooting
 
 **Python issues** (only affects `est_suitability()`; simulation and calibration are pure R):
-```{r troubleshoot-python}
+```{r troubleshoot-python, eval = FALSE}
 # Check Python environment and dependencies
 check_python_env()
 check_dependencies()
@@ -192,7 +192,7 @@ install_dependencies(force = TRUE)
 ```
 
 **Path issues (Developer only):**
-```{r troubleshoot-paths}
+```{r troubleshoot-paths, eval = FALSE}
 # Check and reset root directory
 getOption("root_directory")
 set_root_directory("~/MOSAIC")

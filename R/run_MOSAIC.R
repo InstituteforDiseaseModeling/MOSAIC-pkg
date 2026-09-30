@@ -402,9 +402,9 @@
     if (!is.null(model)) {
       likelihood <- tryCatch({
         obs_cases <- params_sim$reported_cases
-        est_cases <- model$results$reported_cases  # v0.11.1: reported_cases = Isym*rho/chi (comparable to surveillance data)
+        est_cases <- model$results$reported_cases    # rho/chi-thinned onsets, the surveillance scale
         obs_deaths <- params_sim$reported_deaths
-        est_deaths <- model$results$reported_deaths  # v0.13.0: reported_deaths = round(disease_deaths * rho_deaths) (comparable to surveillance data)
+        est_deaths <- model$results$reported_deaths  # engine deaths at the PRIOR mu_jt; the deaths core below integrates the CFR out
 
         if (!is.null(obs_cases) && !is.null(est_cases) &&
             !is.null(obs_deaths) && !is.null(est_deaths)) {
@@ -423,6 +423,18 @@
             est_deaths <- est_deaths[, .keep, drop = FALSE]
           }
 
+          # Deaths core: the reported CFR integrated out of this path. Computed on
+          # the full (unsliced) results; the resolver applied the same slice.
+          # Skipped (zeros) when deaths carry no weight.
+          .ll_d_core <- if (!is.null(likelihood_settings$.deaths_integration)) {
+            if (isTRUE(likelihood_settings$weight_deaths == 0)) {
+              rep(0, likelihood_settings$.deaths_integration$setup$nL)
+            } else {
+              .mosaic_deaths_ll_integrated(likelihood_settings$.deaths_integration,
+                                           model$results, params_sim)$ll
+            }
+          } else NULL
+
           calc_model_likelihood(
             config = .config_lik,
             obs_cases = obs_cases,
@@ -436,8 +448,11 @@
             # behavior change.
             weights_obs_cases  = .wobs_cases_lik,
             weights_obs_deaths = .wobs_deaths_lik,
-            nb_k_min_cases = likelihood_settings$nb_k_min_cases,
-            nb_k_min_deaths = likelihood_settings$nb_k_min_deaths,
+            nb_k_cases  = likelihood_settings$.nb_k_cases_resolved,
+            nb_k_deaths = likelihood_settings$.nb_k_deaths_resolved,
+            eps_rel_cases  = likelihood_settings$eps_rel_cases,
+            eps_rel_deaths = likelihood_settings$eps_rel_deaths,
+            ll_deaths_core = .ll_d_core,
             weight_cases = likelihood_settings$weight_cases,
             weight_deaths = likelihood_settings$weight_deaths,
             weight_peak_timing = likelihood_settings$weight_peak_timing,
@@ -638,7 +653,7 @@
 #' See [mosaic_control_defaults()] for complete documentation. The control structure contains:
 #' \describe{
 #'   \item{calibration}{n_simulations, n_iterations, max_simulations_total, batch_size_adaptive, etc.}
-#'   \item{sampling}{sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.}
+#'   \item{sampling}{sample_tau_i, sample_mobility_gamma, sample_beta_j0_tot, etc.}
 #'   \item{parallel}{enable, n_cores, type, progress}
 #'   \item{paths}{clean_output, plots}
 #'   \item{targets}{ESS_param, ESS_best, A_best, CVw_best, etc.}
@@ -1119,6 +1134,67 @@ run_MOSAIC <- function(config,
             control$likelihood$.score_window_resolved$idx_deaths,
             control$likelihood$.score_window_resolved$n_time)
   }
+
+  # Estimate the per-location NB dispersion ONCE per calibration. k is a property
+  # of the OBSERVATIONS alone, so it is identical for every simulation; the
+  # former code recomputed it inside every likelihood call (~7.2M redundant
+  # evaluations for a 40-location, 30,000-simulation run). Stashed in a private
+  # slot alongside .weights_time_resolved, so it reaches every PSOCK worker via
+  # the existing clusterExport of likelihood_settings.
+  # Resolved AFTER .score_window_resolved so the dispersion is estimated on the
+  # SAME window the likelihood scores. burn_in_days defaults to 30, so scoring
+  # otherwise starts at step 31 while k was estimated from step 1 -- the
+  # "k-coherence" property the previous implementation documented and held.
+  .nb_disp <- .mosaic_resolve_nb_dispersion(config, control,
+                                            score_window = control$likelihood$.score_window_resolved)
+  control$likelihood$.nb_k_cases_resolved  <- .nb_disp$cases$k
+  control$likelihood$.nb_k_deaths_resolved <- .nb_disp$deaths$k
+  control$likelihood$.nb_dispersion_table  <- .nb_disp$table
+  log_msg("NB dispersion (weekly, conditional ML): cases median k = %s, deaths median k = %s | Poisson: %d cases, %d deaths of %d locations",
+          .nb_disp$cases$summary, .nb_disp$deaths$summary,
+          sum(is.infinite(.nb_disp$cases$k)), sum(is.infinite(.nb_disp$deaths$k)),
+          length(.nb_disp$cases$k))
+  # Bound-bind rate is a standing fit diagnostic: in a well-specified fit the
+  # bounds should rarely bind. The retired k_min floor bound in 27 of 28
+  # estimable locations, which was the defect rather than a setting.
+  .nb_bind <- sum(.nb_disp$table$status %in% "clamped_lower_bound", na.rm = TRUE)
+  .nb_noest <- sum(grepl("^no_estimate", .nb_disp$table$status), na.rm = TRUE)
+  if (.nb_bind > 0 || .nb_noest > 0)
+    log_msg("NB dispersion: %d clamped at a hard bound, %d with no own estimate (borrowed), of %d location-channels -- see 2_calibration/diagnostics/nb_dispersion.csv",
+            .nb_bind, .nb_noest, nrow(.nb_disp$table))
+  tryCatch({
+    if (!dir.exists(dirs$cal_diag)) dir.create(dirs$cal_diag, recursive = TRUE, showWarnings = FALSE)
+    utils::write.csv(.nb_disp$table,
+                     file.path(dirs$cal_diag, "nb_dispersion.csv"), row.names = FALSE)
+  }, error = function(e)
+    log_msg("WARNING: could not write nb_dispersion.csv: %s", conditionMessage(e)))
+
+  # Deaths are scored with the reported CFR integrated out (v0.96.0): per
+  # simulated path, the CFR's location offset and year deviations around the
+  # config's time-varying mu_jt are solved analytically (Laplace) instead of
+  # sampled. Everything that depends only on the observations -- weekly blocks,
+  # weekly observed totals and weights, the prior widths -- is resolved here once
+  # and reaches every worker through likelihood_settings. It estimates its own
+  # per-location dispersion phi_j (deaths against observed cases); the NB deaths
+  # k above is diagnostic only.
+  control$likelihood$.deaths_integration <- .mosaic_resolve_deaths_integration(
+    config, control, priors, score_window = control$likelihood$.score_window_resolved)
+  if (!is.null(control$likelihood$.deaths_integration)) {
+    log_msg("Deaths likelihood: reported CFR integrated out per path (weekly quasi-Poisson, %d years, dispersion median %.2f, location sd median %.2f, year sd %.2f)",
+            length(control$likelihood$.deaths_integration$years),
+            stats::median(control$likelihood$.deaths_integration$dispersion),
+            stats::median(control$likelihood$.deaths_integration$sd_shift),
+            control$likelihood$.deaths_integration$sd_year)
+    # Persisted so a post-hoc calc_model_ensemble() re-run can redraw deaths from
+    # the calibrated CFR exactly as the run's own ensemble does.
+    tryCatch({
+      saveRDS(control$likelihood$.deaths_integration,
+              file.path(dirs$calibration, "deaths_integration.rds"))
+      log_msg("Saved 2_calibration/deaths_integration.rds")
+    }, error = function(e)
+      log_warn("deaths_integration.rds write skipped: %s", conditionMessage(e)))
+  }
+
 
   # Resolve per-location (cross-location) influence weights. When the caller did
   # NOT supply weights_location, derive a data-driven default that down-weights
@@ -1674,22 +1750,6 @@ run_MOSAIC <- function(config,
     results$is_best_model[which.max(results$likelihood)] <- TRUE
   }
 
-  # Add derived implied-CFR columns to samples.parquet alongside the sampled
-  # microparameters. The helper adds up to 4 columns per location:
-  #   cfr_baseline_<iso>, cfr_epidemic_<iso>                   (surveillance CFR)
-  #   cfr_clinical_baseline_<iso>, cfr_clinical_epidemic_<iso> (per-episode lethality)
-  # Clinical variants are added when gamma_1 is in the samples (always true in
-  # production since gamma_1 is in convert_config_to_matrix's global-param list).
-  # Downstream posterior fitting / plotting picks them up automatically via
-  # calc_model_posterior_quantiles() and the location-scale disease-category
-  # entries in estimated_parameters.
-  log_msg("Adding implied-CFR derived columns to samples...")
-  results <- .mosaic_add_implied_cfr_columns(
-       results = results,
-       iso_codes = iso_code,
-       verbose = TRUE
-  )
-
   # Write combined simulations and clean up shards
   simulations_file <- file.path(dirs$calibration, "samples.parquet")
   .mosaic_write_parquet(results, simulations_file, control$io)
@@ -2188,6 +2248,10 @@ run_MOSAIC <- function(config,
   r2_deaths_ensemble         <- NA_real_
   bias_ratio_cases_ensemble  <- NA_real_
   bias_ratio_deaths_ensemble <- NA_real_
+  # Posterior reported CFR by location and year from the candidate ensemble. Held
+  # separately because the subset optimizer replaces `ensemble` with an object
+  # that carries no CFR draws; the trajectory panel and the medoid config use it.
+  cfr_posterior_run <- NULL
   # Dual metrics: BOTH the mean- and median-derived ensemble R^2/bias are
   # emitted in summary.json during the transition so historical (median) runs
   # remain cross-walkable regardless of the canonical central_method.
@@ -2231,6 +2295,60 @@ run_MOSAIC <- function(config,
       param_weights <- NULL
     }
 
+    # Forecast-year CFR shift. Years after a location's latest observed year are
+    # centred on the members' shared CFR deviation for that year: the weighted
+    # mean over members of each path's posterior-mode deviation, from one run per
+    # member (the first stochastic run of each, as in the ensemble below). A
+    # path's own deviation also absorbs its case error that year, so carrying it
+    # would carry the error; the mean keeps the shift the members share. It is
+    # stored in the deaths integration, so every ensemble, the medoid and a
+    # post-hoc re-run from deaths_integration.rds use the same value.
+    if (.mosaic_has_forecast_years(control$likelihood$.deaths_integration) &&
+        length(param_seeds) > 0) {
+      log_msg("Forecast-year CFR: members' latest-year shift from %d param sets x 1 run...",
+              length(param_seeds))
+      pilot <- tryCatch(
+        calc_model_ensemble(
+          config                   = config,
+          parameter_seeds          = param_seeds,
+          parameter_weights        = param_weights,
+          n_simulations_per_config = 1L,
+          envelope_quantiles       = c(0.025, 0.975),
+          PATHS                    = PATHS,
+          priors                   = priors,
+          sampling_args            = sampling_args,
+          score_idx_cases          = control$likelihood$.score_window_resolved$idx_cases,
+          score_idx_deaths         = control$likelihood$.score_window_resolved$idx_deaths,
+          parallel                 = ens_parallel,
+          n_cores                  = ens_n_cores,
+          root_dir                 = root_dir,
+          capture_trajectories     = FALSE,
+          deaths_integration       = control$likelihood$.deaths_integration,
+          verbose                  = FALSE
+        ),
+        error = function(e) {
+          log_warn("forecast-year CFR shift not estimated (%s); forecast years revert to the prior level",
+                   conditionMessage(e))
+          NULL
+        }
+      )
+      if (!is.null(pilot) && !is.null(pilot$forecast_shift)) {
+        control$likelihood$.deaths_integration <- .mosaic_set_forecast_shift(
+          control$likelihood$.deaths_integration, pilot$forecast_shift)
+        ok <- is.finite(pilot$forecast_shift)
+        log_msg("Forecast-year CFR shift (logit, latest observed year; %d location(s)): %s",
+                sum(ok), paste(sprintf("%s %+.2f", pilot$location_names[ok], pilot$forecast_shift[ok]),
+                               collapse = ", "))
+        tryCatch({
+          saveRDS(control$likelihood$.deaths_integration,
+                  file.path(dirs$calibration, "deaths_integration.rds"))
+          log_msg("Saved 2_calibration/deaths_integration.rds (with the forecast-year shift)")
+        }, error = function(e)
+          log_warn("deaths_integration.rds write skipped: %s", conditionMessage(e)))
+      }
+      rm(pilot)
+    }
+
     log_msg("Computing weighted posterior ensemble (%d param sets x %d stochastic)...",
             length(param_seeds), n_ensemble_stochastic_per)
 
@@ -2269,6 +2387,7 @@ run_MOSAIC <- function(config,
         trajectory_n_lines       = .traj_n_lines,
         trajectory_scratch_dir   = if (.traj_enabled) traj_scratch_dir else NULL,
         reduce_trajectories      = FALSE,
+        deaths_integration       = control$likelihood$.deaths_integration,
         verbose                  = control$logging$verbose
       ),
       error = function(e) {
@@ -2283,6 +2402,18 @@ run_MOSAIC <- function(config,
                 if (.persist_arrays) ensemble else .mosaic_ensemble_drop_arrays(ensemble)),
               ensemble_rds)
       log_msg("Saved 2_calibration/ensemble_candidate.rds")
+      # Posterior reported CFR by location and year (from the members' post-hoc
+      # CFR draws; covers forecast years past the last observation too).
+      if (!is.null(ensemble$cfr_posterior)) {
+        tryCatch({
+          if (!dir.exists(dirs$res_posterior)) dir.create(dirs$res_posterior, recursive = TRUE, showWarnings = FALSE)
+          utils::write.csv(ensemble$cfr_posterior,
+                           file.path(dirs$res_posterior, "cfr_posterior.csv"), row.names = FALSE)
+          log_msg("Saved 3_results/posterior/cfr_posterior.csv")
+        }, error = function(e)
+          log_warn("cfr_posterior.csv write skipped: %s", conditionMessage(e)))
+        cfr_posterior_run <- ensemble$cfr_posterior
+      }
 
       # Persist the engine spatial-structure arrays for the "spatial" figure
       # group (figs 5-6). These are the element-wise median across the FULL
@@ -2620,7 +2751,7 @@ run_MOSAIC <- function(config,
       })
 
     if (!is.null(traj)) {
-      traj$cfr_refs <- .mosaic_compute_cfr_refs(results, traj$location_names)
+      traj$cfr_refs <- .mosaic_compute_cfr_refs(cfr_posterior_run, traj$location_names)
       ensemble$trajectories <- traj
       .mosaic_persist_trajectory_artifact(ensemble, dirs, log_msg, log_warn)
 
@@ -2660,7 +2791,7 @@ run_MOSAIC <- function(config,
       # Log-scale MAE from each member to the ensemble central trajectory
       # (location 1, cases). Deliberate mix: per-member stochastic spread is
       # summarized by its MEDIAN (robust to a member's stochastic outliers),
-      # while the ensemble TARGET is the canonical central series (median by
+      # while the ensemble TARGET is the canonical central series (mean by
       # default) so the chosen representative member tracks the reported curve.
       cen_cases_target <- .central(ensemble, "cases")
       eps_med <- 1.0
@@ -2788,13 +2919,10 @@ run_MOSAIC <- function(config,
         NULL
       }
     )
-    if (!is.null(config_medoid)) {
-      config_medoid_file <- file.path(dirs$cal_best_model, "config_medoid.json")
-      jsonlite::write_json(config_medoid, config_medoid_file,
-                           pretty = TRUE, auto_unbox = TRUE, digits = NA)
-      log_msg("Saved %s", config_medoid_file)
-    }
   }
+  # The medoid's own posterior reported CFR, from its stochastic ensemble below.
+  # config_medoid.json is written after that ensemble, so it can carry it.
+  medoid_cfr_posterior <- NULL
 
   # ---------------------------------------------------------------------------
   # Medoid stochastic ensemble
@@ -2817,7 +2945,7 @@ run_MOSAIC <- function(config,
 
       # Run N stochastic reruns of the medoid config: R^2/bias and the
       # prediction plot both derive from the ensemble central series
-      # (central_method, median by default), consistent with the posterior ensemble.
+      # (central_method, mean by default), consistent with the posterior ensemble.
       log_msg("Building medoid model stochastic ensemble (%d reruns, source=%s)...",
               n_best_stochastic_per,
               if (ens_parallel) "local-parallel" else "local-sequential")
@@ -2835,6 +2963,7 @@ run_MOSAIC <- function(config,
           capture_trajectories     = FALSE,  # PLAN 14.H B-MEDOID: a median over
           # ~100 identically-weighted reruns is meaningless and nothing consumes a
           # medoid trajectory artifact -- never capture for the medoid.
+          deaths_integration       = control$likelihood$.deaths_integration,
           verbose                  = control$logging$verbose
         ),
         error = function(e) {
@@ -2844,6 +2973,7 @@ run_MOSAIC <- function(config,
       )
 
       if (!is.null(medoid_ensemble)) {
+        medoid_cfr_posterior <- medoid_ensemble$cfr_posterior
         # Persist the medoid ensemble object (Phase 1a / G3) unconditionally so
         # render_MOSAIC_figures() can reconstruct the medoid prediction plot
         # from disk without re-simulating (invariant P5). The posterior ensemble
@@ -2899,6 +3029,14 @@ run_MOSAIC <- function(config,
     log_warn("medoid model block failed: %s", e$message)
   })
 
+  # config_medoid.json, carrying the medoid's own posterior reported CFR
+  # (.mosaic_write_config_medoid()).
+  if (!is.null(config_medoid)) {
+    config_medoid <- .mosaic_write_config_medoid(
+      config_medoid, medoid_cfr_posterior, cfr_posterior_run,
+      file.path(dirs$cal_best_model, "config_medoid.json"), log_msg, log_warn)
+  }
+
   # ===========================================================================
   # ENSEMBLE METRICS, WINDOWED FIT, AND PREDICTIVE PLOTS
   # ===========================================================================
@@ -2952,9 +3090,9 @@ run_MOSAIC <- function(config,
     # Period-weighted implied CFR per location (posterior distribution from
     # ensemble members: sum simulated reported_deaths / sum simulated
     # reported_cases over the calibration window, per (param_set, stoch)).
-    # Surfaces in summary.json:cfr_implied alongside the algebraic
-    # cfr_baseline_<iso>/cfr_epidemic_<iso> derived parameter posteriors
-    # in 2_calibration/posterior/posteriors.json.
+    # Surfaces in summary.json:cfr_implied, alongside the posterior reported CFR
+    # by location and year in 3_results/posterior/cfr_posterior.csv (the
+    # calibrated mu_jt, which these realized period CFRs approach at epidemic PPV).
     cfr_implied <- tryCatch(
          .mosaic_calc_cfr_period_implied(
               cases_array     = ensemble$cases_array,
@@ -2962,7 +3100,10 @@ run_MOSAIC <- function(config,
               obs_cases       = ensemble$obs_cases,
               obs_deaths      = ensemble$obs_deaths,
               location_names  = ensemble$location_names %||% iso_code,
-              envelope_quantiles = c(0.025, 0.5, 0.975)
+              envelope_quantiles = c(0.025, 0.5, 0.975),
+              member_weights  = ensemble$parameter_weights,
+              score_idx       = max(ensemble$artifact_mask$score_idx_cases %||% 1L,
+                                    ensemble$artifact_mask$score_idx_deaths %||% 1L)
          ),
          error = function(e) {
               log_warn("implied-CFR computation failed: %s", e$message)
@@ -3123,6 +3264,7 @@ run_MOSAIC <- function(config,
   # Summary JSON (machine-readable run summary)
   log_msg("Writing summary...")
   summary_obj <- .mosaic_write_summary_json(dirs, state, start_time, config,
+    nb_dispersion = control$likelihood$.nb_dispersion_table,
                                              r2_cases_ensemble = r2_cases_ensemble,
                                              r2_deaths_ensemble = r2_deaths_ensemble,
                                              bias_ratio_cases_ensemble = bias_ratio_cases_ensemble,
@@ -3282,7 +3424,6 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{sample_tau_i}: Sample transmission rate (default: TRUE)
 #'     \item \code{sample_mobility_gamma}: Sample mobility gamma (default: TRUE)
 #'     \item \code{sample_mobility_omega}: Sample mobility omega (default: TRUE)
-#'     \item \code{sample_mu_j}: Sample recovery rate (default: TRUE)
 #'     \item \code{sample_iota}: Sample importation rate (default: TRUE)
 #'     \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
 #'     \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: FALSE, PINNED)
@@ -3348,10 +3489,11 @@ run_mosaic <- run_MOSAIC
 #'       \code{optimal_n} than exhaustive and records only the evaluated N's in the
 #'       diagnostics table. (The \code{\link{optimize_ensemble_subset}} function's
 #'       own \code{stride} default remains \code{1L} to preserve bit-identicality.)
-#'     \item \code{central_method}: Ensemble central tendency, \code{"median"}
-#'       (default; lower calibration bias) or \code{"mean"} (unbiased for
-#'       expected counts, never collapses on sparse deaths, unmasks implied-CFR
-#'       bias). Scalar or per-channel \code{c(cases=, deaths=)}. Governs the prediction
+#'     \item \code{central_method}: Ensemble central tendency, \code{"mean"}
+#'       (default; the expected count, which never collapses to zero on sparse
+#'       deaths) or \code{"median"} (the typical trajectory, robust to a few
+#'       explosive members; the default from v0.46.1 to v0.97.x). Scalar or
+#'       per-channel \code{c(cases=, deaths=)}. Governs the prediction
 #'       trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
 #'       the medoid target, and the subset-selection objective consistently.
 #'   }
@@ -3440,7 +3582,7 @@ run_mosaic <- run_MOSAIC
 #'     sample_tau_i = TRUE,
 #'     sample_mobility_gamma = FALSE,
 #'     sample_mobility_omega = FALSE,
-#'     sample_mu_j_baseline = TRUE,
+#'     sample_beta_j0_tot = TRUE,
 #'     sample_iota = FALSE,
 #'     sample_gamma_2 = FALSE,
 #'     sample_alpha_1 = FALSE
@@ -3463,7 +3605,7 @@ run_mosaic <- run_MOSAIC
 #' # Full workflow configuration (demonstrates logical order)
 #' ctrl <- mosaic_control_defaults(
 #'   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
-#'   sampling = list(sample_tau_i = TRUE, sample_mu_j_baseline = TRUE), # What to sample
+#'   sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
 #'   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
 #'   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
@@ -3527,9 +3669,8 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_kappa                  = FALSE,             # Overdispersion parameter
     sample_chi_endemic = TRUE,       # PPV among suspected cases (endemic)
     sample_chi_epidemic = TRUE,      # PPV among suspected cases (epidemic)
-    sample_rho_deaths = TRUE,        # Death detection rate (laser-cholera#49)
-    sample_delta_reporting_cases = TRUE,  # Infection-to-case reporting delay
-    sample_delta_reporting_deaths = TRUE, # Infection-to-death reporting delay
+    sample_rho_deaths = FALSE,       # Death detection rate: PINNED at 0.42 (cancels from reported deaths exactly; sets only true deaths)
+    sample_delta_reporting_cases = TRUE,  # Symptom-onset-to-case reporting delay (deaths are reported on the same lag)
 
     # Environmental decay (v0.27.0: decay_days_long is derived = short + spread)
     sample_decay_days_short = TRUE,  # Short-term environmental decay
@@ -3547,10 +3688,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_p_beta = TRUE,            # Proportion human-to-human transmission
     sample_tau_i = TRUE,             # Travel/diffusion probability
     sample_theta_j = TRUE,           # WASH coverage
-    sample_mu_j_baseline = TRUE,     # Baseline location-specific IFR
-    sample_mu_j_slope = TRUE,        # Temporal IFR trend
-    sample_mu_j_epidemic_factor = TRUE, # Epidemic IFR multiplier
-    sample_epidemic_threshold = TRUE, # Epidemic activation threshold
+    sample_epidemic_threshold = TRUE, # Case-reporting PPV switch threshold
 
     # Climate relationship
     sample_a_1_j = TRUE,             # Temperature coefficient 1
@@ -3579,6 +3717,23 @@ mosaic_control_defaults <- function(calibration = NULL,
     weight_cumulative_total = 0,     # T-normalized (/end_idx in helper); default OFF
     weight_wis = 0,                  # T-normalized; default OFF (try 0.10 for regularization)
 
+    # === Per-channel epsilon floor on the predicted mean ===
+    # The NB density is evaluated at max(1e-4, eps_rel * mean(obs)) per location
+    # and channel. Production scores ONE stochastic realisation, so a low-count
+    # series is mostly structural zeros and the floor sets the price of a zero
+    # prediction against a positive observation. Too small a floor makes zeros
+    # ruinous and the likelihood optimum shifts onto draws that over-predict the
+    # LEVEL (a Jensen gap, not a CFR misspecification). Deaths need a much larger
+    # fraction than cases: 13.6% of scored deaths cells predict zero against a
+    # positive observation versus 1.7% of cases cells. 0.25 for deaths is the
+    # swept value at which the deaths level at the likelihood optimum is unbiased.
+    # Since v0.96.0 run_MOSAIC() scores deaths with the reported CFR integrated
+    # out (quasi-Poisson, weekly), so eps_rel_deaths applies only to a standalone
+    # calc_model_likelihood() call without ll_deaths_core; the integrated score
+    # uses eps_rel_cases as its weekly background, the same relative floor as cases.
+    eps_rel_cases = 0.02,            # Relative floor, cases channel (and the integrated deaths background)
+    eps_rel_deaths = 0.25,           # Relative floor, standalone NB deaths scoring only (not read by run_MOSAIC)
+
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in time steps)
     sigma_peak_log = 0.5,            # Std dev for log peak magnitude
@@ -3586,16 +3741,13 @@ mosaic_control_defaults <- function(calibration = NULL,
     # === Time/location weighting ===
     weights_time = NULL,             # Numeric vector of per-timestep weights (NULL = uniform)
     weights_location = NULL,         # Numeric vector of per-location weights (NULL = uniform)
-    nb_k_min_cases = 3,              # Minimum NB dispersion floor (cases)
-    nb_k_min_deaths = 3,             # Minimum NB dispersion floor (deaths)
 
     # === Per-channel scored window (burn-in + deaths-era start) ===
     # Run-time only; config_default stays the clean [date_start, date_stop]
     # window. burn_in_days defaults to 30 (NOT 0): the seeded E/I discharge into
-    # cases settles by ~day 14-21, but the DEATHS IC transient lags (death-event
-    # + delta_reporting_deaths ~5d) and is still decaying to ~day 28-35, so 30
-    # clears both channels' transients while costing ~1-2.5% of a multi-year
-    # window. Set burn_in_days = 0L to disable (restores pre-v0.47.3 scoring,
+    # cases settles by ~day 14-21, and since v0.96.0 deaths are drawn at onset and
+    # reported on the case lag, so their transient settles with the cases; 30
+    # clears both channels while costing ~1-2.5% of a multi-year window. Set burn_in_days = 0L to disable (restores pre-v0.47.3 scoring,
     # bit-identical). See .mosaic_resolve_score_window() and the optimal-window
     # research. NOTE: on very short windows 30 may clamp to near n_time; set 0L.
     burn_in_days = 30L,              # Leading steps dropped from BOTH channels (IC transient; 0L disables)
@@ -3672,13 +3824,13 @@ mosaic_control_defaults <- function(calibration = NULL,
                                           # speed; set 1 for a bit-identical exhaustive
                                           # search. (The optimize_ensemble_subset()
                                           # function default stays 1L for parity.)
-    central_method     = "median",       # Ensemble central tendency: "median" (default,
-                                          # lower calibration bias; cases ~1.0, deaths
-                                          # ~0.7-2.1 on the v0456 5-country smoke) or
-                                          # "mean" (unbiased E[sum], unmasks implied-CFR
-                                          # bias). Scalar or per-channel
-                                          # c(cases=, deaths=). Drives predictions,
-                                          # plots, *_ensemble metrics, medoid, subset.
+    central_method     = "mean",         # Ensemble central tendency: "mean" (default
+                                          # from v0.98.0; the expected count, never 0 on
+                                          # sparse deaths) or "median" (the typical
+                                          # trajectory; the v0.46.1-v0.97.x default).
+                                          # Scalar or per-channel c(cases=, deaths=).
+                                          # Drives predictions, plots, *_ensemble
+                                          # metrics, medoid, subset.
     capture_trajectories = TRUE,          # Capture comprehensive internal-state channels
                                           # (compartments + FOI + incidence + burden) from
                                           # the POSTERIOR ensemble and persist

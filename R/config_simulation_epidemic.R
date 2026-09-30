@@ -7,7 +7,7 @@
 #'
 #' @format A named **list** identical in structure to
 #'   [config_default] but much smaller.  Key elements include
-#'   day-by-day matrices (`b_jt`, `psi_jt`, `mu_jt`, …), initial state vectors,
+#'   day-by-day matrices (`b_jt`, `d_jt`, `psi_jt`, …), initial state vectors,
 #'   and placeholder `reported_cases` / `reported_deaths`.
 #'
 #' @details

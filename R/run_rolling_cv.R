@@ -26,7 +26,11 @@
 #' arguments to \code{\link{est_suitability}} and overrides any date keys passed
 #' via \code{est_suitability_spec} (with a warning). \code{est_suitability_spec}
 #' therefore controls only modeling choices (target, features, architecture), not
-#' the cutoff window.
+#' the cutoff window. The reported CFR \code{mu_jt} and its prior are rebuilt per
+#' cutoff from a WHO-annual GAM fitted only to years up to \code{year(T) - 1}
+#' (a calendar year's annual total is not known until the year has ended), and
+#' carried flat past that year's 1 July. So no post-cutoff surveillance year
+#' reaches the config, the prior centres or the prior widths.
 #'
 #' \strong{Coupled metapopulation.} \code{iso} may be a single country or a vector;
 #' a vector runs as the coupled metapopulation (one calibration per cutoff covering
@@ -87,9 +91,10 @@
 #'   process, so cost scales with this value times the number of
 #'   cutoffs and locations.
 #' @param central_method Ensemble central tendency used for the compiled
-#'   predictions and the in-sample calibration metrics/medoid: \code{"median"}
-#'   (default; lower calibration bias) or \code{"mean"} (unbiased for expected
-#'   counts, never collapses on sparse deaths). Scalar or per-channel
+#'   predictions and the in-sample calibration metrics/medoid: \code{"mean"}
+#'   (default; the expected count, which never collapses to zero on sparse
+#'   deaths) or \code{"median"} (the typical trajectory; the default from
+#'   v0.46.1 to v0.97.x). Scalar or per-channel
 #'   \code{c(cases=, deaths=)}. The
 #'   predictions table carries \code{pred_central} (this choice) plus
 #'   \code{pred_mean}/\code{pred_median} for cross-walk; WIS/coverage remain
@@ -135,7 +140,7 @@ run_rolling_cv <- function(PATHS,
                            optimize_subset      = TRUE,
                            models               = c("ensemble", "ensemble_opt", "medoid"),
                            n_reps_best_medoid  = 50L,
-                           central_method       = "median",
+                           central_method       = "mean",
                            est_suitability_spec = list(),
                            psi_cache            = NULL,
                            dir_output,
@@ -208,6 +213,18 @@ run_rolling_cv <- function(PATHS,
                                                est_suitability_spec))
      }
 
+     # WHO annual data for the per-cutoff reported-CFR refit (one GAM per
+     # distinct last data year, shared by the cutoffs in the same calendar year).
+     # Checked before anything is written: without it no cutoff can be built.
+     if (!requireNamespace("mgcv", quietly = TRUE))
+          stop("run_rolling_cv() refits the reported CFR per cutoff with mgcv; install it.")
+     who_annual_path <- file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual.csv")
+     if (is.null(PATHS$DATA_WHO_ANNUAL) || !file.exists(who_annual_path))
+          stop("WHO annual data not found at ", who_annual_path,
+               "; run_rolling_cv() refits the reported CFR per cutoff from it.")
+     who_annual <- utils::read.csv(who_annual_path, stringsAsFactors = FALSE)
+     cfr_asof <- list()
+
      dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
      runs_dir <- file.path(dir_output, "runs")
      dir.create(runs_dir, showWarnings = FALSE)
@@ -252,9 +269,22 @@ run_rolling_cv <- function(PATHS,
                     psi_csv <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
                }
 
-               # 2. build cutoff config: subset loc, swap psi, mask obs > T
+               # 2. build cutoff config: subset loc, swap psi, as-of mu_jt, mask obs > T
                cfg <- MOSAIC::get_location_config(iso = iso, config = base_config)
                cfg$psi_jt <- .rolling_cv_psi_matrix(psi_csv, cfg$location_name, cfg_dates)
+               # The reported CFR and its prior, from WHO annual years <= year(T) - 1
+               # only. Calibration's CFR offset, estimated on deaths <= T, then
+               # carries into the forecast through the post-hoc death redraw.
+               last_cfr_year <- as.integer(format(T_k, "%Y")) - 1L
+               key <- as.character(last_cfr_year)
+               if (is.null(cfr_asof[[key]]))
+                    cfr_asof[[key]] <- .rcv_cfr_asof(who_annual, last_cfr_year, cfg_stop)
+               cfg <- .rcv_apply_cfr_asof(cfg, cfr_asof[[key]], cfg_dates)
+               priors_k <- priors
+               priors_k$mu_jt <- .mosaic_mu_jt_prior(
+                    cfr_asof[[key]]$predictions, location_name = cfg$location_name,
+                    sd_year = cfr_asof[[key]]$sigma, tau = cfr_asof[[key]]$tau,
+                    sd_product = priors$mu_jt$sd_product %||% 0.3)
                nloc <- length(cfg$location_name)
                rc <- .rcv_as_matrix(cfg$reported_cases,  nloc, length(cfg_dates))
                rd <- .rcv_as_matrix(cfg$reported_deaths, nloc, length(cfg_dates))
@@ -263,7 +293,7 @@ run_rolling_cv <- function(PATHS,
                cfg$reported_cases <- rc; cfg$reported_deaths <- rd
 
                # 3. calibrate <= T + project full window
-               MOSAIC::run_MOSAIC(config = cfg, priors = priors, dir_output = dir_k,
+               MOSAIC::run_MOSAIC(config = cfg, priors = priors_k, dir_output = dir_k,
                                   control = control)
 
                # 4. compile predictions for every requested model type
@@ -505,7 +535,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rolling_cv_compile_run <- function(ensemble, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, model = "ensemble",
-                                    central_method = "median") {
+                                    central_method = "mean") {
      central_method <- .mosaic_resolve_central_method(central_method)
      n_t   <- ensemble$n_time_points
      ds    <- as.Date(ensemble$date_start); de <- as.Date(ensemble$date_stop)
@@ -631,7 +661,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rcv_compile_all_models <- function(run_dir, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, models, n_reps,
-                                    central_method = "median") {
+                                    central_method = "mean") {
      central_method <- .mosaic_resolve_central_method(central_method)
      cal      <- file.path(run_dir, "2_calibration")
      ens_path <- file.path(cal, "ensemble_candidate.rds")
@@ -709,6 +739,36 @@ compile_rolling_cv_predictions <- function(dir_output,
      }, error = function(e) NULL)
      if (is.null(val) || length(val) != 1L || !is.numeric(val)) return(NA_real_)
      as.numeric(val)
+}
+
+#' Reported-CFR estimates as of a cutoff
+#'
+#' Fits the WHO-annual GAM to years up to \code{last_year} only, with carry-forward
+#' to the end of the simulation window.
+#' @keywords internal
+#' @noRd
+.rcv_cfr_asof <- function(who_annual, last_year, cfg_stop) {
+     fy <- max(0L, as.integer(format(as.Date(cfg_stop), "%Y")) - as.integer(last_year))
+     est <- .cfr_estimate(who_annual, forecast_years = fy, forecast_method = "carry_forward",
+                          last_year = last_year)
+     if (est$last_data_year != last_year)
+          warning(sprintf("WHO annual data end in %d, before the cutoff's last usable year %d.",
+                          est$last_data_year, last_year), call. = FALSE)
+     list(predictions = est$predictions, sigma = est$fit$sigma, tau = est$fit$tau,
+          last_data_year = est$last_data_year)
+}
+
+#' Put an as-of reported CFR into a cutoff config
+#'
+#' Replaces \code{mu_jt} (and any legacy mortality fields) with the daily matrix
+#' built from \code{.rcv_cfr_asof()} estimates.
+#' @keywords internal
+#' @noRd
+.rcv_apply_cfr_asof <- function(cfg, asof, cfg_dates) {
+     for (f in c(.MOSAIC_LEGACY_MORTALITY_FIELDS, "delta_reporting_deaths")) cfg[[f]] <- NULL
+     cfg$mu_jt <- make_mu_jt(asof$predictions, location_name = cfg$location_name,
+                             date_start = min(cfg_dates), date_stop = max(cfg_dates))
+     cfg
 }
 
 #' Re-simulate a single config to a prediction object matching the ensemble shape

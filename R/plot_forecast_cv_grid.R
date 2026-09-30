@@ -10,7 +10,8 @@
 #'   \item Observed points by \code{segment}: filled circle = in-sample (training,
 #'     \eqn{\le} cutoff), \code{x} = embargo-gap weeks, open circle = out-of-sample
 #'     (validation, shown up to \code{forecast_display_months} past the cutoff).
-#'   \item Model \code{pred_median}: solid line + full-opacity CI ribbon for
+#'   \item Model \code{pred_central} (the run's \code{central_method}; \code{pred_median}
+#'     for predictions written before it existed): solid line + full-opacity CI ribbon for
 #'     dates \eqn{\le} cutoff; solid line + lighter CI ribbon after the cutoff (distinguished by the dashed cutoff rule)
 #'     (clipped to \code{forecast_display_months}).
 #'   \item Dashed vertical line at the cutoff; a faint dotted line at
@@ -27,7 +28,8 @@
 #' @param predictions Predictions to plot: a data.frame, a path to a
 #'   \code{predictions*.parquet}/\code{.csv}, or a directory holding per-cell
 #'   \code{*/cutoff_*/predictions.parquet}. Must carry \code{iso_code,
-#'   cutoff_date, date, metric, segment, observed, pred_median, model} and the CI
+#'   cutoff_date, date, metric, segment, observed, pred_median, model} (plus
+#'   \code{pred_central} when present) and the CI
 #'   columns for \code{ci} (e.g. \code{pi95_lo}/\code{pi95_hi}).
 #' @param metric Single metric to render: \code{"cases"} or \code{"deaths"}.
 #' @param model Model series to plot (default \code{"ensemble_opt"}, the
@@ -87,6 +89,9 @@ plot_forecast_cv_grid <- function(predictions,
               "observed", "pred_median", "model", lo, hi)
      miss <- setdiff(req, names(d))
      if (length(miss)) stop("predictions missing column(s): ", paste(miss, collapse = ", "))
+     # Draw the central series that evaluate_rolling_cv() scores; default to the
+     # median for predictions written before central_method existed.
+     if (!"pred_central" %in% names(d)) d$pred_central <- d$pred_median
 
      d <- d[d$metric == metric & d$model == model, , drop = FALSE]
      if (!nrow(d)) stop("No rows for metric='", metric, "', model='", model, "'.")
@@ -150,11 +155,11 @@ plot_forecast_cv_grid <- function(predictions,
                                         alpha = 0.30) +
                     ggplot2::scale_shape_manual(values = c("IS (train)" = 16, "gap" = 4, "OOS (validation)" = 21),
                                                 drop = FALSE, name = NULL)
-          # model median line LAST -> drawn on top of ribbon + points
+          # model central line LAST -> drawn on top of ribbon + points
           p <- p +
-               ggplot2::geom_line(data = pre,  ggplot2::aes(.data$date, .data$pred_median),
+               ggplot2::geom_line(data = pre,  ggplot2::aes(.data$date, .data$pred_central),
                                   color = colors[["line"]], linewidth = 1.0) +
-               ggplot2::geom_line(data = post, ggplot2::aes(.data$date, .data$pred_median),
+               ggplot2::geom_line(data = post, ggplot2::aes(.data$date, .data$pred_central),
                                   color = colors[["line"]], linewidth = 1.0)
           p +
                ggplot2::scale_x_date(limits = x_range, date_breaks = "6 months", date_labels = "%y-%m",

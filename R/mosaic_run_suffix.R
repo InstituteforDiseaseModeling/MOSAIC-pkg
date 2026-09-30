@@ -34,7 +34,7 @@
 .mosaic_check_suffix <- function(suffix, is_default) {
      if (!is.character(suffix) || length(suffix) != 1L || is.na(suffix)) {
           stop("`suffix` must be a single non-NA character string; got ",
-               paste(utils::capture.output(str(suffix)), collapse = " "), call. = FALSE)
+               paste(utils::capture.output(utils::str(suffix)), collapse = " "), call. = FALSE)
      }
      if (!is_default && !nzchar(suffix)) {
           stop("A non-default run must not write to production filenames.\n",

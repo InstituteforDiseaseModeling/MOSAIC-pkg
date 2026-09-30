@@ -52,7 +52,6 @@ d_rate <- 0.00004                                # deaths ≈ 1.5 % yr‑¹
 
 b_jt <- matrix(b_rate,  n_loc, length(t), dimnames = list(j, t))
 d_jt <- matrix(d_rate, n_loc, length(t), dimnames = list(j, t))
-mu_jt <- matrix(0.01,  n_loc, length(t), dimnames = list(j, t))  # IFR
 
 nu_1_jt <- nu_2_jt <- matrix(0, n_loc, length(t), dimnames = list(j, t))
 
@@ -131,18 +130,14 @@ sim_args <- list(
      gamma_1          = 0.2,
      gamma_2          = 0.1,
      epsilon          = 0.0003,
-     mu_jt            = mu_jt,
-     mu_j_baseline        = setNames(rep(0.01, n_loc), j),  # aligned with mu_jt baseline
-     mu_j_slope           = setNames(rep(0,    n_loc), j),  # no temporal trend (toy)
-     mu_j_epidemic_factor = setNames(rep(0,    n_loc), j),  # no epidemic IFR bump (toy)
+     mu_jt            = 0.02,      # Reported CFR (2%, constant); the engine draws deaths at onset from it
      chi_endemic      = 0.5,       # PPV during endemic periods
      chi_epidemic     = 0.75,      # PPV during epidemic periods
      epidemic_threshold = 0.0001,  # incidence threshold for epidemic definition
      rho              = 0.52,
      rho_deaths       = 0.42,      # Death detection rate (laser-cholera#49; mean of informative Beta(36.95, 51.02))
      sigma            = 0.24,
-     delta_reporting_cases  = 0,   # Infection-to-case reporting delay (days)
-     delta_reporting_deaths = 5,   # Infection-to-death reporting delay (days)
+     delta_reporting_cases  = 0,   # Symptom-onset-to-case reporting delay (days)
      longitude        = longitude,
      latitude         = latitude,
      mobility_omega   = mobility_omega,
@@ -227,8 +222,8 @@ sim <- MOSAIC::run_simulation(config = sim_config, quiet = TRUE)
 # series by one step -- and the result would still look plausible.
 #
 # Semantics are unchanged: reported_cases is rho/chi-adjusted (surveillance-
-# comparable scale) and reported_deaths has rho_deaths applied with a
-# delta_reporting_deaths-day lag. Both populate config$reported_cases /
+# comparable scale) and reported_deaths has rho_deaths applied, on
+# the same lag as the cases (delta_reporting_cases). Both populate config$reported_cases /
 # $reported_deaths consumed downstream by calc_model_likelihood().
 exp_cases  <- sim$results$reported_cases
 exp_deaths <- sim$results$reported_deaths

@@ -19,8 +19,10 @@
 # ============================================================================
 
 # Hand NB log-density (mirrors the scorer's negbin kernel)
-.nb_logdens <- function(o, e, k) {
-     e <- max(e, 1e-10)
+# eps mirrors the channel-relative floor in calc_log_likelihood_negbin (A1b)
+.nb_eps <- function(o) max(1e-4, 0.02 * mean(o[is.finite(o)], na.rm = TRUE))
+.nb_logdens <- function(o, e, k, eps = 1e-10) {
+     e <- max(e, eps)
      lgamma(o + k) - lgamma(k) - lgamma(o + 1) +
           k * log(k / (k + e)) + o * log(e / (k + e))
 }
@@ -83,13 +85,21 @@ testthat::test_that("weighted NB LL equals sum(w_eff * NB log-density) by hand",
      zd    <- matrix(0, 1, 4)
      wobs  <- matrix(c(1, 0.5, 1, 1), nrow = 1)
 
-     # Reconstruct the effective weight + k exactly as the scorer does.
+     # Reconstruct the effective weight exactly as the scorer does. The
+     # dispersion is supplied explicitly so this test isolates the WEIGHTING
+     # mechanics from how k happens to be estimated.
+     k     <- 3
      w_eff <- MOSAIC:::.weights_obs_effective(rep(1, 4), wobs[1, ], obs_c[1, ], est_c[1, ])
-     k     <- MOSAIC:::.nb_size_from_obs_weighted(obs_c[1, ], w_eff, k_min = 3)
-     ll_vec   <- vapply(1:4, function(i) .nb_logdens(obs_c[1, i], est_c[1, i], k), numeric(1))
-     expected <- sum(w_eff * ll_vec)   # deaths all-zero-data contribute 0
+     eps      <- .nb_eps(obs_c[1, ])
+     ll_vec   <- vapply(1:4, function(i) .nb_logdens(obs_c[1, i], est_c[1, i], k, eps), numeric(1))
+     # A1b scores every cell, so the all-zero deaths channel contributes its own
+     # (small, negative) density rather than exactly 0.
+     eps_d    <- .nb_eps(zd[1, ])
+     ll_d     <- vapply(1:4, function(i) .nb_logdens(zd[1, i], zd[1, i], k, eps_d), numeric(1))
+     expected <- sum(w_eff * ll_vec) + sum(ll_d)
 
-     ll <- MOSAIC::calc_model_likelihood(obs_c, est_c, zd, zd, weights_obs_cases = wobs)
+     ll <- MOSAIC::calc_model_likelihood(obs_c, est_c, zd, zd, weights_obs_cases = wobs,
+                                         nb_k_cases = k, nb_k_deaths = k)
      expect_equal(ll, expected, tolerance = 1e-10)
 })
 
@@ -120,7 +130,7 @@ testthat::test_that("a fully-zeroed weight row contributes zero LL", {
      ll <- MOSAIC::calc_model_likelihood(
           obs_c, est_c, zd, zd, weights_obs_cases = matrix(0, 1, 4)
      )
-     expect_equal(ll, 0, tolerance = 1e-12)
+     expect_equal(ll, 0, tolerance = 1e-2)   # A1b scores zero cells; no longer exactly 0
 
      # Helper returns all zeros for a zeroed row.
      w_eff <- MOSAIC:::.weights_obs_effective(rep(1, 4), rep(0, 4), obs_c[1, ], est_c[1, ])
@@ -141,12 +151,14 @@ testthat::test_that("exactly-3-observed boundary passes under all-ones (gate bac
      expect_true(is.finite(ll_ones))
      expect_true(ll_ones != 0)   # cases block contributed
 
-     # 2 finite obs -> fails the >=3 gate -> cases contributes 0; deaths zero -> total 0.
+     # 2 finite obs -> fails the >=3 gate -> cases contributes 0. The all-zero
+     # deaths channel is still scored (A1b), so the total is a small negative
+     # value rather than exactly 0.
      obs_c2 <- matrix(c(0, 5, NA, NA), nrow = 1)
      ll2 <- MOSAIC::calc_model_likelihood(
           obs_c2, est_c, zd, zd, weights_obs_cases = matrix(1, 1, 4)
      )
-     expect_equal(ll2, 0, tolerance = 1e-12)
+     expect_equal(ll2, 0, tolerance = 1e-2)
 })
 
 # ---------------------------------------------------------------------------

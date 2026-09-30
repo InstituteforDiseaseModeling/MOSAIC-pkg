@@ -16,8 +16,11 @@ calc_model_likelihood(
   weights_obs_cases = NULL,
   weights_obs_deaths = NULL,
   config = NULL,
-  nb_k_min_cases = 3,
-  nb_k_min_deaths = 3,
+  nb_k_cases = NULL,
+  nb_k_deaths = NULL,
+  eps_rel_cases = 0.02,
+  eps_rel_deaths = 0.25,
+  ll_deaths_core = NULL,
   verbose = FALSE,
   weight_peak_timing = 0,
   weight_peak_magnitude = 0,
@@ -54,9 +57,38 @@ path. Only the NB cases/deaths terms are weighted; shape terms are not (v1).}
 
 \item{config}{Optional simulation config list (location_name, date_start, date_stop).}
 
-\item{nb_k_min_cases}{Minimum NB dispersion floor for cases. Default \code{3}.}
+\item{nb_k_cases}{NB dispersion for the cases channel: a scalar applied to
+every location, or a vector with one entry per location. \code{Inf} selects
+the Poisson limit. When \code{NULL} (default) the dispersion is estimated
+from \code{obs_cases} via \code{\link{est_nb_dispersion}}; in
+\code{run_MOSAIC()} it is precomputed once and supplied here.}
 
-\item{nb_k_min_deaths}{Minimum NB dispersion floor for deaths. Default \code{3}.}
+\item{nb_k_deaths}{NB dispersion for the deaths channel; see
+\code{nb_k_cases}.}
+
+\item{eps_rel_cases, eps_rel_deaths}{Positive scalars. Within each location the
+predicted mean is floored at \code{max(1e-4, eps_rel * mean(obs))} before the
+NB density is evaluated, separately per channel. The floor is not cosmetic:
+production scores a SINGLE stochastic realisation, so a low-count series is
+full of cells where the realisation is 0 against a positive observation, and
+the size of the floor is what the likelihood pays for such a cell. Too small a
+floor makes zeros ruinous and the optimum moves to a draw that over-predicts
+the level (a Jensen gap: \code{E_seed[LL(est)]} peaks well above
+\code{LL(E_seed[est])}). Cases default \code{0.02}; deaths default
+\code{0.25}, sized by sweep so the deaths level at the likelihood optimum is
+unbiased. Cases are far less exposed: 13.6 percent of scored deaths cells
+predict zero against a positive observation, versus 1.7 percent of cases
+cells.}
+
+\item{ll_deaths_core}{Optional numeric vector, one value per location: the
+deaths log-likelihood computed with the reported case fatality ratio
+integrated out (\code{calc_log_likelihood_deaths_integrated()$ll}). When
+supplied it replaces the negative-binomial deaths core, so
+\code{eps_rel_deaths} and \code{nb_k_deaths} are not used for the core;
+\code{run_MOSAIC()} always supplies it. The level-dependent deaths shape
+terms (peak magnitude, cumulative, WIS) are then dropped, with a warning,
+because \code{est_deaths} is drawn at the prior CFR; deaths peak timing,
+which does not depend on the level, is kept.}
 
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 
@@ -86,7 +118,7 @@ or \code{NA_real_} if all locations contribute nothing.
 \description{
 Scores model fits against observed data using a Negative Binomial (NB)
 time-series log-likelihood per location and outcome (cases, deaths) with
-a weighted MoM dispersion estimate and a \code{k_min} floor.
+a per-location NB dispersion estimated by \code{\link{est_nb_dispersion}}.
 }
 \details{
 Optional shape terms are enabled by setting their weight > 0: peak timing

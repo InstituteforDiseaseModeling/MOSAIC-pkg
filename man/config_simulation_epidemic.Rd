@@ -7,7 +7,7 @@
 \format{
 A named \strong{list} identical in structure to
 \link{config_default} but much smaller.  Key elements include
-day-by-day matrices (\code{b_jt}, \code{psi_jt}, \code{mu_jt}, …), initial state vectors,
+day-by-day matrices (\code{b_jt}, \code{d_jt}, \code{psi_jt}, …), initial state vectors,
 and placeholder \code{reported_cases} / \code{reported_deaths}.
 }
 \usage{

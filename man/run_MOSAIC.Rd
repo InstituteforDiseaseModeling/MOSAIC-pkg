@@ -124,7 +124,7 @@ Executes the full MOSAIC calibration workflow:
 See \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}} for complete documentation. The control structure contains:
 \describe{
 \item{calibration}{n_simulations, n_iterations, max_simulations_total, batch_size_adaptive, etc.}
-\item{sampling}{sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.}
+\item{sampling}{sample_tau_i, sample_mobility_gamma, sample_beta_j0_tot, etc.}
 \item{parallel}{enable, n_cores, type, progress}
 \item{paths}{clean_output, plots}
 \item{targets}{ESS_param, ESS_best, A_best, CVw_best, etc.}

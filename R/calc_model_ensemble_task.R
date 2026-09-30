@@ -35,18 +35,24 @@
 #' @param traj_channels Character vector of result channels to capture.
 #' @param traj_scratch Directory to stream captured channels to, or NULL to
 #'   attach them to the returned record.
+#' @param deaths_integration Run-level setup for the post-hoc death redraw from
+#'   the reported CFR posterior, or \code{NULL} to keep the engine's deaths.
 #'
 #' @return A list with \code{param_idx}, \code{stoch_idx}, \code{success},
 #'   and on success \code{reported_cases}, \code{reported_deaths},
-#'   \code{spatial_hazard}, \code{coupling}, \code{pi_ij} (and optionally
-#'   \code{traj}/\code{traj_epi}); on failure \code{error}.
+#'   \code{spatial_hazard}, \code{coupling}, \code{pi_ij}, \code{cfr_year}
+#'   (per-location yearly reported CFR drawn for this member, or \code{NULL}),
+#'   \code{anchor_dev} (per-location posterior-mode CFR deviation of the latest
+#'   observed year, NA without forecast years, or \code{NULL}),
+#'   optionally \code{traj}/\code{traj_epi}; on failure \code{error}.
 #'
 #' @keywords internal
 #' @noRd
 .mosaic_ensemble_sim_task <- function(task_info, param_configs_list,
                                   capture_traj = FALSE,
                                   traj_channels = character(0),
-                                  traj_scratch = NULL) {
+                                  traj_scratch = NULL,
+                                  deaths_integration = NULL) {
   param_idx <- task_info$param_idx
   stoch_idx <- task_info$stoch_idx
   tryCatch({
@@ -55,6 +61,26 @@
     model <- run_simulation(config = param_config,
                             seed   = param_config$seed,
                             quiet  = TRUE)
+    # Deaths from the calibrated reported CFR: redraw them from the CFR's
+    # posterior given this path (the integration calibration scored with),
+    # before any channel is harvested below, so predictions, trajectories and
+    # forecast years all carry it.
+    # The population compartments keep the engine's own fatal draws (at the
+    # prior mu_jt: p_fatal, a few percent of symptomatic onsets, never enter
+    # Isym), so in the trajectory channels N balances against the engine's
+    # deaths, not these.
+    cfr_year <- NULL
+    cfr_infeasible <- 0L
+    anchor_dev <- NULL
+    if (!is.null(deaths_integration)) {
+      ph <- .mosaic_posthoc_deaths(deaths_integration, model$results, param_config,
+                                   seed = param_config$seed + 7919L)
+      model$results$reported_deaths <- ph$reported_deaths
+      model$results$disease_deaths  <- ph$disease_deaths
+      cfr_year <- ph$cfr_year
+      cfr_infeasible <- ph$n_infeasible
+      anchor_dev <- .mosaic_anchor_deviation(deaths_integration, ph$theta)
+    }
     # Extract the engine's spatial-structure arrays (J x T hazard, J x J
     # coupling, J x J pi_ij) BEFORE the model is discarded below (F1). These
     # are computed by the engine's DerivedValues component at the final tick
@@ -71,6 +97,9 @@
                    spatial_hazard = sh,
                    coupling       = cpl,
                    pi_ij          = pij,
+                   cfr_year       = cfr_year,
+                   cfr_infeasible = cfr_infeasible,
+                   anchor_dev     = anchor_dev,
                    success = TRUE)
     # Trajectory channels (comprehensive internal-state capture). Harvested
     # here, where model$results is in hand, at zero marginal sim cost --

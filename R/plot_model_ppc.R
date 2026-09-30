@@ -21,7 +21,8 @@
 #' @details
 #' Creates a 6-page multi-page PDF per output file:
 #' \enumerate{
-#'   \item Density overlays of observed vs predicted median distributions
+#'   \item Density overlays of observed vs predicted central (the run's
+#'     \code{central_method}, mean by default) distributions
 #'   \item Credible interval coverage analysis (50% and 95% CIs vs nominal)
 #'   \item Observed vs predicted calibration scatter plots
 #'   \item Quantile-quantile plots
@@ -167,6 +168,16 @@ plot_model_ppc <- function(predictions_dir = NULL,
 
         if (verbose) message("Using prediction column: ", pred_col)
 
+        # Name the plotted central series per metric: predicted_central follows
+        # the run's central_method, which the CSV records on every row.
+        .central_label <- function(metric) {
+            if (pred_col == "predicted_mean") return("Mean")
+            if (pred_col == "predicted_median" || !"central_method" %in% names(all_data)) return("Median")
+            cm <- unique(stats::na.omit(as.character(all_data$central_method[all_data$metric == metric])))
+            if (length(cm) != 1L) return("Central")
+            paste0(toupper(substr(cm, 1L, 1L)), substr(cm, 2L, nchar(cm)))
+        }
+
         # Parse dates if present
         has_dates <- "date" %in% names(all_data)
         if (has_dates) all_data$date <- as.Date(all_data$date)
@@ -277,7 +288,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
         # ======================================================================
         # PAGE 1: Density overlays
         # Compares the marginal distribution of observations to the distribution
-        # of posterior predictive medians. Note: this is not a full PPC density
+        # of the posterior predictive central series. Note: this is not a full PPC density
         # (which would require all ensemble draws); it assesses whether the
         # central tendency of predictions matches the data distribution.
         # ======================================================================
@@ -302,7 +313,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
                 yl <- c(0, max(c(d_obs$y, d_pred$y)) * 1.1)
 
                 plot(d_obs, col = palette$observed, lwd = 2.5,
-                     main = paste0("Observed vs Predicted Median: ", metric),
+                     main = paste0("Observed vs Predicted ", .central_label(metric), ": ", metric),
                      sub  = paste0("n = ", length(obs_v), " non-NA time points"),
                      xlab = paste0("log(", metric, " + 1)"), ylab = "Density",
                      xlim = xl, ylim = yl, type = "n")
@@ -314,7 +325,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
                 lines(d_obs,  col = palette$observed, lwd = 2.5)
                 lines(d_pred, col = col_pred,          lwd = 2.5)
                 legend("topright",
-                       legend = c("Observed", "Predicted Median"),
+                       legend = c("Observed", paste("Predicted", .central_label(metric))),
                        col    = c(palette$observed, col_pred),
                        lwd    = 2.5, bty = "n", cex = 0.9)
             } else {
