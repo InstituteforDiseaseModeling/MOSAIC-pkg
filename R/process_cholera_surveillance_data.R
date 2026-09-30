@@ -14,10 +14,15 @@
 #'   \item \strong{DATA_CHOLERA_WEEKLY}: Directory where the combined weekly output will be saved.
 #'   \item \strong{DATA_CHOLERA_DAILY}: Directory where the combined daily output will be saved.
 #' }
-#' @details Duplicate country-week entries across sources are resolved by a fixed
-#'   priority \strong{WHO > JHU > AI > SUPP}, with a completeness tie-break: within
-#'   a key, rows with complete cases AND deaths are preferred before the source
-#'   priority is applied.
+#' @details Duplicate country-week entries across sources are resolved by
+#'   selecting one whole row per week: a row carrying a count beats an empty one;
+#'   an observed row (WHO/JHU/SUPP, or AI \code{observed}/\code{documented_zero})
+#'   beats an imputed one (AI \code{fourier_*} or any other modelled method),
+#'   whatever the sources; a row with a case count beats a deaths-only row; and
+#'   the fixed priority \strong{WHO > JHU > AI > SUPP} decides the rest. When the
+#'   selected row has no death count, the deaths of the highest-priority other
+#'   observed row reporting the same case count that week are used (the same
+#'   report); \code{source_deaths} names the source of each death count.
 #' @param include_ai Logical (default \code{FALSE}). When \code{TRUE}, reads the
 #'   AI-mined processed file (\code{DATA_AI_WEEKLY/cholera_country_weekly_processed.csv},
 #'   produced by \code{\link{process_AI_cholera_data}}) as a fourth source, using
@@ -38,7 +43,7 @@
 #'   \item Reads weekly CSVs from all three sources and adds a \code{source} column.
 #'   \item Cleans rows with missing key grouping fields (iso_code, year, week).
 #'   \item Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).
-#'   \item Deduplicates by \code{iso_code} and \code{date_start} (the actual ISO-week Monday, robust to year-boundary week-1 collisions) using the fixed priority WHO > JHU > AI > SUPP with a completeness tie-break.
+#'   \item Deduplicates by \code{iso_code} and \code{date_start} (the actual week Monday, robust to year-boundary week-1 collisions): observed beats imputed, then the fixed priority WHO > JHU > AI > SUPP (see Details), and adds \code{source_deaths}.
 #'   \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 #'   \item Saves the combined weekly data to
 #'     \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
@@ -53,7 +58,7 @@
 #'     than being dropped.
 #'   \item Downscales weekly \code{cases} and \code{deaths} to daily counts,
 #'     preserving square structure (keeping days with NA), and carries \code{source},
-#'     \code{disaggregation_method}, and \code{confidence_weight} to each daily row
+#'     \code{source_deaths}, \code{disaggregation_method}, and \code{confidence_weight} to each daily row
 #'     (the weight is replicated constant across the week, never divided).
 #'   \item Saves the combined daily data to
 #'     \code{PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv}.
@@ -172,22 +177,67 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      }
      all_df$key <- paste(all_df$iso_code, as.character(all_df$date_start), sep = "_")
 
-     # Within a key (same country + same Monday across sources) prefer, in order:
-     # (1) rows with complete cases AND deaths, then (2) higher-priority source.
-     # Priority WHO > JHU > AI > SUPP. Vectorized: O(n log n).
+     # Source selection within a key (same country + same Monday across sources).
+     # ONE row supplies the week (whole-row selection), chosen by, in order:
+     #   (1) a row carrying a count beats an empty row (both fields NA);
+     #   (2) an OBSERVED row beats an IMPUTED one, whatever the sources. Observed =
+     #       a direct WHO/JHU/SUPP row (disaggregation_method NA) or an AI row whose
+     #       method is `observed` or `documented_zero`; every other method
+     #       (`fourier_*`, `assumed_zero`, any future modelled method) is imputed;
+     #   (3) a row with a case count beats a deaths-only row (cases are the
+     #       primary fit target; a row without them does not report the week);
+     #   (4) source priority WHO > JHU > AI > SUPP.
+     # This replaces a completeness tie-break (rows with cases AND deaths first,
+     # then priority) inherited from the original keep_source merge, which assumed
+     # every source reports both fields. Since process_JHU_weekly_data() keeps a
+     # missing JHU death count as NA instead of 0 (v0.100.0), that rule let 2,235
+     # observed JHU weeks (2011-2023) lose to AI rows -- 2,037 of them fourier
+     # interpolations -- and inflated those weeks' cases 4.9x (54,248 -> 264,759).
+     #
+     # Deaths completion (the case the completeness rule existed for): when the
+     # selected row has cases but no deaths, its deaths are taken from the
+     # highest-priority OTHER observed row that reports the SAME case count for
+     # that week -- the same report, one source having dropped the deaths field.
+     # A row with a different case count is a different report, so its deaths are
+     # not mixed in (on the 2026-09 inputs 157 of the 231 such weeks agree
+     # exactly; the other 74 differ by up to 6,000 cases), and imputed deaths are
+     # never used. `source_deaths` records which source supplied the deaths value
+     # (NA when deaths is NA); it differs from `source` only for completed weeks.
+     # Vectorized: O(n log n).
      PRIORITY <- c(WHO = 1L, JHU = 2L, AI = 3L, SUPP = 4L)
 
      all_df$.priority <- PRIORITY[all_df$source]
-     all_df$.complete <- !is.na(all_df$cases) & !is.na(all_df$deaths)
-     all_df <- all_df[order(all_df$iso_code, all_df$date_start,
-                            -all_df$.complete, all_df$.priority), ]
-     dedup <- all_df[!duplicated(all_df$key), ]
+     all_df$.empty    <- is.na(all_df$cases) & is.na(all_df$deaths)
+     all_df$.imputed  <- !is.na(all_df$disaggregation_method) &
+                         !(all_df$disaggregation_method %in% c("observed", "documented_zero"))
+     all_df$.no_cases <- is.na(all_df$cases)
+     all_df <- all_df[order(all_df$iso_code, all_df$date_start, all_df$.empty,
+                            all_df$.imputed, all_df$.no_cases, all_df$.priority), ]
+     is_winner <- !duplicated(all_df$key)
+     dedup <- all_df[is_winner, ]
+     dedup$source_deaths <- ifelse(is.na(dedup$deaths), NA_character_, dedup$source)
+
+     donors <- all_df[!is_winner & !all_df$.imputed &
+                      !is.na(all_df$cases) & !is.na(all_df$deaths), ]
+     wi <- match(donors$key, dedup$key)
+     donors <- donors[is.na(dedup$deaths[wi]) & !is.na(dedup$cases[wi]) &
+                      round(donors$cases) == round(dedup$cases[wi]), ]
+     donors <- donors[!duplicated(donors$key), ]  # already priority-sorted
+     wi <- match(donors$key, dedup$key)
+     dedup$deaths[wi]        <- donors$deaths
+     dedup$source_deaths[wi] <- donors$source
+     if (nrow(donors) > 0)
+          message(sprintf("Completed deaths for %d week(s) from a lower-priority source reporting the same case count",
+                          nrow(donors)))
+
      dedup$key <- NULL
      dedup$.priority <- NULL
-     dedup$.complete <- NULL
-     
+     dedup$.empty <- NULL
+     dedup$.imputed <- NULL
+     dedup$.no_cases <- NULL
+
      removed <- n_before - nrow(dedup)
-     message(if (removed > 0) sprintf("Removed %d duplicate weekly entries (priority WHO>JHU>AI>SUPP)", removed)
+     message(if (removed > 0) sprintf("Removed %d duplicate weekly entries (observed > imputed, then priority WHO>JHU>AI>SUPP)", removed)
              else "No duplicate weekly entries found")
      
      # Create square data structure by filling missing country-week combinations
@@ -240,7 +290,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # labels a boundary Monday by ISO year while the grid uses calendar year).
      # Carry the value and provenance/trust columns from the deduplicated data.
      dedup$date_start <- as.Date(dedup$date_start)
-     carry_cols <- intersect(c("cases", "deaths", "source", "note",
+     carry_cols <- intersect(c("cases", "deaths", "source", "source_deaths", "note",
                                "confidence_weight", "disaggregation_method"),
                              names(dedup))
      wk <- merge(
@@ -302,6 +352,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
           drop_week <- !is.na(meth) & (meth == "assumed_zero")
           df_iso$cases[drop_week]  <- NA
           df_iso$deaths[drop_week] <- NA
+          df_iso$source_deaths[drop_week] <- NA
           if ("confidence_weight" %in% names(df_iso))
                df_iso$confidence_weight[drop_week] <- NA
 
@@ -331,6 +382,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
                cases                 = as.integer(df_day$cases),
                deaths                = as.integer(df_day$deaths),
                source                = df_iso$source[mi],
+               source_deaths         = df_iso$source_deaths[mi],
                disaggregation_method = df_iso$disaggregation_method[mi],
                confidence_weight     = cw_col,
                stringsAsFactors = FALSE

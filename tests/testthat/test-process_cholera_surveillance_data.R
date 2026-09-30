@@ -117,3 +117,120 @@ test_that("include_ai = TRUE warns and falls back when AI file is missing", {
   # falls back to 3-source: wk4 (AI-only) has no observation
   expect_true(all(is.na(out$cases[out$week == fx$weeks[4]])))
 })
+
+# ---- Source selection: observed beats imputed, priority governs, deaths completion ----
+# One country, one week per scenario; each source's CSV holds the rows it reports.
+make_selection_fixture <- function(who = NULL, jhu = NULL, ai = NULL, supp = NULL) {
+  tmp <- tempfile("survsel"); dir.create(tmp)
+  P <- list(
+    DATA_WHO_WEEKLY     = file.path(tmp, "who"),
+    DATA_JHU_WEEKLY     = file.path(tmp, "jhu"),
+    DATA_SUPP_WEEKLY    = file.path(tmp, "supp"),
+    DATA_AI_WEEKLY      = file.path(tmp, "ai"),
+    DATA_CHOLERA_WEEKLY = file.path(tmp, "cw"),
+    DATA_CHOLERA_DAILY  = file.path(tmp, "cd")
+  )
+  for (d in P) dir.create(d, showWarnings = FALSE, recursive = TRUE)
+  row <- function(w, cases, deaths) {
+    ws <- as.Date("2015-06-01") + 7 * (w - 1)
+    data.frame(iso_code = "MOZ", country = "Mozambique",
+               year = as.integer(format(ws, "%G")), week = as.integer(format(ws, "%V")),
+               date_start = as.character(ws), date_stop = as.character(ws + 6),
+               month = as.integer(format(ws, "%m")), cases = cases, deaths = deaths,
+               stringsAsFactors = FALSE)
+  }
+  build <- function(spec) do.call(rbind, lapply(spec, function(r) {
+    out <- row(r$w, r$cases, r$deaths)
+    if (!is.null(r$method)) {
+      out$confidence_weight <- if (grepl("^fourier", r$method)) 0.5 else 0.9
+      out$disaggregation_method <- r$method
+    }
+    out
+  }))
+  wr <- function(spec, dir) if (!is.null(spec))
+    utils::write.csv(build(spec), file.path(dir, "cholera_country_weekly_processed.csv"), row.names = FALSE)
+  wr(who, P$DATA_WHO_WEEKLY); wr(jhu, P$DATA_JHU_WEEKLY)
+  wr(ai, P$DATA_AI_WEEKLY);   wr(supp, P$DATA_SUPP_WEEKLY)
+  P
+}
+run_selection <- function(P) {
+  suppressWarnings(suppressMessages(process_cholera_surveillance_data(P, include_ai = TRUE)))
+  out <- read_combined(P)
+  out[order(out$date_start), ]
+}
+
+test_that("an observed JHU week with NA deaths is not replaced by an imputed AI row", {
+  # The v0.100.0 regression: JHU deaths became NA, and the old 'complete cases AND
+  # deaths first' rule handed the week to a fourier AI row with 5x the cases.
+  P <- make_selection_fixture(
+    jhu = list(list(w = 1, cases = 40, deaths = NA)),
+    ai  = list(list(w = 1, cases = 200.5, deaths = 3.2, method = "fourier_country_k2")))
+  out <- run_selection(P)
+  expect_equal(out$source, "JHU")
+  expect_equal(out$cases, 40)
+  expect_true(is.na(out$deaths))            # imputed deaths are never borrowed
+  expect_true(is.na(out$source_deaths))
+  expect_equal(out$confidence_weight, 1.0)
+  expect_true(is.na(out$disaggregation_method))
+})
+
+test_that("imputed deaths are not borrowed even when the imputed case count matches", {
+  P <- make_selection_fixture(
+    jhu = list(list(w = 1, cases = 40, deaths = NA)),
+    ai  = list(list(w = 1, cases = 40, deaths = 2, method = "fourier_country_k1")))
+  out <- run_selection(P)
+  expect_equal(out$source, "JHU")
+  expect_true(is.na(out$deaths))
+})
+
+test_that("when both sources observe both fields, source priority decides", {
+  P <- make_selection_fixture(
+    jhu = list(list(w = 1, cases = 300, deaths = 6)),
+    ai  = list(list(w = 1, cases = 310, deaths = 9, method = "observed")))
+  out <- run_selection(P)
+  expect_equal(out$source, "JHU")
+  expect_equal(c(out$cases, out$deaths), c(300, 6))
+  expect_equal(out$source_deaths, "JHU")
+})
+
+test_that("a higher-priority row without deaths keeps priority; deaths come only from the same report", {
+  # The case the old completeness tie-break was built for: WHO reports cases but no
+  # deaths, JHU reports both. Week 1: JHU carries the same case count (same report)
+  # -> WHO row, deaths completed from JHU. Week 2: JHU's count differs (a different
+  # report) -> WHO row, deaths stay NA rather than mixing two reports.
+  P <- make_selection_fixture(
+    who = list(list(w = 1, cases = 120, deaths = NA), list(w = 2, cases = 120, deaths = NA)),
+    jhu = list(list(w = 1, cases = 120, deaths = 4),  list(w = 2, cases = 95,  deaths = 4)))
+  out <- run_selection(P)
+  expect_equal(out$source, c("WHO", "WHO"))
+  expect_equal(out$cases, c(120, 120))
+  expect_equal(out$deaths[1], 4)
+  expect_equal(out$source_deaths[1], "JHU")
+  expect_true(is.na(out$deaths[2]))
+  expect_true(is.na(out$source_deaths[2]))
+  daily <- utils::read.csv(file.path(P$DATA_CHOLERA_DAILY, "cholera_surveillance_daily_combined.csv"),
+                           stringsAsFactors = FALSE)
+  expect_true("source_deaths" %in% names(daily))
+  expect_equal(sum(daily$deaths, na.rm = TRUE), 4)
+  expect_equal(unique(daily$source_deaths[!is.na(daily$deaths)]), "JHU")
+})
+
+test_that("a lower-priority observed source beats an imputed higher-priority one", {
+  P <- make_selection_fixture(
+    ai   = list(list(w = 1, cases = 7.4, deaths = 0.1, method = "fourier_country_k2")),
+    supp = list(list(w = 1, cases = 12, deaths = 0)))
+  out <- run_selection(P)
+  expect_equal(out$source, "SUPP")
+  expect_equal(c(out$cases, out$deaths), c(12, 0))
+})
+
+test_that("an empty row does not win over an observed row, and imputed rows still gap-fill", {
+  P <- make_selection_fixture(
+    who = list(list(w = 1, cases = NA, deaths = NA)),
+    ai  = list(list(w = 1, cases = 30, deaths = 1, method = "observed"),
+               list(w = 2, cases = 8.5, deaths = 0.2, method = "fourier_country_k2")))
+  out <- run_selection(P)
+  expect_equal(out$source, c("AI", "AI"))
+  expect_equal(out$cases, c(30, 8.5))
+  expect_equal(out$disaggregation_method, c("observed", "fourier_country_k2"))
+})

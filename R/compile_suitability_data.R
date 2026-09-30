@@ -775,7 +775,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      message("Handling NA values in all covariates...")
 
      # List all numeric columns that might have NAs (exclude identifiers and dates)
-     exclude_cols <- c("iso_code", "year", "week", "month", "date", "source",
+     exclude_cols <- c("iso_code", "year", "week", "month", "date", "source", "source_deaths",
                       "cases", "deaths", "cases_binary",
                       # Surveillance quality/provenance + response variables: these
                       # are TARGET-side, not features. Their NAs are meaningful
@@ -1522,7 +1522,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # preserved by design rather than only incidentally via remaining_cols.
      # Absent columns are dropped by the final `%in% names(d)` filter, so this is
      # a no-op when a column is not present.
-     surveillance_meta_cols <- c("source", "confidence_weight", "disaggregation_method")
+     surveillance_meta_cols <- c("source", "source_deaths", "confidence_weight", "disaggregation_method")
 
      # 2. Temporal variables
      temporal_cols <- c("sin_annual", "cos_annual", "sin_biannual", "cos_biannual",
