@@ -502,7 +502,9 @@
   # Collapse iterations if n_iterations > 1
   if (n_iterations > 1 && nrow(result_matrix) > 0) {
     likelihoods <- result_matrix[, "likelihood"]
-    valid_ll <- is.finite(likelihoods)
+    # NA marks a failed replicate and is dropped; -Inf is a zero likelihood and
+    # must stay in the log-mean-exp, or the collapse rewards failing replicates.
+    valid_ll <- !is.na(likelihoods)
 
     if (any(valid_ll)) {
       collapsed_ll <- calc_log_mean_exp(likelihoods[valid_ll])
