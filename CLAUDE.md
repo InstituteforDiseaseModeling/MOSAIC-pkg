@@ -177,7 +177,7 @@ Sys.setenv(OMP_NUM_THREADS="1", MKL_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
 
 **Assembly (per location j, then weighted by `weights_location`):** `LL_j = w_c*NB_cases + w_d*deaths_core + (N_obs/N_peaks_j)*[w_pt*peak_time + w_pm*peak_mag] + (N_obs/N_cum)*w_cum*cumulative + (N_obs/N_quantiles)*w_wis*WIS`, where N_obs counts time steps with any finite observation and every shape term is split `w_c*cases + w_d*deaths` (the level-dependent deaths shape terms are dropped when the CFR is integrated out; deaths peak timing stays)
 
-All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
+All shape term weights default to 0 (OFF). A non-finite per-location LL becomes -Inf; a location (or input) with no scorable data returns NA_real_, not a constant score.
 
 ## Python Integration
 
