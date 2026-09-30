@@ -65,61 +65,8 @@ convert_config_to_dataframe <- function(config) {
      }
 
 
-     params_keep <- c(
-          "seed",
-          "location_name",
-          "N_j_initial",
-          "S_j_initial",
-          "E_j_initial",
-          "I_j_initial",
-          "R_j_initial",
-          "V1_j_initial",
-          "V2_j_initial",
-          "phi_1",
-          "phi_2",
-          "omega_1",
-          "omega_2",
-          "iota",
-          "gamma_1",
-          "gamma_2",
-          "epsilon",
-          "rho",
-          "rho_deaths",        # Added: Death detection rate (laser-cholera#49)
-          "sigma",
-          "mobility_omega",
-          "mobility_gamma",
-          "tau_i",
-          "beta_j0_hum",
-          "beta_j0_env",
-          "beta_j0_tot",        # Added: Total transmission rate (primary parameter)
-          "p_beta",             # Added: Proportion of human-to-human transmission
-          "theta_j",            # Added: WASH coverage parameter
-          "a_1",
-          "a_2",
-          "b_1",
-          "b_2",
-          "alpha_1",
-          "alpha_2",
-          "zeta_1",
-          "zeta_ratio",
-          "zeta_2",
-          "kappa",
-          "decay_days_short",
-          "decay_days_spread",  # v0.27.0: sampled; decay_days_long derived
-          "decay_days_long",
-          "decay_shape_1",
-          "decay_shape_2",
-          "epidemic_threshold", # Case-reporting PPV switch threshold
-          "chi_endemic",        # Added: PPV during endemic periods
-          "chi_epidemic",       # Added: PPV during epidemic periods
-          "delta_reporting_cases",  # Symptom-onset-to-case reporting delay (deaths share it)
-          "psi_star_a",         # Added: psi_star calibration parameters
-          "psi_star_b",
-          "psi_star_z",
-          "psi_star_k"
-     )
-
-     config_subset <- config[names(config) %in% params_keep]
+     # Same parameter set as convert_config_to_matrix(), so the two agree column for column
+     config_subset <- config[names(config) %in% .MOSAIC_CONFIG_PARAMS_KEEP]
 
      # ============================================================================
      # Create output dataframe
@@ -145,21 +92,8 @@ convert_config_to_dataframe <- function(config) {
           # Skip location_name itself as it's metadata
           if (param_name == "location_name") next
 
-          # Define location-specific parameter base names (same as in calibration script)
-          location_params_base <- c(
-               "S_j_initial", "E_j_initial", "I_j_initial",
-               "R_j_initial", "V1_j_initial", "V2_j_initial",
-               "prop_S_initial", "prop_E_initial", "prop_I_initial",
-               "prop_R_initial", "prop_V1_initial", "prop_V2_initial",
-               "beta_j0_env", "beta_j0_hum", "beta_j0_tot", "p_beta",
-               "tau_i", "theta_j",
-               "a_1", "a_2", "b_1", "b_2",
-               "epidemic_threshold",
-               "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"
-          )
-          
           # Check if this parameter is location-specific
-          is_location_param <- param_name %in% location_params_base
+          is_location_param <- param_name %in% .MOSAIC_CONFIG_LOCATION_PARAMS
           
           # Handle scalar parameters or single-location vectors
           if (length(param_value) == 1) {

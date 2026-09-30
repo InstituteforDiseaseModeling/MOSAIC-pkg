@@ -54,10 +54,9 @@ n_params <- length(vec_params)
 results_matrix <- matrix(NA_real_, nrow = n_sim, ncol = 4 + n_params)
 results_matrix[1, 5:ncol(results_matrix)] <- vec_params
 
-# Compare with dataframe approach (slower)
+# Compare with dataframe approach (slower); same columns, same order
 df_params <- convert_config_to_dataframe(config_sampled)
-vec_params_slow <- as.numeric(df_params)
-all.equal(vec_params, vec_params_slow)  # Should be TRUE
+all.equal(vec_params, unlist(df_params))  # TRUE
 }
 }
 \seealso{

@@ -79,15 +79,8 @@ get_location_priors <- function(iso, priors = NULL) {
   
   # Load default priors if not provided
   if (is.null(priors)) {
-    if (!requireNamespace("MOSAIC", quietly = TRUE)) {
-      stop("MOSAIC package not found. Please provide priors object explicitly.")
-    }
-    
-    # Check if priors_default exists in MOSAIC
-    if (!exists("priors_default", where = "package:MOSAIC")) {
-      stop("MOSAIC::priors_default not found. Please provide priors object explicitly.")
-    }
-    
+    # Namespace-qualified, so this works when MOSAIC is loaded but not attached
+    # (e.g. MOSAIC::get_location_priors() in a script or on a PSOCK worker)
     priors <- MOSAIC::priors_default
   }
   

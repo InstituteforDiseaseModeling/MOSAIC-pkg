@@ -26,13 +26,11 @@
 #'   \item{normal(mean, sd)}{\code{sd_new = sqrt(f)*sd}.}
 #'   \item{uniform(min, max)}{Bounds extended symmetrically around midpoint.
 #'     Skipped with a warning if new bounds violate positivity.}
-#' }
-#'
-#' \strong{Analytic with empirical fallback:}
-#' \describe{
-#'   \item{truncnorm(mean, sd, a, b)}{Root-finding preserves actual truncated
-#'     mean. Due to active bounds, the achieved variance ratio may be less than
-#'     \code{inflation_factor}. Falls back to empirical refit if root-find fails.}
+#'   \item{truncnorm(mean, sd, a, b)}{\code{sd_new = sqrt(f)*sd}; the
+#'     pre-truncation \code{mean} and the bounds \code{a}, \code{b} are left
+#'     unchanged, so the underlying normal is inflated exactly. When a bound is
+#'     active the truncated distribution's mean shifts (towards the midpoint of
+#'     the bounds) and its variance grows by less than \code{inflation_factor}.}
 #' }
 #'
 #' \strong{Empirical (sample → inflate → refit):}
@@ -48,8 +46,8 @@
 #'   doubles variance while preserving the mean. Default 2.0.
 #' @param params Optional character vector. Base parameter names to inflate.
 #'   When \code{NULL} all non-fixed/frozen parameters are inflated.
-#' @param n_samples Integer. Number of samples for empirical fallback methods
-#'   (truncnorm fallback, gompertz). Default 10000L.
+#' @param n_samples Integer. Number of samples for the empirical methods
+#'   (gompertz and unrecognised distributions). Default 10000L.
 #' @param verbose Logical. Print per-parameter inflation messages. Default TRUE.
 #'
 #' @return A priors list with inflated distribution parameters. Metadata updated.
@@ -318,7 +316,7 @@ inflate_priors <- function(priors,
 
       # --- Gompertz (empirical only — no closed-form moments) ---
       gompertz = {
-        method_used <<- "empirical"
+        method_used <- "empirical"
         emp <- .inflate_empirical(entry, param_name)
         if (is.null(emp)) {
           warning(sprintf(
@@ -331,7 +329,7 @@ inflate_priors <- function(priors,
 
       # --- Unknown distribution — empirical fallback ---
       {
-        method_used <<- "empirical (unknown dist)"
+        method_used <- "empirical (unknown dist)"
         emp <- .inflate_empirical(entry, param_name)
         if (is.null(emp)) {
           if (verbose) message(sprintf(

@@ -1,7 +1,5 @@
 library(MOSAIC)
 
-# Source the function directly for testing to get the latest version
-if (file.exists("../../R/convert_config_to_dataframe.R")) source("../../R/convert_config_to_dataframe.R")
 
 test_that("convert_config_to_dataframe works with default config", {
      # Test with default config
@@ -44,7 +42,7 @@ test_that("convert_config_to_dataframe works with sampled config", {
           config_sampled <- sample_parameters(
                PATHS, 
                seed = 123,
-               sample_beta_j0_env = TRUE
+               sample_beta_j0_tot = TRUE
           )
      })
      
