@@ -1,7 +1,5 @@
 library(MOSAIC)
 
-# Source the function directly for testing to get the latest version
-if (file.exists("../../R/convert_config_to_dataframe.R")) source("../../R/convert_config_to_dataframe.R")
 
 test_that("convert_config_to_dataframe works with default config", {
      # Test with default config
