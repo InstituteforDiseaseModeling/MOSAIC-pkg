@@ -23,7 +23,7 @@ Invisibly returns \code{NULL}. Side effects:
 \description{
 This function processes weekly cholera data by converting country names to ISO3 codes,
 filtering the data for countries in the WHO AFRO region, and organizing the data by
-year and week. It also generates start and stop dates for each ISO week.
+year and week. It also generates start and stop dates for each WHO epidemiological week.
 }
 \details{
 This function performs the following tasks:
@@ -33,11 +33,25 @@ This function performs the following tasks:
 \item Filters the dataset to include only countries in the WHO AFRO region (based on \code{MOSAIC::iso_codes_who_afro}).
 \item Orders the data by year, week, and country.
 \item Renames columns for consistency: \code{cases_by_week} to \code{cases} and \code{deaths_by_week} to \code{deaths}.
-\item Adds \code{date_start} and \code{date_stop} columns based on ISO week, using the \code{ISOweek::ISOweek2date} function.
+\item Adds \code{date_start} (Monday) and \code{date_stop} (Sunday) for each WHO
+epidemiological week (see below).
 \item Computes the \code{month} from \code{date_start}.
-\item Filters out countries with fewer than ten observations.
-\item Checks that no ISO week index 53 remains.
+\item Drops countries with ten or fewer observations.
 }
+
+\strong{Week convention.} The \code{year}/\code{week} columns are WHO's own
+\code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. WHO numbers weeks on
+the MMWR (US CDC) calendar -- Sunday-start weeks, week 1 being the week that
+contains 4 January -- and stamps each week with the following Monday
+(\code{date_wk} in the WHO AWD feature service). This coincides with ISO-8601
+except in years whose 4 January falls on a Sunday: e.g. WHO has a genuine
+2025-W53 starting Monday 2025-12-29 (ISO 2025 has only 52 weeks), and WHO
+2026-W01 starts 2026-01-05 (ISO 2026-W01 starts 2025-12-29). Each row is therefore
+dated from WHO's calendar, never merged into a neighbouring week. Downstream
+consumers key on \code{date_start}, not on \code{(year, week)}.
+
+Missing \code{cases} or \code{deaths} stay \code{NA}; no row is dropped for having
+one field missing.
 }
 \examples{
 \dontrun{
