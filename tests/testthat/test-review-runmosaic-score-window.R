@@ -68,3 +68,33 @@ test_that("the resolver lets score_start_cases move the cases start past the dea
   expect_identical(sw$idx_cases, 101L)
   expect_identical(sw$idx_deaths, 31L)
 })
+
+test_that("peak timing skips a peak whose window is masked instead of returning numeric(0)", {
+  pt <- MOSAIC:::.calc_peak_timing_from_indices
+  est <- c(rep(NA_real_, 100), rep(5, 200))
+  expect_identical(pt(est, 50L), 0)                       # fully masked window
+  expect_identical(pt(est, 95L), 0)                       # partly masked window
+  expect_identical(pt(est, c(50L, 150L)), pt(est, 150L))  # unmasked peak still scored
+  expect_length(pt(est, c(50L, 150L)), 1L)
+})
+
+test_that("peak timing with a peak inside the masked cases prefix keeps the LL finite", {
+  fx <- .sw_fixture(idx_cases = 200L, idx_deaths = 31L)
+  fx$ls$weight_peak_timing <- 1
+  # MOZ has a catalogued peak on 2023-03-27 (day 86), inside the cases prefix.
+  pk <- MOSAIC::epidemic_peaks
+  pk <- pk[pk$iso_code == "MOZ", ]
+  d86 <- as.Date(fx$cfg$date_start) + 85L
+  skip_if_not(any(abs(as.numeric(as.Date(pk$peak_date) - d86)) <= 14),
+              "fixture peak moved out of the masked prefix")
+  base <- round(fx$oc * 1.1) + 1
+  ll_base <- .sw_worker_ll(fx, base)
+  expect_true(is.finite(ll_base))
+  perturbed <- base
+  perturbed[, 31:199] <- perturbed[, 31:199] * 50 + 500
+  expect_identical(ll_base, .sw_worker_ll(fx, perturbed))
+  # The equal-start control still scores that peak for cases.
+  fx2 <- .sw_fixture(idx_cases = 31L, idx_deaths = 31L)
+  fx2$ls$weight_peak_timing <- 1
+  expect_true(is.finite(.sw_worker_ll(fx2, base)))
+})
