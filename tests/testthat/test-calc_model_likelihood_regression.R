@@ -74,7 +74,10 @@ test_that("core negative-binomial likelihood is unchanged", {
 
 test_that("cumulative shape term contributes its frozen amount", {
   ll <- ll_with(weight_cumulative_total = 0.25)
-  expect_equal(ll, -497.0989888952, tolerance = LL_TOL)
+  # Re-baselined (review likelihood-02): the deaths channel has k = Inf, which
+  # the cumulative term used to score as NB(size = 10); it is now the Poisson
+  # limit, as in the core. Was -497.0989888952.
+  expect_equal(ll, -496.8910638334, tolerance = LL_TOL)
   # The term must actually move the answer -- a scaling bug that zeroed it out
   # would otherwise pass a bare equality test against the core value.
   expect_lt(ll, ll_with())

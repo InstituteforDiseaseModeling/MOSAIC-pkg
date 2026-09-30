@@ -377,7 +377,7 @@ calc_log_likelihood_gamma <- function(observed,
 #' @examples
 #' # k is used as supplied
 #' calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
-#' # Provide k but allow flooring if too small
+#' # Supply the dispersion k explicitly (used exactly as given)
 #' calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5), k = 1.2)
 #'
 
@@ -695,7 +695,7 @@ calc_log_likelihood_poisson <- function(observed,
           s2 <- var(observed, na.rm = TRUE)
 
           if (is.na(mu) || mu == 0) {
-               message("All observations are zero (or NA).")
+               if (verbose) message("All observations are zero (or NA).")
           } else {
                disp_ratio <- s2 / mu
                if (disp_ratio > 1.5) {

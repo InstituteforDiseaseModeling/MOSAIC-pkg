@@ -52,7 +52,22 @@ test_that("reference: core NB + cumulative produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
                                       nb_k_cases = .REF_K, nb_k_deaths = .REF_K,
                                       weight_cumulative_total = 0.25)
-  expect_equal(ll, -109.38813798, tolerance = 1e-4)
+  # Re-baselined (review likelihood-02/03): each cell's prediction is floored at
+  # the core's per-channel eps before summing, so the deaths block's
+  # zero-prediction cells moved the value from -109.38813798. Hand computation:
+  # core + 0.25 * (N_obs / 4) * sum over locations/channels of the mean over the
+  # timepoints of dnbinom(sum obs, mu = sum pmax(est, eps), size = k * m) / m.
+  expect_equal(ll, -109.43886944, tolerance = 1e-4)
+  eps <- function(v, rel) max(1e-4, rel * mean(v))
+  hand_cum <- function(o, e, rel) mean(vapply(c(0.25, 0.5, 0.75, 1), function(p) {
+    m <- round(length(o) * p)
+    stats::dnbinom(sum(o[1:m]), mu = sum(pmax(e[1:m], eps(o, rel))), size = .REF_K * m, log = TRUE) / m
+  }, numeric(1)))
+  cum <- sum(vapply(1:2, function(j) hand_cum(ref_obs_c[j, ], ref_est_c[j, ], .REF_EPS_C) +
+                      hand_cum(ref_obs_d[j, ], ref_est_d[j, ], .REF_EPS_D), numeric(1)))
+  core <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
+                                        nb_k_cases = .REF_K, nb_k_deaths = .REF_K)
+  expect_equal(ll, core + 0.25 * (10 / 4) * cum, tolerance = 1e-8)
 })
 
 test_that("reference: core NB + WIS produces known value", {
@@ -105,11 +120,11 @@ test_that("reference: 1x3 matrix (minimum viable input) produces known value", {
   expect_equal(ll, -15.49095, tolerance = 1e-3)
 })
 
-test_that("reference: 1x1 matrix returns 0 (below min obs threshold)", {
-  ll <- MOSAIC::calc_model_likelihood(
+test_that("reference: 1x1 matrix returns NA (below min obs threshold, nothing to score)", {
+  ll <- suppressWarnings(MOSAIC::calc_model_likelihood(
     matrix(50, 1, 1), matrix(55, 1, 1),
-    matrix(5, 1, 1),  matrix(4, 1, 1))
-  expect_equal(ll, 0, tolerance = 1e-8)
+    matrix(5, 1, 1),  matrix(4, 1, 1)))
+  expect_identical(ll, NA_real_)
 })
 
 test_that("reference: perfect match always better than imperfect", {
