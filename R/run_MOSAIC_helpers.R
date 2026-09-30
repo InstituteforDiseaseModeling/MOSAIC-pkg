@@ -2022,6 +2022,46 @@
 # WEIGHT CALCULATIONS
 # =============================================================================
 
+#' Best-subset posterior weights under control$targets$best_subset_weighting
+#'
+#' The single source of the best-subset weights: the convergence gate (ESS_B,
+#' A, CVw) and \code{results$weight_best} (which drives the posterior
+#' quantiles, posteriors.json, the ensemble parameter weights and the optimizer)
+#' both call this, so the gated weights are the weights the posterior uses.
+#' \code{"saturated"}: \eqn{w \propto \exp(-0.5 \min(\Delta AIC, 4))};
+#' \code{"tempered"}: adaptive-eta Gibbs weights
+#' (\code{.mosaic_calc_adaptive_gibbs_weights()}).
+#'
+#' @param likelihood Numeric log-likelihoods of the best-subset members.
+#' @param scheme \code{"saturated"} or \code{"tempered"}.
+#' @param verbose Passed to the weight function.
+#' @return \code{list(weights, temperature, effective_range)}; \code{weights}
+#'   is normalised and aligned with \code{likelihood}.
+#' @noRd
+.mosaic_best_subset_weights <- function(likelihood, scheme = "saturated", verbose = FALSE) {
+  if (length(scheme) != 1L || !scheme %in% c("saturated", "tempered")) {
+    stop("control$targets$best_subset_weighting must be 'saturated' or 'tempered'; got '",
+         paste(scheme, collapse = ", "), "'.", call. = FALSE)
+  }
+  if (identical(scheme, "tempered")) {
+    # Adaptive-eta Gibbs weights: eta is chosen so the worst retained draw
+    # sits at `weight_floor`, rather than saturating delta at a fixed 4.
+    # NOTE this is SHARPER than the saturated default, not softer -- see the
+    # warning on control$targets$best_subset_weighting.
+    ad <- .mosaic_calc_adaptive_gibbs_weights(likelihood = likelihood, verbose = verbose)
+    return(list(weights = ad$weights, temperature = ad$temperature,
+                effective_range = ad$effective_range))
+  }
+  # Truncate to effective range. NOTE: this SATURATES delta at 4 rather than
+  # applying the Delta <= 6 cut-off; every draw past 4 receives the same weight
+  # exp(-2), so weight ratios are capped at exp(2) = 7.39 and the subset
+  # posterior is close to uniform regardless of fit.
+  aic <- -2 * likelihood
+  delta <- aic - min(aic[is.finite(aic)])
+  w <- calc_model_weights_gibbs(x = pmin(delta, 4.0), eta = 0.5, verbose = verbose)
+  list(weights = w, temperature = 0.5, effective_range = 4.0)
+}
+
 #' Calculate Adaptive Gibbs Weights
 #'
 #' Unified adaptive weight calculation using Gibbs tempering with automatic

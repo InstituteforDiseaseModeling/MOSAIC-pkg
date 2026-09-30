@@ -1897,48 +1897,19 @@ run_MOSAIC <- function(config,
       is_diag_best <- .mosaic_empty_is_diag()
       is_diag_all  <- .mosaic_empty_is_diag()
     } else {
-      # Use truncated Akaike weights with fixed effective range for best subset
-      # Effective AIC = 4 for best subset (5% threshold)
+      # Delta AIC within the best subset (reported below as the actual range).
       aic_final <- -2 * top_subset_final$likelihood
       best_aic_final <- min(aic_final[is.finite(aic_final)])
       delta_aic_final <- aic_final - best_aic_final
 
       weighting_scheme <- control$targets$best_subset_weighting %||% "saturated"
-      if (!weighting_scheme %in% c("saturated", "tempered")) {
-        stop("control$targets$best_subset_weighting must be 'saturated' or 'tempered'; got '",
-             weighting_scheme, "'.", call. = FALSE)
-      }
-
-      if (identical(weighting_scheme, "tempered")) {
-        # Adaptive-eta Gibbs weights: eta is chosen so the worst retained draw
-        # sits at `weight_floor`, rather than saturating delta at a fixed 4.
-        # NOTE this is SHARPER than the saturated default, not softer -- see the
-        # warning on control$targets$best_subset_weighting. The degeneracy check
-        # below exists because this scheme can put ~96% of the mass on one draw.
-        adaptive_final <- .mosaic_calc_adaptive_gibbs_weights(
-          likelihood = top_subset_final$likelihood,
-          verbose    = FALSE
-        )
-        weights_final <- adaptive_final$weights
-        gibbs_temperature_final <- adaptive_final$temperature
-        effective_range_best <- adaptive_final$effective_range
-      } else {
-        # Truncate to effective range. NOTE: this SATURATES delta at 4 rather
-        # than applying the Delta <= 6 cut-off; every draw past 4 receives the
-        # same weight exp(-2), so weight ratios are capped at exp(2) = 7.39 and
-        # the subset posterior is close to uniform regardless of fit. The IS
-        # diagnostics computed below are what reveal that; ESS_B does not.
-        effective_range_best <- 4.0
-        delta_aic_truncated <- pmin(delta_aic_final, effective_range_best)
-
-        # Calculate standard Akaike weights: w prop.to exp(-0.5 * delta_aic)
-        gibbs_temperature_final <- 0.5  # Standard for Akaike weights
-        weights_final <- calc_model_weights_gibbs(
-          x = delta_aic_truncated,
-          eta = gibbs_temperature_final,
-          verbose = FALSE
-        )
-      }
+      # Same helper as results$weight_best below, so the gate metrics describe
+      # the weights the posterior is built from. The degeneracy check below
+      # exists because "tempered" can put ~96% of the mass on one draw.
+      bsw_final <- .mosaic_best_subset_weights(top_subset_final$likelihood, weighting_scheme)
+      weights_final           <- bsw_final$weights
+      gibbs_temperature_final <- bsw_final$temperature
+      effective_range_best    <- bsw_final$effective_range
 
       w_tilde_final <- weights_final
       w_final <- weights_final * length(weights_final)
@@ -2057,17 +2028,15 @@ run_MOSAIC <- function(config,
 
   if (sum(results$is_best_subset) > 0) {
     log_msg("  Computing Akaike weights (best subset: n=%d)...", sum(results$is_best_subset))
-    # Truncated Akaike weights for best subset (effective AIC = 4)
-    aic_best <- -2 * results$likelihood[results$is_best_subset]
-    best_aic_best <- min(aic_best[is.finite(aic_best)])
-    delta_aic_best <- aic_best - best_aic_best
-    delta_aic_best_trunc <- pmin(delta_aic_best, 4.0)
-
-    best_weights <- calc_model_weights_gibbs(
-      x = delta_aic_best_trunc,
-      eta = 0.5,
+    # Best-subset weights under control$targets$best_subset_weighting -- the
+    # same helper the convergence gate used, so weight_best (posterior
+    # quantiles, posteriors.json, ensemble parameter weights, optimizer) and
+    # the gated ESS_B/A/CVw are computed from one weighting.
+    best_weights <- .mosaic_best_subset_weights(
+      results$likelihood[results$is_best_subset],
+      control$targets$best_subset_weighting %||% "saturated",
       verbose = control$logging$verbose
-    )
+    )$weights
     results$weight_best[results$is_best_subset] <- best_weights
 
     # Calculate ESS for reference (using control method)
