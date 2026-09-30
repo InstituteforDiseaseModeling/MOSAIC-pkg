@@ -73,27 +73,31 @@
                file.path(mosaic_env_dir, "bin", "python")
           }
 
-          # Only set if the environment actually exists
-          # If it doesn't exist, reticulate will do its normal discovery
-          # and check_python_env() in .onAttach will provide clear error
+          # Only set if the environment actually exists. If it doesn't,
+          # reticulate does its normal discovery when (and only when) the
+          # suitability model first calls Python; check_dependencies() or
+          # check_python_env() report a missing environment on demand.
           if (file.exists(mosaic_python)) {
                Sys.setenv(RETICULATE_PYTHON = mosaic_python)
 
-               # CRITICAL FIX for GLIBCXX version errors on older Linux (e.g., Ubuntu 20.04)
-               # When R embeds Python via reticulate, Python C extensions (pyarrow, numba, etc.)
-               # need libstdc++ with GLIBCXX_3.4.29+, but Ubuntu 20.04 only has 3.4.28.
+               # GLIBCXX version errors on older Linux (e.g., Ubuntu 20.04).
+               # Python is used only by the keras3/TensorFlow suitability model,
+               # and when R embeds it via reticulate, compiled extensions in the
+               # environment (TensorFlow and its dependencies) can need a newer
+               # libstdc++ (GLIBCXX_3.4.29+) than the system one (3.4.28 on 20.04).
                #
-               # Setting LD_LIBRARY_PATH doesn't work because R has already loaded system libstdc++.
-               # Solution: Use dyn.load() to explicitly preload conda's libstdc++ BEFORE reticulate
-               # initializes Python. This way, Python extensions use the preloaded version.
+               # Setting LD_LIBRARY_PATH doesn't work because R has already loaded
+               # the system libstdc++. So preload the environment's libstdc++ with
+               # dyn.load() BEFORE reticulate initialises Python, and the extensions
+               # bind to the preloaded version.
                if (.Platform$OS.type == "unix") {
                     mosaic_libstdcxx <- file.path(mosaic_env_dir, "lib", "libstdc++.so.6")
                     if (file.exists(mosaic_libstdcxx)) {
                          tryCatch({
                               dyn.load(mosaic_libstdcxx, local = FALSE, now = TRUE)
                          }, error = function(e) {
-                              # Silently ignore - may already be loaded or system incompatible
-                              # check_dependencies() will catch any resulting import errors
+                              # Ignore: may already be loaded or be incompatible with the
+                              # system; check_dependencies() reports any resulting import error
                          })
                     }
                }
