@@ -13,6 +13,7 @@ run_fit_sandbox(
   outdir = NULL,
   run_label = "fit_sandbox",
   quiet = TRUE,
+  control = NULL,
   .sim_runner = run_simulation
 )
 }
@@ -41,12 +42,15 @@ recorded in metrics). Default \code{"fit_sandbox"}.}
 
 \item{quiet}{Logical passed to \code{\link[=run_simulation]{run_simulation()}}. Default \code{TRUE}.}
 
+\item{control}{Optional control list; only \code{control$likelihood} (burn-in and scored-window starts) is read, over \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}}. Default \code{NULL} (package defaults).}
+
 \item{.sim_runner}{Function used to run the model; defaults to \code{\link[=run_simulation]{run_simulation()}}.
 Exposed as a seam for testing with a stubbed engine.}
 }
 \value{
 A named list with \code{predictions} (long data.frame in the standard
-ensemble format), \code{metrics} (top-line metrics plus, when
+ensemble format), \code{metrics} (top-line metrics, including the 1-based
+\code{score_idx_cases}/\code{score_idx_deaths} scored-window starts, plus, when
 \code{full_metrics=TRUE}, \code{fit_diagnostics} and a merged \code{scorecard}),
 \code{params_applied} (data.frame of old/new values), and \code{run_label}.
 }
@@ -68,6 +72,24 @@ Predicted and observed series are aggregated (summed) across the selected
 \code{locations} to a single series before scoring, matching the country-level
 diagnostic use case; pass a single index in \code{locations} for a per-patch view.
 Full metrics are delegated to \code{\link[=calc_fit_diagnostics]{calc_fit_diagnostics()}}.
+
+Scoring is paired and windowed the way \code{\link[=run_MOSAIC]{run_MOSAIC()}} scores a fit. For each
+day, the scored predicted total sums only the location-days that carry an
+observation, so a location with no surveillance contributes to neither side
+(a day with no observation at any selected location is \code{NA}, never 0).
+The leading unscored steps -- the likelihood burn-in
+(\code{control$likelihood$burn_in_days}, plus \code{score_start_cases} /
+\code{deaths_score_start}) and, for cases, the two-step initial-condition
+warm-up -- are dropped from both series before any metric is computed. The
+returned \code{predictions} are not masked: \code{predicted_*} is the full
+aggregate, and \code{observed} is \code{NA} on any day where a selected
+location has no observation.
+
+On a config that predates the v0.96.0 mortality model (it carries any of
+\code{mu_j_baseline}, \code{mu_j_epidemic_factor}, \code{CFR_target},
+\code{mu_j}), the engine uses \code{CFR_target} as a constant reported CFR and
+ignores \code{mu_jt}, so on such a config a \code{CFR_target} override is applied
+and a \code{mu_jt} override is skipped with a warning.
 }
 \seealso{
 \code{\link[=calc_fit_diagnostics]{calc_fit_diagnostics()}}, \code{\link[=run_simulation]{run_simulation()}}

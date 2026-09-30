@@ -11,7 +11,7 @@ calc_bias_ratio(observed, estimated, na_rm = TRUE, finite_only = TRUE)
 
 \item{estimated}{Numeric vector or matrix (same length after flattening).}
 
-\item{na_rm}{Logical; drop NA pairs. Default \code{TRUE}.}
+\item{na_rm}{Logical; drop NA pairs. If \code{FALSE} and any \code{NA} is present, returns \code{NA_real_}. Default \code{TRUE}.}
 
 \item{finite_only}{Logical; drop non-finite values. Default \code{TRUE}.}
 }

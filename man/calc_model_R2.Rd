@@ -28,7 +28,7 @@ calc_model_R2(
 
 \item{finite_only}{Logical; drop non-finite values. Default \code{TRUE}.}
 
-\item{weights}{Optional non-negative weights (used for \code{method="sse"} and weighted Pearson in \code{"corr"}).}
+\item{weights}{Optional non-negative weights, length 1 (recycled) or the input length (used for \code{method="sse"} and weighted Pearson in \code{"corr"}).}
 
 \item{verbose}{Logical; if \code{TRUE}, emit brief diagnostics.}
 }

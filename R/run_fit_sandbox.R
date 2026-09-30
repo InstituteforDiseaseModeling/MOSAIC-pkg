@@ -19,6 +19,24 @@
 #' diagnostic use case; pass a single index in \code{locations} for a per-patch view.
 #' Full metrics are delegated to [calc_fit_diagnostics()].
 #'
+#' Scoring is paired and windowed the way [run_MOSAIC()] scores a fit. For each
+#' day, the scored predicted total sums only the location-days that carry an
+#' observation, so a location with no surveillance contributes to neither side
+#' (a day with no observation at any selected location is \code{NA}, never 0).
+#' The leading unscored steps -- the likelihood burn-in
+#' (\code{control$likelihood$burn_in_days}, plus \code{score_start_cases} /
+#' \code{deaths_score_start}) and, for cases, the two-step initial-condition
+#' warm-up -- are dropped from both series before any metric is computed. The
+#' returned \code{predictions} are not masked: \code{predicted_*} is the full
+#' aggregate, and \code{observed} is \code{NA} on any day where a selected
+#' location has no observation.
+#'
+#' On a config that predates the v0.96.0 mortality model (it carries any of
+#' \code{mu_j_baseline}, \code{mu_j_epidemic_factor}, \code{CFR_target},
+#' \code{mu_j}), the engine uses \code{CFR_target} as a constant reported CFR and
+#' ignores \code{mu_jt}, so on such a config a \code{CFR_target} override is applied
+#' and a \code{mu_jt} override is skipped with a warning.
+#'
 #' @param config A config as a named list, or a path to a config JSON
 #'   (e.g. \code{.../2_calibration/best_model/config_medoid.json}).
 #' @param params Named list of point-value parameter overrides applied to the config
@@ -35,11 +53,13 @@
 #' @param run_label Character label for the run (used for the output subdirectory and
 #'   recorded in metrics). Default \code{"fit_sandbox"}.
 #' @param quiet Logical passed to [run_simulation()]. Default \code{TRUE}.
+#' @param control Optional control list; only \code{control$likelihood} (burn-in and scored-window starts) is read, over [mosaic_control_defaults()]. Default \code{NULL} (package defaults).
 #' @param .sim_runner Function used to run the model; defaults to [run_simulation()].
 #'   Exposed as a seam for testing with a stubbed engine.
 #'
 #' @return A named list with \code{predictions} (long data.frame in the standard
-#'   ensemble format), \code{metrics} (top-line metrics plus, when
+#'   ensemble format), \code{metrics} (top-line metrics, including the 1-based
+#'   \code{score_idx_cases}/\code{score_idx_deaths} scored-window starts, plus, when
 #'   \code{full_metrics=TRUE}, \code{fit_diagnostics} and a merged \code{scorecard}),
 #'   \code{params_applied} (data.frame of old/new values), and \code{run_label}.
 #'
@@ -53,6 +73,7 @@ run_fit_sandbox <- function(config,
                             outdir = NULL,
                             run_label = "fit_sandbox",
                             quiet = TRUE,
+                            control = NULL,
                             .sim_runner = run_simulation) {
 
   # ---- Resolve config ------------------------------------------------------
@@ -63,13 +84,26 @@ run_fit_sandbox <- function(config,
   if (!is.list(config)) stop("run_fit_sandbox: `config` must be a list or a path to a config JSON.")
 
   # ---- Apply overrides -----------------------------------------------------
+  # A pre-v0.96.0 config is resolved by .mosaic_mu_jt_matrix(): the engine reads
+  # its CFR_target as a constant reported CFR and never reads its mu_jt. So on
+  # such a config the CFR_target override is the one that takes effect, and a
+  # mu_jt override would be recorded in params_applied yet change nothing.
+  legacy_cfg <- any(vapply(.MOSAIC_LEGACY_MORTALITY_FIELDS,
+                           function(f) !is.null(config[[f]]), logical(1)))
   applied <- list()
   for (nm in names(params)) {
-    if (nm %in% .MOSAIC_REMOVED_MORTALITY_PARAMS) {
-      # Retired in v0.96.0: a legacy config may still carry it, but the engine
-      # reads its CFR_target (or mu_jt), so an override would silently do nothing.
+    if (legacy_cfg && identical(nm, "mu_jt")) {
+      warning(paste0("run_fit_sandbox: this config predates the v0.96.0 mortality model, so the ",
+                     "engine ignores `mu_jt` and uses `CFR_target` as the reported CFR - ",
+                     "skipping; override `CFR_target` instead"))
+      next
+    }
+    if (nm %in% .MOSAIC_REMOVED_MORTALITY_PARAMS && !(legacy_cfg && identical(nm, "CFR_target"))) {
+      # Retired in v0.96.0: the engine reads only mu_jt (or, on a legacy config,
+      # CFR_target), so an override of any other mortality field does nothing.
       warning(sprintf(paste0("run_fit_sandbox: '%s' was removed from the model in v0.96.0 - ",
-                             "skipping; override `mu_jt` (the reported CFR) instead"), nm))
+                             "skipping; override %s (the reported CFR) instead"), nm,
+                      if (legacy_cfg) "`CFR_target`" else "`mu_jt`"))
       next
     }
     if (!nm %in% names(config)) {
@@ -117,11 +151,16 @@ run_fit_sandbox <- function(config,
   loc_idx <- loc_idx[loc_idx >= 1L & loc_idx <= nrow(pred_cases_mat)]
   if (!length(loc_idx)) stop("run_fit_sandbox: no valid location rows selected.")
 
-  agg <- function(m) if (length(loc_idx) == 1L) as.numeric(m[loc_idx, ]) else colSums(m[loc_idx, , drop = FALSE], na.rm = TRUE)
-  pred_cases  <- agg(pred_cases_mat)
-  pred_deaths <- agg(pred_deaths_mat)
-  obs_cases   <- agg(obs_cases_mat)
-  obs_deaths  <- agg(obs_deaths_mat)
+  # Reported series (the predictions table): predicted = full aggregate;
+  # observed = NA on a day where any selected location is unobserved, so a
+  # missing observation is never summed in as a zero.
+  pred_cases  <- .fit_agg(pred_cases_mat, loc_idx)
+  pred_deaths <- .fit_agg(pred_deaths_mat, loc_idx)
+  obs_cases   <- .fit_agg(obs_cases_mat, loc_idx)
+  obs_deaths  <- .fit_agg(obs_deaths_mat, loc_idx)
+  # Scored series: paired on the location-days that carry an observation.
+  sc_cases  <- .fit_agg_paired(obs_cases_mat,  pred_cases_mat,  loc_idx)
+  sc_deaths <- .fit_agg_paired(obs_deaths_mat, pred_deaths_mat, loc_idx)
 
   dates <- seq.Date(as.Date(config$date_start), as.Date(config$date_stop), by = "day")
   n <- min(length(dates), length(pred_cases), length(obs_cases),
@@ -130,14 +169,30 @@ run_fit_sandbox <- function(config,
   pred_cases <- pred_cases[seq_len(n)];   obs_cases <- obs_cases[seq_len(n)]
   pred_deaths <- pred_deaths[seq_len(n)]; obs_deaths <- obs_deaths[seq_len(n)]
 
+  # Drop the unscored head, exactly as run_MOSAIC() does before its R2/bias:
+  # the likelihood's scored window (burn-in + per-channel starts) and, for
+  # cases, the calc_model_ensemble() initial-condition warm-up (2 steps).
+  lik_ctl <- mosaic_control_defaults()$likelihood
+  if (!is.null(control$likelihood)) lik_ctl <- utils::modifyList(lik_ctl, control$likelihood)
+  sw <- .mosaic_resolve_score_window(config, list(likelihood = lik_ctl))
+  head_cases  <- max(.FIT_CASES_WARMUP, sw$idx_cases - 1L)
+  head_deaths <- sw$idx_deaths - 1L
+  mask_head <- function(v, k) { v <- v[seq_len(n)]; if (k > 0L) v[seq_len(min(k, n))] <- NA_real_; v }
+  sc_obs_cases   <- mask_head(sc_cases$obs,   head_cases)
+  sc_pred_cases  <- mask_head(sc_cases$pred,  head_cases)
+  sc_obs_deaths  <- mask_head(sc_deaths$obs,  head_deaths)
+  sc_pred_deaths <- mask_head(sc_deaths$pred, head_deaths)
+
   loc_label <- if (length(loc_idx) == 1L && !is.null(config$location_name)) {
     as.character(config$location_name[loc_idx])
   } else if (length(loc_idx) > 1L) "AGGREGATE" else "location"
 
   # ---- Predictions data.frame (standard ensemble format) -------------------
+  # One deterministic run is its own mean and median.
   mk <- function(metric, obs, pred) data.frame(
     location = loc_label, date = as.character(dates), metric = metric,
-    observed = obs, predicted_median = pred,
+    observed = obs, predicted_central = pred, predicted_mean = pred,
+    predicted_median = pred, central_method = "mean",
     ci_1_lower = pred, ci_1_upper = pred, ci_2_lower = pred, ci_2_upper = pred,
     stringsAsFactors = FALSE
   )
@@ -149,23 +204,24 @@ run_fit_sandbox <- function(config,
     run_label   = run_label,
     seed        = as.integer(seed),
     locations   = loc_idx,
-    r2_cases    = calc_model_R2(obs_cases,  pred_cases,  method = "corr"),
-    r2_deaths   = calc_model_R2(obs_deaths, pred_deaths, method = "corr"),
-    bias_cases  = calc_bias_ratio(obs_cases,  pred_cases),
-    bias_deaths = calc_bias_ratio(obs_deaths, pred_deaths),
+    score_idx_cases  = as.integer(head_cases + 1L),
+    score_idx_deaths = as.integer(head_deaths + 1L),
+    r2_cases    = calc_model_R2(sc_obs_cases,  sc_pred_cases,  method = "corr"),
+    r2_deaths   = calc_model_R2(sc_obs_deaths, sc_pred_deaths, method = "corr"),
+    bias_cases  = calc_bias_ratio(sc_obs_cases,  sc_pred_cases),
+    bias_deaths = calc_bias_ratio(sc_obs_deaths, sc_pred_deaths),
     # Named pair c(reported, symptomatic): the config's window-mean reported
     # CFR (mu_jt) and the per-onset fatality probability it implies.
     cfr_implied  = .fit_cfr_implied(config, loc_idx),
-    cfr_observed = if (sum(obs_cases, na.rm = TRUE) > 0)
-      sum(obs_deaths, na.rm = TRUE) / sum(obs_cases, na.rm = TRUE) else NA_real_
+    cfr_observed = .fit_cfr_observed(obs_cases_mat, obs_deaths_mat, loc_idx)
   )
 
   if (isTRUE(full_metrics)) {
     # NOTE: config$epidemic_threshold is an Isym/N point-PREVALENCE fraction (~1e-6),
     # not a case count, so it must NOT be used as the observed-count split threshold.
     # Let calc_fit_diagnostics use its data-driven default (75th pctile of positive obs).
-    cases_diag  <- calc_fit_diagnostics(obs_cases,  pred_cases,  dates)
-    deaths_diag <- calc_fit_diagnostics(obs_deaths, pred_deaths, dates)
+    cases_diag  <- calc_fit_diagnostics(sc_obs_cases,  sc_pred_cases,  dates)
+    deaths_diag <- calc_fit_diagnostics(sc_obs_deaths, sc_pred_deaths, dates)
     metrics$fit_diagnostics <- list(cases = cases_diag, deaths = deaths_diag)
     metrics$scorecard <- c(
       bias_cases  = unname(cases_diag$scorecard["bias"]),
@@ -192,6 +248,33 @@ run_fit_sandbox <- function(config,
 
 # ---- Internal helpers ------------------------------------------------------
 
+# Leading cases steps blanked as the initial-condition warm-up transient; the
+# calc_model_ensemble() default (n_cases_warmup_mask = 2L) that run_MOSAIC() uses.
+.FIT_CASES_WARMUP <- 2L
+
+# Sum rows `loc_idx` of a [location x time] matrix. A day is NA when any
+# selected location is NA on it (no silent zero-fill).
+.fit_agg <- function(m, loc_idx) {
+  if (length(loc_idx) == 1L) return(as.numeric(m[loc_idx, ]))
+  colSums(m[loc_idx, , drop = FALSE])
+}
+
+# Paired aggregate of observed and predicted: per day, sum both over only the
+# selected location-days where BOTH are finite, so the predicted total never
+# includes a location whose observation is missing. A day with no such cell is
+# NA in both. Returns list(obs, pred), each of length ncol.
+.fit_agg_paired <- function(obs_m, pred_m, loc_idx) {
+  nt <- min(ncol(obs_m), ncol(pred_m))
+  o <- obs_m[loc_idx, seq_len(nt), drop = FALSE]
+  p <- pred_m[loc_idx, seq_len(nt), drop = FALSE]
+  ok <- is.finite(o) & is.finite(p)
+  o[!ok] <- 0; p[!ok] <- 0
+  any_ok <- colSums(ok) > 0
+  so <- colSums(o); sp <- colSums(p)
+  so[!any_ok] <- NA_real_; sp[!any_ok] <- NA_real_
+  list(obs = as.numeric(so), pred = as.numeric(sp))
+}
+
 # Coerce a run_simulation/config field (matrix or vector) to a numeric matrix with
 # locations in rows. The engine always returns a matrix now, but config-supplied
 # observed series are still sometimes bare vectors.
@@ -201,6 +284,17 @@ run_fit_sandbox <- function(config,
   m <- as.matrix(x)
   storage.mode(m) <- "double"
   m
+}
+
+# Observed CFR: sum of deaths / sum of cases over the selected location-days
+# where both are observed. NA when no cases are observed.
+.fit_cfr_observed <- function(obs_cases_m, obs_deaths_m, loc_idx) {
+  nt <- min(ncol(obs_cases_m), ncol(obs_deaths_m))
+  oc <- obs_cases_m[loc_idx, seq_len(nt), drop = FALSE]
+  od <- obs_deaths_m[loc_idx, seq_len(nt), drop = FALSE]
+  ok <- is.finite(oc) & is.finite(od)
+  sc <- sum(oc[ok])
+  if (sc > 0) sum(od[ok]) / sc else NA_real_
 }
 
 # The config's reported CFR over the observed window, and the per-onset fatality

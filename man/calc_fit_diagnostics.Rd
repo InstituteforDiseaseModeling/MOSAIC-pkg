@@ -37,7 +37,7 @@ A named list with elements:
 \item{shape}{list: \code{peak_timing_error_by_year} (days; positive = model peaks later),
 \code{peak_magnitude_ratio_by_year} (pred/obs), \code{onset_slope_ratio},
 \code{seasonal_corr}, \code{shape_corr}.}
-\item{variance}{list: \code{cv_ratio} (pred CV / obs CV), \code{residual_autocorr_lag7}.}
+\item{variance}{list: \code{cv_ratio} (pred CV / obs CV, both on the paired finite days), \code{residual_autocorr_lag7} (lag in days; NA gaps kept in place).}
 \item{scorecard}{named character vector: \code{bias}, \code{peak_timing},
 \code{peak_shape}, \code{variance}, each "PASS"|"WARN"|"FAIL".}
 }
