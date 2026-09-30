@@ -29,6 +29,37 @@ test_that("the human-transmission envelope is evaluated at calendar day-of-year"
 
 test_that("sim_params sets season_t0 from date_start", {
      cfg <- MOSAIC::config_default
-     par <- sim_params(cfg, components = SIM_PIPELINE)
-     expect_identical(par$season_t0, as.integer(format(as.Date(cfg$date_start), "%j")) - 1L)
+     cfg$date_start <- "2023-01-01"
+     expect_identical(sim_params(cfg, components = SIM_PIPELINE)$season_t0, 0L)
+     # A 1 July start: day-of-year 182, so tick 1 is t = 182
+     nt <- as.integer(as.Date(cfg$date_stop) - as.Date(cfg$date_start))
+     cfg$date_start <- "2023-07-01"
+     cfg$date_stop <- as.character(as.Date("2023-07-01") + nt)
+     expect_identical(sim_params(cfg, components = SIM_PIPELINE)$season_t0, 181L)
+})
+
+test_that("run_simulation() evaluates the seasonal envelope at calendar day-of-year", {
+     # End-to-end through the engine: the same config started on 1 January and
+     # on 1 July must carry the envelope at t = tick and t = 181 + tick.
+     fx <- readRDS(test_path("fixtures", "replay_single_location.rds"))
+     cfg <- fx$meta$config_list
+     envelope <- function(t) {
+          cfg$beta_j0_hum * (1 + cfg$a_1_j * cos(2 * pi * t / cfg$p) +
+                                  cfg$b_1_j * sin(2 * pi * t / cfg$p) +
+                                  cfg$a_2_j * cos(4 * pi * t / cfg$p) +
+                                  cfg$b_2_j * sin(4 * pi * t / cfg$p))
+     }
+     run <- function(cfg) {
+          suppressWarnings(run_simulation(cfg, seed = 1L, quiet = TRUE))$results$beta_jt_human
+     }
+     expect_identical(as.character(cfg$date_start), "2023-01-01")
+     b_jan <- run(cfg)
+     expect_equal(as.vector(b_jan[1, ]), envelope(seq_len(ncol(b_jan))), tolerance = 1e-12)
+
+     cfg_jul <- cfg
+     cfg_jul$date_start <- as.character(as.Date(cfg$date_start) + 181)
+     cfg_jul$date_stop <- as.character(as.Date(cfg$date_stop) + 181)
+     b_jul <- run(cfg_jul)
+     expect_equal(as.vector(b_jul[1, ]), envelope(181 + seq_len(ncol(b_jul))), tolerance = 1e-12)
+     expect_false(isTRUE(all.equal(as.vector(b_jan[1, ]), as.vector(b_jul[1, ]))))
 })
