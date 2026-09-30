@@ -135,7 +135,9 @@
         result$traj_epi <- traj_epi
       }
     }
-    gc(verbose = FALSE)
+    # No per-simulation gc(): the calibration worker dropped its copy in
+    # v0.72.0 (a forced full collection measured 292 ms on a warm worker heap
+    # and defeats R's generational collector; see run_MOSAIC.R and NEWS).
     result
   }, error = function(e) {
     list(param_idx = param_idx, stoch_idx = stoch_idx,

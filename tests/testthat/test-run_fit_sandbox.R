@@ -54,8 +54,10 @@ test_that("predictions use the standard ensemble format and both metrics", {
   res <- run_fit_sandbox(cfg, .sim_runner = stub_runner)
   expect_setequal(
     colnames(res$predictions),
-    c("location", "date", "metric", "observed", "predicted_median",
-      "ci_1_lower", "ci_1_upper", "ci_2_lower", "ci_2_upper")
+    c("location", "date", "metric", "observed", "predicted_central",
+      "predicted_mean", "predicted_median", "central_method",
+      "ci_1_lower", "ci_1_upper", "ci_2_lower", "ci_2_upper",
+      "n_locations_observed")
   )
   expect_setequal(unique(res$predictions$metric), c("Suspected Cases", "Deaths"))
 })
