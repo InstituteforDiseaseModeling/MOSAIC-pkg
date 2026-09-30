@@ -16,11 +16,13 @@
 #'
 #' Setting the derivative of log f to zero gives the mode x* = -log(eta) / b,
 #' which is interior only when eta < 1; for eta >= 1 the density is monotone
-#' decreasing and the mode is 0. \code{mode_val} is validated but does not
-#' constrain the fit (a sample-based mode near zero is poorly determined); the
-#' mode of the fitted density is returned as \code{fitted_mode}.
+#' decreasing and the mode is 0. \code{mode_val} does not constrain the fit (a
+#' sample-based mode near zero is poorly determined) and may lie outside the
+#' interval, as it does for a monotone-decreasing target whose KDE mode falls
+#' below the lower quantile; the mode of the fitted density is returned as
+#' \code{fitted_mode}.
 #'
-#' @param mode_val Numeric >= 0 inside the interval. Reference mode, checked against the interval and reported next to the fitted mode; it does not constrain the fit.
+#' @param mode_val Numeric >= 0. Reference mode, reported next to the fitted mode; it does not constrain the fit and need not lie inside the interval.
 #' @param ci_lower Numeric greater than or equal to 0. Lower bound of the target interval (e.g., 2.5 percent quantile).
 #' @param ci_upper Numeric greater than ci_lower. Upper bound of the target interval (e.g., 97.5 percent quantile).
 #' @param probs Numeric length-2 vector in (0, 1). Probability levels for the target bounds. Defaults to c(0.025, 0.975).
@@ -68,9 +70,6 @@ fit_gompertz_from_ci <- function(mode_val,
           stop("`ci_upper` must be a single finite numeric value > `ci_lower`.")
      }
      # Validate that mode is within confidence interval bounds
-     if (mode_val < ci_lower || mode_val > ci_upper) {
-          stop("`mode_val` must be between `ci_lower` and `ci_upper`.")
-     }
      if (!is.numeric(probs) || length(probs) != 2L || any(!is.finite(probs)) ||
          any(probs <= 0) || any(probs >= 1)) {
           stop("`probs` must be a numeric length-2 vector with values strictly between 0 and 1.")
@@ -150,8 +149,8 @@ fit_gompertz_from_ci <- function(mode_val,
                       mode_val, probs[1], probs[2], ci_lower, ci_upper))
           cat(sprintf("Fitted parameters: b = %.6g, eta = %.6g, f(0) = b*eta = %.6g\n",
                       out$b, out$eta, out$f0))
-          cat(sprintf("Fitted mode: %.10g (target: %.10g, diff: %.3g%%)\n",
-                      out$fitted_mode, mode_val, 100 * (out$fitted_mode - mode_val) / mode_val))
+          cat(sprintf("Fitted mode: %.10g (reference mode_val: %.10g)\n",
+                      out$fitted_mode, mode_val))
           cat(sprintf("Fitted %g%%-interval: [%.10g, %.10g]\n",
                       diff(probs) * 100, out$fitted_ci[1], out$fitted_ci[2]))
           cat(sprintf("Target  %g%%-interval: [%.10g, %.10g]\n",

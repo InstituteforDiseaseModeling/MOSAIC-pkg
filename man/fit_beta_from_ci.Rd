@@ -48,7 +48,11 @@ squared error of the fitted 2.5\% and 97.5\% quantiles against the CI on the
 logit scale. Logit-scale errors are relative errors for small proportions, so
 a CI around 1e-6 is matched as closely as one around 0.5. When the CI is
 wider than any unimodal Beta with that mode allows, the widest achievable
-interval is returned.
+interval is returned. Because errors are relative, a bound far outside what
+a Beta with this mode can reach (for example a lower bound clamped to 1e-10
+after a linear widening) dominates the fit and pulls the mean up; pass a CI
+the family can represent, or refit samples by their moments instead.
+\code{mode_val} is a mode: to anchor a mean, use a mean-based fit.
 
 \code{"optimization"} fits both shapes freely to the mode and the two
 quantiles (all on the logit scale, mode weighted 100x), so the mode is matched

@@ -36,7 +36,7 @@ Must include \code{config$location_name} and \code{config$date_start}.}
 \code{n_samples >= 100} (default FALSE). Uses \code{parallel::mclapply()} with all
 available cores. Note: Not supported on Windows.}
 
-\item{variance_inflation}{Multiplicative CI factor for the Beta refit (default 2): the target 95\% CI is mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be > 1.1 for meaningful variance.}
+\item{variance_inflation}{Multiplicative CI factor for the Beta refit (default 2): the Beta keeps the Monte Carlo mean and its spread is fit to the target 95\% CI mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be > 1.1 for meaningful variance.}
 }
 \value{
 A list with two main components:

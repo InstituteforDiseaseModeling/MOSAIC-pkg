@@ -14,9 +14,24 @@
 #' @param verbose Logical, whether to print progress messages (default TRUE)
 #' @param parallel Logical, whether to use parallel processing for locations when length(location_codes) >= 8 (default FALSE).
 #'   Uses parallel::mclapply() with all available cores. Note: Not supported on Windows.
-#' @param variance_inflation Multiplier on the half-widths of the 95% CI of the Monte Carlo R/N samples before the Beta refit (default 1 = no change; 0 is also treated as no change). A scalar or a named per-ISO vector. It scales the SD, so the variance scales roughly with its square (2 gives ~4x the variance); values in (0, 1) tighten the prior.
+#' @param variance_inflation Multiplier on the SD of the Monte Carlo R/N samples in the method-of-moments Beta refit, which keeps the sample mean (default 1 = no change; 0 is also treated as no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.
 #'
 #' @return List with structure matching priors_default for prop_R_initial parameters
+#'
+#' @details
+#' \strong{Reporting chain.} Reported cases are converted to infections through
+#' the engine's observation process: the engine reports
+#' \code{Binomial(new_symptomatic, rho) / chi} (\code{sim_components.R}), so
+#' infections = cases * chi / (rho * sigma), with \code{rho} and
+#' \code{chi_endemic} drawn from the global priors. Before v0.99.11 those
+#' lookups never resolved and every draw used the hardcoded fallbacks rho = 0.1,
+#' chi = 0.5 (chi / rho = 5). At priors_default v16.1 (rho ~ Beta(5.38, 7.10),
+#' chi_endemic ~ Beta(5.43, 5.01)) \eqn{E[chi/rho] \approx 1.36}, so the
+#' infection multiplier, and with it the prop_R_initial mean, is about 3.7x
+#' lower than before, with S correspondingly higher through the simplex
+#' residual. The IC is now consistent with the observation model the
+#' calibration samples.
+#'
 #' @export
 #'
 #' @examples
@@ -541,7 +556,10 @@ est_initial_R_location <- function(
 #'
 #' @description
 #' Disaggregates annual cholera case counts to daily resolution using Fourier series
-#' seasonal patterns. Ensures exact preservation of annual totals.
+#' seasonal patterns. Ensures exact preservation of annual totals. Day \eqn{t}
+#' of each year gets weight \eqn{\max(0, 1 + f(t))}, where \eqn{f} is the
+#' two-harmonic term with period 365 on calendar day-of-year (the engine's
+#' seasonal envelope, see \code{est_seasonal_dynamics()}).
 #'
 #' @param annual_cases Vector of annual case counts
 #' @param years Vector of years corresponding to cases
@@ -585,15 +603,18 @@ disagg_annual_cases_to_daily <- function(
           # Day of year sequence
           t <- 1:n_days
 
-          # Generate daily weights from Fourier series
-          # Use 365.25 for period to handle leap years consistently
-          fourier_daily <- a1 * cos(2 * pi * t / 365.25) +
-               b1 * sin(2 * pi * t / 365.25) +
-               a2 * cos(4 * pi * t / 365.25) +
-               b2 * sin(4 * pi * t / 365.25)
+          # Daily weights from the seasonal envelope 1 + f(t), the same
+          # multiplicative form and period (p = 365, t = calendar day-of-year)
+          # the engine uses (sim_beta_jt_human(); est_seasonal_dynamics()).
+          # f alone is zero-mean, so weighting by pmax(0, f) (before v0.99.11)
+          # put every case in the ~half of the year where f > 0. pmax() only
+          # guards coefficients whose envelope dips below zero.
+          fourier_daily <- a1 * cos(2 * pi * t / 365) +
+               b1 * sin(2 * pi * t / 365) +
+               a2 * cos(4 * pi * t / 365) +
+               b2 * sin(4 * pi * t / 365)
 
-          # Ensure non-negative weights
-          weights <- pmax(0, fourier_daily)
+          weights <- pmax(0, 1 + fourier_daily)
 
           # Normalize weights to sum to 1
           weight_sum <- sum(weights)
@@ -740,74 +761,30 @@ fit_beta_safe <- function(x, label = "") {
 #' Helper Function to Fit Beta Distribution with Variance Inflation for est_initial_R
 #'
 #' @description
-#' Fits a Beta distribution to the sample mean and a rescaled 95% CI: the
-#' half-widths of the sample CI around the mean are multiplied by
-#' \code{variance_inflation} directly (no square root), so the SD scales by the
-#' factor and the variance by roughly its square. Values in (0, 1) tighten, values
-#' > 1 widen, and 0 or 1 leave the CI unchanged. Falls back to method of moments
-#' with direct variance scaling.
+#' Fits a Beta distribution to Monte Carlo R/N samples by the method of moments,
+#' keeping the sample mean and multiplying the sample SD by
+#' \code{variance_inflation} (so the variance scales by its square). Values in
+#' (0, 1) tighten, values > 1 widen, and 0 or 1 leave the spread unchanged. The
+#' concentration is floored at 2 (SD capped at \eqn{\sqrt{m(1-m)/3}}) so a very
+#' large factor cannot produce an invalid Beta; the mean is kept regardless.
+#'
+#' Before v0.99.11 the half-widths of the sample 95% CI were scaled linearly,
+#' the lower bound floored at 1e-10 and the result passed to
+#' \code{fit_beta_from_ci()}. With the mode-exact logit-scale fitter that
+#' unreachable floored bound dominated the fit (prior mean ~2.5x the sample
+#' mean for typical prop_R inputs), so the SD is now scaled directly, which is
+#' what the factor was documented to do.
 #'
 #' @param samples Numeric vector of proportions in (0,1)
-#' @param variance_inflation Numeric CI half-width multiplier (0 or 1 = unchanged)
+#' @param variance_inflation Numeric SD multiplier (0 or 1 = unchanged)
 #' @param label Character string for error messages
 #'
-#' @return List with shape1 and shape2 parameters, or NULL if fitting fails
+#' @return List with shape1 and shape2 parameters, or NULL with fewer than two
+#'   usable samples or zero sample variance
 fit_beta_with_variance_inflation_R <- function(samples, variance_inflation=0, label = "") {
-     # Remove invalid samples
-     valid_samples <- samples[!is.na(samples) & samples > 0 & samples < 1]
-
-     if (length(valid_samples) < 2) {
-          return(NULL)
-     }
-
-     # Calculate sample statistics
-     sample_mean <- mean(valid_samples)
-     sample_quantiles <- quantile(valid_samples, c(0.025, 0.975))
-     ci_lower <- sample_quantiles[1]
-     ci_upper <- sample_quantiles[2]
-
-     # Apply variance inflation correctly:
-     # For values < 1: tighten CI toward the mean
-     # For values > 1: expand CI away from the mean
-     if (variance_inflation <= 1 && variance_inflation > 0) {
-          # Tighten toward mean
-          ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
-          ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
-     } else if (variance_inflation > 1) {
-          # Expand away from mean
-          ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
-          ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
-     }
-     # If variance_inflation = 0, use original CI
-
-     # Ensure bounds remain valid
-     ci_lower <- pmax(1e-10, ci_lower)
-     ci_upper <- pmin(0.999, ci_upper)
-
-     # Wrap in tryCatch to handle potential errors
-     tryCatch({
-          beta_fit <- fit_beta_from_ci(
-               mode_val = sample_mean,
-               ci_lower = ci_lower,
-               ci_upper = ci_upper,
-               method = "moment_matching"
-          )
-
-          return(list(
-               shape1 = beta_fit$shape1,
-               shape2 = beta_fit$shape2
-          ))
-     }, error = function(e) {
-          # Fallback to simple method of moments
-          sample_var <- var(valid_samples)
-          precision <- (sample_mean * (1 - sample_mean) / sample_var) - 1
-          precision <- max(2.1, precision)
-
-          return(list(
-               shape1 = max(1.01, sample_mean * precision),
-               shape2 = max(1.01, (1 - sample_mean) * precision)
-          ))
-     })
+     shapes <- .fit_beta_inflated_samples(samples, variance_inflation)
+     if (is.null(shapes)) return(NULL)
+     list(shape1 = shapes[1], shape2 = shapes[2])
 }
 
 

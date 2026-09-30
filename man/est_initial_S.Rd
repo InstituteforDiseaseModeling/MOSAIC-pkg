@@ -26,7 +26,7 @@ est_initial_S(
 
 \item{t0}{Date object, target date for estimation (default NULL, used for metadata)}
 
-\item{variance_inflation}{Multiplier on the half-widths of the 95\% CI of the S samples before the Beta refit (default 0 = no change; 1 is also no change). A scalar or a named per-ISO vector. It scales the SD, so the variance scales roughly with its square (2 gives ~4x the variance); values in (0, 1) tighten the prior.}
+\item{variance_inflation}{Multiplier on the SD of the S samples in the method-of-moments Beta refit, which keeps the sample mean (default 0 = no change; 1 is also no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.}
 
 \item{verbose}{Logical, whether to print progress messages (default TRUE)}
 
@@ -107,7 +107,7 @@ initial_S <- est_initial_S(
   priors = priors_updated,
   config = config_default,
   n_samples = 1000,
-  variance_inflation = 2  # Double the CI half-widths (~4x the variance)
+  variance_inflation = 2  # Double the SD (4x the variance)
 )
 
 # Access results for a location

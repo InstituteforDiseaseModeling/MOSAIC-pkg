@@ -118,3 +118,41 @@ test_that("zero reported cases in the window give the near-zero prior, not the n
      expect_equal(c(E$shape1, E$shape2), c(0.01, 99999.99))
      expect_equal(E$method, "observed_zero")
 })
+
+test_that("the E/I Beta keeps the Monte Carlo mean for wide variance inflation", {
+     # The Monte Carlo mean used to be passed to fit_beta_from_ci() as the MODE;
+     # with both shapes held above 1 that put the prior mean ~6x above it at the
+     # shipped VI = 65-160.
+     set.seed(5)
+     counts <- stats::rpois(200, 10)
+     N <- 1e7
+     for (vi in c(2, 65, 120, 160)) {
+          fit <- MOSAIC:::.est_initial_E_I_fit(counts, N, "E", "TCD", vi, 200L,
+                                              total_cases = 100, verbose = FALSE)
+          expect_rel_equal(.beta_mean(fit), mean(counts / N), rel = 1e-9)
+     }
+})
+
+test_that("each location's E and I fits receive that location's variance inflation", {
+     # The pre-v0.99.11 loop looked up the I-compartment factor with
+     # exists("loc_variance_inflation"), which could pick up the previous
+     # location's value. The factor is now resolved once per location and passed
+     # explicitly; pin that contract by recording what the fit helper receives.
+     fx <- .ei_fixture()
+     seen <- list()
+     real_fit <- MOSAIC:::.est_initial_E_I_fit
+     local_mocked_bindings(
+          .est_initial_E_I_fit = function(counts, population_t0, compartment, loc,
+                                          loc_variance_inflation, ...) {
+               seen[[paste(loc, compartment)]] <<- loc_variance_inflation
+               real_fit(counts, population_t0, compartment, loc, loc_variance_inflation, ...)
+          },
+          .package = "MOSAIC"
+     )
+     set.seed(1)
+     est_initial_E_I(fx$PATHS, MOSAIC::priors_default, fx$config, n_samples = 20,
+                     t0 = fx$t0, lookback_days = 14, verbose = FALSE,
+                     variance_inflation = c(TCD = 1.5, NER = 50))
+     expect_equal(unlist(seen[c("TCD E", "TCD I", "NER E", "NER I")], use.names = FALSE),
+                  c(1.5, 1.5, 50, 50))
+})

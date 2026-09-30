@@ -28,7 +28,7 @@
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
 #'   `n_samples >= 100` (default FALSE). Uses `parallel::mclapply()` with all
 #'   available cores. Note: Not supported on Windows.
-#' @param variance_inflation Multiplicative CI factor for the Beta refit (default 2): the target 95% CI is mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be > 1.1 for meaningful variance.
+#' @param variance_inflation Multiplicative CI factor for the Beta refit (default 2): the Beta keeps the Monte Carlo mean and its spread is fit to the target 95% CI mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be > 1.1 for meaningful variance.
 #'
 #' @return A list with two main components:
 #' \describe{
@@ -558,7 +558,8 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
 }
 
 # Beta prior for one compartment from its Monte Carlo counts. Zero draws are
-# real outcomes and stay in the mean; the CI is mean / VI to mean * VI.
+# real outcomes and stay in the mean. The Beta keeps the Monte Carlo mean and
+# its spread is fit to the target 95% CI mean / VI to mean * VI.
 .est_initial_E_I_fit <- function(counts, population_t0, compartment, loc,
                                  loc_variance_inflation, n_samples, total_cases,
                                  verbose) {
@@ -584,9 +585,14 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
      m <- mean(prop)
      ci_lower <- max(1e-10, min(m / loc_variance_inflation, 0.999))
      ci_upper <- max(ci_lower + 1e-10, min(m * loc_variance_inflation, 0.999))
-     fit <- fit_beta_from_ci(mode_val = m, ci_lower = ci_lower, ci_upper = ci_upper,
-                             method = "moment_matching")
-     list(shape1 = fit$shape1, shape2 = fit$shape2, method = "variance_inflation",
+     # m is the Monte Carlo MEAN, so it anchors the Beta mean (not its mode):
+     # a mode-exact fit with both shapes > 1 put the prior mean ~6x above m for
+     # VI = 65-160 and cannot span the target's decades below m. The mean-anchored
+     # fit lets shape1 < 1; for wide VI it reproduces the lower target and falls
+     # short on the upper one (a Beta with mean m cannot put 2.5% of its mass
+     # above m * VI for large VI).
+     shapes <- .fit_beta_mean_ci(m, ci_lower, ci_upper)
+     list(shape1 = shapes[1], shape2 = shapes[2], method = "variance_inflation",
           metadata = list(data_available = TRUE, total_cases = total_cases,
                           mean_count = mean(counts), sd_count = stats::sd(counts),
                           n_samples = length(counts)))

@@ -11,7 +11,7 @@
 #' @param config Configuration object containing location codes
 #' @param n_samples Integer, number of Monte Carlo samples for uncertainty quantification (default 1000)
 #' @param t0 Date object, target date for estimation (default NULL, used for metadata)
-#' @param variance_inflation Multiplier on the half-widths of the 95% CI of the S samples before the Beta refit (default 0 = no change; 1 is also no change). A scalar or a named per-ISO vector. It scales the SD, so the variance scales roughly with its square (2 gives ~4x the variance); values in (0, 1) tighten the prior.
+#' @param variance_inflation Multiplier on the SD of the S samples in the method-of-moments Beta refit, which keeps the sample mean (default 0 = no change; 1 is also no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.
 #' @param verbose Logical, whether to print progress messages (default TRUE)
 #' @param min_S_proportion Numeric, minimum allowed S proportion to prevent negative values (default 0.01 = 1%)
 #'
@@ -75,7 +75,7 @@
 #'   priors = priors_updated,
 #'   config = config_default,
 #'   n_samples = 1000,
-#'   variance_inflation = 2  # Double the CI half-widths (~4x the variance)
+#'   variance_inflation = 2  # Double the SD (4x the variance)
 #' )
 #'
 #' # Access results for a location
@@ -179,57 +179,17 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
             return(list(shape1 = 30, shape2 = 7.5, method = "insufficient_data"))
         }
 
-        # Calculate sample statistics
-        sample_mean <- mean(valid_samples)
-        sample_quantiles <- quantile(valid_samples, c(0.025, 0.975))
-        ci_lower <- sample_quantiles[1]
-        ci_upper <- sample_quantiles[2]
-
-        # Apply variance inflation correctly:
-        # For values < 1: tighten CI toward the mean
-        # For values > 1: expand CI away from the mean
-        if (variance_inflation <= 1 && variance_inflation > 0) {
-            # Tighten toward mean
-            ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
-            ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
-        } else if (variance_inflation > 1) {
-            # Expand away from mean
-            ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
-            ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
+        # Method of moments on the sample mean and the SD multiplied by
+        # variance_inflation (see .fit_beta_inflated_samples()). Before v0.99.11
+        # the CI half-widths were scaled linearly, floored at 0.001 and passed to
+        # fit_beta_from_ci(), whose mode-exact logit fit is pulled off the sample
+        # mean by an unreachable floored bound.
+        shapes <- .fit_beta_inflated_samples(valid_samples, variance_inflation)
+        if (is.null(shapes)) {
+            if (verbose) cat("  Degenerate S samples for", label, "- using default\n")
+            return(list(shape1 = 30, shape2 = 7.5, method = "insufficient_data"))
         }
-        # If variance_inflation = 0, use original CI
-
-        # Ensure bounds remain valid
-        ci_lower <- pmax(0.001, ci_lower)
-        ci_upper <- pmin(0.999, ci_upper)
-
-        # Use fit_beta_from_ci with sample_mean as mode_val
-        tryCatch({
-            beta_fit <- fit_beta_from_ci(
-                mode_val = sample_mean,
-                ci_lower = ci_lower,
-                ci_upper = ci_upper,
-                method = "moment_matching"
-            )
-
-            return(list(
-                shape1 = beta_fit$shape1,
-                shape2 = beta_fit$shape2,
-                method = "ci_expansion_constrained_residual"
-            ))
-
-        }, error = function(e) {
-            # Simple fallback using method of moments
-            sample_var <- var(valid_samples)
-            precision <- (sample_mean * (1 - sample_mean) / sample_var) - 1
-            precision <- max(2.1, precision)
-
-            return(list(
-                shape1 = max(1.01, sample_mean * precision),
-                shape2 = max(1.01, (1 - sample_mean) * precision),
-                method = "fallback_method_of_moments"
-            ))
-        })
+        list(shape1 = shapes[1], shape2 = shapes[2], method = "method_of_moments_sd_inflation")
     }
 
     # Default parameters for each compartment (fallbacks)

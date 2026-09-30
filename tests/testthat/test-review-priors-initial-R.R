@@ -60,3 +60,18 @@ test_that("disaggregation reads the shipped a_1_j/b_1_j/a_2_j/b_2_j priors", {
      expect_true(all(vapply(fp, function(x) identical(x$distribution, "normal"), logical(1))))
      expect_null(MOSAIC:::.est_initial_R_fourier_priors(list(parameters_location = list()), "ETH"))
 })
+
+test_that("disaggregation weights days by the envelope 1 + f(t), period 365", {
+     # Before v0.99.11 the weights were pmax(0, f(t)) with period 365.25: f is
+     # zero-mean, so every case went into the ~half of the year where f > 0.
+     a1 <- 0.5; b1 <- 0.2; a2 <- 0.1; b2 <- -0.1
+     d <- disagg_annual_cases_to_daily(3650, 2023, a1, b1, a2, b2)
+     t <- 1:365
+     env <- 1 + a1 * cos(2 * pi * t / 365) + b1 * sin(2 * pi * t / 365) +
+          a2 * cos(4 * pi * t / 365) + b2 * sin(4 * pi * t / 365)
+     expect_equal(d$cases, 3650 * env / sum(env), tolerance = 1e-12)
+     expect_true(all(d$cases > 0))
+     # Flat seasonality spreads cases uniformly
+     u <- disagg_annual_cases_to_daily(365, 2023, 0, 0, 0, 0)
+     expect_equal(u$cases, rep(1, 365))
+})

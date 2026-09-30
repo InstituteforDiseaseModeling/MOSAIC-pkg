@@ -29,7 +29,11 @@
 #' logit scale. Logit-scale errors are relative errors for small proportions, so
 #' a CI around 1e-6 is matched as closely as one around 0.5. When the CI is
 #' wider than any unimodal Beta with that mode allows, the widest achievable
-#' interval is returned.
+#' interval is returned. Because errors are relative, a bound far outside what
+#' a Beta with this mode can reach (for example a lower bound clamped to 1e-10
+#' after a linear widening) dominates the fit and pulls the mean up; pass a CI
+#' the family can represent, or refit samples by their moments instead.
+#' \code{mode_val} is a mode: to anchor a mean, use a mean-based fit.
 #'
 #' \code{"optimization"} fits both shapes freely to the mode and the two
 #' quantiles (all on the logit scale, mode weighted 100x), so the mode is matched
@@ -202,4 +206,66 @@ fit_beta_from_ci <- function(mode_val, ci_lower, ci_upper,
   log_k <- if (opt$objective <= vals[i]) opt$minimum else grid[i]
   k <- exp(log_k)
   c(1 + mode_val * k, 1 + (1 - mode_val) * k)
+}
+
+# Mean-constrained Beta fit: shape1 = m * nu, shape2 = (1 - m) * nu, with the
+# concentration nu > 0 chosen by a log-spaced grid search refined by optimize()
+# to minimise the squared logit-scale error of the fitted 2.5%/97.5% quantiles
+# against the CI. Unlike .fit_beta_mode_ci_k() the shapes are not held above 1,
+# so a small proportion can take shape1 < 1 (a J-shaped density), which is the
+# only way a Beta can span several decades below its mean. The mean is exact;
+# a CI that is wider or more right-skewed than any Beta with this mean allows is
+# matched as closely as possible on the logit scale. Returns c(shape1, shape2).
+.fit_beta_mean_ci <- function(mean_val, ci_lower, ci_upper) {
+  if (!is.finite(mean_val) || mean_val <= 0 || mean_val >= 1) {
+    stop(".fit_beta_mean_ci: mean_val must be in (0, 1)")
+  }
+  if (!is.finite(ci_lower) || !is.finite(ci_upper) ||
+      ci_lower <= 0 || ci_upper >= 1 || ci_lower >= ci_upper) {
+    stop(".fit_beta_mean_ci: need 0 < ci_lower < ci_upper < 1")
+  }
+  target <- stats::qlogis(c(ci_lower, ci_upper))
+  obj <- function(log_nu) {
+    nu <- exp(log_nu)
+    q <- suppressWarnings(stats::qbeta(c(0.025, 0.975),
+                                       shape1 = mean_val * nu,
+                                       shape2 = (1 - mean_val) * nu))
+    err <- sum((stats::qlogis(q) - target)^2)
+    if (!is.finite(err)) Inf else err
+  }
+  # nu >= 0.1 keeps both shapes well inside qbeta's accurate range
+  grid <- seq(log(0.1), log(1e15), length.out = 241L)
+  vals <- vapply(grid, obj, numeric(1))
+  if (!any(is.finite(vals))) {
+    stop(".fit_beta_mean_ci: no finite Beta fit for mean = ", mean_val,
+         ", CI = [", ci_lower, ", ", ci_upper, "]")
+  }
+  i <- which.min(vals)
+  lo <- grid[max(1L, i - 1L)]
+  hi <- grid[min(length(grid), i + 1L)]
+  opt <- stats::optimize(obj, interval = c(lo, hi), tol = 1e-10)
+  nu <- exp(if (opt$objective <= vals[i]) opt$minimum else grid[i])
+  c(mean_val * nu, (1 - mean_val) * nu)
+}
+
+# Beta refit of Monte Carlo proportion samples with their SD multiplied by
+# variance_inflation (0 or 1 = unchanged; values in (0, 1) tighten), by the
+# method of moments: the mean is the sample mean and the variance is
+# (variance_inflation * sd)^2, so the variance scales with the square of the
+# factor. Used by est_initial_R() and est_initial_S(), whose documented
+# variance_inflation is an SD multiplier. The concentration
+# nu = m (1 - m) / var - 1 is floored at nu_min (default 2, i.e. the SD is capped
+# at sqrt(m (1 - m) / 3)) because a Beta needs nu > 0; the mean is kept whatever
+# the cap. Returns c(shape1, shape2), or NULL with fewer than 2 samples in (0, 1)
+# or zero sample variance.
+.fit_beta_inflated_samples <- function(samples, variance_inflation, nu_min = 2) {
+  x <- samples[is.finite(samples) & samples > 0 & samples < 1]
+  if (length(x) < 2L) return(NULL)
+  m <- mean(x)
+  s <- stats::sd(x)
+  if (!is.finite(s) || s <= 0) return(NULL)
+  vi <- if (is.finite(variance_inflation) && variance_inflation > 0) variance_inflation else 1
+  v <- (vi * s)^2
+  nu <- max(nu_min, m * (1 - m) / v - 1)
+  c(m * nu, (1 - m) * nu)
 }

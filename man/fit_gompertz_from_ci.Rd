@@ -13,7 +13,7 @@ fit_gompertz_from_ci(
 )
 }
 \arguments{
-\item{mode_val}{Numeric >= 0 inside the interval. Reference mode, checked against the interval and reported next to the fitted mode; it does not constrain the fit.}
+\item{mode_val}{Numeric >= 0. Reference mode, reported next to the fitted mode; it does not constrain the fit and need not lie inside the interval.}
 
 \item{ci_lower}{Numeric greater than or equal to 0. Lower bound of the target interval (e.g., 2.5 percent quantile).}
 
@@ -56,9 +56,11 @@ anchored on \code{ci_upper}.
 
 Setting the derivative of log f to zero gives the mode x* = -log(eta) / b,
 which is interior only when eta < 1; for eta >= 1 the density is monotone
-decreasing and the mode is 0. \code{mode_val} is validated but does not
-constrain the fit (a sample-based mode near zero is poorly determined); the
-mode of the fitted density is returned as \code{fitted_mode}.
+decreasing and the mode is 0. \code{mode_val} does not constrain the fit (a
+sample-based mode near zero is poorly determined) and may lie outside the
+interval, as it does for a monotone-decreasing target whose KDE mode falls
+below the lower quantile; the mode of the fitted density is returned as
+\code{fitted_mode}.
 }
 \examples{
 # Example: Fit Gompertz for small positive quantity
