@@ -1,5 +1,11 @@
 # Changelog
 
+## MOSAIC 0.99.10
+
+- The pkgdown site carries the Gates Foundation standard footer (legal
+  notice, privacy and terms links)
+  ([\#121](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/121)).
+
 ## MOSAIC 0.99.9
 
 ### Carried-forward CFR years are exactly flat on every BLAS (v0.99.9)
