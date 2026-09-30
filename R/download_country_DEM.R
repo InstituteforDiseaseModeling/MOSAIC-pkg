@@ -13,7 +13,9 @@
 #' @return Invisibly, the paths of the DEM files that exist after the call. Each is written atomically (temporary file, then rename), so a failed or interrupted download never replaces a good raster.
 #'
 #' @details Terrain does not change between refreshes, and \code{PATHS$DATA_DEM} lives under
-#' \code{MOSAIC-data/raw/}, so existing rasters are never rewritten unless \code{overwrite = TRUE}.
+#' \code{MOSAIC-data/raw/}, so existing rasters are never rewritten unless \code{overwrite = TRUE}. Each
+#' download appends a row to \code{PATHS$DATA_DEM/PROVENANCE.md}. File names stay undated because
+#' \code{get_elevation()} reads \code{<ISO>_1km_DEM.tif}.
 #'
 #' @importFrom elevatr get_elev_raster
 #' @importFrom sf st_bbox
@@ -82,6 +84,11 @@ download_country_DEM <- function(PATHS, iso_codes, zoom_level = 6, overwrite = F
                raster::writeRaster(dem_raster, filename = tmp, format = "GTiff", overwrite = TRUE)
           })
 
+          .append_raw_provenance(
+               PATHS$DATA_DEM, dem_filename, NA_integer_, NA_integer_,
+               sprintf("elevatr::get_elev_raster z=%s, clip=bbox of %s_ADM0%s.",
+                       zoom_level, iso_codes[i], if (overwrite) "; replaced existing raster" else ""),
+               title = "DEM download provenance log")
           message(glue::glue("DEM for {iso_codes[i]} saved to {dem_filename}."))
           out <- c(out, dem_filename)
      }

@@ -26,7 +26,9 @@ This function downloads 1km resolution DEM (Digital Elevation Model) raster data
 }
 \details{
 Terrain does not change between refreshes, and \code{PATHS$DATA_DEM} lives under
-\code{MOSAIC-data/raw/}, so existing rasters are never rewritten unless \code{overwrite = TRUE}.
+\code{MOSAIC-data/raw/}, so existing rasters are never rewritten unless \code{overwrite = TRUE}. Each
+download appends a row to \code{PATHS$DATA_DEM/PROVENANCE.md}. File names stay undated because
+\code{get_elevation()} reads \code{<ISO>_1km_DEM.tif}.
 }
 \examples{
 \dontrun{

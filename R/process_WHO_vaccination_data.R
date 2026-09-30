@@ -49,7 +49,14 @@ process_WHO_vaccination_data <- function(PATHS) {
      message('Loading vaccination data')
 
      # Load vaccination data
-     vaccination_data <- read.csv(file.path(PATHS$DATA_SCRAPE_WHO_VACCINATION, 'who_vaccination_data.csv'), stringsAsFactors = FALSE)
+     # Newest dated snapshot written by get_WHO_vaccination_data(), else the legacy file
+     who_file <- .who_vaccination_latest_file(PATHS$DATA_SCRAPE_WHO_VACCINATION)
+     if (is.null(who_file)) {
+          stop("No WHO vaccination table in ", PATHS$DATA_SCRAPE_WHO_VACCINATION,
+               "; run get_WHO_vaccination_data() first.", call. = FALSE)
+     }
+     message('Reading ', basename(who_file))
+     vaccination_data <- read.csv(who_file, stringsAsFactors = FALSE)
 
      vaccination_data$id <- 1:nrow(vaccination_data)
      vaccination_data$decision_date <- as.Date(vaccination_data$decision_date)

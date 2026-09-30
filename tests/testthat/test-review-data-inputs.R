@@ -128,7 +128,7 @@ test_that("get_WHO_vaccination_data leaves an identical file untouched", {
      tmp <- withr::local_tempdir()
      PATHS <- list(DATA_SCRAPE_WHO_VACCINATION = tmp)
      suppressMessages(utils::capture.output(get_WHO_vaccination_data(PATHS)))
-     f <- file.path(tmp, "who_vaccination_data.csv")
+     f <- MOSAIC:::.who_vaccination_latest_file(tmp)
      Sys.setFileTime(f, as.POSIXct("2020-01-01"))
      msgs <- character(0)
      withCallingHandlers(utils::capture.output(get_WHO_vaccination_data(PATHS)),
