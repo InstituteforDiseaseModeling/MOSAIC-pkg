@@ -672,6 +672,38 @@ Tests check against the engine rather than against the code's own algebra:
 
 On the post-v0.89.0 MOZ medoid, the 14-day-mean R_eff has an interquartile range of 0.54-1.71 and a p95 of 3.1; the old estimator gave 0.96-1.09 and 1.19. Old and new R_eff files are not comparable.
 
+# MOSAIC 0.84.0 - 0.91.x (changelog reconstructed from the commit history)
+
+These releases shipped without NEWS entries; the summaries below are taken from their commit messages. Two of them change model behaviour.
+
+## 0.89.0: two engine corrections (results are not comparable across this boundary)
+
+Both are places where the R port faithfully reproduced laser-cholera 0.16.1 while laser-cholera diverged from `MOSAIC-docs/04-model-description.Rmd`, so neither could be found by comparing R to Python.
+
+- **The symptomatic split is stochastic.** E -> I is now split binomially, as the spec's stochastic-transitions table states, instead of `round(sigma * progressing)`. `round()` is not linear, so the old form was wrong in the mean: at `sigma = 0.2` it gave zero symptomatic for every `n <= 2`, which suppressed the observed arm on 15.4% of patch-days with `E >= 1` (28-41% in GNB/COG/NAM) -- exactly where outbreak onset is decided.
+- **The environmental dose-response is per capita.** `Psi = beta_jt_env * (1 - theta_j) * D / (kappa + D)` with `D = W / N`. The reservoir `W` is extensive while `kappa` is a concentration; comparing them pinned the response at 1 (0.9994 from a single symptomatic person; 95.7% of patch-days above 0.99), so `kappa`, `zeta_1`, `zeta_2`, `zeta_ratio` and the decay parameters were flat directions whose posteriors returned their priors. At `kappa = 1e6` the response now half-saturates near 0.3% symptomatic prevalence and the realised human share near onset moves from 0.13% to ~25%, without touching `p_beta` or any other prior. Replay mode keeps the raw-`W` form for port parity (`.SIM_RNG_ONLY_CORRECTIONS`).
+
+Calibrations, posteriors and R_eff estimates from before 0.89.0 should not be compared with later ones.
+
+## 0.90.x: exact importance-sampling diagnostics
+
+- 0.90.0: the best-subset posterior **saturates** delta-AIC at 4 (`pmin(delta, 4)`) rather than applying the Delta <= 6 cut-off the spec described, so subset weights lie in `[exp(-2), 1]` and `ESS_B` is inflated by construction. This is now documented, and the honest numbers are reported alongside: new `calc_is_diagnostics()` (exact untruncated IS ESS + Pareto k-hat) and `summary.json` fields `ess_is_best`, `ess_is_all`, `ess_is_all_prop`, `khat_all`, `khat_all_status`, `n_positive_ratios_all` -- reported, never gated. New `control$targets$best_subset_weighting` (`"saturated"`, the unchanged default, or `"tempered"`). `codetools` declared in Suggests.
+- 0.90.1: `alpha_2` validation accepts the documented `[0, 1]` and rejects values above 1.
+- 0.90.2: the subset diagnostics score the subset the posterior actually uses. 0.90.4: `khat_status` reports usability, not just convergence. 0.90.5: corrected `tempered` weighting description; degenerate subsets guarded.
+- 0.90.6-0.90.11 (suitability RW-CV): ISO-8601 week labelling fixed and day-based RW geometry; forecast lead and validation input context; per-fold held-out predictions retained; the psi drop-tail guard fails loudly and the manifest records fit provenance; a day-based stride is no longer multiplied by `rw_subsample`; an undefined `backend` reference removed from the manifest.
+
+## 0.91.0
+
+- `write_trajectory_csv()` exports the ensemble trajectory channels (incidence, compartments, derived channels) as CSV, so they reach the results archive in a readable form.
+
+## 0.84.0 - 0.88.x: calibration pipeline performance and robustness
+
+- 0.84.0: the ensemble RAM projection counts the config broadcast.
+- 0.85.0: `add_reproductive_numbers()` gains `n_cores`; the R_eff re-simulation (`recompute_ci = TRUE`) runs on a PSOCK cluster.
+- 0.86.0: reverted the `open_dataset()` shard combine from 0.79.0 (2.1x slower on production hardware).
+- 0.87.0: `control$io$shard_batch_size` default 1 -> 100 (57x faster combine, 116x faster resume scan, 34.6x smaller on disk).
+- 0.88.0: the combine's small-file branch unifies shard schemas instead of silently dropping columns a later shard adds. 0.88.1: the implied-CFR identity uses the post-#67 form.
+
 # MOSAIC 0.83.0
 
 ## Every PSOCK cluster now clamps to the connection budget
@@ -689,6 +721,19 @@ R >= 4.4.0 accepts `--max-connections=N` (128 to 4096) to enlarge the table. It 
 Measured on dugong at `n_cores = 170`: **170 workers granted (was 123)**, cluster startup 16.6 s (was 13.6 s), 176 of 1024 file descriptors, 121 GB of 1511 GB resident. The connection table — not memory, not descriptors — was the binding constraint, and ~28% of the machine was being left idle. The flag precedes `"$@"` so a caller's own later value still wins (R takes the last occurrence); a flag placed *after* the script filename is ignored by R entirely. hedgehog (120 cores, `n_cores = 118`) sits under the default ceiling and does not need this; it gets the flag so both VMs behave identically.
 
 `inst/examples/forecast_cv_experiment.R` now derives its calibration cap from the live connection budget instead of a hard-coded `FORECAST_CV_PSOCK_CAP=120`; an explicit env var still overrides.
+
+# MOSAIC 0.74.0 - 0.82.x (changelog reconstructed from the commit history)
+
+These releases shipped without NEWS entries; the summaries below are taken from their commit messages.
+
+- 0.74.0: `inst/bench/`, a multi-version calibration benchmark suite.
+- 0.75.0: `process_IDMC_data()` builds displacement panels from IDMC IDU records.
+- 0.76.0: **`alpha_2` is pinned by default** (`sampling$sample_alpha_2 = FALSE`); it is weakly identified and suitability absorbs its signal. Set it `TRUE` to restore the old behaviour.
+- 0.77.0: **`config_default` rebuilt** on the 2018-01-01..2027-02-04 window (3,322 ticks, was 1,398) with refreshed psi and a newer UN WPP vintage. The demographic-trend test tolerance is now expressed per simulated year (0.8%/yr). 0.77.1-0.77.2: remaining laser-cholera relics and the dead `data-raw/mosaic_python_env.R` removed.
+- 0.78.0: the Python environment is optional and suitability-only; `library(MOSAIC)` no longer initialises Python (~5.2 s saved per interactive session).
+- 0.79.x: shard combine via `open_dataset()` (reverted in 0.86.0); four R CMD check warnings cleared and the build tarball shrunk 105x.
+- 0.80.0: `render_MOSAIC_figures()` renders per-location figure families across PSOCK workers (`cl` / `n_cores`); the vignettes ship in the package. 0.80.1: the resume scan reads simulation ids from the `sim` column, not the filename.
+- 0.81.0: parallel rendering actually engages (the cluster previously failed to start and fell back to serial); shard batching added. 0.81.2: the optimised ensemble keeps its scored-cell mask. 0.81.4: `results_all` restored.
 
 # MOSAIC 0.73.1
 

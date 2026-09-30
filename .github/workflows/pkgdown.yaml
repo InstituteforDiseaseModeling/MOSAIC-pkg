@@ -36,6 +36,12 @@ jobs:
           extra-packages: any::pkgdown, local::.
           needs: website
 
+      # pkgdown renders EVERY root *.md into a site page and has no exclude
+      # option, so the internal agent/planning notes would be published. Drop
+      # them from this throwaway checkout before building.
+      - name: Keep internal notes off the site
+        run: rm -f CLAUDE.md migrate-laser-r.md plan-review.md pipeline-performance-plan.md
+
       - name: Build site
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
         shell: Rscript {0}
@@ -44,6 +50,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: JamesIves/github-pages-deploy-action@v4.5.0
         with:
-          clean: false
+          # clean: true prunes pages for topics that no longer exist
+          # (run_LASER, Running-LASER, ...) instead of leaving them live.
+          clean: true
           branch: gh-pages
           folder: docs
