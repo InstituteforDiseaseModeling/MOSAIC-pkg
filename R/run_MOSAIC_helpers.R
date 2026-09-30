@@ -2294,6 +2294,37 @@
 # EXECUTION
 # =============================================================================
 
+#' Parallelism for the post-calibration ensembles
+#'
+#' A caller-supplied cluster is consent to parallelise the ensembles and sets
+#' their size, but it is not stopped (the caller owns it), so its workers keep
+#' their connection slots and memory while \code{calc_model_ensemble()} starts
+#' its own cluster. The ensemble size is therefore clamped to the free R
+#' connections, and a note says both clusters are resident.
+#'
+#' @param cluster The \code{cluster} argument of \code{run_MOSAIC()} (or NULL).
+#' @param control The resolved control list.
+#' @return \code{list(parallel, n_cores, note)}; \code{note} is NULL unless a
+#'   caller-supplied cluster is present.
+#' @noRd
+.mosaic_ensemble_parallel_plan <- function(cluster, control) {
+  parallel <- isTRUE(control$parallel$enable) || !is.null(cluster)
+  n_cores  <- if (!is.null(cluster) && length(cluster) > 1L) length(cluster)
+              else control$parallel$n_cores
+  note <- NULL
+  if (!is.null(cluster) && parallel && isTRUE(n_cores > 1L)) {
+    n_req   <- as.integer(n_cores)
+    n_cores <- .mosaic_clamp_psock_workers(n_req, reserve = 2L, verbose = FALSE)
+    note <- sprintf(paste0(
+      "The caller-supplied cluster (%d workers) stays alive during the post-calibration ",
+      "ensembles, which start their own %d-worker cluster%s, so host memory holds both. ",
+      "Pass no cluster to let run_MOSAIC() stop its own before the ensembles."),
+      length(cluster), n_cores,
+      if (n_cores < n_req) sprintf(" (reduced from %d by the R connection budget)", n_req) else "")
+  }
+  list(parallel = parallel, n_cores = n_cores, note = note)
+}
+
 #' Build the function that installs the calibration worker on each PSOCK node
 #'
 #' Returns a function for \code{parallel::clusterCall()} that assigns

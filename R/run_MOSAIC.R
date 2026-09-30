@@ -1674,9 +1674,10 @@ run_MOSAIC <- function(config,
   # in which case the calibration ran on 100+ cores and the ensembles then ran
   # one simulation at a time. Treat a supplied cluster as consent to
   # parallelise, and size the ensemble cluster to it.
-  ens_parallel <- isTRUE(control$parallel$enable) || !is.null(cluster)
-  ens_n_cores  <- if (!is.null(cluster) && length(cluster) > 1L) length(cluster)
-                  else control$parallel$n_cores
+  ens_plan     <- .mosaic_ensemble_parallel_plan(cluster, control)
+  ens_parallel <- ens_plan$parallel
+  ens_n_cores  <- ens_plan$n_cores
+  if (!is.null(ens_plan$note)) log_warn("%s", ens_plan$note)
 
   # ===========================================================================
   # COMBINE RESULTS AND ADD FLAGS
