@@ -195,26 +195,30 @@
      isos_pred  <- sort(unique(data_bundle$countries_pred))
      target_iso <- data_bundle$target_iso
 
-     # Per-country day grids (each country starts at its first predicted date).
-     day_grids <- lapply(stats::setNames(isos_pred, isos_pred), function(iso) {
-          idx   <- data_bundle$countries_pred == iso
-          start <- min(data_bundle$dates_pred[idx])
-          seq.Date(start, pred_end, by = "day")
-     })
-
      # Per-country LAST GENUINE (covariate-supported) weekly prediction date,
-     # captured from the weekly prediction grid BEFORE the daily na.locf
-     # forward-fill in .psi_weekly_to_daily_smooth. Days in the daily grid beyond
-     # this date are present only via carry-forward fill (a flat constant tail
-     # that suppresses environmental FOI downstream), so the lstm_v2 writer drops
-     # them via .drop_filled_prediction_tail. Mirrors the legacy path's
-     # genuine_last_pred (R/est_suitability.R). Seed-independent.
+     # capped at pred_date_stop. Seed-independent. Mirrors the legacy path's
+     # genuine_last_pred (R/est_suitability.R).
      genuine_last_pred <- data.frame(
           iso_code = isos_pred,
           last_genuine_date = as.Date(vapply(isos_pred, function(iso) {
-               as.character(max(data_bundle$dates_pred[data_bundle$countries_pred == iso]))
+               as.character(min(pred_end,
+                                max(data_bundle$dates_pred[data_bundle$countries_pred == iso])))
           }, character(1))),
           stringsAsFactors = FALSE)
+
+     # Per-country day grids: first predicted date -> last GENUINE prediction
+     # date. The grid used to run to pred_date_stop, so the carry-forward fill
+     # past a country's covariate coverage entered the LOESS fit (pulling the
+     # retained end-of-series days toward the flat constant) and the per-country
+     # amplitude reference of calibrate_psi_predictions() before the writer
+     # dropped it. Ending the grid here keeps the fill out of both; the writer's
+     # .drop_filled_prediction_tail() is then a no-op safety net.
+     day_grids <- lapply(stats::setNames(isos_pred, isos_pred), function(iso) {
+          idx   <- data_bundle$countries_pred == iso
+          start <- min(data_bundle$dates_pred[idx])
+          stop_ <- genuine_last_pred$last_genuine_date[genuine_last_pred$iso_code == iso]
+          seq.Date(start, max(start, stop_), by = "day")
+     })
 
      # ---- Phase A: fit every seed (serial or parallel) ---------------------
      fit_one_seed <- function(seed) {

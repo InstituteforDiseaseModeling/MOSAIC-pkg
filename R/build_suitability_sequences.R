@@ -32,12 +32,19 @@
 #'   the model covariates that happen to extend into the future. Note the
 #'   returned `dates` are TARGET dates, so downstream date filtering (train
 #'   cutoffs, validation blocks) is target-anchored automatically.
+#' @param predict_mode Logical (default FALSE). TRUE builds PREDICTION
+#'   sequences: one per input window ending at every row, stamped with the
+#'   nominal target date `input_end + 7 * lead` days and NOT requiring a row to
+#'   exist at that date (`y` is ignored; returned `y` is NA). This is what lets
+#'   a lead-`h` model forecast `h` weeks past the last covariate week. At
+#'   `lead = 0` it is identical to the training mapping.
 .psi_build_sequences <- function(X, y, countries, dates, timesteps = 13L,
                                  max_gap_days = 14L,
                                  country_id_lookup = NULL,
                                  region_for_country = NULL,
                                  cw = NULL,
-                                 lead = 0L) {
+                                 lead = 0L,
+                                 predict_mode = FALSE) {
      dates <- as.Date(dates)
      uniq  <- unique(countries)
      seqs <- list(); ys <- numeric(0); cs <- character(0)
@@ -52,9 +59,24 @@
           Xi <- Xi[ord, , drop = FALSE]; yi <- yi[ord]; di <- di[ord]
           if (!is.null(cwi)) cwi <- cwi[ord]
           n <- nrow(Xi)
-          if (n < timesteps + lead) next
           cid <- if (!is.null(country_id_lookup)) as.integer(country_id_lookup[[iso]]) else NA_integer_
           rid <- if (!is.null(region_for_country)) as.integer(region_for_country[[iso]]) else NA_integer_
+          if (isTRUE(predict_mode)) {
+               # Prediction: every input window, target stamped lead weeks after
+               # its last input week; no target row needed.
+               if (n < timesteps) next
+               for (i in timesteps:n) {
+                    sub_d <- di[(i - timesteps + 1):i]
+                    if (any(as.numeric(diff(sub_d)) > max_gap_days)) next
+                    seqs[[length(seqs) + 1]] <- Xi[(i - timesteps + 1):i, , drop = FALSE]
+                    ys <- c(ys, NA_real_); cs <- c(cs, iso)
+                    ds <- c(ds, di[i] + 7L * as.integer(lead))
+                    c_ids <- c(c_ids, cid); r_ids <- c(r_ids, rid)
+                    if (!is.null(cwi)) cw_track <- c(cw_track, cwi[i])
+               }
+               next
+          }
+          if (n < timesteps + lead) next
           for (i in timesteps:(n - lead)) {
                sub_d <- di[(i - timesteps + 1):i]
                if (any(as.numeric(diff(sub_d)) > max_gap_days)) next
@@ -459,7 +481,9 @@
      seq_params <- list(timesteps = timesteps, max_gap_days = max_gap_days,
                         lead = lead)
 
-     # Prediction sequences: ALL pool countries, full date range.
+     # Prediction sequences: ALL pool countries, full date range. predict_mode
+     # stamps each window's target `lead` weeks after its last input week without
+     # requiring a covariate row there, so a lead model forecasts past coverage.
      seqs_pred <- .psi_build_sequences(
           X         = X_all,
           y         = rep(0, nrow(X_all)),
@@ -469,7 +493,8 @@
           max_gap_days = max_gap_days,
           country_id_lookup  = country_to_id,
           region_for_country = region_for_country,
-          lead      = lead)
+          lead      = lead,
+          predict_mode = TRUE)
 
      # ---- Rolling-CV step grid ---------------------------------------------
      gap_weeks <- split_params$rw_gap_weeks %||% 4L
