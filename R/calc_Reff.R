@@ -637,10 +637,38 @@ calc_Reff <- function(ensemble,
 #' @keywords internal
 #' @noRd
 .mosaic_reff_prob_colnames <- function(probs) {
-  pct <- probs * 100
-  lab <- ifelse(pct == round(pct), sprintf("%d", round(pct)),
-                sub("0+$", "", sprintf("%.4f", pct)))
+  # Round away the 1-ulp error of products such as 0.07 * 100 before testing for
+  # a whole percentage, and strip a trailing "." along with trailing zeros, so
+  # 0.07 -> "q7" (not "q7.") and 0.025 -> "q2.5".
+  pct <- round(probs * 100, 8)
+  lab <- ifelse(pct == round(pct), sprintf("%d", as.integer(round(pct))),
+                sub("\\.?0+$", "", sprintf("%.4f", pct)))
   paste0("q", lab)
+}
+
+#' Faithfulness diagnostics of one re-simulated member against its saved slice
+#'
+#' Over the cells where both are finite: relative total-case error \code{re},
+#' Pearson correlation \code{cc}, the two totals and the max absolute cell
+#' difference. A constant saved series (e.g. an all-zero extinct member) has no
+#' defined correlation; when the re-simulation reproduces it exactly
+#' (\code{max_abs == 0}) it is a perfect match and \code{cc = 1}, so the gate's
+#' median-correlation criterion does not refuse a bit-exact re-simulation.
+#' @param rv,sv Re-simulated and saved reported cases (flattened, same length).
+#' @return List \code{re}, \code{cc}, \code{ssum}, \code{rsum}, \code{max_abs}.
+#' @keywords internal
+#' @noRd
+.mosaic_reff_faithfulness <- function(rv, sv) {
+  ok <- is.finite(rv) & is.finite(sv)
+  out <- list(re = NA_real_, cc = NA_real_, ssum = NA_real_, rsum = NA_real_,
+              max_abs = 0)
+  if (!any(ok)) return(out)
+  ssum <- sum(sv[ok]); rsum <- sum(rv[ok])
+  mx <- max(abs(rv[ok] - sv[ok]))
+  cc <- suppressWarnings(stats::cor(rv[ok], sv[ok]))
+  if (!is.finite(cc) && mx == 0) cc <- 1
+  list(re = if (ssum > 0) abs(rsum - ssum) / ssum else abs(rsum - ssum),
+       cc = cc, ssum = ssum, rsum = rsum, max_abs = mx)
 }
 
 #' Re-simulate one posterior member for the R_eff CI
@@ -688,15 +716,8 @@ calc_Reff <- function(ensemble,
       stop("incidence != incidence_human + incidence_env for member (", p, ",", s, ")")
 
     saved <- matrix(as.numeric(task$saved), nrow = nL, ncol = Tn)
-    rv <- as.numeric(rc_m); sv <- as.numeric(saved)
-    ok <- is.finite(rv) & is.finite(sv)
-    re <- cc <- ssum <- rsum <- NA_real_; mx <- 0
-    if (any(ok)) {
-      ssum <- sum(sv[ok]); rsum <- sum(rv[ok])
-      re   <- if (ssum > 0) abs(rsum - ssum) / ssum else abs(rsum - ssum)
-      cc   <- suppressWarnings(stats::cor(rv[ok], sv[ok]))
-      mx   <- max(abs(rv[ok] - sv[ok]))
-    }
+    fd <- MOSAIC:::.mosaic_reff_faithfulness(as.numeric(rc_m), as.numeric(saved))
+    re <- fd$re; cc <- fd$cc; ssum <- fd$ssum; rsum <- fd$rsum; mx <- fd$max_abs
     ests <- MOSAIC:::.MOSAIC_REFF_ESTIMANDS
     reff <- stats::setNames(lapply(ests, function(e) vector("list", nL)), ests)
     peak <- stats::setNames(lapply(ests, function(e) rep(NA_real_, nL)), ests)
@@ -757,6 +778,17 @@ calc_Reff <- function(ensemble,
 #' @param peak_window Days in the trailing Cori window whose time-max is each
 #'   member's peak R_t (default 7).
 #' @param cases_central_method Central method used to select the medoid.
+#' @param member_param_weights Optional length-\code{n_param_sets} weights, indexed
+#'   like the ensemble's parameter dimension, that REPLACE
+#'   \code{parameter_weights} -- e.g. the optimized subset's Gibbs weights mapped
+#'   onto the candidate by seed, 0 outside the subset. \code{NULL} (default) uses
+#'   \code{parameter_weights}.
+#' @param param_subset Optional integer indices (into the parameter dimension) of
+#'   the parameter sets in the posterior being described; the others are neither
+#'   re-simulated nor eligible as the medoid. \code{NULL} (default) = all.
+#' @param medoid_cases_central Optional central cases series (\code{[nL, T]}) to
+#'   select the medoid against, overriding the ensemble's own; pass the final
+#'   (optimized) ensemble's central series with \code{member_param_weights}.
 #' @param gate_rel_tol,gate_frac,gate_cor_min Faithfulness-gate thresholds:
 #'   the \code{gate_frac}-percentile and ensemble-aggregate relative total-case
 #'   error must be \eqn{\le} \code{gate_rel_tol} and the median per-member cases
@@ -777,6 +809,9 @@ calc_Reff <- function(ensemble,
                                   burn_in_days = 0L,
                                   peak_window = 7L,
                                   cases_central_method = "mean",
+                                  member_param_weights = NULL,
+                                  param_subset = NULL,
+                                  medoid_cases_central = NULL,
                                   gate_rel_tol = 0.05, gate_frac = 0.95,
                                   gate_cor_min = 0.95, verbose = TRUE,
                                   cl = NULL) {
@@ -803,6 +838,19 @@ calc_Reff <- function(ensemble,
   Tn    <- dim(ca)[2L]
   if (length(parameter_seeds) != nP)
     stop(".mosaic_reff_resim_ci: seeds length != n_param_sets.")
+  if (!is.null(member_param_weights)) {
+    pw <- as.numeric(member_param_weights)
+    if (length(pw) != nP || any(!is.finite(pw)) || any(pw < 0) || sum(pw) <= 0)
+      stop(".mosaic_reff_resim_ci: `member_param_weights` must be ", nP,
+           " finite non-negative weights with a positive sum.")
+  }
+  in_subset <- rep(TRUE, nP)
+  if (!is.null(param_subset)) {
+    ps <- as.integer(param_subset)
+    if (!length(ps) || anyNA(ps) || any(ps < 1L | ps > nP))
+      stop(".mosaic_reff_resim_ci: `param_subset` must index 1..", nP, ".")
+    in_subset[] <- FALSE; in_subset[ps] <- TRUE
+  }
   bid <- suppressWarnings(as.integer(burn_in_days))
   if (length(bid) != 1L || is.na(bid) || bid < 0L) bid <- 0L
   pw_days <- suppressWarnings(as.integer(peak_window))
@@ -827,23 +875,44 @@ calc_Reff <- function(ensemble,
   ssum_v  <- rep(NA_real_, n_members)
   rsum_v  <- rep(NA_real_, n_members)
   max_abs <- 0
-  if (verbose) message("  Re-simulating ", n_members, " members (", nP, " x ", nS, ")...")
 
+  # A member is re-simulated only when it belongs to the posterior being
+  # described (in_subset) AND has a saved slice to be faithful to. A member whose
+  # saved cases are entirely non-finite failed at calibration: calc_model_ensemble
+  # left it as an NA slice and renormalised over the survivors, so it gets weight
+  # 0 here too (it would otherwise enter the band although the published
+  # ensemble excluded it), and is not re-run (a deterministic engine failure
+  # would recur and abort the whole CI).
+  active <- logical(n_members)
   tasks <- vector("list", n_members)
   for (p in seq_len(nP)) for (s in seq_len(nS)) {
     m <- (s - 1L) * nP + p
-    member_w[m] <- pw[p] / nS
-    tasks[[m]] <- list(p = p, s = s,
-                       saved = matrix(as.numeric(ca[, , p, s, drop = FALSE]),
-                                      nrow = nL, ncol = Tn))
+    active[m] <- in_subset[p] && any(is.finite(ca[, , p, s]))
+    member_w[m] <- if (active[m]) pw[p] / nS else 0
+    if (active[m])
+      tasks[[m]] <- list(p = p, s = s,
+                         saved = matrix(as.numeric(ca[, , p, s, drop = FALSE]),
+                                        nrow = nL, ncol = Tn))
   }
+  if (!any(active))
+    stop(".mosaic_reff_resim_ci: no ensemble member has saved cases to re-simulate.")
+  n_skipped <- n_members - sum(active) - sum(!rep(in_subset, times = nS))
+  if (verbose && n_skipped > 0L)
+    message("    skipping ", n_skipped, " member(s) with no saved cases ",
+            "(failed at calibration; weight 0, as in the published ensemble)")
+  active_idx <- which(active)
+  tasks <- tasks[active_idx]
+  n_active <- length(active_idx)
+  if (verbose) message("  Re-simulating ", n_active, " members (", sum(in_subset), " x ", nS,
+                       " parameter sets x reruns", if (n_active < n_members)
+                         paste0(", of ", n_members, " in the ensemble") else "", ")...")
 
   ctx <- list(base_config = base_config, priors = priors,
               sampling = sampling_args, paths = PATHS,
               seeds = parameter_seeds, floor = infectiousness_floor,
               burn_in = bid, peak_window = pw_days, nL = nL, Tn = Tn)
 
-  use_cl <- !is.null(cl) && inherits(cl, "cluster") && length(cl) > 1L && n_members > 1L
+  use_cl <- !is.null(cl) && inherits(cl, "cluster") && length(cl) > 1L && n_active > 1L
   if (use_cl) {
     .rr_env <- new.env(parent = emptyenv())
     assign(".rr_ctx", ctx, envir = .rr_env)
@@ -865,15 +934,22 @@ calc_Reff <- function(ensemble,
     res <- lapply(tasks, function(tk) .mosaic_reff_resim_member(tk, ctx))
   }
 
-  failed <- vapply(res, function(r) !is.null(r$error), logical(1))
-  if (any(failed))
+  # Only members that have valid saved cases were dispatched, so any failure
+  # here is a member the published ensemble contains: refuse.
+  failed <- vapply(res, function(r) !is.list(r) || !is.null(r$error), logical(1))
+  if (any(failed)) {
+    r1 <- res[[which(failed)[1]]]
     stop(sprintf(".mosaic_reff_resim_ci: %d of %d members failed to re-simulate; first: %s",
-                 sum(failed), n_members, res[[which(failed)[1]]]$error), call. = FALSE)
+                 sum(failed), length(res),
+                 if (is.list(r1)) r1$error else paste(as.character(r1), collapse = " ")),
+         call. = FALSE)
+  }
 
   rm(tasks)
   member_kp <- vector("list", n_members)
-  for (m in seq_len(n_members)) {
-    r <- res[[m]]
+  for (k in seq_along(res)) {
+    m <- active_idx[k]
+    r <- res[[k]]
     re_vec[m] <- r$re; cc_vec[m] <- r$cc
     ssum_v[m] <- r$ssum; rsum_v[m] <- r$rsum
     max_abs   <- max(max_abs, r$max_abs)
@@ -882,13 +958,13 @@ calc_Reff <- function(ensemble,
       for (i in seq_len(nL)) reff_loc[[e]][[i]][m, ] <- r$reff[[e]][[i]]
       peak_loc[[e]][m, ] <- r$peak[[e]]
     }
-    res[m] <- list(NULL)   # free as we go: the gathered list is as large as reff_loc
+    res[k] <- list(NULL)   # free as we go: the gathered list is as large as reff_loc
   }
   rm(res); gc(FALSE)
 
   if (verbose)
     message(sprintf("    members done: %d/%d | rel_err med=%.4f p%.0f=%.4f | cor med=%.4f",
-                    n_members, n_members, stats::median(re_vec, na.rm = TRUE),
+                    n_active, n_active, stats::median(re_vec, na.rm = TRUE),
                     gate_frac * 100,
                     stats::quantile(re_vec, gate_frac, na.rm = TRUE, names = FALSE),
                     stats::median(cc_vec, na.rm = TRUE)))
@@ -944,13 +1020,26 @@ calc_Reff <- function(ensemble,
 
   # Phase-coherent headline: the MEDOID member (run_MOSAIC criterion on the
   # saved cases_array, same per-channel central_method as calibration).
-  cases_central <- if (identical(cases_central_method, "mean") &&
-                       !is.null(ensemble$cases_mean)) {
+  cases_central <- if (!is.null(medoid_cases_central)) {
+    medoid_cases_central
+  } else if (identical(cases_central_method, "mean") &&
+             !is.null(ensemble$cases_mean)) {
     ensemble$cases_mean
   } else {
     ensemble$cases_median
   }
-  medoid_sel <- .mosaic_reff_select_medoid_member(ca, cases_central, nP, nS)
+  # The medoid is chosen among the parameter sets of the posterior being
+  # described (the optimized subset when member_param_weights restricts it),
+  # exactly as run_MOSAIC() chooses it on its final ensemble; indices are then
+  # mapped back to this ensemble's parameter dimension.
+  sub_p <- which(in_subset)
+  medoid_sel <- .mosaic_reff_select_medoid_member(ca[, , sub_p, , drop = FALSE],
+                                                  cases_central, length(sub_p), nS)
+  if (!is.na(medoid_sel$param_idx)) {
+    medoid_sel$param_idx <- sub_p[medoid_sel$param_idx]
+    medoid_sel$member_id <- (medoid_sel$stoch_idx - 1L) * nP + medoid_sel$param_idx
+    if (!active[medoid_sel$member_id]) medoid_sel$member_id <- NA_integer_
+  }
   central_definition <- "medoid_trajectory"
   m_medoid <- medoid_sel$member_id
 
@@ -997,7 +1086,7 @@ calc_Reff <- function(ensemble,
        gate_agg_rel_err = agg_rel_err, gate_cor_median = cor_median,
        gate_cor_min = cor_min, gate_max_abs_diff = max_abs,
        gate_n_outliers = n_outliers, gate_frac = gate_frac,
-       n_members = n_members,
+       n_members = n_active,
        kernel_params = if (!is.na(m_medoid)) member_kp[[m_medoid]] else NULL)
 }
 
@@ -1145,17 +1234,21 @@ calc_Reff <- function(ensemble,
         v[r$t] <- r$value
         v
       }
-      ih <- dense("incidence_human"); ie <- dense("incidence_env")
-      if (anyNA(ih) || anyNA(ie)) next
-      rr <- .mosaic_reff_routes(ih, ie, delta[i, cols], kern, infectiousness_floor,
-                                init = if (!is.null(init)) init[[i]])
-      for (e in ests) mats[[e]][mi, ] <- rr[[e]]
+      # Record the weight BEFORE the gap check: a dropped member keeps its
+      # weight (with an all-NA row), so the "at least half the weight" rule in
+      # .mosaic_reff_cell_quantiles() is measured against the total posterior
+      # weight, not only the members that happen to be complete.
       w <- if (!is.null(weights)) {
         if (w_named) weights[as.character(id)] else weights[id]
       } else {
         mm$weight[1]
       }
       mw[mi] <- if (length(w) && is.finite(w[1])) w[1] else NA_real_
+      ih <- dense("incidence_human"); ie <- dense("incidence_env")
+      if (anyNA(ih) || anyNA(ie)) next
+      rr <- .mosaic_reff_routes(ih, ie, delta[i, cols], kern, infectiousness_floor,
+                                init = if (!is.null(init)) init[[i]])
+      for (e in ests) mats[[e]][mi, ] <- rr[[e]]
     }
     for (e in ests)
       qmats[[e]][i, cols, ] <- .mosaic_reff_cell_quantiles(mats[[e]], mw, probs)

@@ -13,8 +13,22 @@ get_generation_time_distribution(PATHS, mean_generation_time)
 \item \strong{DOCS_TABLES}: Path to the directory where day-wise and week-wise generation time tables will be saved.
 }}
 
-\item{mean_generation_time}{A numeric value representing the desired mean generation time (in days). This value is used to adjust the shape and rate parameters of the gamma distribution.}
+\item{mean_generation_time}{A numeric value representing the desired mean generation time (in days); sets the gamma shape (\code{mean_generation_time / 10}) at a fixed rate of 0.1.}
 }
 \description{
-This function generates the probability distribution of the generation time for cholera based on a gamma distribution. It allows the specification of the mean generation time, which adjusts the shape and rate parameters. The day-wise and week-wise probabilities are saved as CSV files.
+This function generates the generation time distribution for cholera from a
+gamma distribution with shape \code{mean_generation_time / 10} and a FIXED rate
+of \code{0.1} per day, so only the shape responds to the mean (and the
+coefficient of variation, \eqn{1/\sqrt{shape}}, changes with it). The day-wise
+and week-wise tables are saved as CSV files.
+}
+\details{
+The day-wise table (\code{pred_generation_time_days.csv}, column \code{y}) holds
+the gamma \strong{density} evaluated at days 1-56, not a probability mass
+function: it is not normalised and omits the mass below day 1 and beyond day
+56 (at a mean of 5 days it sums to about 0.6). Only the week-wise table
+(\code{Probability}) is normalised to sum to 1. This is a legacy kernel: the
+reproductive-number calculations (\code{\link{calc_Reff}}) derive their
+generation-interval kernels from the model parameters and do not read these
+files.
 }

@@ -35,9 +35,16 @@
 #'   directory that contains \code{1_inputs/}, \code{2_calibration/}, and
 #'   \code{3_results/}). No path is hardcoded; all I/O is relative to this.
 #' @param recompute_ci Logical. When \code{TRUE}, build a proper posterior
-#'   credible interval by \strong{re-simulating} the saved posterior ensemble
-#'   (\code{2_calibration/ensemble_candidate.rds}) and computing R_eff per member,
-#'   then weighted quantiles (median + 95% interval). This captures the daily
+#'   credible interval by \strong{re-simulating} the run's posterior members and
+#'   computing R_eff per member: \code{central} is the medoid trajectory's R_t and
+#'   \code{q2.5}/\code{q50}/\code{q97.5} are per-calendar-day cross-member
+#'   weighted quantiles. Members are re-simulated from
+#'   \code{2_calibration/ensemble_candidate.rds} (whose seeds reproduce them) and
+#'   weighted, and the medoid chosen, by the run's FINAL posterior
+#'   (\code{2_calibration/ensemble_optimized.rds}, mapped onto the candidate by
+#'   seed; the optimized subset when \code{optimize_subset = TRUE}). Requires a
+#'   run with \code{control$io$persist_ensemble_arrays = TRUE}; does not need the
+#'   trajectory artifact. This captures the daily
 #'   route incidence, stock and decay-rate channels that the persisted
 #'   trajectory artifact does not retain at a daily grid. A faithfulness gate
 #'   confirms the re-sim reproduces the saved \code{cases_array} before any CI is written.
@@ -148,7 +155,10 @@ add_reproductive_numbers <- function(output_dir,
   }
 
   # --- Required inputs present? ----------------------------------------------
-  if (!file.exists(traj_path)) {
+  # The trajectory artifact feeds only the point path; recompute_ci re-simulates
+  # from the ensemble RDS and never reads it.
+  need_traj <- !isTRUE(recompute_ci)
+  if (need_traj && !file.exists(traj_path)) {
     warning("add_reproductive_numbers: missing trajectories artifact: ",
             traj_path, call. = FALSE)
     return(invisible(.status("skipped_missing_trajectories",
@@ -161,7 +171,7 @@ add_reproductive_numbers <- function(output_dir,
   }
 
   # --- Load ------------------------------------------------------------------
-  traj <- tryCatch(readRDS(traj_path), error = function(e) e)
+  traj <- if (need_traj) tryCatch(readRDS(traj_path), error = function(e) e) else NULL
   if (inherits(traj, "error")) {
     warning("add_reproductive_numbers: failed to read trajectories: ",
             conditionMessage(traj), call. = FALSE)
@@ -178,8 +188,8 @@ add_reproductive_numbers <- function(output_dir,
                                               conditionMessage(cfg)))))
   }
 
-  # --- Guard: route incidence channels present? ------------------------------
-  has_route <- all(vapply(c("incidence_human", "incidence_env"), function(ch)
+  # --- Guard: route incidence channels present? (point path only) -------------
+  has_route <- !need_traj || all(vapply(c("incidence_human", "incidence_env"), function(ch)
     is.matrix(tryCatch(traj$summary[[ch]]$median, error = function(e) NULL)),
     logical(1)))
   if (!has_route) {
@@ -311,7 +321,9 @@ add_reproductive_numbers <- function(output_dir,
 # -----------------------------------------------------------------------------
 #' Re-simulate the saved posterior ensemble and assemble a R_eff CI table
 #'
-#' Loads \code{2_calibration/ensemble_candidate.rds}, \code{1_inputs/priors.json},
+#' Loads \code{2_calibration/ensemble_candidate.rds} (re-simulated) and
+#' \code{2_calibration/ensemble_optimized.rds} (weights + medoid target, mapped by
+#' seed; see \code{.add_reff_final_posterior}), \code{1_inputs/priors.json},
 #' and the calibration \code{control$sampling} + \code{burn_in_days} from
 #' \code{1_inputs/control.json}, re-simulates the posterior members via
 #' \code{\link{.mosaic_reff_resim_ci}} (faithfulness-gated against the saved
@@ -373,12 +385,13 @@ add_reproductive_numbers <- function(output_dir,
   bid <- as.integer(burn_in_days)
   if (verbose) message("  Excluding first ", bid, " day(s) as burn-in.")
 
-  # Match run_MOSAIC's medoid target: the run's cases central_method. A control
-  # without the setting predates it (v0.38.0), and those runs used the median.
-  cases_cm <- tryCatch(
-    .mosaic_resolve_central_method(control$predictions$central_method %||% "median")[["cases"]],
-    error = function(e) "median")
-  if (length(cases_cm) != 1L || is.na(cases_cm)) cases_cm <- "median"
+  # Match run_MOSAIC's medoid target: the run's cases central_method.
+  cases_cm <- .add_reff_cases_central_method(output_dir, control)
+
+  # Re-simulate the candidate (its seeds reproduce every member), but weight the
+  # members and pick the medoid by the run's FINAL posterior, as run_MOSAIC()
+  # does: ensemble_optimized.rds, mapped onto the candidate by seed.
+  fin <- .add_reff_final_posterior(output_dir, ens, cases_cm, verbose)
 
   PATHS <- get_paths()
 
@@ -407,6 +420,9 @@ add_reproductive_numbers <- function(output_dir,
     probs = c(0.025, 0.5, 0.975),
     infectiousness_floor = infectiousness_floor, burn_in_days = bid,
     cases_central_method = cases_cm,
+    member_param_weights = fin$weights,
+    param_subset = fin$subset,
+    medoid_cases_central = fin$central,
     verbose = verbose, cl = .reff_cl)
 
   if (verbose)
@@ -460,14 +476,95 @@ add_reproductive_numbers <- function(output_dir,
   attr(out, "gate_max_abs_diff") <- res$gate_max_abs_diff
   attr(out, "gate_n_outliers")  <- res$gate_n_outliers
   attr(out, "n_members")        <- res$n_members
+  attr(out, "ensemble_source")  <- fin$source
   attr(out, "caveat")         <- paste0(
     "Route-decomposed Cori R_eff (R_hum + R_env) computed on RE-SIMULATED ",
-    "posterior-member infection incidence; ",
-    "per-member weighted quantiles (median + 95% CI). Burn-in (", bid,
+    "posterior-member infection incidence; central = the medoid trajectory's ",
+    "R_t; q2.5/q50/q97.5 = per-calendar-day cross-member weighted quantiles. ",
+    "Burn-in (", bid,
     " days) excluded. Descriptor of the model trajectory, not a ",
     "first-principles R0.")
   class(out) <- c("reproductive_numbers", "data.frame")
   out
+}
+
+#' The run's cases central_method, for matching run_MOSAIC()'s medoid target
+#'
+#' Prefers \code{3_results/summary.json}'s \code{central_method_cases} (the
+#' resolved value run_MOSAIC() used). Otherwise reads
+#' \code{control$predictions$central_method} from control.json, where a named
+#' per-channel vector comes back UNNAMED (jsonlite writes it as a plain array):
+#' a length-2 unnamed vector is therefore read positionally as
+#' \code{c(cases, deaths)}, the documented order. A control without the setting
+#' predates it (v0.38.0), and those runs used the median. An unreadable value
+#' falls back to the median with a warning.
+#' @keywords internal
+#' @noRd
+.add_reff_cases_central_method <- function(output_dir, control) {
+  sum_path <- file.path(output_dir, "3_results", "summary.json")
+  if (file.exists(sum_path)) {
+    v <- tryCatch(jsonlite::fromJSON(sum_path)$central_method_cases,
+                  error = function(e) NULL)
+    if (length(v) == 1L && !is.na(v) && v %in% c("mean", "median"))
+      return(as.character(v))
+  }
+  cm <- control$predictions$central_method %||% "median"
+  if (is.null(names(cm)) && length(cm) == 2L) names(cm) <- c("cases", "deaths")
+  out <- tryCatch(.mosaic_resolve_central_method(cm)[["cases"]],
+                  error = function(e) {
+                    warning("add_reproductive_numbers: could not resolve ",
+                            "control$predictions$central_method (", conditionMessage(e),
+                            "); selecting the medoid against the median.", call. = FALSE)
+                    "median"
+                  })
+  if (length(out) != 1L || is.na(out)) out <- "median"
+  out
+}
+
+#' Map the run's final posterior onto the candidate ensemble
+#'
+#' run_MOSAIC() picks its medoid, and builds the trajectory artifact, on the
+#' FINAL ensemble -- \code{ensemble_optimized.rds}, which is the optimized subset
+#' when \code{optimize_subset = TRUE} and a copy of the candidate otherwise. Its
+#' members are the candidate's (sliced and re-weighted), and each carries its
+#' candidate seed, so they map back by \code{match(seeds)}, as the trajectory
+#' reduce does. Returns \code{weights} (candidate-indexed, 0 outside the final
+#' subset), \code{subset} (candidate indices of the final members), \code{central} (the final ensemble's cases central series) and
+#' \code{source}. Falls back to the candidate itself (\code{weights = NULL})
+#' when the file is absent, unreadable, or its seeds do not map uniquely.
+#' @keywords internal
+#' @noRd
+.add_reff_final_posterior <- function(output_dir, cand, cases_cm, verbose = TRUE) {
+  fallback <- list(weights = NULL, subset = NULL, central = NULL,
+                   source = "ensemble_candidate.rds")
+  opt_path <- file.path(output_dir, "2_calibration", "ensemble_optimized.rds")
+  if (!file.exists(opt_path)) return(fallback)
+  opt <- tryCatch(readRDS(opt_path), error = function(e) NULL)
+  cs <- cand$seeds; os <- if (is.list(opt)) opt$seeds else NULL
+  ow <- if (is.list(opt)) as.numeric(opt$parameter_weights) else NULL
+  if (is.null(cs) || is.null(os) || length(ow) != length(os) || anyDuplicated(cs) ||
+      anyDuplicated(os)) {
+    warning("add_reproductive_numbers: ensemble_optimized.rds could not be mapped onto ",
+            "the candidate by seed; using the candidate ensemble's weights and medoid.",
+            call. = FALSE)
+    return(fallback)
+  }
+  idx <- match(os, cs)
+  if (anyNA(idx) || !is.null(opt$n_simulations_per_config) &&
+      !identical(as.integer(opt$n_simulations_per_config),
+                 as.integer(cand$n_simulations_per_config))) {
+    warning("add_reproductive_numbers: ensemble_optimized.rds members are not a subset ",
+            "of the candidate; using the candidate ensemble's weights and medoid.",
+            call. = FALSE)
+    return(fallback)
+  }
+  w <- numeric(length(cs)); w[idx] <- ow
+  central <- if (identical(cases_cm, "mean") && !is.null(opt$cases_mean)) opt$cases_mean
+             else opt$cases_median
+  if (verbose && length(idx) < length(cs))
+    message("  Final posterior = optimized subset: ", length(idx), " of ", length(cs),
+            " candidate parameter sets.")
+  list(weights = w, subset = idx, central = central, source = "ensemble_optimized.rds")
 }
 
 #' Resolve the burn-in: argument > control$likelihood$burn_in_days > 30 days
