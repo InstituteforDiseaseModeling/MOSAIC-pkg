@@ -83,7 +83,8 @@
 #'   \item \code{summary}: fit statistics, \code{tau}, \code{sigma} and settings.
 #' }
 #' Files written to \code{PATHS$MODEL_INPUT}: \code{param_mu_disease_mortality.csv}
-#' (MOSAIC parameter format; per location-year \code{point} median,
+#' (MOSAIC parameter format, an export not read by the package; per location-year
+#' \code{point} median (\code{parameter_name = "median"}),
 #' \code{beta} shapes and \code{logitnormal} mean/sd), \code{cfr_hierarchical_estimates.csv},
 #' \code{cfr_temporal_trend.csv}, \code{cfr_country_effects.csv} and
 #' \code{cfr_model_summary.rds}.
@@ -288,12 +289,17 @@ est_CFR_hierarchical <- function(
 # at cases (a handful of source rows report more deaths than cases).
 #
 # A calendar year still in progress when its dashboard snapshot was taken is
-# excluded. Its total is incomplete and its deaths lag its cases (NAM 2026:
-# 0 deaths in 213 cases; RWA 2026: 0 in 321), and the same weeks are scored by
-# the calibration's deaths likelihood, so fitting them here would count them
-# twice. The fs trend is not shielded by s(obs) at the boundary: NGA's partial
-# 2026 row alone (408 deaths in 65,910 cases) moves NGA's 2026 centre from
-# 2.78% to 2.15%.
+# excluded because its total is incomplete and its deaths lag its cases (NAM
+# 2026: 0 deaths in 213 cases; RWA 2026: 0 in 321). The fs trend is not shielded
+# by s(obs) at the boundary: NGA's partial 2026 row alone (408 deaths in 65,910
+# cases) moves NGA's 2026 centre from 2.78% to 2.15%.
+#
+# Completed years inside the calibration window (2023-2025 for config_default)
+# stay in the fit, so those deaths inform both the mu_jt prior centre and the
+# calibration's deaths likelihood. That double use is accepted: the fit needs
+# the recent years to place each country's current level, and the likelihood's
+# year deviations (sd_year) and location offset (sd_product) absorb the
+# difference between the GAM centre and the scored deaths.
 .cfr_model_data <- function(who_data, min_cases) {
     if (!"iso_code" %in% names(who_data)) stop("WHO annual data has no iso_code column.")
     d <- who_data[who_data$country != "AFRO Region" & who_data$iso_code != "AFRO" &
@@ -497,14 +503,17 @@ est_CFR_hierarchical <- function(
     list(units = units, summary = summ[order(summ$horizon, summ$method), ])
 }
 
-# MOSAIC parameter-format table: per location-year point median, beta shapes and
-# logit-normal mean/sd, all describing the predictive distribution of one year.
+# MOSAIC parameter-format table: per location-year point median (labelled
+# "median": plogis(logit_mean) is the median of the logit-normal, not its mean),
+# beta shapes and logit-normal mean/sd, all describing the predictive
+# distribution of one year. Nothing in the package reads this file; it is kept
+# as a parameter-format export of the fit.
 .cfr_param_table <- function(predictions) {
     desc <- "reported case fatality ratio (reported deaths per reported suspected case)"
     bb <- .cfr_logitnormal_to_beta(predictions$logit_mean, predictions$logit_sd)
     j <- predictions$iso_code; t <- predictions$year
     rbind(
-        make_param_df("mu", desc, "point", NA, j, t, "mean", predictions$cfr_estimate),
+        make_param_df("mu", desc, "point", NA, j, t, "median", predictions$cfr_estimate),
         make_param_df("mu", desc, "beta", NA, j, t, "shape1", bb[, "shape1"]),
         make_param_df("mu", desc, "beta", NA, j, t, "shape2", bb[, "shape2"]),
         make_param_df("mu", desc, "logitnormal", NA, j, t, "mean", predictions$logit_mean),

@@ -15,7 +15,7 @@
 #'     dates \eqn{\le} cutoff; solid line + lighter CI ribbon after the cutoff (distinguished by the dashed cutoff rule)
 #'     (clipped to \code{forecast_display_months}).
 #'   \item Dashed vertical line at the cutoff; a faint dotted line at
-#'     \code{cutoff + scored_horizon_months} marks the formally-scored boundary
+#'     the embargo end plus \code{scored_horizon_months} marks the formally-scored boundary
 #'     (the displayed window is longer than the scored window on purpose).
 #' }
 #'
@@ -117,7 +117,14 @@ plot_forecast_cv_grid <- function(predictions,
           ci_col   <- MOSAIC::mosaic_color_variant(line_col, "lighten", 0.3)
           colors <- c(line = line_col, ci = ci_col)
      }
-     ylab <- sprintf("Reported %s per week", metric)
+     # Label the count cadence from the date spacing: the harness writes the
+     # config's daily grid, so rows are usually per-day counts, not weekly.
+     step_days <- suppressWarnings(stats::median(diff(sort(unique(as.numeric(d$date))))))
+     cadence <- if (!is.finite(step_days) || step_days <= 1) "per day"
+                else if (step_days == 7) "per week"
+                else sprintf("per %g days", step_days)
+     ylab <- sprintf("Reported %s %s", metric, cadence)
+     ci_lab <- sprintf("%s%% CI", sub("^pi", "", ci))
 
      # Global cutoff factor so every country column shows the SAME rows (empty
      # panels for absent (iso,cutoff), keeping rows aligned across columns).
@@ -134,7 +141,14 @@ plot_forecast_cv_grid <- function(predictions,
                             ifelse(oi$segment == "embargo", "gap", "OOS (validation)")),
                            levels = c("IS (train)", "gap", "OOS (validation)"))
           vlines <- di[!duplicated(di$cutoff_date), , drop = FALSE]
-          vlines$scored_end <- vlines$cutoff_date + ceiling(scored_horizon_months * 30.4375)
+          # Scored windows run from the end of the harness embargo (the last
+          # "embargo" date, else the cutoff), as in evaluate_rolling_cv().
+          emb_end <- vapply(seq_len(nrow(vlines)), function(k) {
+               e <- di$date[di$cutoff_date == vlines$cutoff_date[k] & di$segment == "embargo"]
+               as.numeric(max(c(vlines$cutoff_date[k], e)))
+          }, numeric(1))
+          vlines$scored_end <- as.Date(emb_end, origin = "1970-01-01") +
+               ceiling(scored_horizon_months * 30.4375)
 
           # Layer order (bottom -> top): CI ribbon, then cutoff/scored rules,
           # then observed points, then the model median line ON TOP of everything.
@@ -184,7 +198,8 @@ plot_forecast_cv_grid <- function(predictions,
           patchwork::plot_annotation(
                title = sprintf("MOSAIC rolling-origin forecast CV -- reported %s (%s)", metric, model),
                subtitle = paste0("filled circle = in-sample train | x = embargo gap | open circle = OOS validation   ||   ",
-                                 "solid + 95% CI up to cutoff (dashed line); solid + lighter CI after ",
+                                 "solid + ", ci_lab, " up to cutoff (dashed line); solid + lighter ",
+                                 ci_lab, " after ",
                                  "(shown to ", forecast_display_months, " mo; dotted line = ",
                                  scored_horizon_months, "-mo scored horizon)"),
                caption = ylab) &

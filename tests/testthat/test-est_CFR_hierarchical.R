@@ -79,7 +79,7 @@ test_that("the parameter table distinguishes the point value from the logit-norm
   p <- out$res$predictions
   row_of <- function(dist, par) tab[tab$parameter_distribution == dist & tab$parameter_name == par &
                                       tab$j == "AGO" & tab$t == 2020, "parameter_value"]
-  expect_equal(row_of("point", "mean"), p$cfr_estimate[p$iso_code == "AGO" & p$year == 2020], tolerance = 1e-10)
+  expect_equal(row_of("point", "median"), p$cfr_estimate[p$iso_code == "AGO" & p$year == 2020], tolerance = 1e-10)
   expect_equal(row_of("logitnormal", "mean"), p$logit_mean[p$iso_code == "AGO" & p$year == 2020], tolerance = 1e-10)
   expect_lt(row_of("logitnormal", "mean"), 0)
 })

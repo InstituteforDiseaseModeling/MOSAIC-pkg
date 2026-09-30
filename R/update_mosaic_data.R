@@ -397,10 +397,14 @@ list_mosaic_data_steps <- function() {
               "process_SUPP_weekly_data", "process_AI_cholera_data"),
             function(P) MOSAIC::process_cholera_surveillance_data(P, include_ai = TRUE)),
 
-          S("est_CFR_hierarchical", "2B", "Hierarchical Bayesian CFR", "process_WHO_annual_data",
+          # Package-default GAM settings (min_cases = 1, k_year = 12): the same
+          # specification behind the shipped cfr_* artifacts and the one
+          # run_rolling_cv() refits per cutoff (.rcv_cfr_asof), so a refresh does
+          # not silently change the model that config_default$mu_jt and the
+          # mu_jt prior come from.
+          S("est_CFR_hierarchical", "2B", "Hierarchical GAM CFR", "process_WHO_annual_data",
             function(P) MOSAIC::est_CFR_hierarchical(
-                 P, min_cases = 3, k_year = 15, include_country_trends = TRUE,
-                 population_weighted = FALSE, save_diagnostics = FALSE, verbose = TRUE)),
+                 P, save_diagnostics = FALSE, verbose = TRUE)),
 
           S("est_demographic_rates", "2C", "Birth/death/population rates",
             c("process_UN_demographics_data", "process_WHO_annual_data"),

@@ -68,7 +68,10 @@ test_that("psi_manifest write/read round-trips per-cutoff entries", {
   dir_cache <- tempfile("psi_cache_"); dir.create(dir_cache)
   T_chr <- as.character(as.Date(cutoff))
   csv <- file.path(dir_cache, sprintf("psi_%s.csv", T_chr))
-  utils::write.csv(data.frame(iso_code = "MOZ", date = T_chr, psi = 0.5),
+  # Daily psi over the manifest's prediction window: run_rolling_cv() requires
+  # the frozen psi to cover the config start through the cutoff's OOS end.
+  psi_dates <- seq(as.Date("2023-01-01"), as.Date("2025-01-01"), by = "day")
+  utils::write.csv(data.frame(iso_code = "MOZ", date = as.character(psi_dates), psi = 0.5),
                    csv, row.names = FALSE)
   spec_stripped <- MOSAIC:::.rcv_strip_date_keys(spec)
   spec_hash <- MOSAIC:::.rcv_psi_spec_hash(cutoff, spec_stripped)

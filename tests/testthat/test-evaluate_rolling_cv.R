@@ -148,8 +148,10 @@ test_that("wis_skill computed against a known persistence baseline", {
   cutoff <- as.Date("2025-06-01")
   is_df  <- p[p$segment == "IS", ]
   oos    <- p[p$segment == "OOS", ]
-  oos0   <- min(oos$date); wend <- oos0 + ceiling(5 * 30.4375)
-  sl     <- oos[oos$date <= wend, ]
+  # Horizon windows are measured from the scoring origin (the cutoff here: no
+  # embargo rows), not from the first observed OOS date.
+  oos0   <- cutoff; wend <- oos0 + ceiling(5 * 30.4375)
+  sl     <- oos[oos$date > oos0 & oos$date <= wend, ]
   io     <- is_df[order(is_df$date), ]
   mu     <- mean(utils::tail(io$observed, 4), na.rm = TRUE)
   resid  <- io$observed - mu
@@ -198,12 +200,13 @@ test_that("per-metric embargo shifts the OOS scoring boundary", {
   expect_equal(n_cases, n_cases_0)        # cases embargo unchanged
   expect_lt(n_deaths, n_deaths_0)         # deaths embargo drops early OOS rows
 
-  # Boundary is exactly cutoff + 6*7 days: the scored deaths window starts there.
+  # The deaths scoring origin is exactly cutoff + 6*7 days: scored dates are
+  # strictly after it and the horizon window is measured from it.
   cutoff <- as.Date("2025-06-01")
   oos    <- p[p$segment == "OOS" & p$metric == "deaths", ]
-  oos0   <- min(oos$date[oos$date >= cutoff + 6 * 7])
+  oos0   <- cutoff + 6 * 7
   wend   <- oos0 + ceiling(5 * 30.4375)
-  expect_equal(n_deaths, sum(oos$date >= oos0 & oos$date <= wend))
+  expect_equal(n_deaths, sum(oos$date > oos0 & oos$date <= wend))
 })
 
 test_that("evaluate_rolling_cv drops AI-sourced observations when trusted_only", {

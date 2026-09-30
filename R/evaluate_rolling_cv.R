@@ -12,22 +12,28 @@
 #' predictions only; all judgement (metrics, baselines, skill) lives here.
 #'
 #' Horizons are \strong{cumulative} (\eqn{\le h} months): the \eqn{\le h} window
-#' is every OOS point within \code{h} months of the per-metric OOS-scoring
-#' origin, computed from \code{date} and \code{cutoff_date} (not the disjoint
-#' \code{horizon_bucket} label), so the \eqn{\le}max-horizon window equals the
-#' full scored OOS set. An \code{IS} window (training fit, \eqn{\le} cutoff) is
-#' always reported.
+#' is every scored OOS date \eqn{d} with \code{origin < d <= origin +
+#' ceiling(h * 30.4375)} days, where \code{origin} is the per-metric OOS-scoring
+#' origin below. The origin is fixed by the cutoff and embargo, never by where
+#' observations happen to exist, so a reporting gap just after the cutoff shrinks
+#' a window's \code{n} instead of shifting its lead times (windows with fewer
+#' than 3 scorable dates are dropped). The \eqn{\le}max-horizon window is the
+#' largest scored set; predictions further out are not scored in any window. An
+#' \code{IS} window (training fit, \eqn{\le} cutoff) is always reported.
 #'
 #' Scoring uses \strong{trusted observed only}: rows whose \code{observed_source}
 #' is missing or not \code{"AI"} (when \code{trusted_only = TRUE}).
 #'
-#' \strong{Channel-specific embargo.} \code{embargo_weeks} may be a scalar (all
-#' metrics) or a named vector such as \code{c(cases = 4, deaths = 6)}. For each
-#' metric the OOS scoring start is re-derived as
-#' \code{cutoff_date + embargo_weeks[metric] * 7}; only OOS rows at or after that
-#' per-metric boundary are scored, independent of the single \code{segment} label
-#' baked into predictions. Default (\code{0}) reproduces the prior behavior of
-#' scoring the entire \code{segment == "OOS"} block.
+#' \strong{Embargo and scoring origin.} The harness labels the dates in
+#' \code{(cutoff, cutoff + embargo]} as \code{segment == "embargo"}; those are
+#' never scored. For each metric the scoring origin is
+#' \code{max(last embargo-labelled date (or the cutoff), cutoff_date +
+#' embargo_weeks[metric] * 7)} and the scored dates are those strictly after it.
+#' \code{embargo_weeks} can therefore only lengthen the harness embargo, per
+#' channel: it may be a scalar (all metrics) or a named vector such as
+#' \code{c(cases = 4, deaths = 6)}; metrics it omits get 0. With the default
+#' (\code{0}) exactly the \code{segment == "OOS"} block is scored, from the
+#' harness's own OOS origin.
 #'
 #' \strong{Baselines}, fit per (cutoff, country, metric) on the IS observed
 #' history. \code{"seasonal"} (week-of-year climatology) is the \strong{primary}
@@ -58,8 +64,10 @@
 #' @param metrics Metrics to evaluate (default \code{c("cases","deaths")}).
 #' @param trusted_only Drop rows with \code{observed_source == "AI"} (default TRUE).
 #' @param embargo_weeks Channel-specific OOS embargo, in weeks, after the cutoff
-#'   before scoring begins. A scalar applies to all metrics; a named vector
-#'   (e.g. \code{c(cases = 4, deaths = 6)}) applies per metric. Default \code{0}.
+#'   before scoring begins, applied on top of the harness embargo (see Details).
+#'   A scalar applies to all metrics; a named vector (e.g.
+#'   \code{c(cases = 4, deaths = 6)}) applies per metric, and omitted metrics get
+#'   0. Default \code{0}.
 #' @param ess_min Minimum importance-weight ESS for a cell to enter the summary
 #'   aggregation. Default \code{0} (gate off). See Details.
 #' @param min_cells_ci Minimum number of finite cells in a (model, metric,
@@ -76,7 +84,8 @@
 #' @return A list with:
 #' \describe{
 #'   \item{cells}{Per (cutoff x model x iso x metric x window) metrics + per-baseline
-#'     mae_skill and wis_skill, the cell \code{ess} and \code{ess_ok} flag.}
+#'     mae_skill and wis_skill, the cell \code{ess} and \code{ess_ok} flag (plus
+#'     \code{anchor_date} when the predictions carry it).}
 #'   \item{summary}{Aggregated across \code{ess_ok} cells per (model x metric x
 #'     window): \code{n_cells_used} / \code{n_cells_total}, mean/median of each
 #'     metric, and mean baseline skills with bootstrap CI (suppressed when fewer
@@ -109,6 +118,12 @@ evaluate_rolling_cv <- function(predictions,
      d$cutoff_date <- as.Date(d$cutoff_date)
      if (!"run_id" %in% names(d)) d$run_id <- paste0("cutoff_", d$cutoff_date)
      if (!"model"  %in% names(d)) d$model  <- "ensemble"   # back-compat: single series
+     # Harness embargo end per cell, taken BEFORE the trusted_only filter: that
+     # filter drops whole rows, and if every embargo date in a cell were
+     # AI-sourced the origin would otherwise fall back to the cutoff.
+     emb_rows <- d$segment == "embargo"
+     emb_key  <- paste(d$run_id, d$model, d$iso_code, d$metric, sep = "\r")
+     emb_end  <- if (any(emb_rows)) tapply(d$date[emb_rows], emb_key[emb_rows], max) else numeric(0)
      if (trusted_only && "observed_source" %in% names(d))
           d <- d[is.na(d$observed_source) | d$observed_source != "AI", ]
      horizons_months <- sort(unique(as.numeric(horizons_months)))
@@ -134,19 +149,25 @@ evaluate_rolling_cv <- function(predictions,
           } else NA_real_
           ess_ok <- if (!has_ess) TRUE else (!is.na(ess_val) && ess_val >= ess_min)
 
-          # Per-metric OOS boundary: cutoff + embargo_weeks[metric]*7 days.
-          oos_start <- cutoff + emb_of[[this_metric]] * 7
+          # Per-metric scoring origin: the later of the harness embargo end (the
+          # last "embargo"-labelled date, else the cutoff) and the caller's
+          # per-metric embargo. Scored dates are strictly after it, and horizon
+          # windows are measured from it -- not from the first date that happens
+          # to carry an observation.
+          ck <- paste(cells$run_id[r], cells$model[r], cells$iso_code[r], this_metric, sep = "\r")
+          harness_origin <- if (ck %in% names(emb_end))
+               max(cutoff, as.Date(emb_end[[ck]], origin = "1970-01-01")) else cutoff
+          oos0 <- max(harness_origin, cutoff + emb_of[[this_metric]] * 7)
 
           is_df  <- cd[cd$segment == "IS"  & is.finite(cd$observed) & is.finite(cd$pred_central), ]
-          # OOS scored set = rows at/after the per-metric embargo boundary
-          # (independent of the baked segment label, but never scoring IS dates).
-          oos_df <- cd[cd$date >= oos_start & cd$date > cutoff &
+          oos_df <- cd[cd$date > oos0 & cd$segment != "IS" &
                        is.finite(cd$observed) & is.finite(cd$pred_central), ]
-          oos0   <- if (nrow(oos_df)) min(oos_df$date) else oos_start
 
           base_meta <- list(run_id = cells$run_id[r], model = cells$model[r],
                             iso_code = cells$iso_code[r], metric = this_metric,
                             cutoff_date = as.character(cutoff))
+          if ("anchor_date" %in% names(cd))
+               base_meta$anchor_date <- as.character(cd$anchor_date[1])
 
           # IS window (fit) — no baselines/skill
           if (nrow(is_df) >= 3L)
@@ -246,7 +267,9 @@ evaluate_rolling_cv <- function(predictions,
      if (is.null(names(ew)))
           stop("`embargo_weeks` must be a scalar or a named vector (e.g. c(cases=4, deaths=6))")
      out <- setNames(as.list(rep(0, length(metrics))), metrics)
-     for (m in metrics) if (!is.null(ew[[m]]) && !is.na(ew[[m]])) out[[m]] <- as.numeric(ew[[m]])
+     # `ew[[m]]` on an atomic vector errors for an absent name, so test
+     # membership first; omitted metrics keep 0.
+     for (m in metrics) if (m %in% names(ew) && !is.na(ew[[m]])) out[[m]] <- as.numeric(ew[[m]])
      # any name in ew not in metrics is harmlessly ignored
      out
 }
