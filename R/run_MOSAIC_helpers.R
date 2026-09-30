@@ -154,7 +154,9 @@
       })
   }
   tryCatch({
-    jsonlite::write_json(config_medoid, path, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+    # 17 significant digits + temp-file-then-rename, like the 1_inputs writers:
+    # this is the config that downstream re-simulation reproduces the medoid from.
+    .mosaic_write_json(config_medoid, path)
     log_msg("Saved %s (reported CFR: %s)", path,
             switch(source_lbl, medoid = "medoid posterior", run = "run posterior", "prior"))
   }, error = function(e) log_warn("config_medoid.json write failed: %s", conditionMessage(e)))

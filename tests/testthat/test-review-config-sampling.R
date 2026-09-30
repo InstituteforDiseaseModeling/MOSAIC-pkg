@@ -134,6 +134,28 @@ test_that("re-sampling a sampled config never applies psi_star twice", {
   expect_false(identical(s3$gamma_1, s1$gamma_1))
 })
 
+test_that("the psi_star mark survives a JSON round trip (config_medoid.json)", {
+  cfg <- cfg_eth()
+  s1  <- sample_quiet(config = cfg, seed = 7)
+  expect_true(isTRUE(s1$psi_star_applied))
+  expect_null(cfg$psi_star_applied)
+  f <- withr::local_tempfile(fileext = ".json")
+  MOSAIC:::.mosaic_write_config_medoid(s1, NULL, NULL, f)
+  back <- read_json_to_list(f)
+  expect_null(attr(back, "psi_star_applied"))
+  expect_true(isTRUE(back$psi_star_applied))
+  # 17 significant digits: the medoid's parameters come back exactly
+  expect_identical(back$gamma_1, s1$gamma_1)
+  expect_equal(unname(as.matrix(back$psi_jt)), unname(s1$psi_jt), tolerance = 0)
+  # Default flags would redraw psi_star on an already-calibrated psi -> error
+  expect_error(sample_quiet(config = back, seed = 8), "already carries a psi_star calibration")
+  # All psi_star flags FALSE: psi_jt kept as is, not transformed a second time
+  pin_all <- list(sample_psi_star_a = FALSE, sample_psi_star_b = FALSE,
+                  sample_psi_star_z = FALSE, sample_psi_star_k = FALSE)
+  s2 <- sample_quiet(config = back, seed = 8, sample_args = pin_all)
+  expect_equal(unname(as.matrix(s2$psi_jt)), unname(as.matrix(back$psi_jt)), tolerance = 0)
+})
+
 test_that("psi_jt is left untouched when all psi_star values are pinned at the identity", {
   cfg <- cfg_eth()
   cfg$psi_star_a[] <- 1; cfg$psi_star_b[] <- 0; cfg$psi_star_z[] <- 1; cfg$psi_star_k[] <- 0

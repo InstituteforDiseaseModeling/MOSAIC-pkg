@@ -233,7 +233,8 @@
 #' Remove post-calibration artifacts left by an earlier run
 #'
 #' The posterior/medoid/trajectory/spatial artifacts, the per-location
-#' prediction CSVs and the fit/optimizer/CFR tables are rebuilt from the
+#' prediction and trajectory CSVs, the fit/optimizer/CFR/HSIC tables and the
+#' post-hoc reproductive-number tables are rebuilt from the
 #' current run's samples, but several writers are conditional (optimizer on,
 #' medoid found, arrays present). Deleting them before they are rebuilt means a
 #' skipped or failed block leaves no file rather than a stale one from a
@@ -254,15 +255,27 @@
   # Conditional 3_results tables. The per-location prediction CSVs matter most:
   # the combine step globs predictions_<type>_*.csv, so a re-run with fewer
   # locations would otherwise fold the earlier run's files into *_all.csv.
+  # trajectories_<LOC>.csv is written only when capture_trajectories is on and
+  # the reduction succeeds, and it is what the MOSAIC-results promoter archives.
   if (!is.null(dirs$res_predictions) && dir.exists(dirs$res_predictions))
     paths <- c(paths, list.files(dirs$res_predictions,
-                                 pattern = "^predictions_(ensemble|medoid)_.*\\.csv$",
+                                 pattern = "^(predictions_(ensemble|medoid)|trajectories)_.*\\.csv$",
                                  full.names = TRUE))
+  # parameter_sensitivity.csv is written inside a non-fatal block (and skipped
+  # with < 10 finite sims or < 2 sampled parameters); render_MOSAIC_figures()
+  # plots any existing copy instead of recomputing, so a stale one would be
+  # rendered as this run's HSIC table.
   if (!is.null(dirs$res_fig_diag))
     paths <- c(paths, file.path(dirs$res_fig_diag,
-                                c("model_fit_windows.csv", "optimization_diagnostics.csv")))
+                                c("model_fit_windows.csv", "optimization_diagnostics.csv",
+                                  "parameter_sensitivity.csv")))
+  # reproductive_numbers.{csv,rds} come from add_reproductive_numbers() on
+  # trajectories_ensemble.rds, which is rebuilt above; with overwrite = FALSE
+  # it would otherwise return the earlier run's R_eff as "skipped_exists".
   if (!is.null(dirs$res_posterior))
-    paths <- c(paths, file.path(dirs$res_posterior, "cfr_posterior.csv"))
+    paths <- c(paths, file.path(dirs$res_posterior,
+                                c("cfr_posterior.csv", "reproductive_numbers.csv",
+                                  "reproductive_numbers.rds")))
   stale <- paths[file.exists(paths)]
   if (length(stale)) {
     unlink(stale)

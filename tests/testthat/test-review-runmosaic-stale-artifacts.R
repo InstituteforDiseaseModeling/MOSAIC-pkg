@@ -36,17 +36,21 @@ test_that("per-location prediction CSVs and 3_results tables from an earlier run
   preds <- file.path(dirs$res_predictions,
                      c(sprintf("predictions_ensemble_%s.csv", c("MOZ", "AGO", "ETH")),
                        sprintf("predictions_medoid_%s.csv", c("MOZ", "AGO", "ETH")),
-                       "predictions_ensemble_all.csv", "predictions_medoid_all.csv"))
+                       "predictions_ensemble_all.csv", "predictions_medoid_all.csv",
+                       sprintf("trajectories_%s.csv", c("MOZ", "AGO", "ETH"))))
   tables <- c(file.path(dirs$res_fig_diag, c("model_fit_windows.csv",
-                                             "optimization_diagnostics.csv")),
-              file.path(dirs$res_posterior, "cfr_posterior.csv"))
+                                             "optimization_diagnostics.csv",
+                                             "parameter_sensitivity.csv")),
+              file.path(dirs$res_posterior, c("cfr_posterior.csv",
+                                              "reproductive_numbers.csv",
+                                              "reproductive_numbers.rds")))
   keep <- c(file.path(dirs$res_posterior, "parameter_estimates.csv"),
             file.path(dirs$res_predictions, "notes.csv"))
   for (f in c(preds, tables, keep)) writeLines("old", f)
   removed <- MOSAIC:::.mosaic_clear_posterior_artifacts(dirs)
   expect_setequal(removed, c(preds, tables))
   expect_true(all(file.exists(keep)))
-  expect_length(list.files(dirs$res_predictions, pattern = "^predictions_"), 0L)
+  expect_length(list.files(dirs$res_predictions, pattern = "^(predictions|trajectories)_"), 0L)
 })
 
 test_that("run_MOSAIC's ensemble_optimized.rds fallback is not keyed on file.exists()", {

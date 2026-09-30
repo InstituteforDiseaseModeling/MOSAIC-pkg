@@ -121,8 +121,10 @@ reproduces v0.46.1-v0.97.x) sets the ensemble central tendency — see `?calc_mo
 - Validation rule: `batch_size_adaptive` must be strictly **<** `max_simulations_total`.
 - Resume: `run_MOSAIC(resume = TRUE)` requires `clean_output = FALSE`. A **non-resume** run into an
   existing `dir_output` moves leftover `sim_*.parquet` shards to `2_calibration/samples_stale_<time>/`
-  (with a warning; never pooled) and deletes and rebuilds every post-calibration artifact
-  (ensemble RDS files, `config_medoid.json`, trajectories), so nothing from the earlier run survives.
+  (with a warning; never pooled) and deletes the post-calibration data artifacts before rebuilding
+  them (ensemble RDS files, `config_medoid.json`, prediction/trajectory CSVs, the fit/optimizer/
+  HSIC/CFR tables, and the post-hoc `reproductive_numbers.{csv,rds}`). Figures and other files
+  are only replaced when re-written, so use `clean_output = TRUE` for a guaranteed-empty tree.
 
 ## 4. Launch
 ```r

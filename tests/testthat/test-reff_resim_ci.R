@@ -154,6 +154,39 @@ test_that(".mosaic_reff_select_medoid_member picks the param set + stoch rerun n
   expect_equal(sel$member_id, (2L - 1L) * nP + 2L)   # = 5
 })
 
+test_that(".mosaic_reff_select_medoid_member agrees with run_MOSAIC's all-location medoid", {
+  # nL = 2: location 1 favours param set 1, the larger location 2 favours set 3.
+  # A location-1-only selector picks p = 1; run_MOSAIC's pooled, masked
+  # .mosaic_medoid_distances() picks p = 3, and the R_eff selector must follow it.
+  Tn <- 12L; nP <- 3L; nS <- 2L
+  c1 <- rep(10, Tn); c2 <- rep(1000, Tn)
+  ca <- array(NA_real_, dim = c(2L, Tn, nP, nS))
+  for (s in 1:2) {
+    ca[1, , 1, s] <- c1;       ca[2, , 1, s] <- c2 * 8
+    ca[1, , 2, s] <- c1 * 2;   ca[2, , 2, s] <- c2 * 3
+    ca[1, , 3, s] <- c1 * 1.6; ca[2, , 3, s] <- c2
+  }
+  cen <- rbind(c1, c2)
+  mask <- list(cases_warmup = 2L, deaths_final = TRUE, score_idx_cases = 3L)
+  d_run <- MOSAIC:::.mosaic_medoid_distances(ca, cen, mask)
+  sel <- MOSAIC:::.mosaic_reff_select_medoid_member(ca, cen, nP, nS, mask_spec = mask)
+  expect_identical(which.min(d_run), 3L)
+  expect_identical(sel$param_idx, which.min(d_run))
+})
+
+test_that(".mosaic_reff_select_medoid_member ignores the unscored head (artifact mask)", {
+  # Set 1 matches the central everywhere except a huge burn-in head; set 2 is
+  # close on the head and off afterwards. Scored from step 6, set 1 must win.
+  Tn <- 10L; nP <- 2L; nS <- 1L
+  cen <- matrix(rep(50, Tn), nrow = 1L)
+  ca <- array(NA_real_, dim = c(1L, Tn, nP, nS))
+  ca[1, , 1, 1] <- c(rep(5000, 5), rep(50, 5))
+  ca[1, , 2, 1] <- c(rep(50, 5), rep(80, 5))
+  mask <- list(cases_warmup = 0L, deaths_final = TRUE, score_idx_cases = 6L)
+  expect_identical(MOSAIC:::.mosaic_reff_select_medoid_member(ca, cen, nP, nS,
+                                                              mask_spec = mask)$param_idx, 1L)
+})
+
 test_that(".mosaic_reff_select_medoid_member returns NA when central is absent/mismatched", {
   ca <- array(1, dim = c(1L, 4L, 2L, 2L))
   expect_true(is.na(MOSAIC:::.mosaic_reff_select_medoid_member(ca, NULL, 2L, 2L)$member_id))

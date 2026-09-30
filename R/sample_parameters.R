@@ -66,11 +66,12 @@
 #'       effect too. \code{config} should carry the raw, uncalibrated
 #'       \code{psi_jt}, as \code{config_default} and \code{get_location_config()}
 #'       do. A returned config is marked with the attribute
-#'       \code{psi_star_applied = TRUE}; passed back in as the template, its
+#'       \code{psi_star_applied = TRUE} and carries the field
+#'       \code{config$psi_star_applied = TRUE}, which survives JSON (e.g.
+#'       \code{config_medoid.json}); passed back in as the template, its
 #'       \code{psi_jt} is left as is when every psi_star flag is FALSE, and
 #'       sampling stops with an error when any psi_star flag is TRUE, so the
-#'       transform is never applied twice. The attribute does not survive JSON
-#'       serialization, so a config read back from JSON counts as raw.
+#'       transform is never applied twice.
 #'     \item sample_initial_conditions: Initial condition proportions (default TRUE).
 #'       V1, V2, E, I and R are drawn from their per-location priors and S is
 #'       the residual, so the \code{prop_S_initial} prior is not used.
@@ -310,7 +311,7 @@ sample_parameters <- function(
     cat(paste(rep("=", 50), collapse = ""), "\n", sep = "")
   }
 
-  # Only R-side metadata is the psi_star_applied attribute, which the engine ignores
+  # R-side metadata: the psi_star_applied attribute and field (the engine ignores both)
   return(config_sampled)
 }
 
@@ -1271,6 +1272,16 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
   return(NULL)  # No issues
 }
 
+#' Whether a config's psi_jt already carries a psi_star calibration
+#'
+#' True when either the in-memory attribute or the JSON-surviving field
+#' \code{psi_star_applied} is set.
+#' @noRd
+.psi_star_already_applied <- function(config) {
+  isTRUE(attr(config, "psi_star_applied", exact = TRUE)) ||
+    isTRUE(as.logical(unlist(config[["psi_star_applied"]]))[1])
+}
+
 #' Apply psi_star calibration to psi_jt matrix
 #'
 #' @description
@@ -1294,7 +1305,9 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 #' value such as config_default's psi_star_b = 1 mean the same thing whatever
 #' the sibling flags are.
 #'
-#' A calibrated config is marked with \code{attr(, "psi_star_applied") = TRUE}.
+#' A calibrated config is marked with \code{attr(, "psi_star_applied") = TRUE}
+#' and with the field \code{psi_star_applied = TRUE}; the field survives a JSON
+#' round trip (the attribute does not), and either one counts as the mark.
 #' A template that already carries the mark is returned untouched when no
 #' psi_star flag is TRUE (its psi_star values were not redrawn, so its psi_jt
 #' already reflects them) and is rejected when any flag is TRUE, because the
@@ -1313,7 +1326,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
                                  function(p) isTRUE(sampling_flags[[p]]),
                                  logical(1)))
 
-  if (isTRUE(attr(config_sampled, "psi_star_applied", exact = TRUE))) {
+  if (.psi_star_already_applied(config_sampled)) {
     if (psi_star_enabled) {
       stop("config$psi_jt already carries a psi_star calibration (the template is a ",
            "config returned by sample_parameters()), so drawing new psi_star values ",
@@ -1491,7 +1504,10 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
     })
   }
 
-  if (n_calibrated > 0) attr(config_sampled, "psi_star_applied") <- TRUE
+  if (n_calibrated > 0) {
+    attr(config_sampled, "psi_star_applied") <- TRUE
+    config_sampled$psi_star_applied <- TRUE
+  }
 
   # ============================================================================
   # Report calibration results

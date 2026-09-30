@@ -1040,7 +1040,8 @@ calc_Reff <- function(ensemble,
   # mapped back to this ensemble's parameter dimension.
   sub_p <- which(in_subset)
   medoid_sel <- .mosaic_reff_select_medoid_member(ca[, , sub_p, , drop = FALSE],
-                                                  cases_central, length(sub_p), nS)
+                                                  cases_central, length(sub_p), nS,
+                                                  mask_spec = ensemble$artifact_mask)
   if (!is.na(medoid_sel$param_idx)) {
     medoid_sel$param_idx <- sub_p[medoid_sel$param_idx]
     medoid_sel$member_id <- (medoid_sel$stoch_idx - 1L) * nP + medoid_sel$param_idx
@@ -1098,45 +1099,49 @@ calc_Reff <- function(ensemble,
 
 #' Select the medoid re-simulated member (run_MOSAIC criterion)
 #'
-#' Reuses the medoid definition from \code{run_MOSAIC()}: the param set whose
-#' stochastic-MEDIAN \code{reported_cases} at location 1 minimises the log-scale
-#' MAE (eps = 1) to the ensemble central cases series, then -- within that param
-#' set -- the stochastic rerun closest (same metric) to that param set's own
-#' median. Returns the flattened member id \code{m = (s - 1) * nP + p} aligned to
+#' Reuses the medoid definition from \code{run_MOSAIC()}: the param set chosen
+#' by \code{.mosaic_medoid_distances()} (stochastic-median \code{reported_cases}
+#' vs the ensemble central series, log-scale MAE with eps = 1, pooled over every
+#' location and every scored time step under the ensemble's artifact mask), so
+#' the member named here belongs to the same param set as
+#' \code{config_medoid.json}. Within that param set the stochastic rerun closest
+#' (same metric, same locations and scored steps) to the set's own median is
+#' taken. Returns the flattened member id \code{m = (s - 1) * nP + p} aligned to
 #' the resim path's member indexing, plus the (param_idx, stoch_idx). On failure
 #' (no central, degenerate arrays) returns \code{member_id = NA} so the caller can
 #' fall back to the median-peak member.
 #'
 #' @param ca Saved \code{cases_array} \code{[nL, T, nP, nS]} (reported_cases).
-#' @param cases_central Ensemble central cases series (\code{[nL, T]} matrix or
-#'   length-T vector); location 1 is used (matching run_MOSAIC()).
+#' @param cases_central Ensemble central cases series, an \code{[nL, T]} matrix
+#'   (a length-T vector is accepted when \code{nL = 1}).
 #' @param nP,nS Number of param sets / stochastic reruns.
+#' @param mask_spec The ensemble's \code{artifact_mask} (scored window).
 #' @keywords internal
 #' @noRd
-.mosaic_reff_select_medoid_member <- function(ca, cases_central, nP, nS) {
+.mosaic_reff_select_medoid_member <- function(ca, cases_central, nP, nS,
+                                              mask_spec = NULL) {
   na_out <- list(member_id = NA_integer_, param_idx = NA_integer_,
                  stoch_idx = NA_integer_)
   if (is.null(cases_central)) return(na_out)
-  cen <- if (is.matrix(cases_central)) as.numeric(cases_central[1L, ]) else
-    as.numeric(cases_central)
-  Tn <- dim(ca)[2L]
-  if (length(cen) != Tn) return(na_out)
+  d <- dim(ca)
+  cen <- if (is.null(dim(cases_central))) matrix(as.numeric(cases_central), nrow = 1L) else
+    cases_central
+  if (!identical(as.integer(dim(cen)), as.integer(d[1:2]))) return(na_out)
   eps <- 1.0
-  param_dist <- vapply(seq_len(nP), function(p) {
-    med_p <- apply(matrix(ca[1L, , p, , drop = TRUE], nrow = Tn, ncol = nS),
-                   1L, stats::median, na.rm = TRUE)
-    mean(abs(log(med_p + eps) - log(cen + eps)), na.rm = TRUE)
-  }, numeric(1L))
+  param_dist <- tryCatch(.mosaic_medoid_distances(ca, cen, mask_spec, eps = eps),
+                         error = function(e) rep(NA_real_, nP))
   if (all(!is.finite(param_dist))) return(na_out)
   p_med <- which.min(param_dist)
+  # Within-set rerun: same locations and scored steps as the param-set metric.
   # NOTE: log-MAE distance vs a raw-space median is asymmetric, so at nS = 2
   # (median = the two reruns' raw mean) the larger rerun wins an exact tie. Both
   # are faithful coherent members of the medoid param set, so this only changes
   # which equivalent member is the headline; it is not a correctness issue.
-  med_p <- apply(matrix(ca[1L, , p_med, , drop = TRUE], nrow = Tn, ncol = nS),
-                 1L, stats::median, na.rm = TRUE)
+  set_p <- array(ca[, , p_med, , drop = FALSE], dim = c(d[1:2], nS))
+  med_p <- apply(set_p, c(1L, 2L), stats::median, na.rm = TRUE)
+  target <- .mosaic_mask_central_for_scoring(matrix(med_p, nrow = d[1L]), "cases", mask_spec)
   stoch_dist <- vapply(seq_len(nS), function(s) {
-    mean(abs(log(ca[1L, , p_med, s] + eps) - log(med_p + eps)), na.rm = TRUE)
+    mean(abs(log(set_p[, , s] + eps) - log(target + eps)), na.rm = TRUE)
   }, numeric(1L))
   s_med <- if (all(!is.finite(stoch_dist))) 1L else which.min(stoch_dist)
   list(member_id = (s_med - 1L) * nP + p_med,
