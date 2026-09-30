@@ -665,12 +665,18 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
 #'
 #' @param state State environment from \code{sim_alloc_state()}.
 #' @param par Parameters from \code{sim_params()}.
-#' @param ctl Draw controller from \code{sim_draws()}; in \code{"rng"} mode the
-#'   symptomatic split of \code{I_j_initial} is drawn, otherwise (\code{NULL} or
-#'   \code{"replay"}) it is the oracle's deterministic \code{round()}.
+#' @param ctl Draw controller from \code{sim_draws()} (required); \code{"replay"} keeps the oracle's deterministic \code{round()} split of \code{I_j_initial}, any other mode draws it.
 #' @return The state environment with row 1 seeded.
 #' @keywords internal
-sim_seed_state <- function(state, par, ctl = NULL) {
+sim_seed_state <- function(state, par, ctl) {
+
+     # `ctl` is required and has no default: a NULL fallback would be a silent
+     # path back to the biased round() split in production. The branch below
+     # mirrors sim_phase_infectious(): only "replay" is deterministic.
+     if (!(is.list(ctl) || is.environment(ctl)) || is.null(ctl$mode)) {
+          stop("sim_seed_state() requires a draw controller from sim_draws().",
+               call. = FALSE)
+     }
 
      r1 <- state$rows[[1L]]
 
@@ -690,10 +696,10 @@ sim_seed_state <- function(state, par, ctl = NULL) {
      # `as.integer(x)` -- np.round is round-half-to-even and agrees with R's
      # round(), but as.integer() truncates.
      if (any(c("Isym", "Iasym") %in% par$compartments)) {
-          isym <- if (!is.null(ctl) && isTRUE(ctl$mode == "rng")) {
-               .sim_binom(ctl, "infectious/sigma_split_t0", par$I_j_initial, par$sigma)
-          } else {
+          isym <- if (isTRUE(ctl$mode == "replay")) {
                as.integer(round(par$sigma * par$I_j_initial))
+          } else {
+               .sim_binom(ctl, "infectious/sigma_split_t0", par$I_j_initial, par$sigma)
           }
           if ("Isym" %in% par$compartments)  r1$Isym  <- isym
           if ("Iasym" %in% par$compartments) r1$Iasym <- par$I_j_initial - isym

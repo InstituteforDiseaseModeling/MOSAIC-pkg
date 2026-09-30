@@ -206,14 +206,15 @@ test_that("compartments in play follow the pipeline subset", {
 })
 
 test_that("I_j_initial splits by sigma and the two halves sum back exactly", {
-  # Isym takes round(sigma * I) and Iasym the remainder, so the split is
-  # lossless by construction (infectious.py:83-84). `as.integer(round(x))`,
+  # In replay mode Isym takes round(sigma * I) and Iasym the remainder, so the
+  # split is lossless by construction (infectious.py:83-84). `as.integer(round(x))`,
   # never as.integer(x), because as.integer() truncates.
   cfg <- mini_config(I_j_initial = c(101L, 7L, 0L), sigma = 0.5,
                      E_j_initial = rep(0L, 3), R_j_initial = rep(0L, 3))
   comps <- c("Susceptible", "Exposed", "Infectious", "Recovered", "Census")
   par <- sim_params(cfg, components = comps)
-  state <- sim_seed_state(sim_alloc_state(par$nticks, par$npatches), par)
+  state <- sim_seed_state(sim_alloc_state(par$nticks, par$npatches), par,
+                          list(mode = "replay"))
 
   r1 <- state$rows[[1L]]
   expect_identical(r1$Isym + r1$Iasym, c(101L, 7L, 0L))

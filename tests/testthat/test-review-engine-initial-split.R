@@ -45,12 +45,19 @@ test_that("rng mode seeds a symptomatic arm at low counts, unbiased and conservi
   expect_gt(mean(isym > 0), 0.5)
 })
 
-test_that("replay mode and a NULL controller keep the oracle's round()", {
+test_that("replay mode keeps the oracle's round()", {
   par <- MOSAIC:::sim_params(.split_cfg(I = c(101L, 7L, 2L), sigma = 0.5))
-  r1 <- .seed_row(par, NULL)
-  expect_identical(r1$Isym, c(50L, 4L, 1L))        # round-half-to-even
   ctl <- list(mode = "replay")
-  expect_identical(.seed_row(par, ctl)$Isym, c(50L, 4L, 1L))
+  expect_identical(.seed_row(par, ctl)$Isym, c(50L, 4L, 1L))   # round-half-to-even
+})
+
+test_that("a missing or NULL controller errors instead of silently rounding", {
+  # A NULL fallback used to route production callers that omitted `ctl` back
+  # to the biased round() split. The controller is now required.
+  par <- MOSAIC:::sim_params(.split_cfg(I = c(101L, 7L, 2L), sigma = 0.5))
+  st <- MOSAIC:::sim_alloc_state(par$nticks, par$npatches)
+  expect_error(MOSAIC:::sim_seed_state(st, par, NULL), "requires a draw controller")
+  expect_error(MOSAIC:::sim_seed_state(st, par))
 })
 
 test_that("a full rng run draws the t=0 split exactly once", {
