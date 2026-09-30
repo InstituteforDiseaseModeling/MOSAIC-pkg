@@ -169,13 +169,13 @@ Sys.setenv(OMP_NUM_THREADS="1", MKL_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
 
 **Core:** cases — Negative Binomial on daily cells (per-location weekly dispersion from `est_nb_dispersion()`, eps-floored mean). Deaths (v0.96.0+) — the reported CFR `mu_jt` is integrated out per simulated path (`calc_log_likelihood_deaths_integrated()`): weekly quasi-Poisson with a per-location dispersion and a small background, Laplace over a location offset + smooth year deviations. Ensemble deaths are redrawn from that CFR posterior (`cfr_posterior.csv`).
 
-**Shape terms (all T-normalized, weight > 0 enables):**
+**Shape terms (each scaled by N_obs / its own point count, weight > 0 enables):**
 - Peak timing (Normal LL on time differences)
 - Peak magnitude (log-Normal on peak ratios)
 - Cumulative progression (NB at fractions 0.25/0.5/0.75/1.0)
 - WIS (Weighted Interval Score per Bracher et al. 2021)
 
-**Assembly:** `LL = w_cases*NB_cases + w_deaths*deaths_core + (T/N_peaks)*w_pt*peaks + T*w_cum*cumulative + T*w_wis*WIS` (the level-dependent deaths shape terms are dropped when the CFR is integrated out)
+**Assembly (per location j, then weighted by `weights_location`):** `LL_j = w_c*NB_cases + w_d*deaths_core + (N_obs/N_peaks_j)*[w_pt*peak_time + w_pm*peak_mag] + (N_obs/N_cum)*w_cum*cumulative + (N_obs/N_quantiles)*w_wis*WIS`, where N_obs counts time steps with any finite observation and every shape term is split `w_c*cases + w_d*deaths` (the level-dependent deaths shape terms are dropped when the CFR is integrated out; deaths peak timing stays)
 
 All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 
