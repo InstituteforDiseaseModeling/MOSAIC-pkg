@@ -13,8 +13,8 @@
 #' @param ess_best Numeric effective sample size within the best subset
 #' @param A_best Numeric agreement index (entropy-based) for the best subset
 #' @param cvw_best Numeric coefficient of variation of weights in the best subset
-#' @param percentile_used Numeric percentile of likelihood distribution used for
-#'   best subset selection (e.g., 5.0 for top 5%)
+#' @param percentile_used Numeric size of the best subset as a percentage of all
+#'   \code{n_total} draws (e.g., 5.0 for the top 5%)
 #' @param convergence_tier Character string indicating which tier criteria were
 #'   used (e.g., "tier_3", "fallback")
 #' @param param_ess_results Optional data frame with columns \code{parameter} and
@@ -74,13 +74,26 @@
 #'
 #' \strong{Default thresholds by metric:}
 #' \itemize{
-#'   \item ESS_B: pass=0.8 (80%), warn=0.5 (50%)
+#'   \item ESS_B (target \code{target_ess_best}): pass=1.0 (100%), warn=0.8 (80%)
 #'   \item A_B: pass=0.9 (90%), warn=0.7 (70%)
 #'   \item CVw_B: pass=1.2 (120%), warn=2.0 (200%)
-#'   \item B_size: pass=1.0 (100%), warn=0.5 (50%)
-#'   \item Percentile: pass=1.0 (100%), warn=1.5 (150%)
+#'   \item B_size (lower bound, target \code{target_ess_best}): pass=1.0 (100%), warn=0.5 (50%)
+#'   \item B_size_upper (upper cap, target \code{target_max_best_subset}, lower is
+#'     better): pass when \code{n_best_subset <= target}, warn when it exceeds the
+#'     cap by at most 20%, fail beyond that. \code{run_MOSAIC()} enforces the cap
+#'     when it selects the subset, so in a normal run this is an invariant check.
 #'   \item Param ESS: pass=1.0 (100%), warn=0.8 (80%)
 #' }
+#'
+#' The subset percentile (\code{percentile_used} against
+#' \code{target_max_best_subset / n_total * 100}) carries the same information
+#' as B_size_upper on the same denominator, so its status is reported in
+#' \code{summary$percentile_status} but is not gated.
+#'
+#' The function defaults for the targets (300 / 0.95 / 0.5) are not the
+#' \code{run_MOSAIC()} control defaults (\code{ESS_best = 100},
+#' \code{A_best = 0.70}, \code{CVw_best = 1.0}); \code{run_MOSAIC()} always
+#' passes its targets explicitly.
 #'
 #' @section Overall Status:
 #' The overall convergence status is determined by aggregating individual metric
@@ -205,7 +218,7 @@ calc_convergence_diagnostics <- function(
         target = target_max_best_subset,  # Direct comparison (absolute count)
         direction = "lower",              # Must be BELOW target
         pass_threshold = 1.0,             # Must not exceed limit
-        warn_threshold = 1.2              # Warn if within 20% of exceeding
+        warn_threshold = 1.2              # Warn if the cap is exceeded by up to 20%
     )
 
     # ESS_best: Effective sample size in best subset
@@ -235,18 +248,18 @@ calc_convergence_diagnostics <- function(
         warn_threshold = 2.0
     )
 
-    # Percentile: Should be small (concentrated selection).
-    # Convert max_best_subset to a percentile of retained for validation.
-    # When the absolute cap exceeds retained sims (small calibration runs),
-    # the raw ratio can exceed 100% — clamp to 100% to keep the displayed
-    # target sensible. Also flag the situation so an operator knows the
-    # max_best_subset cap is effectively non-binding on this run.
-    target_percentile_max_raw <- (target_max_best_subset / n_retained) * 100
+    # Percentile: the subset as a percentage of ALL draws. percentile_used is
+    # n_best / n_total * 100 (run_MOSAIC()), so the cap is converted on the same
+    # denominator. On that denominator the check is equivalent to B_size_upper,
+    # so it is reported (summary$percentile_status) but not gated. When the
+    # absolute cap exceeds n_total the ratio exceeds 100%; clamp it so the
+    # displayed target stays sensible and flag that the cap is non-binding.
+    target_percentile_max_raw <- (target_max_best_subset / n_total) * 100
     target_percentile_max_derived <- min(100, target_percentile_max_raw)
     if (target_percentile_max_raw > 100) {
         message(sprintf(
-            "  Note: target_max_best_subset (%d) exceeds n_retained (%d); ",
-            as.integer(target_max_best_subset), as.integer(n_retained)),
+            "  Note: target_max_best_subset (%d) exceeds n_total (%d); ",
+            as.integer(target_max_best_subset), as.integer(n_total)),
             "clamped derived target percentile to 100% (cap is non-binding).")
     }
     status_percentile <- .calc_percentile_status(
@@ -278,14 +291,14 @@ calc_convergence_diagnostics <- function(
     # Calculate overall status
     # ============================================================================
 
-    # Collect all statuses (exclude info-only metrics)
+    # Collect all gated statuses (the percentile status duplicates
+    # B_size_upper and is reported only)
     all_statuses <- c(
         status_B_size,
         status_B_size_upper,
         status_ess_best,
         status_A_best,
-        status_cvw_best,
-        status_percentile
+        status_cvw_best
     )
 
     # Include param_ess if available
@@ -323,7 +336,8 @@ calc_convergence_diagnostics <- function(
         message("Subset Selection:")
         message("  Convergence tier: ", convergence_tier)
         message("  Percentile used: ", round(percentile_used, 2), "%",
-                " (target <= ", round(target_percentile_max_derived, 2), "%) - ", toupper(status_percentile))
+                " of all draws (target <= ", round(target_percentile_max_derived, 2), "%) - ",
+                toupper(status_percentile), " (reported, not gated)")
         message("")
         message("Best Subset Metrics:")
         message("  Size (B) - Lower: ", n_best_subset,
@@ -384,7 +398,7 @@ calc_convergence_diagnostics <- function(
             ),
             percentile_max = list(
                 value = target_percentile_max_derived,
-                description = "Maximum percentile for subset selection (derived from max_best_subset)"
+                description = "Maximum best subset size as a percentage of all draws (max_best_subset / n_total * 100)"
             ),
             ess_param = list(
                 value = target_ess_param,
@@ -443,6 +457,7 @@ calc_convergence_diagnostics <- function(
             # Subset info
             convergence_tier = convergence_tier,
             percentile_used = percentile_used,
+            percentile_status = status_percentile,
 
             # Overall status
             convergence_status = overall_status

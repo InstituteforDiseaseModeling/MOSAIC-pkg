@@ -18,6 +18,12 @@
 #' - 10% → Δ AIC ≈ 7 (upper end of "considerably less support")
 #' - 20% → Δ AIC ≈ 10 (boundary to "essentially no support")
 #'
+#' This heuristic is used only by \code{\link{plot_effective_range}}. It does
+#' not drive calibration weighting: \code{run_MOSAIC()},
+#' \code{\link{grid_search_best_subset}} and
+#' \code{\link{optimize_ensemble_subset}} saturate \eqn{\Delta} AIC at a fixed
+#' 4 for the best subset regardless of the subset's percentile.
+#'
 #' @examples
 #' get_effective_aic_range(1)   # 2.0
 #' get_effective_aic_range(5)   # 4.0

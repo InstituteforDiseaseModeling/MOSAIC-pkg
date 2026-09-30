@@ -102,9 +102,34 @@ calc_model_convergence_status <- function(results_dir,
     metric_expressions[[length(metric_expressions) + 1]] <- expression(bold(N[retained]))
   }
 
-  # Process metrics in specific order
+  # Subset selection row: keyed off summary$percentile_used directly. It is
+  # reported, not gated (calc_convergence_diagnostics() gates the same
+  # information through B_size_upper), so it carries status "info".
+  if (!is.null(diagnostics$summary$percentile_used)) {
+    percentile_val <- as.numeric(diagnostics$summary$percentile_used)
+    target_percentile <- if (!is.null(diagnostics$targets$percentile_max$value)) {
+      as.numeric(diagnostics$targets$percentile_max$value)
+    } else if (!is.null(diagnostics$targets$max_best_subset$value) &&
+               !is.null(diagnostics$summary$total_simulations_original)) {
+      as.numeric(diagnostics$targets$max_best_subset$value) /
+        as.numeric(diagnostics$summary$total_simulations_original) * 100
+    } else {
+      NA_real_
+    }
+    metrics_data <- rbind(metrics_data, data.frame(
+      Metric = "Subset Selection",
+      Description = "Best subset as % of all draws (not gated)",
+      Target = if (is.finite(target_percentile)) sprintf("<=%.1f%%", target_percentile) else "-",
+      Value = sprintf("%.1f%%", percentile_val),
+      Status = "info",
+      stringsAsFactors = FALSE
+    ))
+    metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Subset Selection"))
+  }
+
+  # Gated best-subset metrics, in display order
   if (verbose) message("Processing metrics in specified order...")
-  metric_order <- c("ess_retained", "B_size", "ess_best", "A_B", "cvw_B")
+  metric_order <- c("B_size", "B_size_upper", "ess_best", "A_B", "cvw_B")
 
   for (metric_name in metric_order) {
     if (!(metric_name %in% names(diagnostics$metrics))) {
@@ -125,120 +150,59 @@ calc_model_convergence_status <- function(results_dir,
       metric <- list(value = metric, status = "info", description = metric_name)
     }
 
-    target_value <- NA
-    if (metric_name %in% c("ess_all", "ess_retained")) {
-      target_value <- "-"
-    } else if (metric_name == "ess_best") {
-      target_value <- paste(">=", diagnostics$targets$ess_best$value)
-    } else if (metric_name == "A_B") {
-      target_value <- paste(">=", diagnostics$targets$A_best$value)
-    } else if (metric_name == "cvw_B") {
-      target_value <- paste("<=", diagnostics$targets$cvw_best$value)
-    } else if (metric_name == "B_size") {
-      target_value <- paste(">=", diagnostics$targets$ess_best$value)
-    } else {
-      target_value <- "-"
-    }
+    target_value <- switch(metric_name,
+      "ess_best"     = paste(">=", diagnostics$targets$ess_best$value),
+      "A_B"          = paste(">=", diagnostics$targets$A_best$value),
+      "cvw_B"        = paste("<=", diagnostics$targets$cvw_best$value),
+      "B_size"       = paste(">=", diagnostics$targets$ess_best$value),
+      "B_size_upper" = paste("<=", metric$target %||% diagnostics$targets$max_best_subset$value),
+      "-"
+    )
 
-    formatted_value <- if (is.numeric(metric$value)) {
-      if (metric$value >= 100) {
-        format(round(metric$value, 0), scientific = FALSE)
-      } else if (metric$value >= 1) {
-        format(round(metric$value, 2), scientific = FALSE)
-      } else {
-        format(round(metric$value, 4), scientific = FALSE)
-      }
-    } else {
-      as.character(metric$value)
-    }
+    formatted_value <- .mosaic_format_status_value(metric$value)
 
     display_name <- switch(metric_name,
-      "ess_all" = "ESS_retained",
-      "ess_retained" = "ESS_retained",
       "ess_best" = "ESS_B",
       "A_B" = "A_B",
       "cvw_B" = "CV_B",
       "B_size" = "Best Subset (B)",
+      "B_size_upper" = "Best Subset (B) cap",
       metric_name
     )
 
     display_expression <- switch(metric_name,
-      "ess_all" = expression(bold(ESS[retained])),
-      "ess_retained" = expression(bold(ESS[retained])),
       "ess_best" = expression(bold(ESS[B])),
       "A_B" = expression(bold(A[B])),
       "cvw_B" = expression(bold(CV[B])),
       "B_size" = expression(bold("Best Subset (B)")),
+      "B_size_upper" = expression(bold("Best Subset (B) cap")),
       NULL
     )
 
     better_description <- switch(metric_name,
-      "ess_all" = "Effective sample size across retained simulations",
-      "ess_retained" = "Effective sample size across retained simulations",
       "ess_best" = "Effective sample size in best subset",
       "A_B" = "Agreement between simulations in best subset",
       "cvw_B" = "Variability of weights in best subset",
       "B_size" = "Number of simulations in best performing subset (lower bound)",
+      "B_size_upper" = "Best subset size must not exceed max_best_subset (upper cap)",
       if (!is.null(metric$description)) metric$description else metric_name
     )
 
-    if (is.null(display_name) || length(display_name) == 0) display_name <- metric_name
-    if (is.null(better_description) || length(better_description) == 0) better_description <- metric_name
     if (is.null(target_value) || length(target_value) == 0) target_value <- "-"
-    if (is.null(formatted_value) || length(formatted_value) == 0) formatted_value <- "N/A"
     if (is.null(metric$status) || length(metric$status) == 0) metric$status <- "info"
 
-    tryCatch({
-      new_row <- data.frame(
-        Metric = display_name,
-        Description = better_description,
-        Target = target_value,
-        Value = formatted_value,
-        Status = metric$status,
-        stringsAsFactors = FALSE
-      )
-      metrics_data <- rbind(metrics_data, new_row)
-      if (!is.null(display_expression)) {
-        metric_expressions[[length(metric_expressions) + 1]] <- display_expression
-      }
-    }, error = function(e) {
-      if (verbose) message("    Error creating row for metric: ", metric_name, " - ", e$message)
-    })
-
-    # Subset Selection row after ESS_retained
-    if (metric_name == "ess_retained" && !is.null(diagnostics$summary$percentile_used)) {
-      percentile_val <- diagnostics$summary$percentile_used
-
-      target_percentile <- if (!is.null(diagnostics$targets$percentile_max$value)) {
-        diagnostics$targets$percentile_max$value
-      } else if (!is.null(diagnostics$targets$max_percentile$value)) {
-        diagnostics$targets$max_percentile$value
-      } else if (!is.null(diagnostics$targets$max_best_subset$value)) {
-        n_retained <- diagnostics$summary$retained_simulations
-        (diagnostics$targets$max_best_subset$value / n_retained) * 100
-      } else {
-        5.0
-      }
-
-      percentile_display <- sprintf("%.1f%%", percentile_val)
-
-      percentile_status <- if (percentile_val <= target_percentile) {
-        "pass"
-      } else if (percentile_val <= target_percentile * 1.5) {
-        "warn"
-      } else {
-        "fail"
-      }
-
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Subset Selection",
-        Description = "Percentile of likelihood distribution used for best subset",
-        Target = sprintf("<=%.1f%%", target_percentile),
-        Value = percentile_display,
-        Status = percentile_status,
-        stringsAsFactors = FALSE
-      ))
-      metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Subset Selection"))
+    metrics_data <- rbind(metrics_data, data.frame(
+      Metric = display_name,
+      Description = better_description,
+      Target = target_value,
+      Value = formatted_value,
+      Status = metric$status,
+      stringsAsFactors = FALSE
+    ))
+    metric_expressions[[length(metric_expressions) + 1]] <- if (!is.null(display_expression)) {
+      display_expression
+    } else {
+      as.expression(bquote(bold(.(display_name))))
     }
   }
 
@@ -322,6 +286,55 @@ calc_model_convergence_status <- function(results_dir,
     }
   }
 
+  # Exact importance-sampling diagnostics: reported, never gated. The docs
+  # require these to be read alongside ESS_B, so they belong in the table.
+  is_all  <- diagnostics$importance_sampling$all_draws
+  is_best <- diagnostics$importance_sampling$best_subset
+  if (!is.null(is_all) || !is.null(is_best)) {
+    .is_row <- function(metric, description, value, target, expr) {
+      metrics_data <<- rbind(metrics_data, data.frame(
+        Metric = metric, Description = description, Target = target,
+        Value = value, Status = "info", stringsAsFactors = FALSE
+      ))
+      metric_expressions[[length(metric_expressions) + 1]] <<- expr
+    }
+    .ess_is_value <- function(d) {
+      v <- .mosaic_format_status_value(d$ess_is)
+      if (!is.null(d$n)) paste0(v, " of ", format(d$n, big.mark = ",")) else v
+    }
+    if (!is.null(is_all)) {
+      .is_row("ESS_IS (all)", "Exact IS ESS, all draws (not gated)",
+              .ess_is_value(is_all), "-", expression(bold(ESS[IS]~"(all)")))
+    }
+    if (!is.null(is_best)) {
+      .is_row("ESS_IS (B)", "Exact IS ESS, best subset (not gated)",
+              .ess_is_value(is_best), "-", expression(bold(ESS[IS]~"(B)")))
+    }
+    if (!is.null(is_all)) {
+      khat_desc <- if (!is.null(is_all$khat_status)) {
+        paste0("Pareto k-hat: ", is_all$khat_status)
+      } else {
+        "Pareto k-hat, all draws (not gated)"
+      }
+      .is_row("Pareto k-hat", khat_desc, .mosaic_format_status_value(is_all$khat),
+              "< 0.7", expression(bold(hat(k))))
+    }
+  }
+
+  # Overall verdict (the aggregate of the gated statuses)
+  overall <- diagnostics$summary$convergence_status
+  if (!is.null(overall) && length(overall) == 1L && nzchar(overall)) {
+    metrics_data <- rbind(metrics_data, data.frame(
+      Metric = "Overall",
+      Description = "Worst of the gated metrics",
+      Target = "PASS",
+      Value = as.character(overall),
+      Status = tolower(as.character(overall)),
+      stringsAsFactors = FALSE
+    ))
+    metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Overall"))
+  }
+
   if (nrow(metrics_data) == 0) {
     if (verbose) message("No metrics data to assemble.")
     return(invisible(NULL))
@@ -355,4 +368,22 @@ calc_model_convergence_status <- function(results_dir,
     n_pass             = n_pass,
     target_ess_param   = target_ess_param
   ))
+}
+
+
+# Format a diagnostics value for the status table; JSON nulls/NA print as "NA".
+# @keywords internal
+.mosaic_format_status_value <- function(x) {
+  if (is.null(x) || length(x) == 0L) return("NA")
+  if (is.list(x)) x <- unlist(x)
+  if (!is.numeric(x)) return(as.character(x[1]))
+  x <- x[1]
+  if (!is.finite(x)) return("NA")
+  if (abs(x) >= 100) {
+    format(round(x, 0), scientific = FALSE)
+  } else if (abs(x) >= 1) {
+    format(round(x, 2), scientific = FALSE)
+  } else {
+    format(round(x, 4), scientific = FALSE)
+  }
 }
