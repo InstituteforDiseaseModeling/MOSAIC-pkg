@@ -449,7 +449,23 @@ prefit_rolling_cv_psi <- function(PATHS,
      .rcv_bytes_hash(raw)
 }
 
+#' Version of the psi-producing code, folded into every psi cache key.
+#'
+#' The cache key otherwise covers only the cutoff and the est_suitability spec,
+#' so a change to the estimator or to the covariate-panel code that alters psi
+#' under an unchanged spec would be served from a stale cache. Bump this
+#' whenever such a change ships. v0.100.0: the drought_prob GAM lags its
+#' predictors past the label window and takes a climate_obs_stop horizon, and
+#' the lstm_v2 full in-sample refit includes the cutoff week and smooths only up
+#' to each country's covariate edge.
+#' @keywords internal
+#' @noRd
+.MOSAIC_PSI_ALGORITHM_VERSION <- "0.100.0"
+
 #' spec_hash over (fit_date_stop, modeling spec) for one cutoff.
+#'
+#' The key also carries \code{.MOSAIC_PSI_ALGORITHM_VERSION}, so a cache built
+#' by an older psi estimator is refitted rather than reused.
 #'
 #' When the spec requests the v7.4 leak-free hazard panel, a normalized
 #' \code{v74_panel} block (leakfree marker + resolved compile window +
@@ -469,7 +485,8 @@ prefit_rolling_cv_psi <- function(PATHS,
      # serial on the whole box, calibrate cells that don't refit at all).
      if (!is.null(spec$arch_control)) spec$arch_control$parallel_seeds <- NULL
      key <- list(fit_date_stop = as.character(as.Date(cutoff)),
-                 est_suitability_spec = spec)
+                 est_suitability_spec = spec,
+                 psi_algorithm = .MOSAIC_PSI_ALGORITHM_VERSION)
      v74 <- .rcv_psi_v74_request(spec)
      if (v74$active)
           key$v74_panel <- list(leakfree = TRUE,

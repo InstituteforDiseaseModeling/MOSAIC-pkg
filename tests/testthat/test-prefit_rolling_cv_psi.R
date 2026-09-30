@@ -294,3 +294,18 @@ test_that("each cutoff calibrates with a mu_jt and prior refit on WHO years <= y
                MOSAIC:::.mosaic_mu_jt_prior(ref$predictions, "MOZ", ref$sigma, ref$tau)$location$MOZ)
   expect_true(all(is.na(seen$config$reported_deaths[, dates > cutoff])))
 })
+
+test_that("the psi cache key changes with the psi-algorithm version", {
+  # A v0.99.x cache (same spec + window) must not be reused after the drought_prob
+  # and lstm_v2 changes of v0.100.0 altered psi under an unchanged spec.
+  spec <- list(model_version = "lstm_v2", arch_control = list(n_seeds = 3L))
+  h_now <- MOSAIC:::.rcv_psi_spec_hash(as.Date("2024-01-01"), spec)
+  ns <- asNamespace("MOSAIC")
+  old <- get(".MOSAIC_PSI_ALGORITHM_VERSION", envir = ns)
+  unlockBinding(".MOSAIC_PSI_ALGORITHM_VERSION", ns)
+  on.exit({ assign(".MOSAIC_PSI_ALGORITHM_VERSION", old, envir = ns)
+            lockBinding(".MOSAIC_PSI_ALGORITHM_VERSION", ns) }, add = TRUE)
+  assign(".MOSAIC_PSI_ALGORITHM_VERSION", "0.99.10", envir = ns)
+  h_old <- MOSAIC:::.rcv_psi_spec_hash(as.Date("2024-01-01"), spec)
+  expect_false(identical(h_now, h_old))
+})
