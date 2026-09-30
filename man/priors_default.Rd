@@ -113,7 +113,7 @@ a first-class prior, but is typically \emph{derived at sampling time} as
 literature spread retained intentionally). \code{data-raw/make_priors_default.R}
 truncates it below at 1 (\code{parameters$lower = 1}) so the derived \code{zeta_2}
 never exceeds \code{zeta_1}; objects built before that change (v16.1 and
-earlier) carry no \code{lower}, and about 16\\% of their draws have
+earlier) carry no \code{lower}, and about 16\% of their draws have
 \code{zeta_2 > zeta_1}.
 }
 

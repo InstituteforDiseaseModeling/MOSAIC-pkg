@@ -41,15 +41,16 @@ testthat::test_that("compile window is resolved from the LSTM fit_date_start (de
 # .rcv_psi_spec_hash(): v7.4 folds panel provenance into the key; back-compat
 # ===========================================================================
 
-testthat::test_that("BACK-COMPAT: non-v7.4 spec hash is unchanged by v7.4 plumbing", {
-     # The default/v7.3 hash must equal the hash of the SAME key WITHOUT any
-     # v74_panel block -- i.e. the legacy content hash. We reconstruct the
-     # pre-v7.4 key inline and require byte-identical digests.
+testthat::test_that("non-v7.4 spec hash carries no v7.4 panel block", {
+     # The default/v7.3 hash must equal the hash of the same key WITHOUT any
+     # v74_panel block. The key includes the psi algorithm version (v0.100.0),
+     # so caches written by earlier MOSAIC versions are deliberately refitted.
      T_k  <- as.Date("2022-06-30")
      spec <- list(feature_set = "v7.3", response_var = "y",
                   arch_control = list(n_seeds = 10L))
      legacy_key <- list(fit_date_stop = as.character(T_k),
-                        est_suitability_spec = spec)
+                        est_suitability_spec = spec,
+                        psi_algorithm = MOSAIC:::.MOSAIC_PSI_ALGORITHM_VERSION)
      testthat::expect_identical(
           MOSAIC:::.rcv_psi_spec_hash(T_k, spec),
           MOSAIC:::.rcv_obj_hash(legacy_key))

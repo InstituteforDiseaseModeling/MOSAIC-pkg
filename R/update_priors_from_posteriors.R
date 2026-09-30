@@ -345,7 +345,7 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
 #' zeta_1 >= zeta_2) carries \code{lower}/\code{upper}. A posterior entry that
 #' already carries bounds was fitted in the truncated family by
 #' \code{calc_model_posterior_distributions()} and is kept as is. An entry
-#' without bounds is an untruncated fit to the (truncated) posterior's 95\%
+#' without bounds is an untruncated fit to the (truncated) posterior's 95%
 #' interval; re-attaching the bound to it unchanged would truncate twice and
 #' push the distribution away from the bound at every stage, so it is refitted
 #' in the truncated family to the same interval before the bound is attached.

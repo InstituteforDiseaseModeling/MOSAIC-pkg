@@ -104,7 +104,7 @@
 #'     literature spread retained intentionally). `data-raw/make_priors_default.R`
 #'     truncates it below at 1 (`parameters$lower = 1`) so the derived `zeta_2`
 #'     never exceeds `zeta_1`; objects built before that change (v16.1 and
-#'     earlier) carry no `lower`, and about 16\% of their draws have
+#'     earlier) carry no `lower`, and about 16% of their draws have
 #'     `zeta_2 > zeta_1`.
 #' }
 #'

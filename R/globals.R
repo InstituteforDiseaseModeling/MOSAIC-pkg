@@ -73,3 +73,8 @@ utils::globalVariables(c(
 # global environment (clusterEvalQ/assign) and the dispatch closures call them
 # there; they are never bound in the package namespace.
 utils::globalVariables(c(".run_sim_worker", ".run_sim_worker_chunk"))
+# .mosaic_worker_installer(): the installed worker closures resolve these in the
+# PSOCK worker's global environment, where run_MOSAIC() exports them.
+utils::globalVariables(c("PATHS", "config", "dirs", "io_settings", "likelihood_settings",
+                         "n_iterations", "param_lookup", "param_names_all", "priors",
+                         "sampling_args"))
