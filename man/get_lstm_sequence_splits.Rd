@@ -52,9 +52,12 @@ generalization capability.
 \itemize{
 \item Groups sequences by iso_code + year-month combinations
 \item Randomly assigns entire location-month blocks to train or validation
-\item Ensures no data leakage between train/validation for the same location-month
-\item Better tests spatial-temporal generalization capability
-\item More realistic evaluation for deployment to new regions/time periods
+\item Reduces, but does NOT eliminate, train/validation leakage: each
+sequence carries a multi-week input window, so sequences in adjacent
+location-month blocks share overlapping inputs and autocorrelated
+targets across the split. Validation scores are therefore optimistic
+relative to a strictly forward-in-time (rolling-origin) evaluation.
+\item Better tests spatial-temporal generalization than a per-sequence random split
 }
 
 The location-month blocking approach is particularly valuable for:
