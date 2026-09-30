@@ -568,7 +568,10 @@ default_args <- list(
      gamma_2 = 0.5,       # Asymptomatic recovery ~2 days (was 0.1 = 10 days; posteriors consistently 0.34-0.78)
      epsilon = 0.0003,
      mu_jt = mu_jt,       # Reported CFR by location and day (v5.0): WHO-annual GAM, see above
-     sigma = 0.25,
+     # Mean of the priors_default sigma Beta (est_symptomatic_prop() fit, ~0.35
+     # at priors v17.0; the old fixed 0.25 matched the pre-v17.0 Beta(4.30, 13.51)).
+     sigma = with(MOSAIC::priors_default$parameters_global$sigma$parameters,
+                  shape1 / (shape1 + shape2)),
      # Case reporting parameters (surveillance PPV, regime-dependent)
      rho = 0.423,               # Care-seeking rate (mean of Beta(5.38, 7.10) prior, Wiens et al. 2025 RE pool of general + severe/cholera strata; see R/get_rho_care_seeking_params.R)
      # Death detection rate: probability a true cholera death is captured by

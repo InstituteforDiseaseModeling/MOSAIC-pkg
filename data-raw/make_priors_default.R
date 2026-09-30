@@ -564,22 +564,25 @@ if (file.exists(chi_param_file)) {
 
      if (length(chi_endemic_shape1) == 0 || length(chi_endemic_shape2) == 0) {
           warning("Could not extract chi_endemic shape params from file. Using defaults.")
-          chi_endemic_shape1 <- 5.43
-          chi_endemic_shape2 <- 5.01
+          chi_endemic_shape1 <- 5.56
+          chi_endemic_shape2 <- 5.10
      }
      if (length(chi_epidemic_shape1) == 0 || length(chi_epidemic_shape2) == 0) {
           warning("Could not extract chi_epidemic shape params from file. Using defaults.")
-          chi_epidemic_shape1 <- 4.79
-          chi_epidemic_shape2 <- 1.53
+          chi_epidemic_shape1 <- 4.97
+          chi_epidemic_shape2 <- 1.58
      }
 } else {
      warning("Chi PPV parameter file not found. Using default values.")
-     chi_endemic_shape1  <- 5.43;  chi_endemic_shape2  <- 5.01
-     chi_epidemic_shape1 <- 4.79;  chi_epidemic_shape2 <- 1.53
+     chi_endemic_shape1  <- 5.56;  chi_endemic_shape2  <- 5.10
+     chi_epidemic_shape1 <- 4.97;  chi_epidemic_shape2 <- 1.58
 }
 
+# The fallbacks above are the get_suspected_cases() fits to the published
+# (2.5%, 50%, 97.5%) triples (0.24, 0.52, 0.80) and (0.40, 0.78, 0.99); until
+# v0.100.0 the fit used a 0.0275 lower quantile (Beta(5.43, 5.01) / Beta(4.79, 1.53)).
 # chi_endemic - PPV among suspected cases during endemic periods (Weins et al. 2023 low estimate)
-# Beta(5.43, 5.01) -> median ~0.52, 95% CI [0.24, 0.80]
+# Beta(5.56, 5.10) -> median ~0.52, 95% CI [0.24, 0.80]
 priors_default$parameters_global$chi_endemic <- list(
      description = "PPV among suspected cases during endemic periods (Weins et al. 2023, all settings)",
      distribution = "beta",
@@ -587,7 +590,7 @@ priors_default$parameters_global$chi_endemic <- list(
 )
 
 # chi_epidemic - PPV among suspected cases during epidemic periods (Weins et al. 2023 high estimate)
-# Beta(4.79, 1.53) -> median ~0.78, 95% CI [0.40, 0.99]
+# Beta(4.97, 1.58) -> median ~0.79, 95% CI [0.40, 0.98]
 priors_default$parameters_global$chi_epidemic <- list(
      description = "PPV among suspected cases during epidemic periods (Weins et al. 2023, during outbreaks)",
      distribution = "beta",
@@ -676,11 +679,34 @@ priors_default$parameters_global$rho_deaths <- list(
      parameters = list(shape1 = 36.95, shape2 = 51.02)
 )
 
-# sigma - Proportion symptomatic
+# sigma - Proportion of infections that are symptomatic
+# Read from param_sigma_prop_symptomatic.csv, written by est_symptomatic_prop():
+# a least-squares Beta quantile fit to the sero-survey / cohort table of
+# get_symptomatic_prop_data() (Nelson 2009, Leung & Matrajt 2021, Harris 2012,
+# Finger 2024, Jackson 2013, Bart 1970 x2, Harris 2008, Hegde 2023), the
+# method 04-model-description.Rmd documents. Up to priors v16.1 the value was
+# hardcoded as Beta(4.30, 13.51) (mean 0.24): that was this same fit on a table
+# whose Harris et al. 2008 row was mistranscribed as 0.184 [0.112, 0.256]. The
+# paper (PLoS NTD 2(4):e221) reports 127 of 202 culture-confirmed household-
+# contact infections symptomatic, 0.629 [0.558, 0.695]; with the corrected row
+# (and the 0.025 quantile typo fixed) the fit is Beta(3.75, 7.12), mean 0.35,
+# 95% [0.11, 0.64]. The Haiti population sero-surveys (Jackson 2013 0.21,
+# Finger 2024 0.24) sit near its 20th percentile.
+sigma_param_file <- file.path(PATHS$MODEL_INPUT, "param_sigma_prop_symptomatic.csv")
+sigma_shape1 <- sigma_shape2 <- numeric(0)
+if (file.exists(sigma_param_file)) {
+     param_sigma  <- read.csv(sigma_param_file, stringsAsFactors = FALSE)
+     sigma_shape1 <- param_sigma$parameter_value[param_sigma$parameter_name == "shape1"]
+     sigma_shape2 <- param_sigma$parameter_value[param_sigma$parameter_name == "shape2"]
+}
+if (length(sigma_shape1) != 1L || length(sigma_shape2) != 1L) {
+     stop("param_sigma_prop_symptomatic.csv missing or lacks one shape1/shape2 row. ",
+          "Run get_symptomatic_prop_data() and est_symptomatic_prop() first.")
+}
 priors_default$parameters_global$sigma <- list(
-     description = "Proportion symptomatic",
+     description = "Proportion of infections that are symptomatic (Beta quantile fit to the sero-survey and cohort table of get_symptomatic_prop_data(); est_symptomatic_prop())",
      distribution = "beta",
-     parameters = list(shape1 = 4.30, shape2 = 13.51)
+     parameters = list(shape1 = sigma_shape1, shape2 = sigma_shape2)
 )
 
 # zeta_1 - Symptomatic shedding rate (V. cholerae cells per infected person per day)
