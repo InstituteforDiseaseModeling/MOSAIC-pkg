@@ -21,3 +21,7 @@
 - [update pipeline raw-writer compliance](update_pipeline_raw_writer_compliance.md) — v0.93.0: only EMDAT logs provenance; WB/WPP/EMDAT-api non-atomic; DEM + WHO-vacc unlisted raw writers; est_mobility edge blocks compile on dugong
 - [surveillance "revisions" are source precedence](surveillance_revision_is_source_precedence.md) — 379/507 changed cells were AI→WHO, only 81 were WHO→WHO; diagnose with source+disaggregation_method+confidence_weight, never the case value alone
 - [R Open-Meteo download path retired](open_meteo_r_download_path_retired.md) — download_climate_data/get_climate_future DELETED v0.23.0, open-meteo-pipeline owns download; PR #51 edits deleted files
+- [processed refresh audit gotchas](processed_refresh_audit_gotchas.md) — PSL ENSO now ERSSTv6 (history revised), WDI urban revision, WHO-annual tie-break keeps OLDEST snapshot, dbf header noise, orphan outputs, 224MB frozen panel not ignored
+- [WHO weekly MMWR calendar / W53](who_weekly_w53_quirk.md) — WHO weeks are MMWR not ISO (real 2025-W53, 2026 +7d); FIXED v0.100.0, rebuilt 2026-09-30; join on date_start
+- [Combiner tie-break vs JHU NA deaths](combiner_completeness_tiebreak_jhu_ai.md) — completeness-before-priority dedup makes 2235 JHU weeks lose to AI fourier (cases 4.9x); combined series HELD 2026-09-30
+- [Suitability panel hidden inputs](suitability_panel_hidden_inputs.md) — cases_binary reads model/input/param_epidemic_peaks.csv; edge-row drop moves spei/week-52 anomalies/poverty global-mean fill

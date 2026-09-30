@@ -1,4 +1,4 @@
-- [Reviewer checklist](reviewer_checklist.md) — review checks: data-object bumps, param-removal sibling set, mutation-test the wiring, chi fixture-loosening, roxygen [] / NEWS vN.N check traps
+- [Reviewer checklist](reviewer_checklist.md) — review checks: data-object bumps, param-removal sibling set, mutation-test the wiring, chi fixture-loosening, roxygen [] / NEWS vN.N check traps; post-merge duplicate-definition scan
 - [Trajectory artifact review (v0.54.0)](project_trajectory_artifact_review.md) — capture triad sites, R<->Py channel-list lockstep landmine (no parity test), candidate-not-optimized persistence, set.seed side-effect nit; engine exposes all 19 channels
 - [Trajectory stream-to-disk review (v0.55.2)](project_trajectory_streamtodisk_review.md) — orphaned-scratch-on-interrupt gap (RUN_FATAL on.exit only logs, doesn't unlink caller-owned scratch); conn-leak nit; version/NEWS tangle w/ concurrent ENSO; recommended split + monotonic versions
 - [config_default psi provenance](project_config_default_psi_provenance.md) — psi_jt build is reproducible from the CSV but the est_suitability run that makes the CSV usually is NOT; verify on every psi bump
@@ -31,3 +31,6 @@
 - [R_eff route-split review (v0.92.1)](project_reff_route_split_review.md) — PR #126 clean-list; MOSAIC-docs spec rewrite was uncommitted; lazydata exists(asNamespace) skip-guard trap
 - [v0.93.0 release review](project_v093_release_review.md) — sample_kappa dual-default drift, undeclared gdistance/malariaAtlas/mipfp, vignette purl hazard, NEWS gaps; reusable static checks
 - [pkgdown root-md publish trap](reference_pkgdown_root_md_publish_trap.md) — every root *.md (CLAUDE.md, plans) goes to public site despite .Rbuildignore; deploy clean:false keeps dead pages
+- [Packaging-env review v0.99.9](project_packaging_env_review_v0999.md) — attach_mosaic_env in vignette/vm stops w/o Python; sporadic/rare example regimes =0 cases; check_dependencies <<- globalenv leak; roxygen '>=' block-quote
+- [Naming-contract trace (v0.99.9)](project_naming_contract_review_v099.md) — rda/json clean; alpha_1 inventory scale stale, create_sampling_args formals() trap, psi_star all-pinned gate
+- [Integration fixer v0.100.0](project_integration_fixer_v0100.md) — cross-group interaction bugs (medoid selector drift, clear-list vs read-if-exists, two-stage truncation, JSON-lost attrs); data-raw uses INSTALLED pkg under worktree

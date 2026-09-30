@@ -51,6 +51,12 @@ explicitly). 95% CI spans 7.5 orders of magnitude (0.0136 to 4.1e5), the widest 
 `R/sample_parameters.R:716-720` claims P(violation) ~ 1e-6 based on "meanlog ~10 and sdlog ~2" --
 **that is not the shipped prior**. `est_zeta_ratio_prior.R` applies no truncation.
 Fix: left-truncate at 1 in `make_priors_default.R`; correct the comment and the spec.
+**FIX WRITTEN 2026-09-30 (branch fix/handoff-h2-priors, user-approved):** lognormal family gained
+optional `lower`/`upper` in `sample_from_prior()` (inverse CDF; untruncated path still `rlnorm`, same
+RNG stream); builder emits `lower = 1`; bounds carried through `update_priors_from_posteriors()` and
+`inflate_priors()`. Takes effect only at the next priors_default rebuild (v16.1 .rda has no `lower`).
+Truncated: median 75 -> 185, 95% [1.4, 5.7e5]. Rationale: Smith 2026 OR<1 is household transmission,
+not per-day shedding.
 
 ## 5. ETH `prop_E_initial` / `prop_I_initial` are the `insufficient_data` fallback
 Both are `Beta(1, 999)` = the `"insufficient_data"` branch (`R/est_initial_E_I.R:360, 395`),

@@ -129,10 +129,19 @@ Related: [[weighting-stack-measured-v085]] (nb_k_min, the three weight columns),
 [[likelihood-overconcentration-invariants]] (score noise SD 120 vs best-vs-2nd gap 244 — the noise
 swamps exactly the top-1 comparison that carries the saturated scheme's only discrimination).
 
-## (v0.93.0 review, 2026-09-29) `"tempered"` never reaches the posterior
+## (v0.93.0 review, 2026-09-29; SUPERSEDED on integrate/deep-review 2026-09-30) `"tempered"` never reaches the posterior
 
 `best_subset_weighting` is read ONLY in the gated-metrics block (`run_MOSAIC.R:1852-1880`: ESS_B/A/CVw,
 temperature, degeneracy warning). `results$weight_best` (`:1999-2011`) is hard-coded `pmin(Delta,4)`,
 eta 0.5, and that is what the ensemble/posterior consume. So flipping the switch changes the gate verdict
 (ESS_B ~1.25 on ETH -> FAIL) but not one posterior number. Check this wiring before believing any
 "scheme X changes the posterior" claim.
+
+**Update 2026-09-30 (integrate/deep-review + fix/handoff-h5-stats):** `weight_best`, the gate, the
+tier search (`grid_search_best_subset(weighting=)`) and `optimize_ensemble_subset(weighting=)` now ALL
+read `control$targets$best_subset_weighting` via the single `.mosaic_best_subset_weights()`
+(run_MOSAIC_helpers.R). So "tempered" DOES now change the posterior. Closed form for tempered on a
+linear-in-rank Delta: Kish ESS = (2/34.54) n = **0.058 n** (verified numerically at n=100/1000), so a
+tier target ESS_B=T is met near n = 17 T. Merge trap seen: two definitions of that helper after the
+branch merge (grid file vs helpers file) — collate order silently picks the later file; a test now
+asserts one definition.

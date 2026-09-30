@@ -128,3 +128,12 @@ using `intersect()` silently ignores typos; (b) assert topological order if the 
 not sort; (c) for each edge, confirm the named producer actually writes the file the consumer
 reads. MOSAIC has processed files with **no producer at all** and consumers guarded by
 `if (file.exists())`, so a wrong edge degrades output with zero error.
+**After merging parallel fix branches, scan for duplicate top-level definitions.** The
+2026-09-30 deep-review integration left `.mosaic_best_subset_weights()` defined in BOTH
+`R/grid_search_best_subset.R` and `R/run_MOSAIC_helpers.R` (two branches each added it).
+R CMD check and the tests are silent: collation (alphabetical) keeps the last file's copy,
+so the other becomes dead code with its own, possibly contradictory, docs. One-liner:
+`grep -hoE "^[.A-Za-z_][.A-Za-z0-9_]* *<- *function" R/*.R | sed 's/ *<-.*//' | sort | uniq -d`.
+Also after such merges: tests written by one branch can assert the OTHER branch's old
+return shape (est_initial_E_I fit names; resim fixture lacking cases_mean once the default
+flipped to mean) — run the whole suite on the integration branch, not per branch.

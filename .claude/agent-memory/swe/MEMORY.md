@@ -30,3 +30,6 @@
 - [JSON 15-digit member reconstruction](reference_json_roundtrip_member_reconstruction.md) — 1_inputs JSON at digits=NA (15 sig) breaks bit-identical seed re-sampling in multi-loc (7/80 >5% off); digits=I(17) fixes; kills R_eff recompute_ci gate
 - [robust-gather timeout is per task](reference_robust_gather_timeout_is_per_task.md) — 1800 s idle timeout judged per TASK; 100-sim shards (v0.87) not rescaled -> fake "worker crash" abort; render + R_eff use blocking parLapplyLB
 - [delta_jt can exceed 1](reference_delta_jt_can_exceed_one.md) — decay_days_short<1 (0.3-0.5% of prior draws) + psi~0 gives delta_jt~2; engine clamps it, but consumers asserting delta<=1 abort. Clamp with pmin(delta,1)
+- [render figure source traps](reference_render_figure_source_traps.md) — spatial figs from INPUT config, psi_star from global PATHS psi, ensemble caption R2 unmasked vs summary.json, subset-opt flat-profile marker
+- [OCV scenarios: CFR v2.1 + engine compat](project_ocv_scenarios_cfr_v21_and_engine_compat.md) — never pass deaths_integration per counterfactual arm (erases averted deaths; bake per-member draw); all registry models pre-v0.89 fade out
+- [merge duplicate internal defs](reference_merge_duplicate_internal_defs.md) — multi-branch merges can leave 2 defs of one helper; no Collate => alphabetically-last file wins silently; uniq -d grep

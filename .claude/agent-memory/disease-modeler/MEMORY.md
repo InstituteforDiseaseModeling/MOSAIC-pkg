@@ -39,3 +39,7 @@
 - [R_eff route-split review (v0.92.1)](reference_reff_route_split_review.md) — kernel faithful; mortality shifts human GI ~1d at high mu ("<0.2d" false); R_env frozen-at-t double-counts psi (beta_env x 1/delta, 11.5x); p_beta is NOT a route share (realized 0.1-10%)
 - [v0.93 review: dose/IC/psi defects](project_v093_review_dose_ic_psi.md) — W/N dose desaturates only at config zeta_1 MODE (prior median 416x up => still saturated); config_default 37x under; 2018 IC = Beta(1,999) zero-case fallback; psi_jt unreproducible
 - [Docs CFR v2.1 spec rewrite](project_docs_cfr_v21_spec.md) — 04/05 now match v0.99.9 onset-death model; new symbols (p_fatal, xi_j, e_{j,yr}, varphi_j) UNAPPROVED; tau_i builder-vs-shipped provenance gap; medoid uses location 1 only
+- [Priors-estimation review @ v0.99.9](project_priors_estimation_review_v0999.md) — fit_beta_from_ci broken <0.02; seasonal envelope <0 in 25/40; V1/V2 IC ignore phi; zeta_ratio A-vs-C mismatch; est_initial_R rho=0.1 fallback
+- [OCV WHO/GTFCC request dedup (2026-09-30)](project_ocv_who_gtfcc_request_dedup.md) — GTFCC=per-request totals, WHO=per-shipment; ~17M doses double-counted; request-key matching fix; MWI 2018 residual
+- [Priors rebuild prep h2 (2026-09-30)](project_h2_prior_rebuild_prep.md) — E/I VI uniform 10 (derived from chain priors); Harris 2008 row = 127/202 (0.629); sigma prior hardcoded, not table-fit
+- [Docs sync to v0.100.0](project_docs_sync_v0100.md) — notation added (beta_tot, p_beta, omega/gamma^mob), R0_env unchanged under W/N, sigma prior not refit after Harris fix

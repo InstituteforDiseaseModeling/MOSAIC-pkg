@@ -12,4 +12,7 @@
 - [ND / DLinear evidence audit](project_nd_dlinear_evidence_audit.md) — the -13.3% ND win is raw-psi wk1-13 only; it REVERSES on the pre-registered wk9-13 blend estimand. Option, not default.
 - [psi replicate floor is family-specific](reference_psi_replicate_floor_family_specific.md) — LSTM 0.10% vs DLinear 1.59% MAE spread; never certify one family's effect with another's noise floor.
 - [psi A/B cache inventory (dugong)](project_psi_ab_cache_inventory.md) — NO psi_cache is production-configured (run_arm.R pins country_static=off/balance=FALSE); manifests shard-raced to 1-of-10 cutoffs so run_rolling_cv(psi_cache=) errors; sharded refit ~1.6 h wall not 15 h; seasonal baseline dead before 2025-04-01
+- [Auto cutoff trains fabricated zeros (v0.99.9)](project_auto_cutoff_fabricated_zeros.md) — auto fit_date_stop = ENSO end (2027-04) not surveillance end (2026-08); intensity target trains 1,440 NA->0 rows
 - [Default-path target-anchor leak (v0.93 review)](project_default_path_target_anchor_leak.md) — target_anchor_stop only on opt-in v7.4 prefit; v7.3 default CV still leaks (AGO ~9x); cache key unversioned; prefit manifest drops cutoffs
+- [drought_prob leak-fix sign-off (2026-09-30)](project_drought_prob_leakfix_signoff.md) — old GAM = circular spei nowcast (12w-ahead AUC 0.54); new lagged = 0.66; v7.4-only, v7.3 refit unaffected; re-screen v7.4
+- [psi refit v0.100.0 (2026-09-30)](project_psi_refit_v0100.md) — dugong 15.6 min, parallel_seeds=5 needs R_LIBS for separate lib; new vs shipped r~0.19 on 2023+ window; 11.9 MB manifest
