@@ -23,7 +23,7 @@ data, dates, and locations are read from the supplied config."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -134,7 +134,8 @@ Exposed as a seam for testing with a stubbed engine.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A named list with <code>predictions</code> (long data.frame in the standard
-ensemble format), <code>metrics</code> (top-line metrics plus, when
+ensemble format, plus <code>n_locations_observed</code>), <code>metrics</code> (top-line metrics, including the 1-based
+<code>score_idx_cases</code>/<code>score_idx_deaths</code> scored-window starts, plus, when
 <code>full_metrics=TRUE</code>, <code>fit_diagnostics</code> and a merged <code>scorecard</code>),
 <code>params_applied</code> (data.frame of old/new values), and <code>run_label</code>.</p>
     </div>
@@ -145,6 +146,29 @@ Predicted and observed series are aggregated (summed) across the selected
 <code>locations</code> to a single series before scoring, matching the country-level
 diagnostic use case; pass a single index in <code>locations</code> for a per-patch view.
 Full metrics are delegated to <code><a href="calc_fit_diagnostics.html">calc_fit_diagnostics()</a></code>.</p>
+<p>Scoring is paired and windowed the way <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> scores a fit. For each
+day, the scored predicted total sums only the location-days that carry an
+observation, so a location with no surveillance contributes to neither side
+(a day with no observation at any selected location is <code>NA</code>, never 0).
+The leading unscored steps – the default likelihood scored window
+(<code><a href="mosaic_control_defaults.html">mosaic_control_defaults()</a></code> <code>likelihood</code>: <code>burn_in_days</code>, 30 days)
+and, for cases, the two-step initial-condition warm-up – are dropped from
+both series before any metric is computed. A run calibrated with a
+non-default <code>burn_in_days</code>/<code>score_start_cases</code>/<code>deaths_score_start</code>
+is still scored here on the default window.
+The returned <code>predictions</code> use the same pairing but are not windowed:
+on a day where at least one selected location is observed, <code>observed</code>
+and <code>predicted_*</code> are both summed over exactly those observed locations
+(<code>n_locations_observed</code> records how many), so the two columns are always
+comparable; on a day with no observation at any selected location,
+<code>observed</code> is <code>NA</code> and <code>predicted_*</code> is the full aggregate
+over all selected locations. For a single location this is simply its own
+observed and predicted series.</p>
+<p>On a config that predates the v0.96.0 mortality model (it carries any of
+<code>mu_j_baseline</code>, <code>mu_j_epidemic_factor</code>, <code>CFR_target</code>,
+<code>mu_j</code>), the engine uses <code>CFR_target</code> as a constant reported CFR and
+ignores <code>mu_jt</code>, so on such a config a <code>CFR_target</code> override is applied
+and a <code>mu_jt</code> override is skipped with a warning.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

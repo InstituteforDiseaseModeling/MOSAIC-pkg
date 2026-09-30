@@ -23,7 +23,8 @@ calc_bias_ratio(observed, estimated, na_rm = TRUE, finite_only = TRUE)
 
 - na_rm:
 
-  Logical; drop NA pairs. Default `TRUE`.
+  Logical; drop NA pairs. If `FALSE` and any `NA` is present, returns
+  `NA_real_`. Default `TRUE`.
 
 - finite_only:
 

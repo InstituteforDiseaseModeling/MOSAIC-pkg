@@ -11,7 +11,7 @@ through a Monte Carlo simulation approach."><meta property="og:image" content="h
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -104,9 +104,7 @@ available cores. Note: Not supported on Windows.</p></dd>
 
 
 <dt id="arg-variance-inflation">variance_inflation<a class="anchor" aria-label="anchor" href="#arg-variance-inflation"></a></dt>
-<dd><p>Factor to create variance in Beta distributions (default 2).
-Sets ci_lower = mean_val / variance_inflation and ci_upper = mean_val * variance_inflation.
-Values &gt; 1 create wider distributions around the sample mean. Should be &gt; 1.1 for meaningful variance.</p></dd>
+<dd><p>Multiplicative CI factor for the Beta refit (default 2): the Beta keeps the Monte Carlo mean and its spread is fit to the target 95% CI mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be &gt; 1.1 for meaningful variance.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -125,10 +123,20 @@ lookback_days, n_samples, and method.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The method back-calculates true infections from reported cases using the surveillance
-cascade, accounts for reporting delays, and estimates E/I compartments based on
-epidemiological progression rates. Includes comprehensive parameter validation,
-numerical stability protections, and optional parallel processing.</p>
+    <p>The method back-calculates symptom onsets from reported cases through the
+engine's reporting chain and maps them to E/I stocks at t0 (see
+<code><a href="est_initial_E_I_location.html">est_initial_E_I_location</a></code>). Each Monte Carlo draw samples
+<code>sigma</code>, <code>iota</code>, <code>gamma_1</code>, <code>gamma_2</code>, <code>rho</code>,
+<code>chi_endemic</code> and <code>delta_reporting_cases</code> from
+<code>priors$parameters_global</code> (a missing prior is replaced by a fixed
+value with a warning); the parallel and sequential branches run the same
+draw function. Draws with E or I = 0 are kept in the mean. Locations with no
+usable surveillance in the window (no rows, or every case count NA) get the
+near-zero Beta(0.01, 99999.99) template, the same prior as a window that
+reports zero cases throughout: absent surveillance is not evidence of active
+infection at t0, so it never seeds more E/I than confirmed zeros. Locations
+with surveillance but too few usable draws, or an estimation error, get the
+fallback Beta priors (Beta(1, 9999) for E, Beta(0.5, 9999.5) for I).</p>
     </div>
 
     <div class="section level2">

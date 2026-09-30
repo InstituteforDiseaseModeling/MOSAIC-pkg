@@ -55,9 +55,12 @@ est_suitability(
 
 - fit_date_stop:
 
-  Date string or NULL. End date for model fitting period. If NULL,
-  auto-detects from last date with both cholera cases and complete ENSO
-  data.
+  Date string or NULL. End date (inclusive) of the model fitting period.
+  If NULL, auto-detects the last date with both cholera cases and
+  complete ENSO data. With a pre-computed `target_*` `response_var`, a
+  cutoff earlier than the panel's target-anchor window leaks post-cutoff
+  scaling into the targets; lstm_v2 warns when this happens (see
+  **Leakage**).
 
 - pred_date_start:
 
@@ -67,16 +70,22 @@ est_suitability(
 - pred_date_stop:
 
   Date string or NULL. End date for prediction period. If NULL,
-  auto-detects from last date with complete ENSO data.
+  auto-detects from last date with complete ENSO data (lstm_v2: plus
+  `arch_control$lead` weeks when a forecast lead is trained).
 
 - feature_set:
 
-  Named covariate set, shared by both architectures: `"v7.3"` (default;
-  the 38 screening-informed features, see
-  [`MINFEAT_V7_3_FEATURE_SET`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MINFEAT_V7_3_FEATURE_SET.md))
-  or `"default"` (full production candidate set). This is the SOLE
-  public, schema-guarded feature selector. Errors if a `"v7.3"` feature
-  is absent from the suitability CSV (schema-drift guard).
+  Named covariate set: `"v7.3"` (default; the 38 screening-informed
+  features, see
+  [`MINFEAT_V7_3_FEATURE_SET`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MINFEAT_V7_3_FEATURE_SET.md)),
+  `"v7.4"` (v7.3 plus 4 cyclone/drought hazard channels = 42 features,
+  see
+  [`MINFEAT_V7_4_FEATURE_SET`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MINFEAT_V7_4_FEATURE_SET.md);
+  lstm_v2 only, and requires a `source_csv` compiled with the hazard
+  GAMs), or `"default"` (full production candidate set). `"v7.3"` and
+  `"default"` are shared by both architectures. This is the SOLE public,
+  schema-guarded feature selector: errors if a named set's feature is
+  absent from the suitability CSV.
 
 - response_var:
 
@@ -204,11 +213,13 @@ are zero, higher per high-incidence country) plus an optional per-row
 confidence-weight overlay. Training uses expanding-window rolling-origin
 CV (each step validates strictly forward in time with a 4-week embargo,
 early-stopping records `best_epoch`); the model is then refit on the
-full in-sample data at `median(best_epoch)`. `n_seeds` fits are averaged
-on the logit scale to yield the prediction (canonical `psi` column),
-plus seed-dispersion quantiles (diagnostic only, NOT predictive
-intervals). This regime fixes the v0.33 random-split temporal leak that
-collapsed out-of-sample forecasts. Defaults are pinned to the B4
+full in-sample data at `median(best_epoch)`. The `n_seeds` fits are
+combined by the cross-seed MEDIAN on the logit scale (not the mean) to
+yield the prediction (canonical `psi` column), plus seed-dispersion
+quantiles (diagnostic only, NOT predictive intervals). A seed whose fit
+errors is dropped with a warning and the manifest records the seeds
+actually pooled. This regime fixes the v0.33 random-split temporal leak
+that collapsed out-of-sample forecasts. Defaults are pinned to the B4
 fixture; override via `arch_control`.
 
 *Honest framing.* lstm_v2 converts a structurally-collapsed flat psi
@@ -242,6 +253,31 @@ random split places temporally-adjacent weeks on both sides of the
 train/val boundary, so the out-of-sample forecast collapses in amplitude
 – the failure lstm_v2 fixes.
 
+## Leakage
+
+The `"transmission_intensity"` response is re-anchored on training rows
+only (`date <= fit_date_stop`), so any cutoff is leak-free on the target
+side. The pre-computed `target_*` columns (including the default
+`"target_D_rate_per_country_floored"`) arrive scaled by anchors that
+[`compile_suitability_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
+computed over its anchor window – the whole panel unless it was built
+with `target_anchor_stop`. Fitting such a panel at an earlier
+`fit_date_stop` trains (and bias-corrects) on targets scaled by later
+outbreaks, so out-of-sample skill measured from that fit is optimistic;
+lstm_v2 warns when it detects this and records the anchor window end as
+`target_anchor_end` in `psi_suitability_config.json`. The production
+refresh (auto-detected `fit_date_stop` at the end of surveillance) is
+not affected. For a retrospective / forecast-CV psi use
+`response_var = "transmission_intensity"` or a per-cutoff panel compiled
+with `target_anchor_stop`. Covariate climatologies in the panel remain
+full-window (see
+[`compile_suitability_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)).
+The frozen `lstm_v1_legacy` path is never leak-free for a retrospective
+cutoff: it counts unobserved weeks as zero cases and scales its response
+by an anchor over the whole panel. Its numerics are frozen, so it warns
+instead when `fit_date_stop` precedes the last observed surveillance
+week.
+
 ## Migration (reproduce v0.33 production behavior)
 
 The current defaults set `response_var` to
@@ -269,8 +305,11 @@ PATHS <- get_paths()
 # Basic usage with default settings (lstm_v2 hierarchical-FiLM, rolling-CV)
 est_suitability(PATHS)
 
-# Custom date ranges for fitting and prediction
+# Custom date ranges for fitting and prediction. A retrospective cutoff on
+# the canonical (full-window-anchored) panel needs the train-only anchored
+# response to be leak-free (see the Leakage section).
 est_suitability(PATHS,
+               response_var = "transmission_intensity",
                fit_date_start = "2015-01-01",
                fit_date_stop = "2023-12-31",
                pred_date_start = "2020-01-01",

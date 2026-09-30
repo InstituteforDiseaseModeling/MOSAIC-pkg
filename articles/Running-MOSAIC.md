@@ -12,7 +12,9 @@ For running single deterministic simulations, see the **Running
 simulations** vignette.
 
 **Before you begin**: Complete the Installation vignette to set up
-MOSAIC and its dependencies.
+MOSAIC and its dependencies. Calibration is pure R, so the optional
+Python environment is not needed and there is no need to call
+[`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md).
 
 ------------------------------------------------------------------------
 
@@ -22,8 +24,6 @@ MOSAIC and its dependencies.
 
 # Load required packages
 library(MOSAIC)
-
-MOSAIC::attach_mosaic_env(silent = FALSE)
 
 
 # Create output directory and set up logging
@@ -78,8 +78,6 @@ result_ETH <- run_MOSAIC(
 
 # Load required packages
 library(MOSAIC)
-
-MOSAIC::attach_mosaic_env(silent = FALSE)
 
 
 # Create output directory and set up logging
@@ -139,8 +137,6 @@ result_ETH <- run_MOSAIC(
 
 # Load required packages
 library(MOSAIC)
-
-MOSAIC::attach_mosaic_env(silent = FALSE)
 
 # Create output directory and set up logging
 dir_output <- path.expand("~/MOSAIC/output/ETH_KEN")

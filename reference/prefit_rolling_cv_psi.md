@@ -61,7 +61,8 @@ prefit_rolling_cv_psi(
 
 Invisibly, the manifest list (also written to
 `dir_cache/psi_manifest.json`). Side effects: one `psi_<T>.csv` per
-fitted cutoff plus the manifest under `dir_cache`.
+fitted cutoff plus the manifest under `dir_cache`; nothing is written to
+`PATHS$MODEL_INPUT`.
 
 ## Details
 
@@ -83,9 +84,16 @@ fits psi via
 `est_suitability(source_csv = <panel>, feature_set = "v7.4", fit_date_stop = T)`.
 The panel is compiled ONCE per cutoff and reused across the whole
 \\\ge\\10-seed psi ensemble (the 3 GAMs are not refit per seed). When
-v7.4 is not requested the DEFAULT path is byte-unchanged: psi is fit
-from the canonical panel with no `source_csv` and no `gam_train_stop`
-(v1/v7.3 behaviour).
+v7.4 is not requested the DEFAULT path is unchanged: psi is fit from the
+canonical panel with no `source_csv` and no `gam_train_stop` (v1/v7.3
+behaviour). That panel is **not** leak-free: its per-country target
+anchors (for the precomputed `target_*` responses, including the
+default) and the flood-probability GAM behind the `emdat_flood_prob*`
+channels of the default `"v7.3"` feature set were fitted on every row,
+including rows after `T`. The function warns in that case, and the
+manifest entries carry no `hazard_panel = "v7.4_leakfree"` marker, which
+[`run_rolling_cv`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+also warns about.
 
 **Panel-window alignment (v7.4).** The leak-free panel's compile/GAM-fit
 window is deliberately aligned to the psi-LSTM *training* window
@@ -100,11 +108,17 @@ default `"2015-01-01"`) and `date_stop` from the cutoff `T`. This
 resolved window is folded into the cache spec-hash (below) so a panel
 built over a different window cannot be silently reused.
 
-**Atomic cache (concurrency-safe).**
+**Isolated, atomic writes.** Each cutoff's
 [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
-writes a single global `MODEL_INPUT/pred_psi_suitability_day.csv`; this
-function copies that file into `dir_cache/psi_<T>.csv` via a tempfile +
-`file.rename` so a partially-written cache file can never be observed.
+fit runs with `MODEL_INPUT` (and `DOCS_FIGURES`) redirected to a private
+scratch directory, so it never overwrites the canonical
+`PATHS$MODEL_INPUT/pred_psi_suitability_day.csv` that
+`data-raw/make_config_default.R` reads, and concurrent calls sharing one
+`PATHS` cannot pick up each other's psi. The fitted file is copied into
+`dir_cache/psi_<T>.csv` via a tempfile + `file.rename` so a
+partially-written cache file can never be observed. Concurrent calls
+must still use different `dir_cache` directories: the manifest itself is
+not locked.
 
 **Cache key (spec hash).** For each cutoff a `spec_hash` is computed
 over `list(fit_date_stop = T, est_suitability_spec)` where the resolved
@@ -119,8 +133,13 @@ recomputes the same hash from its own `est_suitability_spec` and
 **hard-errors** on a mismatch.
 
 **Idempotent / resume.** A cutoff is skipped when its `psi_<T>.csv`
-exists and the manifest already records a matching `spec_hash` for that
-cutoff; rerunning therefore only fits the missing/changed cutoffs.
+exists and the manifest already records a matching `spec_hash` and the
+same prediction window for that cutoff; rerunning therefore only fits
+the missing/changed cutoffs. The cache can be extended over several
+calls: the manifest keeps every previously frozen cutoff, not only those
+in the current call. Each entry records its own
+`pred_date_start`/`pred_date_stop`; the top-level values describe the
+most recent call.
 
 ## See also
 

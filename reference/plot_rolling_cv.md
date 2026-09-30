@@ -53,7 +53,7 @@ plot_rolling_cv(
 - horizon_max_months:
 
   Max assessed horizon in months; right edge of each panel relative to
-  its cutoff (default 5).
+  its scoring origin (default 5).
 
 - context_months:
 
@@ -150,12 +150,16 @@ Invisibly, a list with:
 
 **Horizon truncation.** The compiled artifact stores the full OOS path
 to `window_stop` regardless of cutoff, so an early cutoff appears to
-forecast years ahead. This function clips each panel to
-`[cutoff - context_months, cutoff + horizon_max_months]` so the plotted
-window equals the scored window. Scoring in
+forecast years ahead.
 [`evaluate_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_rolling_cv.md)
-is already restricted to cumulative \\\le h\\-month windows, so this is
-a display change only.
+scores the dates strictly after the scoring origin – the later of the
+cutoff and the last `segment == "embargo"` date – up to origin +
+`horizon_max_months`. This function clips each panel to
+`[cutoff - context_months, origin + horizon_max_months]` and shades
+`(origin, origin + horizon_max_months]`, so the shaded region is the
+scored window; any harness embargo sits unshaded between the dashed
+cutoff rule and the band. The skill annotation is computed on the
+unclipped series.
 
 **Styling.** Uses
 [`theme_mosaic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/theme_mosaic.md)

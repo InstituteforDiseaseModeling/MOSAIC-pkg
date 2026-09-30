@@ -76,8 +76,8 @@ calc_log_likelihood(
 
 ## Value
 
-The total log-likelihood (scalar) for most families, or (in the case of
-Normal) a list with `log_likelihood`, `sigma`, `shapiro_p`.
+The total log-likelihood as a numeric scalar, for every family
+(including Normal); `NA_real_` where the sub-function cannot score.
 
 ## Details
 

@@ -17,7 +17,7 @@ tick, in the same phase, at the same site.'><meta property="og:image" content="h
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,7 +65,7 @@ tick, in the same phase, at the same site.</p>
 
 <p>A simulation's output is determined solely by its <code>seed</code> and
 <code>config</code> – never by worker identity, batch position, or how much
-randomness was consumed earlier in the session. <code>.sim_rng_state()</code>
+randomness was consumed earlier in the session. <code><a href="dot-sim_rng_begin.html">.sim_rng_begin()</a></code>
 establishes an isolated stream and returns everything needed to restore the
 caller's <code>.Random.seed</code> afterwards, so calling the engine never
 perturbs the caller's stream.</p>

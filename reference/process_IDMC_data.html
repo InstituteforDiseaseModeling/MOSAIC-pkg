@@ -15,7 +15,7 @@ compile_suitability_data()."><meta property="og:image" content="https://institut
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -125,6 +125,11 @@ flood/storm-mediated and therefore partly collinear with the EM-DAT
 hazard covariates, whereas conflict-driven displacement is an
 independent signal (WASH collapse, camp formation, care-seeking
 disruption) with no EM-DAT analogue.</p>
+<p>Only rows with <code>role == "Recommended figure"</code> are used; IDU
+<code>"Triangulation"</code> rows are alternative estimates of displacement the
+recommended rows already count (IDMC totals use recommended figures only),
+so including them would double-count. Rows from extracts without a
+<code>role</code> column are kept.</p>
 <p>Each event is expanded across the ISO-weeks its
 <code>displacement_start_date</code>:<code>displacement_end_date</code> range touches.
 Records missing a start date are dropped; a missing or earlier end date is

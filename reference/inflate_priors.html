@@ -23,7 +23,7 @@ variance tempering in the Sequential Monte Carlo literature (Liu &amp;amp; West
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,8 +98,8 @@ When <code>NULL</code> all non-fixed/frozen parameters are inflated.</p></dd>
 
 
 <dt id="arg-n-samples">n_samples<a class="anchor" aria-label="anchor" href="#arg-n-samples"></a></dt>
-<dd><p>Integer. Number of samples for empirical fallback methods
-(truncnorm fallback, gompertz). Default 10000L.</p></dd>
+<dd><p>Integer. Number of samples for the empirical methods
+(gompertz and unrecognised distributions). Default 10000L.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -127,7 +127,9 @@ Maximum inflatable factor is <code>f_max = s+1</code>.</p></dd>
 adjusted to preserve natural-scale mean.</p></dd>
 
 <dt>lognormal(mean, sd)</dt>
-<dd><p><code>sd_new = sqrt(f)*sd</code>.</p></dd>
+<dd><p><code>sd_new = sqrt(f)*sd</code>. For either
+lognormal form, truncation bounds <code>lower</code>/<code>upper</code> are kept and
+apply to the inflated distribution.</p></dd>
 
 <dt>normal(mean, sd)</dt>
 <dd><p><code>sd_new = sqrt(f)*sd</code>.</p></dd>
@@ -136,11 +138,12 @@ adjusted to preserve natural-scale mean.</p></dd>
 <dd><p>Bounds extended symmetrically around midpoint.
 Skipped with a warning if new bounds violate positivity.</p></dd>
 
-
-</dl><p><strong>Analytic with empirical fallback:</strong></p><dl><dt>truncnorm(mean, sd, a, b)</dt>
-<dd><p>Root-finding preserves actual truncated
-mean. Due to active bounds, the achieved variance ratio may be less than
-<code>inflation_factor</code>. Falls back to empirical refit if root-find fails.</p></dd>
+<dt>truncnorm(mean, sd, a, b)</dt>
+<dd><p><code>sd_new = sqrt(f)*sd</code>; the
+pre-truncation <code>mean</code> and the bounds <code>a</code>, <code>b</code> are left
+unchanged, so the underlying normal is inflated exactly. When a bound is
+active the truncated distribution's mean shifts (towards the midpoint of
+the bounds) and its variance grows by less than <code>inflation_factor</code>.</p></dd>
 
 
 </dl><p><strong>Empirical (sample → inflate → refit):</strong></p><dl><dt>gompertz(b, eta)</dt>

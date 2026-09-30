@@ -4,16 +4,32 @@ likelihood) and selects the N that maximizes prediction quality. Produces a
 separate mosaic_ensemble object at the optimal subset size, leaving the
 original ensemble untouched.
 For each candidate size N (from min_n to the full ensemble), the
-function re-computes Gibbs weights within the top-N subset, re-computes
-weighted median predictions from the 4D arrays, and scores with the selected
-objective function."><meta property="og:description" content="Post-ensemble optimization that evaluates top-N subsets (ranked by
+function re-computes the best-subset weights within the top-N subset,
+re-computes weighted median predictions from the 4D arrays, and scores with
+the selected objective function.
+The per-N weights use the same scheme as the weight_best posterior
+that run_MOSAIC() builds the candidate ensemble from (by default
+\(w \propto \exp(-0.5 \min(\Delta, 4))\) with
+\(\Delta = -2(\ell - \max \ell)\) within the top N).
+So at N = the full ensemble the weights, and therefore
+diagnostics_score, reproduce the candidate ensemble, and any score
+change reported for a smaller N is due to the subset, not to a change of
+weighting scheme."><meta property="og:description" content="Post-ensemble optimization that evaluates top-N subsets (ranked by
 likelihood) and selects the N that maximizes prediction quality. Produces a
 separate mosaic_ensemble object at the optimal subset size, leaving the
 original ensemble untouched.
 For each candidate size N (from min_n to the full ensemble), the
-function re-computes Gibbs weights within the top-N subset, re-computes
-weighted median predictions from the 4D arrays, and scores with the selected
-objective function."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
+function re-computes the best-subset weights within the top-N subset,
+re-computes weighted median predictions from the 4D arrays, and scores with
+the selected objective function.
+The per-N weights use the same scheme as the weight_best posterior
+that run_MOSAIC() builds the candidate ensemble from (by default
+\(w \propto \exp(-0.5 \min(\Delta, 4))\) with
+\(\Delta = -2(\ell - \max \ell)\) within the top N).
+So at N = the full ensemble the weights, and therefore
+diagnostics_score, reproduce the candidate ensemble, and any score
+change reported for a smaller N is due to the subset, not to a change of
+weighting scheme."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -21,7 +37,7 @@ objective function."><meta property="og:image" content="https://institutefordise
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,9 +75,17 @@ likelihood) and selects the N that maximizes prediction quality. Produces a
 separate <code>mosaic_ensemble</code> object at the optimal subset size, leaving the
 original ensemble untouched.</p>
 <p>For each candidate size N (from <code>min_n</code> to the full ensemble), the
-function re-computes Gibbs weights within the top-N subset, re-computes
-weighted median predictions from the 4D arrays, and scores with the selected
-objective function.</p>
+function re-computes the best-subset weights within the top-N subset,
+re-computes weighted median predictions from the 4D arrays, and scores with
+the selected objective function.</p>
+<p>The per-N weights use the same scheme as the <code>weight_best</code> posterior
+that <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> builds the candidate ensemble from (by default
+\(w \propto \exp(-0.5 \min(\Delta, 4))\) with
+\(\Delta = -2(\ell - \max \ell)\) within the top N).
+So at N = the full ensemble the weights, and therefore
+<code>diagnostics_score</code>, reproduce the candidate ensemble, and any score
+change reported for a smaller N is due to the subset, not to a change of
+weighting scheme.</p>
     </div>
 
     <div class="section level2">
@@ -75,6 +99,8 @@ objective function.</p>
 <span>  central_method <span class="op">=</span> <span class="st">"median"</span>,</span>
 <span>  stride <span class="op">=</span> <span class="fl">1L</span>,</span>
 <span>  cl <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  weighting <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"saturated"</span>, <span class="st">"tempered"</span><span class="op">)</span>,</span>
+<span>  ess_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"kish"</span>, <span class="st">"perplexity"</span><span class="op">)</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -151,6 +177,14 @@ in the pipeline). For trivially small problems the function falls back to
 serial regardless of <code>cl</code>.</p></dd>
 
 
+<dt id="arg-weighting">weighting<a class="anchor" aria-label="anchor" href="#arg-weighting"></a></dt>
+<dd><p>Best-subset weighting scheme for the per-N weights, matching <code>control$targets$best_subset_weighting</code> (the scheme of <code>weight_best</code>): <code>"saturated"</code> (default) or <code>"tempered"</code>.</p></dd>
+
+
+<dt id="arg-ess-method">ess_method<a class="anchor" aria-label="anchor" href="#arg-ess-method"></a></dt>
+<dd><p>ESS formula for <code>evaluation_table$ess</code>: <code>"kish"</code> (default) or <code>"perplexity"</code>.</p></dd>
+
+
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Logical; if <code>TRUE</code>, emit progress messages.</p></dd>
 
@@ -169,7 +203,7 @@ N, not every N in <code>min_n:max_n</code>.</p></dd>
 <dd><p>Score at optimal N.</p></dd>
 
 <dt>optimal_weights</dt>
-<dd><p>Re-computed Gibbs weights for the optimal subset.</p></dd>
+<dd><p>Re-computed best-subset weights for the optimal subset.</p></dd>
 
 <dt>optimal_indices</dt>
 <dd><p>Integer indices into the original ensemble arrays.</p></dd>

@@ -16,4 +16,5 @@ sim_draw_coverage(ctl)
 
 ## Value
 
-Data frame of `site` and `n_calls`, all 22 sites present.
+Data frame of `site` and `n_calls`, one row per entry of
+`.SIM_DRAW_SITES` (sites never drawn report 0).

@@ -4,8 +4,7 @@ Simulates the metapopulation SEIR model over the configured window and
 returns the result channels. This is the package's only engine entry
 point: there is deliberately no `engine =` switch, because there is only
 one engine. Prior to v0.68.0 this function was a reticulate bridge to
-the Python `laser-cholera` package; it is now pure R and the two agree
-to the tolerances recorded in `tests/testthat/fixtures/ORACLE.md`.
+the Python `laser-cholera` package; it is now pure R.
 
 ## Usage
 
@@ -67,9 +66,30 @@ run_simulation(
 
 ## Value
 
-A list with `params` (the normalised config), `results` (the 28 result
-channels as `[patch, time]` matrices, except `pi_ij` and `coupling`
-which are `[patch, patch]`) and `seed`.
+A list with `params` (the config as supplied; a file path is parsed),
+`results` (the 28 result channels as `[patch, time]` matrices, except
+`pi_ij` and `coupling` which are `[patch, patch]`) and `seed`.
+
+## Relationship to laser-cholera
+
+Only `rng = "replay"` (the parity test mode) reproduces `laser-cholera`
+0.16.1, to the tolerances recorded in
+`tests/testthat/fixtures/ORACLE.md`. The default `"rng"` mode, which
+every production run uses, deliberately follows the model specification
+where the Python engine departed from it, so its output is not certified
+against `laser-cholera` and is not expected to match it:
+
+- the symptomatic split of new infections, and of `I_j_initial` at t =
+  0, is a binomial draw rather than `round(sigma * n)` (v0.89.0);
+
+- the environmental dose-response uses the per-capita dose \\W/N\\
+  rather than the absolute reservoir \\W\\ (v0.89.0);
+
+- each symptomatic onset's fate is drawn at onset from the reported CFR
+  `mu_jt`, and deaths are reported on the case lag
+  (`delta_reporting_deaths` is not used) (v0.96.0).
+
+The internal `.SIM_RNG_ONLY_CORRECTIONS` registry lists these.
 
 ## Examples
 

@@ -9,7 +9,7 @@ that best matches a given mode and 95% confidence intervals."><meta property="og
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -92,6 +92,24 @@ that best matches a given mode and 95% confidence intervals.</p>
 <li><p>input_mode: The input mode value</p></li>
 <li><p>input_ci: The input confidence interval</p></li>
 </ul></div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p><code>"moment_matching"</code> (default) keeps the mode exact: every Beta with
+both shapes above 1 and mode \(m\) is \(\mathrm{Beta}(1 + mk, 1 + (1 - m)k)\)
+for some concentration \(k &gt; 0\), and \(k\) is chosen to minimise the
+squared error of the fitted 2.5% and 97.5% quantiles against the CI on the
+logit scale. Logit-scale errors are relative errors for small proportions, so
+a CI around 1e-6 is matched as closely as one around 0.5. When the CI is
+wider than any unimodal Beta with that mode allows, the widest achievable
+interval is returned. Because errors are relative, a bound far outside what
+a Beta with this mode can reach (for example a lower bound clamped to 1e-10
+after a linear widening) dominates the fit and pulls the mean up; pass a CI
+the family can represent, or refit samples by their moments instead.
+<code>mode_val</code> is a mode: to anchor a mean, use a mean-based fit.</p>
+<p><code>"optimization"</code> fits both shapes freely to the mode and the two
+quantiles (all on the logit scale, mode weighted 100x), so the mode is matched
+closely but not exactly.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
@@ -101,26 +119,26 @@ that best matches a given mode and 95% confidence intervals.</p>
 <span class="r-in"><span>                            ci_upper <span class="op">=</span> <span class="fl">0.822</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $shape1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 446.3372</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 419.8812</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $shape2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 120.8115</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 113.6939</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $fitted_mode</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.788</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $fitted_mean</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.7869844</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.7869205</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $fitted_var</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.0002950635</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.0003136633</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $fitted_sd</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.01717741</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.01771054</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $fitted_ci</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     lower     upper </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 0.7523816 0.8196704 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 0.7512149 0.8205891 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $input_mode</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.788</span>

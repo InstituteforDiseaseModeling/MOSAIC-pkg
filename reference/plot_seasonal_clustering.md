@@ -12,7 +12,7 @@ plot_seasonal_clustering(
   PATHS,
   use_cases = FALSE,
   set_inferred_to_na = TRUE,
-  clustering_method = "hierarchical",
+  clustering_method = c("ward.D2", "kmeans", "dbscan", "knn"),
   k = 4
 )
 ```
@@ -48,9 +48,9 @@ plot_seasonal_clustering(
 
 - clustering_method:
 
-  A character string specifying the clustering method. Options are
-  `"kmeans"`, `"ward.D2"`, `"dbscan"`, or `"knn"`. Default is
-  `"ward.D2"` for hierarchical clustering.
+  A character string specifying the clustering method. One of
+  `"ward.D2"` (hierarchical, the default), `"kmeans"`, `"dbscan"`, or
+  `"knn"`.
 
 - k:
 

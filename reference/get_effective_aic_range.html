@@ -9,7 +9,7 @@ using a continuous relationship based on log odds ratio."><meta property="og:ima
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,7 +72,12 @@ Based on their interpretation:</p><ul><li><p>1% → Δ AIC &lt; 2 (substantial s
 <li><p>5% → Δ AIC ≈ 4 (boundary of substantial/less support)</p></li>
 <li><p>10% → Δ AIC ≈ 7 (upper end of "considerably less support")</p></li>
 <li><p>20% → Δ AIC ≈ 10 (boundary to "essentially no support")</p></li>
-</ul></div>
+</ul><p>This heuristic is used only by <code><a href="plot_effective_range.html">plot_effective_range</a></code>. It does
+not drive calibration weighting: <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code>,
+<code><a href="grid_search_best_subset.html">grid_search_best_subset</a></code> and
+<code><a href="optimize_ensemble_subset.html">optimize_ensemble_subset</a></code> saturate \(\Delta\) AIC at a fixed
+4 for the best subset regardless of the subset's percentile.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>

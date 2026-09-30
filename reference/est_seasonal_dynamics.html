@@ -11,7 +11,7 @@ Weekly data is expanded by assigning each weekly value to every day in that week
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,7 +59,8 @@ Weekly data is expanded by assigning each weekly value to every day in that week
 <span>  <span class="va">clustering_method</span>,</span>
 <span>  <span class="va">k</span>,</span>
 <span>  exclude_iso_codes <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  data_sources <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"WHO"</span>, <span class="st">"JHU"</span>, <span class="st">"SUPP"</span><span class="op">)</span></span>
+<span>  data_sources <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"WHO"</span>, <span class="st">"JHU"</span>, <span class="st">"SUPP"</span><span class="op">)</span>,</span>
+<span>  envelope_floor <span class="op">=</span> <span class="fl">0.1</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -98,10 +99,43 @@ Weekly data is expanded by assigning each weekly value to every day in that week
 <dt id="arg-data-sources">data_sources<a class="anchor" aria-label="anchor" href="#arg-data-sources"></a></dt>
 <dd><p>Character vector of data sources to include. Default is c('WHO', 'JHU', 'SUPP').</p></dd>
 
+
+<dt id="arg-envelope-floor">envelope_floor<a class="anchor" aria-label="anchor" href="#arg-envelope-floor"></a></dt>
+<dd><p>Minimum allowed value of the human-transmission envelope 1 + f(t) over the year (default 0.1); case-fit coefficients whose envelope dips lower are shrunk towards zero.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Saves daily fitted values and parameter estimates to CSV.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p><strong>Phase convention.</strong> The coefficients are fit against calendar
+day-of-year (<code><a href="https://lubridate.tidyverse.org/reference/day.html" class="external-link">lubridate::yday()</a></code>, t = 1 is 1 January) with
+<code>p = 365</code>. The engine (<code><a href="sim_beta_jt_human.html">sim_beta_jt_human()</a></code>) evaluates the
+envelope at the day-of-year of each simulated day, so the coefficients keep
+this meaning whatever the simulation <code>date_start</code>.</p>
+<p><strong>Weekly alignment.</strong> Precipitation is summed over the same ISO weeks
+(Monday to Sunday) as the weekly surveillance file and merged on the week's
+start date; weeks with fewer than 7 days of precipitation at the edges of the
+window are dropped.</p>
+<p><strong>Positivity of the envelope.</strong> The engine uses the case-fit
+coefficients as a multiplicative modulation of the mean human transmission
+rate, <code>beta_j0_hum * (1 + f(t))</code>. A Fourier fit to affine-normalised
+weekly cases has no such constraint and can dip below -1, which the engine
+clamps to zero transmission for weeks at a time. Multiplicative seasonal
+forcing requires the envelope to stay positive (amplitude below 1 in
+<code>beta(t) = beta0 (1 + beta1 cos(wt))</code>; Keeling &amp; Rohani 2008,
+<em>Modeling Infectious Diseases in Humans and Animals</em>, section 5.2;
+King et al. 2008, <em>Nature</em> 454:877, fit cholera seasonality on the log
+scale for the same reason). When <code>min_t(1 + f(t)) &lt; envelope_floor</code>
+the four case coefficients (and their SE and CI) are multiplied by the single
+factor <code>(1 - envelope_floor) / -min_t f(t)</code>, which keeps the fitted
+phase and the relative shape of the season and lowers only its amplitude.
+The factor applied is recorded in the <code>envelope_scale</code> column
+(1 = unchanged). <code>envelope_floor</code> is a numerical positivity margin, not
+an estimated trough: it leaves room for prior draws around the mean
+(make_priors_default widens the SE) without crossing zero.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

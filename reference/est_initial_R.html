@@ -11,7 +11,7 @@ with natural immunity from previous cholera infection, subject to waning immunit
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -89,7 +89,7 @@ with natural immunity from previous cholera infection, subject to waning immunit
 
 
 <dt id="arg-disaggregate">disaggregate<a class="anchor" aria-label="anchor" href="#arg-disaggregate"></a></dt>
-<dd><p>Logical, whether to use Fourier disaggregation (TRUE) or mid-year point estimate (FALSE)</p></dd>
+<dd><p>Logical, whether to spread each year's cases over the year with the location's seasonal priors (<code>priors$parameters_location$a_1_j</code>, <code>b_1_j</code>, <code>a_2_j</code>, <code>b_2_j</code>; TRUE) or place them at mid-year (FALSE)</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -102,13 +102,27 @@ Uses parallel::mclapply() with all available cores. Note: Not supported on Windo
 
 
 <dt id="arg-variance-inflation">variance_inflation<a class="anchor" aria-label="anchor" href="#arg-variance-inflation"></a></dt>
-<dd><p>Numeric factor to inflate variance of fitted Beta distributions (default 1 = no inflation).
-Values &gt; 1 increase uncertainty while preserving the mean. For example, 2 doubles the variance.</p></dd>
+<dd><p>Multiplier on the SD of the Monte Carlo R/N samples in the method-of-moments Beta refit, which keeps the sample mean (default 1 = no change; 0 is also treated as no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>List with structure matching priors_default for prop_R_initial parameters</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p><strong>Reporting chain.</strong> Reported cases are converted to infections through
+the engine's observation process: the engine reports
+<code>Binomial(new_symptomatic, rho) / chi</code> (<code>sim_components.R</code>), so
+infections = cases * chi / (rho * sigma), with <code>rho</code> and
+<code>chi_endemic</code> drawn from the global priors. Before v0.100.0 those
+lookups never resolved and every draw used the hardcoded fallbacks rho = 0.1,
+chi = 0.5 (chi / rho = 5). At priors_default v16.1 (rho ~ Beta(5.38, 7.10),
+chi_endemic ~ Beta(5.43, 5.01)) \(E[chi/rho] \approx 1.36\), so the
+infection multiplier, and with it the prop_R_initial mean, is about 3.7x
+lower than before, with S correspondingly higher through the simplex
+residual. The IC is now consistent with the observation model the
+calibration samples.</p>
     </div>
 
     <div class="section level2">

@@ -13,7 +13,7 @@ process_IDMC_data."><meta property="og:image" content="https://institutefordisea
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -89,9 +89,7 @@ Licence: CC BY-IGO. Cite IDMC.</p>
 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
-<dd><p>If <code>FALSE</code> (default) and today's snapshot directory
-already exists with files in it, the download is skipped and the existing
-snapshot is reported. Set <code>TRUE</code> to re-download.</p></dd>
+<dd><p>If <code>FALSE</code> (default), a complete snapshot for <code>snapshot_date</code> is reported without downloading and a partial one is topped up (existing files kept). <code>TRUE</code> re-downloads every country.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -127,7 +125,11 @@ provisional</em> product: records age out and figures are revised. Snapshots are
 therefore written to a dated subdirectory and never overwritten in place,
 mirroring the EM-DAT and WHO-dashboard conventions elsewhere in MOSAIC.
 <code><a href="process_IDMC_data.html">process_IDMC_data()</a></code> reads whichever directory it is pointed at, so
-pass <code>source_dir</code> to reprocess a historical snapshot.</p>
+pass <code>source_dir</code> to reprocess a historical snapshot. Each run writes a
+<code>MANIFEST.tsv</code> completion record into the snapshot (per-country
+<code>ok</code>/<code>note</code>) and appends a row to <code>raw/IDMC/PROVENANCE.md</code>; the
+automatic resolver in <code><a href="process_IDMC_data.html">process_IDMC_data()</a></code> skips snapshots whose
+manifest records a failed download.</p>
 <p><strong>Coverage.</strong> As of 2026-09-17, 38 of the 40 MOSAIC countries have an
 HDX IDU dataset; <strong>ERI and TGO have none</strong>. Most series begin
 2025-01-01 (KEN is a notable exception, reaching back to 2011). Zero cells

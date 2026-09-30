@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -146,6 +146,7 @@ growth patterns typical of cholera epidemics.</p>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/grDevices/dev.html" class="external-link">dev.off</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Saved: figures/running_mosaic_epidemic.png\n"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="figures/running_mosaic_epidemic.png" class="r-plt" alt="" width="90%" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level3">
 <h3 id="endemic-scenario">Endemic Scenario<a class="anchor" aria-label="anchor" href="#endemic-scenario"></a>
@@ -190,6 +191,7 @@ patterns with seasonal fluctuations.</p>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/grDevices/dev.html" class="external-link">dev.off</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Saved: figures/running_mosaic_endemic.png\n"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="figures/running_mosaic_endemic.png" class="r-plt" alt="" width="90%" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level3">
 <h3 id="running-simulations-for-multiple-locations">Running simulations for multiple locations<a class="anchor" aria-label="anchor" href="#running-simulations-for-multiple-locations"></a>
@@ -197,7 +199,7 @@ patterns with seasonal fluctuations.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">iso_codes</span> <span class="op">&lt;-</span> <span class="va">iso_codes_mosaic</span><span class="op">[</span><span class="va">iso_codes_mosaic</span> <span class="op">!=</span> <span class="st">'SSD'</span><span class="op">]</span> <span class="co"># Current bug with SSD vaccination data</span></span>
+<span><span class="va">iso_codes</span> <span class="op">&lt;-</span> <span class="va">iso_codes_mosaic</span></span>
 <span></span>
 <span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span>iso <span class="op">=</span> <span class="va">iso_codes</span><span class="op">)</span></span>
 <span><span class="va">config</span><span class="op">$</span><span class="va">beta_j0_hum</span> <span class="op">&lt;-</span> <span class="va">config</span><span class="op">$</span><span class="va">beta_j0_hum</span><span class="op">*</span><span class="fl">2</span></span>
@@ -226,6 +228,7 @@ patterns with seasonal fluctuations.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/mtext.html" class="external-link">mtext</a></span><span class="op">(</span><span class="st">"Reported Cases by Location"</span>, side <span class="op">=</span> <span class="fl">3</span>, outer <span class="op">=</span> <span class="cn">TRUE</span>, line <span class="op">=</span> <span class="fl">0.5</span>, font <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/grDevices/dev.html" class="external-link">dev.off</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Saved: figures/multi_location_grid.png\n"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="figures/multi_location_grid.png" class="r-plt" alt="" width="100%" style="display: block; margin: auto;"></p>
 <hr>
 </div>
 </div>

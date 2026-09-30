@@ -9,7 +9,7 @@ The extracted legend can then be used independently, for instance, to combine th
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,13 +61,18 @@ The extracted legend can then be used independently, for instance, to combine th
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A grob representing the legend of the ggplot object.</p>
+    <p>A grob representing the legend of the ggplot object, or an empty
+<code><a href="https://rdrr.io/r/grid/grid.null.html" class="external-link">grid::nullGrob()</a></code> when the plot has no legend (e.g. a mapped layer with
+no rows, such as a single-location flux network), so the result can always
+be passed to <code><a href="https://rdrr.io/pkg/gridExtra/man/arrangeGrob.html" class="external-link">gridExtra::grid.arrange()</a></code> or <code><a href="https://wilkelab.org/cowplot/reference/plot_grid.html" class="external-link">cowplot::plot_grid()</a></code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>This function converts a ggplot object into a grob using <strong><code>ggplotGrob()</code></strong> and
-extracts the legend, which is stored in the grob under the name "guide-box". The function
-can be used to separate the legend from the plot and combine it with other plots as needed.</p>
+extracts the legend. ggplot2 &gt;= 3.5 lays out one guide-box slot per position
+(<code>"guide-box-right"</code>, <code>"guide-box-bottom"</code>, ...), leaving empty slots
+as zero grobs; the first non-empty slot is returned, and the single
+<code>"guide-box"</code> grob of older ggplot2 versions is matched too.</p>
     </div>
 
     <div class="section level2">

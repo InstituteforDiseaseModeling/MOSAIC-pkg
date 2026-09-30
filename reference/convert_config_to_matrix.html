@@ -11,7 +11,7 @@ workflows where parameters need to be stored efficiently in pre-allocated matric
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -103,10 +103,9 @@ a numeric vector while maintaining the same naming convention.</p>
 <span class="r-in"><span><span class="va">results_matrix</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="cn">NA_real_</span>, nrow <span class="op">=</span> <span class="va">n_sim</span>, ncol <span class="op">=</span> <span class="fl">4</span> <span class="op">+</span> <span class="va">n_params</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">results_matrix</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">5</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">results_matrix</span><span class="op">)</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">vec_params</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Compare with dataframe approach (slower)</span></span></span>
+<span class="r-in"><span><span class="co"># Compare with dataframe approach (slower); same columns, same order</span></span></span>
 <span class="r-in"><span><span class="va">df_params</span> <span class="op">&lt;-</span> <span class="fu"><a href="convert_config_to_dataframe.html">convert_config_to_dataframe</a></span><span class="op">(</span><span class="va">config_sampled</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">vec_params_slow</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">df_params</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/all.equal.html" class="external-link">all.equal</a></span><span class="op">(</span><span class="va">vec_params</span>, <span class="va">vec_params_slow</span><span class="op">)</span>  <span class="co"># Should be TRUE</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/all.equal.html" class="external-link">all.equal</a></span><span class="op">(</span><span class="va">vec_params</span>, <span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="va">df_params</span><span class="op">)</span><span class="op">)</span>  <span class="co"># TRUE</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

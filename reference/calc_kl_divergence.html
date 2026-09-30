@@ -11,7 +11,7 @@ how one probability distribution diverges from a reference distribution."><meta 
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -93,31 +93,39 @@ same length as <code>samples2</code>. If NULL, uniform weights are used.</p></dd
 
 
 <dt id="arg-n-points">n_points<a class="anchor" aria-label="anchor" href="#arg-n-points"></a></dt>
-<dd><p>Integer specifying the number of points for kernel density
-estimation. Higher values provide more accurate estimates but require more
-computation. Default is 1000.</p></dd>
+<dd><p>Integer minimum number of grid points over the support of <code>samples1</code> (default 1000); the grid is refined further when needed to resolve the P bandwidth.</p></dd>
 
 
 <dt id="arg-eps">eps<a class="anchor" aria-label="anchor" href="#arg-eps"></a></dt>
-<dd><p>Numeric value for numerical stability. Small positive value added
-to densities to avoid log(0). Default is 1e-10.</p></dd>
+<dd><p>Numeric floor applied to the Q density before taking logs (default 1e-10).</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A non-negative numeric value representing the KL divergence.
 Returns 0 when the distributions are identical, and larger values
-indicate greater divergence.</p>
+indicate greater divergence. Returns <code>NA</code> with a warning when either
+weight vector has Kish effective sample size below 2 (the KDE bandwidth
+is then undefined).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The KL divergence KL(P||Q) is calculated as:
-$$KL(P||Q) = \sum_i P(x_i) \log(P(x_i) / Q(x_i))$$</p>
+$$KL(P||Q) = \int p(x) \log(p(x) / q(x)) dx$$</p>
 <p>where P represents the distribution from <code>samples1</code> and Q represents
 the distribution from <code>samples2</code>.</p>
-<p>The function uses weighted kernel density estimation to approximate the
-continuous distributions from the discrete samples, then evaluates the
-KL divergence using numerical integration.</p>
+<p>Both densities are weighted kernel density estimates whose bandwidths use
+the weighted Silverman rule with the Kish effective sample size
+\(n_{eff} = (\sum w)^2 / \sum w^2\), so a concentrated weight vector
+yields a narrow density even when the draws are spread out (with equal
+weights this is <code><a href="https://rdrr.io/r/stats/bandwidth.html" class="external-link">stats::bw.nrd0()</a></code>). The integral
+\(\int p \log(p/q)\) is evaluated by the trapezoidal rule on a grid over
+the support of P only (where the integrand is non-zero), with Q interpolated
+from a full-range KDE, so the value does not level off at
+<code>log(n_points)</code> when P is much narrower than Q.</p>
+<p>Before v0.100.0 both densities used unweighted bandwidths on one grid over
+the pooled range and the densities were renormalised as discrete
+probabilities, so a narrow P saturated near <code>log(n_points)</code>.</p>
 <p>Note that KL divergence is not symmetric: KL(P||Q) ≠ KL(Q||P).</p>
     </div>
 
@@ -129,7 +137,7 @@ KL divergence using numerical integration.</p>
 <span class="r-in"><span><span class="va">samples2</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">1000</span>, mean <span class="op">=</span> <span class="fl">0.5</span>, sd <span class="op">=</span> <span class="fl">1.2</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">kl_div</span> <span class="op">&lt;-</span> <span class="fu">calc_kl_divergence</span><span class="op">(</span><span class="va">samples1</span>, <span class="cn">NULL</span>, <span class="va">samples2</span>, <span class="cn">NULL</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"KL divergence:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">kl_div</span>, <span class="fl">4</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "KL divergence: 0.1338"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "KL divergence: 0.1353"</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Example 2: Using weighted samples</span></span></span>
 <span class="r-in"><span><span class="va">samples1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">500</span><span class="op">)</span></span></span>

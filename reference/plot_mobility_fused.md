@@ -55,8 +55,9 @@ Invisibly, a character vector of the files written.
 
 - `fused_od_3_tau_prior.png`:
 
-  Daily departure probability, air fit vs overland prior with 95%
-  intervals, log scale.
+  Daily departure probability, air fit vs overland prior (the rake
+  target) with 95% intervals, log scale. Read from the unsuffixed prior
+  files, so `suffix` does not affect it.
 
 - `fused_od_4_corridors.png`:
 

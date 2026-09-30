@@ -3,14 +3,14 @@
 It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
 The file extension determines which output format is used:
 .json or .json.gz → written with write_list_to_json,
-.h5, or .h5.gz → written with write_list_to_hdf5,
+.h5, .hdf5, .h5.gz or .hdf5.gz → written with write_list_to_hdf5,
 .yaml or .yaml.gz → written with write_list_to_yaml.
 
 "><meta property="og:description" content="This function generates a JSON/HDF5/YAML configuration file to be used as transmission model simulation parameters.
 It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
 The file extension determines which output format is used:
 .json or .json.gz → written with write_list_to_json,
-.h5, or .h5.gz → written with write_list_to_hdf5,
+.h5, .hdf5, .h5.gz or .hdf5.gz → written with write_list_to_hdf5,
 .yaml or .yaml.gz → written with write_list_to_yaml.
 
 "><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
@@ -21,7 +21,7 @@ The file extension determines which output format is used:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,7 @@ The file extension determines which output format is used:
     <p>This function generates a JSON/HDF5/YAML configuration file to be used as transmission model simulation parameters.
 It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
 The file extension determines which output format is used:</p><ul><li><p>.json or .json.gz → written with write_list_to_json,</p></li>
-<li><p>.h5, or .h5.gz → written with write_list_to_hdf5,</p></li>
+<li><p>.h5, .hdf5, .h5.gz or .hdf5.gz → written with write_list_to_hdf5,</p></li>
 <li><p>.yaml or .yaml.gz → written with write_list_to_yaml.</p></li>
 </ul></div>
 
@@ -149,8 +149,8 @@ The file extension determines which output format is used:</p><ul><li><p>.json o
 
 <dl><dt id="arg-output-file-path">output_file_path<a class="anchor" aria-label="anchor" href="#arg-output-file-path"></a></dt>
 <dd><p>A character string representing the full file path of the output file.
-Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.
-If NULL, no file is written and the parameters are returned.</p></dd>
+Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .hdf5.gz, .yaml, or .yaml.gz extension.
+If NULL, no file is written. The validated parameters are returned either way.</p></dd>
 
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
@@ -309,15 +309,18 @@ a <em>rate</em>, not a period – prior median ~0.71/day. The engine uses
 
 
 <dt id="arg-gamma-">gamma_1<a class="anchor" aria-label="anchor" href="#arg-gamma-"></a></dt>
-<dd><p>Symptomatic shedding-duration rate <code>I_sym -&gt; R</code> (numeric= 0, per day; "severe / symptomatic" branch).</p></dd>
+<dd><p>Symptomatic shedding-duration rate <code>I_sym -&gt; R</code> (numeric,
+<code>&gt;= 0</code>, per day; "severe / symptomatic" branch).</p></dd>
 
 
 <dt id="arg-gamma-">gamma_2<a class="anchor" aria-label="anchor" href="#arg-gamma-"></a></dt>
-<dd><p>Asymptomatic shedding-duration rate <code>I_asym -&gt; R</code> (numeric= 0, per day; "mild / asymptomatic" branch).</p></dd>
+<dd><p>Asymptomatic shedding-duration rate <code>I_asym -&gt; R</code> (numeric,
+<code>&gt;= 0</code>, per day; "mild / asymptomatic" branch).</p></dd>
 
 
 <dt id="arg-epsilon">epsilon<a class="anchor" aria-label="anchor" href="#arg-epsilon"></a></dt>
-<dd><p>Natural-infection immunity waning rate <code>R -&gt; S</code> (numeric= 0, per day). Distinct from vaccine waning (omega_1, omega_2).</p></dd>
+<dd><p>Natural-infection immunity waning rate <code>R -&gt; S</code> (numeric,
+<code>&gt;= 0</code>, per day). Distinct from vaccine waning (<code>omega_1</code>, <code>omega_2</code>).</p></dd>
 
 
 <dt id="arg-mu-jt">mu_jt<a class="anchor" aria-label="anchor" href="#arg-mu-jt"></a></dt>
@@ -349,10 +352,10 @@ matrix. Retained in the signature so the refusal names the problem.</p></dd>
 <code>(1 + mu_j_slope * tick/nticks)</code> was removed from the engine in v0.95.0
 (CFR restructure R3): it is not estimable from the deaths series, it
 double-counted the <code>s(year)</code> term already inside <code>CFR_target</code>, and no
-secular trend in cholera CFR is documented. Retained only so that configs
-written before v0.95.0 can still be replayed through
-<code>do.call(make_simulation_config, config)</code>; any value supplied is silently
-dropped and is <strong>not</strong> returned in the config.</p></dd>
+secular trend in cholera CFR is documented. Retained only so that
+existing calls that pass <code>mu_j_slope</code> explicitly do not fail with an
+unused-argument error; any value supplied is silently dropped and is
+<strong>not</strong> returned in the config.</p></dd>
 
 
 <dt id="arg-mu-j-epidemic-factor">mu_j_epidemic_factor<a class="anchor" aria-label="anchor" href="#arg-mu-j-epidemic-factor"></a></dt>
@@ -485,8 +488,8 @@ or a per-location vector of length <code>length(location_name)</code>.</p></dd>
 <dd><p>Exponent on <code>N_jt</code> in the FOI denominator
 (numeric in [0, 1]). <code>alpha_2 = 1</code> is frequency-dependent
 transmission (FOI proportional to <code>I/N</code>); <code>alpha_2 = 0</code> is
-density-dependent (FOI proportional to <code>I</code>). Dual-mode: scalar or a
-per-location vector of length <code>length(location_name)</code>.</p><div class="section">
+density-dependent (FOI proportional to <code>I</code>). A single global scalar:
+the engine rejects a per-location vector.</p><div class="section">
 <h3 id="force-of-infection-environment-to-human-">Force of Infection (environment-to-human)<a class="anchor" aria-label="anchor" href="#force-of-infection-environment-to-human-"></a></h3>
 
 
@@ -587,13 +590,14 @@ NULL the peak shape terms contribute 0 to the likelihood.</p></dd>
 
 
 <dt id="arg-sigfigs">sigfigs<a class="anchor" aria-label="anchor" href="#arg-sigfigs"></a></dt>
-<dd><p>Integer; number of significant figures to round all numeric values to. Default is 4.</p></dd>
+<dd><p>Ignored; retained for backward compatibility. No rounding is applied, and supplying it raises a warning.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
-in the format determined by the file extension.</p>
+    <p>The validated list of parameters (invisibly when <code>output_file_path</code> is
+provided, after the parameters are written to a file in the format
+determined by the file extension).</p>
     </div>
 
     <div class="section level2">

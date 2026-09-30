@@ -81,7 +81,7 @@ Estimation and fitting functions
 - [`est_epidemic_peaks()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_epidemic_peaks.md)
   : Estimate Epidemic Peaks from Cholera Time Series Data
 - [`est_immune_decay_vaccine()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_immune_decay_vaccine.md)
-  : Estimate Vaccine Immune Decay
+  : Plot Vaccine Immune Decay
 - [`est_initial_E_I()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I.md)
   : Estimate Initial E and I Compartments from Surveillance Data
 - [`est_initial_E_I_location()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I_location.md)
@@ -247,7 +247,7 @@ Processing and downloading data
   Per-Source Schema
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
-  and Fit Beta Distributions (2014-2024)
+  and Fit Beta Distributions
 - [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
   : Process EM-DAT Flood and Tropical-Cyclone Events Into Country-Week
   Panels
@@ -569,7 +569,7 @@ Built-in datasets
 - [`config_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
   : Default Simulation Configuration
 - [`config_simulation_endemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.md)
-  : Endemic Simulation Simulation Configuration
+  : Endemic Simulation Configuration
 - [`config_simulation_epidemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_epidemic.md)
   : Epidemic Simulation Simulation Configuration
 - [`priors_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/priors_default.md)
@@ -788,7 +788,7 @@ Other exported functions and internal helpers
   : Default Simulation Configuration
 
 - [`config_simulation_endemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.md)
-  : Endemic Simulation Simulation Configuration
+  : Endemic Simulation Configuration
 
 - [`config_simulation_epidemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_epidemic.md)
   : Epidemic Simulation Simulation Configuration
@@ -877,7 +877,7 @@ Other exported functions and internal helpers
   : Estimate Epidemic Peaks from Cholera Time Series Data
 
 - [`est_immune_decay_vaccine()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_immune_decay_vaccine.md)
-  : Estimate Vaccine Immune Decay
+  : Plot Vaccine Immune Decay
 
 - [`est_initial_E_I()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I.md)
   : Estimate Initial E and I Compartments from Surveillance Data
@@ -1375,7 +1375,7 @@ Other exported functions and internal helpers
 
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
-  and Fit Beta Distributions (2014-2024)
+  and Fit Beta Distributions
 
 - [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
   : Process EM-DAT Flood and Tropical-Cyclone Events Into Country-Week

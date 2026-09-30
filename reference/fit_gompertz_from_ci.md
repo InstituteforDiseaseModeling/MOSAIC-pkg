@@ -2,10 +2,8 @@
 
 This function estimates the parameters of a Gompertz distribution on
 \[0, Inf) with pdf f(x; b, eta) = b \* eta \* exp(b*x) \*
-exp(-eta*(exp(b*x) - 1)), given a target interior mode and a two-sided
-interval (default: central 95 percent). The interior mode condition is
-enforced by eta = b \* exp(b*mode), which holds exactly for the Gompertz
-mode when eta \> b.
+exp(-eta*(exp(b\*x) - 1)) so that its quantiles at `probs` match a
+target interval (default: the central 95 percent).
 
 ## Usage
 
@@ -23,8 +21,8 @@ fit_gompertz_from_ci(
 
 - mode_val:
 
-  Numeric greater than 0. Target mode of the distribution (very near
-  zero is allowed).
+  Numeric \>= 0. Reference mode, reported next to the fitted mode; it
+  does not constrain the fit and need not lie inside the interval.
 
 - ci_lower:
 
@@ -55,7 +53,8 @@ A list containing:
 
 - f0: Density at zero (finite and positive)
 
-- fitted_mode: The implied mode (matches mode_val up to numeric error)
+- fitted_mode: The mode of the fitted density, -log(eta)/b (0 when eta
+  \>= 1)
 
 - fitted_ci: Named vector of fitted quantiles at probs
 
@@ -69,6 +68,25 @@ A list containing:
 
 - input_ci: Echo of c(lower = ci_lower, upper = ci_upper)
 
+## Details
+
+The two quantiles determine the distribution: the ratio \\Q(p_2)/Q(p_1)
+= \log(1 + c_2/\eta) / \log(1 + c_1/\eta)\\, with \\c_k = -\log(1 -
+p_k)\\, depends on \\\eta\\ alone and increases monotonically from 1
+(\\\eta \to 0\\) to \\c_2/c_1\\ (\\\eta \to \infty\\, the exponential
+limit; about 146 for the central 95 percent), so \\\eta\\ is solved from
+the target ratio and \\b\\ from the scale. A ratio beyond that limit (or
+`ci_lower = 0`) is matched as closely as the family allows, anchored on
+`ci_upper`.
+
+Setting the derivative of log f to zero gives the mode x\* = -log(eta) /
+b, which is interior only when eta \< 1; for eta \>= 1 the density is
+monotone decreasing and the mode is 0. `mode_val` does not constrain the
+fit (a sample-based mode near zero is poorly determined) and may lie
+outside the interval, as it does for a monotone-decreasing target whose
+KDE mode falls below the lower quantile; the mode of the fitted density
+is returned as `fitted_mode`.
+
 ## Examples
 
 ``` r
@@ -81,26 +99,26 @@ result <- fit_gompertz_from_ci(
 )
 print(result)
 #> $b
-#> [1] 1919.758
+#> [1] 0.03688879
 #> 
 #> $eta
-#> [1] 1919.795
+#> [1] 1e+08
 #> 
 #> $f0
-#> [1] 3685543
+#> [1] 3688879
 #> 
 #> $fitted_mode
-#> [1] 1e-08
+#> [1] 0
 #> 
 #> $fitted_ci
 #>        lower        upper 
-#> 6.869447e-09 9.999450e-07 
+#> 6.863279e-09 1.000000e-06 
 #> 
 #> $fitted_mean
-#> [1] 2.711853e-07
+#> [1] 2.71081e-07
 #> 
 #> $fitted_sd
-#> [1] 2.710226e-07
+#> [1] 2.710592e-07
 #> 
 #> $probs
 #> [1] 0.025 0.975

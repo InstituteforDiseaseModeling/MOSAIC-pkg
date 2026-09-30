@@ -3,13 +3,11 @@
 returns the result channels. This is the package's only engine entry point:
 there is deliberately no engine = switch, because there is only one
 engine. Prior to v0.68.0 this function was a reticulate bridge to the
-Python laser-cholera package; it is now pure R and the two agree to
-the tolerances recorded in tests/testthat/fixtures/ORACLE.md."><meta property="og:description" content="Simulates the metapopulation SEIR model over the configured window and
+Python laser-cholera package; it is now pure R."><meta property="og:description" content="Simulates the metapopulation SEIR model over the configured window and
 returns the result channels. This is the package's only engine entry point:
 there is deliberately no engine = switch, because there is only one
 engine. Prior to v0.68.0 this function was a reticulate bridge to the
-Python laser-cholera package; it is now pure R and the two agree to
-the tolerances recorded in tests/testthat/fixtures/ORACLE.md."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
+Python laser-cholera package; it is now pure R."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -17,7 +15,7 @@ the tolerances recorded in tests/testthat/fixtures/ORACLE.md."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -54,8 +52,7 @@ the tolerances recorded in tests/testthat/fixtures/ORACLE.md."><meta property="o
 returns the result channels. This is the package's only engine entry point:
 there is deliberately no <code>engine =</code> switch, because there is only one
 engine. Prior to v0.68.0 this function was a <span class="pkg">reticulate</span> bridge to the
-Python <code>laser-cholera</code> package; it is now pure R and the two agree to
-the tolerances recorded in <code>tests/testthat/fixtures/ORACLE.md</code>.</p>
+Python <code>laser-cholera</code> package; it is now pure R.</p>
     </div>
 
     <div class="section level2">
@@ -118,10 +115,30 @@ error naming it rather than silently ignoring it. See
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with <code>params</code> (the normalised config), <code>results</code>
+    <p>A list with <code>params</code> (the config as supplied; a file path is
+parsed), <code>results</code>
 (the 28 result channels as <code>[patch, time]</code> matrices, except
 <code>pi_ij</code> and <code>coupling</code> which are <code>[patch, patch]</code>) and
 <code>seed</code>.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="relationship-to-laser-cholera">Relationship to laser-cholera<a class="anchor" aria-label="anchor" href="#relationship-to-laser-cholera"></a></h2>
+
+
+<p>Only <code>rng = "replay"</code> (the parity test mode) reproduces
+<code>laser-cholera</code> 0.16.1, to the tolerances recorded in
+<code>tests/testthat/fixtures/ORACLE.md</code>. The default <code>"rng"</code> mode,
+which every production run uses, deliberately follows the model
+specification where the Python engine departed from it, so its output is
+not certified against <code>laser-cholera</code> and is not expected to match it:</p><ul><li><p>the symptomatic split of new infections, and of <code>I_j_initial</code>
+at t = 0, is a binomial draw rather than <code>round(sigma * n)</code>
+(v0.89.0);</p></li>
+<li><p>the environmental dose-response uses the per-capita dose
+\(W/N\) rather than the absolute reservoir \(W\) (v0.89.0);</p></li>
+<li><p>each symptomatic onset's fate is drawn at onset from the reported
+CFR <code>mu_jt</code>, and deaths are reported on the case lag
+(<code>delta_reporting_deaths</code> is not used) (v0.96.0).</p></li>
+</ul><p>The internal <code>.SIM_RNG_ONLY_CORRECTIONS</code> registry lists these.</p>
     </div>
 
     <div class="section level2">

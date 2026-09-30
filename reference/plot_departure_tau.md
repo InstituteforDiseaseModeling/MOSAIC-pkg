@@ -54,9 +54,11 @@ positional sort (F3-safe).
 
 \\\tau_i\\ is a **daily** probability (the engine consumes it per-day in
 the spatial-hazard step), so \\N_i \tau_i\\ is the expected number of
-travelers *per day*. CI bars are drawn only when `ci` is supplied (from
-the optional `mobility_tau_ci.csv` run artifact); otherwise the left
-panel shows point estimates only — matching
+travelers *per day*. CI bars are drawn only when `ci` is supplied;
+[`render_MOSAIC_figures`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
+passes the posterior 95% interval of \\\tau_i\\ when every location's
+\\\tau_i\\ was sampled, else the optional `mobility_tau_ci.csv` run
+artifact. Otherwise the left panel shows point estimates only — matching
 [`plot_mobility`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility.md)
 minus the error bars.
 

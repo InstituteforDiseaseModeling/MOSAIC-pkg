@@ -63,15 +63,23 @@ strategy:
 
 - Graceful degradation when ESS target cannot be achieved
 
-**Example with defaults (target_ESS_best=500, target_A=0.95,
-target_CVw=0.7):**
+**Example with the function defaults (target_ESS_best=500,
+target_A=0.95, target_CVw=0.7):**
 
     Tier  1: ESS=500, A=0.950, CVw=0.700  (Stringent)
-    Tier  5: ESS=500, A=0.773, CVw=0.817  (High quality)
-    Tier 10: ESS=500, A=0.599, CVw=0.931  (Moderate quality)
-    Tier 20: ESS=500, A=0.358, CVw=1.327  (Last ESS-constant)
-    Tier 21: ESS=475, A=0.340, CVw=1.393  (Fallback begins)
-    Tier 30: ESS=315, A=0.226, CVw=1.986  (Final fallback)
+    Tier  5: ESS=500, A=0.774, CVw=0.851
+    Tier 10: ESS=500, A=0.599, CVw=1.086
+    Tier 20: ESS=500, A=0.358, CVw=1.769  (Last ESS-constant)
+    Tier 21: ESS=475, A=0.341, CVw=1.857  (Fallback begins)
+    Tier 30: ESS=299, A=0.215, CVw=2.881  (Final fallback)
+
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+calls this with its control targets (`ESS_best = 100`, `A_best = 0.70`,
+`CVw_best = 1.0` by default), which gives:
+
+    Tier  1: ESS=100, A=0.700, CVw=1.000
+    Tier 20: ESS=100, A=0.264, CVw=2.527
+    Tier 30: ESS=60,  A=0.158, CVw=4.116
 
 ## Examples
 

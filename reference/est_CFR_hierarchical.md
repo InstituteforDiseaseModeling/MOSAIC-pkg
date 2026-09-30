@@ -103,7 +103,8 @@ A list of class `cfr_hierarchical_model`:
 - `summary`: fit statistics, `tau`, `sigma` and settings.
 
 Files written to `PATHS$MODEL_INPUT`: `param_mu_disease_mortality.csv`
-(MOSAIC parameter format; per location-year `point` median, `beta`
+(MOSAIC parameter format, an export not read by the package; per
+location-year `point` median (`parameter_name = "median"`), `beta`
 shapes and `logitnormal` mean/sd), `cfr_hierarchical_estimates.csv`,
 `cfr_temporal_trend.csv`, `cfr_country_effects.csv` and
 `cfr_model_summary.rds`.

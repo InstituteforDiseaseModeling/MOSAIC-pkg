@@ -79,6 +79,8 @@ dev.off()
 cat("Saved: figures/running_mosaic_epidemic.png\n")
 ```
 
+![](figures/running_mosaic_epidemic.png)
+
 ### Endemic Scenario
 
 The endemic configuration simulates stable, persistent transmission
@@ -125,13 +127,15 @@ dev.off()
 cat("Saved: figures/running_mosaic_endemic.png\n")
 ```
 
+![](figures/running_mosaic_endemic.png)
+
 ### Running simulations for multiple locations
 
 ``` r
 
 library(MOSAIC)
 
-iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD'] # Current bug with SSD vaccination data
+iso_codes <- iso_codes_mosaic
 
 config <- get_location_config(iso = iso_codes)
 config$beta_j0_hum <- config$beta_j0_hum*2
@@ -161,6 +165,8 @@ mtext("Reported Cases by Location", side = 3, outer = TRUE, line = 0.5, font = 2
 dev.off()
 cat("Saved: figures/multi_location_grid.png\n")
 ```
+
+![](figures/multi_location_grid.png)
 
 ------------------------------------------------------------------------
 

@@ -29,7 +29,7 @@ Provides clear error messages if attachment fails
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -92,10 +92,15 @@ pure R since v0.68.0 and need no Python at all.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>This function is called automatically when MOSAIC is loaded (via .onAttach).
-You typically don't need to call it manually unless:</p><ul><li><p>You want to verify the Python environment is working</p></li>
+    <p>Loading MOSAIC does <em>not</em> attach Python (since v0.78.0). <code>.onLoad</code>
+only sets <code>RETICULATE_PYTHON</code> to the r-mosaic interpreter when that
+variable is unset and the interpreter exists, so reticulate binds r-mosaic
+lazily on the first Python call (e.g. the keras3 calls in
+<code><a href="est_suitability.html">est_suitability()</a></code>). To use a different interpreter, set
+<code>RETICULATE_PYTHON</code> before <code><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">library(MOSAIC)</a></code>. Call this function
+explicitly when:</p><ul><li><p>You want Python initialised up front, before <code><a href="est_suitability.html">est_suitability()</a></code></p></li>
+<li><p>You want to verify the Python environment is working</p></li>
 <li><p>You detached and want to re-attach without restarting R</p></li>
-<li><p>You're writing a script that needs explicit environment control</p></li>
 </ul><p>Once Python is initialized, reticulate prevents switching to a different
 environment without restarting R. If Python is already initialized with
 a different environment, this function will fail with an error message

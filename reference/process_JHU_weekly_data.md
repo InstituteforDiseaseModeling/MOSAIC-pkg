@@ -42,6 +42,10 @@ Steps performed:
 - Load `Public_surveillance_dataset.rds` and keep only
   `spatial_scale == "country"`.
 
+- Drop rows flagged `phantom`: weeks the archive zero-fills without a
+  report (no `observation_collection_id`). They are unobserved, not
+  zeros.
+
 - Extract `iso_code` from `location_name` (suffix after “::”) and
   convert to full country name.
 
@@ -55,9 +59,13 @@ Steps performed:
   [`lubridate::month()`](https://lubridate.tidyverse.org/reference/month.html).
 
 - Define `cases` using suspected (`sCh`) if present, else confirmed
-  (`cCh`), defaulting to 0.
+  (`cCh`), else `NA`.
 
-- Define `deaths` (zero if `NA`).
+- Keep `deaths` as reported; a missing death count stays `NA` (it is not
+  an observed zero – about three quarters of country-level rows in the
+  OSF archive carry no death count).
+
+- Drop rows where both `cases` and `deaths` are `NA` (no observation).
 
 - Save a data.frame with columns:
   `country, iso_code, year, month, week, date_start, date_stop, cases, deaths`.

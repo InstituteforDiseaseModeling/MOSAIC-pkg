@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,35 +53,75 @@
 
 
 <dl><dt id="arg-root">root<a class="anchor" aria-label="anchor" href="#arg-root"></a></dt>
-<dd><p>A string specifying the root directory of the MOSAIC project. All other paths will be generated relative to this root.</p></dd>
+<dd><p>A string specifying the root directory of the MOSAIC project; if <code>NULL</code>, <code>getOption("root_directory")</code> (see <code><a href="set_root_directory.html">set_root_directory</a></code>).</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A named list containing the following paths:</p>
+    <p>A named list of paths, all built with <code>file.path(root, ...)</code>:</p>
 <dl><dt>ROOT</dt>
-<dd><p>The root directory provided by the user.</p></dd>
+<dd><p>The root directory.</p></dd>
 
-<dt>DATA_RAW</dt>
-<dd><p>Path to the raw data directory (under "MOSAIC-data/data/raw").</p></dd>
+<dt>DATA_RAW, DATA_PROCESSED</dt>
+<dd><p><code>MOSAIC-data/raw</code> and <code>MOSAIC-data/processed</code>.</p></dd>
 
-<dt>DATA_PROCESSED</dt>
-<dd><p>Path to the processed data directory (under "MOSAIC-data/data/processed").</p></dd>
+<dt>DATA_SCRAPE_WHO_VACCINATION</dt>
+<dd><p><code>MOSAIC-data/raw/WHO/vaccination</code>.</p></dd>
 
-<dt>MODEL_INPUT</dt>
-<dd><p><code>NULL</code>, reserved for the path to the model input (if applicable).</p></dd>
+<dt>DATA_SCRAPE_WHO_WEEKLY, DATA_SCRAPE_GTFCC</dt>
+<dd><p>WHO AWD and GTFCC scrapes under
+<code>ees-cholera-mapping/data/cholera/</code>.</p></dd>
 
-<dt>MODEL_OUTPUT</dt>
-<dd><p><code>NULL</code>, reserved for the path to the model output (if applicable).</p></dd>
+<dt>DATA_DEM, DATA_EMDAT_RAW, DATA_IDMC_RAW</dt>
+<dd><p>Raw inputs under <code>MOSAIC-data/raw/</code>
+(<code>DEM</code>, <code>EMDAT</code>, <code>IDMC</code>).</p></dd>
 
-<dt>DOCS_FIGURES</dt>
-<dd><p>Path to the figures directory (under "MOSAIC-docs/figures").</p></dd>
+<dt>DATA_SHAPEFILES, DATA_SIMILARITY_MATRIX, DATA_ELEVATION, DATA_ENSO, DATA_OAG,
+DATA_UNICEF, DATA_WORLD_BANK, DATA_DEMOGRAPHICS, DATA_WASH, DATA_SYMPTOMATIC,
+DATA_IMMUNITY, DATA_SUSPECTED, DATA_VACCINE_EFFECTIVENESS</dt>
+<dd><p>Processed data under
+<code>MOSAIC-data/processed/</code> (<code>shapefiles</code>, <code>similarity_matrix</code>,
+<code>elevation</code>, <code>enso</code>, <code>OAG</code>, <code>UNICEF</code>, <code>world_bank</code>,
+<code>demographics</code>, <code>WASH</code>, <code>symptomatic</code>, <code>immunity</code>,
+<code>suspected_cases</code>, <code>vaccine_effectiveness</code>).</p></dd>
 
-<dt>DOCS_TABLES</dt>
-<dd><p>Path to the tables directory (under "MOSAIC-docs/tables").</p></dd>
+<dt>DATA_CLIMATE, DATA_CLIMATE_DAILY</dt>
+<dd><p><code>MOSAIC-data/processed/climate/weekly</code>
+and <code>.../climate/daily</code>.</p></dd>
 
-<dt>DOCS_PARAMS</dt>
-<dd><p>Path to the parameters directory (under "MOSAIC-docs/parameters").</p></dd>
+<dt>DATA_WHO_ANNUAL, DATA_WHO_WEEKLY, DATA_WHO_DAILY</dt>
+<dd><p><code>MOSAIC-data/processed/WHO/</code>
+<code>annual</code>, <code>weekly</code>, <code>daily</code>.</p></dd>
+
+<dt>DATA_JHU_WEEKLY, DATA_JHU_DAILY</dt>
+<dd><p><code>MOSAIC-data/processed/JHU/weekly</code> and <code>.../daily</code>.</p></dd>
+
+<dt>DATA_SUPP_WEEKLY, DATA_SUPP_DAILY</dt>
+<dd><p>Both <code>MOSAIC-data/processed/SUPP/daily</code>:
+the weekly supplemental file <code>cholera_country_weekly_processed.csv</code> is
+written and read there.</p></dd>
+
+<dt>DATA_CHOLERA_WEEKLY, DATA_CHOLERA_DAILY, DATA_AI_WEEKLY</dt>
+<dd><p>Combined surveillance under
+<code>MOSAIC-data/processed/cholera/</code> (<code>weekly</code>, <code>daily</code>, <code>ai/weekly</code>).</p></dd>
+
+<dt>DATA_GTFCC_VACCINATION</dt>
+<dd><p><code>MOSAIC-data/processed/GTFCC/vaccination</code>.</p></dd>
+
+<dt>DATA_EMDAT, DATA_IDMC</dt>
+<dd><p><code>MOSAIC-data/processed/EMDAT/weekly</code> and
+<code>.../IDMC/weekly</code>.</p></dd>
+
+<dt>ENSO_DATA_REPO, OPEN_METEO_REPO, AI_CHOLERA_REPO</dt>
+<dd><p>Sibling repositories
+<code>enso-data</code>, <code>open-meteo-pipeline</code>, <code>ai-cholera-data-mining</code>.</p></dd>
+
+<dt>MODEL_INPUT, MODEL_OUTPUT</dt>
+<dd><p><code>MOSAIC-pkg/model/input</code> and <code>MOSAIC-pkg/model/output</code>.</p></dd>
+
+<dt>DOCS_FIGURES, DOCS_TABLES, DOCS_PARAMS</dt>
+<dd><p><code>MOSAIC-docs/figures</code>, <code>tables</code>,
+<code>parameters</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

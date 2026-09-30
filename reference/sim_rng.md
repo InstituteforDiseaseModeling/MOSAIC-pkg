@@ -14,7 +14,8 @@ same phase, at the same site.
 
 A simulation's output is determined solely by its `seed` and `config` –
 never by worker identity, batch position, or how much randomness was
-consumed earlier in the session. `.sim_rng_state()` establishes an
-isolated stream and returns everything needed to restore the caller's
-`.Random.seed` afterwards, so calling the engine never perturbs the
-caller's stream.
+consumed earlier in the session.
+[`.sim_rng_begin()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-sim_rng_begin.md)
+establishes an isolated stream and returns everything needed to restore
+the caller's `.Random.seed` afterwards, so calling the engine never
+perturbs the caller's stream.

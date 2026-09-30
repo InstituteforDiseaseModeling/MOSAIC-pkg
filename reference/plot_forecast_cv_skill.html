@@ -21,7 +21,7 @@ evaluate_rolling_cv."><meta property="og:image" content="https://institutefordis
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,9 +69,9 @@ confidence interval – matching the small-\(n\) discipline of
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_forecast_cv_skill</span><span class="op">(</span></span>
 <span>  <span class="va">x</span>,</span>
 <span>  value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"R2_corr"</span>, <span class="st">"bias_ratio"</span>, <span class="st">"R2_sse"</span>, <span class="st">"wis_skill"</span>, <span class="st">"mae_skill"</span><span class="op">)</span>,</span>
-<span>  horizon_months <span class="op">=</span> <span class="fl">6</span>,</span>
+<span>  horizon_months <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>  baseline <span class="op">=</span> <span class="st">"seasonal"</span>,</span>
-<span>  model <span class="op">=</span> <span class="st">"ensemble"</span>,</span>
+<span>  model <span class="op">=</span> <span class="st">"ensemble_opt"</span>,</span>
 <span>  metrics <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"cases"</span>, <span class="st">"deaths"</span><span class="op">)</span>,</span>
 <span>  show_gated <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  title <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -103,7 +103,8 @@ path to that parquet/csv, or the <code>$cells</code> data frame from
 
 <dt id="arg-horizon-months">horizon_months<a class="anchor" aria-label="anchor" href="#arg-horizon-months"></a></dt>
 <dd><p>Primary OOS horizon; mapped to the <code>OOS&lt;={h}mo</code>
-window (default 6).</p></dd>
+window (default 3, the forecast-CV scoring cap, which
+<code><a href="evaluate_rolling_cv.html">evaluate_rolling_cv()</a></code>'s default horizons include).</p></dd>
 
 
 <dt id="arg-baseline">baseline<a class="anchor" aria-label="anchor" href="#arg-baseline"></a></dt>
@@ -112,7 +113,9 @@ ignored for R2/bias.</p></dd>
 
 
 <dt id="arg-model">model<a class="anchor" aria-label="anchor" href="#arg-model"></a></dt>
-<dd><p>Model type to plot (default <code>"ensemble"</code>).</p></dd>
+<dd><p>Model type to plot (default <code>"ensemble_opt"</code>, the headline
+model of <code><a href="make_forecast_cv_table.html">make_forecast_cv_table</a></code> and
+<code><a href="plot_forecast_cv_grid.html">plot_forecast_cv_grid</a></code>).</p></dd>
 
 
 <dt id="arg-metrics">metrics<a class="anchor" aria-label="anchor" href="#arg-metrics"></a></dt>

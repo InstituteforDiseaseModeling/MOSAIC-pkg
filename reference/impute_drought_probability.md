@@ -19,6 +19,7 @@ impute_drought_probability(
   integrator_col = "drought_prob_26w_mean",
   integrator_weeks = 26L,
   gam_train_stop = NULL,
+  climate_obs_stop = NULL,
   diagnostics = TRUE,
   diag_dir = NULL,
   verbose = TRUE
@@ -75,6 +76,12 @@ impute_drought_probability(
   (back-compatible). Only the fit-row subset changes;
   `select=TRUE`/fREML/the formula are identical.
 
+- climate_obs_stop:
+
+  Date/character, or a Date vector named by `iso_code`. Last
+  observed-climate date; rows after it are never fit. `NULL` (default) =
+  no cap.
+
 - diagnostics:
 
   Logical. If `TRUE`, fits a rolling-year cross-validation and writes
@@ -118,8 +125,13 @@ mess the EM-DAT drought type produces.
 source, so it (and its rolling mean) is **excluded** from the predictor
 set – predicting the label from its own generator would be trivially
 circular and would defeat the entire purpose (the lead-time mapping).
-The predictors are exogenous ocean-state teleconnections and antecedent
-temperature / precipitation-deficit only.
+The same applies to any local-climate series that overlaps the label's
+`sustain_weeks` window (precipitation and temperature are the
+ingredients of `spei_approx`), so every local-climate predictor is
+lagged by `sustain_weeks` weeks: it describes conditions strictly
+*before* the label window. The predictors are exogenous ocean-state
+teleconnections and genuinely antecedent temperature / precipitation
+only.
 
 The GAM is fit with
 [`mgcv::bam()`](https://rdrr.io/pkg/mgcv/man/bam.html),
@@ -133,13 +145,17 @@ The GAM is fit with
 - Antecedent `temp_anom` (heat amplifies evaporative demand),
   `precip_anom`, and long-window antecedent precipitation
   `precip_sum_12w` / `precip_sum_24w` (accumulated rainfall deficit; 24w
-  computed inline).
+  computed inline), each lagged by `sustain_weeks` so it ends the week
+  before the label window begins.
 
 - `s(iso_code_f, bs = "re")` country random effect (baseline aridity /
   drought propensity).
 
 The concurrent `spei_approx` and its rolling mean are NOT predictors
-(label leakage; see the leakage-control note above).
+(label leakage; see the leakage-control note above). Fit rows are
+limited to `date <= climate_obs_stop` (and `<= gam_train_stop` when
+set). A warning is raised if `bam()` reports non-convergence. The output
+is returned in the input's row order, whatever that order is.
 
 **Slow integrator.** Drought is a persistent state whose cholera
 relevance accumulates (WASH strain, water-source concentration,

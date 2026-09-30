@@ -11,7 +11,7 @@ magnitude, and duration of epidemic periods."><meta property="og:image" content=
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,6 +65,17 @@ magnitude, and duration of epidemic periods.</p>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame containing epidemic peak parameters</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Peaks are detected on observed weeks only: days whose
+<code>disaggregation_method</code> is set and is not <code>observed</code> or
+<code>documented_zero</code> (AI <code>fourier_*</code> reconstructions,
+<code>assumed_zero</code>) are treated as missing, and a detected peak whose
+<code>[peak_start, peak_stop]</code> window is at least half imputed days is dropped.
+A detected peak day is the centre of any flat stretch of the smoothed curve and
+must itself be observed with cases &gt; 0. The hand-curated peaks the function
+appends (documented outbreaks) are exempt from the imputed-window filter.</p>
     </div>
 
     <div class="section level2">

@@ -28,9 +28,9 @@ function will provide appropriate guidance based on the current state.
 
 **Recommended**: Use
 [`attach_mosaic_env`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md)
-for clearer semantics and better error handling. The Python environment
-is now automatically attached when you load MOSAIC via
-[`library(MOSAIC)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/).
+for clearer semantics and better error handling. Loading MOSAIC does not
+attach Python: it only sets RETICULATE_PYTHON to r-mosaic (when unset),
+so reticulate binds r-mosaic on the first Python call.
 
 ## See also
 
@@ -55,7 +55,7 @@ use_mosaic_env()
 # New approach (recommended)
 attach_mosaic_env()
 
-# Auto-attach on package load (no action needed)
-library(MOSAIC)  # Automatically attaches r-mosaic
+# Loading MOSAIC points reticulate at r-mosaic; Python starts lazily
+library(MOSAIC)
 } # }
 ```

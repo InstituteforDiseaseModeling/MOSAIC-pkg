@@ -7,7 +7,7 @@ raster to a GeoTIFF file.
 ## Usage
 
 ``` r
-download_country_DEM(PATHS, iso_codes, zoom_level = 6)
+download_country_DEM(PATHS, iso_codes, zoom_level = 6, overwrite = FALSE)
 ```
 
 ## Arguments
@@ -31,11 +31,25 @@ download_country_DEM(PATHS, iso_codes, zoom_level = 6)
   An integer representing the zoom level for the DEM data. Zoom levels
   6-8 are recommended for 1km resolution (default = 6).
 
+- overwrite:
+
+  If `FALSE` (default), a country whose DEM file already exists is
+  skipped; `TRUE` re-downloads and replaces it.
+
 ## Value
 
-The function does not return a value. It downloads the DEM data for each
-country and saves the results as GeoTIFF files in the specified
-directory.
+Invisibly, the paths of the DEM files that exist after the call. Each is
+written atomically (temporary file, then rename), so a failed or
+interrupted download never replaces a good raster.
+
+## Details
+
+Terrain does not change between refreshes, and `PATHS$DATA_DEM` lives
+under `MOSAIC-data/raw/`, so existing rasters are never rewritten unless
+`overwrite = TRUE`. Each download appends a row to
+`PATHS$DATA_DEM/PROVENANCE.md`. File names stay undated because
+[`get_elevation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_elevation.md)
+reads `<ISO>_1km_DEM.tif`.
 
 ## Examples
 
@@ -48,6 +62,6 @@ iso_codes <- c("ZAF", "KEN", "NGA")
 PATHS <- get_paths()
 
 # Download DEM rasters for the countries
-download_country_DEM(iso_codes, PATHS)
+download_country_DEM(PATHS, iso_codes)
 } # }
 ```

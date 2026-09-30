@@ -23,7 +23,8 @@ Named list with I/O settings (format, compression, compression_level)
 
 Presets:
 
-- `debug`: CSV format, no compression (easy inspection)
+- `debug`: Parquet with no compression (cheapest writes; output is
+  always parquet, so there is no CSV preset)
 
 - `fast`: Parquet with low compression (fastest)
 

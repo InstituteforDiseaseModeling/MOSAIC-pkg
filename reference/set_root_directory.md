@@ -21,8 +21,8 @@ set_root_directory(root = NULL)
 
 ## Value
 
-A character string representing the root directory. The root directory
-is also stored globally in the option `root_directory`.
+The root directory (character string), invisibly. It is also stored
+globally in the option `root_directory`.
 
 ## Details
 

@@ -2,7 +2,10 @@
 
 Disaggregates annual cholera case counts to daily resolution using
 Fourier series seasonal patterns. Ensures exact preservation of annual
-totals.
+totals. Day \\t\\ of each year gets weight \\\max(0, 1 + f(t))\\, where
+\\f\\ is the two-harmonic term with period 365 on calendar day-of-year
+(the engine's seasonal envelope, see
+[`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)).
 
 ## Usage
 

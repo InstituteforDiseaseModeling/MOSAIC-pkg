@@ -68,9 +68,10 @@ Invisibly returns `NULL`. Side effects:
   any column missing from a given source (so source-specific columns are
   never silently dropped).
 
-- Deduplicates by `iso_code` and `date_start` (the actual ISO-week
-  Monday, robust to year-boundary week-1 collisions) using the fixed
-  priority WHO \> JHU \> AI \> SUPP with a completeness tie-break.
+- Deduplicates by `iso_code` and `date_start` (the actual week Monday,
+  robust to year-boundary week-1 collisions): observed beats imputed,
+  then the fixed priority WHO \> JHU \> AI \> SUPP (see Details), and
+  adds `source_deaths`.
 
 - Creates truly square data structure with all country-week combinations
   from min to max date (missing data = NA).
@@ -90,15 +91,23 @@ Invisibly returns `NULL`. Side effects:
 
 - Downscales weekly `cases` and `deaths` to daily counts, preserving
   square structure (keeping days with NA), and carries `source`,
-  `disaggregation_method`, and `confidence_weight` to each daily row
-  (the weight is replicated constant across the week, never divided).
+  `source_deaths`, `disaggregation_method`, and `confidence_weight` to
+  each daily row (the weight is replicated constant across the week,
+  never divided).
 
 - Saves the combined daily data to
   `PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv`.
 
 ## Details
 
-Duplicate country-week entries across sources are resolved by a fixed
-priority **WHO \> JHU \> AI \> SUPP**, with a completeness tie-break:
-within a key, rows with complete cases AND deaths are preferred before
-the source priority is applied.
+Duplicate country-week entries across sources are resolved by selecting
+one whole row per week: a row carrying a count beats an empty one; an
+observed row (WHO/JHU/SUPP, or AI `observed`/`documented_zero`) beats an
+imputed one (AI `fourier_*` or any other modelled method), whatever the
+sources; a row with a case count beats a deaths-only row; and the fixed
+priority **WHO \> JHU \> AI \> SUPP** decides the rest. When the
+selected row has no death count, the deaths of the highest-priority
+other observed row reporting the same case count that week are used (the
+same report, compared after half-up rounding) and the week keeps the
+lower of the two rows' `confidence_weight`; `source_deaths` names the
+source of each death count.

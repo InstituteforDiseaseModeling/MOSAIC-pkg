@@ -3,15 +3,17 @@
 prop_V2_initial by reading the raw GTFCC OCV request log,
 classifying doses by regimen (single-dose Euvichol-S vs. two-dose
 Shanchol/Euvichol/Euvichol+), pairing rounds within each campaign,
-applying omega_1 / omega_2 waning from administration
-date to simulation start, and moment-matching the resulting country-level
-proportions to Beta distributions."><meta property="og:description" content="Builds country-specific Beta priors for prop_V1_initial and
+converting doses to effective immunisations with phi_1 /
+phi_2, applying omega_1 / omega_2 waning from
+administration date to simulation start, and moment-matching the resulting
+country-level proportions to Beta distributions."><meta property="og:description" content="Builds country-specific Beta priors for prop_V1_initial and
 prop_V2_initial by reading the raw GTFCC OCV request log,
 classifying doses by regimen (single-dose Euvichol-S vs. two-dose
 Shanchol/Euvichol/Euvichol+), pairing rounds within each campaign,
-applying omega_1 / omega_2 waning from administration
-date to simulation start, and moment-matching the resulting country-level
-proportions to Beta distributions."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
+converting doses to effective immunisations with phi_1 /
+phi_2, applying omega_1 / omega_2 waning from
+administration date to simulation start, and moment-matching the resulting
+country-level proportions to Beta distributions."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -19,7 +21,7 @@ proportions to Beta distributions."><meta property="og:image" content="https://i
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -56,9 +58,10 @@ proportions to Beta distributions."><meta property="og:image" content="https://i
 <code>prop_V2_initial</code> by reading the raw GTFCC OCV request log,
 classifying doses by regimen (single-dose Euvichol-S vs. two-dose
 Shanchol/Euvichol/Euvichol+), pairing rounds within each campaign,
-applying <code>omega_1</code> / <code>omega_2</code> waning from administration
-date to simulation start, and moment-matching the resulting country-level
-proportions to Beta distributions.</p>
+converting doses to <em>effective</em> immunisations with <code>phi_1</code> /
+<code>phi_2</code>, applying <code>omega_1</code> / <code>omega_2</code> waning from
+administration date to simulation start, and moment-matching the resulting
+country-level proportions to Beta distributions.</p>
     </div>
 
     <div class="section level2">
@@ -70,6 +73,8 @@ proportions to Beta distributions.</p>
 <span>  cv <span class="op">=</span> <span class="fl">0.4</span>,</span>
 <span>  omega_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  omega_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  phi_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  phi_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  t_lag <span class="op">=</span> <span class="fl">14</span>,</span>
 <span>  vacc_ceiling_frac <span class="op">=</span> <span class="fl">0.7</span>,</span>
 <span>  fallback_shape1_V1 <span class="op">=</span> <span class="fl">0.5</span>,</span>
@@ -117,15 +122,25 @@ mean of <code>priors_default$parameters_global$omega_1</code>.</p></dd>
 mean of <code>priors_default$parameters_global$omega_2</code>.</p></dd>
 
 
+<dt id="arg-phi-">phi_1<a class="anchor" aria-label="anchor" href="#arg-phi-"></a></dt>
+<dd><p>One-dose vaccine effectiveness at delivery. Defaults to the mean of <code>priors_default$parameters_global$phi_1</code>.</p></dd>
+
+
+<dt id="arg-phi-">phi_2<a class="anchor" aria-label="anchor" href="#arg-phi-"></a></dt>
+<dd><p>Two-dose vaccine effectiveness at delivery. Defaults to the mean of <code>priors_default$parameters_global$phi_2</code>.</p></dd>
+
+
 <dt id="arg-t-lag">t_lag<a class="anchor" aria-label="anchor" href="#arg-t-lag"></a></dt>
 <dd><p>Protection onset lag (days). Waning starts at
 <code>event_date + t_lag</code>. Default 14.</p></dd>
 
 
 <dt id="arg-vacc-ceiling-frac">vacc_ceiling_frac<a class="anchor" aria-label="anchor" href="#arg-vacc-ceiling-frac"></a></dt>
-<dd><p>Hard ceiling on combined V1+V2 coverage (fraction
-of population). Default 0.70 (v0.28.7; was 0.60 in v0.28.6). If the waned
-dose sum exceeds this, V1 and V2 are scaled proportionally. Rationale for
+<dd><p>Hard ceiling on combined V1+V2 dose coverage
+(fraction of population). Default 0.70 (v0.28.7; was 0.60 in v0.28.6). If
+the waned dose-recipient sum exceeds this, V1 and V2 are scaled
+proportionally. The ceiling applies to recipients (published coverage),
+before <code>phi_1</code>/<code>phi_2</code> are applied. Rationale for
 0.70: published OCV campaigns routinely reach 65-80% coverage
 (Abubakar et al. 2018 DRC 65%; Qadri et al. 2015 BGD 75%; Luquero et al.
 2014 Haiti 80%+). A lower ceiling under-captures real emergency responses.</p></dd>
@@ -151,16 +166,25 @@ in the CSV. Defaults match the pre-v0.22.11 uninformative priors
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Biological notes:</p><ul><li><p>V1/V2 in the MOSAIC/transmission model are <em>administrative</em> compartments
-(dose received). The engine independently splits the
-initial counts into immune (V<em>k</em>imm) and susceptible (V<em>k</em>sus)
-substates via <code>phi_1</code>/<code>phi_2</code>. This function therefore does NOT
-multiply by <code>phi_1</code>/<code>phi_2</code> — doing so would double-count
-effectiveness, a bug present in the pre-v0.22.11 implementation.</p></li>
-<li><p>For two-dose regimens, the R01 attendees who return for R02
-transition V1\(\to\)V2 at the R02 date. Non-returners (R01_doses
-\(-\) R02_doses, when positive) remain in V1 with <code>omega_1</code> waning
-from R01 onward.</p></li>
+    <p>Biological notes:</p><ul><li><p>V1/V2 in the engine are <em>effectively-vaccinated</em> compartments:
+there is no vaccinated-but-unprotected substate, V1/V2 are not exposed
+to the force of infection, and only the effective fraction of each
+delivered dose enters them (<code>V1 += phi_1 * nu_1 - phi_2 * nu_2</code>,
+<code>V2 += phi_2 * nu_2</code>; <code>sim_components.R</code> vaccination step and
+MOSAIC-docs 04-model-description "Table of vaccination model terms").
+The initial conditions use the same convention ("cumulative effective
+coverage", 04-model-description "Vaccinated initial conditions"), so
+pre-t0 doses are multiplied by <code>phi_1</code>/<code>phi_2</code>. (Before
+v0.100.0 this function counted raw doses on the premise that the engine
+split V into immune and susceptible substates; that split was removed in
+laser-cholera 0.12 and never existed in the R engine, so raw counts
+overstated the protected mass by 1/phi.)</p></li>
+<li><p>For two-dose regimens, as in the engine, second doses go to the
+effective first-dose recipients: with R01 and R02 dose counts
+\(d_1, d_2\) and \(d_2' = \min(d_2, \phi_1 d_1)\),
+V2 receives \(\phi_2 d_2'\) (waning with <code>omega_2</code> from R02) and
+V1 keeps \(\phi_1 d_1 - \phi_2 d_2'\) (waning with <code>omega_1</code>
+from R01).</p></li>
 <li><p>Single-dose Euvichol-S campaigns contribute only to V1.</p></li>
 <li><p>Blank/unknown vaccine products are treated conservatively as
 two-dose (most pre-2022 campaigns were two-dose Shanchol).</p></li>

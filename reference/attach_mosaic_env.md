@@ -35,14 +35,21 @@ Invisible TRUE if successful, stops with error otherwise
 
 ## Details
 
-This function is called automatically when MOSAIC is loaded (via
-.onAttach). You typically don't need to call it manually unless:
+Loading MOSAIC does *not* attach Python (since v0.78.0). `.onLoad` only
+sets `RETICULATE_PYTHON` to the r-mosaic interpreter when that variable
+is unset and the interpreter exists, so reticulate binds r-mosaic lazily
+on the first Python call (e.g. the keras3 calls in
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)).
+To use a different interpreter, set `RETICULATE_PYTHON` before
+[`library(MOSAIC)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/).
+Call this function explicitly when:
+
+- You want Python initialised up front, before
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
 
 - You want to verify the Python environment is working
 
 - You detached and want to re-attach without restarting R
-
-- You're writing a script that needs explicit environment control
 
 Once Python is initialized, reticulate prevents switching to a different
 environment without restarting R. If Python is already initialized with

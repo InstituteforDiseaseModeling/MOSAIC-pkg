@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -95,7 +95,20 @@
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function performs the following steps:</p><ol><li><p><strong>Load Vaccination Data</strong>:
+    <p><strong>What nu is.</strong> The output <code>nu</code> is the number of doses
+<em>shipped</em> per request, spread over days at <code>max_rate_per_day</code>. It
+carries no round, regimen or administered-dose information, and
+<code>data-raw/make_config_default.R</code> routes all of it to first doses
+(<code>nu_1_jt</code>; <code>nu_2_jt = 0</code>). For simulation windows from 2023
+onward this is close to right, because the ICG suspended the two-dose regimen
+for outbreak response in October 2022 (global OCV shortage; WHO news release,
+19 October 2022) and reactive
+campaigns have been single-dose since. For earlier windows a two-dose campaign
+is counted as two rounds of first doses, roughly doubling the distinct people
+immunised, and shipped-but-unused doses are counted as delivered.
+Pre-t0 campaigns enter the initial conditions through
+<code><a href="est_initial_V1_V2.html">est_initial_V1_V2</a></code>, which does pair rounds.</p>
+<p>The function performs the following steps:</p><ol><li><p><strong>Load Vaccination Data</strong>:
 - Reads processed vaccination data from WHO or GTFCC and filters for relevant columns (<code>iso_code</code>, <code>campaign_date</code>, <code>doses_shipped</code>).</p></li>
 <li><p><strong>Redistribute Doses</strong>:
 - Redistributes shipped doses day by day based on a maximum daily rate (<code>max_rate_per_day</code>).

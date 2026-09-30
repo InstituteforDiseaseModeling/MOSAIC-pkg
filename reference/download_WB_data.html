@@ -19,7 +19,7 @@ hand-downloaded portal export identically.'><meta property="og:image" content="h
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -100,7 +100,7 @@ the four MOSAIC consumes; see <code><a href="MOSAIC_WB_INDICATORS.html">MOSAIC_W
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
 <dd><p>If <code>FALSE</code> (default), an indicator whose file for
-<code>snapshot_date</code> already exists is skipped.</p></dd>
+<code>snapshot_date</code> already exists is skipped; <code>TRUE</code> replaces that dated file (use only to repair a bad snapshot).</p></dd>
 
 
 <dt id="arg-per-page">per_page<a class="anchor" aria-label="anchor" href="#arg-per-page"></a></dt>
@@ -127,7 +127,8 @@ retires four of the six manual sources reported by
 <code>process_WB_*_data()</code> functions select the newest match for their
 indicator. Existing hand-downloaded portal exports are left in place and
 still readable – an API pull simply outranks them by date. Nothing is
-deleted.</p>
+deleted. Each file is written atomically (temporary file, then rename) and
+logged as one row in <code>raw/world_bank/PROVENANCE.md</code>.</p>
 <p><strong>All countries are fetched</strong>, not just the MOSAIC-40: the processors
 do their own ISO filtering, and keeping the full panel means the raw file
 stays reusable. Records the API returns with a blank <code>countryiso3code</code>

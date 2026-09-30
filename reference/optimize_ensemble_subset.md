@@ -6,9 +6,19 @@ Produces a separate `mosaic_ensemble` object at the optimal subset size,
 leaving the original ensemble untouched.
 
 For each candidate size N (from `min_n` to the full ensemble), the
-function re-computes Gibbs weights within the top-N subset, re-computes
-weighted median predictions from the 4D arrays, and scores with the
-selected objective function.
+function re-computes the best-subset weights within the top-N subset,
+re-computes weighted median predictions from the 4D arrays, and scores
+with the selected objective function.
+
+The per-N weights use the same scheme as the `weight_best` posterior
+that
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+builds the candidate ensemble from (by default \\w \propto \exp(-0.5
+\min(\Delta, 4))\\ with \\\Delta = -2(\ell - \max \ell)\\ within the top
+N). So at N = the full ensemble the weights, and therefore
+`diagnostics_score`, reproduce the candidate ensemble, and any score
+change reported for a smaller N is due to the subset, not to a change of
+weighting scheme.
 
 ## Usage
 
@@ -22,6 +32,8 @@ optimize_ensemble_subset(
   central_method = "median",
   stride = 1L,
   cl = NULL,
+  weighting = c("saturated", "tempered"),
+  ess_method = c("kish", "perplexity"),
   verbose = TRUE
 )
 ```
@@ -99,6 +111,17 @@ optimize_ensemble_subset(
   unsafe at this point in the pipeline). For trivially small problems
   the function falls back to serial regardless of `cl`.
 
+- weighting:
+
+  Best-subset weighting scheme for the per-N weights, matching
+  `control$targets$best_subset_weighting` (the scheme of `weight_best`):
+  `"saturated"` (default) or `"tempered"`.
+
+- ess_method:
+
+  ESS formula for `evaluation_table$ess`: `"kish"` (default) or
+  `"perplexity"`.
+
 - verbose:
 
   Logical; if `TRUE`, emit progress messages.
@@ -123,7 +146,7 @@ An S3 object of class `mosaic_subset_optimization` containing:
 
 - optimal_weights:
 
-  Re-computed Gibbs weights for the optimal subset.
+  Re-computed best-subset weights for the optimal subset.
 
 - optimal_indices:
 

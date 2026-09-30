@@ -28,5 +28,7 @@ predictions.
 ## Details
 
 The function reads pred_psi_suitability_week.csv created by
-est_suitability(), which contains the columns: iso_code, year, week,
-date, cases, cases_binary, and pred.
+est_suitability() (columns iso_code, year, date and psi) and plots the
+canonical `psi` column (smoothed and bias-corrected), the series that
+becomes the engine's `psi_jt`. A pre-v0.34 file without `psi` falls back
+to `pred_smooth`, with a message.

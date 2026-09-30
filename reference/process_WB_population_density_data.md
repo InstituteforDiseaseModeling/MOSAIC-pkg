@@ -18,11 +18,13 @@ process_WB_population_density_data(PATHS)
   List. Project paths object with components `DATA_RAW` and
   `DATA_PROCESSED`.
 
-  - Expects the raw file at:
-    `file.path(PATHS$DATA_RAW, 'world_bank', 'API_EN.POP.DNST_DS2_en_csv_v2_85433.csv')`
+  - Reads the newest raw CSV for indicator `EN.POP.DNST` in
+    `file.path(PATHS$DATA_RAW, 'world_bank', 'population_density')` (see
+    [`download_WB_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_WB_data.md)).
 
-  - Will write output to:
-    `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'pop_density_data_world_bank.csv')`
+  - Writes
+    `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_population_density_data.csv')`,
+    creating the directory if needed.
 
 ## Value
 

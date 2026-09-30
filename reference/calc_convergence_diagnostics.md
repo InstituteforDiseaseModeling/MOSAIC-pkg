@@ -65,8 +65,8 @@ calc_convergence_diagnostics(
 
 - percentile_used:
 
-  Numeric percentile of likelihood distribution used for best subset
-  selection (e.g., 5.0 for top 5%)
+  Numeric size of the best subset as a percentage of all `n_total` draws
+  (e.g., 5.0 for the top 5%)
 
 - convergence_tier:
 
@@ -176,17 +176,34 @@ relative to targets:
 
 **Default thresholds by metric:**
 
-- ESS_B: pass=0.8 (80%), warn=0.5 (50%)
+- ESS_B (target `target_ess_best`): pass=1.0 (100%), warn=0.8 (80%)
 
 - A_B: pass=0.9 (90%), warn=0.7 (70%)
 
 - CVw_B: pass=1.2 (120%), warn=2.0 (200%)
 
-- B_size: pass=1.0 (100%), warn=0.5 (50%)
+- B_size (lower bound, target `target_ess_best`): pass=1.0 (100%),
+  warn=0.5 (50%)
 
-- Percentile: pass=1.0 (100%), warn=1.5 (150%)
+- B_size_upper (upper cap, target `target_max_best_subset`, lower is
+  better): pass when `n_best_subset <= target`, warn when it exceeds the
+  cap by at most 20%, fail beyond that.
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  enforces the cap when it selects the subset, so in a normal run this
+  is an invariant check.
 
 - Param ESS: pass=1.0 (100%), warn=0.8 (80%)
+
+The subset percentile (`percentile_used` against
+`target_max_best_subset / n_total * 100`) carries the same information
+as B_size_upper on the same denominator, so its status is reported in
+`summary$percentile_status` but is not gated.
+
+The function defaults for the targets (300 / 0.95 / 0.5) are not the
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+control defaults (`ESS_best = 100`, `A_best = 0.70`, `CVw_best = 1.0`);
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+always passes its targets explicitly.
 
 ## Overall Status
 

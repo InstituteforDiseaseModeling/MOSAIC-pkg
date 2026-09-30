@@ -49,8 +49,10 @@ calc_model_cor(
 
 - weights:
 
-  Optional numeric vector of non-negative weights (recycled if length
-  1). Only used when `method = "pearson"`; ignored otherwise.
+  Optional numeric vector of non-negative weights: length 1 (recycled),
+  the input length (subset with the same pairwise validity mask), or the
+  number of valid pairs (pre-filtered). Only used when
+  `method = "pearson"`; ignored otherwise.
 
 - verbose:
 

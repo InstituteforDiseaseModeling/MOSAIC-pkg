@@ -15,7 +15,7 @@ suitability (psi) based on the climate covariates."><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,7 +91,7 @@ suitability (psi) based on the climate covariates.</p>
 
 
 <dt id="arg-fit-date-stop">fit_date_stop<a class="anchor" aria-label="anchor" href="#arg-fit-date-stop"></a></dt>
-<dd><p>Date string or NULL. End date for model fitting period. If NULL, auto-detects from last date with both cholera cases and complete ENSO data.</p></dd>
+<dd><p>Date string or NULL. End date (inclusive) of the model fitting period. If NULL, auto-detects the last date with both cholera cases and complete ENSO data. With a pre-computed <code>target_*</code> <code>response_var</code>, a cutoff earlier than the panel's target-anchor window leaks post-cutoff scaling into the targets; lstm_v2 warns when this happens (see <strong>Leakage</strong>).</p></dd>
 
 
 <dt id="arg-pred-date-start">pred_date_start<a class="anchor" aria-label="anchor" href="#arg-pred-date-start"></a></dt>
@@ -99,15 +99,18 @@ suitability (psi) based on the climate covariates.</p>
 
 
 <dt id="arg-pred-date-stop">pred_date_stop<a class="anchor" aria-label="anchor" href="#arg-pred-date-stop"></a></dt>
-<dd><p>Date string or NULL. End date for prediction period. If NULL, auto-detects from last date with complete ENSO data.</p></dd>
+<dd><p>Date string or NULL. End date for prediction period. If NULL, auto-detects from last date with complete ENSO data (lstm_v2: plus <code>arch_control$lead</code> weeks when a forecast lead is trained).</p></dd>
 
 
 <dt id="arg-feature-set">feature_set<a class="anchor" aria-label="anchor" href="#arg-feature-set"></a></dt>
-<dd><p>Named covariate set, shared by both architectures: <code>"v7.3"</code>
-(default; the 38 screening-informed features, see <code><a href="MINFEAT_V7_3_FEATURE_SET.html">MINFEAT_V7_3_FEATURE_SET</a></code>)
-or <code>"default"</code> (full production candidate set). This is the SOLE public,
-schema-guarded feature selector. Errors if a <code>"v7.3"</code> feature is absent from
-the suitability CSV (schema-drift guard).</p></dd>
+<dd><p>Named covariate set: <code>"v7.3"</code> (default; the 38
+screening-informed features, see <code><a href="MINFEAT_V7_3_FEATURE_SET.html">MINFEAT_V7_3_FEATURE_SET</a></code>),
+<code>"v7.4"</code> (v7.3 plus 4 cyclone/drought hazard channels = 42 features, see
+<code><a href="MINFEAT_V7_4_FEATURE_SET.html">MINFEAT_V7_4_FEATURE_SET</a></code>; lstm_v2 only, and requires a
+<code>source_csv</code> compiled with the hazard GAMs), or <code>"default"</code> (full
+production candidate set). <code>"v7.3"</code> and <code>"default"</code> are shared by both
+architectures. This is the SOLE public, schema-guarded feature selector:
+errors if a named set's feature is absent from the suitability CSV.</p></dd>
 
 
 <dt id="arg-response-var">response_var<a class="anchor" aria-label="anchor" href="#arg-response-var"></a></dt>
@@ -219,9 +222,11 @@ weeks are zero, higher per high-incidence country) plus an optional per-row
 confidence-weight overlay. Training uses expanding-window rolling-origin CV
 (each step validates strictly forward in time with a 4-week embargo,
 early-stopping records <code>best_epoch</code>); the model is then refit on the full
-in-sample data at <code>median(best_epoch)</code>. <code>n_seeds</code> fits are averaged on the
-logit scale to yield the prediction (canonical <code>psi</code> column), plus
-seed-dispersion quantiles (diagnostic only, NOT predictive intervals). This
+in-sample data at <code>median(best_epoch)</code>. The <code>n_seeds</code> fits are combined by
+the cross-seed MEDIAN on the logit scale (not the mean) to yield the
+prediction (canonical <code>psi</code> column), plus seed-dispersion quantiles
+(diagnostic only, NOT predictive intervals). A seed whose fit errors is
+dropped with a warning and the manifest records the seeds actually pooled. This
 regime fixes the v0.33 random-split temporal leak that collapsed out-of-sample
 forecasts. Defaults are pinned to the B4 fixture; override via <code>arch_control</code>.</p>
 <p><em>Honest framing.</em> lstm_v2 converts a structurally-collapsed flat psi
@@ -252,6 +257,30 @@ temporally-adjacent weeks on both sides of the train/val boundary, so the
 out-of-sample forecast collapses in amplitude – the failure lstm_v2 fixes.</p>
     </div>
     <div class="section level2">
+    <h2 id="leakage">Leakage<a class="anchor" aria-label="anchor" href="#leakage"></a></h2>
+
+
+<p>The <code>"transmission_intensity"</code> response is re-anchored on training rows only
+(<code>date &lt;= fit_date_stop</code>), so any cutoff is leak-free on the target side. The
+pre-computed <code>target_*</code> columns (including the default
+<code>"target_D_rate_per_country_floored"</code>) arrive scaled by anchors that
+<code><a href="compile_suitability_data.html">compile_suitability_data</a></code> computed over its anchor window –
+the whole panel unless it was built with <code>target_anchor_stop</code>. Fitting such a
+panel at an earlier <code>fit_date_stop</code> trains (and bias-corrects) on targets
+scaled by later outbreaks, so out-of-sample skill measured from that fit is
+optimistic; lstm_v2 warns when it detects this and records the anchor window
+end as <code>target_anchor_end</code> in <code>psi_suitability_config.json</code>. The production
+refresh (auto-detected <code>fit_date_stop</code> at the end of surveillance) is not
+affected. For a retrospective / forecast-CV psi use
+<code>response_var = "transmission_intensity"</code> or a per-cutoff panel compiled with
+<code>target_anchor_stop</code>. Covariate climatologies in the panel remain full-window
+(see <code><a href="compile_suitability_data.html">compile_suitability_data</a></code>).
+The frozen <code>lstm_v1_legacy</code> path is never leak-free for a retrospective
+cutoff: it counts unobserved weeks as zero cases and scales its response by an
+anchor over the whole panel. Its numerics are frozen, so it warns instead when
+<code>fit_date_stop</code> precedes the last observed surveillance week.</p>
+    </div>
+    <div class="section level2">
     <h2 id="migration-reproduce-v-production-behavior-">Migration (reproduce v0.33 production behavior)<a class="anchor" aria-label="anchor" href="#migration-reproduce-v-production-behavior-"></a></h2>
 
 
@@ -278,8 +307,11 @@ shared-LSTM path:</p><div class="sourceCode"><pre><code><span></span>
 <span class="r-in"><span><span class="co"># Basic usage with default settings (lstm_v2 hierarchical-FiLM, rolling-CV)</span></span></span>
 <span class="r-in"><span><span class="fu">est_suitability</span><span class="op">(</span><span class="va">PATHS</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Custom date ranges for fitting and prediction</span></span></span>
+<span class="r-in"><span><span class="co"># Custom date ranges for fitting and prediction. A retrospective cutoff on</span></span></span>
+<span class="r-in"><span><span class="co"># the canonical (full-window-anchored) panel needs the train-only anchored</span></span></span>
+<span class="r-in"><span><span class="co"># response to be leak-free (see the Leakage section).</span></span></span>
 <span class="r-in"><span><span class="fu">est_suitability</span><span class="op">(</span><span class="va">PATHS</span>,</span></span>
+<span class="r-in"><span>               response_var <span class="op">=</span> <span class="st">"transmission_intensity"</span>,</span></span>
 <span class="r-in"><span>               fit_date_start <span class="op">=</span> <span class="st">"2015-01-01"</span>,</span></span>
 <span class="r-in"><span>               fit_date_stop <span class="op">=</span> <span class="st">"2023-12-31"</span>,</span></span>
 <span class="r-in"><span>               pred_date_start <span class="op">=</span> <span class="st">"2020-01-01"</span>,</span></span>

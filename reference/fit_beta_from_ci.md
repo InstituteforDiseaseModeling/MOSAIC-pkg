@@ -61,6 +61,26 @@ A list containing:
 
 - input_ci: The input confidence interval
 
+## Details
+
+`"moment_matching"` (default) keeps the mode exact: every Beta with both
+shapes above 1 and mode \\m\\ is \\\mathrm{Beta}(1 + mk, 1 + (1 - m)k)\\
+for some concentration \\k \> 0\\, and \\k\\ is chosen to minimise the
+squared error of the fitted 2.5% and 97.5% quantiles against the CI on
+the logit scale. Logit-scale errors are relative errors for small
+proportions, so a CI around 1e-6 is matched as closely as one around
+0.5. When the CI is wider than any unimodal Beta with that mode allows,
+the widest achievable interval is returned. Because errors are relative,
+a bound far outside what a Beta with this mode can reach (for example a
+lower bound clamped to 1e-10 after a linear widening) dominates the fit
+and pulls the mean up; pass a CI the family can represent, or refit
+samples by their moments instead. `mode_val` is a mode: to anchor a
+mean, use a mean-based fit.
+
+`"optimization"` fits both shapes freely to the mode and the two
+quantiles (all on the logit scale, mode weighted 100x), so the mode is
+matched closely but not exactly.
+
 ## Examples
 
 ``` r
@@ -70,26 +90,26 @@ result <- fit_beta_from_ci(mode_val = 0.788,
                             ci_upper = 0.822)
 print(result)
 #> $shape1
-#> [1] 446.3372
+#> [1] 419.8812
 #> 
 #> $shape2
-#> [1] 120.8115
+#> [1] 113.6939
 #> 
 #> $fitted_mode
 #> [1] 0.788
 #> 
 #> $fitted_mean
-#> [1] 0.7869844
+#> [1] 0.7869205
 #> 
 #> $fitted_var
-#> [1] 0.0002950635
+#> [1] 0.0003136633
 #> 
 #> $fitted_sd
-#> [1] 0.01717741
+#> [1] 0.01771054
 #> 
 #> $fitted_ci
 #>     lower     upper 
-#> 0.7523816 0.8196704 
+#> 0.7512149 0.8205891 
 #> 
 #> $input_mode
 #> [1] 0.788

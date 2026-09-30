@@ -80,7 +80,7 @@ calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
 #> Estimated k = 1.390 (from Var = 20.333, Mean = 4.667)
 #> Negative Binomial log-likelihood (k=1.390): -7.50
 #> [1] -7.498757
-# Provide k but allow flooring if too small
+# Supply the dispersion k explicitly (used exactly as given)
 calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5), k = 1.2)
 #> Using provided k = 1.200
 #> Negative Binomial log-likelihood (k=1.200): -7.51

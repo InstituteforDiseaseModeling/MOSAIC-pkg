@@ -1,7 +1,9 @@
 # Write ensemble trajectory channels to per-location CSV
 
-Exports the ensemble-median daily trajectory of every captured channel
-to a plain-text CSV, one file per location, as `trajectories_<LOC>.csv`.
+Exports the ensemble central daily trajectory of every captured channel
+(the artifact's `$summary[[channel]]$median` field, which is not always
+a median; see "What is lost") to a plain-text CSV, one file per
+location, as `trajectories_<LOC>.csv`.
 
 ## Usage
 
@@ -89,8 +91,22 @@ and rest on the pinned `rho_deaths`.
 ## What is lost
 
 The summary carries one central line per channel and no credible
-intervals: `disease_deaths` follows the run's deaths `central_method`
-(default mean), and every other channel is the weighted **median**.
+intervals. The central line is not the same statistic for every column:
+
+- `reported_cases` and `reported_deaths` follow the run's per-channel
+  `central_method` (default weighted **mean**), matching
+  `predicted_central` in the prediction CSVs; `disease_deaths` follows
+  the deaths `central_method`.
+
+- `mass_balance` is a ratio of the compartments' weighted means, `CFR` a
+  ratio of 28-day rolling sums of the weighted-mean reported deaths and
+  cases, and `epidemic_frac` the weighted mean of the reconstructed
+  epidemic flag.
+
+- `I_total` is the sum of the `Isym` and `Iasym` medians.
+
+- Every other channel is the weighted **median**.
+
 Intervals for these channels require the per-member data.
 `reported_cases` and `reported_deaths` keep their intervals in the
 prediction CSVs.

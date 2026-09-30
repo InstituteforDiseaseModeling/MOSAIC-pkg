@@ -18,9 +18,9 @@ matching the small-\\n\\ discipline of
 plot_forecast_cv_skill(
   x,
   value = c("R2_corr", "bias_ratio", "R2_sse", "wis_skill", "mae_skill"),
-  horizon_months = 6,
+  horizon_months = 3,
   baseline = "seasonal",
-  model = "ensemble",
+  model = "ensemble_opt",
   metrics = c("cases", "deaths"),
   show_gated = TRUE,
   title = NULL,
@@ -50,7 +50,10 @@ plot_forecast_cv_skill(
 
 - horizon_months:
 
-  Primary OOS horizon; mapped to the `OOS<={h}mo` window (default 6).
+  Primary OOS horizon; mapped to the `OOS<={h}mo` window (default 3, the
+  forecast-CV scoring cap, which
+  [`evaluate_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_rolling_cv.md)'s
+  default horizons include).
 
 - baseline:
 
@@ -59,7 +62,10 @@ plot_forecast_cv_skill(
 
 - model:
 
-  Model type to plot (default `"ensemble"`).
+  Model type to plot (default `"ensemble_opt"`, the headline model of
+  [`make_forecast_cv_table`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_forecast_cv_table.md)
+  and
+  [`plot_forecast_cv_grid`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_forecast_cv_grid.md)).
 
 - metrics:
 

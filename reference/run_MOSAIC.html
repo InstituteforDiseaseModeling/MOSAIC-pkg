@@ -35,7 +35,7 @@ Posterior predictive checks and uncertainty quantification
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -143,7 +143,11 @@ present, and is removed when the run completes; otherwise the state is
 reconstructed from the shards). Behaviour by mode: in adaptive (auto) mode
 the run continues from <code>max(sim_id)+1</code> and does <em>not</em> backfill
 interior gaps (a lost/quarantined shard reduces the pool); in fixed mode any
-missing id within the target is re-run so the exact target is met.</p>
+missing id within the target is re-run so the exact target is met. With
+<code>resume = FALSE</code>, shards already in the samples directory are moved to
+<code>2_calibration/samples_stale_&lt;time&gt;/</code> (never pooled), and the
+post-calibration artifacts of an earlier run into the same directory are
+removed before they are rebuilt.</p>
 <p>Resume is <strong>rejected</strong> (hard error) when:</p><ul><li><p><code>control$paths$clean_output = TRUE</code> (the wipe would delete the shards);</p></li>
 <li><p>the run already completed – a consolidated <code>2_calibration/samples.parquet</code>
 exists that the on-disk shards would shrink (start fresh, or remove it to recompute);</p></li>
@@ -189,7 +193,7 @@ ignoring it. See <a href="removed_api.html">removed_api</a>.</p></dd>
 <dd><p>Named list of key output files</p></dd>
 
 <dt>summary</dt>
-<dd><p>Named list with run statistics (batches, sims, converged, runtime)</p></dd>
+<dd><p>Named list with run statistics (batches, sims, converged, convergence_evaluated, runtime); fixed mode never evaluates the ESS stopping criterion, so it reports <code>converged = FALSE</code> with <code>convergence_evaluated = FALSE</code></p></dd>
 
 
 </dl></div>
@@ -270,9 +274,11 @@ ignoring it. See <a href="removed_api.html">removed_api</a>.</p></dd>
 <span class="r-in"><span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_location_config.html">get_location_config</a></span><span class="op">(</span>iso <span class="op">=</span> <span class="st">"ETH"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">priors</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_location_priors.html">get_location_priors</a></span><span class="op">(</span>iso <span class="op">=</span> <span class="st">"ETH"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Tighten transmission rate prior</span></span></span>
-<span class="r-in"><span><span class="va">priors</span><span class="op">$</span><span class="va">tau_i</span><span class="op">$</span><span class="va">shape</span> <span class="op">&lt;-</span> <span class="fl">20</span></span></span>
-<span class="r-in"><span><span class="va">priors</span><span class="op">$</span><span class="va">tau_i</span><span class="op">$</span><span class="va">rate</span> <span class="op">&lt;-</span> <span class="fl">4</span></span></span>
+<span class="r-in"><span><span class="co"># Tighten the departure-probability (tau_i) prior for ETH. Location priors</span></span></span>
+<span class="r-in"><span><span class="co"># live under priors$parameters_location; tau_i is lognormal(meanlog, sdlog).</span></span></span>
+<span class="r-in"><span><span class="va">tau_eth</span> <span class="op">&lt;-</span> <span class="va">priors</span><span class="op">$</span><span class="va">parameters_location</span><span class="op">$</span><span class="va">tau_i</span><span class="op">$</span><span class="va">location</span><span class="op">$</span><span class="va">ETH</span><span class="op">$</span><span class="va">parameters</span></span></span>
+<span class="r-in"><span><span class="va">tau_eth</span><span class="op">$</span><span class="va">sdlog</span> <span class="op">&lt;-</span> <span class="va">tau_eth</span><span class="op">$</span><span class="va">sdlog</span> <span class="op">/</span> <span class="fl">2</span></span></span>
+<span class="r-in"><span><span class="va">priors</span><span class="op">$</span><span class="va">parameters_location</span><span class="op">$</span><span class="va">tau_i</span><span class="op">$</span><span class="va">location</span><span class="op">$</span><span class="va">ETH</span><span class="op">$</span><span class="va">parameters</span> <span class="op">&lt;-</span> <span class="va">tau_eth</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu">run_MOSAIC</span><span class="op">(</span><span class="va">config</span>, <span class="va">priors</span>, <span class="st">"./output"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>

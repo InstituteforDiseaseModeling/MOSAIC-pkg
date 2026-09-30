@@ -15,7 +15,7 @@ the last estimated year."><meta property="og:image" content="https://institutefo
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -107,6 +107,16 @@ logit scale). A simulation that draws deaths directly at <code>mu_jt</code> – 
 scenario run or a prior-predictive check – runs 5-10% below WHO-annual
 deaths (2018-25); the logit-normal mean would over-predict, because annual
 CFR is lower in high-case years.</p>
+<p>The default <code>"linear_logit"</code> centre and the integrated likelihood's
+year deviations use different time bases on purpose. The deviations are
+calendar-year levels blended over 30 days either side of 1 January
+(<code>.d7_basis()</code> in <code>calc_log_likelihood_deaths_integrated.R</code>),
+while the centre interpolates between 1 July anchors, so from January to
+June the centre sits partway toward the previous year's value. The
+resulting offset is at most the year-to-year change in the GAM centre
+(under 0.07 logit, about 3 percent of the CFR, for 2022-26 estimates) and is
+absorbed by the year deviation; years past the last estimate are held flat,
+so forecast windows are unaffected.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

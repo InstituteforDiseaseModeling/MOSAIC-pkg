@@ -25,7 +25,7 @@ ensembles, computed via evaluate_rolling_cv.'><meta property="og:image" content=
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -109,8 +109,7 @@ ensembles, computed via <code><a href="evaluate_rolling_cv.html">evaluate_rollin
 
 
 <dt id="arg-horizon-max-months">horizon_max_months<a class="anchor" aria-label="anchor" href="#arg-horizon-max-months"></a></dt>
-<dd><p>Max assessed horizon in months; right edge of each
-panel relative to its cutoff (default 5).</p></dd>
+<dd><p>Max assessed horizon in months; right edge of each panel relative to its scoring origin (default 5).</p></dd>
 
 
 <dt id="arg-context-months">context_months<a class="anchor" aria-label="anchor" href="#arg-context-months"></a></dt>
@@ -200,11 +199,14 @@ nothing is written and the ggplot objects are returned for further use.</p></dd>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p><strong>Horizon truncation.</strong> The compiled artifact stores the full OOS path
 to <code>window_stop</code> regardless of cutoff, so an early cutoff appears to
-forecast years ahead. This function clips each panel to
-<code>[cutoff - context_months, cutoff + horizon_max_months]</code> so the plotted
-window equals the scored window. Scoring in <code><a href="evaluate_rolling_cv.html">evaluate_rolling_cv()</a></code> is
-already restricted to cumulative \(\le h\)-month windows, so this is a
-display change only.</p>
+forecast years ahead. <code><a href="evaluate_rolling_cv.html">evaluate_rolling_cv()</a></code> scores the dates strictly
+after the scoring origin – the later of the cutoff and the last
+<code>segment == "embargo"</code> date – up to origin + <code>horizon_max_months</code>.
+This function clips each panel to
+<code>[cutoff - context_months, origin + horizon_max_months]</code> and shades
+<code>(origin, origin + horizon_max_months]</code>, so the shaded region is the
+scored window; any harness embargo sits unshaded between the dashed cutoff
+rule and the band. The skill annotation is computed on the unclipped series.</p>
 <p><strong>Styling.</strong> Uses <code><a href="theme_mosaic.html">theme_mosaic</a></code> and the MOSAIC semantic
 palette. Output is sized for 16:9 slides and written as both PNG (raster,
 <code>dpi</code>) and PDF (vector) when <code>dir_output</code> is supplied.</p>

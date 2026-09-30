@@ -100,7 +100,10 @@ run_mosaic(
   adaptive (auto) mode the run continues from `max(sim_id)+1` and does
   *not* backfill interior gaps (a lost/quarantined shard reduces the
   pool); in fixed mode any missing id within the target is re-run so the
-  exact target is met.
+  exact target is met. With `resume = FALSE`, shards already in the
+  samples directory are moved to `2_calibration/samples_stale_<time>/`
+  (never pooled), and the post-calibration artifacts of an earlier run
+  into the same directory are removed before they are rebuilt.
 
   Resume is **rejected** (hard error) when:
 
@@ -161,7 +164,10 @@ Invisibly returns a list with:
 
 - summary:
 
-  Named list with run statistics (batches, sims, converged, runtime)
+  Named list with run statistics (batches, sims, converged,
+  convergence_evaluated, runtime); fixed mode never evaluates the ESS
+  stopping criterion, so it reports `converged = FALSE` with
+  `convergence_evaluated = FALSE`
 
 ## Control Structure
 
@@ -253,9 +259,11 @@ run_MOSAIC(config, priors, "./output", ctrl)
 config <- get_location_config(iso = "ETH")
 priors <- get_location_priors(iso = "ETH")
 
-# Tighten transmission rate prior
-priors$tau_i$shape <- 20
-priors$tau_i$rate <- 4
+# Tighten the departure-probability (tau_i) prior for ETH. Location priors
+# live under priors$parameters_location; tau_i is lognormal(meanlog, sdlog).
+tau_eth <- priors$parameters_location$tau_i$location$ETH$parameters
+tau_eth$sdlog <- tau_eth$sdlog / 2
+priors$parameters_location$tau_i$location$ETH$parameters <- tau_eth
 
 run_MOSAIC(config, priors, "./output")
 

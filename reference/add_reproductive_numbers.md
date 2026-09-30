@@ -42,17 +42,23 @@ add_reproductive_numbers(
 - recompute_ci:
 
   Logical. When `TRUE`, build a proper posterior credible interval by
-  **re-simulating** the saved posterior ensemble
-  (`2_calibration/ensemble_candidate.rds`) and computing R_eff per
-  member, then weighted quantiles (median + 95% interval). This captures
-  the daily route incidence, stock and decay-rate channels that the
-  persisted trajectory artifact does not retain at a daily grid. A
-  faithfulness gate confirms the re-sim reproduces the saved
-  `cases_array` before any CI is written. When `FALSE` (default) the
-  cheap point-estimate path is used (renewal on the weighted-median
-  route incidence from `trajectories_ensemble.rds`; CI columns are
-  populated only if the artifact carries daily-consecutive per-member
-  lines, otherwise NA).
+  **re-simulating** the run's posterior members and computing R_eff per
+  member: `central` is the medoid trajectory's R_t and
+  `q2.5`/`q50`/`q97.5` are per-calendar-day cross-member weighted
+  quantiles. Members are re-simulated from
+  `2_calibration/ensemble_candidate.rds` (whose seeds reproduce them)
+  and weighted, and the medoid chosen, by the run's FINAL posterior
+  (`2_calibration/ensemble_optimized.rds`, mapped onto the candidate by
+  seed; the optimized subset when `optimize_subset = TRUE`). Requires a
+  run with `control$io$persist_ensemble_arrays = TRUE`; does not need
+  the trajectory artifact. This captures the daily route incidence,
+  stock and decay-rate channels that the persisted trajectory artifact
+  does not retain at a daily grid. A faithfulness gate confirms the
+  re-sim reproduces the saved `cases_array` before any CI is written.
+  When `FALSE` (default) the cheap point-estimate path is used (renewal
+  on the weighted-median route incidence from
+  `trajectories_ensemble.rds`; CI columns are populated only if the
+  artifact carries daily-consecutive per-member lines, otherwise NA).
 
 - burn_in_days:
 

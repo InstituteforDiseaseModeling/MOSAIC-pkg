@@ -145,10 +145,28 @@ compile_suitability_data(
   re-baselining – with a fixed anchor window a data refresh can no
   longer shift the entire historical target series.
 
-  Default `NULL` = full-window anchors (back-compatible; the canonical
-  panel is unchanged). Note `target_F_rank_per_country` is a rank over
-  the country's whole observed series and is full-window BY
-  CONSTRUCTION; this argument does not and cannot make it leak-free.
+  Default `NULL` = full-window anchors (back-compatible). Note
+  `target_F_rank_per_country` is a rank over the country's whole
+  observed series and is full-window BY CONSTRUCTION; this argument does
+  not and cannot make it leak-free.
+
+  The panel records the effective anchor window end (the last trusted,
+  observed row used for the anchors) in a constant `target_anchor_stop`
+  column.
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  warns when a `target_*` response is fit with a cutoff earlier than
+  this date.
+
+  **Leakage scope.** `gam_train_stop` and `target_anchor_stop` bound the
+  hazard GAMs and the target anchors only. Covariate standardisations
+  are still computed over the whole panel window, including rows after
+  either bound: the week-of-year climatology anomalies (`precip_anom`,
+  `temp_anom`, `soil_moisture_anom`, ...), the per-country `spei_approx`
+  scaling, the precipitation p90 / temperature p95 extreme thresholds,
+  and the `emdat_flood_prob_anom` baseline. No post-cutoff case data
+  enters these, but in a per-cutoff panel the pre-cutoff values of those
+  covariates depend weakly on the post-cutoff climate distribution, so
+  such a panel is leak-free on the target and hazard side only.
 
 - backfill_case_gaps:
 

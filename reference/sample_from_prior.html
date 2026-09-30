@@ -9,7 +9,7 @@ Expects all priors to have consistent structure with $distribution and $paramete
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -78,7 +78,9 @@ Returns NA values if prior is NULL/invalid.</p>
 <li><p><code>$parameters</code>: List containing the distribution parameters</p></li>
 </ul><p>Supported distributions:</p><ul><li><p><strong>beta</strong>: parameters$shape1, parameters$shape2</p></li>
 <li><p><strong>gamma</strong>: parameters$shape, parameters$rate</p></li>
-<li><p><strong>lognormal</strong>: parameters$meanlog, parameters$sdlog OR parameters$mean, parameters$sd</p></li>
+<li><p><strong>lognormal</strong>: parameters$meanlog, parameters$sdlog OR parameters$mean, parameters$sd;
+optional parameters$lower / parameters$upper truncate the draw (meanlog/sdlog
+then describe the untruncated distribution)</p></li>
 <li><p><strong>normal</strong>: parameters$mean, parameters$sd</p></li>
 <li><p><strong>truncnorm</strong>: parameters$mean, parameters$sd, parameters$a (lower bound), parameters$b (upper bound)</p></li>
 <li><p><strong>uniform</strong>: parameters$min, parameters$max</p></li>

@@ -1,10 +1,10 @@
 # Check Installed R and Python Dependencies for MOSAIC
 
 This function checks the MOSAIC Python conda environment, verifies that
-the expected Python packages are installed, and confirms that the R
-packages `keras3` and `tensorflow` are present and configured correctly.
-It prints the currently active Python configuration and confirms whether
-the backend is working.
+the expected Python packages are installed, and reports the versions of
+the optional R packages `keras3` and `tensorflow` when they are
+installed. It prints the currently active Python configuration and
+confirms whether the backend is working.
 
 Since v0.68.0 the transmission engine is pure R, so the Python
 environment exists only for the environmental-suitability (psi) model.

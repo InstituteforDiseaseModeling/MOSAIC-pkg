@@ -7,7 +7,7 @@ parameter.
 ## Usage
 
 ``` r
-sim_seed_state(state, par)
+sim_seed_state(state, par, ctl)
 ```
 
 ## Arguments
@@ -21,6 +21,14 @@ sim_seed_state(state, par)
 
   Parameters from
   [`sim_params()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sim_params.md).
+
+- ctl:
+
+  Draw controller from
+  [`sim_draws()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sim_draws.md)
+  (required); `"replay"` keeps the oracle's deterministic
+  [`round()`](https://rdrr.io/r/base/Round.html) split of `I_j_initial`,
+  any other mode draws it.
 
 ## Value
 

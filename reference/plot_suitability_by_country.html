@@ -11,7 +11,7 @@ prediction files."><meta property="og:image" content="https://institutefordiseas
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,8 +71,11 @@ historical (black) and future (orange) predictions.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function reads pred_psi_suitability_week.csv created by est_suitability(),
-which contains the columns: iso_code, year, week, date, cases, cases_binary, and pred.</p>
+    <p>The function reads pred_psi_suitability_week.csv created by est_suitability()
+(columns iso_code, year, date and psi) and plots the canonical <code>psi</code>
+column (smoothed and bias-corrected), the series that becomes the engine's
+<code>psi_jt</code>. A pre-v0.34 file without <code>psi</code> falls back to
+<code>pred_smooth</code>, with a message.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -8,7 +8,7 @@ is used:
 
 - .json or .json.gz → written with write_list_to_json,
 
-- .h5, or .h5.gz → written with write_list_to_hdf5,
+- .h5, .hdf5, .h5.gz or .hdf5.gz → written with write_list_to_hdf5,
 
 - .yaml or .yaml.gz → written with write_list_to_yaml.
 
@@ -100,9 +100,9 @@ make_simulation_config(
 - output_file_path:
 
   A character string representing the full file path of the output file.
-  Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz
-  extension. If NULL, no file is written and the parameters are
-  returned.
+  Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .hdf5.gz, .yaml, or
+  .yaml.gz extension. If NULL, no file is written. The validated
+  parameters are returned either way.
 
 - seed:
 
@@ -277,18 +277,18 @@ make_simulation_config(
 
 - gamma_1:
 
-  Symptomatic shedding-duration rate `I_sym -> R` (numeric= 0, per day;
-  "severe / symptomatic" branch).
+  Symptomatic shedding-duration rate `I_sym -> R` (numeric, `>= 0`, per
+  day; "severe / symptomatic" branch).
 
 - gamma_2:
 
-  Asymptomatic shedding-duration rate `I_asym -> R` (numeric= 0, per
-  day; "mild / asymptomatic" branch).
+  Asymptomatic shedding-duration rate `I_asym -> R` (numeric, `>= 0`,
+  per day; "mild / asymptomatic" branch).
 
 - epsilon:
 
-  Natural-infection immunity waning rate `R -> S` (numeric= 0, per day).
-  Distinct from vaccine waning (omega_1, omega_2).
+  Natural-infection immunity waning rate `R -> S` (numeric, `>= 0`, per
+  day). Distinct from vaccine waning (`omega_1`, `omega_2`).
 
 - mu_jt:
 
@@ -325,9 +325,9 @@ make_simulation_config(
   v0.95.0 (CFR restructure R3): it is not estimable from the deaths
   series, it double-counted the `s(year)` term already inside
   `CFR_target`, and no secular trend in cholera CFR is documented.
-  Retained only so that configs written before v0.95.0 can still be
-  replayed through `do.call(make_simulation_config, config)`; any value
-  supplied is silently dropped and is **not** returned in the config.
+  Retained only so that existing calls that pass `mu_j_slope` explicitly
+  do not fail with an unused-argument error; any value supplied is
+  silently dropped and is **not** returned in the config.
 
 - mu_j_epidemic_factor:
 
@@ -477,8 +477,7 @@ make_simulation_config(
   Exponent on `N_jt` in the FOI denominator (numeric in \[0, 1\]).
   `alpha_2 = 1` is frequency-dependent transmission (FOI proportional to
   `I/N`); `alpha_2 = 0` is density-dependent (FOI proportional to `I`).
-  Dual-mode: scalar or a per-location vector of length
-  `length(location_name)`.
+  A single global scalar: the engine rejects a per-location vector.
 
   ### Force of Infection (environment-to-human)
 
@@ -590,14 +589,14 @@ make_simulation_config(
 
 - sigfigs:
 
-  Integer; number of significant figures to round all numeric values to.
-  Default is 4.
+  Ignored; retained for backward compatibility. No rounding is applied,
+  and supplying it raises a warning.
 
 ## Value
 
-Returns the validated list of parameters. If output_file_path is
-provided, the parameters are written to a file in the format determined
-by the file extension.
+The validated list of parameters (invisibly when `output_file_path` is
+provided, after the parameters are written to a file in the format
+determined by the file extension).
 
 ## Examples
 

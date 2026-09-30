@@ -9,7 +9,7 @@ a2 cos(4 pi t/p) + b2 sin(4 pi t/p))."><meta property="og:image" content="https:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,6 +70,11 @@ Python implementation writes <code>np.arange(0, nticks) + 1</code> with the comm
 "R is 1-indexed, so we start at 1", i.e. it already matches an R convention.
 Using <code>0:(nticks-1)</code> here would phase-shift the whole seasonal envelope
 by one day.</p>
+<p><strong>Calendar phase.</strong> The coefficients are estimated on calendar
+day-of-year (<code><a href="est_seasonal_dynamics.html">est_seasonal_dynamics()</a></code>, t = 1 is 1 January), so tick
+<code>i</code> is evaluated at <code>t = par$season_t0 + i</code>, where
+<code>season_t0</code> is the day-of-year of <code>date_start</code> minus one (set by
+<code><a href="sim_params.html">sim_params()</a></code>; 0 for a 1 January start, and taken as 0 when absent).</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

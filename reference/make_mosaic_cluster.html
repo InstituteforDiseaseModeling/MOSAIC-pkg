@@ -15,7 +15,7 @@ the overhead of repeated cluster creation."><meta property="og:image" content="h
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -75,7 +75,8 @@ connections if that is smaller, with a message – see Details.</p></dd>
 
 
 <dt id="arg-type">type<a class="anchor" aria-label="anchor" href="#arg-type"></a></dt>
-<dd><p>Character. Cluster type: <code>"PSOCK"</code> (default, all platforms) or</p></dd>
+<dd><p>Character. Cluster type: <code>"PSOCK"</code> (default, all platforms) or
+<code>"FORK"</code> (Linux/Mac only, faster startup).</p></dd>
 
 
 <dt id="arg-require-root">require_root<a class="anchor" aria-label="anchor" href="#arg-require-root"></a></dt>
@@ -83,8 +84,7 @@ connections if that is smaller, with a message – see Details.</p></dd>
 be set and is propagated to the workers, which simulation workers need to
 resolve <code><a href="get_paths.html">get_paths()</a></code>. <code>FALSE</code> allows a cluster without one, for
 workers handed explicit paths – <code><a href="render_MOSAIC_figures.html">render_MOSAIC_figures</a></code> runs
-post-hoc on a finished run directory and may have no MOSAIC tree at all.
-<code>"FORK"</code> (Linux/Mac only, faster startup).</p></dd>
+post-hoc on a finished run directory and may have no MOSAIC tree at all.</p></dd>
 
 </dl></div>
     <div class="section level2">

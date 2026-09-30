@@ -49,7 +49,8 @@ Licence CC BY 4.0.
 - overwrite:
 
   If `FALSE` (default), an indicator whose file for `snapshot_date`
-  already exists is skipped.
+  already exists is skipped; `TRUE` replaces that dated file (use only
+  to repair a bad snapshot).
 
 - per_page:
 
@@ -75,7 +76,8 @@ retires four of the six manual sources reported by
 `process_WB_*_data()` functions select the newest match for their
 indicator. Existing hand-downloaded portal exports are left in place and
 still readable – an API pull simply outranks them by date. Nothing is
-deleted.
+deleted. Each file is written atomically (temporary file, then rename)
+and logged as one row in `raw/world_bank/PROVENANCE.md`.
 
 **All countries are fetched**, not just the MOSAIC-40: the processors do
 their own ISO filtering, and keeping the full panel means the raw file

@@ -3,15 +3,27 @@
 dose (ID50) estimates and fits a lognormal prior distribution for the
 environmental dose-response half-saturation constant \(\kappa\) used in the
 MOSAIC environmental force-of-infection term:
-$$\lambda_W \propto W / (\kappa + W)$$
-where \(W\) is the environmental bacterial concentration and \(\kappa\)
-is the concentration (CFU) at which the probability of infection is 50%."><meta property="og:description" content="This function compiles a meta-analysis of published Vibrio cholerae infectious
+$$\lambda_W \propto D / (\kappa + D), \quad D = W / N$$
+In the engine (rng mode, since v0.89.0) the dose \(D\) is the
+per-capita environmental load \(W/N\) – cells shed into the patch
+reservoir per resident – not a water concentration (sim_components.R,
+EnvToHuman step). \(\kappa\) is therefore a per-capita half-saturation
+dose. The prior below is anchored on volunteer ID50 data (CFU ingested); the
+conversion from cells per capita to an ingested dose is absorbed into the
+shedding rates \(\zeta_1, \zeta_2\), so the ID50 scale is a literature
+anchor for \(\kappa\), not a unit identity."><meta property="og:description" content="This function compiles a meta-analysis of published Vibrio cholerae infectious
 dose (ID50) estimates and fits a lognormal prior distribution for the
 environmental dose-response half-saturation constant \(\kappa\) used in the
 MOSAIC environmental force-of-infection term:
-$$\lambda_W \propto W / (\kappa + W)$$
-where \(W\) is the environmental bacterial concentration and \(\kappa\)
-is the concentration (CFU) at which the probability of infection is 50%."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
+$$\lambda_W \propto D / (\kappa + D), \quad D = W / N$$
+In the engine (rng mode, since v0.89.0) the dose \(D\) is the
+per-capita environmental load \(W/N\) – cells shed into the patch
+reservoir per resident – not a water concentration (sim_components.R,
+EnvToHuman step). \(\kappa\) is therefore a per-capita half-saturation
+dose. The prior below is anchored on volunteer ID50 data (CFU ingested); the
+conversion from cells per capita to an ingested dose is absorbed into the
+shedding rates \(\zeta_1, \zeta_2\), so the ID50 scale is a literature
+anchor for \(\kappa\), not a unit identity."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -19,7 +31,7 @@ is the concentration (CFU) at which the probability of infection is 50%."><meta 
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -56,9 +68,15 @@ is the concentration (CFU) at which the probability of infection is 50%."><meta 
 dose (ID50) estimates and fits a lognormal prior distribution for the
 environmental dose-response half-saturation constant \(\kappa\) used in the
 MOSAIC environmental force-of-infection term:
-$$\lambda_W \propto W / (\kappa + W)$$
-where \(W\) is the environmental bacterial concentration and \(\kappa\)
-is the concentration (CFU) at which the probability of infection is 50%.</p>
+$$\lambda_W \propto D / (\kappa + D), \quad D = W / N$$
+In the engine (rng mode, since v0.89.0) the dose \(D\) is the
+<em>per-capita</em> environmental load \(W/N\) – cells shed into the patch
+reservoir per resident – not a water concentration (<code>sim_components.R</code>,
+EnvToHuman step). \(\kappa\) is therefore a per-capita half-saturation
+dose. The prior below is anchored on volunteer ID50 data (CFU ingested); the
+conversion from cells per capita to an ingested dose is absorbed into the
+shedding rates \(\zeta_1, \zeta_2\), so the ID50 scale is a literature
+anchor for \(\kappa\), not a unit identity.</p>
     </div>
 
     <div class="section level2">
@@ -103,11 +121,10 @@ in healthy adults. Modern re-analyses of buffered-exposure volunteer studies
 food or contaminated drinking water) consistently support a lower central
 estimate of \(\sim 10^5\) CFU, with substantial between-study heterogeneity.</p>
 <p>Fitting: each source contributes a point estimate \(\log_{10} \kappa_i\)
-with weight \(w_i\) reflecting its evidentiary quality. Weighted mean and
-standard deviation on the log10 scale are converted to lognormal
-<code>meanlog</code> and <code>sdlog</code>. The resulting prior is reconciled with
-<code><a href="fit_lognormal_from_ci.html">fit_lognormal_from_ci()</a></code> so that <code>meanlog</code> is consistent with the
-weighted mode and the 2.5th / 97.5th percentiles match the empirical spread.</p>
+with weight \(w_i\) reflecting its evidentiary quality. The weighted mean
+and standard deviation on the log10 scale are converted directly to the
+lognormal <code>meanlog</code> and <code>sdlog</code> (<code>meanlog = mu_log10 * ln 10</code>,
+<code>sdlog = sd_log10 * ln 10</code>); no further refit is applied.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>

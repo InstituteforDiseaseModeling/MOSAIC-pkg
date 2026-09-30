@@ -13,7 +13,7 @@ and aggregates to an overall convergence status."><meta property="og:image" cont
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -112,8 +112,8 @@ and aggregates to an overall convergence status.</p>
 
 
 <dt id="arg-percentile-used">percentile_used<a class="anchor" aria-label="anchor" href="#arg-percentile-used"></a></dt>
-<dd><p>Numeric percentile of likelihood distribution used for
-best subset selection (e.g., 5.0 for top 5%)</p></dd>
+<dd><p>Numeric size of the best subset as a percentage of all
+<code>n_total</code> draws (e.g., 5.0 for the top 5%)</p></dd>
 
 
 <dt id="arg-convergence-tier">convergence_tier<a class="anchor" aria-label="anchor" href="#arg-convergence-tier"></a></dt>
@@ -207,13 +207,24 @@ targets:</p>
 </ul><p><strong>For "lower is better" metrics (CVw):</strong></p><ul><li><p><strong>PASS</strong>: value &lt;= target * pass_threshold</p></li>
 <li><p><strong>WARN</strong>: value &lt;= target * warn_threshold but &gt; pass_threshold</p></li>
 <li><p><strong>FAIL</strong>: value &gt; target * warn_threshold</p></li>
-</ul><p><strong>Default thresholds by metric:</strong></p><ul><li><p>ESS_B: pass=0.8 (80%), warn=0.5 (50%)</p></li>
+</ul><p><strong>Default thresholds by metric:</strong></p><ul><li><p>ESS_B (target <code>target_ess_best</code>): pass=1.0 (100%), warn=0.8 (80%)</p></li>
 <li><p>A_B: pass=0.9 (90%), warn=0.7 (70%)</p></li>
 <li><p>CVw_B: pass=1.2 (120%), warn=2.0 (200%)</p></li>
-<li><p>B_size: pass=1.0 (100%), warn=0.5 (50%)</p></li>
-<li><p>Percentile: pass=1.0 (100%), warn=1.5 (150%)</p></li>
+<li><p>B_size (lower bound, target <code>target_ess_best</code>): pass=1.0 (100%), warn=0.5 (50%)</p></li>
+<li><p>B_size_upper (upper cap, target <code>target_max_best_subset</code>, lower is
+better): pass when <code>n_best_subset &lt;= target</code>, warn when it exceeds the
+cap by at most 20%, fail beyond that. <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> enforces the cap
+when it selects the subset, so in a normal run this is an invariant check.</p></li>
 <li><p>Param ESS: pass=1.0 (100%), warn=0.8 (80%)</p></li>
-</ul></div>
+</ul><p>The subset percentile (<code>percentile_used</code> against
+<code>target_max_best_subset / n_total * 100</code>) carries the same information
+as B_size_upper on the same denominator, so its status is reported in
+<code>summary$percentile_status</code> but is not gated.</p>
+<p>The function defaults for the targets (300 / 0.95 / 0.5) are not the
+<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> control defaults (<code>ESS_best = 100</code>,
+<code>A_best = 0.70</code>, <code>CVw_best = 1.0</code>); <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> always
+passes its targets explicitly.</p>
+    </div>
     <div class="section level2">
     <h2 id="overall-status">Overall Status<a class="anchor" aria-label="anchor" href="#overall-status"></a></h2>
 

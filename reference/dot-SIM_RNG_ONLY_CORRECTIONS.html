@@ -11,7 +11,7 @@ replay fixtures no longer certify about production."><meta property="og:image" c
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -67,6 +67,13 @@ harness structurally cannot cover it – CLAUDE.md lesson #18(v).</p>
 table specifies a binomial. round() is not linear, so the deterministic
 form is wrong in the MEAN at low counts (zero symptomatic for every
 progression &lt;= 2 at sigma = 0.2). Covered by test-sigma-split.R.</p></dd>
+
+<dt>infectious/sigma_split_t0</dt>
+<dd><p>The same correction for the t=0 split of
+<code>I_j_initial</code>, which the oracle seeds with
+<code>round(sigma * I_j_initial)</code>: at sigma = 0.25 a patch seeded with 1
+or 2 infections starts with no symptomatic. Covered by
+test-review-engine-initial-split.R.</p></dd>
 
 <dt>envtohuman/dose_percapita</dt>
 <dd><p>v0.89.0. The oracle's dose-response is

@@ -22,8 +22,8 @@ get_symptomatic_prop_data(PATHS)
 
 ## Value
 
-The function does not return a value but saves the data frame to a CSV
-file.
+Invisibly, the data frame, after saving it to a CSV file. Errors if any
+row has `ci_lo > ci_hi` or a mean outside its interval.
 
 ## Examples
 

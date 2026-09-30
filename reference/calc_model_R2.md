@@ -53,8 +53,10 @@ calc_model_R2(
 
 - weights:
 
-  Optional non-negative weights (used for `method="sse"` and weighted
-  Pearson in `"corr"`).
+  Optional non-negative weights: length 1 (recycled), the input length
+  (subset with the validity mask), or the number of valid pairs
+  (pre-filtered); used for `method="sse"` and weighted Pearson in
+  `"corr"`.
 
 - verbose:
 

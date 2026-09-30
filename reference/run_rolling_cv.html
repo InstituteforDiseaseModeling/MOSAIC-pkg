@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -126,7 +126,10 @@ window defines the anchor and projection span.</p></dd>
 <dt id="arg-control">control<a class="anchor" aria-label="anchor" href="#arg-control"></a></dt>
 <dd><p><code>run_MOSAIC</code> control list, or NULL for an experiment-grade
 cheap default (fixed <code>n_simulations</code>, plots off). See
-<code><a href="mosaic_control_defaults.html">mosaic_control_defaults</a></code>.</p></dd>
+<code><a href="mosaic_control_defaults.html">mosaic_control_defaults</a></code>. The harness forces
+<code>paths$clean_output = TRUE</code>, so each cutoff's <code>runs/cutoff_&lt;T&gt;/</code>
+directory is wiped before its calibration and simulation shards left by an
+earlier interrupted attempt cannot enter the new posterior.</p></dd>
 
 
 <dt id="arg-optimize-subset">optimize_subset<a class="anchor" aria-label="anchor" href="#arg-optimize-subset"></a></dt>
@@ -144,8 +147,13 @@ candidate ensemble.</p></dd>
 <code>predictions.parquet</code> (default
 <code>c("ensemble","ensemble_opt","medoid")</code>). <code>"ensemble"</code>
 (posterior-weighted candidate) is always included. <code>"ensemble_opt"</code> is
-the optimizer-selected subset (only emitted when <code>optimize_subset =
-TRUE</code> and <code>ensemble_optimized.rds</code> exists). <code>"medoid"</code> is
+the optimizer-selected subset, emitted only for cutoffs where the optimizer
+actually ran and selected a subset (<code>subset_opt.rds</code> present, or a
+finite <code>n_ensemble_params_tier</code> in <code>summary.json</code>); with
+<code>optimize_subset = FALSE</code> it is dropped from <code>models</code> up front,
+and a cutoff whose optimizer selected nothing is skipped with a warning
+rather than duplicating the candidate ensemble, which
+<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> saves as a fallback <code>ensemble_optimized.rds</code>. <code>"medoid"</code> is
 re-simulated from its saved config (see <code>n_reps_best_medoid</code>).
 <code>"best"</code> is accepted for back-compat but is no longer produced by
 <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> (no <code>config_best.json</code>); it is skipped with a
@@ -191,8 +199,13 @@ per-cutoff <code><a href="est_suitability.html">est_suitability()</a></code> fit
 in-place (original behavior). When set, the per-cutoff <code><a href="est_suitability.html">est_suitability()</a></code>
 call is skipped and the frozen <code>psi_&lt;T&gt;.csv</code> is loaded from this cache
 directory instead. The run <strong>hard-errors</strong> if a requested cutoff is
-absent from the cache manifest, or if the run's <code>est_suitability_spec</code>
-hash does not match the manifest <code>spec_hash</code> recorded for that cutoff.</p></dd>
+absent from the cache manifest, if the run's <code>est_suitability_spec</code>
+hash does not match the manifest <code>spec_hash</code> recorded for that cutoff,
+or if the cache's prediction window does not cover <code>base_config</code>'s
+start through the cutoff's last OOS date. When <code>psi_cache</code> is NULL the
+per-cutoff psi is fitted into a scratch <code>MODEL_INPUT</code> (the canonical
+<code>pred_psi_suitability_day.csv</code> is never overwritten) and kept as
+<code>runs/psi_cutoff_&lt;T&gt;.csv</code>.</p></dd>
 
 
 <dt id="arg-dir-output">dir_output<a class="anchor" aria-label="anchor" href="#arg-dir-output"></a></dt>
@@ -207,7 +220,10 @@ hash does not match the manifest <code>spec_hash</code> recorded for that cutoff
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Invisibly, the manifest list. Side effects: writes
 <code>manifest.json</code>, <code>predictions.parquet</code>, and <code>runs/</code> under
-<code>dir_output</code>.</p>
+<code>dir_output</code>. <code>manifest.json</code> is rewritten atomically after every
+cutoff (<code>status = "running"</code>, then <code>"complete"</code>), so the cutoffs
+finished before an interruption can still be compiled with
+<code><a href="compile_rolling_cv_predictions.html">compile_rolling_cv_predictions</a></code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -221,19 +237,38 @@ done post-hoc by reading <code>predictions.parquet</code>.</p>
 the calibration likelihood only scores weeks \(\le T\) (observations after
 <code>T</code> are masked to <code>NA</code>); the post-<code>T</code> portion of the simulation
 is the forecast. A <code>embargo_weeks</code> gap separates the IS stop (<code>T</code>)
-from the OOS start (<code>T + embargo</code>); the embargo week is neither trained
-nor labeled OOS.</p>
-<p><strong>Leakage discipline.</strong> psi is re-fit per cutoff with
-<code>fit_date_stop = T</code>; the harness <em>owns</em> the leakage-critical date
-arguments to <code><a href="est_suitability.html">est_suitability</a></code> and overrides any date keys passed
-via <code>est_suitability_spec</code> (with a warning). <code>est_suitability_spec</code>
-therefore controls only modeling choices (target, features, architecture), not
-the cutoff window. The reported CFR <code>mu_jt</code> and its prior are rebuilt per
-cutoff from a WHO-annual GAM fitted only to years up to <code>year(T) - 1</code>
-(a calendar year's annual total is not known until the year has ended), and
-carried flat past that year's 1 July. So no post-cutoff surveillance year
-reaches the config, the prior centres or the prior widths.</p>
-<p><strong>Coupled metapopulation.</strong> <code>iso</code> may be a single country or a vector;
+from the OOS start: dates in <code>(T, T + embargo]</code> are labeled
+<code>"embargo"</code> (neither trained nor scored) and the first OOS date is
+<code>T + embargo + 1</code>. <code>weeks_ahead</code> counts whole weeks from that first
+OOS date (week 1 = its first seven days).</p>
+<p><strong>Leakage discipline.</strong> What is rebuilt as of each cutoff:</p><ul><li><p>psi is re-fit per cutoff with <code>fit_date_stop = T</code>; the harness
+<em>owns</em> the leakage-critical date arguments to
+<code><a href="est_suitability.html">est_suitability</a></code> and overrides any date keys passed via
+<code>est_suitability_spec</code> (with a warning), so the spec controls only
+modeling choices (target, features, architecture).</p></li>
+<li><p>The reported CFR <code>mu_jt</code> and its prior are rebuilt from a
+WHO-annual GAM fitted only to years up to <code>year(T) - 1</code>, carried flat
+past that year's 1 July. The annual totals used are the final revised
+ones, not the vintage that had been published at <code>T</code>.</p></li>
+<li><p>Observed cases and deaths after <code>T</code> are masked, and epidemic peaks
+whose 14-day peak-shape scoring window reaches past <code>T</code> are dropped
+from the cutoff config (an empty set is kept as a 0-row table so the
+likelihood never falls back to the full <code><a href="epidemic_peaks.html">epidemic_peaks</a></code>
+dataset). The remaining peaks were still <em>detected</em> on the full record.</p></li>
+</ul><p>What is <strong>not</strong> as of the cutoff, so the hindcast is only approximately
+leak-free:</p><ul><li><p>psi fitted in place (<code>psi_cache = NULL</code>), or from a cache built
+with any feature set other than <code>"v7.4"</code>, is trained on the canonical
+suitability panel. Its per-country target anchors and its flood-probability
+GAM were fitted on the whole panel, including rows after <code>T</code>. The run
+warns when this is the case; build the cache with
+<code><a href="prefit_rolling_cv_psi.html">prefit_rolling_cv_psi</a>(est_suitability_spec =
+    list(feature_set = "v7.4", ...))</code> for per-cutoff leak-free panels.</p></li>
+<li><p>Every prior other than <code>mu_jt</code> comes from <code>priors</code> unchanged.
+<code>priors_default</code> carries centres derived from surveillance through its
+build date (e.g. the per-country <code>beta_j0_tot</code> centres, recentred on
+posterior medians of fits to the full record); supply as-of priors for a
+strictly leak-free hindcast.</p></li>
+</ul><p><strong>Coupled metapopulation.</strong> <code>iso</code> may be a single country or a vector;
 a vector runs as the coupled metapopulation (one calibration per cutoff covering
 all listed locations). Thus there is one <code>run_MOSAIC</code> calibration per cutoff
 (not per country).</p>

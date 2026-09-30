@@ -1,11 +1,13 @@
 # Estimate Prior Distribution for the Shedding Ratio (zeta_ratio = zeta_1 / zeta_2)
 
-Fits a lognormal prior for the per-person-per-day symptomatic-to-
-asymptomatic shedding ratio \\\zeta\_{\mathrm{ratio}} = \zeta_1 /
-\zeta_2\\ used in
+Fits a lognormal prior, truncated below at 1, for the per-person-per-day
+symptomatic-to-asymptomatic shedding ratio \\\zeta\_{\mathrm{ratio}} =
+\zeta_1 / \zeta_2\\ used in
 [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
 to derive \\\zeta_2 = \zeta_1 / \zeta\_{\mathrm{ratio}}\\ at sampling
-time (which guarantees \\\zeta_1 \> \zeta_2\\ algebraically).
+time. The truncation (`lower = 1`, applied by
+[`sample_from_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_from_prior.md))
+is what makes \\\zeta_2 \le \zeta_1\\ hold for every draw; see Details.
 
 ## Usage
 
@@ -69,8 +71,11 @@ Invisibly returns a list with elements:
 
 - `data`: direct-literature anchor table (Table 7.A).
 
-- `fit`: combined (C) lognormal parameters (`meanlog`, `sdlog`,
-  `median`, `mode`, `mean`, `ci_lower`, `ci_upper`).
+- `fit`: the shipped direct-channel (A) prior: `meanlog` and `sdlog` of
+  the untruncated lognormal, the truncation bound `lower` (= 1), the
+  `median`, `mode`, `mean`, `ci_lower` and `ci_upper` of the truncated
+  distribution that is sampled, and `p_below_1` (the untruncated mass
+  below 1 that the truncation removes).
 
 - `param_df`: long-format parameter data frame (as saved to disk).
 
@@ -84,21 +89,27 @@ Invisibly returns a list with elements:
 
 ## Details
 
-The function produces THREE candidate lognormal fits and writes the
-precision-weighted combined prior:
+The function produces THREE candidate lognormal fits. The **direct
+channel (A)** is the shipped prior: it is returned as `$fit`, written to
+`param_zeta_ratio_prior.csv`, and stored by
+`data-raw/make_priors_default.R` in
+`priors_default$parameters_global$zeta_ratio`.
 
-- **(A) Direct channel**: weighted-MLE lognormal on literature ratio
-  anchors (Smith 2026 medRxiv, Nelson 2009 paired, Kaper 1995, Harris
-  2012, Chao 2011, Finger 2018, Righetto 2012, Sugimoto 2014, MOSAIC
-  calibration).
+- **(A) Direct channel** (shipped): weighted-MLE lognormal on literature
+  ratio anchors (Smith 2026 medRxiv, Nelson 2009 paired, Kaper 1995,
+  Harris 2012, Chao 2011, Finger 2018, Righetto 2012, Sugimoto 2014,
+  MOSAIC calibration).
 
 - **(B) Derived channel**: paired Monte-Carlo lognormal from the fitted
   \\\zeta_1\\ / \\\zeta_2\\ marginals, with a paired-bootstrap step on
   the shared Nelson 2009 anchor.
 
 - **(C) Combined**: precision-weighted (inverse-variance) lognormal
-  combination of (A) and (B). This is what is written into
-  `priors_default$parameters_global$zeta_ratio`.
+  combination of (A) and (B). Diagnostic only since 2026-04-23 (returned
+  in `$diagnostics$fit_combined`): its median (~2e5) is driven by the
+  stool-concentration anchors and overestimates the ratio relative to
+  the household-transmission and modelling-convention evidence (Smith
+  2026 ~1.6x, Chao 2011 / Finger 2018 ~10).
 
 **Direct channel (A).** Weighted MLE on log10 of the literature ratio
 anchors in the direct-ratio table. The anchors span ~1.6x (Smith 2026
@@ -122,6 +133,26 @@ conservative upper bound on the true derived-channel spread. A
 100,000-draw Monte Carlo sample of the ratio distribution is generated
 for the diagnostic figure and returned in `$diagnostics$ratio_sample`;
 it does not enter the fit statistics.
+
+**Truncation at 1.** The direct channel is wide (the anchors span ~1.6x
+to ~10^5), so the untruncated lognormal puts a non-trivial share of its
+mass below 1 (`$fit$p_below_1`, about 0.16 at the v0.100.0 anchors),
+inherited from the Smith 2026 household odds-ratio interval (0.11-3.23).
+Such draws would give \\\zeta_2 \> \zeta_1\\, which contradicts the
+shedding biology the model encodes: symptomatic stool carries
+\\10^5\\-\\10^8\\ cells/mL at up to litres per day (the
+[`est_zeta_1_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_zeta_1_prior.md)
+anchors), while asymptomatic carriers shed about \\10^3\\ (Nelson 2009)
+to \\10^5\\ (Kaper 1995) cells per gram of formed stool (the
+[`est_zeta_2_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_zeta_2_prior.md)
+anchors), and the model description samples the ratio precisely to rule
+out \\\zeta_1 \< \zeta_2\\. The Smith 2026 interval concerns household
+transmission odds, not per-day shedding, so it does not license ratios
+below 1. The shipped prior is therefore the direct-channel lognormal
+truncated below at 1 (`lower = 1`): its `meanlog`/`sdlog` are unchanged
+and the removed mass is redistributed proportionally over
+\\\zeta\_{\mathrm{ratio}} \ge 1\\, which moves the median up (to
+`$fit$median`).
 
 **Combined channel (C).** Given direct and derived fits
 \\\mathrm{LN}(\mu_A, \sigma_A^2)\\ and \\\mathrm{LN}(\mu_B,

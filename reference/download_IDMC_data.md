@@ -44,9 +44,9 @@ BY-IGO. Cite IDMC.
 
 - overwrite:
 
-  If `FALSE` (default) and today's snapshot directory already exists
-  with files in it, the download is skipped and the existing snapshot is
-  reported. Set `TRUE` to re-download.
+  If `FALSE` (default), a complete snapshot for `snapshot_date` is
+  reported without downloading and a partial one is topped up (existing
+  files kept). `TRUE` re-downloads every country.
 
 - verbose:
 
@@ -83,7 +83,11 @@ place, mirroring the EM-DAT and WHO-dashboard conventions elsewhere in
 MOSAIC.
 [`process_IDMC_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_IDMC_data.md)
 reads whichever directory it is pointed at, so pass `source_dir` to
-reprocess a historical snapshot.
+reprocess a historical snapshot. Each run writes a `MANIFEST.tsv`
+completion record into the snapshot (per-country `ok`/`note`) and
+appends a row to `raw/IDMC/PROVENANCE.md`; the automatic resolver in
+[`process_IDMC_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_IDMC_data.md)
+skips snapshots whose manifest records a failed download.
 
 **Coverage.** As of 2026-09-17, 38 of the 40 MOSAIC countries have an
 HDX IDU dataset; **ERI and TGO have none**. Most series begin 2025-01-01

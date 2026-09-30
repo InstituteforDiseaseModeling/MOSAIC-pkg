@@ -9,7 +9,7 @@ debug, fast, default, or archive presets to optimize for your workflow."><meta p
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,7 +65,8 @@ debug, fast, default, or archive presets to optimize for your workflow.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Presets:</p><ul><li><p><code>debug</code>: CSV format, no compression (easy inspection)</p></li>
+    <p>Presets:</p><ul><li><p><code>debug</code>: Parquet with no compression (cheapest writes; output
+is always parquet, so there is no CSV preset)</p></li>
 <li><p><code>fast</code>: Parquet with low compression (fastest)</p></li>
 <li><p><code>default</code>: Parquet with medium compression (balanced)</p></li>
 <li><p><code>archive</code>: Parquet with high compression (smallest files)</p></li>

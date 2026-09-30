@@ -19,9 +19,6 @@ process_GTFCC_vaccination_data(PATHS)
   A list containing file paths for input and output data. The list
   should include:
 
-  - **DATA_DEMOGRAPHICS**: Path to the directory where demographic data
-    is stored.
-
   - **MODEL_INPUT**: Path to the directory where processed vaccination
     data will be saved.
 
@@ -45,20 +42,16 @@ This function performs the following steps:
     as campaign dates. - Converts country names to ISO codes for
     consistency.
 
-3.  **Load and Merge Demographic Data**: - Reads demographic data for
-    African countries from a CSV file. - Filters the data for the year
-    2023 and retains population sizes.
-
-4.  **Infer Missing Campaign Dates**: - Computes the delay between
+3.  **Infer Missing Campaign Dates**: - Computes the delay between
     decision and campaign dates. - Infers missing campaign dates based
     on the mean delay where possible. - Fixes missing decision dates for
     grouped request numbers.
 
-5.  **Validate and Filter Data**: - Ensures all rows have valid campaign
+4.  **Validate and Filter Data**: - Ensures all rows have valid campaign
     dates. - Removes rows where `doses_shipped` is zero or missing. -
     Filters for MOSAIC countries only.
 
-6.  **Save Processed Data**: - Writes the cleaned and processed dataset
+5.  **Save Processed Data**: - Writes the cleaned and processed dataset
     to a CSV file for further modeling.
 
 ## Examples
@@ -67,7 +60,6 @@ This function performs the following steps:
 if (FALSE) { # \dontrun{
 # Example usage
 PATHS <- list(
-  DATA_DEMOGRAPHICS = "path/to/demographics",
   MODEL_INPUT = "path/to/model/input"
 )
 

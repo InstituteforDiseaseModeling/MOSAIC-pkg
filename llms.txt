@@ -1,4 +1,4 @@
-# **MOSAIC**: The Metapopulation Outbreak Simulation with Agent-based Implementation for Cholera
+# **MOSAIC**: Metapopulation Outbreak Simulation And Interventions for Cholera
 
   
 
@@ -22,14 +22,17 @@ repos where all functions are documented here at
 The package downloads and processes all required data to be saved in
 [MOSAIC-data](https://github.com/InstituteforDiseaseModeling/MOSAIC-data)
 and prepares model quantities to run MOSAIC which are saved in
-[MOSAIC-pkg/model/input](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/model/input).
+[MOSAIC-pkg/model/input](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/tree/main/model/input).
 The package also produces all figures and tables used to make the
 documentation located at
 [MOSAIC-docs](https://github.com/InstituteforDiseaseModeling/MOSAIC-docs).
 
-Below is the directory structure for the **MOSAIC** project. See
-[./src/mosiac_setup.sh](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/src/mosiac_setup.sh)
-for a project setup script.
+Below is the directory structure for the **MOSAIC** project. See the
+[Installation
+article](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Installation.html)
+to set up the project, and
+[vm/setup_mosaic.sh](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/vm/setup_mosaic.sh)
+for the full compute-VM setup script.
 
 ``` bash
 MOSAIC/               # Local parent directory to hold 3 repositories, root directory in get_paths()
@@ -37,15 +40,16 @@ MOSAIC/               # Local parent directory to hold 3 repositories, root dire
 │   ├── raw/          # Raw data files supplied to MOSAIC-pkg
 │   └── processed/    # Processed data files supplied to MOSAIC-pkg
 ├── MOSAIC-pkg/       
-│   ├── [R package]   # Contents of MOSAIC R package: https://gilesjohnr.github.io/MOSAIC-pkg/
+│   ├── [R package]   # Contents of MOSAIC R package: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/
 │   └── model/
 │       ├── input/    # Files used as input to MOSAIC framework
 │       ├── output/   # Location of output from MOSAIC framework
-│       └── LAUNCH.R  # LAUNCH.R file runs data acquisition functions, a priori models, and runs MOSAIC
+│       └── LAUNCH_sanitized.R  # Template workflow: data acquisition, a priori models, MOSAIC runs
+│                               # (copy to the git-ignored model/LAUNCH.R for local edits)
 └── MOSAIC-docs/      
-├── [Website]     # Documentation and model description: https://gilesjohnr.github.io/MOSAIC-docs/
-├── figures/      # Output images and figures from MOSAIC-pkg used in documentation
-└── tables/       # Output data and parameter values from MOSAIC-pkg used in documentation
+    ├── [Website]     # Documentation and model description: https://institutefordiseasemodeling.github.io/MOSAIC-docs/
+    ├── figures/      # Output images and figures from MOSAIC-pkg used in documentation
+    └── tables/       # Output data and parameter values from MOSAIC-pkg used in documentation
 ```
 
 ## Contact
@@ -140,7 +144,7 @@ Estimation and fitting functions
 - [`est_epidemic_peaks()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_epidemic_peaks.md)
   : Estimate Epidemic Peaks from Cholera Time Series Data
 - [`est_immune_decay_vaccine()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_immune_decay_vaccine.md)
-  : Estimate Vaccine Immune Decay
+  : Plot Vaccine Immune Decay
 - [`est_initial_E_I()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I.md)
   : Estimate Initial E and I Compartments from Surveillance Data
 - [`est_initial_E_I_location()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I_location.md)
@@ -306,7 +310,7 @@ Processing and downloading data
   Per-Source Schema
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
-  and Fit Beta Distributions (2014-2024)
+  and Fit Beta Distributions
 - [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
   : Process EM-DAT Flood and Tropical-Cyclone Events Into Country-Week
   Panels
@@ -628,7 +632,7 @@ Built-in datasets
 - [`config_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
   : Default Simulation Configuration
 - [`config_simulation_endemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.md)
-  : Endemic Simulation Simulation Configuration
+  : Endemic Simulation Configuration
 - [`config_simulation_epidemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_epidemic.md)
   : Epidemic Simulation Simulation Configuration
 - [`priors_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/priors_default.md)
@@ -847,7 +851,7 @@ Other exported functions and internal helpers
   : Default Simulation Configuration
 
 - [`config_simulation_endemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.md)
-  : Endemic Simulation Simulation Configuration
+  : Endemic Simulation Configuration
 
 - [`config_simulation_epidemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_epidemic.md)
   : Epidemic Simulation Simulation Configuration
@@ -936,7 +940,7 @@ Other exported functions and internal helpers
   : Estimate Epidemic Peaks from Cholera Time Series Data
 
 - [`est_immune_decay_vaccine()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_immune_decay_vaccine.md)
-  : Estimate Vaccine Immune Decay
+  : Plot Vaccine Immune Decay
 
 - [`est_initial_E_I()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I.md)
   : Estimate Initial E and I Compartments from Surveillance Data
@@ -1434,7 +1438,7 @@ Other exported functions and internal helpers
 
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
-  and Fit Beta Distributions (2014-2024)
+  and Fit Beta Distributions
 
 - [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
   : Process EM-DAT Flood and Tropical-Cyclone Events Into Country-Week

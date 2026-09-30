@@ -59,6 +59,17 @@ at `mu_jt` – a scenario run or a prior-predictive check – runs 5-10%
 below WHO-annual deaths (2018-25); the logit-normal mean would
 over-predict, because annual CFR is lower in high-case years.
 
+The default `"linear_logit"` centre and the integrated likelihood's year
+deviations use different time bases on purpose. The deviations are
+calendar-year levels blended over 30 days either side of 1 January
+(`.d7_basis()` in `calc_log_likelihood_deaths_integrated.R`), while the
+centre interpolates between 1 July anchors, so from January to June the
+centre sits partway toward the previous year's value. The resulting
+offset is at most the year-to-year change in the GAM centre (under 0.07
+logit, about 3 percent of the CFR, for 2022-26 estimates) and is
+absorbed by the year deviation; years past the last estimate are held
+flat, so forecast windows are unaffected.
+
 ## See also
 
 [`est_CFR_hierarchical`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_CFR_hierarchical.md)

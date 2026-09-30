@@ -95,7 +95,9 @@ per-member peak statistic (attr `peak_Rt`) is annotated instead.
 ``` r
 if (FALSE) { # \dontrun{
 tr  <- readRDS("2_calibration/trajectories_ensemble.rds")
-cfg <- jsonlite::fromJSON("1_inputs/config.json")
+# The medoid config carries the calibrated kernel and decay rates; the base
+# 1_inputs/config.json holds prior centres (see add_reproductive_numbers()).
+cfg <- jsonlite::fromJSON("2_calibration/best_model/config_medoid.json")
 print(plot_Reff(calc_Reff(tr, cfg)))
 } # }
 ```

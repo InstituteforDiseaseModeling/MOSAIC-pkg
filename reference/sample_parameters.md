@@ -70,7 +70,8 @@ sample_parameters(
   - sample_iota: Incubation rate (default TRUE)
 
   - sample_kappa: V. cholerae 50 percent infectious dose concentration
-    (default TRUE)
+    (default FALSE; PINNED at `config_default$kappa` = 1e6 since
+    v0.89.0)
 
   - sample_mobility_gamma: Mobility distance decay parameter (default
     TRUE)
@@ -142,16 +143,33 @@ sample_parameters(
   - sample_psi_star_z: Suitability calibration smoothing (default TRUE)
 
   - sample_psi_star_k: Suitability calibration time offset (default
-    TRUE)
+    TRUE). The config's `psi_star_a/b/z/k` are applied to `psi_jt` by
+    [`calc_psi_star()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_psi_star.md)
+    whenever any flag is TRUE or any value differs from the identity (a
+    = 1, b = 0, z = 1, k = 0), so pinned values take effect too.
+    `config` should carry the raw, uncalibrated `psi_jt`, as
+    `config_default` and
+    [`get_location_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_config.md)
+    do. A returned config is marked with the attribute
+    `psi_star_applied = TRUE` and carries the field
+    `config$psi_star_applied = TRUE`, which survives JSON (e.g.
+    `config_medoid.json`); passed back in as the template, its `psi_jt`
+    is left as is when every psi_star flag is FALSE, and sampling stops
+    with an error when any psi_star flag is TRUE, so the transform is
+    never applied twice.
 
   - sample_initial_conditions: Initial condition proportions (default
-    TRUE)
+    TRUE). V1, V2, E, I and R are drawn from their per-location priors
+    and S is the residual, so the `prop_S_initial` prior is not used.
 
   - ic_moment_match: Derive E/I from observed week-1 cases and the
     sampled reporting chain (sigma, rho, chi_endemic, iota). Only active
     when sample_initial_conditions is TRUE. (default FALSE)
 
-  If NULL, all parameters are sampled (default behavior).
+  If NULL, the defaults listed above are used: every parameter is
+  sampled except `alpha_1`, `alpha_2`, `kappa` and `rho_deaths`, which
+  stay at their config values. These are the same defaults as
+  `mosaic_control_defaults()$sampling`.
 
   The reported case fatality ratio `mu_jt` is not sampled. It is a
   \[location x day\] matrix carried by the config, and calibration
@@ -175,7 +193,8 @@ sample_parameters(
 - ...:
 
   Additional individual sample\_\* arguments for backward compatibility.
-  These override values in sample_args if both are provided.
+  These override values in sample_args if both are provided. An
+  unrecognised name raises a warning and has no effect.
 
 ## Value
 

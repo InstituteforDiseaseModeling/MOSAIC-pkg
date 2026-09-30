@@ -39,9 +39,13 @@ rates, hazards and continuous quantities are `double`.
 
 State is `state$rows`, a list of `nticks + 1` **environments**, one per
 tick, each holding every channel for that tick. Reading is
-`state$rows[[row]]$S`; writing is `state$rows[[row]]$S <- v`. The phases
-bind the two rows they need once (`rh <- state$rows[[here]]`,
-`rn <- state$rows[[nxt]]`) and then address channels by name.
+`state$rows[[row]]$S`. Writing is bind-then-write:
+`e <- state$rows[[row]]; e$S <- v`. Do not write
+`state$rows[[row]]$S <- v`: that is a nested subassignment into
+`state$rows` and copies the whole `nticks + 1` list on every write (the
+mechanism described below). The phases bind the two rows they need once
+(`rh <- state$rows[[here]]`, `rn <- state$rows[[nxt]]`) and then address
+channels by name.
 
 This is a measured decision, not a preference, and it is the second such
 change to this structure – the history is worth keeping because both

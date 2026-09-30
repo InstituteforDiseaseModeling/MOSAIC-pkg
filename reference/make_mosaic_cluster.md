@@ -27,6 +27,7 @@ make_mosaic_cluster(
 - type:
 
   Character. Cluster type: `"PSOCK"` (default, all platforms) or
+  `"FORK"` (Linux/Mac only, faster startup).
 
 - require_root:
 
@@ -37,7 +38,7 @@ make_mosaic_cluster(
   paths –
   [`render_MOSAIC_figures`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
   runs post-hoc on a finished run directory and may have no MOSAIC tree
-  at all. `"FORK"` (Linux/Mac only, faster startup).
+  at all.
 
 ## Value
 

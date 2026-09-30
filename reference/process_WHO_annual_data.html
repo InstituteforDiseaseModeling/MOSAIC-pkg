@@ -15,7 +15,7 @@ without being mislabeled as full-year totals."><meta property="og:image" content
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -97,11 +97,25 @@ calendar days are covered, and <code>year_fraction = coverage_days/365.25</code>
 indicates whether the row is a full-year observation (~1.0) or a partial
 snapshot (&lt;1.0). When multiple files have a row for the same
 <code>(iso_code, year)</code> combination, the row with the larger
-<code>coverage_days</code> is kept.</p>
+<code>coverage_days</code> is kept; on equal coverage the row from the newest file
+wins (dated snapshots by their date/time stamp, all ranked above undated
+hand-placed files), so a WHO revision of the same weeks supersedes the old one.</p>
+<p><strong>Snapshot writes</strong>: the dashboard CSV is fetched to a temporary file,
+validated (complete final line, required columns, at least one row) and only
+then moved into the raw directory. A fetch byte-identical to the newest
+existing snapshot is discarded, an existing snapshot is never overwritten
+(a second, different fetch on the same day gets a <code>_HHMMSS</code> suffix), and
+each new snapshot is logged in <code>who_global_dashboard/PROVENANCE.md</code>.</p>
 <p><strong>To refresh through a given calendar year</strong>: place a year-filtered
 CSV in <code>raw/WHO/annual/who_global_dashboard/</code> named
 <code>cholera_adm0_public_YYYY.csv</code> (downloaded from the WHO dashboard UI
-with the year filter applied). Re-run <code>process_WHO_annual_data()</code>.</p>
+with the year filter applied). Re-run <code>process_WHO_annual_data()</code>.
+Precedence: a hand-placed year file replaces a dated snapshot's row for that
+year only if it covers MORE days (<code>coverage_days</code>). At equal coverage the
+dated snapshot wins, because undated files rank below every dated one (file
+modification times are not used; a git checkout resets them). To force a
+hand-placed revision of an already-covered year, save it as
+<code>cholera_adm0_public_snapshot_YYYY-MM-DD.csv</code> dated the day it was downloaded.</p>
 <p>Outputs (in <code>PATHS$DATA_WHO_ANNUAL</code>):</p><ul><li><p><code>who_afro_annual.csv</code> – current full series, columns
 <code>country, iso_code, region, year, cases_total,
         cases_imported, deaths_total, cfr, cfr_lo, cfr_hi, first_epiwk,

@@ -15,15 +15,17 @@ variate the R engine draws in `"rng"` mode that Python never drew.
 
 Such a site must be drawn ONLY in `"rng"` mode. Drawing it under
 `"replay"` would consume a variate the fixture has no record of and
-desynchronise every subsequent draw, destroying parity for the other 22
+desynchronise every subsequent draw, destroying parity for the 22 oracle
 sites.
 
 `infectious/sigma_split` (v0.89.0): the spec specifies a stochastic
 symptomatic split and the oracle does a deterministic `np.round`, which
-is wrong in the mean at low counts. `infectious/fatal_onsets` (v0.96.0):
-production draws fatal outcomes at symptom onset from the time-varying
-reported CFR `mu_jt`, where the oracle applies a daily hazard to the
-symptomatic stock. See `sim_components.R` for the full rationale.
+is wrong in the mean at low counts; `infectious/sigma_split_t0` applies
+the same correction to the t=0 split of `I_j_initial`.
+`infectious/fatal_onsets` (v0.96.0): production draws fatal outcomes at
+symptom onset from the time-varying reported CFR `mu_jt`, where the
+oracle applies a daily hazard to the symptomatic stock. See
+`sim_components.R` for the full rationale.
 
 NOTE for anyone extending this: CLAUDE.md lesson \#15 records that a
 PHANTOM `infectious/sigma_split` was once invented in this registry by

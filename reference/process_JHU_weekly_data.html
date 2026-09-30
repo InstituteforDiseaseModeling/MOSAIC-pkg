@@ -11,7 +11,7 @@ for the MOSAIC framework."><meta property="og:image" content="https://institutef
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,12 +72,17 @@ for the MOSAIC framework.</p>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Steps performed:</p><ul><li><p>Load <code>Public_surveillance_dataset.rds</code> and keep only <code>spatial_scale == "country"</code>.</p></li>
+<li><p>Drop rows flagged <code>phantom</code>: weeks the archive zero-fills without a
+report (no <code>observation_collection_id</code>). They are unobserved, not zeros.</p></li>
 <li><p>Extract <code>iso_code</code> from <code>location_name</code> (suffix after “::”) and convert to full country name.</p></li>
 <li><p>Split <code>epiweek</code> (e.g. "2017-15") into <code>year</code> and <code>week</code>.</p></li>
 <li><p>Create <code>date_start</code> (Monday) and <code>date_stop</code> (Sunday) for each ISO week via <code><a href="https://rdrr.io/pkg/ISOweek/man/ISOweek2date.html" class="external-link">ISOweek::ISOweek2date()</a></code>.</p></li>
 <li><p>Compute <code>month</code> from <code>date_start</code> using <code><a href="https://lubridate.tidyverse.org/reference/month.html" class="external-link">lubridate::month()</a></code>.</p></li>
-<li><p>Define <code>cases</code> using suspected (<code>sCh</code>) if present, else confirmed (<code>cCh</code>), defaulting to 0.</p></li>
-<li><p>Define <code>deaths</code> (zero if <code>NA</code>).</p></li>
+<li><p>Define <code>cases</code> using suspected (<code>sCh</code>) if present, else confirmed (<code>cCh</code>), else <code>NA</code>.</p></li>
+<li><p>Keep <code>deaths</code> as reported; a missing death count stays <code>NA</code> (it is
+not an observed zero – about three quarters of country-level rows in the OSF
+archive carry no death count).</p></li>
+<li><p>Drop rows where both <code>cases</code> and <code>deaths</code> are <code>NA</code> (no observation).</p></li>
 <li><p>Save a data.frame with columns:
 <code>country, iso_code, year, month, week, date_start, date_stop, cases, deaths</code>.</p></li>
 </ul></div>

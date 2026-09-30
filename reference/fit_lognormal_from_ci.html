@@ -9,7 +9,7 @@ distribution that best matches a given mode and 95% confidence intervals."><meta
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -95,8 +95,18 @@ distribution that best matches a given mode and 95% confidence intervals.</p>
     <p>For a lognormal distribution with parameters meanlog (μ) and sdlog (σ):</p><ul><li><p>Mode = exp(μ - σ²)</p></li>
 <li><p>Mean = exp(μ + σ²/2)</p></li>
 <li><p>Variance = (exp(σ²) - 1) * exp(2μ + σ²)</p></li>
-</ul><p>The moment matching method estimates parameters from the mode and CI width
-on the log scale, then adjusts for the lognormal relationship.</p>
+</ul><p>The moment matching method (default) matches the 95% CI exactly on the
+log scale: a lognormal is fully determined by two quantiles, so
+<code>meanlog</code> is the midpoint of <code>log(ci_lower)</code> and
+<code>log(ci_upper)</code> and <code>sdlog</code> is their distance divided by
+<code>2 * qnorm(0.975)</code>. <code>mode_val</code> is validated but does not move
+the fit; the implied mode <code>exp(meanlog - sdlog^2)</code> is returned as
+<code>mode</code>. Anchoring on a sample-based mode (for example a KDE mode of
+posterior draws) and then adding <code>sdlog^2</code> shifted wide CIs upward by
+orders of magnitude, which is why the CI is authoritative here.</p>
+<p>The optimization method fits <code>meanlog</code> and <code>sdlog</code> jointly to the
+mode and both quantiles, with all errors measured on the log scale and the
+mode weighted 10x; use it when <code>mode_val</code> is a trusted anchor.</p>
     </div>
 
     <div class="section level2">
@@ -107,22 +117,22 @@ on the log scale, then adjusts for the lognormal relationship.</p>
 <span class="r-in"><span>                                 ci_upper <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $meanlog</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.2089235</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.2027326</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $sdlog</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.4570815</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.4570899</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $mean</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1.368048</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1.35961</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $sd</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.6594373</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.6553832</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $fitted_ci</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.5031134 3.0185807</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.5 3.0</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $mode</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.9938206</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Example 2: Using optimization method</span></span></span>

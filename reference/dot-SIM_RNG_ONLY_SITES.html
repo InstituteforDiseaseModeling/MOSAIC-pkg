@@ -13,7 +13,7 @@ engine draws in "rng" mode that Python never drew.'><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,10 +61,12 @@ engine draws in <code>"rng"</code> mode that Python never drew.</p>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Such a site must be drawn ONLY in <code>"rng"</code> mode. Drawing it under
 <code>"replay"</code> would consume a variate the fixture has no record of and
-desynchronise every subsequent draw, destroying parity for the other 22 sites.</p>
+desynchronise every subsequent draw, destroying parity for the 22 oracle sites.</p>
 <p><code>infectious/sigma_split</code> (v0.89.0): the spec specifies a stochastic
 symptomatic split and the oracle does a deterministic <code>np.round</code>, which
-is wrong in the mean at low counts. <code>infectious/fatal_onsets</code> (v0.96.0):
+is wrong in the mean at low counts; <code>infectious/sigma_split_t0</code> applies
+the same correction to the t=0 split of <code>I_j_initial</code>.
+<code>infectious/fatal_onsets</code> (v0.96.0):
 production draws fatal outcomes at symptom onset from the time-varying
 reported CFR <code>mu_jt</code>, where the oracle applies a daily hazard to the
 symptomatic stock. See <code>sim_components.R</code> for the full rationale.</p>

@@ -13,7 +13,7 @@ rolling windows, anomalies, and climate / WASH interaction terms."><meta propert
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -175,10 +175,25 @@ predict the forecast window), a full-window anchor makes the target at time
 <em>t</em> depend on data after <em>t</em>. It also removes retroactive
 re-baselining – with a fixed anchor window a data refresh can no longer
 shift the entire historical target series.</p>
-<p>Default <code>NULL</code> = full-window anchors (back-compatible; the canonical
-panel is unchanged). Note <code>target_F_rank_per_country</code> is a rank over
-the country's whole observed series and is full-window BY CONSTRUCTION;
-this argument does not and cannot make it leak-free.</p></dd>
+<p>Default <code>NULL</code> = full-window anchors (back-compatible). Note
+<code>target_F_rank_per_country</code> is a rank over the country's whole
+observed series and is full-window BY CONSTRUCTION; this argument does not
+and cannot make it leak-free.</p>
+<p>The panel records the effective anchor window end (the last trusted,
+observed row used for the anchors) in a constant <code>target_anchor_stop</code>
+column. <code><a href="est_suitability.html">est_suitability()</a></code> warns when a <code>target_*</code> response is
+fit with a cutoff earlier than this date.</p>
+<p><strong>Leakage scope.</strong> <code>gam_train_stop</code> and
+<code>target_anchor_stop</code> bound the hazard GAMs and the target anchors
+only. Covariate standardisations are still computed over the whole panel
+window, including rows after either bound: the week-of-year climatology
+anomalies (<code>precip_anom</code>, <code>temp_anom</code>,
+<code>soil_moisture_anom</code>, ...), the per-country <code>spei_approx</code>
+scaling, the precipitation p90 / temperature p95 extreme thresholds, and
+the <code>emdat_flood_prob_anom</code> baseline. No post-cutoff case data enters
+these, but in a per-cutoff panel the pre-cutoff values of those covariates
+depend weakly on the post-cutoff climate distribution, so such a panel is
+leak-free on the target and hazard side only.</p></dd>
 
 
 <dt id="arg-backfill-case-gaps">backfill_case_gaps<a class="anchor" aria-label="anchor" href="#arg-backfill-case-gaps"></a></dt>

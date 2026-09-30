@@ -15,7 +15,7 @@ generalization capability."><meta property="og:image" content="https://institute
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -105,9 +105,12 @@ structure built internally by the legacy <code><a href="est_suitability.html">es
 <li><p>May allow data leakage for sequences from same location-month</p></li>
 </ul><p><strong>Location-Month Block Method (new approach)</strong>:</p><ul><li><p>Groups sequences by iso_code + year-month combinations</p></li>
 <li><p>Randomly assigns entire location-month blocks to train or validation</p></li>
-<li><p>Ensures no data leakage between train/validation for the same location-month</p></li>
-<li><p>Better tests spatial-temporal generalization capability</p></li>
-<li><p>More realistic evaluation for deployment to new regions/time periods</p></li>
+<li><p>Reduces, but does NOT eliminate, train/validation leakage: each
+sequence carries a multi-week input window, so sequences in adjacent
+location-month blocks share overlapping inputs and autocorrelated
+targets across the split. Validation scores are therefore optimistic
+relative to a strictly forward-in-time (rolling-origin) evaluation.</p></li>
+<li><p>Better tests spatial-temporal generalization than a per-sequence random split</p></li>
 </ul><p>The location-month blocking approach is particularly valuable for:</p><ul><li><p>Testing model generalization to unseen location-time combinations</p></li>
 <li><p>Preventing overfitting to specific location-month patterns</p></li>
 <li><p>Evaluating suitability for early warning systems</p></li>

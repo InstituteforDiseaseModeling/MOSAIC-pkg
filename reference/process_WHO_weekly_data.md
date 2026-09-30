@@ -3,7 +3,7 @@
 This function processes weekly cholera data by converting country names
 to ISO3 codes, filtering the data for countries in the WHO AFRO region,
 and organizing the data by year and week. It also generates start and
-stop dates for each ISO week.
+stop dates for each WHO epidemiological week.
 
 ## Usage
 
@@ -58,15 +58,27 @@ This function performs the following tasks:
 - Renames columns for consistency: `cases_by_week` to `cases` and
   `deaths_by_week` to `deaths`.
 
-- Adds `date_start` and `date_stop` columns based on ISO week, using the
-  [`ISOweek::ISOweek2date`](https://rdrr.io/pkg/ISOweek/man/ISOweek2date.html)
-  function.
+- Adds `date_start` (Monday) and `date_stop` (Sunday) for each WHO
+  epidemiological week (see below).
 
 - Computes the `month` from `date_start`.
 
-- Filters out countries with fewer than ten observations.
+- Drops countries with ten or fewer observations.
 
-- Checks that no ISO week index 53 remains.
+**Week convention.** The `year`/`week` columns are WHO's own
+`epiyr`/`epiwk` labels, which are NOT ISO-8601 weeks. WHO numbers weeks
+on the MMWR (US CDC) calendar – Sunday-start weeks, week 1 being the
+week that contains 4 January – and stamps each week with the following
+Monday (`date_wk` in the WHO AWD feature service). This coincides with
+ISO-8601 except in years whose 4 January falls on a Sunday: e.g. WHO has
+a genuine 2025-W53 starting Monday 2025-12-29 (ISO 2025 has only 52
+weeks), and WHO 2026-W01 starts 2026-01-05 (ISO 2026-W01 starts
+2025-12-29). Each row is therefore dated from WHO's calendar, never
+merged into a neighbouring week. Downstream consumers key on
+`date_start`, not on `(year, week)`.
+
+Missing `cases` or `deaths` stay `NA`; no row is dropped for having one
+field missing.
 
 ## Examples
 

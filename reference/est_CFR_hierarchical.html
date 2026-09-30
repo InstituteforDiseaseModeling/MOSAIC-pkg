@@ -17,7 +17,7 @@ carry the widths used by the calibration's integrated deaths likelihood."><meta 
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -138,7 +138,8 @@ absent from the fit), <code>n_country_years</code>;</p></li>
 <li><p><code>validation</code>: rolling-origin results, or <code>NULL</code>;</p></li>
 <li><p><code>summary</code>: fit statistics, <code>tau</code>, <code>sigma</code> and settings.</p></li>
 </ul><p>Files written to <code>PATHS$MODEL_INPUT</code>: <code>param_mu_disease_mortality.csv</code>
-(MOSAIC parameter format; per location-year <code>point</code> median,
+(MOSAIC parameter format, an export not read by the package; per location-year
+<code>point</code> median (<code>parameter_name = "median"</code>),
 <code>beta</code> shapes and <code>logitnormal</code> mean/sd), <code>cfr_hierarchical_estimates.csv</code>,
 <code>cfr_temporal_trend.csv</code>, <code>cfr_country_effects.csv</code> and
 <code>cfr_model_summary.rds</code>.</p>

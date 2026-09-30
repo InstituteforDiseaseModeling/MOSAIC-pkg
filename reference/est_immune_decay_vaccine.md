@@ -1,10 +1,10 @@
-# Estimate Vaccine Immune Decay
+# Plot Vaccine Immune Decay
 
-This function estimates oral cholera vaccine (OCV) immune decay by
-fitting exponential decay models to meta-regression effectiveness data
-from Xu et al (2024). It estimates decay parameters (omega) and initial
-effectiveness (phi) for both one-dose and two-dose regimens, and
-generates plots for predicted vaccine effectiveness over time.
+Draws the documentation figure of oral cholera vaccine (OCV)
+effectiveness over time for the one- and two-dose regimens: the Xu et
+al. (2024) meta-regression points and the exponential-decay fits
+\\VE_k(t) = \phi_k e^{-\omega_k t}\\ produced by
+[`est_vaccine_effectiveness`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md).
 
 ## Usage
 
@@ -21,11 +21,31 @@ est_immune_decay_vaccine(PATHS)
   [`get_paths()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md)
   function and should include:
 
-  - **MODEL_INPUT**: Path to the directory where parameter files will be
-    saved.
+  - **MODEL_INPUT**: Directory holding `data_vaccine_effectiveness.csv`,
+    `pred_vaccine_effectiveness.csv` and
+    `param_vaccine_effectiveness.csv` from
+    [`est_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md).
 
-  - **DOCS_FIGURES**: Path to the directory where the plots will be
-    saved.
+  - **DOCS_FIGURES**: Directory where `vaccine_effectiveness_decay.png`
+    is saved.
+
+## Value
+
+Invisibly, the combined plot object; the figure is written to
+`DOCS_FIGURES`.
+
+## Details
+
+This function does not fit anything. Before v0.100.0 it re-implemented
+the
+[`est_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md)
+fit (without its \\\phi_2 \ge \phi_1\\ bound and with hard-coded omega
+shapes), announced parameter files it did not write, and so plotted a
+fit that differed from the one behind the priors. It now reads the files
+that
+[`est_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md)
+writes, so the figure always shows the fit the priors use; run that
+function first.
 
 ## References
 
@@ -37,8 +57,8 @@ https://doi.org/10.1101/2024.08.13.24311930v2
 
 ``` r
 if (FALSE) { # \dontrun{
-# Assuming PATHS is generated from get_paths()
 PATHS <- get_paths()
+est_vaccine_effectiveness(PATHS)
 est_immune_decay_vaccine(PATHS)
 } # }
 ```

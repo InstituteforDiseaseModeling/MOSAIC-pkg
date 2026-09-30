@@ -1,6 +1,5 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/404.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/CLAUDE.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/LICENSE-text.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Deployment.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Installation.html</loc></url>
@@ -9,10 +8,7 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/index.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/authors.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/index.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/migrate-laser-r.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/news/index.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/pipeline-performance-plan.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/plan-review.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MINFEAT_V7_3_FEATURE_SET.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MINFEAT_V7_4_FEATURE_SET.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MOSAIC_E3_TAU_WEEKLY.html</loc></url>
@@ -102,7 +98,6 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_mom.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_shrink.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_weekly.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-psi_make_rw_cv_steps.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-sim_at.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-sim_binom.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-sim_coupling.html</loc></url>

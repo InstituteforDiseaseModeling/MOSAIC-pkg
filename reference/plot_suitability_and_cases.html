@@ -11,7 +11,7 @@ Requires that est_suitability() has been run first to generate prediction files.
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,13 +69,16 @@ Must include MODEL_INPUT (for reading prediction files) and DOCS_FIGURES (for sa
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A combined plot showing both cholera case bars and smoothed suitability predictions
-for the specified country.</p>
+    <p>Invisibly, the combined plot showing both cholera case bars and the
+suitability series for the specified country.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function reads pred_psi_suitability_day.csv created by est_suitability(),
-which contains: date, cases, pred, pred_smooth, and iso_code columns.</p>
+    <p>The function reads pred_psi_suitability_day.csv created by est_suitability()
+(columns date, cases, iso_code and psi) and plots the canonical <code>psi</code>
+column (smoothed and bias-corrected), the series that becomes the engine's
+<code>psi_jt</code>. A pre-v0.34 file without <code>psi</code> falls back to
+<code>pred_smooth</code>, with a message.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

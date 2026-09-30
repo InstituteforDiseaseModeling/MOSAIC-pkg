@@ -17,11 +17,13 @@ process_WB_GDP_data(PATHS)
   List. Project paths object with components `DATA_RAW` and
   `DATA_PROCESSED`.
 
-  - Expects the raw file at:
-    `file.path(PATHS$DATA_RAW, 'world_bank', 'API_NY.GDP.MKTP.CD_DS2_en_csv_v2_132025.csv')`
+  - Reads the newest raw CSV for indicator `NY.GDP.MKTP.CD` in
+    `file.path(PATHS$DATA_RAW, 'world_bank', 'GDP')` (see
+    [`download_WB_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_WB_data.md)).
 
-  - Will write output to:
-    `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'GDP_data_world_bank.csv')`
+  - Writes
+    `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_GDP_data.csv')`,
+    creating the directory if needed.
 
 ## Value
 

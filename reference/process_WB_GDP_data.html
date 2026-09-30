@@ -9,7 +9,7 @@ writes the processed data as a CSV to disk, and saves it to processed data."><me
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -56,10 +56,9 @@ writes the processed data as a CSV to disk, and saves it to processed data.</p>
 
 
 <dl><dt id="arg-paths">PATHS<a class="anchor" aria-label="anchor" href="#arg-paths"></a></dt>
-<dd><p>List. Project paths object with components <code>DATA_RAW</code> and <code>DATA_PROCESSED</code>.</p><ul><li><p>Expects the raw file at:
-<code>file.path(PATHS$DATA_RAW, 'world_bank', 'API_NY.GDP.MKTP.CD_DS2_en_csv_v2_132025.csv')</code></p></li>
-<li><p>Will write output to:
-<code>file.path(PATHS$DATA_PROCESSED, 'world_bank', 'GDP_data_world_bank.csv')</code></p></li>
+<dd><p>List. Project paths object with components <code>DATA_RAW</code> and <code>DATA_PROCESSED</code>.</p><ul><li><p>Reads the newest raw CSV for indicator <code>NY.GDP.MKTP.CD</code> in
+<code>file.path(PATHS$DATA_RAW, 'world_bank', 'GDP')</code> (see <code><a href="download_WB_data.html">download_WB_data()</a></code>).</p></li>
+<li><p>Writes <code>file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_GDP_data.csv')</code>, creating the directory if needed.</p></li>
 </ul></dd>
 
 </dl></div>

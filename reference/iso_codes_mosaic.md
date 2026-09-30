@@ -1,7 +1,7 @@
 # ISO3 Country Codes for MOSAIC Modeling Framework
 
-A character vector containing the ISO3 country codes for 41 countries
-modeled in the MOSAIC framework.
+A character vector containing the ISO3 country codes for the 40
+countries modeled in the MOSAIC framework.
 
 ## Usage
 

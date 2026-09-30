@@ -13,7 +13,7 @@ and pooled summary rows at the primary horizon."><meta property="og:image" conte
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,7 +62,7 @@ and pooled summary rows at the primary horizon.</p>
 <span>  primary_horizon <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>  exploratory_isos <span class="op">=</span> <span class="st">"NGA"</span>,</span>
 <span>  near_cast_metrics <span class="op">=</span> <span class="st">"deaths"</span>,</span>
-<span>  train_start <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="st">"2018-01-01"</span><span class="op">)</span>,</span>
+<span>  train_start <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  dir_output <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  file_prefix <span class="op">=</span> <span class="st">"forecast_cv_table"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -92,7 +92,8 @@ cutoff_date, metric, model, window</code> and skill/bias columns.</p></dd>
 
 
 <dt id="arg-primary-horizon">primary_horizon<a class="anchor" aria-label="anchor" href="#arg-primary-horizon"></a></dt>
-<dd><p>Horizon used for the summary rows (default 3).</p></dd>
+<dd><p>Horizon used for the summary rows (default 3); must be
+one of <code>horizons_months</code>.</p></dd>
 
 
 <dt id="arg-exploratory-isos">exploratory_isos<a class="anchor" aria-label="anchor" href="#arg-exploratory-isos"></a></dt>
@@ -106,8 +107,10 @@ summary (default <code>"NGA"</code>).</p></dd>
 
 
 <dt id="arg-train-start">train_start<a class="anchor" aria-label="anchor" href="#arg-train-start"></a></dt>
-<dd><p>Anchor for the reported training-window length (default
-<code>2018-01-01</code>, the config window start).</p></dd>
+<dd><p>Anchor for the reported training-window length. NULL
+(default) uses each cell's <code>anchor_date</code> (the run's config start,
+carried by <code><a href="evaluate_rolling_cv.html">evaluate_rolling_cv()</a></code> cells), else
+<code>MOSAIC::config_default$date_start</code>.</p></dd>
 
 
 <dt id="arg-dir-output">dir_output<a class="anchor" aria-label="anchor" href="#arg-dir-output"></a></dt>
@@ -130,7 +133,11 @@ and <code>$summary</code> (per country + pooled, at <code>primary_horizon</code>
 (\(1 - WIS_{model}/WIS_{clim}\)); bias-ratio is a secondary cumulative-bias
 check. NGA is flagged exploratory (surveillance data-quality confound) and
 excluded from the pooled summary; deaths are flagged conditional near-casts
-(the 2-week embargo is shorter than the infection-to-reported-death dwell).</p>
+(the scoring embargo is shorter than the infection-to-reported-death dwell).</p>
+<p>Summary rows aggregate only cells that pass the weight-ESS gate
+(<code>ess_ok</code>, when the column is present), matching
+<code>evaluate_rolling_cv()$summary</code> and <code><a href="plot_forecast_cv_skill.html">plot_forecast_cv_skill</a></code>;
+<code>n_gated</code> counts the origins left out.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

@@ -38,9 +38,9 @@ stops with an error message detailing the failed condition(s).
 If any of these conditions fail, the function stops execution and
 returns an informative error message.
 
-The check uses a tolerance of `1e-8` to account for floating point
-precision. The conditions verified correspond to a transformation
-defined as:
+The check uses a tolerance of `1e-2`: the mean must satisfy
+`abs(mean) < 1e-2` and the minimum must be at least `-1 - 1e-2`. The
+conditions verified correspond to a transformation defined as:
 
 \$\$x\_{\text{scaled}} = \frac{x - \mu}{\mu - \min(x)}\$\$
 

@@ -36,7 +36,7 @@ A data frame with 6 variables:
 
 - outbreak_interval_days:
 
-  Number of days since the previous peak for the same country (numeric)
+  Length of the peak window in days, `peak_stop - peak_start` (numeric)
 
 ## Source
 
@@ -47,9 +47,10 @@ function on combined daily surveillance data from WHO and other sources.
 ## Details
 
 **Scope:** The dataset is the full historical detection record from the
-surveillance time series (2010+) and is **not** pre-trimmed to any
-particular simulation window. Consumers that score peaks against a
-specific config window (e.g.
+surveillance time series (all years of the combined daily series,
+observed weeks only – AI Fourier reconstructions are excluded) and is
+**not** pre-trimmed to any particular simulation window. Consumers that
+score peaks against a specific config window (e.g.
 [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md),
 the Python likelihood port, the simulation config builders) must filter
 against `[date_start, date_stop]` first – otherwise
@@ -85,6 +86,12 @@ Country-specific adjustments are applied for:
 
 - Ethiopia (ETH): Lower threshold (3%) for multiple outbreaks
 
+Detected peaks sit on observed weeks: imputed (AI Fourier, assumed-zero)
+weeks are treated as missing, a peak day must be observed with cases \>
+0, and a detected peak whose window is at least half imputed days is
+dropped. The manual corrections below are documented outbreaks and are
+exempt from that window filter.
+
 Manual corrections have been applied for known issues including:
 
 - Ethiopia 2024: February peak corrected to March (sustained outbreak)
@@ -117,32 +124,34 @@ for visualization
 data(epidemic_peaks)
 head(epidemic_peaks)
 #>     iso_code peak_start  peak_date  peak_stop reported_cases
+#> 1        AGO 2006-03-27 2006-04-23 2006-05-23            757
 #> 118      AGO 2018-01-01 2018-01-04 2018-01-31             24
-#> 1        AGO 2025-03-29 2025-04-28 2025-05-28            303
-#> 2        AGO 2025-09-25 2025-10-13 2025-11-05            149
-#> 3        AGO 2026-04-06 2026-04-20 2026-05-03            106
+#> 2        AGO 2025-04-09 2025-04-28 2025-05-25            303
+#> 3        AGO 2025-10-02 2025-10-13 2025-10-24            149
+#> 4        AGO 2026-04-18 2026-04-27 2026-05-12            106
 #> 120      BDI 2016-08-01 2016-08-21 2016-10-31              9
-#> 119      BDI 2017-10-15 2017-10-17 2017-10-19              6
 #>     outbreak_interval_days
+#> 1                       57
 #> 118                     30
-#> 1                       60
-#> 2                       41
-#> 3                       27
+#> 2                       46
+#> 3                       22
+#> 4                       24
 #> 120                     91
-#> 119                      4
 
 # Countries with epidemic data
 unique(epidemic_peaks$iso_code)
-#>  [1] "AGO" "BDI" "BEN" "CAF" "CIV" "CMR" "COD" "COG" "ETH" "GHA" "GIN" "KEN"
-#> [13] "LBR" "MOZ" "MWI" "NER" "NGA" "RWA" "SDN" "SLE" "SOM" "SSD" "TCD" "TGO"
-#> [25] "TZA" "UGA" "ZMB" "ZWE"
+#>  [1] "AGO" "BDI" "BEN" "CAF" "CIV" "CMR" "COD" "COG" "COM" "ETH" "GHA" "GIN"
+#> [13] "GNB" "KEN" "LBR" "MOZ" "MWI" "NER" "NGA" "RWA" "SDN" "SEN" "SLE" "SOM"
+#> [25] "SSD" "TCD" "TGO" "TZA" "UGA" "ZAF" "ZMB" "ZWE"
 
 # Recent peaks (2024-2025)
 recent_peaks <- epidemic_peaks[epidemic_peaks$peak_date >= as.Date("2024-01-01"), ]
 table(recent_peaks$iso_code)
 #> 
-#> AGO BDI COD COG ETH KEN MOZ NGA RWA SDN SOM SSD TGO TZA UGA ZMB ZWE 
-#>   3   4   2   1   3   3   3   2   1   4   2   2   1   3   3   2   2 
+#> AGO BDI CAF COD COG COM ETH GHA KEN MOZ NER NGA RWA SDN SOM SSD TCD TGO TZA UGA 
+#>   3   4   1   3   1   1   3   1   3   3   1   3   1   4   2   3   1   1   3   3 
+#> ZMB ZWE 
+#>   2   2 
 
 # Peak duration calculation
 epidemic_peaks$duration <- as.numeric(
@@ -150,5 +159,5 @@ epidemic_peaks$duration <- as.numeric(
 )
 summary(epidemic_peaks$duration)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>    2.00   16.00   28.00   30.79   47.00  105.00 
+#>    2.00   16.00   28.00   32.36   50.00  117.00 
 ```

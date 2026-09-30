@@ -21,6 +21,17 @@ est_epidemic_peaks(PATHS)
 
 A data frame containing epidemic peak parameters
 
+## Details
+
+Peaks are detected on observed weeks only: days whose
+`disaggregation_method` is set and is not `observed` or
+`documented_zero` (AI `fourier_*` reconstructions, `assumed_zero`) are
+treated as missing, and a detected peak whose `[peak_start, peak_stop]`
+window is at least half imputed days is dropped. A detected peak day is
+the centre of any flat stretch of the smoothed curve and must itself be
+observed with cases \> 0. The hand-curated peaks the function appends
+(documented outbreaks) are exempt from the imputed-window filter.
+
 ## Examples
 
 ``` r

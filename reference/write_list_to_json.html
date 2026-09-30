@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,7 +73,10 @@ Default is FALSE.</p></dd>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The function converts the R list to JSON text using <code><a href="https://jeroen.r-universe.dev/jsonlite/reference/fromJSON.html" class="external-link">jsonlite::toJSON()</a></code> (with pretty printing enabled) and then writes it out either to a
 plain text file or to a gzipped file if <code>compress = TRUE</code>. The gzipped file is created using a connection
-opened with <code><a href="https://rdrr.io/r/base/connections.html" class="external-link">gzfile()</a></code>.</p>
+opened with <code><a href="https://rdrr.io/r/base/connections.html" class="external-link">gzfile()</a></code>. Numbers are written with 17 significant digits, enough to round-trip every double
+exactly, so a config read back from the file reproduces a simulation bit for bit. The text is written to a
+temporary file in the target directory and then renamed over <code>file_path</code>, so an interrupted write never
+leaves a truncated file behind.</p>
     </div>
 
     <div class="section level2">

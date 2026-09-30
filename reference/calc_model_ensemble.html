@@ -17,7 +17,7 @@ plot_model_ensemble to render plots from the returned object."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -112,7 +112,7 @@ If <code>NULL</code>, all parameter sets are weighted equally.</p></dd>
 
 
 <dt id="arg-n-simulations-per-config">n_simulations_per_config<a class="anchor" aria-label="anchor" href="#arg-n-simulations-per-config"></a></dt>
-<dd><p>Integer. Stochastic stochastic reruns per parameter
+<dd><p>Integer. Stochastic reruns per parameter
 set. Default <code>10L</code>.</p></dd>
 
 
@@ -173,18 +173,24 @@ returned series here.</p></dd>
 
 
 <dt id="arg-root-dir">root_dir<a class="anchor" aria-label="anchor" href="#arg-root-dir"></a></dt>
-<dd><p>Character. MOSAIC root directory. Required when <code>parallel = TRUE</code>.
-Each element must have <code>$param_idx</code>, <code>$stoch_idx</code>,
-<code>$reported_cases</code>, <code>$reported_deaths</code>, and <code>$success</code>.</p></dd>
+<dd><p>Character. MOSAIC root directory. Required when <code>parallel = TRUE</code>.</p></dd>
 
 
 <dt id="arg-capture-trajectories">capture_trajectories<a class="anchor" aria-label="anchor" href="#arg-capture-trajectories"></a></dt>
 <dd><p>Logical. When <code>TRUE</code>, harvest the
 comprehensive internal-state channels (<code>trajectory_channels</code>) from each
 member and attach a compact <code>$trajectories</code> (<code>mosaic_trajectories</code>)
-object – per-channel weighted median + a uniform-thinned set of actual
-member trajectories + derived series (I_total, mass_balance, CFR, epidemic
-frac). Default <code>FALSE</code> (<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> enables it for the posterior
+object – a per-channel central line (field <code>$median</code>, kept for schema
+stability) + a uniform-thinned set of actual member trajectories + derived
+series. The central line is the weighted MEAN for <code>reported_cases</code>,
+<code>reported_deaths</code> and <code>disease_deaths</code> (the default
+<code>central_method</code> of the trajectory reducer, matching the prediction
+plots' <code>predicted_central</code>), and the weighted median for every other
+captured channel; <code>I_total</code> is the sum of the Isym and Iasym medians,
+<code>mass_balance</code> a ratio of compartment weighted means, <code>CFR</code> a
+ratio of 28-day rolling weighted-mean deaths and cases, and
+<code>epidemic_frac</code> the weighted mean of the reconstructed epidemic flag.
+Default <code>FALSE</code> (<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> enables it for the posterior
 ensemble; never for the medoid). RAM/payload is linear in
 <code>length(trajectory_channels)</code>.</p></dd>
 
@@ -285,6 +291,12 @@ selection) need not rely on positional alignment with an external vector.</p></d
 <dt>location_names</dt>
 <dd><p>Character vector of location names.</p></dd>
 
+<dt>n_locations</dt>
+<dd><p>Number of locations (rows of the central matrices).</p></dd>
+
+<dt>n_time_points</dt>
+<dd><p>Number of time steps (columns of the central matrices).</p></dd>
+
 <dt>date_start</dt>
 <dd><p>Simulation start date.</p></dd>
 
@@ -293,6 +305,28 @@ selection) need not rely on positional alignment with an external vector.</p></d
 
 <dt>envelope_quantiles</dt>
 <dd><p>Quantiles used for CI envelopes.</p></dd>
+
+<dt>spatial_hazard_ensemble</dt>
+<dd><p>Element-wise median over successful members
+of the engine's <code>spatial_hazard</code> (locations x time), or <code>NULL</code>.</p></dd>
+
+<dt>coupling_ensemble</dt>
+<dd><p>Element-wise median of the engine's <code>coupling</code>
+matrix (locations x locations), or <code>NULL</code>.</p></dd>
+
+<dt>pi_ij_ensemble</dt>
+<dd><p>Element-wise median of the engine's <code>pi_ij</code>
+mobility matrix (locations x locations), or <code>NULL</code>.</p></dd>
+
+<dt>trajectories</dt>
+<dd><p><code>mosaic_trajectories</code> object when
+<code>capture_trajectories = TRUE</code> and <code>reduce_trajectories = TRUE</code>
+(see <code>capture_trajectories</code>), else <code>NULL</code>.</p></dd>
+
+<dt>trajectory_scratch</dt>
+<dd><p>Scratch-spill handle when
+<code>capture_trajectories = TRUE</code> and <code>reduce_trajectories = FALSE</code>,
+for a caller-side reduce over a final subset; else <code>NULL</code>.</p></dd>
 
 <dt>artifact_mask</dt>
 <dd><p>List recording the engine-artifact masking spec for

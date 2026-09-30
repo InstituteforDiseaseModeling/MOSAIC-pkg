@@ -41,9 +41,12 @@ After detaching:
 
 - The current Python session remains active (cannot be changed)
 
-- When R restarts, MOSAIC will NOT auto-attach to r-mosaic
+- Detaching lasts only for this session: in a new session,
+  [`library(MOSAIC)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/)
+  sets RETICULATE_PYTHON to r-mosaic again whenever it is unset and
+  r-mosaic exists
 
-- You can set a different RETICULATE_PYTHON before loading MOSAIC
+- To use a different Python, set RETICULATE_PYTHON before loading MOSAIC
 
 ## See also
 

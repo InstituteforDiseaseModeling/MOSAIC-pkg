@@ -17,7 +17,7 @@ being effectively disabled."><meta property="og:image" content="https://institut
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,7 @@ being effectively disabled.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_psi_star_diagnostic</span><span class="op">(</span><span class="va">dirs</span>, <span class="va">PATHS</span>, <span class="va">location_names</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_psi_star_diagnostic</span><span class="op">(</span><span class="va">dirs</span>, PATHS <span class="op">=</span> <span class="cn">NULL</span>, <span class="va">location_names</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -71,13 +71,14 @@ being effectively disabled.</p>
 <dd><p>Named list of output directory paths as returned by the internal
 <code>.mosaic_ensure_dir_tree()</code> helper inside <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code>. Required
 entries: <code>dirs$res_fig_diag</code> (output), <code>dirs$inputs</code> (for
-<code>config.json</code>), <code>dirs$res_post</code> (for <code>parameter_estimates.csv</code>).</p></dd>
+<code>config.json</code>), <code>dirs$res_posterior</code> (for <code>parameter_estimates.csv</code>).</p></dd>
 
 
 <dt id="arg-paths">PATHS<a class="anchor" aria-label="anchor" href="#arg-paths"></a></dt>
-<dd><p>Named list of project paths as returned by <code><a href="get_paths.html">get_paths()</a></code>.
-Used to locate <code>pred_psi_suitability_day.csv</code> at
-<code>PATHS$MODEL_INPUT</code>.</p></dd>
+<dd><p>Optional named list of project paths as returned by
+<code><a href="get_paths.html">get_paths()</a></code>; used only as a fallback to read
+<code>PATHS$MODEL_INPUT/pred_psi_suitability_day.csv</code> when the run's
+<code>config.json</code> carries no usable <code>psi_jt</code>. Default <code>NULL</code>.</p></dd>
 
 
 <dt id="arg-location-names">location_names<a class="anchor" aria-label="anchor" href="#arg-location-names"></a></dt>
@@ -101,10 +102,15 @@ location. Saves PNG files to <code>dirs$res_fig_diag</code> with filenames
 suitability psi with the calibrated psi* after applying the posterior psi_star
 parameters (<code>psi_star_a</code>, <code>psi_star_b</code>, <code>psi_star_z</code>,
 <code>psi_star_k</code>) via <code><a href="calc_psi_star.html">calc_psi_star</a></code>.</p>
-<p>The plot is skipped gracefully (with a warning) for any location where:</p><ul><li><p>the psi_star posterior parameters are absent from
+<p>The raw series is the <code>psi_jt</code> row the run actually calibrated on, read
+from <code>1_inputs/config.json</code> over its daily <code>date_start</code>..<code>date_stop</code>
+grid, so the figure is a pure read of the run directory and renders post-hoc
+on any machine. Only when <code>config.json</code> has no <code>psi_jt</code> of matching
+length does it fall back to the <code>psi</code> column of
+<code>PATHS$MODEL_INPUT/pred_psi_suitability_day.csv</code>.</p>
+<p>The plot is skipped gracefully (with a message) for any location where:</p><ul><li><p>the psi_star posterior parameters are absent from
 <code>parameter_estimates.csv</code> (e.g. parameters were frozen or not sampled),</p></li>
-<li><p><code>pred_psi_suitability_day.csv</code> cannot be found at
-<code>PATHS$MODEL_INPUT</code>, or</p></li>
+<li><p>neither <code>psi_jt</code> nor the fallback CSV is available, or</p></li>
 <li><p>the suitability data contains no rows for the location or calibration
 window.</p></li>
 </ul></div>

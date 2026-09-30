@@ -19,7 +19,7 @@ asymptomatic infected person per day during the shedding phase."><meta property=
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -105,8 +105,9 @@ asymptomatic stool-volume measurement exists.</p>
 on a single primary source (Nelson 2009). The fit applies a hard floor
 <code>sdlog &gt;= 2.0</code> (raised from 1.5 in rev 1 per modeller review). The floor
 preserves the lognormal median (meanlog is unchanged); the mode shifts
-left as a consequence. With the median at ~1.5e5 and sdlog = 2.0 the
-95 percent CI spans roughly 3e3 to 7.6e6 - factor ~50 on each side - which
+left as a consequence. With the weights 1.0 / 0.1 / 0.1 (v0.29.1) the
+weighted log10 mean is ~5.34, so the median is ~2.2e5; with sdlog = 2.0 the
+95 percent CI spans roughly 4.4e3 to 1.1e7 - factor ~50 on each side - which
 is the correct spread to cover a +/- 1 order-of-magnitude error in the
 single primary source.</p>
 <p><strong>King 2008 caveat (documentation only).</strong> King, Ionides, Pascual &amp;

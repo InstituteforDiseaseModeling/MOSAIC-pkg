@@ -19,7 +19,7 @@ This can be negative when the model underperforms the intercept-only baseline.
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -101,7 +101,7 @@ This can be <em>negative</em> when the model underperforms the intercept-only ba
 
 
 <dt id="arg-weights">weights<a class="anchor" aria-label="anchor" href="#arg-weights"></a></dt>
-<dd><p>Optional non-negative weights (used for <code>method="sse"</code> and weighted Pearson in <code>"corr"</code>).</p></dd>
+<dd><p>Optional non-negative weights: length 1 (recycled), the input length (subset with the validity mask), or the number of valid pairs (pre-filtered); used for <code>method="sse"</code> and weighted Pearson in <code>"corr"</code>.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

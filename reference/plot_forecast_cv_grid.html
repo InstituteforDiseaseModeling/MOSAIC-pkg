@@ -13,7 +13,7 @@ blue, deaths in MOSAIC red)."><meta property="og:image" content="https://institu
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -160,7 +160,7 @@ for predictions written before it existed): solid line + full-opacity CI ribbon 
 dates \(\le\) cutoff; solid line + lighter CI ribbon after the cutoff (distinguished by the dashed cutoff rule)
 (clipped to <code>forecast_display_months</code>).</p></li>
 <li><p>Dashed vertical line at the cutoff; a faint dotted line at
-<code>cutoff + scored_horizon_months</code> marks the formally-scored boundary
+the embargo end plus <code>scored_horizon_months</code> marks the formally-scored boundary
 (the displayed window is longer than the scored window on purpose).</p></li>
 </ul><p>Per-country fixed y-axis (free across countries) is achieved by assembling one
 <code><a href="https://patchwork.data-imaginist.com/reference/patchwork-package.html" class="external-link">patchwork</a></code> column per country (vanilla <code>facet_grid</code>

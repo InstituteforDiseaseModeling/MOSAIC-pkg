@@ -9,7 +9,7 @@ the perplexity (entropy-based) method."><meta property="og:image" content="https
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -114,7 +114,7 @@ while perplexity is common in information theory and model averaging.</p>
 <span class="r-in"><span><span class="va">w_conc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.9</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0.01</span>, <span class="fl">10</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">calc_model_ess</span><span class="op">(</span><span class="va">w_conc</span>, method <span class="op">=</span> <span class="st">"kish"</span><span class="op">)</span>       <span class="co"># ~1.2</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1.233046</span>
-<span class="r-in"><span><span class="fu">calc_model_ess</span><span class="op">(</span><span class="va">w_conc</span>, method <span class="op">=</span> <span class="st">"perplexity"</span><span class="op">)</span> <span class="co"># ~1.5</span></span></span>
+<span class="r-in"><span><span class="fu">calc_model_ess</span><span class="op">(</span><span class="va">w_conc</span>, method <span class="op">=</span> <span class="st">"perplexity"</span><span class="op">)</span> <span class="co"># ~1.74</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1.742536</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

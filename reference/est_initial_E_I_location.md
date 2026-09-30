@@ -1,10 +1,10 @@
 # Estimate E and I Compartments for a Single Location
 
 This function performs the actual E/I estimation for a single location
-using surveillance data and epidemiological parameters. It
-back-calculates true infections from reported cases using the
-surveillance cascade, accounts for infection-to-report delays, and
-estimates current E and I compartments based on disease progression.
+using surveillance data and epidemiological parameters, following the
+engine's reporting chain: a report on day d is a symptomatic onset on
+day `d - tau_r`, and all onsets (symptomatic and asymptomatic) are
+`reported * chi / (rho * sigma)`.
 
 ## Usage
 
@@ -46,7 +46,8 @@ est_initial_E_I_location(
 
 - lookback_days:
 
-  Days of data to use (default 60, must be positive)
+  Days of reports before t0 to use (default 60, must be positive); also
+  the averaging window for the onset rate
 
 - sigma:
 
@@ -65,7 +66,7 @@ est_initial_E_I_location(
 - tau_r:
 
   Reporting delay in days from symptom onset to report (must be
-  non-negative)
+  non-negative; rounded to whole days as in the engine)
 
 - iota:
 
@@ -101,10 +102,18 @@ stability protections and parameter validation. Warns if E or I exceed
 
 ## Details
 
-The function includes comprehensive parameter validation, numerical
-stability protections for exponential calculations, and detailed
-progress reporting when verbose=TRUE. Uses exact infectiousness kernels
-for the I compartment estimation.
+- **I**: observed onsets that have not yet recovered at t0 (per-day
+  survival `exp(-gamma_1)` for the symptomatic share `sigma`,
+  `exp(-gamma_2)` for the rest), plus the onsets the window cannot see,
+  filled in at the window's mean onset rate: those in the last `tau_r`
+  days before t0 (reported on or after t0) and those older than the
+  window.
+
+- **E**: people infected before t0 whose onset comes after t0. A
+  reported case is already past E, so E is the stock in balance with the
+  window's mean onset rate \\\lambda\\: \\E = \lambda / (1 -
+  e^{-\iota})\\, the engine's daily E-to-I probability (Azman et al.
+  2013 for the incubation period behind `iota`).
 
 ## Examples
 

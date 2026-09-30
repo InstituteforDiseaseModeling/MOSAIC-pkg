@@ -75,15 +75,19 @@ mosaic_control_defaults(
 
   List of parameter sampling flags (what to sample). Default is:
 
-  - `sample_tau_i`: Sample transmission rate (default: TRUE)
+  - `sample_tau_i`: Sample the daily departure (travel) probability by
+    location (default: TRUE)
 
-  - `sample_mobility_gamma`: Sample mobility gamma (default: TRUE)
+  - `sample_mobility_gamma`: Sample the gravity-model distance-decay
+    exponent (default: TRUE)
 
-  - `sample_mobility_omega`: Sample mobility omega (default: TRUE)
+  - `sample_mobility_omega`: Sample the gravity-model population-scaling
+    exponent (default: TRUE)
 
-  - `sample_iota`: Sample importation rate (default: TRUE)
+  - `sample_iota`: Sample the incubation rate, E to I (default: TRUE)
 
-  - `sample_gamma_2`: Sample second dose efficacy (default: TRUE)
+  - `sample_gamma_2`: Sample the asymptomatic recovery rate (default:
+    TRUE; second-dose vaccine effectiveness is `sample_phi_2`)
 
   - `sample_alpha_1`: Sample within-metapop population mixing exponent
     (default: FALSE, PINNED)
@@ -91,8 +95,7 @@ mosaic_control_defaults(
   - `sample_alpha_2`: Sample frequency-dependence degree (default:
     FALSE; pinned, weakly identified)
 
-  - ... (see `mosaic_control_defaults()` for complete list of 38
-    parameters)
+  - ... (see `mosaic_control_defaults()` for complete list of 40 flags)
 
 - likelihood:
 
@@ -125,11 +128,19 @@ mosaic_control_defaults(
   - `CVw_best`: Target CV of weights (default: 1.0). Higher values
     permit sharper discrimination.
 
-  - `percentile_min`: Minimum percentile for best subset search
-    (default: 0.001)
+  - `min_best_subset`: Smallest best-subset size searched (default: 30)
+
+  - `max_best_subset`: Largest best-subset size searched (default: 1000)
 
   - `ESS_method`: ESS calculation method, "kish" or "perplexity"
     (default: "perplexity")
+
+  - `ESS_marginal_method`: Per-parameter marginal ESS method, "kde" or
+    "binned" (default: "kde")
+
+  - `best_subset_weighting`: Best-subset posterior weights, "saturated"
+    or "tempered" (default: "saturated"; "tempered" is sharper, not
+    softer)
 
 - predictions:
 
@@ -215,7 +226,8 @@ mosaic_control_defaults(
 
   List of I/O settings (output format). Default is:
 
-  - `format`: Output format, "parquet" or "csv" (default: "parquet")
+  - `format`: Output format; only "parquet" is supported ("csv" is
+    coerced to "parquet" with a warning)
 
   - `compression`: Compression algorithm (default: "zstd")
 

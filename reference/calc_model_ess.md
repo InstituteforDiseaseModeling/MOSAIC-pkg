@@ -74,6 +74,6 @@ calc_model_ess(w_uniform, method = "perplexity") # 10
 w_conc <- c(0.9, rep(0.01, 10))
 calc_model_ess(w_conc, method = "kish")       # ~1.2
 #> [1] 1.233046
-calc_model_ess(w_conc, method = "perplexity") # ~1.5
+calc_model_ess(w_conc, method = "perplexity") # ~1.74
 #> [1] 1.742536
 ```

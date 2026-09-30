@@ -17,11 +17,13 @@ process_WB_urban_population_data(PATHS)
   List. Project paths object with components `DATA_RAW` and
   `DATA_PROCESSED`.
 
-  - Expects the raw file at: `file.path(PATHS$DATA_RAW, 'world_bank',`
-    `'API_SP.URB.TOTL.IN.ZS_DS2_en_csv_v2_86733.csv')`
+  - Reads the newest raw CSV for indicator `SP.URB.TOTL.IN.ZS` in
+    `file.path(PATHS$DATA_RAW, 'world_bank', 'urban_population')` (see
+    [`download_WB_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_WB_data.md)).
 
-  - Will write output to:
-    `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'urban_population_data_world_bank.csv')`
+  - Writes
+    `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_urban_population_data.csv')`,
+    creating the directory if needed.
 
 ## Value
 

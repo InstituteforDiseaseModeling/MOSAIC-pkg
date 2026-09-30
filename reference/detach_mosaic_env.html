@@ -11,7 +11,7 @@ restarting R to use a different Python environment."><meta property="og:image" c
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -77,8 +77,10 @@ it cannot be switched to a different environment without restarting R.</p>
 <li><p>Optionally triggers automatic restart (RStudio only)</p></li>
 </ul><p>After detaching:</p><ul><li><p>The RETICULATE_PYTHON variable is cleared</p></li>
 <li><p>The current Python session remains active (cannot be changed)</p></li>
-<li><p>When R restarts, MOSAIC will NOT auto-attach to r-mosaic</p></li>
-<li><p>You can set a different RETICULATE_PYTHON before loading MOSAIC</p></li>
+<li><p>Detaching lasts only for this session: in a new session,
+<code><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">library(MOSAIC)</a></code> sets RETICULATE_PYTHON to r-mosaic again whenever
+it is unset and r-mosaic exists</p></li>
+<li><p>To use a different Python, set RETICULATE_PYTHON before loading MOSAIC</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

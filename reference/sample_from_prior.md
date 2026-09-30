@@ -46,7 +46,9 @@ Supported distributions:
 - **gamma**: parameters\$shape, parameters\$rate
 
 - **lognormal**: parameters\$meanlog, parameters\$sdlog OR
-  parameters\$mean, parameters\$sd
+  parameters\$mean, parameters\$sd; optional parameters\$lower /
+  parameters\$upper truncate the draw (meanlog/sdlog then describe the
+  untruncated distribution)
 
 - **normal**: parameters\$mean, parameters\$sd
 

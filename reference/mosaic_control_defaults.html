@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -110,14 +110,14 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 
 
 <dt id="arg-sampling">sampling<a class="anchor" aria-label="anchor" href="#arg-sampling"></a></dt>
-<dd><p>List of parameter sampling flags (what to sample). Default is:</p><ul><li><p><code>sample_tau_i</code>: Sample transmission rate (default: TRUE)</p></li>
-<li><p><code>sample_mobility_gamma</code>: Sample mobility gamma (default: TRUE)</p></li>
-<li><p><code>sample_mobility_omega</code>: Sample mobility omega (default: TRUE)</p></li>
-<li><p><code>sample_iota</code>: Sample importation rate (default: TRUE)</p></li>
-<li><p><code>sample_gamma_2</code>: Sample second dose efficacy (default: TRUE)</p></li>
+<dd><p>List of parameter sampling flags (what to sample). Default is:</p><ul><li><p><code>sample_tau_i</code>: Sample the daily departure (travel) probability by location (default: TRUE)</p></li>
+<li><p><code>sample_mobility_gamma</code>: Sample the gravity-model distance-decay exponent (default: TRUE)</p></li>
+<li><p><code>sample_mobility_omega</code>: Sample the gravity-model population-scaling exponent (default: TRUE)</p></li>
+<li><p><code>sample_iota</code>: Sample the incubation rate, E to I (default: TRUE)</p></li>
+<li><p><code>sample_gamma_2</code>: Sample the asymptomatic recovery rate (default: TRUE; second-dose vaccine effectiveness is <code>sample_phi_2</code>)</p></li>
 <li><p><code>sample_alpha_1</code>: Sample within-metapop population mixing exponent (default: FALSE, PINNED)</p></li>
 <li><p><code>sample_alpha_2</code>: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)</p></li>
-<li><p>... (see <code>mosaic_control_defaults()</code> for complete list of 38 parameters)</p></li>
+<li><p>... (see <code>mosaic_control_defaults()</code> for complete list of 40 flags)</p></li>
 </ul></dd>
 
 
@@ -135,8 +135,11 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <li><p><code>ESS_best</code>: Target for both subset size and ESS within subset (default: 100).</p></li>
 <li><p><code>A_best</code>: Target agreement index (default: 0.70). Lower values allow top sims to dominate.</p></li>
 <li><p><code>CVw_best</code>: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.</p></li>
-<li><p><code>percentile_min</code>: Minimum percentile for best subset search (default: 0.001)</p></li>
+<li><p><code>min_best_subset</code>: Smallest best-subset size searched (default: 30)</p></li>
+<li><p><code>max_best_subset</code>: Largest best-subset size searched (default: 1000)</p></li>
 <li><p><code>ESS_method</code>: ESS calculation method, "kish" or "perplexity" (default: "perplexity")</p></li>
+<li><p><code>ESS_marginal_method</code>: Per-parameter marginal ESS method, "kde" or "binned" (default: "kde")</p></li>
+<li><p><code>best_subset_weighting</code>: Best-subset posterior weights, "saturated" or "tempered" (default: "saturated"; "tempered" is sharper, not softer)</p></li>
 </ul></dd>
 
 
@@ -204,7 +207,7 @@ the medoid target, and the subset-selection objective consistently.</p></li>
 
 
 <dt id="arg-io">io<a class="anchor" aria-label="anchor" href="#arg-io"></a></dt>
-<dd><p>List of I/O settings (output format). Default is:</p><ul><li><p><code>format</code>: Output format, "parquet" or "csv" (default: "parquet")</p></li>
+<dd><p>List of I/O settings (output format). Default is:</p><ul><li><p><code>format</code>: Output format; only "parquet" is supported ("csv" is coerced to "parquet" with a warning)</p></li>
 <li><p><code>compression</code>: Compression algorithm (default: "zstd")</p></li>
 <li><p><code>compression_level</code>: Compression level (default: 3L)</p></li>
 <li><p><code>persist_ensemble_arrays</code>: Retain the dense 4-D

@@ -9,7 +9,7 @@ making it easier to work with the many parameters."><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -63,12 +63,13 @@ making it easier to work with the many parameters.</p>
 
 
 <dl><dt id="arg-pattern">pattern<a class="anchor" aria-label="anchor" href="#arg-pattern"></a></dt>
-<dd><p>Character string specifying the pattern. Options:</p><ul><li><p>"all": Sample all parameters (default)</p></li>
+<dd><p>Character string specifying the pattern. Options:</p><ul><li><p>"all": The package default flags (every parameter except alpha_1, alpha_2, kappa and rho_deaths, which stay pinned)</p></li>
 <li><p>"none": Don't sample any parameters</p></li>
-<li><p>"disease_only": Sample only disease progression and immunity parameters</p></li>
-<li><p>"transmission_only": Sample only transmission parameters</p></li>
-<li><p>"mobility_only": Sample only mobility parameters</p></li>
-<li><p>"spatial_only": Sample only spatial parameters</p></li>
+<li><p>"disease_only": Sample only disease progression, immunity and reporting parameters</p></li>
+<li><p>"transmission_only": Sample only the transmission rates (beta_j0_tot, p_beta)</p></li>
+<li><p>"mobility_only": Sample only the mobility and diffusion parameters (mobility_omega, mobility_gamma, tau_i)</p></li>
+<li><p>"spatial_only": Same flags as "mobility_only"; the spatial coupling of the model is its mobility network</p></li>
+<li><p>"environmental_only": Sample only shedding and environmental decay (zeta_1, zeta_ratio, decay_*)</p></li>
 <li><p>"initial_conditions_only": Sample only initial condition proportions</p></li>
 </ul></dd>
 
@@ -78,7 +79,7 @@ making it easier to work with the many parameters.</p>
 
 
 <dt id="arg-custom">custom<a class="anchor" aria-label="anchor" href="#arg-custom"></a></dt>
-<dd><p>Named list of custom overrides for specific parameters</p></dd>
+<dd><p>Named list of flag overrides (e.g. <code>list(sample_kappa = TRUE)</code>) applied after the pattern</p></dd>
 
 
 <dt id="arg-paths">PATHS<a class="anchor" aria-label="anchor" href="#arg-paths"></a></dt>
@@ -95,7 +96,19 @@ making it easier to work with the many parameters.</p>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>Named list of arguments suitable for do.call(sample_parameters, ...)</p>
+    <p>Named list of arguments suitable for <code>do.call(sample_parameters, ...)</code>:
+<code>sample_args</code> (a complete named list of logical flags), <code>seed</code>,
+and <code>PATHS</code>, <code>priors</code> and <code>config</code> when supplied.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Every pattern other than "all" sets each <code>sample_*</code> flag to FALSE except
+the ones the pattern names. No pattern turns on a parameter the package pins
+by default (<code>alpha_1</code>, <code>alpha_2</code>, <code>kappa</code>, <code>rho_deaths</code>);
+re-enable one explicitly through <code>custom</code>. <code>ic_moment_match</code> keeps its default (FALSE)
+unless set in <code>custom</code>. With every psi_star flag FALSE, the config's
+psi_star values are still applied to <code>psi_jt</code> when they differ from the
+identity transform (see <code><a href="sample_parameters.html">sample_parameters</a></code>).</p>
     </div>
 
     <div class="section level2">

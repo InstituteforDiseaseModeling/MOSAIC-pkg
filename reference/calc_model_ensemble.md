@@ -64,8 +64,7 @@ calc_model_ensemble(
 
 - n_simulations_per_config:
 
-  Integer. Stochastic stochastic reruns per parameter set. Default
-  `10L`.
+  Integer. Stochastic reruns per parameter set. Default `10L`.
 
 - envelope_quantiles:
 
@@ -130,16 +129,22 @@ calc_model_ensemble(
 - root_dir:
 
   Character. MOSAIC root directory. Required when `parallel = TRUE`.
-  Each element must have `$param_idx`, `$stoch_idx`, `$reported_cases`,
-  `$reported_deaths`, and `$success`.
 
 - capture_trajectories:
 
   Logical. When `TRUE`, harvest the comprehensive internal-state
   channels (`trajectory_channels`) from each member and attach a compact
-  `$trajectories` (`mosaic_trajectories`) object – per-channel weighted
-  median + a uniform-thinned set of actual member trajectories + derived
-  series (I_total, mass_balance, CFR, epidemic frac). Default `FALSE`
+  `$trajectories` (`mosaic_trajectories`) object – a per-channel central
+  line (field `$median`, kept for schema stability) + a uniform-thinned
+  set of actual member trajectories + derived series. The central line
+  is the weighted MEAN for `reported_cases`, `reported_deaths` and
+  `disease_deaths` (the default `central_method` of the trajectory
+  reducer, matching the prediction plots' `predicted_central`), and the
+  weighted median for every other captured channel; `I_total` is the sum
+  of the Isym and Iasym medians, `mass_balance` a ratio of compartment
+  weighted means, `CFR` a ratio of 28-day rolling weighted-mean deaths
+  and cases, and `epidemic_frac` the weighted mean of the reconstructed
+  epidemic flag. Default `FALSE`
   ([`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   enables it for the posterior ensemble; never for the medoid).
   RAM/payload is linear in `length(trajectory_channels)`.
@@ -260,6 +265,14 @@ S3 object of class `"mosaic_ensemble"` containing:
 
   Character vector of location names.
 
+- n_locations:
+
+  Number of locations (rows of the central matrices).
+
+- n_time_points:
+
+  Number of time steps (columns of the central matrices).
+
 - date_start:
 
   Simulation start date.
@@ -271,6 +284,33 @@ S3 object of class `"mosaic_ensemble"` containing:
 - envelope_quantiles:
 
   Quantiles used for CI envelopes.
+
+- spatial_hazard_ensemble:
+
+  Element-wise median over successful members of the engine's
+  `spatial_hazard` (locations x time), or `NULL`.
+
+- coupling_ensemble:
+
+  Element-wise median of the engine's `coupling` matrix (locations x
+  locations), or `NULL`.
+
+- pi_ij_ensemble:
+
+  Element-wise median of the engine's `pi_ij` mobility matrix (locations
+  x locations), or `NULL`.
+
+- trajectories:
+
+  `mosaic_trajectories` object when `capture_trajectories = TRUE` and
+  `reduce_trajectories = TRUE` (see `capture_trajectories`), else
+  `NULL`.
+
+- trajectory_scratch:
+
+  Scratch-spill handle when `capture_trajectories = TRUE` and
+  `reduce_trajectories = FALSE`, for a caller-side reduce over a final
+  subset; else `NULL`.
 
 - artifact_mask:
 

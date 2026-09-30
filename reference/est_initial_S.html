@@ -13,7 +13,7 @@ ensuring mathematical consistency while propagating uncertainty from all compart
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,8 +91,7 @@ ensuring mathematical consistency while propagating uncertainty from all compart
 
 
 <dt id="arg-variance-inflation">variance_inflation<a class="anchor" aria-label="anchor" href="#arg-variance-inflation"></a></dt>
-<dd><p>Numeric factor to inflate variance of fitted Beta distributions (default 1 = no inflation).
-Values &gt; 1 increase uncertainty while preserving the mean. For example, 2 doubles the variance.</p></dd>
+<dd><p>Multiplier on the SD of the S samples in the method-of-moments Beta refit, which keeps the sample mean (default 0 = no change; 1 is also no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -110,13 +109,25 @@ Values &gt; 1 increase uncertainty while preserving the mean. For example, 2 dou
 
 <dt>parameters_location</dt>
 <dd><p>Parameter hierarchy matching priors_default:</p><ul><li><p>prop_S_initial: Beta distribution parameters for S/N by location</p></li>
-</ul><p>Each parameter contains $parameters$location$ISO_CODE with shape1 and shape2</p></dd>
+</ul><p>Each parameter contains $parameters$location$ISO_CODE with shape1, shape2
+and a <code>metadata</code> list (<code>estimated_from_constraints</code>, <code>mean</code>,
+<code>ci_lower</code>, <code>ci_upper</code>, <code>constraint_violation_rate</code>)</p></dd>
 
 
-</dl></div>
+</dl><p>The object has class <code>c("mosaic_initial_conditions_S",
+"mosaic_initial_conditions", "list")</code>.</p>
+    </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function implements a constrained residual approach:</p>
+    <p><strong>Diagnostic prior.</strong> <code><a href="sample_parameters.html">sample_parameters()</a></code> does not draw
+<code>prop_S_initial</code>: it samples V1, V2, E, I and R and sets S to the
+simplex residual (renormalising when the others sum to 1 or more). The Beta
+built here is therefore not a sampling prior. It is a summary of the S
+distribution those draws imply (up to the <code>min_S_proportion</code> floor used
+here), kept in <code>priors_default</code> as the reference for prior-vs-posterior
+comparisons of S; tuning <code>variance_inflation</code> changes that reference
+only, not calibration.</p>
+<p>The function implements a constrained residual approach:</p>
 <p><strong>Method Overview:</strong></p><ol><li><p>Sample from estimated Beta priors for V1, V2, E, I, R compartments</p></li>
 <li><p>Calculate S as constrained residual: S = 1 - (V1 + V2 + E + I + R)</p></li>
 <li><p>Apply constraints: ensure S ≥ min_S_proportion and handle over-allocation</p></li>
@@ -151,7 +162,7 @@ Values &gt; 1 increase uncertainty while preserving the mean. For example, 2 dou
 <span class="r-in"><span>  priors <span class="op">=</span> <span class="va">priors_updated</span>,</span></span>
 <span class="r-in"><span>  config <span class="op">=</span> <span class="va">config_default</span>,</span></span>
 <span class="r-in"><span>  n_samples <span class="op">=</span> <span class="fl">1000</span>,</span></span>
-<span class="r-in"><span>  variance_inflation <span class="op">=</span> <span class="fl">2</span>  <span class="co"># Double the variance for less constrained priors</span></span></span>
+<span class="r-in"><span>  variance_inflation <span class="op">=</span> <span class="fl">2</span>  <span class="co"># Double the SD (4x the variance)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Access results for a location</span></span></span>

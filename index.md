@@ -1,4 +1,4 @@
-# **MOSAIC**: The Metapopulation Outbreak Simulation with Agent-based Implementation for Cholera
+# **MOSAIC**: Metapopulation Outbreak Simulation And Interventions for Cholera
 
   
 
@@ -22,14 +22,17 @@ repos where all functions are documented here at
 The package downloads and processes all required data to be saved in
 [MOSAIC-data](https://github.com/InstituteforDiseaseModeling/MOSAIC-data)
 and prepares model quantities to run MOSAIC which are saved in
-[MOSAIC-pkg/model/input](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/model/input).
+[MOSAIC-pkg/model/input](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/tree/main/model/input).
 The package also produces all figures and tables used to make the
 documentation located at
 [MOSAIC-docs](https://github.com/InstituteforDiseaseModeling/MOSAIC-docs).
 
-Below is the directory structure for the **MOSAIC** project. See
-[./src/mosiac_setup.sh](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/src/mosiac_setup.sh)
-for a project setup script.
+Below is the directory structure for the **MOSAIC** project. See the
+[Installation
+article](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Installation.html)
+to set up the project, and
+[vm/setup_mosaic.sh](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/vm/setup_mosaic.sh)
+for the full compute-VM setup script.
 
 ``` bash
 MOSAIC/               # Local parent directory to hold 3 repositories, root directory in get_paths()
@@ -37,15 +40,16 @@ MOSAIC/               # Local parent directory to hold 3 repositories, root dire
 │   ├── raw/          # Raw data files supplied to MOSAIC-pkg
 │   └── processed/    # Processed data files supplied to MOSAIC-pkg
 ├── MOSAIC-pkg/       
-│   ├── [R package]   # Contents of MOSAIC R package: https://gilesjohnr.github.io/MOSAIC-pkg/
+│   ├── [R package]   # Contents of MOSAIC R package: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/
 │   └── model/
 │       ├── input/    # Files used as input to MOSAIC framework
 │       ├── output/   # Location of output from MOSAIC framework
-│       └── LAUNCH.R  # LAUNCH.R file runs data acquisition functions, a priori models, and runs MOSAIC
+│       └── LAUNCH_sanitized.R  # Template workflow: data acquisition, a priori models, MOSAIC runs
+│                               # (copy to the git-ignored model/LAUNCH.R for local edits)
 └── MOSAIC-docs/      
-├── [Website]     # Documentation and model description: https://gilesjohnr.github.io/MOSAIC-docs/
-├── figures/      # Output images and figures from MOSAIC-pkg used in documentation
-└── tables/       # Output data and parameter values from MOSAIC-pkg used in documentation
+    ├── [Website]     # Documentation and model description: https://institutefordiseasemodeling.github.io/MOSAIC-docs/
+    ├── figures/      # Output images and figures from MOSAIC-pkg used in documentation
+    └── tables/       # Output data and parameter values from MOSAIC-pkg used in documentation
 ```
 
 ## Contact

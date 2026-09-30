@@ -36,8 +36,9 @@ calc_model_parameter_sensitivity(
 
 - output_dir:
 
-  Optional directory to write `parameter_sensitivity.csv`. When `NULL`
-  (default) no file is written and the data.frame is returned.
+  Optional directory to write `parameter_sensitivity.csv` (the `sens_df`
+  columns plus run-level `weighting` and `n_used`). When `NULL`
+  (default) no file is written.
 
 - n_samples:
 

@@ -48,9 +48,10 @@ est_initial_S(
 
 - variance_inflation:
 
-  Numeric factor to inflate variance of fitted Beta distributions
-  (default 1 = no inflation). Values \> 1 increase uncertainty while
-  preserving the mean. For example, 2 doubles the variance.
+  Multiplier on the SD of the S samples in the method-of-moments Beta
+  refit, which keeps the sample mean (default 0 = no change; 1 is also
+  no change). A scalar or a named per-ISO vector; the variance scales
+  with its square (2 gives 4x) and values in (0, 1) tighten the prior.
 
 - verbose:
 
@@ -75,10 +76,24 @@ List with priors_default-compatible structure containing:
 
   - prop_S_initial: Beta distribution parameters for S/N by location
 
-  Each parameter contains \$parameters\$location\$ISO_CODE with shape1
-  and shape2
+  Each parameter contains \$parameters\$location\$ISO_CODE with shape1,
+  shape2 and a `metadata` list (`estimated_from_constraints`, `mean`,
+  `ci_lower`, `ci_upper`, `constraint_violation_rate`)
+
+The object has class
+`c("mosaic_initial_conditions_S", "mosaic_initial_conditions", "list")`.
 
 ## Details
+
+**Diagnostic prior.**
+[`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
+does not draw `prop_S_initial`: it samples V1, V2, E, I and R and sets S
+to the simplex residual (renormalising when the others sum to 1 or
+more). The Beta built here is therefore not a sampling prior. It is a
+summary of the S distribution those draws imply (up to the
+`min_S_proportion` floor used here), kept in `priors_default` as the
+reference for prior-vs-posterior comparisons of S; tuning
+`variance_inflation` changes that reference only, not calibration.
 
 The function implements a constrained residual approach:
 
@@ -146,7 +161,7 @@ initial_S <- est_initial_S(
   priors = priors_updated,
   config = config_default,
   n_samples = 1000,
-  variance_inflation = 2  # Double the variance for less constrained priors
+  variance_inflation = 2  # Double the SD (4x the variance)
 )
 
 # Access results for a location

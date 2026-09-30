@@ -42,8 +42,8 @@ inflate_priors(
 
 - n_samples:
 
-  Integer. Number of samples for empirical fallback methods (truncnorm
-  fallback, gompertz). Default 10000L.
+  Integer. Number of samples for the empirical methods (gompertz and
+  unrecognised distributions). Default 10000L.
 
 - verbose:
 
@@ -74,7 +74,8 @@ Each distribution is inflated using the most appropriate method:
 
 - lognormal(mean, sd):
 
-  `sd_new = sqrt(f)*sd`.
+  `sd_new = sqrt(f)*sd`. For either lognormal form, truncation bounds
+  `lower`/`upper` are kept and apply to the inflated distribution.
 
 - normal(mean, sd):
 
@@ -85,13 +86,13 @@ Each distribution is inflated using the most appropriate method:
   Bounds extended symmetrically around midpoint. Skipped with a warning
   if new bounds violate positivity.
 
-**Analytic with empirical fallback:**
-
 - truncnorm(mean, sd, a, b):
 
-  Root-finding preserves actual truncated mean. Due to active bounds,
-  the achieved variance ratio may be less than `inflation_factor`. Falls
-  back to empirical refit if root-find fails.
+  `sd_new = sqrt(f)*sd`; the pre-truncation `mean` and the bounds `a`,
+  `b` are left unchanged, so the underlying normal is inflated exactly.
+  When a bound is active the truncated distribution's mean shifts
+  (towards the midpoint of the bounds) and its variance grows by less
+  than `inflation_factor`.
 
 **Empirical (sample → inflate → refit):**
 

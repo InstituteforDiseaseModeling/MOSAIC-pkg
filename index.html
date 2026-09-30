@@ -28,7 +28,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,9 +65,9 @@
 <p><br></p>
 <div class="section level1">
 <div class="page-header">
-<img src="logo.png" class="logo" alt=""><h1 id="mosaic-the-metapopulation-outbreak-simulation-with-agent-based-implementation-for-cholera-">
-<strong>MOSAIC</strong>: The Metapopulation Outbreak Simulation with Agent-based Implementation for Cholera 
-<a class="anchor" aria-label="anchor" href="#mosaic-the-metapopulation-outbreak-simulation-with-agent-based-implementation-for-cholera-"></a>
+<img src="logo.png" class="logo" alt=""><h1 id="mosaic-metapopulation-outbreak-simulation-and-interventions-for-cholera-">
+<strong>MOSAIC</strong>: Metapopulation Outbreak Simulation And Interventions for Cholera 
+<a class="anchor" aria-label="anchor" href="#mosaic-metapopulation-outbreak-simulation-and-interventions-for-cholera-"></a>
 </h1>
 </div>
 <p> </p>
@@ -76,22 +76,23 @@
 <div class="section level2">
 <h2 id="mosaic-project-directory-structure">MOSAIC Project Directory Structure<a class="anchor" aria-label="anchor" href="#mosaic-project-directory-structure"></a>
 </h2>
-<p>The MOSAIC R package is designed to be used within a triad of Github repos where all functions are documented here at <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg" class="external-link">MOSAIC-pkg</a>. The package downloads and processes all required data to be saved in <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-data" class="external-link">MOSAIC-data</a> and prepares model quantities to run MOSAIC which are saved in <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/model/input" class="external-link">MOSAIC-pkg/model/input</a>. The package also produces all figures and tables used to make the documentation located at <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-docs" class="external-link">MOSAIC-docs</a>.</p>
-<p>Below is the directory structure for the <strong>MOSAIC</strong> project. See <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/src/mosiac_setup.sh" class="external-link">./src/mosiac_setup.sh</a> for a project setup script.</p>
+<p>The MOSAIC R package is designed to be used within a triad of Github repos where all functions are documented here at <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg" class="external-link">MOSAIC-pkg</a>. The package downloads and processes all required data to be saved in <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-data" class="external-link">MOSAIC-data</a> and prepares model quantities to run MOSAIC which are saved in <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/tree/main/model/input" class="external-link">MOSAIC-pkg/model/input</a>. The package also produces all figures and tables used to make the documentation located at <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-docs" class="external-link">MOSAIC-docs</a>.</p>
+<p>Below is the directory structure for the <strong>MOSAIC</strong> project. See the <a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Installation.html">Installation article</a> to set up the project, and <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/vm/setup_mosaic.sh" class="external-link">vm/setup_mosaic.sh</a> for the full compute-VM setup script.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="ex">MOSAIC/</span>               <span class="co"># Local parent directory to hold 3 repositories, root directory in get_paths()</span></span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="ex">├──</span> MOSAIC-data/      </span>
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="ex">│</span>   ├── raw/          <span class="co"># Raw data files supplied to MOSAIC-pkg</span></span>
 <span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="ex">│</span>   └── processed/    <span class="co"># Processed data files supplied to MOSAIC-pkg</span></span>
 <span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="ex">├──</span> MOSAIC-pkg/       </span>
-<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="ex">│</span>   ├── [R package]   <span class="co"># Contents of MOSAIC R package: https://gilesjohnr.github.io/MOSAIC-pkg/</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="ex">│</span>   ├── [R package]   <span class="co"># Contents of MOSAIC R package: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/</span></span>
 <span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="ex">│</span>   └── model/</span>
 <span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="ex">│</span>       ├── input/    <span class="co"># Files used as input to MOSAIC framework</span></span>
 <span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="ex">│</span>       ├── output/   <span class="co"># Location of output from MOSAIC framework</span></span>
-<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="ex">│</span>       └── LAUNCH.R  <span class="co"># LAUNCH.R file runs data acquisition functions, a priori models, and runs MOSAIC</span></span>
-<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="ex">└──</span> MOSAIC-docs/      </span>
-<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="ex">├──</span> <span class="pp">[</span><span class="ss">Website</span><span class="pp">]</span>     <span class="co"># Documentation and model description: https://gilesjohnr.github.io/MOSAIC-docs/</span></span>
-<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="ex">├──</span> figures/      <span class="co"># Output images and figures from MOSAIC-pkg used in documentation</span></span>
-<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="ex">└──</span> tables/       <span class="co"># Output data and parameter values from MOSAIC-pkg used in documentation</span></span></code></pre></div>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="ex">│</span>       └── LAUNCH_sanitized.R  <span class="co"># Template workflow: data acquisition, a priori models, MOSAIC runs</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="ex">│</span>                               <span class="co"># (copy to the git-ignored model/LAUNCH.R for local edits)</span></span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="ex">└──</span> MOSAIC-docs/      </span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>    <span class="ex">├──</span> <span class="pp">[</span><span class="ss">Website</span><span class="pp">]</span>     <span class="co"># Documentation and model description: https://institutefordiseasemodeling.github.io/MOSAIC-docs/</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>    <span class="ex">├──</span> figures/      <span class="co"># Output images and figures from MOSAIC-pkg used in documentation</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>    <span class="ex">└──</span> tables/       <span class="co"># Output data and parameter values from MOSAIC-pkg used in documentation</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="contact">Contact<a class="anchor" aria-label="anchor" href="#contact"></a>

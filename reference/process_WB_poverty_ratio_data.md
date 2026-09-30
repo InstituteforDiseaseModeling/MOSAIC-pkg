@@ -18,11 +18,13 @@ process_WB_poverty_ratio_data(PATHS)
   List. Project paths object with components `DATA_RAW` and
   `DATA_PROCESSED`.
 
-  - Expects the raw file located in:
-    `file.path(PATHS$DATA_RAW, 'world_bank', '<poverty_ratio_filename>.csv')`
+  - Reads the newest raw CSV for indicator `SI.POV.DDAY` in
+    `file.path(PATHS$DATA_RAW, 'world_bank', 'poverty_ratio')` (see
+    [`download_WB_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_WB_data.md)).
 
-  - Will write output to:
-    `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'poverty_ratio_data_world_bank.csv')`
+  - Writes
+    `file.path(PATHS$DATA_PROCESSED, 'world_bank', 'world_bank_poverty_ratio_data.csv')`,
+    creating the directory if needed.
 
 ## Value
 

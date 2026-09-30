@@ -1,10 +1,10 @@
 # Estimate the Generation Time Distribution for Days and Weeks
 
-This function generates the probability distribution of the generation
-time for cholera based on a gamma distribution. It allows the
-specification of the mean generation time, which adjusts the shape and
-rate parameters. The day-wise and week-wise probabilities are saved as
-CSV files.
+This function generates the generation time distribution for cholera
+from a gamma distribution with shape `mean_generation_time / 10` and a
+FIXED rate of `0.1` per day, so only the shape responds to the mean (and
+the coefficient of variation, \\1/\sqrt{shape}\\, changes with it). The
+day-wise and week-wise tables are saved as CSV files.
 
 ## Usage
 
@@ -30,5 +30,17 @@ get_generation_time_distribution(PATHS, mean_generation_time)
 - mean_generation_time:
 
   A numeric value representing the desired mean generation time (in
-  days). This value is used to adjust the shape and rate parameters of
-  the gamma distribution.
+  days); sets the gamma shape (`mean_generation_time / 10`) at a fixed
+  rate of 0.1.
+
+## Details
+
+The day-wise table (`pred_generation_time_days.csv`, column `y`) holds
+the gamma **density** evaluated at days 1-56, not a probability mass
+function: it is not normalised and omits the mass below day 1 and beyond
+day 56 (at a mean of 5 days it sums to about 0.74). Only the week-wise
+table (`Probability`) is normalised to sum to 1. This is a legacy
+kernel: the reproductive-number calculations
+([`calc_Reff`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md))
+derive their generation-interval kernels from the model parameters and
+do not read these files.

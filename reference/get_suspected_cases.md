@@ -25,8 +25,9 @@ get_suspected_cases(PATHS)
 
 ## Value
 
-A data frame containing the Beta distribution parameters for chi_endemic
-(low/all-settings estimate) and chi_epidemic (high/outbreak estimate).
+Invisibly, a data frame containing the Beta distribution parameters for
+chi_endemic (low/all-settings estimate) and chi_epidemic (high/outbreak
+estimate).
 
 ## Details
 

@@ -25,11 +25,13 @@ plot_suitability_and_cases(PATHS, plot_iso_code)
 
 ## Value
 
-A combined plot showing both cholera case bars and smoothed suitability
-predictions for the specified country.
+Invisibly, the combined plot showing both cholera case bars and the
+suitability series for the specified country.
 
 ## Details
 
 The function reads pred_psi_suitability_day.csv created by
-est_suitability(), which contains: date, cases, pred, pred_smooth, and
-iso_code columns.
+est_suitability() (columns date, cases, iso_code and psi) and plots the
+canonical `psi` column (smoothed and bias-corrected), the series that
+becomes the engine's `psi_jt`. A pre-v0.34 file without `psi` falls back
+to `pred_smooth`, with a message.

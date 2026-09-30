@@ -15,7 +15,7 @@ correlation."><meta property="og:image" content="https://institutefordiseasemode
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,8 +98,10 @@ values (<code>Inf</code>, <code>-Inf</code>, <code>NaN</code>) during pairwise f
 
 
 <dt id="arg-weights">weights<a class="anchor" aria-label="anchor" href="#arg-weights"></a></dt>
-<dd><p>Optional numeric vector of non-negative weights (recycled if
-length 1). Only used when <code>method = "pearson"</code>; ignored otherwise.</p></dd>
+<dd><p>Optional numeric vector of non-negative weights: length 1
+(recycled), the input length (subset with the same pairwise validity
+mask), or the number of valid pairs (pre-filtered). Only used when
+<code>method = "pearson"</code>; ignored otherwise.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

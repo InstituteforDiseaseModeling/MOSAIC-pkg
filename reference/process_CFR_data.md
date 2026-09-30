@@ -1,10 +1,10 @@
-# Process Cholera Data to Calculate Aggregated Case Fatality Ratios and Fit Beta Distributions (2014-2024)
+# Process Cholera Data to Calculate Aggregated Case Fatality Ratios and Fit Beta Distributions
 
-This function processes cholera data, aggregates cases and deaths for
-each country over the period 2014-2024, calculates the aggregated Case
-Fatality Ratio (CFR), and fits Beta distributions for each country.
-Countries with fewer cases than `min_obs` will have their CFR set to the
-value of the AFRO Region.
+This function processes WHO annual cholera data, aggregates cases and
+deaths for each country from 2014 through the last complete year in the
+data, calculates the aggregated Case Fatality Ratio (CFR), and fits Beta
+distributions for each country. Countries with fewer cases than
+`min_obs` will have their CFR set to the value of the AFRO Region.
 
 ## Usage
 
@@ -35,8 +35,30 @@ process_CFR_data(PATHS, min_obs)
 
 ## Value
 
-A data frame with aggregated CFR, confidence intervals, and Beta
-distribution parameters for each country.
+Invisibly, a data frame with aggregated CFR, confidence intervals, and
+Beta distribution parameters for each country (also written to
+`case_fatality_ratio_2014_<end year>.csv` in `DOCS_TABLES` and
+`DATA_WHO_ANNUAL`).
+
+## Details
+
+A calendar year still in progress when its dashboard snapshot was taken
+is dropped before aggregating (its deaths lag its cases), using the same
+rule as
+[`est_CFR_hierarchical`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_CFR_hierarchical.md);
+the end year of the output (and of its filename) is the last year left
+after that filter. A country whose only data fall in an in-progress year
+therefore gets the AFRO Region CFR. Any existing
+`case_fatality_ratio_2014_<year>.csv` with a later end year (one built
+while that year was still counted) is deleted from both output
+directories, so
+[`plot_CFR_by_country`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_CFR_by_country.md),
+which reads the highest end year, picks up the new file. Country-years
+with a missing case or death count are left out of both totals, so each
+CFR is computed over the same years for its numerator and denominator.
+Rows are aggregated by ISO code, and each country is labelled with its
+most frequent spelling in the data (the WHO file spells some countries
+more than one way).
 
 ## Examples
 

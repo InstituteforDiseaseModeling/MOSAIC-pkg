@@ -82,6 +82,10 @@ run_rolling_cv(
   `run_MOSAIC` control list, or NULL for an experiment-grade cheap
   default (fixed `n_simulations`, plots off). See
   [`mosaic_control_defaults`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md).
+  The harness forces `paths$clean_output = TRUE`, so each cutoff's
+  `runs/cutoff_<T>/` directory is wiped before its calibration and
+  simulation shards left by an earlier interrupted attempt cannot enter
+  the new posterior.
 
 - optimize_subset:
 
@@ -98,11 +102,16 @@ run_rolling_cv(
   `predictions.parquet` (default
   `c("ensemble","ensemble_opt","medoid")`). `"ensemble"`
   (posterior-weighted candidate) is always included. `"ensemble_opt"` is
-  the optimizer-selected subset (only emitted when
-  `optimize_subset = TRUE` and `ensemble_optimized.rds` exists).
-  `"medoid"` is re-simulated from its saved config (see
-  `n_reps_best_medoid`). `"best"` is accepted for back-compat but is no
-  longer produced by
+  the optimizer-selected subset, emitted only for cutoffs where the
+  optimizer actually ran and selected a subset (`subset_opt.rds`
+  present, or a finite `n_ensemble_params_tier` in `summary.json`); with
+  `optimize_subset = FALSE` it is dropped from `models` up front, and a
+  cutoff whose optimizer selected nothing is skipped with a warning
+  rather than duplicating the candidate ensemble, which
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  saves as a fallback `ensemble_optimized.rds`. `"medoid"` is
+  re-simulated from its saved config (see `n_reps_best_medoid`).
+  `"best"` is accepted for back-compat but is no longer produced by
   [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   (no `config_best.json`); it is skipped with a warning unless an older
   run dir still carries that file. Each model appears as a value of the
@@ -148,8 +157,13 @@ run_rolling_cv(
   [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
   call is skipped and the frozen `psi_<T>.csv` is loaded from this cache
   directory instead. The run **hard-errors** if a requested cutoff is
-  absent from the cache manifest, or if the run's `est_suitability_spec`
-  hash does not match the manifest `spec_hash` recorded for that cutoff.
+  absent from the cache manifest, if the run's `est_suitability_spec`
+  hash does not match the manifest `spec_hash` recorded for that cutoff,
+  or if the cache's prediction window does not cover `base_config`'s
+  start through the cutoff's last OOS date. When `psi_cache` is NULL the
+  per-cutoff psi is fitted into a scratch `MODEL_INPUT` (the canonical
+  `pred_psi_suitability_day.csv` is never overwritten) and kept as
+  `runs/psi_cutoff_<T>.csv`.
 
 - dir_output:
 
@@ -162,7 +176,11 @@ run_rolling_cv(
 ## Value
 
 Invisibly, the manifest list. Side effects: writes `manifest.json`,
-`predictions.parquet`, and `runs/` under `dir_output`.
+`predictions.parquet`, and `runs/` under `dir_output`. `manifest.json`
+is rewritten atomically after every cutoff (`status = "running"`, then
+`"complete"`), so the cutoffs finished before an interruption can still
+be compiled with
+[`compile_rolling_cv_predictions`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_rolling_cv_predictions.md).
 
 ## Details
 
@@ -177,21 +195,49 @@ those are done post-hoc by reading `predictions.parquet`.
 calibration likelihood only scores weeks \\\le T\\ (observations after
 `T` are masked to `NA`); the post-`T` portion of the simulation is the
 forecast. A `embargo_weeks` gap separates the IS stop (`T`) from the OOS
-start (`T + embargo`); the embargo week is neither trained nor labeled
-OOS.
+start: dates in `(T, T + embargo]` are labeled `"embargo"` (neither
+trained nor scored) and the first OOS date is `T + embargo + 1`.
+`weeks_ahead` counts whole weeks from that first OOS date (week 1 = its
+first seven days).
 
-**Leakage discipline.** psi is re-fit per cutoff with
-`fit_date_stop = T`; the harness *owns* the leakage-critical date
-arguments to
-[`est_suitability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
-and overrides any date keys passed via `est_suitability_spec` (with a
-warning). `est_suitability_spec` therefore controls only modeling
-choices (target, features, architecture), not the cutoff window. The
-reported CFR `mu_jt` and its prior are rebuilt per cutoff from a
-WHO-annual GAM fitted only to years up to `year(T) - 1` (a calendar
-year's annual total is not known until the year has ended), and carried
-flat past that year's 1 July. So no post-cutoff surveillance year
-reaches the config, the prior centres or the prior widths.
+**Leakage discipline.** What is rebuilt as of each cutoff:
+
+- psi is re-fit per cutoff with `fit_date_stop = T`; the harness *owns*
+  the leakage-critical date arguments to
+  [`est_suitability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  and overrides any date keys passed via `est_suitability_spec` (with a
+  warning), so the spec controls only modeling choices (target,
+  features, architecture).
+
+- The reported CFR `mu_jt` and its prior are rebuilt from a WHO-annual
+  GAM fitted only to years up to `year(T) - 1`, carried flat past that
+  year's 1 July. The annual totals used are the final revised ones, not
+  the vintage that had been published at `T`.
+
+- Observed cases and deaths after `T` are masked, and epidemic peaks
+  whose 14-day peak-shape scoring window reaches past `T` are dropped
+  from the cutoff config (an empty set is kept as a 0-row table so the
+  likelihood never falls back to the full
+  [`epidemic_peaks`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/epidemic_peaks.md)
+  dataset). The remaining peaks were still *detected* on the full
+  record.
+
+What is **not** as of the cutoff, so the hindcast is only approximately
+leak-free:
+
+- psi fitted in place (`psi_cache = NULL`), or from a cache built with
+  any feature set other than `"v7.4"`, is trained on the canonical
+  suitability panel. Its per-country target anchors and its
+  flood-probability GAM were fitted on the whole panel, including rows
+  after `T`. The run warns when this is the case; build the cache with
+  [`prefit_rolling_cv_psi`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/prefit_rolling_cv_psi.md)`(est_suitability_spec = list(feature_set = "v7.4", ...))`
+  for per-cutoff leak-free panels.
+
+- Every prior other than `mu_jt` comes from `priors` unchanged.
+  `priors_default` carries centres derived from surveillance through its
+  build date (e.g. the per-country `beta_j0_tot` centres, recentred on
+  posterior medians of fits to the full record); supply as-of priors for
+  a strictly leak-free hindcast.
 
 **Coupled metapopulation.** `iso` may be a single country or a vector; a
 vector runs as the coupled metapopulation (one calibration per cutoff

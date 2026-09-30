@@ -17,7 +17,7 @@ CIs (suppressed at small cell counts)."><meta property="og:image" content="https
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -102,8 +102,10 @@ CIs (suppressed at small cell counts).</p>
 
 <dt id="arg-embargo-weeks">embargo_weeks<a class="anchor" aria-label="anchor" href="#arg-embargo-weeks"></a></dt>
 <dd><p>Channel-specific OOS embargo, in weeks, after the cutoff
-before scoring begins. A scalar applies to all metrics; a named vector
-(e.g. <code>c(cases = 4, deaths = 6)</code>) applies per metric. Default <code>0</code>.</p></dd>
+before scoring begins, applied on top of the harness embargo (see Details).
+A scalar applies to all metrics; a named vector (e.g.
+<code>c(cases = 4, deaths = 6)</code>) applies per metric, and omitted metrics get
+0. Default <code>0</code>.</p></dd>
 
 
 <dt id="arg-ess-min">ess_min<a class="anchor" aria-label="anchor" href="#arg-ess-min"></a></dt>
@@ -133,7 +135,8 @@ single <code>"ensemble"</code> model (back-compatible).</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with:</p><dl><dt>cells</dt>
 <dd><p>Per (cutoff x model x iso x metric x window) metrics + per-baseline
-mae_skill and wis_skill, the cell <code>ess</code> and <code>ess_ok</code> flag.</p></dd>
+mae_skill and wis_skill, the cell <code>ess</code> and <code>ess_ok</code> flag (plus
+<code>anchor_date</code> when the predictions carry it).</p></dd>
 
 <dt>summary</dt>
 <dd><p>Aggregated across <code>ess_ok</code> cells per (model x metric x
@@ -149,20 +152,26 @@ than <code>min_cells_ci</code> finite cells), plus <code>ess_gated</code> and
     <p>This is the post-hoc companion to <code><a href="run_rolling_cv.html">run_rolling_cv()</a></code> — the harness emits
 predictions only; all judgement (metrics, baselines, skill) lives here.</p>
 <p>Horizons are <strong>cumulative</strong> (\(\le h\) months): the \(\le h\) window
-is every OOS point within <code>h</code> months of the per-metric OOS-scoring
-origin, computed from <code>date</code> and <code>cutoff_date</code> (not the disjoint
-<code>horizon_bucket</code> label), so the \(\le\)max-horizon window equals the
-full scored OOS set. An <code>IS</code> window (training fit, \(\le\) cutoff) is
-always reported.</p>
+is every scored OOS date \(d\) with <code>origin &lt; d &lt;= origin +
+ceiling(h * 30.4375)</code> days, where <code>origin</code> is the per-metric OOS-scoring
+origin below. The origin is fixed by the cutoff and embargo, never by where
+observations happen to exist, so a reporting gap just after the cutoff shrinks
+a window's <code>n</code> instead of shifting its lead times (windows with fewer
+than 3 scorable dates are dropped). The \(\le\)max-horizon window is the
+largest scored set; predictions further out are not scored in any window. An
+<code>IS</code> window (training fit, \(\le\) cutoff) is always reported.</p>
 <p>Scoring uses <strong>trusted observed only</strong>: rows whose <code>observed_source</code>
 is missing or not <code>"AI"</code> (when <code>trusted_only = TRUE</code>).</p>
-<p><strong>Channel-specific embargo.</strong> <code>embargo_weeks</code> may be a scalar (all
-metrics) or a named vector such as <code>c(cases = 4, deaths = 6)</code>. For each
-metric the OOS scoring start is re-derived as
-<code>cutoff_date + embargo_weeks[metric] * 7</code>; only OOS rows at or after that
-per-metric boundary are scored, independent of the single <code>segment</code> label
-baked into predictions. Default (<code>0</code>) reproduces the prior behavior of
-scoring the entire <code>segment == "OOS"</code> block.</p>
+<p><strong>Embargo and scoring origin.</strong> The harness labels the dates in
+<code>(cutoff, cutoff + embargo]</code> as <code>segment == "embargo"</code>; those are
+never scored. For each metric the scoring origin is
+<code>max(last embargo-labelled date (or the cutoff), cutoff_date +
+embargo_weeks[metric] * 7)</code> and the scored dates are those strictly after it.
+<code>embargo_weeks</code> can therefore only lengthen the harness embargo, per
+channel: it may be a scalar (all metrics) or a named vector such as
+<code>c(cases = 4, deaths = 6)</code>; metrics it omits get 0. With the default
+(<code>0</code>) exactly the <code>segment == "OOS"</code> block is scored, from the
+harness's own OOS origin.</p>
 <p><strong>Baselines</strong>, fit per (cutoff, country, metric) on the IS observed
 history. <code>"seasonal"</code> (week-of-year climatology) is the <strong>primary</strong>
 baseline and <strong>requires \(\ge 2\) years of in-sample history</strong>; with

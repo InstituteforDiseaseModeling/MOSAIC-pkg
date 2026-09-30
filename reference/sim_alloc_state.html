@@ -17,7 +17,7 @@ port, so it is deliberately not done."><meta property="og:image" content="https:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -93,9 +93,13 @@ rates, hazards and continuous quantities are <code>double</code>.</p>
 
 <p>State is <code>state$rows</code>, a list of <code>nticks + 1</code> <strong>environments</strong>,
 one per tick, each holding every channel for that tick. Reading is
-<code>state$rows[[row]]$S</code>; writing is <code>state$rows[[row]]$S &lt;- v</code>. The
-phases bind the two rows they need once (<code>rh &lt;- state$rows[[here]]</code>,
-<code>rn &lt;- state$rows[[nxt]]</code>) and then address channels by name.</p>
+<code>state$rows[[row]]$S</code>. Writing is bind-then-write:
+<code>e &lt;- state$rows[[row]]; e$S &lt;- v</code>. Do not write
+<code>state$rows[[row]]$S &lt;- v</code>: that is a nested subassignment into
+<code>state$rows</code> and copies the whole <code>nticks + 1</code> list on every write
+(the mechanism described below). The phases bind the two rows they need once
+(<code>rh &lt;- state$rows[[here]]</code>, <code>rn &lt;- state$rows[[nxt]]</code>) and then
+address channels by name.</p>
 <p>This is a measured decision, not a preference, and it is the second such
 change to this structure – the history is worth keeping because both moves
 were driven by the same mechanism.</p>

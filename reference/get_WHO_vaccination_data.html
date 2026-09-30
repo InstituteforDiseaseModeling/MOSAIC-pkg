@@ -13,7 +13,7 @@ The data is compiled into a data frame and saved to a CSV format for further ana
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -76,7 +76,7 @@ which can be accessed via the following Power BI link: <a href="https://app.powe
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A data frame containing the processed WHO vaccination request data. The function also prints summary information,
+    <p>Invisibly, a data frame containing the processed WHO vaccination request data. The function also prints summary information,
 including the total number of observations, total requested doses, approved doses, shipped doses, and the start and end dates of the requests.</p>
     </div>
     <div class="section level2">
@@ -85,7 +85,9 @@ including the total number of observations, total requested doses, approved dose
 <li><p>Extracts relevant columns such as Year, Country, Request Number, Status, Context, Decision Date, Doses Requested, Approved, and Shipped.</p></li>
 <li><p>Handles missing values and checks for duplicated rows, removing duplicates and printing which rows were removed.</p></li>
 <li><p>Summarizes the data, printing the total number of observations, total doses requested, approved, and shipped, as well as the first and last decision dates.</p></li>
-<li><p>Saves the processed vaccination data to a CSV file in the location specified by the <code>PATHS</code> argument.</p></li>
+<li><p>Saves the table as a new dated snapshot <code>who_vaccination_data_snapshot_&lt;date&gt;.csv</code> under
+<code>PATHS$DATA_SCRAPE_WHO_VACCINATION</code> (atomically, logged in <code>PROVENANCE.md</code>), only when its
+content differs from the newest existing file. Existing files are never modified.</p></li>
 </ul></div>
 
     <div class="section level2">

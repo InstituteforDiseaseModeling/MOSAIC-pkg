@@ -34,10 +34,10 @@ can be accessed via the following Power BI link:
 
 ## Value
 
-A data frame containing the processed WHO vaccination request data. The
-function also prints summary information, including the total number of
-observations, total requested doses, approved doses, shipped doses, and
-the start and end dates of the requests.
+Invisibly, a data frame containing the processed WHO vaccination request
+data. The function also prints summary information, including the total
+number of observations, total requested doses, approved doses, shipped
+doses, and the start and end dates of the requests.
 
 ## Details
 
@@ -57,8 +57,11 @@ The function performs the following steps:
   doses requested, approved, and shipped, as well as the first and last
   decision dates.
 
-- Saves the processed vaccination data to a CSV file in the location
-  specified by the `PATHS` argument.
+- Saves the table as a new dated snapshot
+  `who_vaccination_data_snapshot_<date>.csv` under
+  `PATHS$DATA_SCRAPE_WHO_VACCINATION` (atomically, logged in
+  `PROVENANCE.md`), only when its content differs from the newest
+  existing file. Existing files are never modified.
 
 ## Examples
 

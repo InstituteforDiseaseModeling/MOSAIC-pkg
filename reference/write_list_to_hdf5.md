@@ -1,6 +1,7 @@
 # Write an R list to an HDF5 file
 
-Writes an R list to an HDF5 file (.h5 or .h5.gz) format.
+Writes an R list to an HDF5 file (.h5, .hdf5, .h5.gz or .hdf5.gz)
+format.
 
 ## Usage
 
@@ -22,7 +23,7 @@ write_list_to_hdf5(
 - file_path:
 
   A character string specifying the full file path, including file
-  extension (.h5 or .h5.gz).
+  extension (.h5, .hdf5, .h5.gz or .hdf5.gz).
 
 - compress_chunks:
 

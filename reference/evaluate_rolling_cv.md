@@ -53,8 +53,10 @@ evaluate_rolling_cv(
 - embargo_weeks:
 
   Channel-specific OOS embargo, in weeks, after the cutoff before
-  scoring begins. A scalar applies to all metrics; a named vector (e.g.
-  `c(cases = 4, deaths = 6)`) applies per metric. Default `0`.
+  scoring begins, applied on top of the harness embargo (see Details). A
+  scalar applies to all metrics; a named vector (e.g.
+  `c(cases = 4, deaths = 6)`) applies per metric, and omitted metrics
+  get 0. Default `0`.
 
 - ess_min:
 
@@ -87,7 +89,8 @@ A list with:
 - cells:
 
   Per (cutoff x model x iso x metric x window) metrics + per-baseline
-  mae_skill and wis_skill, the cell `ess` and `ess_ok` flag.
+  mae_skill and wis_skill, the cell `ess` and `ess_ok` flag (plus
+  `anchor_date` when the predictions carry it).
 
 - summary:
 
@@ -105,22 +108,29 @@ This is the post-hoc companion to
 skill) lives here.
 
 Horizons are **cumulative** (\\\le h\\ months): the \\\le h\\ window is
-every OOS point within `h` months of the per-metric OOS-scoring origin,
-computed from `date` and `cutoff_date` (not the disjoint
-`horizon_bucket` label), so the \\\le\\max-horizon window equals the
-full scored OOS set. An `IS` window (training fit, \\\le\\ cutoff) is
-always reported.
+every scored OOS date \\d\\ with
+`origin < d <= origin + ceiling(h * 30.4375)` days, where `origin` is
+the per-metric OOS-scoring origin below. The origin is fixed by the
+cutoff and embargo, never by where observations happen to exist, so a
+reporting gap just after the cutoff shrinks a window's `n` instead of
+shifting its lead times (windows with fewer than 3 scorable dates are
+dropped). The \\\le\\max-horizon window is the largest scored set;
+predictions further out are not scored in any window. An `IS` window
+(training fit, \\\le\\ cutoff) is always reported.
 
 Scoring uses **trusted observed only**: rows whose `observed_source` is
 missing or not `"AI"` (when `trusted_only = TRUE`).
 
-**Channel-specific embargo.** `embargo_weeks` may be a scalar (all
-metrics) or a named vector such as `c(cases = 4, deaths = 6)`. For each
-metric the OOS scoring start is re-derived as
-`cutoff_date + embargo_weeks[metric] * 7`; only OOS rows at or after
-that per-metric boundary are scored, independent of the single `segment`
-label baked into predictions. Default (`0`) reproduces the prior
-behavior of scoring the entire `segment == "OOS"` block.
+**Embargo and scoring origin.** The harness labels the dates in
+`(cutoff, cutoff + embargo]` as `segment == "embargo"`; those are never
+scored. For each metric the scoring origin is
+`max(last embargo-labelled date (or the cutoff), cutoff_date + embargo_weeks[metric] * 7)`
+and the scored dates are those strictly after it. `embargo_weeks` can
+therefore only lengthen the harness embargo, per channel: it may be a
+scalar (all metrics) or a named vector such as
+`c(cases = 4, deaths = 6)`; metrics it omits get 0. With the default
+(`0`) exactly the `segment == "OOS"` block is scored, from the harness's
+own OOS origin.
 
 **Baselines**, fit per (cutoff, country, metric) on the IS observed
 history. `"seasonal"` (week-of-year climatology) is the **primary**

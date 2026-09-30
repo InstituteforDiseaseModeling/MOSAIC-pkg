@@ -77,7 +77,8 @@ A named list with elements:
 
 - variance:
 
-  list: `cv_ratio` (pred CV / obs CV), `residual_autocorr_lag7`.
+  list: `cv_ratio` (pred CV / obs CV, both on the paired finite days),
+  `residual_autocorr_lag7` (lag in days; NA gaps kept in place).
 
 - scorecard:
 

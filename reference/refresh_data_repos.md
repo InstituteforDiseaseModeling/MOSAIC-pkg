@@ -51,14 +51,21 @@ Uses `git pull --ff-only` so the call is non-destructive: a divergent
 local branch will fail loudly rather than auto-merge. Uncommitted local
 changes will also block the pull and surface in `pull_output`.
 
-For `ees-cholera-mapping` and `jhu_cholera_data`, the function
-additionally peeks at the canonical surveillance file (the one the
+For `ees-cholera-mapping` the function additionally peeks at the WHO AWD
+weekly file
 [`process_WHO_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_weekly_data.md)
-/
+reads and reports record count, date range (week-start Mondays derived
+from WHO's `year`/`week`) and country count.
+
+**JHU is a static archive.**
 [`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)
-functions read) and reports record count, date range, and country count.
-ENSO and open-meteo coverage stats are not extracted because their data
-is spread across many per-country / per-source files; commit date is the
+does NOT read the `jhu_cholera_data` repo: it reads the frozen OSF
+archive
+`MOSAIC-data/raw/JHU/osfstorage-archive/Public_surveillance_dataset.rds`.
+Pulling the repo therefore never changes MOSAIC's JHU input; the summary
+reports the archive's year range and file date, labelled as static. ENSO
+and open-meteo coverage stats are not extracted because their data is
+spread across many per-country / per-source files; commit date is the
 practical freshness signal.
 
 ## Examples

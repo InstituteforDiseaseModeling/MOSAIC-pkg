@@ -70,12 +70,14 @@ List containing train/validation indices and metadata:
 
 - Randomly assigns entire location-month blocks to train or validation
 
-- Ensures no data leakage between train/validation for the same
-  location-month
+- Reduces, but does NOT eliminate, train/validation leakage: each
+  sequence carries a multi-week input window, so sequences in adjacent
+  location-month blocks share overlapping inputs and autocorrelated
+  targets across the split. Validation scores are therefore optimistic
+  relative to a strictly forward-in-time (rolling-origin) evaluation.
 
-- Better tests spatial-temporal generalization capability
-
-- More realistic evaluation for deployment to new regions/time periods
+- Better tests spatial-temporal generalization than a per-sequence
+  random split
 
 The location-month blocking approach is particularly valuable for:
 

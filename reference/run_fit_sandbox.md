@@ -83,9 +83,11 @@ run_fit_sandbox(
 ## Value
 
 A named list with `predictions` (long data.frame in the standard
-ensemble format), `metrics` (top-line metrics plus, when
-`full_metrics=TRUE`, `fit_diagnostics` and a merged `scorecard`),
-`params_applied` (data.frame of old/new values), and `run_label`.
+ensemble format, plus `n_locations_observed`), `metrics` (top-line
+metrics, including the 1-based `score_idx_cases`/`score_idx_deaths`
+scored-window starts, plus, when `full_metrics=TRUE`, `fit_diagnostics`
+and a merged `scorecard`), `params_applied` (data.frame of old/new
+values), and `run_label`.
 
 ## Details
 
@@ -95,6 +97,33 @@ the selected `locations` to a single series before scoring, matching the
 country-level diagnostic use case; pass a single index in `locations`
 for a per-patch view. Full metrics are delegated to
 [`calc_fit_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_fit_diagnostics.md).
+
+Scoring is paired and windowed the way
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+scores a fit. For each day, the scored predicted total sums only the
+location-days that carry an observation, so a location with no
+surveillance contributes to neither side (a day with no observation at
+any selected location is `NA`, never 0). The leading unscored steps –
+the default likelihood scored window
+([`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
+`likelihood`: `burn_in_days`, 30 days) and, for cases, the two-step
+initial-condition warm-up – are dropped from both series before any
+metric is computed. A run calibrated with a non-default
+`burn_in_days`/`score_start_cases`/`deaths_score_start` is still scored
+here on the default window. The returned `predictions` use the same
+pairing but are not windowed: on a day where at least one selected
+location is observed, `observed` and `predicted_*` are both summed over
+exactly those observed locations (`n_locations_observed` records how
+many), so the two columns are always comparable; on a day with no
+observation at any selected location, `observed` is `NA` and
+`predicted_*` is the full aggregate over all selected locations. For a
+single location this is simply its own observed and predicted series.
+
+On a config that predates the v0.96.0 mortality model (it carries any of
+`mu_j_baseline`, `mu_j_epidemic_factor`, `CFR_target`, `mu_j`), the
+engine uses `CFR_target` as a constant reported CFR and ignores `mu_jt`,
+so on such a config a `CFR_target` override is applied and a `mu_jt`
+override is skipped with a warning.
 
 ## See also
 

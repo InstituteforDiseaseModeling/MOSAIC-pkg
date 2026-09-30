@@ -33,8 +33,8 @@ sim_params(config, components = SIM_PIPELINE, mode = c("rng", "replay"))
 
 ## Value
 
-A list of validated engine parameters, including the original
-(normalised) config under `$config`.
+A list of validated engine parameters, including the config as supplied
+(a file path is parsed, a list is kept unchanged) under `$config`.
 
 ## Details
 

@@ -66,8 +66,19 @@ For a lognormal distribution with parameters meanlog (μ) and sdlog (σ):
 
 - Variance = (exp(σ²) - 1) \* exp(2μ + σ²)
 
-The moment matching method estimates parameters from the mode and CI
-width on the log scale, then adjusts for the lognormal relationship.
+The moment matching method (default) matches the 95% CI exactly on the
+log scale: a lognormal is fully determined by two quantiles, so
+`meanlog` is the midpoint of `log(ci_lower)` and `log(ci_upper)` and
+`sdlog` is their distance divided by `2 * qnorm(0.975)`. `mode_val` is
+validated but does not move the fit; the implied mode
+`exp(meanlog - sdlog^2)` is returned as `mode`. Anchoring on a
+sample-based mode (for example a KDE mode of posterior draws) and then
+adding `sdlog^2` shifted wide CIs upward by orders of magnitude, which
+is why the CI is authoritative here.
+
+The optimization method fits `meanlog` and `sdlog` jointly to the mode
+and both quantiles, with all errors measured on the log scale and the
+mode weighted 10x; use it when `mode_val` is a trusted anchor.
 
 ## Examples
 
@@ -78,22 +89,22 @@ result <- fit_lognormal_from_ci(mode_val = 1,
                                  ci_upper = 3)
 print(result)
 #> $meanlog
-#> [1] 0.2089235
+#> [1] 0.2027326
 #> 
 #> $sdlog
-#> [1] 0.4570815
+#> [1] 0.4570899
 #> 
 #> $mean
-#> [1] 1.368048
+#> [1] 1.35961
 #> 
 #> $sd
-#> [1] 0.6594373
+#> [1] 0.6553832
 #> 
 #> $fitted_ci
-#> [1] 0.5031134 3.0185807
+#> [1] 0.5 3.0
 #> 
 #> $mode
-#> [1] 1
+#> [1] 0.9938206
 #> 
 
 # Example 2: Using optimization method

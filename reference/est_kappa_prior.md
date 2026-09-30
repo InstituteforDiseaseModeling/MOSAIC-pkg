@@ -4,9 +4,15 @@ This function compiles a meta-analysis of published *Vibrio cholerae*
 infectious dose (ID50) estimates and fits a lognormal prior distribution
 for the environmental dose-response half-saturation constant \\\kappa\\
 used in the MOSAIC environmental force-of-infection term: \$\$\lambda_W
-\propto W / (\kappa + W)\$\$ where \\W\\ is the environmental bacterial
-concentration and \\\kappa\\ is the concentration (CFU) at which the
-probability of infection is 50%.
+\propto D / (\kappa + D), \quad D = W / N\$\$ In the engine (rng mode,
+since v0.89.0) the dose \\D\\ is the *per-capita* environmental load
+\\W/N\\ – cells shed into the patch reservoir per resident – not a water
+concentration (`sim_components.R`, EnvToHuman step). \\\kappa\\ is
+therefore a per-capita half-saturation dose. The prior below is anchored
+on volunteer ID50 data (CFU ingested); the conversion from cells per
+capita to an ingested dose is absorbed into the shedding rates
+\\\zeta_1, \zeta_2\\, so the ID50 scale is a literature anchor for
+\\\kappa\\, not a unit identity.
 
 ## Usage
 
@@ -61,12 +67,11 @@ drinking water) consistently support a lower central estimate of \\\sim
 10^5\\ CFU, with substantial between-study heterogeneity.
 
 Fitting: each source contributes a point estimate \\\log\_{10}
-\kappa_i\\ with weight \\w_i\\ reflecting its evidentiary quality.
-Weighted mean and standard deviation on the log10 scale are converted to
-lognormal `meanlog` and `sdlog`. The resulting prior is reconciled with
-[`fit_lognormal_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_lognormal_from_ci.md)
-so that `meanlog` is consistent with the weighted mode and the 2.5th /
-97.5th percentiles match the empirical spread.
+\kappa_i\\ with weight \\w_i\\ reflecting its evidentiary quality. The
+weighted mean and standard deviation on the log10 scale are converted
+directly to the lognormal `meanlog` and `sdlog`
+(`meanlog = mu_log10 * ln 10`, `sdlog = sd_log10 * ln 10`); no further
+refit is applied.
 
 ## References
 

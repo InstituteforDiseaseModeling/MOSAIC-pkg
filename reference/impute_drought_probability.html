@@ -19,7 +19,7 @@ drivers, months before the local moisture deficit fully develops."><meta propert
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,6 +71,7 @@ drivers, months before the local moisture deficit fully develops.</p>
 <span>  integrator_col <span class="op">=</span> <span class="st">"drought_prob_26w_mean"</span>,</span>
 <span>  integrator_weeks <span class="op">=</span> <span class="fl">26L</span>,</span>
 <span>  gam_train_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  climate_obs_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  diagnostics <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  diag_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
@@ -130,6 +131,10 @@ is unaffected – only the GAM fit-row subset is capped. Default
 subset changes; <code>select=TRUE</code>/fREML/the formula are identical.</p></dd>
 
 
+<dt id="arg-climate-obs-stop">climate_obs_stop<a class="anchor" aria-label="anchor" href="#arg-climate-obs-stop"></a></dt>
+<dd><p>Date/character, or a Date vector named by <code>iso_code</code>. Last observed-climate date; rows after it are never fit. <code>NULL</code> (default) = no cap.</p></dd>
+
+
 <dt id="arg-diagnostics">diagnostics<a class="anchor" aria-label="anchor" href="#arg-diagnostics"></a></dt>
 <dd><p>Logical. If <code>TRUE</code>, fits a rolling-year
 cross-validation and writes diagnostic artefacts to <code>diag_dir</code>.</p></dd>
@@ -172,8 +177,12 @@ the EM-DAT drought type produces.</p>
 label source, so it (and its rolling mean) is <strong>excluded</strong> from the
 predictor set – predicting the label from its own generator would be
 trivially circular and would defeat the entire purpose (the lead-time
-mapping). The predictors are exogenous ocean-state teleconnections and
-antecedent temperature / precipitation-deficit only.</p>
+mapping). The same applies to any local-climate series that overlaps the
+label's <code>sustain_weeks</code> window (precipitation and temperature are the
+ingredients of <code>spei_approx</code>), so every local-climate predictor is
+lagged by <code>sustain_weeks</code> weeks: it describes conditions strictly
+<em>before</em> the label window. The predictors are exogenous ocean-state
+teleconnections and genuinely antecedent temperature / precipitation only.</p>
 <p>The GAM is fit with <code><a href="https://rdrr.io/pkg/mgcv/man/bam.html" class="external-link">mgcv::bam()</a></code>,
 <code>family = stats::binomial(link = "logit")</code>, <code>method = "fREML"</code>,
 <code>select = TRUE</code> (smoothness null-space shrinkage). Predictors:</p><ul><li><p>ENSO34 and IOD at lags 8, 16, 24 weeks (the slow ocean-state
@@ -182,11 +191,15 @@ product the GAM sells to the LSTM).</p></li>
 <li><p>Antecedent <code>temp_anom</code> (heat amplifies evaporative demand),
 <code>precip_anom</code>, and long-window antecedent precipitation
 <code>precip_sum_12w</code> / <code>precip_sum_24w</code> (accumulated rainfall
-deficit; 24w computed inline).</p></li>
+deficit; 24w computed inline), each lagged by <code>sustain_weeks</code> so it
+ends the week before the label window begins.</p></li>
 <li><p><code>s(iso_code_f, bs = "re")</code> country random effect (baseline
 aridity / drought propensity).</p></li>
 </ul><p>The concurrent <code>spei_approx</code> and its rolling mean are NOT predictors
-(label leakage; see the leakage-control note above).</p>
+(label leakage; see the leakage-control note above). Fit rows are limited to
+<code>date &lt;= climate_obs_stop</code> (and <code>&lt;= gam_train_stop</code> when set). A
+warning is raised if <code>bam()</code> reports non-convergence. The output is
+returned in the input's row order, whatever that order is.</p>
 <p><strong>Slow integrator.</strong> Drought is a persistent state whose cholera
 relevance accumulates (WASH strain, water-source concentration, migration).
 A single per-week probability under-represents that memory, so a trailing

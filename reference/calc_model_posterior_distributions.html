@@ -9,7 +9,7 @@ file that mirrors the structure of the priors.json file with updated parameter v
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -109,7 +109,13 @@ tagged <code>"fixed"</code>).</p></dd>
 <li><p>Calls the appropriate fit_*_from_ci function based on distribution type</p></li>
 <li><p>Updates the corresponding entry in the posteriors structure</p></li>
 </ul></li>
-<li><p>Preserves all non-estimated parameters from the priors unchanged</p></li>
+<li><p>Removes from the output every parameter (global, or location/parameter
+pair) that does not appear in the quantiles file, so posteriors.json holds
+only the estimated parameters and is not a drop-in full priors file
+(use <code><a href="update_priors_from_posteriors.html">update_priors_from_posteriors</a></code> to merge it back into a
+priors object). Rows of scale <code>"unknown"</code> (columns outside the
+<code>estimated_parameters</code> template) are skipped silently and are not
+counted as failures</p></li>
 <li><p>Properly handles location-specific parameters for single or multiple countries</p></li>
 <li><p>Writes posteriors.json to the output directory</p></li>
 </ol></div>

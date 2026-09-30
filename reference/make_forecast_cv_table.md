@@ -18,7 +18,7 @@ make_forecast_cv_table(
   primary_horizon = 3,
   exploratory_isos = "NGA",
   near_cast_metrics = "deaths",
-  train_start = as.Date("2018-01-01"),
+  train_start = NULL,
   dir_output = NULL,
   file_prefix = "forecast_cv_table"
 )
@@ -47,7 +47,8 @@ make_forecast_cv_table(
 
 - primary_horizon:
 
-  Horizon used for the summary rows (default 3).
+  Horizon used for the summary rows (default 3); must be one of
+  `horizons_months`.
 
 - exploratory_isos:
 
@@ -60,8 +61,10 @@ make_forecast_cv_table(
 
 - train_start:
 
-  Anchor for the reported training-window length (default `2018-01-01`,
-  the config window start).
+  Anchor for the reported training-window length. NULL (default) uses
+  each cell's `anchor_date` (the run's config start, carried by
+  [`evaluate_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_rolling_cv.md)
+  cells), else `MOSAIC::config_default$date_start`.
 
 - dir_output:
 
@@ -83,8 +86,14 @@ The headline skill is WIS-skill vs the seasonal-climatology baseline
 (\\1 - WIS\_{model}/WIS\_{clim}\\); bias-ratio is a secondary
 cumulative-bias check. NGA is flagged exploratory (surveillance
 data-quality confound) and excluded from the pooled summary; deaths are
-flagged conditional near-casts (the 2-week embargo is shorter than the
+flagged conditional near-casts (the scoring embargo is shorter than the
 infection-to-reported-death dwell).
+
+Summary rows aggregate only cells that pass the weight-ESS gate
+(`ess_ok`, when the column is present), matching
+`evaluate_rolling_cv()$summary` and
+[`plot_forecast_cv_skill`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_forecast_cv_skill.md);
+`n_gated` counts the origins left out.
 
 ## See also
 

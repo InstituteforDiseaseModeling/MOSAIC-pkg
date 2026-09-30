@@ -25,7 +25,9 @@ compile_rolling_cv_predictions(
 
   A
   [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
-  output directory (must contain `manifest.json` and `runs/`).
+  output directory (must contain `manifest.json` and `runs/`); a
+  manifest from an interrupted run (`status = "running"`) compiles the
+  cutoffs it records.
 
 - base_config:
 
@@ -36,9 +38,9 @@ compile_rolling_cv_predictions(
 
 - models:
 
-  Character vector of model types to compile (e.g. `"ensemble"`,
-  `"opt"`, `"best"`, `"medoid"`); NULL (default) uses the set recorded
-  in each run's manifest.
+  Character vector of model types to compile, from `"ensemble"`,
+  `"ensemble_opt"`, `"best"`, `"medoid"`; NULL (default) uses the set
+  recorded in the run manifest.
 
 - n_reps_best_medoid:
 

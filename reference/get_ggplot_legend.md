@@ -18,14 +18,22 @@ get_ggplot_legend(plot)
 
 ## Value
 
-A grob representing the legend of the ggplot object.
+A grob representing the legend of the ggplot object, or an empty
+[`grid::nullGrob()`](https://rdrr.io/r/grid/grid.null.html) when the
+plot has no legend (e.g. a mapped layer with no rows, such as a
+single-location flux network), so the result can always be passed to
+[`gridExtra::grid.arrange()`](https://rdrr.io/pkg/gridExtra/man/arrangeGrob.html)
+or
+[`cowplot::plot_grid()`](https://wilkelab.org/cowplot/reference/plot_grid.html).
 
 ## Details
 
 This function converts a ggplot object into a grob using
-**`ggplotGrob()`** and extracts the legend, which is stored in the grob
-under the name "guide-box". The function can be used to separate the
-legend from the plot and combine it with other plots as needed.
+**`ggplotGrob()`** and extracts the legend. ggplot2 \>= 3.5 lays out one
+guide-box slot per position (`"guide-box-right"`, `"guide-box-bottom"`,
+...), leaving empty slots as zero grobs; the first non-empty slot is
+returned, and the single `"guide-box"` grob of older ggplot2 versions is
+matched too.
 
 ## Examples
 

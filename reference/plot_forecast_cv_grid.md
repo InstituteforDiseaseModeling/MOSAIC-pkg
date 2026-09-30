@@ -117,8 +117,8 @@ Encodings (locked for the OCV-4 experiment):
   the cutoff (distinguished by the dashed cutoff rule) (clipped to
   `forecast_display_months`).
 
-- Dashed vertical line at the cutoff; a faint dotted line at
-  `cutoff + scored_horizon_months` marks the formally-scored boundary
+- Dashed vertical line at the cutoff; a faint dotted line at the embargo
+  end plus `scored_horizon_months` marks the formally-scored boundary
   (the displayed window is longer than the scored window on purpose).
 
 Per-country fixed y-axis (free across countries) is achieved by

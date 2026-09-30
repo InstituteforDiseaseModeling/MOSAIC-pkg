@@ -47,14 +47,14 @@ library(MOSAIC)
 
 When MOSAIC loads successfully, you should see:
 
-     __  __   ___   ____     _     ___  ____       __      ___    _____  _____   _____ ___
-    |  \/  | / _ \ / ___|   / \   |_ _|/ ___|   __/ /_    / /    /   |  / ___/ / ____// __ \
-    | |\/| || | | |\___ \  / _ \   | || |      /_  __/   / /    / /| |  \__ \ / __/  / /_/ /
-    | |  | || |_| | ___) |/ ___ \  | || |___    /_/     / /___ / ___ | ___/ // /___ / _, _/
-    |_|  |_| \___/ |____//_/   \_\|___|\____|          /_____//_/  |_|/____//_____//_/ |_|
+     __  __   ___   ____     _     ___  ____
+    |  \/  | / _ \ / ___|   / \   |_ _|/ ___|
+    | |\/| || | | |\___ \  / _ \   | || |
+    | |  | || |_| | ___) |/ ___ \  | || |___
+    |_|  |_| \___/ |____//_/   \_\|___|\____|
 
-    Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation
-    for Cholera (MOSAIC)!
+    Welcome to MOSAIC: Metapopulation Outbreak Simulation And Interventions
+    for Cholera!
 
     Version: <the version you installed>
 

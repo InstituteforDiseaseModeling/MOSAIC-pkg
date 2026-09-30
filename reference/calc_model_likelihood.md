@@ -128,19 +128,18 @@ calc_model_likelihood(
 
 - weight_peak_timing, weight_peak_magnitude:
 
-  Weights for peak terms (T-normalized). Default `0` (OFF). Set \> 0 to
-  enable; 0.25 = 25 percent of NB core influence.
+  Weights for peak terms, scaled by `N_obs / N_peaks`. Default `0`
+  (OFF); set \> 0 to enable.
 
 - weight_cumulative_total:
 
-  Weight for cumulative progression (T-normalized). Default `0` (OFF).
-  Cumulative helper is /end_idx normalized so weights are on the same
-  scale as other shape terms.
+  Weight for cumulative progression, scaled by
+  `N_obs / length(cumulative_timepoints)`. Default `0` (OFF).
 
 - weight_wis:
 
-  Weight for WIS term (T-normalized). Default `0` (OFF). Ablation tests
-  show 0.10 provides trajectory-shape regularization.
+  Weight for the negated WIS term, scaled by
+  `N_obs / length(wis_quantiles)`. Default `0` (OFF).
 
 - sigma_peak_time:
 
@@ -161,7 +160,8 @@ calc_model_likelihood(
 ## Value
 
 Scalar total log-likelihood (finite), `-Inf` if non-finite, or
-`NA_real_` if all locations contribute nothing.
+`NA_real_` if no location has data to score (fewer than three usable
+observations in both channels, and no integrated deaths score).
 
 ## Details
 
@@ -170,10 +170,17 @@ timing (Normal), peak magnitude (log-Normal with adaptive sigma),
 cumulative progression (NB at cumulative fractions), and Weighted
 Interval Score (WIS). All weights default to 0 (OFF).
 
-Shape terms are internally T-normalized so that weight parameters share
-a common scale: `weight = 0.25` means the term contributes roughly 25
-percent as much as the NB core. Peaks are scaled by `T / N_peaks`,
-cumulative and WIS by `T` (both return per-evaluation averages).
+Each shape term helper returns a per-evaluation value, which is scaled
+up to the size of the NB core by `N_obs / N_eval`, where `N_obs` is the
+number of time steps with a finite observation in either channel and
+`N_eval` is the number of evaluations of that term: peaks are scaled by
+`N_obs / N_peaks`, WIS by `N_obs / length(wis_quantiles)` and the
+cumulative term by `N_obs / length(cumulative_timepoints)`. Because the
+WIS and cumulative helpers already average over their quantiles and
+timepoints, a given weight on those two terms carries less influence
+than the same weight on the peak terms (with the defaults, 1/5 and 1/4
+of `N_obs` times the per-cell value), and changing the number of
+quantiles or timepoints changes their influence.
 
 Non-finite per-location LL values are replaced with `-Inf` (zero
 importance weight). The NB likelihood naturally produces very negative

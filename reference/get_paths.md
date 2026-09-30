@@ -14,45 +14,86 @@ get_paths(root = NULL)
 
 - root:
 
-  A string specifying the root directory of the MOSAIC project. All
-  other paths will be generated relative to this root.
+  A string specifying the root directory of the MOSAIC project; if
+  `NULL`, `getOption("root_directory")` (see
+  [`set_root_directory`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_root_directory.md)).
 
 ## Value
 
-A named list containing the following paths:
+A named list of paths, all built with `file.path(root, ...)`:
 
 - ROOT:
 
-  The root directory provided by the user.
+  The root directory.
 
-- DATA_RAW:
+- DATA_RAW, DATA_PROCESSED:
 
-  Path to the raw data directory (under "MOSAIC-data/data/raw").
+  `MOSAIC-data/raw` and `MOSAIC-data/processed`.
 
-- DATA_PROCESSED:
+- DATA_SCRAPE_WHO_VACCINATION:
 
-  Path to the processed data directory (under
-  "MOSAIC-data/data/processed").
+  `MOSAIC-data/raw/WHO/vaccination`.
 
-- MODEL_INPUT:
+- DATA_SCRAPE_WHO_WEEKLY, DATA_SCRAPE_GTFCC:
 
-  `NULL`, reserved for the path to the model input (if applicable).
+  WHO AWD and GTFCC scrapes under `ees-cholera-mapping/data/cholera/`.
 
-- MODEL_OUTPUT:
+- DATA_DEM, DATA_EMDAT_RAW, DATA_IDMC_RAW:
 
-  `NULL`, reserved for the path to the model output (if applicable).
+  Raw inputs under `MOSAIC-data/raw/` (`DEM`, `EMDAT`, `IDMC`).
 
-- DOCS_FIGURES:
+- DATA_SHAPEFILES, DATA_SIMILARITY_MATRIX, DATA_ELEVATION, DATA_ENSO,
+  DATA_OAG, DATA_UNICEF, DATA_WORLD_BANK, DATA_DEMOGRAPHICS, DATA_WASH,
+  DATA_SYMPTOMATIC, DATA_IMMUNITY, DATA_SUSPECTED,
+  DATA_VACCINE_EFFECTIVENESS:
 
-  Path to the figures directory (under "MOSAIC-docs/figures").
+  Processed data under `MOSAIC-data/processed/` (`shapefiles`,
+  `similarity_matrix`, `elevation`, `enso`, `OAG`, `UNICEF`,
+  `world_bank`, `demographics`, `WASH`, `symptomatic`, `immunity`,
+  `suspected_cases`, `vaccine_effectiveness`).
 
-- DOCS_TABLES:
+- DATA_CLIMATE, DATA_CLIMATE_DAILY:
 
-  Path to the tables directory (under "MOSAIC-docs/tables").
+  `MOSAIC-data/processed/climate/weekly` and `.../climate/daily`.
 
-- DOCS_PARAMS:
+- DATA_WHO_ANNUAL, DATA_WHO_WEEKLY, DATA_WHO_DAILY:
 
-  Path to the parameters directory (under "MOSAIC-docs/parameters").
+  `MOSAIC-data/processed/WHO/` `annual`, `weekly`, `daily`.
+
+- DATA_JHU_WEEKLY, DATA_JHU_DAILY:
+
+  `MOSAIC-data/processed/JHU/weekly` and `.../daily`.
+
+- DATA_SUPP_WEEKLY, DATA_SUPP_DAILY:
+
+  Both `MOSAIC-data/processed/SUPP/daily`: the weekly supplemental file
+  `cholera_country_weekly_processed.csv` is written and read there.
+
+- DATA_CHOLERA_WEEKLY, DATA_CHOLERA_DAILY, DATA_AI_WEEKLY:
+
+  Combined surveillance under `MOSAIC-data/processed/cholera/`
+  (`weekly`, `daily`, `ai/weekly`).
+
+- DATA_GTFCC_VACCINATION:
+
+  `MOSAIC-data/processed/GTFCC/vaccination`.
+
+- DATA_EMDAT, DATA_IDMC:
+
+  `MOSAIC-data/processed/EMDAT/weekly` and `.../IDMC/weekly`.
+
+- ENSO_DATA_REPO, OPEN_METEO_REPO, AI_CHOLERA_REPO:
+
+  Sibling repositories `enso-data`, `open-meteo-pipeline`,
+  `ai-cholera-data-mining`.
+
+- MODEL_INPUT, MODEL_OUTPUT:
+
+  `MOSAIC-pkg/model/input` and `MOSAIC-pkg/model/output`.
+
+- DOCS_FIGURES, DOCS_TABLES, DOCS_PARAMS:
+
+  `MOSAIC-docs/figures`, `tables`, `parameters`.
 
 ## Details
 

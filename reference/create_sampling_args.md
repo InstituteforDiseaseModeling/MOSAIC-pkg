@@ -22,18 +22,25 @@ create_sampling_args(
 
   Character string specifying the pattern. Options:
 
-  - "all": Sample all parameters (default)
+  - "all": The package default flags (every parameter except alpha_1,
+    alpha_2, kappa and rho_deaths, which stay pinned)
 
   - "none": Don't sample any parameters
 
-  - "disease_only": Sample only disease progression and immunity
-    parameters
+  - "disease_only": Sample only disease progression, immunity and
+    reporting parameters
 
-  - "transmission_only": Sample only transmission parameters
+  - "transmission_only": Sample only the transmission rates
+    (beta_j0_tot, p_beta)
 
-  - "mobility_only": Sample only mobility parameters
+  - "mobility_only": Sample only the mobility and diffusion parameters
+    (mobility_omega, mobility_gamma, tau_i)
 
-  - "spatial_only": Sample only spatial parameters
+  - "spatial_only": Same flags as "mobility_only"; the spatial coupling
+    of the model is its mobility network
+
+  - "environmental_only": Sample only shedding and environmental decay
+    (zeta_1, zeta_ratio, decay\_\*)
 
   - "initial_conditions_only": Sample only initial condition proportions
 
@@ -43,7 +50,8 @@ create_sampling_args(
 
 - custom:
 
-  Named list of custom overrides for specific parameters
+  Named list of flag overrides (e.g. `list(sample_kappa = TRUE)`)
+  applied after the pattern
 
 - PATHS:
 
@@ -59,7 +67,20 @@ create_sampling_args(
 
 ## Value
 
-Named list of arguments suitable for do.call(sample_parameters, ...)
+Named list of arguments suitable for `do.call(sample_parameters, ...)`:
+`sample_args` (a complete named list of logical flags), `seed`, and
+`PATHS`, `priors` and `config` when supplied.
+
+## Details
+
+Every pattern other than "all" sets each `sample_*` flag to FALSE except
+the ones the pattern names. No pattern turns on a parameter the package
+pins by default (`alpha_1`, `alpha_2`, `kappa`, `rho_deaths`); re-enable
+one explicitly through `custom`. `ic_moment_match` keeps its default
+(FALSE) unless set in `custom`. With every psi_star flag FALSE, the
+config's psi_star values are still applied to `psi_jt` when they differ
+from the identity transform (see
+[`sample_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)).
 
 ## Examples
 
