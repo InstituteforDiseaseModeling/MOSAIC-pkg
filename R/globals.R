@@ -68,3 +68,8 @@ utils::globalVariables(c(
      ".dp"
 ))
 
+
+# run_MOSAIC() assigns these two worker entry points into each PSOCK worker's
+# global environment (clusterEvalQ/assign) and the dispatch closures call them
+# there; they are never bound in the package namespace.
+utils::globalVariables(c(".run_sim_worker", ".run_sim_worker_chunk"))

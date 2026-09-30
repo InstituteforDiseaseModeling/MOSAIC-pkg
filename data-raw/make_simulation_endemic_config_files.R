@@ -9,13 +9,13 @@
 #   survive long enough in water to re‑seed infection after vaccine‑ and
 #   infection‑derived immunity wanes.
 # ▸ Key levers:
-#     • 15‑year time span (2020‑01‑01 → 2034‑12‑31).
+#     • 5-year time span (2020-01-01 -> 2024-12-31).
 #     • Environmental suitability `psi_jt` fluctuates annually **and** on a
 #       4‑year cycle.
 #     • Longer environmental half‑life (`decay_days_long = 365`).
 #     • Moderate immunity waning (ω₁, ω₂ ≈ 1 / 180 days ≈ 0.0056).
-#     • Immunity coverage at t0: 30 % vaccinated, 20 % recovered, 2 % exposed /
-#       infected, 48 % susceptible.
+#     • Immunity coverage at t0: 30 % one-dose vaccinated, 10 % susceptible,
+#       0.125 % infected (E and I floored at 1 per patch), remainder (~60 %) recovered.
 #
 # Output
 #   inst/extdata/config_simulation_endemic.json
