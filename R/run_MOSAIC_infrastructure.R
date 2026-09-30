@@ -189,6 +189,76 @@
   invisible(success)
 }
 
+#' Move shards left by an earlier run out of a fresh run's samples directory
+#'
+#' A non-resume run starts its sim ids at 1 and later combines every
+#' \code{sim_*.parquet} in \code{2_calibration/samples}, so shards from an
+#' earlier interrupted run (higher ids, or other chunk ranges) would be pooled
+#' into the new posterior without the resume input checks. They are moved,
+#' not deleted, into a timestamped \code{2_calibration/samples_stale_<time>/}
+#' directory so the earlier draws are recoverable.
+#'
+#' @param dirs The directory list from \code{.mosaic_ensure_dir_tree()}.
+#' @param log_warn Logging callback for the warning.
+#' @return Invisibly, the quarantine directory, or \code{NULL} if there was
+#'   nothing to move.
+#' @noRd
+.mosaic_quarantine_stale_shards <- function(dirs, log_warn = function(...) invisible(NULL)) {
+  if (is.null(dirs$cal_samples) || !dir.exists(dirs$cal_samples)) return(invisible(NULL))
+  stale <- list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
+  if (!length(stale)) return(invisible(NULL))
+  qdir <- file.path(dirs$calibration,
+                    paste0("samples_stale_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+  base <- qdir
+  k <- 1L
+  while (dir.exists(qdir)) {
+    qdir <- paste0(base, "_", k)
+    k <- k + 1L
+  }
+  dir.create(qdir, recursive = TRUE, showWarnings = FALSE)
+  moved <- file.rename(stale, file.path(qdir, basename(stale)))
+  if (!all(moved)) {
+    stop(sprintf(paste0(
+      "resume = FALSE but %d shard(s) from an earlier run in %s could not be moved aside; ",
+      "they would be pooled into this run's posterior. Remove them, set resume = TRUE, ",
+      "or use a new dir_output."), sum(!moved), dirs$cal_samples), call. = FALSE)
+  }
+  log_warn(paste0("resume = FALSE: moved %d shard(s) left by an earlier run from ",
+                  "2_calibration/samples to %s so they are not pooled into this run. ",
+                  "Use resume = TRUE to continue an interrupted run."),
+           length(stale), file.path("2_calibration", basename(qdir)))
+  invisible(qdir)
+}
+
+#' Remove post-calibration artifacts left by an earlier run
+#'
+#' The posterior/medoid/trajectory/spatial artifacts are rebuilt from the
+#' current run's samples, but several writers are conditional (optimizer on,
+#' medoid found, arrays present). Deleting them before they are rebuilt means a
+#' skipped or failed block leaves no file rather than a stale one from a
+#' previous run into the same \code{dir_output}.
+#'
+#' @param dirs The directory list from \code{.mosaic_ensure_dir_tree()}.
+#' @param log_msg Logging callback.
+#' @return Invisibly, the paths that were removed.
+#' @noRd
+.mosaic_clear_posterior_artifacts <- function(dirs, log_msg = function(...) invisible(NULL)) {
+  cal_files <- c("ensemble_candidate.rds", "ensemble_optimized.rds", "subset_opt.rds",
+                 "medoid_ensemble.rds", "trajectories_ensemble.rds",
+                 "spatial_hazard_ensemble.rds", "coupling_ensemble.rds",
+                 "pi_ij_ensemble.rds")
+  paths <- file.path(dirs$calibration, cal_files)
+  if (!is.null(dirs$cal_best_model))
+    paths <- c(paths, file.path(dirs$cal_best_model, "config_medoid.json"))
+  stale <- paths[file.exists(paths)]
+  if (length(stale)) {
+    unlink(stale)
+    log_msg("Removed %d post-calibration artifact(s) from an earlier run: %s",
+            length(stale), paste(basename(stale), collapse = ", "))
+  }
+  invisible(stale)
+}
+
 #' Write the per-location tau_i credible-interval artifact
 #'
 #' Copies the 95\% interval of the upstream departure-probability fit

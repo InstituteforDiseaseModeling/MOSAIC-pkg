@@ -620,7 +620,11 @@
 #'   reconstructed from the shards). Behaviour by mode: in adaptive (auto) mode
 #'   the run continues from \code{max(sim_id)+1} and does \emph{not} backfill
 #'   interior gaps (a lost/quarantined shard reduces the pool); in fixed mode any
-#'   missing id within the target is re-run so the exact target is met.
+#'   missing id within the target is re-run so the exact target is met. With
+#'   \code{resume = FALSE}, shards already in the samples directory are moved to
+#'   \code{2_calibration/samples_stale_<time>/} (never pooled), and the
+#'   post-calibration artifacts of an earlier run into the same directory are
+#'   removed before they are rebuilt.
 #'
 #'   Resume is \strong{rejected} (hard error) when:
 #'   \itemize{
@@ -972,6 +976,12 @@ run_MOSAIC <- function(config,
           call. = FALSE)
       }
     }
+  } else {
+    # A fresh (non-resume) run issues sim ids from 1 and the combine step reads
+    # every sim_*.parquet in the samples directory, so shards left by an
+    # earlier interrupted run would be pooled into this posterior unchecked
+    # (possibly from other priors or another config). Move them aside.
+    .mosaic_quarantine_stale_shards(dirs, log_warn)
   }
 
   # Capture full environment snapshot (versions, system, git, data)
@@ -2233,6 +2243,13 @@ run_MOSAIC <- function(config,
   # posterior-resimulation CI path from the saved file).
   .persist_arrays <- isTRUE(control$io$persist_ensemble_arrays)
 
+  # Every post-calibration artifact below is rebuilt from this run's samples.
+  # Remove any left by an earlier run into the same dir_output first, so a
+  # block that is skipped or fails this time cannot leave the previous run's
+  # posterior on disk for render_MOSAIC_figures(), run_rolling_cv() or
+  # MOSAIC-OCV to pick up.
+  .mosaic_clear_posterior_artifacts(dirs, log_msg)
+
   # Initialize metric variables (populated after ensemble is built/resolved)
   r2_cases_ensemble          <- NA_real_
   r2_deaths_ensemble         <- NA_real_
@@ -2436,6 +2453,7 @@ run_MOSAIC <- function(config,
   # driven by the optimized subset via .mosaic_active_subset_cols().
 
   subset_opt <- NULL   # initialised here; assigned inside block below if optimize_subset=TRUE
+  ensemble_opt_saved <- FALSE   # TRUE once the optimizer writes ensemble_optimized.rds
 
   if (!is.null(ensemble) && isTRUE(control$predictions$optimize_subset)) {
 
@@ -2527,6 +2545,7 @@ run_MOSAIC <- function(config,
                 else .mosaic_ensemble_drop_arrays(subset_opt$ensemble_optimized)),
               file.path(dirs$calibration, "ensemble_optimized.rds"))
       log_msg("Saved 2_calibration/ensemble_optimized.rds")
+      ensemble_opt_saved <- TRUE
 
       # Persist the full subset-optimization result (Phase 1b / G4) so the
       # renderer can reconstruct plot_model_subset_optimization() from disk.
@@ -2660,10 +2679,13 @@ run_MOSAIC <- function(config,
   # disabled (control$predictions$optimize_subset != TRUE) or produced an empty
   # subset, the block above never wrote that file. Fall back to the candidate
   # ensemble so ensemble_optimized.rds always exists whenever an ensemble was
-  # built. Slimmed under the same persist_ensemble_arrays flag; non-fatal.
+  # built. Keyed on whether THIS run's optimizer wrote the file, never on
+  # file.exists(): a file from an earlier run into the same directory must be
+  # overwritten, not kept. Slimmed under the same persist_ensemble_arrays flag;
+  # non-fatal.
   if (!is.null(ensemble)) {
     ensemble_opt_path <- file.path(dirs$calibration, "ensemble_optimized.rds")
-    if (!file.exists(ensemble_opt_path)) {
+    if (!ensemble_opt_saved) {
       tryCatch({
         saveRDS(.mosaic_stamp_artifact(
                   if (.persist_arrays) ensemble
