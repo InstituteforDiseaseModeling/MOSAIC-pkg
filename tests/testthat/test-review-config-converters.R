@@ -8,7 +8,7 @@ test_that("convert_config_to_dataframe() matches convert_config_to_matrix() colu
   vec <- convert_config_to_matrix(cfg)
   df  <- convert_config_to_dataframe(cfg)
   expect_identical(names(df), names(vec))
-  expect_equal(vec, unlist(df))
+  expect_identical(vec, unlist(df))
   for (col in c("a_1_j_ETH", "b_2_j_KEN", "prop_S_initial_ETH", "prop_V2_initial_KEN",
                 "chi_endemic", "chi_epidemic")) {
     expect_true(col %in% names(df), info = col)

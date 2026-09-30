@@ -42,7 +42,7 @@ test_that("convert_config_to_dataframe works with sampled config", {
           config_sampled <- sample_parameters(
                PATHS, 
                seed = 123,
-               sample_beta_j0_env = TRUE
+               sample_beta_j0_tot = TRUE
           )
      })
      

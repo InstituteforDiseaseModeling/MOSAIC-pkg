@@ -42,7 +42,10 @@
 #'
 #' @details
 #' The object is self-contained: it references no external files and runs
-#' directly, e.g. \code{run_simulation(config_default)}. For tutorials or
+#' directly, e.g. \code{run_simulation(config_default)}. The engine does not
+#' read `psi_star_*`, so a direct run uses the raw `psi_jt` and ignores the
+#' shipped `psi_star_b = 1`; to simulate with the calibrated suitability, pass
+#' the config through \code{sample_parameters()} first. For tutorials or
 #' fast tests the smaller toy configs [`config_simulation_epidemic`] and
 #' [`config_simulation_endemic`] are also available.
 #'

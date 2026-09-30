@@ -23,7 +23,7 @@ test_that("sample_parameters(sample_args = NULL) keeps kappa at the config value
   expect_identical(out$kappa, cfg$kappa)
 })
 
-test_that("create_sampling_args('none') leaves every sampled parameter at its config value", {
+test_that("create_sampling_args('none') draws nothing; only the pinned psi_star transform touches psi_jt", {
   cfg  <- cfg_eth()
   args <- create_sampling_args("none", seed = 11, config = cfg, PATHS = list())
   expect_true(is.list(args$sample_args))
@@ -34,6 +34,32 @@ test_that("create_sampling_args('none') leaves every sampled parameter at its co
               "psi_star_a", "psi_star_b", "S_j_initial", "E_j_initial", "I_j_initial")) {
     expect_identical(out[[p]], cfg[[p]], info = p)
   }
+  # psi_jt is not drawn, but config's pinned psi_star values (psi_star_b = 1) are applied
+  expected <- calc_psi_star(cfg$psi_jt[1, ], a = cfg$psi_star_a[1], b = cfg$psi_star_b[1],
+                            z = cfg$psi_star_z[1], k = cfg$psi_star_k[1],
+                            fill_method = "locf", warn_k_rounding = FALSE)
+  expect_identical(unname(out$psi_jt[1, ]), unname(expected))
+})
+
+test_that("no create_sampling_args() pattern un-pins a parameter the defaults pin", {
+  defaults <- MOSAIC:::.mosaic_default_sample_args()
+  pinned   <- names(defaults)[!unlist(defaults)]
+  expect_true(all(c("sample_alpha_1", "sample_alpha_2", "sample_kappa",
+                    "sample_rho_deaths") %in% pinned))
+  for (pat in c("none", "disease_only", "transmission_only", "mobility_only",
+                "spatial_only", "environmental_only", "initial_conditions_only")) {
+    flags <- create_sampling_args(pat, seed = 1)$sample_args
+    expect_false(any(unlist(flags[pinned])), info = pat)
+    expect_true(pat == "none" || any(unlist(flags)), info = pat)
+  }
+})
+
+test_that("create_sampling_args('spatial_only') keeps kappa at its pinned config value", {
+  cfg  <- cfg_eth()
+  args <- create_sampling_args("spatial_only", seed = 1, config = cfg, PATHS = list())
+  out  <- do.call(sample_parameters, c(args, verbose = FALSE))
+  expect_identical(out$kappa, cfg$kappa)
+  expect_false(identical(out$mobility_omega, cfg$mobility_omega))
 })
 
 test_that("create_sampling_args('disease_only') samples disease parameters and nothing else", {
@@ -90,6 +116,24 @@ test_that("pinned psi_star values are applied even when every psi_star flag is F
   expect_identical(out_k$psi_star_b, out_pinned$psi_star_b)
 })
 
+test_that("re-sampling a sampled config never applies psi_star twice", {
+  cfg <- cfg_eth()
+  s1  <- sample_quiet(config = cfg, seed = 7)
+  expect_true(isTRUE(attr(s1, "psi_star_applied")))
+  expect_null(attr(cfg, "psi_star_applied"))
+  none <- create_sampling_args("none", seed = 8)$sample_args
+  s2   <- sample_quiet(config = s1, seed = 8, sample_args = none)
+  expect_identical(s2$psi_jt, s1$psi_jt)
+  expect_identical(s2$psi_star_b, s1$psi_star_b)
+  # Redrawing psi_star needs the raw psi_jt, which a sampled config no longer has
+  expect_error(sample_quiet(config = s1, seed = 8), "already carries a psi_star calibration")
+  # Other flags can still be re-sampled around the calibrated psi
+  s3 <- sample_quiet(config = s1, seed = 9,
+                     sample_args = modifyList(none, list(sample_gamma_1 = TRUE)))
+  expect_identical(s3$psi_jt, s1$psi_jt)
+  expect_false(identical(s3$gamma_1, s1$gamma_1))
+})
+
 test_that("psi_jt is left untouched when all psi_star values are pinned at the identity", {
   cfg <- cfg_eth()
   cfg$psi_star_a[] <- 1; cfg$psi_star_b[] <- 0; cfg$psi_star_z[] <- 1; cfg$psi_star_k[] <- 0
@@ -97,6 +141,7 @@ test_that("psi_jt is left untouched when all psi_star values are pinned at the i
                   sample_psi_star_z = FALSE, sample_psi_star_k = FALSE)
   out <- sample_quiet(config = cfg, seed = 2, sample_args = pin_all)
   expect_identical(out$psi_jt, cfg$psi_jt)
+  expect_null(attr(out, "psi_star_applied"))
 })
 
 test_that("an NA draw for a global parameter falls back to the config value", {

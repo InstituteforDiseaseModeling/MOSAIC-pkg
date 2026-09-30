@@ -63,9 +63,14 @@
 #'       The config's \code{psi_star_a/b/z/k} are applied to \code{psi_jt} by
 #'       \code{calc_psi_star()} whenever any flag is TRUE or any value differs
 #'       from the identity (a = 1, b = 0, z = 1, k = 0), so pinned values take
-#'       effect too. \code{config} must therefore carry the raw, uncalibrated
+#'       effect too. \code{config} should carry the raw, uncalibrated
 #'       \code{psi_jt}, as \code{config_default} and \code{get_location_config()}
-#'       do; do not pass an already-sampled config as the template.
+#'       do. A returned config is marked with the attribute
+#'       \code{psi_star_applied = TRUE}; passed back in as the template, its
+#'       \code{psi_jt} is left as is when every psi_star flag is FALSE, and
+#'       sampling stops with an error when any psi_star flag is TRUE, so the
+#'       transform is never applied twice. The attribute does not survive JSON
+#'       serialization, so a config read back from JSON counts as raw.
 #'     \item sample_initial_conditions: Initial condition proportions (default TRUE).
 #'       V1, V2, E, I and R are drawn from their per-location priors and S is
 #'       the residual, so the \code{prop_S_initial} prior is not used.
@@ -305,7 +310,7 @@ sample_parameters <- function(
     cat(paste(rep("=", 50), collapse = ""), "\n", sep = "")
   }
 
-  # Config is clean and ready for the engine - no R-specific metadata added
+  # Only R-side metadata is the psi_star_applied attribute, which the engine ignores
   return(config_sampled)
 }
 
@@ -1270,6 +1275,12 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 #' value such as config_default's psi_star_b = 1 mean the same thing whatever
 #' the sibling flags are.
 #'
+#' A calibrated config is marked with \code{attr(, "psi_star_applied") = TRUE}.
+#' A template that already carries the mark is returned untouched when no
+#' psi_star flag is TRUE (its psi_star values were not redrawn, so its psi_jt
+#' already reflects them) and is rejected when any flag is TRUE, because the
+#' raw psi_jt needed to apply the new draw is no longer available.
+#'
 #' @noRd
 .apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose = FALSE) {
 
@@ -1282,6 +1293,18 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
   psi_star_enabled <- any(vapply(psi_star_params,
                                  function(p) isTRUE(sampling_flags[[p]]),
                                  logical(1)))
+
+  if (isTRUE(attr(config_sampled, "psi_star_applied", exact = TRUE))) {
+    if (psi_star_enabled) {
+      stop("config$psi_jt already carries a psi_star calibration (the template is a ",
+           "config returned by sample_parameters()), so drawing new psi_star values ",
+           "would apply calc_psi_star() twice. Pass the raw base config, e.g. ",
+           "config_default or get_location_config(), or set every sample_psi_star_* ",
+           "flag to FALSE.", call. = FALSE)
+    }
+    if (verbose) cat("  \u2139 psi_jt already calibrated by its own psi_star values, skipping\n")
+    return(config_sampled)
+  }
 
   if (!psi_star_enabled && !.psi_star_is_non_identity(config_sampled)) {
     if (verbose) cat("  \u2139 psi_star pinned at the identity transform, skipping calibration\n")
@@ -1449,6 +1472,8 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
     })
   }
 
+  if (n_calibrated > 0) attr(config_sampled, "psi_star_applied") <- TRUE
+
   # ============================================================================
   # Report calibration results
   # ============================================================================
@@ -1513,10 +1538,11 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 #' @param pattern Character string specifying the pattern. Options:
 #'   - "all": The package default flags (every parameter except alpha_1, alpha_2, kappa and rho_deaths, which stay pinned)
 #'   - "none": Don't sample any parameters
-#'   - "disease_only": Sample only disease progression and immunity parameters
-#'   - "transmission_only": Sample only transmission parameters
-#'   - "mobility_only": Sample only mobility parameters
-#'   - "spatial_only": Sample only spatial parameters
+#'   - "disease_only": Sample only disease progression, immunity and reporting parameters
+#'   - "transmission_only": Sample only the transmission rates (beta_j0_tot, p_beta)
+#'   - "mobility_only": Sample only the mobility and diffusion parameters (mobility_omega, mobility_gamma, tau_i)
+#'   - "spatial_only": Same flags as "mobility_only"; the spatial coupling of the model is its mobility network
+#'   - "environmental_only": Sample only shedding and environmental decay (zeta_1, zeta_ratio, decay_*)
 #'   - "initial_conditions_only": Sample only initial condition proportions
 #' @param seed Random seed for sampling
 #' @param custom Named list of flag overrides (e.g. \code{list(sample_kappa = TRUE)}) applied after the pattern
@@ -1530,7 +1556,9 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 #'
 #' @details
 #' Every pattern other than "all" sets each \code{sample_*} flag to FALSE except
-#' the ones the pattern names. \code{ic_moment_match} keeps its default (FALSE)
+#' the ones the pattern names. No pattern turns on a parameter the package pins
+#' by default (\code{alpha_1}, \code{alpha_2}, \code{kappa}, \code{rho_deaths});
+#' re-enable one explicitly through \code{custom}. \code{ic_moment_match} keeps its default (FALSE)
 #' unless set in \code{custom}. With every psi_star flag FALSE, the config's
 #' psi_star values are still applied to \code{psi_jt} when they differ from the
 #' identity transform (see \code{\link{sample_parameters}}).
@@ -1563,19 +1591,20 @@ create_sampling_args <- function(pattern = "all",
   flags <- .mosaic_default_sample_args()
   flag_names <- setdiff(names(flags), "ic_moment_match")
 
+  mobility_flags <- c("sample_mobility_omega", "sample_mobility_gamma", "sample_tau_i")
   pattern_flags <- list(
     disease_only = c("sample_phi_1", "sample_phi_2",
                      "sample_omega_1", "sample_omega_2",
                      "sample_gamma_1", "sample_gamma_2",
                      "sample_epsilon", "sample_chi_endemic",
-                     "sample_chi_epidemic", "sample_rho", "sample_rho_deaths",
+                     "sample_chi_epidemic", "sample_rho",
                      "sample_sigma", "sample_iota"),
-    transmission_only = c("sample_beta_j0_tot", "sample_p_beta",
-                          "sample_alpha_1", "sample_alpha_2"),
-    mobility_only = c("sample_mobility_omega", "sample_mobility_gamma",
-                      "sample_tau_i"),
-    spatial_only = c("sample_zeta_1", "sample_zeta_ratio",
-                     "sample_kappa", "sample_tau_i"),
+    transmission_only = c("sample_beta_j0_tot", "sample_p_beta"),
+    mobility_only = mobility_flags,
+    spatial_only = mobility_flags,
+    environmental_only = c("sample_zeta_1", "sample_zeta_ratio",
+                           "sample_decay_days_short", "sample_decay_days_spread",
+                           "sample_decay_shape_1", "sample_decay_shape_2"),
     initial_conditions_only = "sample_initial_conditions"
   )
 
@@ -1588,7 +1617,7 @@ create_sampling_args <- function(pattern = "all",
   } else {
     stop("Unknown pattern: ", pattern,
          ". Choose from: all, none, disease_only, transmission_only, ",
-         "mobility_only, spatial_only, initial_conditions_only")
+         "mobility_only, spatial_only, environmental_only, initial_conditions_only")
   }
 
   # Apply custom overrides
