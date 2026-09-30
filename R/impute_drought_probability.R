@@ -28,8 +28,12 @@
 #' label source, so it (and its rolling mean) is \strong{excluded} from the
 #' predictor set -- predicting the label from its own generator would be
 #' trivially circular and would defeat the entire purpose (the lead-time
-#' mapping). The predictors are exogenous ocean-state teleconnections and
-#' antecedent temperature / precipitation-deficit only.
+#' mapping). The same applies to any local-climate series that overlaps the
+#' label's \code{sustain_weeks} window (precipitation and temperature are the
+#' ingredients of \code{spei_approx}), so every local-climate predictor is
+#' lagged by \code{sustain_weeks} weeks: it describes conditions strictly
+#' \emph{before} the label window. The predictors are exogenous ocean-state
+#' teleconnections and genuinely antecedent temperature / precipitation only.
 #'
 #' @param d A data.frame with one row per (iso_code, year, week). Must
 #'   contain the columns returned by
@@ -55,6 +59,10 @@
 #'   is unaffected -- only the GAM fit-row subset is capped. Default
 #'   \code{NULL} = current full-data fit (back-compatible). Only the fit-row
 #'   subset changes; \code{select=TRUE}/fREML/the formula are identical.
+#' @param climate_obs_stop Date or character (\code{"YYYY-MM-DD"}). Last date of observed
+#'   (not projected) climate. The GAM is never fit on rows after it, because
+#'   the panel's future rows carry climate-model projections and forecast
+#'   teleconnections. Default \code{Sys.Date()}; pass the ERA5 end date when known.
 #' @param integrator_col Character. Name of the slow long-memory integrator
 #'   column. Default \code{"drought_prob_26w_mean"}.
 #' @param integrator_weeks Integer. Trailing window (weeks) for the slow
@@ -81,12 +89,16 @@
 #'   \item Antecedent \code{temp_anom} (heat amplifies evaporative demand),
 #'     \code{precip_anom}, and long-window antecedent precipitation
 #'     \code{precip_sum_12w} / \code{precip_sum_24w} (accumulated rainfall
-#'     deficit; 24w computed inline).
+#'     deficit; 24w computed inline), each lagged by \code{sustain_weeks} so it
+#'     ends the week before the label window begins.
 #'   \item \code{s(iso_code_f, bs = "re")} country random effect (baseline
 #'     aridity / drought propensity).
 #' }
 #' The concurrent \code{spei_approx} and its rolling mean are NOT predictors
-#' (label leakage; see the leakage-control note above).
+#' (label leakage; see the leakage-control note above). Fit rows are limited to
+#' \code{date <= climate_obs_stop} (and \code{<= gam_train_stop} when set). A
+#' warning is raised if \code{bam()} reports non-convergence. The output is
+#' returned in the input's row order, whatever that order is.
 #'
 #' \strong{Slow integrator.} Drought is a persistent state whose cholera
 #' relevance accumulates (WASH strain, water-source concentration, migration).
@@ -121,6 +133,7 @@ impute_drought_probability <- function(d,
                                         integrator_col   = "drought_prob_26w_mean",
                                         integrator_weeks = 26L,
                                         gam_train_stop   = NULL,
+                                        climate_obs_stop = Sys.Date(),
                                         diagnostics      = TRUE,
                                         diag_dir         = NULL,
                                         verbose          = TRUE) {
@@ -137,7 +150,11 @@ impute_drought_probability <- function(d,
      # ---- Build the sustained-SPEI-deficit label + inline predictors ----
      # spei_approx is used ONLY to build the label; it and its rolling mean
      # are deliberately kept OUT of the predictor set (leakage control).
-     d_aug <- d %>%
+     # .orig_row carries each row's position in `d` through the per-country
+     # sort, so predictions are written back to the rows they belong to.
+     d_aug <- d
+     d_aug$.orig_row <- seq_len(nrow(d))
+     d_aug <- d_aug %>%
           dplyr::group_by(iso_code) %>%
           dplyr::arrange(date, .by_group = TRUE) %>%
           dplyr::mutate(
@@ -150,7 +167,12 @@ impute_drought_probability <- function(d,
                IOD_lag8       = dplyr::lag(IOD,    n = 8),
                IOD_lag16      = dplyr::lag(IOD,    n = 16),
                precip_sum_24w = slider::slide_dbl(precipitation_sum, sum,
-                                                  .before = 23L, .complete = TRUE)
+                                                  .before = 23L, .complete = TRUE),
+               # Local climate lagged past the label window (see leakage control)
+               temp_anom_ante      = dplyr::lag(temp_anom,      n = sustain_weeks),
+               precip_anom_ante    = dplyr::lag(precip_anom,    n = sustain_weeks),
+               precip_sum_12w_ante = dplyr::lag(precip_sum_12w, n = sustain_weeks),
+               precip_sum_24w_ante = dplyr::lag(precip_sum_24w, n = sustain_weeks)
           ) %>%
           dplyr::ungroup()
 
@@ -184,19 +206,21 @@ impute_drought_probability <- function(d,
           s(IOD) +
           s(IOD_lag8) +
           s(IOD_lag16) +
-          # Antecedent temperature / precip deficit (NOT concurrent SPEI)
-          s(temp_anom) +
-          s(precip_anom) +
-          s(precip_sum_12w) +
-          s(precip_sum_24w)
+          # Antecedent temperature / precip, lagged past the label window
+          s(temp_anom_ante) +
+          s(precip_anom_ante) +
+          s(precip_sum_12w_ante) +
+          s(precip_sum_24w_ante)
 
      train_idx <- !is.na(d_aug$drought_active) &
                   !is.na(d_aug$ENSO34_lag24) &
                   !is.na(d_aug$IOD_lag16) &
-                  !is.na(d_aug$precip_sum_24w) &
-                  !is.na(d_aug$temp_anom) &
-                  !is.na(d_aug$precip_anom) &
-                  !is.na(d_aug$precip_sum_12w)
+                  !is.na(d_aug$precip_sum_24w_ante) &
+                  !is.na(d_aug$temp_anom_ante) &
+                  !is.na(d_aug$precip_anom_ante) &
+                  !is.na(d_aug$precip_sum_12w_ante) &
+                  # never fit on projected climate / forecast teleconnections
+                  as.Date(d_aug$date) <= as.Date(climate_obs_stop)
      # Leakage gate: restrict the FIT to rows on/before the cutoff when
      # gam_train_stop is supplied. The SPEI-deficit label (built above) and
      # the predict step below are unaffected -- only the fit rows are capped.
@@ -222,6 +246,10 @@ impute_drought_probability <- function(d,
           select   = TRUE,
           discrete = TRUE
      )
+     if (!isTRUE(gam_model$converged)) {
+          warning("impute_drought_probability: mgcv::bam() did not converge; ",
+                  "drought probabilities may be unreliable.")
+     }
      if (verbose) {
           message(sprintf("  Deviance explained: %.1f%%",
                           summary(gam_model)$dev.expl * 100))
@@ -250,7 +278,8 @@ impute_drought_probability <- function(d,
      }
      stopifnot(!any(is.na(preds)), all(preds >= 0), all(preds <= 1))
 
-     d[[output_col]] <- preds
+     d[[output_col]] <- NA_real_
+     d[[output_col]][d_aug$.orig_row] <- preds
 
      # ---- Slow long-memory integrator: trailing-window mean of the prob ----
      # Carry a stable original-row index through the group/arrange so the
@@ -259,7 +288,7 @@ impute_drought_probability <- function(d,
      d_tmp <- data.frame(.orig_row = seq_len(nrow(d)),
                          iso_code  = d$iso_code,
                          date      = d$date,
-                         .dp       = preds,
+                         .dp       = d[[output_col]],
                          stringsAsFactors = FALSE)
      d_tmp <- d_tmp %>%
           dplyr::group_by(iso_code) %>%

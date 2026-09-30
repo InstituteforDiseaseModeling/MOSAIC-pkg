@@ -219,3 +219,17 @@ testthat::test_that("rolling-window features land alongside the probability when
      testthat::expect_true(all(out$emdat_flood_prob_12w_max[ok] >=
                                 out$emdat_flood_prob[ok] - 1e-12))
 })
+
+
+testthat::test_that("predictions follow the input rows when the input is not sorted (review data-pipeline-06)", {
+     d <- .mk_synth_suitability()
+     out_sorted <- MOSAIC::impute_flood_probability(d, diagnostics = FALSE, verbose = FALSE)
+     set.seed(11L)
+     perm <- sample.int(nrow(d))
+     out_shuf <- MOSAIC::impute_flood_probability(d[perm, , drop = FALSE],
+                                               diagnostics = FALSE, verbose = FALSE)
+     for (col in c("emdat_flood_prob")) {
+          # Row k of the shuffled output is row perm[k] of the sorted input
+          testthat::expect_equal(out_shuf[[col]], out_sorted[[col]][perm])
+     }
+})

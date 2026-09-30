@@ -107,3 +107,50 @@ testthat::test_that("errors when a required column is missing", {
           "missing required column"
      )
 })
+
+
+testthat::test_that("predictions follow the input rows when the input is not sorted (review data-pipeline-06)", {
+     d <- .mk_synth_drought()
+     out_sorted <- MOSAIC::impute_drought_probability(d, diagnostics = FALSE, verbose = FALSE)
+     set.seed(11L)
+     perm <- sample.int(nrow(d))
+     out_shuf <- MOSAIC::impute_drought_probability(d[perm, , drop = FALSE],
+                                               diagnostics = FALSE, verbose = FALSE)
+     for (col in c("drought_prob", "drought_prob_26w_mean")) {
+          # Row k of the shuffled output is row perm[k] of the sorted input
+          testthat::expect_equal(out_shuf[[col]], out_sorted[[col]][perm])
+     }
+})
+
+
+testthat::test_that("local-climate predictors never overlap the label window (review data-pipeline-07a)", {
+     d <- .mk_synth_drought()
+     base <- MOSAIC::impute_drought_probability(d, diagnostics = FALSE, verbose = FALSE)
+     # Perturb the concurrent local-climate columns in each country's final 11
+     # weeks. Those values can only enter the fit as predictors for rows that
+     # lie sustain_weeks (12) later -- which do not exist -- so a leakage-free
+     # model is unchanged. A model using concurrent precip/temp would refit.
+     d2 <- d
+     last11 <- unlist(lapply(split(seq_len(nrow(d2)), d2$iso_code), function(ix)
+          utils::tail(ix[order(d2$date[ix])], 11L)))
+     d2$precip_sum_12w[last11] <- d2$precip_sum_12w[last11] * 5
+     d2$precip_anom[last11]    <- d2$precip_anom[last11] + 3
+     d2$temp_anom[last11]      <- d2$temp_anom[last11] - 3
+     pert <- MOSAIC::impute_drought_probability(d2, diagnostics = FALSE, verbose = FALSE)
+     testthat::expect_equal(pert$drought_prob, base$drought_prob)
+})
+
+
+testthat::test_that("the GAM is never fit on rows after climate_obs_stop (review data-pipeline-07c)", {
+     d <- .mk_synth_drought()
+     stop_date <- as.Date("2019-06-30")
+     base <- MOSAIC::impute_drought_probability(d, climate_obs_stop = stop_date,
+                                                diagnostics = FALSE, verbose = FALSE)
+     # Rewrite the "projected" climate after the stop so its drought labels flip
+     d2 <- d
+     fut <- d2$date > stop_date
+     d2$spei_approx[fut] <- -d2$spei_approx[fut]
+     pert <- MOSAIC::impute_drought_probability(d2, climate_obs_stop = stop_date,
+                                                diagnostics = FALSE, verbose = FALSE)
+     testthat::expect_equal(pert$drought_prob, base$drought_prob)
+})

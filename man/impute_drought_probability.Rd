@@ -12,6 +12,7 @@ impute_drought_probability(
   integrator_col = "drought_prob_26w_mean",
   integrator_weeks = 26L,
   gam_train_stop = NULL,
+  climate_obs_stop = Sys.Date(),
   diagnostics = TRUE,
   diag_dir = NULL,
   verbose = TRUE
@@ -52,6 +53,11 @@ forecast CV. The SPEI-deficit LABEL's rolling mean (an input transform)
 is unaffected -- only the GAM fit-row subset is capped. Default
 \code{NULL} = current full-data fit (back-compatible). Only the fit-row
 subset changes; \code{select=TRUE}/fREML/the formula are identical.}
+
+\item{climate_obs_stop}{Date or character (\code{"YYYY-MM-DD"}). Last date of observed
+(not projected) climate. The GAM is never fit on rows after it, because
+the panel's future rows carry climate-model projections and forecast
+teleconnections. Default \code{Sys.Date()}; pass the ERA5 end date when known.}
 
 \item{diagnostics}{Logical. If \code{TRUE}, fits a rolling-year
 cross-validation and writes diagnostic artefacts to \code{diag_dir}.}
@@ -97,8 +103,12 @@ the EM-DAT drought type produces.
 label source, so it (and its rolling mean) is \strong{excluded} from the
 predictor set -- predicting the label from its own generator would be
 trivially circular and would defeat the entire purpose (the lead-time
-mapping). The predictors are exogenous ocean-state teleconnections and
-antecedent temperature / precipitation-deficit only.
+mapping). The same applies to any local-climate series that overlaps the
+label's \code{sustain_weeks} window (precipitation and temperature are the
+ingredients of \code{spei_approx}), so every local-climate predictor is
+lagged by \code{sustain_weeks} weeks: it describes conditions strictly
+\emph{before} the label window. The predictors are exogenous ocean-state
+teleconnections and genuinely antecedent temperature / precipitation only.
 
 The GAM is fit with \code{mgcv::bam()},
 \code{family = stats::binomial(link = "logit")}, \code{method = "fREML"},
@@ -110,12 +120,16 @@ product the GAM sells to the LSTM).
 \item Antecedent \code{temp_anom} (heat amplifies evaporative demand),
 \code{precip_anom}, and long-window antecedent precipitation
 \code{precip_sum_12w} / \code{precip_sum_24w} (accumulated rainfall
-deficit; 24w computed inline).
+deficit; 24w computed inline), each lagged by \code{sustain_weeks} so it
+ends the week before the label window begins.
 \item \code{s(iso_code_f, bs = "re")} country random effect (baseline
 aridity / drought propensity).
 }
 The concurrent \code{spei_approx} and its rolling mean are NOT predictors
-(label leakage; see the leakage-control note above).
+(label leakage; see the leakage-control note above). Fit rows are limited to
+\code{date <= climate_obs_stop} (and \code{<= gam_train_stop} when set). A
+warning is raised if \code{bam()} reports non-convergence. The output is
+returned in the input's row order, whatever that order is.
 
 \strong{Slow integrator.} Drought is a persistent state whose cholera
 relevance accumulates (WASH strain, water-source concentration, migration).
