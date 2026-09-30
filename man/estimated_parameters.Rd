@@ -49,8 +49,8 @@ It does not include:
 
 The inventory is organized hierarchically:
 \itemize{
-\item \strong{Global parameters} (27): Same value across all locations
-\item \strong{Location-specific parameters} (19): Vary by geographic location
+\item \strong{Global parameters} (26): Same value across all locations
+\item \strong{Location-specific parameters} (20): Vary by geographic location (including \code{alpha_1}, per-location since priors_default v15.16)
 }
 
 The reported case fatality ratio \code{mu_jt} is not listed: it is not

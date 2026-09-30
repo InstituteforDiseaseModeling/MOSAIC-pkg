@@ -9,15 +9,26 @@ fit_beta_with_variance_inflation_R(samples, variance_inflation = 0, label = "")
 \arguments{
 \item{samples}{Numeric vector of proportions in (0,1)}
 
-\item{variance_inflation}{Numeric inflation factor}
+\item{variance_inflation}{Numeric SD multiplier (0 or 1 = unchanged)}
 
 \item{label}{Character string for error messages}
 }
 \value{
-List with shape1 and shape2 parameters, or NULL if fitting fails
+List with shape1 and shape2 parameters, or NULL with fewer than two
+usable samples or zero sample variance
 }
 \description{
-Fits Beta distribution using CI expansion method with variance inflation.
-Uses sqrt(variance_inflation) for CI expansion since variance scales as the square
-of standard deviation. Falls back to method of moments with direct variance scaling.
+Fits a Beta distribution to Monte Carlo R/N samples by the method of moments,
+keeping the sample mean and multiplying the sample SD by
+\code{variance_inflation} (so the variance scales by its square). Values in
+(0, 1) tighten, values > 1 widen, and 0 or 1 leave the spread unchanged. The
+concentration is floored at 2 (SD capped at \eqn{\sqrt{m(1-m)/3}}) so a very
+large factor cannot produce an invalid Beta; the mean is kept regardless.
+
+Before v0.99.11 the half-widths of the sample 95\% CI were scaled linearly,
+the lower bound floored at 1e-10 and the result passed to
+\code{fit_beta_from_ci()}. With the mode-exact logit-scale fitter that
+unreachable floored bound dominated the fit (prior mean ~2.5x the sample
+mean for typical prop_R inputs), so the SD is now scaled directly, which is
+what the factor was documented to do.
 }

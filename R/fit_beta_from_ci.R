@@ -21,6 +21,24 @@
 #'   \item input_ci: The input confidence interval
 #' }
 #'
+#' @details
+#' \code{"moment_matching"} (default) keeps the mode exact: every Beta with
+#' both shapes above 1 and mode \eqn{m} is \eqn{\mathrm{Beta}(1 + mk, 1 + (1 - m)k)}
+#' for some concentration \eqn{k > 0}, and \eqn{k} is chosen to minimise the
+#' squared error of the fitted 2.5% and 97.5% quantiles against the CI on the
+#' logit scale. Logit-scale errors are relative errors for small proportions, so
+#' a CI around 1e-6 is matched as closely as one around 0.5. When the CI is
+#' wider than any unimodal Beta with that mode allows, the widest achievable
+#' interval is returned. Because errors are relative, a bound far outside what
+#' a Beta with this mode can reach (for example a lower bound clamped to 1e-10
+#' after a linear widening) dominates the fit and pulls the mean up; pass a CI
+#' the family can represent, or refit samples by their moments instead.
+#' \code{mode_val} is a mode: to anchor a mean, use a mean-based fit.
+#'
+#' \code{"optimization"} fits both shapes freely to the mode and the two
+#' quantiles (all on the logit scale, mode weighted 100x), so the mode is matched
+#' closely but not exactly.
+#'
 #' @examples
 #' # Example 1: Fit beta for phi_1 (vaccine effectiveness)
 #' result <- fit_beta_from_ci(mode_val = 0.788, 
@@ -63,124 +81,50 @@ fit_beta_from_ci <- function(mode_val, ci_lower, ci_upper,
   }
   
   if (method == "moment_matching") {
-    # Method 1: Moment matching approach
-    # For beta: mode = (alpha - 1) / (alpha + beta - 2) when alpha, beta > 1
-    
-    # Estimate mean and variance from CI
-    # For beta on [0,1], the distribution is often roughly symmetric
-    # or can be transformed to be more symmetric
-    
-    # Estimate mean (could be different from mode for skewed distributions)
-    # Use weighted average based on mode position
-    mode_position <- (mode_val - ci_lower) / (ci_upper - ci_lower)
-    
-    if (mode_position < 0.5) {
-      # Left-skewed, mean > mode
-      approx_mean <- mode_val + 0.1 * (ci_upper - mode_val)
-    } else if (mode_position > 0.5) {
-      # Right-skewed, mean < mode
-      approx_mean <- mode_val - 0.1 * (mode_val - ci_lower)
-    } else {
-      # Symmetric
-      approx_mean <- mode_val
-    }
-    
-    # Ensure mean is within bounds
-    approx_mean <- max(ci_lower + 0.01, min(ci_upper - 0.01, approx_mean))
-    
-    # Estimate variance from CI width
-    # For beta, approximately 95% of mass is within mean ± 2*sd
-    approx_sd <- (ci_upper - ci_lower) / 4
-    approx_var <- approx_sd^2
-    
-    # Method of moments for beta distribution
-    # mean = alpha / (alpha + beta)
-    # var = alpha * beta / ((alpha + beta)^2 * (alpha + beta + 1))
-    
-    # Solve for alpha and beta
-    # Let S = alpha + beta
-    # From mean: alpha = mean * S
-    # From variance: var = mean * (1 - mean) / (S + 1)
-    # Therefore: S = mean * (1 - mean) / var - 1
-    
-    S <- approx_mean * (1 - approx_mean) / approx_var - 1
-    S <- max(2.1, S)  # Ensure S > 2 for mode to exist
-    
-    alpha <- approx_mean * S
-    beta <- (1 - approx_mean) * S
-    
-    # Ensure both parameters > 1 for mode to exist
-    alpha <- max(1.01, alpha)
-    beta <- max(1.01, beta)
-    
-    # Adjust to match mode
-    # mode = (alpha - 1) / (alpha + beta - 2)
-    # Rearranging: alpha = mode * (alpha + beta - 2) + 1
-    # Let ratio = alpha / beta, then we can solve
-    
-    if (alpha > 1 && beta > 1) {
-      # Current mode
-      current_mode <- (alpha - 1) / (alpha + beta - 2)
-      
-      # Scale factor to adjust mode
-      scale_factor <- (mode_val * (alpha + beta - 2) + 1) / alpha
-      alpha <- alpha * scale_factor
-      # Keep sum approximately constant
-      beta <- S - alpha
-      
-      # Ensure constraints
-      alpha <- max(1.01, alpha)
-      beta <- max(1.01, beta)
-    }
-    
+    # Mode-constrained quantile matching on the logit scale.
+    #
+    # Any Beta with shape1, shape2 > 1 and mode m can be written as
+    #   shape1 = 1 + m * k,  shape2 = 1 + (1 - m) * k,  k = shape1 + shape2 - 2 > 0,
+    # so the mode is matched exactly and the single free parameter k (the
+    # concentration) is chosen to bring the fitted 2.5%/97.5% quantiles as close
+    # as possible to the target CI. Errors are measured on the logit scale, i.e.
+    # as relative errors for small proportions (and for 1 - p near 1), so the fit
+    # is scale-free: a CI around 1e-6 is matched as well as one around 0.5.
+    # (The pre-v0.99.11 version clamped the mean to [ci_lower + 0.01,
+    # ci_upper - 0.01] -- an absolute offset -- which discarded the CI for any
+    # quantity below ~0.02.)
+    #
+    # If the target CI is wider than any unimodal Beta with this mode allows
+    # (k -> 0 is the widest), the widest achievable interval is returned.
+    shapes <- .fit_beta_mode_ci_k(mode_val, ci_lower, ci_upper)
+    alpha <- shapes[1]
+    beta <- shapes[2]
+
   } else if (method == "optimization") {
-    # Method 2: Optimization to match mode and quantiles
-    
+    # Free two-parameter fit of (shape1, shape2) > 1 to the mode and both
+    # quantiles, all measured on the logit scale (relative errors near 0 and 1).
+    # The mode is weighted 100x the quantiles, so it is matched closely but not
+    # exactly; start from the mode-constrained solution.
+    target_q <- stats::qlogis(c(ci_lower, ci_upper))
+    target_m <- stats::qlogis(mode_val)
+
     objective <- function(params) {
-      if (params[1] <= 1 || params[2] <= 1) return(1e10)  # Both must be > 1 for mode
-      
-      alpha <- params[1]
-      beta <- params[2]
-      
-      # Check if mode matches
-      fitted_mode <- (alpha - 1) / (alpha + beta - 2)
-      
-      # Get fitted quantiles
-      fitted_lower <- qbeta(0.025, shape1 = alpha, shape2 = beta)
-      fitted_upper <- qbeta(0.975, shape1 = alpha, shape2 = beta)
-      
-      # Calculate error (heavily weight mode matching)
-      error <- 1000 * (fitted_mode - mode_val)^2 + 
-               10 * (fitted_lower - ci_lower)^2 + 
-               10 * (fitted_upper - ci_upper)^2
-      
-      return(error)
+      a <- 1 + exp(params[1])
+      b <- 1 + exp(params[2])
+      q <- stats::qbeta(c(0.025, 0.975), shape1 = a, shape2 = b)
+      m <- (a - 1) / (a + b - 2)
+      err <- 100 * (stats::qlogis(m) - target_m)^2 +
+             sum((stats::qlogis(q) - target_q)^2)
+      if (!is.finite(err)) 1e10 else err
     }
-    
-    # Initial guess based on moment matching
-    approx_mean <- (ci_lower + ci_upper) / 2
-    approx_var <- ((ci_upper - ci_lower) / 4)^2
-    
-    S_init <- approx_mean * (1 - approx_mean) / approx_var - 1
-    S_init <- max(3, S_init)
-    
-    alpha_init <- approx_mean * S_init
-    beta_init <- (1 - approx_mean) * S_init
-    
-    # Ensure initial values satisfy constraints
-    alpha_init <- max(1.1, alpha_init)
-    beta_init <- max(1.1, beta_init)
-    
-    # Optimize
-    result <- optim(c(alpha_init, beta_init), 
-                   objective, 
-                   method = "L-BFGS-B",
-                   lower = c(1.01, 1.01),  # Both must be > 1
-                   upper = c(1000, 1000))
-    
-    alpha <- result$par[1]
-    beta <- result$par[2]
-    
+
+    init <- .fit_beta_mode_ci_k(mode_val, ci_lower, ci_upper)
+    result <- stats::optim(log(init - 1), objective, method = "Nelder-Mead",
+                           control = list(maxit = 2000, reltol = 1e-12))
+
+    alpha <- 1 + exp(result$par[1])
+    beta <- 1 + exp(result$par[2])
+
   } else {
     stop("Method must be 'moment_matching' or 'optimization'")
   }
@@ -233,4 +177,95 @@ fit_beta_from_ci <- function(mode_val, ci_lower, ci_upper,
   }
   
   return(output)
+}
+
+# Mode-constrained Beta fit: shape1 = 1 + m*k, shape2 = 1 + (1-m)*k, with k > 0
+# chosen by a log-spaced grid search refined by optimize() to minimise the
+# squared logit-scale error of the fitted 2.5%/97.5% quantiles against the CI.
+# Returns c(shape1, shape2).
+.fit_beta_mode_ci_k <- function(mode_val, ci_lower, ci_upper) {
+  target <- stats::qlogis(c(ci_lower, ci_upper))
+  obj <- function(log_k) {
+    k <- exp(log_k)
+    q <- stats::qbeta(c(0.025, 0.975),
+                      shape1 = 1 + mode_val * k,
+                      shape2 = 1 + (1 - mode_val) * k)
+    err <- sum((stats::qlogis(q) - target)^2)
+    if (!is.finite(err)) Inf else err
+  }
+  grid <- seq(log(1e-6), log(1e15), length.out = 211L)
+  vals <- vapply(grid, obj, numeric(1))
+  if (!any(is.finite(vals))) {
+    stop("fit_beta_from_ci: no finite Beta fit for mode = ", mode_val,
+         ", CI = [", ci_lower, ", ", ci_upper, "]")
+  }
+  i <- which.min(vals)
+  lo <- grid[max(1L, i - 1L)]
+  hi <- grid[min(length(grid), i + 1L)]
+  opt <- stats::optimize(obj, interval = c(lo, hi), tol = 1e-10)
+  log_k <- if (opt$objective <= vals[i]) opt$minimum else grid[i]
+  k <- exp(log_k)
+  c(1 + mode_val * k, 1 + (1 - mode_val) * k)
+}
+
+# Mean-constrained Beta fit: shape1 = m * nu, shape2 = (1 - m) * nu, with the
+# concentration nu > 0 chosen by a log-spaced grid search refined by optimize()
+# to minimise the squared logit-scale error of the fitted 2.5%/97.5% quantiles
+# against the CI. Unlike .fit_beta_mode_ci_k() the shapes are not held above 1,
+# so a small proportion can take shape1 < 1 (a J-shaped density), which is the
+# only way a Beta can span several decades below its mean. The mean is exact;
+# a CI that is wider or more right-skewed than any Beta with this mean allows is
+# matched as closely as possible on the logit scale. Returns c(shape1, shape2).
+.fit_beta_mean_ci <- function(mean_val, ci_lower, ci_upper) {
+  if (!is.finite(mean_val) || mean_val <= 0 || mean_val >= 1) {
+    stop(".fit_beta_mean_ci: mean_val must be in (0, 1)")
+  }
+  if (!is.finite(ci_lower) || !is.finite(ci_upper) ||
+      ci_lower <= 0 || ci_upper >= 1 || ci_lower >= ci_upper) {
+    stop(".fit_beta_mean_ci: need 0 < ci_lower < ci_upper < 1")
+  }
+  target <- stats::qlogis(c(ci_lower, ci_upper))
+  obj <- function(log_nu) {
+    nu <- exp(log_nu)
+    q <- suppressWarnings(stats::qbeta(c(0.025, 0.975),
+                                       shape1 = mean_val * nu,
+                                       shape2 = (1 - mean_val) * nu))
+    err <- sum((stats::qlogis(q) - target)^2)
+    if (!is.finite(err)) Inf else err
+  }
+  # nu >= 0.1 keeps both shapes well inside qbeta's accurate range
+  grid <- seq(log(0.1), log(1e15), length.out = 241L)
+  vals <- vapply(grid, obj, numeric(1))
+  if (!any(is.finite(vals))) {
+    stop(".fit_beta_mean_ci: no finite Beta fit for mean = ", mean_val,
+         ", CI = [", ci_lower, ", ", ci_upper, "]")
+  }
+  i <- which.min(vals)
+  lo <- grid[max(1L, i - 1L)]
+  hi <- grid[min(length(grid), i + 1L)]
+  opt <- stats::optimize(obj, interval = c(lo, hi), tol = 1e-10)
+  nu <- exp(if (opt$objective <= vals[i]) opt$minimum else grid[i])
+  c(mean_val * nu, (1 - mean_val) * nu)
+}
+
+# Beta refit of Monte Carlo proportion samples with their SD multiplied by
+# variance_inflation (0 or 1 = unchanged; values in (0, 1) tighten), by the
+# method of moments: the mean is the sample mean and the variance is
+# (variance_inflation * sd)^2, so the variance scales with the square of the
+# factor. Used by est_initial_R() and est_initial_S(), whose documented
+# variance_inflation is an SD multiplier. The concentration
+# nu = m (1 - m) / var - 1 is floored at nu_min (default 2, i.e. the SD is capped
+# at sqrt(m (1 - m) / 3)) because a Beta needs nu > 0; the mean is kept whatever
+# the cap. Returns c(shape1, shape2), or NULL with fewer than 2 samples in (0, 1)
+# or zero sample variance.
+.fit_beta_inflated_samples <- function(samples, variance_inflation, nu_min = 2) {
+  x <- samples[is.finite(samples) & samples > 0 & samples < 1]
+  if (length(x) < 2L) return(NULL)
+  m <- mean(x)
+  s <- stats::sd(x)
+  if (!is.finite(s) || s <= 0) return(NULL)
+  vi <- if (is.finite(variance_inflation) && variance_inflation > 0) variance_inflation else 1
+  v <- (vi * s)^2
+  nu <- max(nu_min, m * (1 - m) / v - 1)
+  c(m * nu, (1 - m) * nu)
 }

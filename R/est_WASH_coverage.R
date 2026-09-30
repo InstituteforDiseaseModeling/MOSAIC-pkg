@@ -150,7 +150,10 @@ est_WASH_coverage <- function(PATHS) {
 
           if (length(similar_countries) > 0) {
 
-               imputed_value <- weighted.mean(wash_data$Weighted_Mean_WASH[wash_data$iso_code %in% names(similar_countries)[1:3]], w=similar_countries[1:3])
+               imputed_value <- .wash_impute_from_similar(
+                    values = stats::setNames(wash_data$Weighted_Mean_WASH, wash_data$iso_code),
+                    similarity = similar_countries
+               )
 
                tmp <- wash_data[1,]
                tmp[1,] <- NA
@@ -291,13 +294,13 @@ est_WASH_coverage <- function(PATHS) {
 
 
      combo <- cowplot::plot_grid(p1, p2, p3, ncol=1, rel_heights = c(1,1,0.7), align = "vh", axis='tb')
-     combo
-
 
      path <- file.path(PATHS$DOCS_FIGURES, "wash_incidence_correlation.png")
 
+     # print() is required: plot objects are only auto-printed at top level, so a
+     # bare `combo` inside the function wrote an empty PNG.
      png(filename = path, height = 3200, width = 2000, units = "px", res=300)
-     combo
+     print(combo)
      dev.off()
 
      message(paste("WASH v incidence plot saved here: ", path))
@@ -335,7 +338,7 @@ est_WASH_coverage <- function(PATHS) {
      path <- file.path(PATHS$DOCS_FIGURES, "wash_index_by_country.png")
 
      png(filename = path, height = 1750, width = 2750, units = "px", res=300)
-     p4
+     print(p4)
      dev.off()
 
      message(paste("WASH index by country plot saved here: ", path))
@@ -382,4 +385,18 @@ est_WASH_coverage <- function(PATHS) {
 
 
 
+}
+
+
+# Similarity-weighted mean of the k most similar countries' WASH values.
+# `values` is named by ISO code; `similarity` is a named similarity vector (any
+# order). Values and weights are paired by name, so the weight of each
+# neighbour multiplies that neighbour's own value; fewer than k neighbours use
+# all available.
+.wash_impute_from_similar <- function(values, similarity, k = 3L) {
+     similarity <- similarity[!is.na(similarity) & names(similarity) %in% names(values)]
+     if (length(similarity) == 0L) return(NA_real_)
+     similarity <- sort(similarity, decreasing = TRUE)
+     top <- similarity[seq_len(min(k, length(similarity)))]
+     stats::weighted.mean(values[names(top)], w = top)
 }

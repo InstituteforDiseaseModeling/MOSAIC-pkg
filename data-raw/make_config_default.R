@@ -283,6 +283,18 @@ tmp <- tmp[tmp$j %in% j,]
 tmp <- tmp[tmp$t >= date_start & tmp$t <= date_stop,]
 nu_jt <- reshape2::acast(tmp, j ~ t, value.var = "parameter_value")
 
+# KNOWN LIMITATION: nu_jt is shipped doses (est_vaccination_rate() spreads each
+# request's doses_shipped at max_rate_per_day) with no round or regimen
+# information, so every dose is routed to first doses (nu_1) and nu_2 stays 0:
+# the engine immunises phi_1 * doses of previously unvaccinated people and V2 is
+# never reached after t0. For windows starting 2023 or later this is close to
+# right -- the ICG suspended the two-dose regimen for outbreak response in
+# October 2022 because of the global OCV shortage (WHO news release, 19 Oct
+# 2022), so reactive campaigns are
+# single-dose -- but for back-history windows a two-dose campaign counts both
+# rounds as first doses (about twice the distinct people immunised). Splitting
+# nu into nu_1/nu_2 needs round-level data in the processed vaccination inputs
+# (est_initial_V1_V2() pairs rounds from the raw GTFCC log for the pre-t0 ICs).
 nu_1_jt <- nu_2_jt <- nu_jt
 nu_2_jt[,] <- 0
 
@@ -309,14 +321,48 @@ b2 <- tmp$mean[sel]
 names(b2) <- tmp$country_iso_code[sel]
 b2 <- b2[match(j, names(b2))]
 
+# The engine's human-transmission envelope is beta_j0_hum * (1 + f(t)) with a
+# negative rate clamped to zero, so 1 + f(t) must stay positive over the year
+# (est_seasonal_dynamics() >= v0.99.11 keeps min(1 + f) >= 0.1).
+.season_min_envelope <- vapply(seq_along(j), function(i) {
+     1 + MOSAIC:::.seasonal_envelope_min(c(a_1 = a1[[i]], b_1 = b1[[i]], a_2 = a2[[i]], b_2 = b2[[i]]))
+}, numeric(1))
+if (any(.season_min_envelope <= 0)) {
+     stop("param_seasonal_dynamics.csv gives a non-positive transmission envelope min(1 + f(t)) for: ",
+          paste(j[.season_min_envelope <= 0], collapse = ", "),
+          ". Re-run est_seasonal_dynamics() (>= v0.99.11).")
+}
+
 
 message("Get departure probability of each location (tau_j)")
-tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_tau_departure.csv'))
-tmp <- tmp[tmp$i %in% j,]
-tmp <- tmp[tmp$parameter_name =='mean',]
-sel <- match(j, tmp$i)
-tau_i <- tmp$parameter_value[sel]
-names(tau_i) <- tmp$i[sel]
+# OVERLAND ONLY (user decision, 2026-09-18): tau_i is the evidence-anchored
+# overland departure probability from est_overland_tau_prior() -- the SAME
+# object data-raw/make_priors_default.R centres the tau_i lognormal prior on.
+# Sourcing both from param_tau_departure_overland.csv makes config_default$tau_i
+# identical to the prior median for all 40 locations. Sourcing tau_i from the
+# additive blend instead put the config ~18% above its own prior median (up to
+# 2.2x for air-dominated NAM/GAB/BWA).
+# The gravity kernel (mobility_gamma/mobility_omega) DELIBERATELY stays on the
+# BLEND fit -- see the gravity block below. Do not "make them consistent".
+# Ordered fallbacks: overland -> additive blend -> air-only.
+.tau_ov <- file.path(PATHS$MODEL_INPUT, 'param_tau_departure_overland.csv')
+if (file.exists(.tau_ov)) {
+     message("config tau_i source: ", basename(.tau_ov))
+     tmp <- read.csv(.tau_ov, stringsAsFactors = FALSE)
+     tau_i <- tmp$tau_daily[match(j, tmp$iso_code)]
+     names(tau_i) <- j
+} else {
+     .tau_f <- file.path(PATHS$MODEL_INPUT, 'param_tau_departure_blend.csv')
+     if (!file.exists(.tau_f)) .tau_f <- file.path(PATHS$MODEL_INPUT, 'param_tau_departure.csv')
+     message("config tau_i source: ", basename(.tau_f))
+     tmp <- read.csv(.tau_f)
+     tmp <- tmp[tmp$i %in% j,]
+     tmp <- tmp[tmp$parameter_name =='mean',]
+     sel <- match(j, tmp$i)
+     tau_i <- tmp$parameter_value[sel]
+     names(tau_i) <- tmp$i[sel]
+}
+stopifnot(length(tau_i) == length(j), all(is.finite(tau_i)), all(tau_i > 0 & tau_i < 1))
 
 message("Gravity model parameters")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "mobility_lon_lat.csv"))
@@ -329,7 +375,16 @@ lat <- tmp$lat
 names(lat) <- tmp$iso3
 latitude <- lat[match(j, names(lat))]
 
-tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "mobility_gravity_params.csv"), row.names=1)
+.grav_f <- file.path(PATHS$MODEL_INPUT, "mobility_gravity_params_blend.csv")
+if (!file.exists(.grav_f)) {
+     warning("mobility_gravity_params_blend.csv not found; falling back to the air-only ",
+             "mobility_gravity_params.csv, so the config kernel will not match the ",
+             "priors_default blend modes. Re-run est_mobility(od_source = \"blend\").",
+             immediate. = TRUE)
+     .grav_f <- file.path(PATHS$MODEL_INPUT, "mobility_gravity_params.csv")
+}
+message("config gravity source: ", basename(.grav_f))
+tmp <- read.csv(.grav_f, row.names=1)
 mobility_omega <- tmp['omega', 'mean']
 mobility_gamma <- tmp['gamma', 'mean']
 
@@ -405,9 +460,10 @@ if (!"confidence_weight" %in% names(df_daily)) {
 mat_cases  <- matrix(NA_real_, nrow = length(j), ncol = length(t), dimnames = list(j, as.character(t)))
 mat_deaths <- matrix(NA_real_, nrow = length(j), ncol = length(t), dimnames = list(j, as.character(t)))
 # Parallel per-observation confidence-weight matrices (same shape/alignment as the
-# fit matrices). CARRIED in config_default for downstream weighting but NOT yet
-# consumed by calc_model_likelihood() (it has no per-cell weight slot; tracked in a
-# separate issue). A matched cell with a missing weight defaults to 1.0 (full
+# fit matrices). CONSUMED downstream: run_MOSAIC() passes them to
+# calc_model_likelihood() as weights_obs_cases / weights_obs_deaths (and on to
+# est_nb_dispersion()), and calc_log_likelihood_deaths_integrated() reads
+# config$reported_deaths_weight directly. A matched cell with a missing weight defaults to 1.0 (full
 # trust), so a WHO-only / no-AI rebuild yields all-ones weights and is
 # likelihood-identical to the legacy config. Dimnames are dropped on JSON
 # round-trip -- consumers must align positionally (rows = location_name, cols = t).
@@ -631,6 +687,18 @@ config_default$metadata <- list(
      description = "Default simulation configuration for MOSAIC cholera metapopulation model. v5.1 (2026-09-29): mu_jt rebuilt from the revised est_CFR_hierarchical() (MOSAIC v0.97.0): a calendar year still in progress when its WHO dashboard snapshot was taken is excluded from the GAM (its deaths lag its cases, and the same weeks are scored by the calibration), and each country's trend is held flat after that country's own last WHO-annual year instead of extrapolating (SOM, BFA, LBR, BEN end in 2022). 34 of 40 locations move more than 5% in 2026 (NGA +33%); the geometric mean against the scored 2023-26 CFR moves from 0.93 to 0.97. No other field changes. v5.0 (2026-09-28): CFR v2.1 MORTALITY MODEL (MOSAIC v0.96.0). NEW mu_jt: the reported case fatality ratio as a [nL x nT] matrix, one value per location and day, built by make_mu_jt() from the per-location, per-year WHO-annual estimates of est_CFR_hierarchical() (model/input/cfr_hierarchical_estimates.csv; binomial GAM on all WHO-annual years 1970-2026 with a global trend, country intercepts, per-country drift and a country-year random effect), interpolated on the logit scale between mid-years and carried flat past the last estimated year. The engine converts it each tick to the probability that a symptomatic onset is fatal, mu_jt * rho / (rho_deaths * chi_epidemic), draws deaths at onset, and reports them on the case lag. REMOVED: mu_j_baseline, mu_j_epidemic_factor, CFR_target and delta_reporting_deaths (the daily hazard on the symptomatic stock, its epidemic escalation, its B2.1 derivation target and its separate post-mortem lag). In calibration the reported CFR is integrated out per simulated path around this mu_jt (see priors_default v16.0 mu_jt). Sources priors_default v16.0. No window/psi/surveillance/transmission change vs v4.9. v4.9 (2026-09-28): SCHEMA REMOVAL -- the per-location mu_j_slope field is no longer built, validated, or shipped (CFR restructure R3, MOSAIC v0.95.0). The engine term it fed, (1 + mu_j_slope * tick/nticks), is deleted from R/sim_components.R, so mu_jt is now TWO multiplicative components (per-patch baseline x epidemic escalation) rather than three. The linear-in-time trend was not estimable from the deaths series (~74,000 deaths needed for posterior shrinkage 0.5 against 4,139 in the largest shipped series and ~15,600 pooled over all 40 locations; measured posterior/prior SD 0.969), it double-counted the s(year) smooth already inside CFR_target, and no secular trend in cholera CFR is documented (WHO's Yemen-excluded series is flat at 1.7/1.4/1.5% for 2017/2019/2020). SIMULATION OUTPUT IS BIT-IDENTICAL: this config has shipped mu_j_slope = 0 for every location since the field existed, so the deleted factor evaluated to exactly 1 (verified over 26 scenarios x 722 result-channel digests in both rng and replay engine modes, at 40 and 1 patches, including the 1,398-tick full-length oracle fixture). make_simulation_config() keeps a deprecated, ignored mu_j_slope formal so pre-v0.95.0 configs on disk still replay without an 'unused argument' error. Sources priors_default v15.20. No window/psi/surveillance/prior-value change vs v4.8. v4.8 (2026-09-23): SCHEMA REMOVAL -- the [nL x nT] mu_jt matrix is no longer built, validated, or shipped (CFR restructure R6 defect #1). It was dead payload that the engine never read: run_simulation() derives its own per-tick mortality hazard from mu_j_baseline / mu_j_epidemic_factor (R/sim_components.R), while this matrix carried RAW reported CFR, 2.5-7.6x the mu_j_baseline actually used, and was clusterExport'ed (~1 MB at 40 x 3322, ~11% of the object) to every PSOCK worker on every run. No engine input changed, so simulation output is bit-identical. make_simulation_config() keeps a deprecated, ignored mu_jt formal so pre-v0.94.0 configs on disk still replay without an 'unused argument' error. ALSO (CFR restructure R2): rho_deaths (0.42) and delta_reporting_deaths (5) are no longer mere fallbacks -- they are now the PINNED constants the sampler uses, because sample_rho_deaths and sample_delta_reporting_deaths default FALSE in sample_parameters() and run_MOSAIC(). Their VALUES are unchanged, so no shipped field moves; only their status and the surrounding provenance comments do. rho_deaths is pinned because it cancels identically from the deaths mean under the B2 derivation (mu_j_baseline is proportional to 1/rho_deaths, the engine thins disease_deaths by rho_deaths; measured: a 0.25-0.65 sweep WITH re-derivation moves realized deaths 0.3-1.3 percent at n=48 seeds/arm across 5 national medoids, against 6-27 percent for either half-change alone). delta_reporting_deaths is pinned because no observational anchor exists (deaths and cases share the same WHO bulletin row). No window/psi/surveillance/prior-value change vs v4.7. v4.7 (2026-06-24): alpha_1 (within-metapop population-mixing exponent) is now stored as a LENGTH-nL VECTOR (rep(0.27, length(j))) instead of a global scalar (D1 of the per-location-alpha_1 plan). The laser-cholera engine is dual-mode (params.py: a scalar alpha_1 is broadcast to all patches, a length-(num_nodes,) vector is applied elementwise per patch in the FOI), so this is engine-valid and the prior was relocated to PER-LOCATION in priors_default v15.16 (shared Beta(28.4,71.6) per ISO). The seed config MUST carry a length-nL alpha_1 so the convert_matrix_to_config round-trip preserves per-ISO calibrated values (a scalar seed silently drops idx 2..nL). alpha_2 is DELIBERATELY KEPT as a global scalar (0.50). Scalar-alpha_1 configs remain valid for national/legacy use. No window/psi/surveillance/prior-value change vs v4.6 (priors_default bumped to v15.16 only for the alpha_1 relocation). v4.6 (2026-06-23): B2.1 ENGINE-CORRECT chain factor (RECALIBRATION-GATED; statistician-validated). The B2 derivation (v4.5) computed mu_j_baseline = CFR_target * gamma_1 * rho / (rho_deaths * chi_blend); the laser-cholera deaths/reported_cases mechanism actually implies CFR_target * (1-exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic) -- two corrections: (1) reported_cases scales with INCIDENCE not prevalence-days so the recovery-tick factor is the survival complement (1-exp(-gamma_1)) NOT gamma_1; (2) reported_cases is an Isym stock-read dominated by epidemic-regime ticks so the effective PPV leans to chi_epidemic NOT the 0.5*(chi_endemic+chi_epidemic) blend (statistician memory b2-cfr-chain-factor-diagnosis). This reduces realized deaths bias 16-28% on the problem countries with no harm to the good ones; an irreducible ~1.3-1.5x dynamics-dependent residual (realized epidemic-fraction + spatial coupling) remains and cannot be absorbed by any closed form. sample_parameters() derives mu with the B2.1 chain; config_default's static mu_j_baseline anchor is correspondingly rebuilt as CFR_target * (1-exp(-0.10))*rho_mean/(rho_deaths_mean*chi_epidemic=0.75) -> cfr_to_mu_adjustment ~0.1303 (was ~0.1467 under v4.5, ratio 0.888). priors_default is UNCHANGED at v15.15 (B2.1 changes only the DERIVATION, not the CFR_target prior). The ETH-only dwell stop-gap remains GONE (B2 subsumes it structurally). No window/psi/surveillance change vs v4.5. v4.5 (2026-06-23): B2 DYNAMIC mu_j_baseline <-> sampled gamma_1 coupling (RECALIBRATION-GATED; statistician spec MOSAIC-pkg/claude/prior_fix_spec/SPEC_B2.md, sourcing priors_default v15.15). priors_default v15.15 REPLACED the per-country mu_j_baseline Gamma location prior with a per-country CFR_target lognormal prior (median = the same WHO-GAM CFR the B1 build used, sdlog=0.787); sample_parameters() now DERIVES mu_j_baseline at sample time so realized implied CFR == CFR_target for every draw. config_default now ships a NEW per-country CFR_target field (the prior median) AND a mu_j_baseline numeric default built as CFR_target * the STATIC chain anchor; the v15.10/v15.14 ETH-only x0.497 dwell stop-gap is GONE (B2 subsumes it structurally). No window/psi/surveillance change vs v4.4. v4.4 (2026-06-22): rebuilt at the 2023-01-01 production window to source the RECALIBRATION-GATED priors_default v15.14 Stage-1 fixes (statistician spec MOSAIC-pkg/claude/prior_fix_spec/SPEC_prior_fixes.md). mu_j_baseline per-country defaults now carry the B1 chain-factor re-anchor (gamma_1 0.1133->0.10, chi 0.639->0.70 in the CFR->mu derivation: every country's Gamma mean x0.804, ~1.25x deaths/implied-CFR reduction; cases untouched) and the v15.10 ETH-only x0.40 dwell stop-gap is removed (subsumed by the global re-anchor). beta_j0_tot per-country defaults now carry the w=0.5 geometric-mean partial-shrinkage recenter of 18 Stage-1 ISOs toward their single-location posterior medians (symmetric: BDI/MWI/NGA/RWA/TZA move UP; LBR excluded/unidentified -> 2e-5 default; the v15.9 COG override is dropped as COG is outside the 19-ISO cohort -> 2e-5 default); beta_j0_hum/beta_j0_env are re-derived as p_beta*beta_j0_tot so they propagate consistently. No window/schema change vs v4.3. v4.3 (2026-06-20): rebuilt at the 2023-01-01 production window under the relaxed surveillance trust-tier gate (process_cholera_surveillance_data v0.47.1). fourier_* synthetic reconstructions of real annual/quarterly totals are now KEPT in the reported_cases/reported_deaths fit target (811 fourier weeks in the 2023+ window: 312 k1 + 428 k2 + 7 k3 + 12 East Africa + 52 Southern Africa) carrying their lower per-week confidence_weight (~0.4-0.5) in reported_cases_weight/reported_deaths_weight, which calc_model_likelihood() consumes as a per-observation weight; only assumed_zero weeks remain NA-blanked. This adds many (0,1)-weighted cells vs the prior fourier-hard-drop build. v4.2 (2026-06-19): psi_jt regenerated from the CLEAN 'G' suitability re-run with the B1-fixed bias-correction (calibrate_psi_predictions robust guard, MOSAIC v0.45.0). The v4.0/v4.1 psi was produced by an unregularized per-country affine bias-correction that CORRUPTED low-signal countries (ZAF ~9.7x logit blow-up, GMB flat-constant, SEN/SWZ gutted); the fixed correction (identity fallback for rank-deficient/degenerate fits + bounded affine + amplitude clamp, plus a check_psi_amplitude monitor) de-corrupts them (GMB flat->real seasonality; ZAF psi range 0.65->0.02) while leaving good countries (COD/SOM/MOZ) bit-unchanged. Same 'G' config as v4.0 (D per-capita-per-country target + AI + confidence_weight ON + rw_subsample=5 tiling + fit_date_start=2010 + n_seeds=10); 8 low-signal countries sit at the amplitude clamp (~2x / 0.5x) but the correction only rescales the genuine LSTM seasonal shape there (logit corr=1.0), and beta_env is self-normalized so the scaling is largely absorbed. v4.1 (2026-06-19): multi-source fit target + configurable window. (a) reported_cases/reported_deaths now read from the MULTI-SOURCE combined daily file (cholera_surveillance_daily_combined.csv, include_ai=TRUE) instead of the WHO-only daily file -- adds the JHU back-history and AI observed/documented_zero (confirmed-absence) weeks under the WHO>JHU>AI>SUPP merge; fourier/assumed_zero are NA-blanked upstream. (b) date_start is now a configurable top-of-script constant (DEFAULT 2023-01-01, one month earlier than the legacy 2023-02-01 at the clean year boundary for direct comparability; settable to >=2015 for back-history builds, with a psi-coverage floor guard). (c) NEW reported_cases_weight/reported_deaths_weight matrices (per-observation confidence_weight in [0,1]; direct sources = 1.0) injected post-make_simulation_config and carried in the .rda + JSON, and CONSUMED by calc_model_likelihood: run_MOSAIC passes them as weights_obs_cases/weights_obs_deaths (run_MOSAIC.R:429-430) and derives a per-location weights_location from them. IC seeding is floored at a data-rich epoch in priors_default v15.12 (ic_t0 = max(date_start, 2023-02-01)) so the window change does not cold-start ICs. v4.0 (2026-06-19): psi_jt regenerated from the WINNING 'G' suitability config of the 6-variant psi->LASER calibration tournament: per-capita per-country target (target_D_rate_per_country_floored) + AI-enhanced surveillance (include_ai=TRUE, confidence_weight ON so AI/synthetic rows are down-weighted) + rolling-CV rw_subsample=5 (tiling, = the 5-month test window: full coverage, no fold overlap) + fit_date_start=2010 (modest AI back-history; 2000 was tested and degraded fit via pre-2010 pure-synthetic data) + n_seeds=10 (bumped from 5 for ensemble stability on this load-bearing artifact). Median R2_cases across 15 data countries improved old 0.589 -> D 0.687 -> E(+AI) 0.718 -> G 0.722, with G also best-among-per-capita on bias. psi_star_b prior stays at the v15.11 per-capita re-center (+1.0). v3.9 (2026-06-18): psi_jt switched to the per-capita per-country suitability response (est_suitability response_var='target_D_rate_per_country_floored', now the package default), selected over 'transmission_intensity' by a 15-country psi->LASER calibration case-skill comparison (D lifts cases-R2 for the priority cluster COD 0.51->0.73 / SOM 0.34->0.82 / ETH 0.61->0.80; regressions on 5 low-burden countries RWA/MWI/AGO/NAM/SSD accepted for the global default). D psi has a much lower level, so psi_star_b default prior was re-centered 0->+1.0 in priors_default v15.11 (calc_psi_star odds-multiply offset), the stale MOZ psi_star_b override removed, and config_default now sources psi_star_b from the priors_default mean. v3.8 (2026-06-18): ETH-only mu_j_baseline synced to the priors_default v15.10 dwell-mismatch STOP-GAP (x0.40; Gamma mean 0.00220230 -> 0.00088092). config_default sources mu_j_baseline directly from priors_default Gamma means (see L~199), so a full regen reproduces the stop-gap automatically; the shipped .rda was patched surgically (no full regen) because priors_default v15.10 was patched surgically. Completes the half-applied v15.10 change (priors_default.rda/.json were updated but config_default.rda was not), fixing the Lesson-#12 drift guard in tests/testthat/test-cfr-pipeline-consistency.R. See disease-modeler memory project_eth_deaths_cfr_dwell_mismatch. v3.7 (2026-06-04): date_stop is now derived from the maximum date in pred_psi_suitability_day.csv (the LSTM environmental-suitability forecast horizon) rather than being a hard-coded 2026-03-31. date_start remains anchored to WHO surveillance availability (2023-02-01). This couples the simulation window to whatever the latest psi forecast extends to, so an LSTM rerun with a different horizon picks up automatically. v3.6 (2026-06-02): mu_j_baseline per-country defaults now sourced UNIVERSALLY from priors_default Gamma means (was: rowMeans of raw CFR matrix with ETH-only hand-patch). priors_default v15.6+ applies the v0.13+ identity mu_j_baseline = CFR * rho / (rho_deaths * chi) so config_default and priors_default agree by construction. Ordering dependency: make_priors_default.R must be run before make_config_default.R. The MOSAIC-data WHO annual file was refreshed through 2025 calendar year (2024 + 2025 dashboard CSVs ingested, 2026 partial snapshot included). v3.5 (2026-06-02): rho_deaths default changed from 0.6 to 0.42 (informative Beta(36.95, 51.02) mean) following the random-effects meta-analysis of three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); see claude/rho_deaths_research/SYNTHESIS_REPORT.md. v3.4 (2026-06-01): beta_j0_tot now sourced PER-COUNTRY from priors_default location medians (was a global 2e-5 constant); ETH resolves to its recentred 1.75e-6 median while all other countries are unchanged at 2e-5. Also ETH mu_j_baseline sourced from its prior mean (reporting-adjusted CFR) instead of mean(mu_jt), fixing a ~2x deaths over-prediction. With these, the fixed-ensemble ETH default fits observed cases at bias~1.05 (R2corr~0.50) and deaths at bias~0.9. v3.3 (2026-06-01): epidemic_peaks filtered to [date_start, date_stop] at build time -- the 82 rows outside the config window were silently snapping to t=1/t=N in the peak-shape likelihood terms and bloating the JSON (47 rows shipped, was 129). v3.2 (2026-05-28): epidemic_peaks (iso_code, peak_date) shipped in default config so the Python likelihood port (laser-cholera#47) can compute peak-timing / peak-magnitude shape terms without a runtime injection. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
 )
 
+# The changelog head "vX.Y (YYYY-MM-DD)" is hand-written; metadata$date is the
+# build day. Flag a mismatch (config v5.1 shipped date 2026-09-28 under a
+# 2026-09-29 head).
+.changelog_date <- sub("^.*? v[0-9.]+ \\(([0-9]{4}-[0-9]{2}-[0-9]{2})\\).*$", "\\1",
+                       config_default$metadata$description, perl = TRUE)
+if (grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", .changelog_date) &&
+    .changelog_date != config_default$metadata$date) {
+     warning("config_default changelog head is dated ", .changelog_date,
+             " but metadata$date (build day) is ", config_default$metadata$date,
+             "; update the version heading.")
+}
+
 # Validate transmission parameter relationships
 # Note: Using the original vectors since beta_j0_tot and p_beta are not in config
 validation_tol <- 1e-10
@@ -680,9 +748,10 @@ params_validated$decay_days_spread <- .decay_days_spread_default
 
 # Per-observation confidence-weight matrices (n_loc x n_t, aligned to
 # reported_cases/reported_deaths). make_simulation_config() rejects unknown args, so
-# (like zeta_ratio) they are injected AFTER validation. Carried for downstream
-# weighting; NOT consumed by the engine (it ignores unknown JSON keys) or yet by
-# calc_model_likelihood() (no per-cell weight slot -- tracked in a separate issue).
+# (like zeta_ratio) they are injected AFTER validation. Not read by the engine (it
+# ignores unknown keys), but consumed by the likelihood: run_MOSAIC() passes them
+# as weights_obs_cases / weights_obs_deaths, and
+# calc_log_likelihood_deaths_integrated() reads config$reported_deaths_weight.
 params_validated$reported_cases_weight  <- mat_cases_weight
 params_validated$reported_deaths_weight <- mat_deaths_weight
 

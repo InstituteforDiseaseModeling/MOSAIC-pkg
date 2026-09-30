@@ -44,8 +44,9 @@ remains \code{NULL}.}
 Invisibly returns a list with elements:
 \itemize{
 \item \code{data}: direct-literature anchor table (Table 7.A).
-\item \code{fit}: combined (C) lognormal parameters (\code{meanlog}, \code{sdlog},
-\code{median}, \code{mode}, \code{mean}, \code{ci_lower}, \code{ci_upper}).
+\item \code{fit}: the shipped direct-channel (A) lognormal parameters
+(\code{meanlog}, \code{sdlog}, \code{median}, \code{mode}, \code{mean}, \code{ci_lower},
+\code{ci_upper}, \code{p_below_1}).
 \item \code{param_df}: long-format parameter data frame (as saved to disk).
 \item \code{prediction}: density grid for the direct, derived and
 combined channels (tagged via the \code{channel} column).
@@ -59,22 +60,29 @@ cross-check only), and \code{candidate_fits}.
 Fits a lognormal prior for the per-person-per-day symptomatic-to-
 asymptomatic shedding ratio \eqn{\zeta_{\mathrm{ratio}} = \zeta_1 / \zeta_2}
 used in \code{sample_parameters()} to derive \eqn{\zeta_2 = \zeta_1 / \zeta_{\mathrm{ratio}}}
-at sampling time (which guarantees \eqn{\zeta_1 > \zeta_2} algebraically).
+at sampling time (so \eqn{\zeta_1 > \zeta_2} exactly when a draw has
+\eqn{\zeta_{\mathrm{ratio}} > 1}; nothing truncates the draw, see Details).
 }
 \details{
-The function produces THREE candidate lognormal fits and writes the
-precision-weighted combined prior:
+The function produces THREE candidate lognormal fits. The \strong{direct
+channel (A)} is the shipped prior: it is returned as \verb{$fit}, written to
+\code{param_zeta_ratio_prior.csv}, and stored by \code{data-raw/make_priors_default.R}
+in \code{priors_default$parameters_global$zeta_ratio}.
 \itemize{
-\item \strong{(A) Direct channel}: weighted-MLE lognormal on literature
-ratio anchors (Smith 2026 medRxiv, Nelson 2009 paired, Kaper 1995,
-Harris 2012, Chao 2011, Finger 2018, Righetto 2012, Sugimoto 2014,
-MOSAIC calibration).
+\item \strong{(A) Direct channel} (shipped): weighted-MLE lognormal on
+literature ratio anchors (Smith 2026 medRxiv, Nelson 2009 paired,
+Kaper 1995, Harris 2012, Chao 2011, Finger 2018, Righetto 2012,
+Sugimoto 2014, MOSAIC calibration).
 \item \strong{(B) Derived channel}: paired Monte-Carlo lognormal from
 the fitted \eqn{\zeta_1} / \eqn{\zeta_2} marginals, with a
 paired-bootstrap step on the shared Nelson 2009 anchor.
 \item \strong{(C) Combined}: precision-weighted (inverse-variance)
-lognormal combination of (A) and (B). This is what is written
-into \code{priors_default$parameters_global$zeta_ratio}.
+lognormal combination of (A) and (B). Diagnostic only since
+2026-04-23 (returned in \verb{$diagnostics$fit_combined}): its median
+(~2e5) is driven by the stool-concentration anchors and
+overestimates the ratio relative to the household-transmission and
+modelling-convention evidence (Smith 2026 ~1.6x, Chao 2011 /
+Finger 2018 ~10).
 }
 
 \strong{Direct channel (A).} Weighted MLE on log10 of the literature
@@ -99,6 +107,14 @@ the true derived-channel spread. A 100,000-draw Monte Carlo sample of the
 ratio distribution is generated for the diagnostic figure and returned
 in \code{$diagnostics$ratio_sample}; it does not enter the fit
 statistics.
+
+\strong{Mass below 1.} The direct channel is wide (the anchors span
+~1.6x to ~10^5), so it puts a non-trivial share of its mass below 1
+(\verb{$fit$p_below_1}, about 0.16 at the v0.99.x anchors). Those draws give
+\eqn{\zeta_2 > \zeta_1}. This is inherited from the Smith 2026
+household anchor, whose odds-ratio interval (0.11-3.23) includes
+asymptomatic index cases transmitting at least as much as symptomatic ones;
+it is not truncated here.
 
 \strong{Combined channel (C).} Given direct and derived fits
 \eqn{\mathrm{LN}(\mu_A, \sigma_A^2)} and \eqn{\mathrm{LN}(\mu_B, \sigma_B^2)},

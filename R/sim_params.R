@@ -112,6 +112,11 @@ sim_params <- function(config, components = SIM_PIPELINE, mode = c("rng", "repla
                par[[nm]] <- .sim_patch_vector(config[[nm]], nm, par$npatches)
           }
           par$p <- .sim_scalar(config$p, "p", positive = TRUE)
+          # The seasonal coefficients a_*/b_* are estimated on calendar
+          # day-of-year (est_seasonal_dynamics(): t = 1 is 1 January), so the
+          # envelope is evaluated at the day-of-year of date_start plus the tick
+          # offset. 0 for a 1 January start, which leaves t = 1:nticks unchanged.
+          par$season_t0 <- as.integer(format(as.Date(config$date_start), "%j")) - 1L
           par$mobility_omega <- .sim_scalar(config$mobility_omega, "mobility_omega")
           par$mobility_gamma <- .sim_scalar(config$mobility_gamma, "mobility_gamma")
 

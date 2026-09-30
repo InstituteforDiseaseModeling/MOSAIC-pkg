@@ -46,8 +46,19 @@ For a lognormal distribution with parameters meanlog (μ) and sdlog (σ):
 \item Variance = (exp(σ²) - 1) * exp(2μ + σ²)
 }
 
-The moment matching method estimates parameters from the mode and CI width
-on the log scale, then adjusts for the lognormal relationship.
+The moment matching method (default) matches the 95\% CI exactly on the
+log scale: a lognormal is fully determined by two quantiles, so
+\code{meanlog} is the midpoint of \code{log(ci_lower)} and
+\code{log(ci_upper)} and \code{sdlog} is their distance divided by
+\code{2 * qnorm(0.975)}. \code{mode_val} is validated but does not move
+the fit; the implied mode \code{exp(meanlog - sdlog^2)} is returned as
+\code{mode}. Anchoring on a sample-based mode (for example a KDE mode of
+posterior draws) and then adding \code{sdlog^2} shifted wide CIs upward by
+orders of magnitude, which is why the CI is authoritative here.
+
+The optimization method fits \code{meanlog} and \code{sdlog} jointly to the
+mode and both quantiles, with all errors measured on the log scale and the
+mode weighted 10x; use it when \code{mode_val} is a trusted anchor.
 }
 \examples{
 # Example 1: Fit lognormal distribution

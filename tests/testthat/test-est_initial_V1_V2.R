@@ -54,19 +54,21 @@ test_that("V1 waning decays exponentially with omega_1 and t_lag", {
 
   out <- est_initial_V1_V2(fake$PATHS, cfg,
                            omega_1 = omega_1, omega_2 = 0.001, t_lag = t_lag,
+                           phi_1 = 0.8, phi_2 = 0.9,
                            cv = 0.1, verbose = FALSE)
 
   age <- as.numeric(t0 - d) - t_lag
-  expected_V1 <- doses * exp(-omega_1 * age) / N
+  expected_V1 <- 0.8 * doses * exp(-omega_1 * age) / N
   beta_V1 <- out$parameters_location$prop_V1_initial$location$AGO$parameters
   observed_mean <- beta_V1$shape1 / (beta_V1$shape1 + beta_V1$shape2)
   expect_equal(observed_mean, expected_V1, tolerance = 1e-6)
 })
 
 # -----------------------------------------------------------------------------
-# 2. Round pairing: R01 + R02 → V2 = R02 * waning, V1 = (R01 − R02) * waning
+# 2. Round pairing (engine semantics): V2 = phi_2 * R02 * waning,
+#    V1 = (phi_1 * R01 - phi_2 * R02) * waning
 # -----------------------------------------------------------------------------
-test_that("paired two-dose campaign routes attendees to V2, non-returners to V1", {
+test_that("paired two-dose campaign routes effective second doses V1 -> V2", {
   N <- 1e7
   r1_doses <- 1e6
   r2_doses <- 0.8e6
@@ -90,13 +92,18 @@ test_that("paired two-dose campaign routes attendees to V2, non-returners to V1"
   fake <- make_fake_gtfcc(rows)
   cfg <- make_fake_config("KEN", N, t0)
 
+  phi_1 <- 0.9
+  phi_2 <- 0.95
   out <- est_initial_V1_V2(fake$PATHS, cfg, omega_1 = omega_1, omega_2 = omega_2,
+                           phi_1 = phi_1, phi_2 = phi_2,
                            t_lag = t_lag, cv = 0.1, verbose = FALSE)
 
   age1 <- as.numeric(t0 - d_r1) - t_lag
   age2 <- as.numeric(t0 - d_r2) - t_lag
-  expected_V1 <- (r1_doses - r2_doses) * exp(-omega_1 * age1) / N
-  expected_V2 <- r2_doses * exp(-omega_2 * age2) / N
+  # r2 (0.8e6) <= phi_1 * r1 (0.9e6), so every second dose finds an effective
+  # first-dose recipient
+  expected_V1 <- (phi_1 * r1_doses - phi_2 * r2_doses) * exp(-omega_1 * age1) / N
+  expected_V2 <- phi_2 * r2_doses * exp(-omega_2 * age2) / N
 
   b1 <- out$parameters_location$prop_V1_initial$location$KEN$parameters
   b2 <- out$parameters_location$prop_V2_initial$location$KEN$parameters
@@ -198,18 +205,42 @@ test_that("countries absent from the CSV receive the fallback Beta priors", {
 })
 
 # -----------------------------------------------------------------------------
-# 6. Function signature should NOT reference phi_1 / phi_2 (regression test
-#    against the double-count bug in the pre-v0.22.11 implementation).
+# 6. Regression (v0.99.11): V1/V2 are EFFECTIVE-immune compartments in the
+#    engine (V1 += phi_1 * nu_1), so the IC must scale doses by phi. The old
+#    implementation counted raw doses and overstated V by 1/phi.
 # -----------------------------------------------------------------------------
-test_that("est_initial_V1_V2 does not use phi_1 or phi_2 (no double-counting)", {
-  fmls <- names(formals(est_initial_V1_V2))
-  expect_false("phi_1" %in% fmls)
-  expect_false("phi_2" %in% fmls)
+test_that("est_initial_V1_V2 scales doses by phi_1 / phi_2 (effective coverage)", {
+  N <- 1e7
+  t0 <- as.Date("2025-01-01")
+  rows <- data.frame(
+    country = "Angola", req_id = "R1",
+    event_date = as.Date("2024-06-01"), event_type = "Round",
+    round_id = "C01-R01", doses = 1e6, vaccine = "Shanchol",
+    stringsAsFactors = FALSE
+  )
+  fake <- make_fake_gtfcc(rows)
+  cfg <- make_fake_config("AGO", N, t0)
+  mean_V1 <- function(phi_1) {
+    out <- est_initial_V1_V2(fake$PATHS, cfg, omega_1 = 0, omega_2 = 0,
+                             t_lag = 0, cv = 0.1, phi_1 = phi_1, phi_2 = 0.9,
+                             verbose = FALSE)
+    b <- out$parameters_location$prop_V1_initial$location$AGO$parameters
+    b$shape1 / (b$shape1 + b$shape2)
+  }
+  expect_equal(mean_V1(1), 0.1, tolerance = 1e-8)
+  expect_equal(mean_V1(0.5), 0.05, tolerance = 1e-8)
 
-  # Also confirm phi_1 / phi_2 do not appear in the function body
-  body_text <- paste(deparse(body(est_initial_V1_V2)), collapse = "\n")
-  expect_false(grepl("phi_1", body_text))
-  expect_false(grepl("phi_2", body_text))
+  # Defaults are the priors_default Beta means, not 1
+  pg <- MOSAIC::priors_default$parameters_global
+  phi_1_mean <- pg$phi_1$parameters$shape1 /
+    (pg$phi_1$parameters$shape1 + pg$phi_1$parameters$shape2)
+  out <- est_initial_V1_V2(fake$PATHS, cfg, omega_1 = 0, omega_2 = 0,
+                           t_lag = 0, cv = 0.1, verbose = FALSE)
+  b <- out$parameters_location$prop_V1_initial$location$AGO$parameters
+  expect_equal(b$shape1 / (b$shape1 + b$shape2), phi_1_mean * 0.1, tolerance = 1e-8)
+
+  expect_error(est_initial_V1_V2(fake$PATHS, cfg, phi_1 = 1.5, verbose = FALSE),
+               "phi_1")
 })
 
 # -----------------------------------------------------------------------------
@@ -233,7 +264,7 @@ test_that("campaigns on or after date_start are excluded", {
   cfg <- make_fake_config("AGO", N, t0)
   out <- est_initial_V1_V2(fake$PATHS, cfg,
                            omega_1 = 0, omega_2 = 0, t_lag = 0, cv = 0.1,
-                           verbose = FALSE)
+                           phi_1 = 1, phi_2 = 1, verbose = FALSE)
   b1 <- out$parameters_location$prop_V1_initial$location$AGO$parameters
   mean_V1 <- b1$shape1 / (b1$shape1 + b1$shape2)
   # Only the 1e5-dose pre-t0 campaign should contribute → prop ≈ 1e5/1e7 = 0.01
