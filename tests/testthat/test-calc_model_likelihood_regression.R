@@ -32,6 +32,20 @@
 # 2 locations x 60 daily timesteps. Same construction as the retired parity
 # test, so the frozen values are comparable to the figures quoted in its
 # comments (core was recorded there as "R -495").
+# These are frozen-value tests of the likelihood ASSEMBLY, not of the dispersion
+# rule. Dispersion used to be estimated inside the likelihood by a marginal
+# method-of-moments form; it is now estimated per location by
+# est_nb_dispersion() and passed in (v0.92.0).
+#
+# To keep the frozen values comparable across that change, the dispersion the
+# RETIRED estimator produced for THIS fixture is pinned as literal constants.
+# (Deliberately literals, not a reimplementation of the deleted function: a
+# parallel copy of a retired algorithm in test-land is its own hazard.) With
+# them, every historical expected value below reproduces exactly -- the point
+# being that the assembly maths did not change, only where k comes from.
+.REG_K_CASES  <- c(13512.048583, 74.918266)
+.REG_K_DEATHS <- c(Inf, Inf)
+
 regression_inputs <- function() {
   set.seed(42)
   n_loc <- 2L
@@ -42,7 +56,8 @@ regression_inputs <- function() {
   obs_d <- matrix(round(obs_c * 0.05), nrow = n_loc)
   est_d <- matrix(pmax(0, round(est_c * 0.05)), nrow = n_loc)
   list(obs_cases = obs_c, est_cases = est_c,
-       obs_deaths = obs_d, est_deaths = est_d)
+       obs_deaths = obs_d, est_deaths = est_d,
+       nb_k_cases = .REG_K_CASES, nb_k_deaths = .REG_K_DEATHS)
 }
 
 ll_with <- function(...) {
@@ -111,7 +126,12 @@ test_that("observation orientation is [locations, time]", {
   # -- if it does not, the function is collapsing the matrices and the
   # per-location structure is being ignored.
   inp <- regression_inputs()
-  flipped <- lapply(inp, t)
+  # transpose only the MATRICES; a per-location dispersion vector would no
+  # longer match n_locations once the orientation flips, so use a scalar here
+  mats <- c("obs_cases", "est_cases", "obs_deaths", "est_deaths")
+  inp$nb_k_cases <- 3; inp$nb_k_deaths <- 3
+  flipped <- inp
+  flipped[mats] <- lapply(inp[mats], t)
   expect_false(isTRUE(all.equal(do.call(MOSAIC::calc_model_likelihood, inp),
                                 do.call(MOSAIC::calc_model_likelihood, flipped))))
 })

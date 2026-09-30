@@ -168,8 +168,9 @@ test_that("mosaic_ensemble object has expected structure", {
 
   # artifact_mask carries the default resolved spec (defaults match plot_model_ensemble).
   # score_idx_* default to 1L (no scored-window slicing; bit-identical default).
+  # The final deaths step is real since v0.96.0 (deaths reported on the cases' row).
   expect_equal(ens$artifact_mask,
-               list(cases_warmup = 2L, deaths_final = TRUE,
+               list(cases_warmup = 2L, deaths_final = FALSE,
                     score_idx_cases = 1L, score_idx_deaths = 1L))
 })
 

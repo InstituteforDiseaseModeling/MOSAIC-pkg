@@ -182,6 +182,12 @@ calc_model_posterior_distributions <- function(
 
     # Create posteriors object as copy of priors
     posteriors <- priors
+    # The reported CFR's prior block (priors_default v16+) is not a sampled
+    # parameter: it is integrated out of the deaths likelihood, and its calibrated
+    # value is 3_results/posterior/cfr_posterior.csv. Copying it here would present
+    # the prior as a posterior. Staged estimation keeps it, because
+    # update_priors_from_posteriors() starts from the priors.
+    posteriors$mu_jt <- NULL
 
     # Update metadata
     posteriors$metadata$description <- "Posterior distributions fitted from calibration quantiles"

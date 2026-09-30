@@ -27,7 +27,8 @@ plot_forecast_cv_grid(
 \item{predictions}{Predictions to plot: a data.frame, a path to a
 \code{predictions*.parquet}/\code{.csv}, or a directory holding per-cell
 \code{*/cutoff_*/predictions.parquet}. Must carry \code{iso_code,
-cutoff_date, date, metric, segment, observed, pred_median, model} and the CI
+cutoff_date, date, metric, segment, observed, pred_median, model} (plus
+\code{pred_central} when present) and the CI
 columns for \code{ci} (e.g. \code{pi95_lo}/\code{pi95_hi}).}
 
 \item{metric}{Single metric to render: \code{"cases"} or \code{"deaths"}.}
@@ -78,7 +79,8 @@ Encodings (locked for the OCV-4 experiment):
 \item Observed points by \code{segment}: filled circle = in-sample (training,
 \eqn{\le} cutoff), \code{x} = embargo-gap weeks, open circle = out-of-sample
 (validation, shown up to \code{forecast_display_months} past the cutoff).
-\item Model \code{pred_median}: solid line + full-opacity CI ribbon for
+\item Model \code{pred_central} (the run's \code{central_method}; \code{pred_median}
+for predictions written before it existed): solid line + full-opacity CI ribbon for
 dates \eqn{\le} cutoff; solid line + lighter CI ribbon after the cutoff (distinguished by the dashed cutoff rule)
 (clipped to \code{forecast_display_months}).
 \item Dashed vertical line at the cutoff; a faint dotted line at

@@ -61,6 +61,10 @@ utils::globalVariables(c(
      "zeta_1_hi", "zeta_1_lo", "zeta_2", "zeta_2_hi", "zeta_2_lo",
      "zeta_ratio",
      # plot_mobility_fused() ggplot2 aes() columns
-     "air", "dest", "fused", "panel", "tau_daily", "xend", "yend"
+     "air", "dest", "fused", "panel", "tau_daily", "xend", "yend",
+     # plot_CFR_hierarchical() ggplot2 aes() columns
+     "cfr_pred", "deviation",
+     # impute_drought_probability() data.table column
+     ".dp"
 ))
 

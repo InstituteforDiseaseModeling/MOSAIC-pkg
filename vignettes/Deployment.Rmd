@@ -100,7 +100,7 @@ This script is identical to the complete setup but skips R installation (step 2/
 
 For running multiple simulations in parallel on a cluster:
 
-```{r vm-parallel}
+```{r vm-parallel, eval = FALSE}
 library(MOSAIC)
 
 # Enable parallel execution across available cores
@@ -128,7 +128,7 @@ result <- run_MOSAIC(
 ## Troubleshooting
 
 **Python issues** (only affects `est_suitability()`; simulation and calibration are pure R):
-```{r troubleshoot}
+```{r troubleshoot, eval = FALSE}
 # Check Python configuration
 reticulate::py_config()
 

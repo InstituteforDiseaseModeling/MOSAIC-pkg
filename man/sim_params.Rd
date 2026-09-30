@@ -4,7 +4,7 @@
 \alias{sim_params}
 \title{Normalise and validate a config for the R transmission engine}
 \usage{
-sim_params(config, components = SIM_PIPELINE)
+sim_params(config, components = SIM_PIPELINE, mode = c("rng", "replay"))
 }
 \arguments{
 \item{config}{Config list, or a path to a \code{.json} / \code{.json.gz}
@@ -12,6 +12,9 @@ file.}
 
 \item{components}{Pipeline subset that will be run; determines which
 compartments \code{Census} sums and which parameters are required.}
+
+\item{mode}{\code{"rng"} (production) or \code{"replay"} (the laser-cholera
+parity harness); decides which mortality inputs are read.}
 }
 \value{
 A list of validated engine parameters, including the original

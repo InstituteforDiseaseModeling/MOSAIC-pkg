@@ -91,7 +91,7 @@ test_that("sample_parameters is deterministic for a fixed seed", {
   a <- sample_parameters(seed = 7, verbose = FALSE)
   b <- sample_parameters(seed = 7, verbose = FALSE)
   for (f in c("beta_j0_tot", "p_beta", "tau_i",
-              "S_j_initial", "E_j_initial", "I_j_initial", "mu_j_baseline")) {
+              "S_j_initial", "E_j_initial", "I_j_initial", "epidemic_threshold")) {
     expect_equal(a[[f]], b[[f]], info = f)
   }
   # A different seed should differ somewhere (sanity: sampling is actually seeded)

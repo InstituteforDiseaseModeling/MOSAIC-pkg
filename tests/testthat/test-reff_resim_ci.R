@@ -181,9 +181,22 @@ test_that(".mosaic_reff_resim_ci reduces real engine members into three estimand
   seeds <- c(11L, 12L)
   Tn <- 366L; nL <- length(base$location_name)
   ca <- array(NA_real_, dim = c(nL, Tn, nP, nS))
+  # Each member's 7-day-window peak R_eff at location 1, computed here from the
+  # member's own run, for the peak_Rt check below. Member id m = (s-1)*nP + p.
+  pk1 <- w_m <- numeric(nP * nS)
   for (p in seq_len(nP)) for (s in seq_len(nS)) {
     cfg <- member_cfg(seeds[p]); cfg$seed <- p * 1000L + s
-    ca[, , p, s] <- run_simulation(config = cfg, seed = cfg$seed, quiet = TRUE)$results$reported_cases
+    rs <- run_simulation(config = cfg, seed = cfg$seed, quiet = TRUE)$results
+    ca[, , p, s] <- rs$reported_cases
+    rw <- MOSAIC:::.mosaic_reff_routes(
+      rs$incidence_human[1, ], rs$incidence_env[1, ], rs$delta_jt[1, ],
+      MOSAIC:::.mosaic_reff_config_kernel(cfg), 1,
+      init = MOSAIC:::.mosaic_reff_init(rs$E[1, 1], rs$Isym[1, 1], rs$Iasym[1, 1],
+                                        rs$incidence[1, 1]),
+      window = 7L)$R_eff
+    rw[1:10] <- NA_real_
+    m <- (s - 1L) * nP + p
+    pk1[m] <- max(rw[is.finite(rw)]); w_m[m] <- c(0.6, 0.4)[p] / nS
   }
   ens <- structure(list(seeds = seeds, parameter_weights = c(0.6, 0.4),
                         cases_array = ca, n_param_sets = nP,
@@ -208,6 +221,11 @@ test_that(".mosaic_reff_resim_ci reduces real engine members into three estimand
   expect_equal(res$central$R_eff[both], res$central$R_hum[both] + res$central$R_env[both])
   expect_setequal(unique(res$peak_Rt$estimand), c("R_eff", "R_hum", "R_env"))
   expect_equal(nrow(res$peak_Rt), 3L * nL)
+  expect_equal(res$peak_window, 7L)
+  row1 <- res$peak_Rt[res$peak_Rt$estimand == "R_eff" &
+                        res$peak_Rt$location == base$location_name[1], ]
+  expect_equal(unname(unlist(row1[, c("q2.5", "q50", "q97.5")])),
+               weighted_quantiles(pk1, w_m, c(0.025, 0.5, 0.975)))
   expect_equal(unname(res$kernel_params[["gamma_1"]]),
                member_cfg(seeds[res$medoid_member$param_idx])$gamma_1)
 })

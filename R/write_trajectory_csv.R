@@ -33,9 +33,21 @@
 #' significant figures it measured 62.7 MB raw / 7.8 MB packed for a single
 #' national model, which belongs in blob storage rather than git.
 #'
+#' @section Deaths and the population balance:
+#' When the run integrated the reported CFR out (MOSAIC >= v0.96.0),
+#' \code{reported_deaths} and \code{disease_deaths} are the members' deaths
+#' redrawn from the calibrated CFR. The population compartments and \code{N}
+#' carry the engine's own fatal draws at the prior \code{mu_jt} (the fatal share
+#' \code{p_fatal} of symptomatic onsets, a few percent, never enters
+#' \code{Isym}), so \code{N} balances against those,
+#' not against the redrawn \code{disease_deaths}. \code{disease_deaths} are true
+#' deaths, i.e. reported deaths / \code{rho_deaths}, and rest on the pinned
+#' \code{rho_deaths}.
+#'
 #' @section What is lost:
-#' The summary carries the weighted \strong{median} only, so these are central
-#' trajectories with no credible intervals. Intervals for these channels
+#' The summary carries one central line per channel and no credible intervals:
+#' \code{disease_deaths} follows the run's deaths \code{central_method} (default
+#' mean), and every other channel is the weighted \strong{median}. Intervals for these channels
 #' require the per-member data. \code{reported_cases} and
 #' \code{reported_deaths} keep their intervals in the prediction CSVs.
 #'

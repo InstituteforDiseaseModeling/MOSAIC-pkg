@@ -18,7 +18,7 @@ run_rolling_cv(
   optimize_subset = TRUE,
   models = c("ensemble", "ensemble_opt", "medoid"),
   n_reps_best_medoid = 50L,
-  central_method = "median",
+  central_method = "mean",
   est_suitability_spec = list(),
   psi_cache = NULL,
   dir_output,
@@ -79,9 +79,10 @@ process, so cost scales with this value times the number of
 cutoffs and locations.}
 
 \item{central_method}{Ensemble central tendency used for the compiled
-predictions and the in-sample calibration metrics/medoid: \code{"median"}
-(default; lower calibration bias) or \code{"mean"} (unbiased for expected
-counts, never collapses on sparse deaths). Scalar or per-channel
+predictions and the in-sample calibration metrics/medoid: \code{"mean"}
+(default; the expected count, which never collapses to zero on sparse
+deaths) or \code{"median"} (the typical trajectory; the default from
+v0.46.1 to v0.97.x). Scalar or per-channel
 \code{c(cases=, deaths=)}. The
 predictions table carries \code{pred_central} (this choice) plus
 \code{pred_mean}/\code{pred_median} for cross-walk; WIS/coverage remain
@@ -141,7 +142,11 @@ nor labeled OOS.
 arguments to \code{\link{est_suitability}} and overrides any date keys passed
 via \code{est_suitability_spec} (with a warning). \code{est_suitability_spec}
 therefore controls only modeling choices (target, features, architecture), not
-the cutoff window.
+the cutoff window. The reported CFR \code{mu_jt} and its prior are rebuilt per
+cutoff from a WHO-annual GAM fitted only to years up to \code{year(T) - 1}
+(a calendar year's annual total is not known until the year has ended), and
+carried flat past that year's 1 July. So no post-cutoff surveillance year
+reaches the config, the prior centres or the prior widths.
 
 \strong{Coupled metapopulation.} \code{iso} may be a single country or a vector;
 a vector runs as the coupled metapopulation (one calibration per cutoff covering

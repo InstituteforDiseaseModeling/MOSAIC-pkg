@@ -168,7 +168,7 @@ exported signatures / the `run_MOSAIC()` core loop.
 2. **Frontmatter:** YAML parses; required `name`/`description` present; valid model aliases,
    colors, tool names; `name` values unique (duplicates are silently discarded).
 3. **Positive route matrix:** "Why is WIS off by 2×?" → statistician; "Port the FiLM embedding into
-   est_suitability" → ml-scientist; "Was mu_j_baseline already rho_deaths-corrected?" →
+   est_suitability" → ml-scientist; "Is the mu_jt prior centre right for a sparse-deaths country?" →
    disease-modeler; "The WHO weekly counts look wrong after reprocessing" → data-engineer;
    "Review my diff before commit" → maintainer; "A Dask worker deadlocks" → swe;
    "Set control params for a 500-sim run" → `run-mosaic` skill; "My run over-predicts 3×, diagnose it" →

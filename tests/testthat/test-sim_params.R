@@ -29,10 +29,8 @@ mini_config <- function(npatches = 3L, nticks = 5L, ...) {
     iota = 0.5, gamma_1 = 0.2, gamma_2 = 0.25,          # Infectious
     sigma = 0.25, rho = 0.1, rho_deaths = 0.4,
     chi_endemic = 1, chi_epidemic = 1,
-    delta_reporting_cases = 0L, delta_reporting_deaths = 0L,
-    mu_j_baseline = rep(1e-3, npatches),
-    mu_j_slope = rep(0, npatches),
-    mu_j_epidemic_factor = rep(0, npatches),
+    delta_reporting_cases = 0L,
+    mu_jt = rep(0.02, npatches),                         # reported CFR (v0.96.0)
     epidemic_threshold = rep(0.01, npatches),
     omega_1 = 1 / 730, omega_2 = 1 / 1095,              # Vaccinated
     phi_1 = 0.6, phi_2 = 0.8,

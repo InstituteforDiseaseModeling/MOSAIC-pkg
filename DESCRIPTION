@@ -1,8 +1,8 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.93.0
-Date: 2026-07-09
+Version: 0.99.9
+Date: 2026-09-29
 Authors@R: c(
           person("John R", "Giles",
                  email = "john.giles@gatesfoundation.org",
@@ -42,8 +42,8 @@ Remotes:
 Imports:
   arrow,
   cli,
-  cowplot,
   countrycode,
+  cowplot,
   data.table,
   dbscan,
   dplyr,
@@ -63,6 +63,7 @@ Imports:
   jsonlite,
   lubridate,
   magrittr,
+  MASS,
   methods,
   minpack.lm,
   parallel,
@@ -77,14 +78,15 @@ Imports:
   remotes,
   reshape2,
   reticulate,
+  RhpcBLASctl,
   rlang,
   rnaturalearth,
-  RhpcBLASctl,
   scales,
   sensitivity,
   sf,
   slider,
   sp,
+  splines,
   stats,
   stringr,
   tidyr,
@@ -112,7 +114,10 @@ Suggests:
   mockery,
   keras3,
   knitr,
-  rmarkdown
+  rmarkdown,
+  gdistance,
+  malariaAtlas,
+  mipfp
 VignetteBuilder: knitr
 Config/Needs/website: rmarkdown
 Config/testthat/edition: 3
@@ -120,5 +125,4 @@ Config/testthat/parallel: true
 Config/testthat/start-first: est_initial_R_parallel, optimize_ensemble_subset,
   rolling_cv_empty_val_skip, calc_model_ensemble, est_initial_E_I,
   ensemble_cluster_robust
-Config/roxygen2/version: 8.0.0
-RoxygenNote: 7.3.3
+Config/roxygen2/version: 8.1.0

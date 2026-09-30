@@ -40,6 +40,11 @@ NULL
      # v0.89.0 implements it, so this variate exists in "rng" mode only. Replay
      # keeps the oracle's deterministic form -- see sim_components.R.
      "infectious/sigma_split",             # (R-only, rng mode)
+     # NOT an oracle site either. Production (v0.96.0) decides each symptomatic
+     # onset's outcome at onset, at the time-varying reported CFR mu_jt; the
+     # oracle's daily hazard on the symptomatic stock (infectious/disease_deaths)
+     # runs in replay only.
+     "infectious/fatal_onsets",            # (R-only, rng mode)
      "infectious/reported_cases",          # infectious.py:267  (conditional)
      "vaccinated/v1_non_disease_deaths",   # vaccinated.py:157
      "vaccinated/v2_non_disease_deaths",   # vaccinated.py:163
@@ -63,10 +68,12 @@ NULL
 #' \code{"replay"} would consume a variate the fixture has no record of and
 #' desynchronise every subsequent draw, destroying parity for the other 22 sites.
 #'
-#' \code{infectious/sigma_split} is the first and only entry (v0.89.0): the spec
-#' specifies a stochastic symptomatic split and the oracle does a deterministic
-#' \code{np.round}, which is wrong in the mean at low counts. See
-#' \code{sim_components.R} for the full rationale.
+#' \code{infectious/sigma_split} (v0.89.0): the spec specifies a stochastic
+#' symptomatic split and the oracle does a deterministic \code{np.round}, which
+#' is wrong in the mean at low counts. \code{infectious/fatal_onsets} (v0.96.0):
+#' production draws fatal outcomes at symptom onset from the time-varying
+#' reported CFR \code{mu_jt}, where the oracle applies a daily hazard to the
+#' symptomatic stock. See \code{sim_components.R} for the full rationale.
 #'
 #' NOTE for anyone extending this: CLAUDE.md lesson #15 records that a PHANTOM
 #' \code{infectious/sigma_split} was once invented in this registry by mistake,
@@ -74,7 +81,15 @@ NULL
 #' R side -- it must never appear in \code{.SIM_ORACLE_SITE_MAP}, and a test
 #' asserts exactly that.
 #' @keywords internal
-.SIM_RNG_ONLY_SITES <- c("infectious/sigma_split")
+.SIM_RNG_ONLY_SITES <- c("infectious/sigma_split", "infectious/fatal_onsets")
+
+#' Draw sites that exist in replay mode only
+#'
+#' The oracle's mortality hazard on the symptomatic stock. Production replaced it
+#' with fate at onset in v0.96.0 (\code{infectious/fatal_onsets}), so an
+#' ordinary \code{"rng"} run never reaches this site.
+#' @keywords internal
+.SIM_REPLAY_ONLY_SITES <- c("infectious/disease_deaths")
 
 #' Spec corrections applied in "rng" mode but not in "replay"
 #'
@@ -98,9 +113,16 @@ NULL
 #'     \code{W/(kappa + W)} with W an absolute cell count; kappa is a
 #'     concentration. Production divides by N. Covered by
 #'     test-env-dose-response.R.}
+#'   \item{infectious/fatal_onsets}{v0.96.0. The oracle's mortality is a daily
+#'     hazard \code{mu_j_baseline * (1 + mu_j_epidemic_factor * flag)} on the
+#'     symptomatic stock, reported \code{delta_reporting_deaths} days after the
+#'     death. Production draws each onset's outcome at onset from the
+#'     time-varying reported CFR \code{mu_jt} and reports deaths on the case
+#'     lag. Covered by test-sim-mortality-onset.R.}
 #' }
 #' @keywords internal
-.SIM_RNG_ONLY_CORRECTIONS <- c("infectious/sigma_split", "envtohuman/dose_percapita")
+.SIM_RNG_ONLY_CORRECTIONS <- c("infectious/sigma_split", "envtohuman/dose_percapita",
+                               "infectious/fatal_onsets")
 
 #' Create a draw controller for one simulation
 #'

@@ -36,7 +36,6 @@ mosaic_control_defaults(
 \item \code{sample_tau_i}: Sample transmission rate (default: TRUE)
 \item \code{sample_mobility_gamma}: Sample mobility gamma (default: TRUE)
 \item \code{sample_mobility_omega}: Sample mobility omega (default: TRUE)
-\item \code{sample_mu_j}: Sample recovery rate (default: TRUE)
 \item \code{sample_iota}: Sample importation rate (default: TRUE)
 \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
 \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: FALSE, PINNED)
@@ -101,10 +100,11 @@ the exhaustive search. Note it may select a slightly different
 \code{optimal_n} than exhaustive and records only the evaluated N's in the
 diagnostics table. (The \code{\link{optimize_ensemble_subset}} function's
 own \code{stride} default remains \code{1L} to preserve bit-identicality.)
-\item \code{central_method}: Ensemble central tendency, \code{"median"}
-(default; lower calibration bias) or \code{"mean"} (unbiased for
-expected counts, never collapses on sparse deaths, unmasks implied-CFR
-bias). Scalar or per-channel \code{c(cases=, deaths=)}. Governs the prediction
+\item \code{central_method}: Ensemble central tendency, \code{"mean"}
+(default; the expected count, which never collapses to zero on sparse
+deaths) or \code{"median"} (the typical trajectory, robust to a few
+explosive members; the default from v0.46.1 to v0.97.x). Scalar or
+per-channel \code{c(cases=, deaths=)}. Governs the prediction
 trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
 the medoid target, and the subset-selection objective consistently.
 }
@@ -210,7 +210,7 @@ ctrl <- mosaic_control_defaults(
     sample_tau_i = TRUE,
     sample_mobility_gamma = FALSE,
     sample_mobility_omega = FALSE,
-    sample_mu_j_baseline = TRUE,
+    sample_beta_j0_tot = TRUE,
     sample_iota = FALSE,
     sample_gamma_2 = FALSE,
     sample_alpha_1 = FALSE
@@ -233,7 +233,7 @@ ctrl <- mosaic_control_defaults(
 # Full workflow configuration (demonstrates logical order)
 ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
-  sampling = list(sample_tau_i = TRUE, sample_mu_j_baseline = TRUE), # What to sample
+  sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure

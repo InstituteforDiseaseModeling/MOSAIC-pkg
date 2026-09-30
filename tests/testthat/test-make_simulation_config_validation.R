@@ -10,7 +10,6 @@
   args$metadata          <- NULL
   args$zeta_ratio        <- NULL
   args$decay_days_spread <- NULL
-  args$CFR_target        <- NULL   # B2 (v4.5): injected tracking field, not a signature arg
   args$reported_cases_weight  <- NULL
   args$reported_deaths_weight <- NULL
   args$output_file_path  <- NULL
@@ -107,4 +106,127 @@ test_that("make_simulation_config rejects an out-of-range alpha_1 (scalar and ve
   av <- .valid_sim_args(); av$alpha_1[1] <- 1.2
   expect_error(do.call(MOSAIC::make_simulation_config, av),
                "alpha_1 must be numeric in \\(0, 1\\]")
+})
+
+# ---------------------------------------------------------------------------
+# mu_jt (v0.96.0): the reported CFR by location and day. The validator accepts
+# a scalar, a per-location vector, a [nL x nT] matrix, or (one location) a daily
+# vector -- how JSON returns a [1 x nT] matrix -- and always returns the full
+# matrix, so every config carries one schema.
+# ---------------------------------------------------------------------------
+.nT_of <- function(args) length(seq.Date(as.Date(args$date_start), as.Date(args$date_stop), by = "day"))
+
+test_that("make_simulation_config expands a scalar or per-location mu_jt to the full matrix", {
+  args <- .valid_sim_args(); nL <- length(args$location_name); nT <- .nT_of(args)
+  args$mu_jt <- 0.02
+  cfg <- suppressMessages(do.call(MOSAIC::make_simulation_config, args))
+  expect_identical(dim(cfg$mu_jt), c(nL, nT))
+  expect_true(all(cfg$mu_jt == 0.02))
+
+  args$mu_jt <- seq(0.01, 0.05, length.out = nL)
+  cfg <- suppressMessages(do.call(MOSAIC::make_simulation_config, args))
+  expect_identical(dim(cfg$mu_jt), c(nL, nT))
+  expect_equal(cfg$mu_jt[, nT], seq(0.01, 0.05, length.out = nL))
+})
+
+test_that("make_simulation_config keeps a full mu_jt matrix and accepts a one-location daily vector", {
+  args <- .valid_sim_args()
+  cfg <- suppressMessages(do.call(MOSAIC::make_simulation_config, args))
+  expect_identical(cfg$mu_jt, args$mu_jt)
+
+  one <- MOSAIC::get_location_config(MOSAIC::config_default, iso = "MOZ")
+  a1 <- one[intersect(names(one), names(args))]
+  a1$mu_jt <- as.numeric(one$mu_jt)              # JSON's form of a [1 x nT] matrix
+  cfg1 <- suppressMessages(do.call(MOSAIC::make_simulation_config, a1))
+  expect_identical(dim(cfg1$mu_jt), c(1L, .nT_of(a1)))
+  expect_equal(as.numeric(cfg1$mu_jt), as.numeric(one$mu_jt))
+})
+
+test_that("make_simulation_config rejects a missing, misshapen or out-of-range mu_jt", {
+  args <- .valid_sim_args(); nL <- length(args$location_name); nT <- .nT_of(args)
+  a <- args; a$mu_jt <- NULL
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, a)), "must be provided: mu_jt")
+  a <- args; a$mu_jt <- matrix(0.02, nL, nT - 1L)
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, a)), "mu_jt must be a matrix")
+  a <- args; a$mu_jt <- rep(0.02, nL + 1L)
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, a)), "mu_jt must be a matrix")
+  a <- args; a$mu_jt[1, 1] <- 1
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, a)), "finite and in \\[0, 1\\)")
+  a <- args; a$mu_jt[2, 3] <- -0.01
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, a)), "finite and in \\[0, 1\\)")
+  a <- args; a$mu_jt[1, 2] <- NA
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, a)), "finite and in \\[0, 1\\)")
+})
+
+test_that("make_simulation_config rejects a mu_jt no per-onset probability can produce", {
+  # p = mu_jt * rho / (rho_deaths * chi_epidemic) must stay below 1.
+  args <- .valid_sim_args()
+  args$mu_jt <- 0.8
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, args)),
+               "no per-onset fatality probability")
+  args$mu_jt <- 0.02; args$rho_deaths <- 0
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, args)),
+               "rho_deaths is 0")
+})
+
+test_that("make_simulation_config refuses a config written for the retired mortality model", {
+  # Such a config's `mu_jt` was never read by any engine, so it must not be
+  # silently promoted to the reported CFR.
+  a <- .valid_sim_args(); a$mu_j_baseline <- rep(0.002, length(a$location_name))
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, a)),
+               "pre-v0.96.0 mortality model.*mu_j_baseline")
+  a <- .valid_sim_args(); a$mu_j_epidemic_factor <- 0.5
+  expect_error(suppressMessages(do.call(MOSAIC::make_simulation_config, a)),
+               "pre-v0.96.0 mortality model.*mu_j_epidemic_factor")
+})
+
+test_that("delta_reporting_deaths is accepted silently and dropped (deaths use the case lag)", {
+  a <- .valid_sim_args(); a$delta_reporting_deaths <- 5
+  expect_silent(cfg <- suppressMessages(do.call(MOSAIC::make_simulation_config, a)))
+  expect_null(cfg$delta_reporting_deaths)
+  expect_identical(cfg, suppressMessages(do.call(MOSAIC::make_simulation_config, .valid_sim_args())))
+})
+
+# ---------------------------------------------------------------------------
+# Legacy-field tolerance. mu_j_slope has been removed from the config schema
+# but kept as a deprecated, ignored formal, because every config saved before
+# v0.95.0 carries it and is replayed via do.call(make_simulation_config, config).
+# Replay must neither error nor warn, and the field must not reappear.
+# ---------------------------------------------------------------------------
+test_that("a legacy config carrying mu_j_slope is accepted silently and it is dropped", {
+  args <- .valid_sim_args()
+  args$mu_j_slope <- rep(0.05, length(args$location_name))
+
+  expect_silent(cfg <- suppressMessages(do.call(MOSAIC::make_simulation_config, args)))
+  expect_null(cfg$mu_j_slope)
+
+  # No length or range check survives: the value is never read, so a
+  # wrong-length or non-numeric mu_j_slope must be ignored, not rejected.
+  bad <- .valid_sim_args(); bad$mu_j_slope <- "not numeric"
+  expect_silent(cfg_bad <- suppressMessages(do.call(MOSAIC::make_simulation_config, bad)))
+  expect_null(cfg_bad$mu_j_slope)
+
+  short <- .valid_sim_args(); short$mu_j_slope <- rep(0, 2L)
+  expect_silent(cfg_short <- suppressMessages(do.call(MOSAIC::make_simulation_config, short)))
+  expect_null(cfg_short$mu_j_slope)
+
+  cfg_none <- suppressMessages(do.call(MOSAIC::make_simulation_config, .valid_sim_args()))
+  expect_identical(cfg, cfg_none)
+})
+
+test_that("the engine ignores mu_j_slope entirely (R3: the trend term is gone)", {
+  # The falsifiable form of "the term was removed": a config with a large
+  # mu_j_slope must produce bit-identical results to one with none. Before
+  # MOSAIC v0.95.0 the hazard was multiplied by (1 + mu_j_slope * tick/nticks),
+  # so this comparison DIFFERED in 22 of 28 result channels.
+  cfg0 <- MOSAIC::config_simulation_epidemic
+  expect_null(cfg0$mu_j_slope)          # no longer shipped
+
+  cfgS <- cfg0
+  cfgS$mu_j_slope <- rep(0.5, length(cfg0$location_name))
+
+  expect_identical(
+    MOSAIC::run_simulation(cfgS, seed = 11L)$results,
+    MOSAIC::run_simulation(cfg0, seed = 11L)$results
+  )
 })

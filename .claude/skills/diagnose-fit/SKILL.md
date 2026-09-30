@@ -65,15 +65,18 @@ Rscript -e '
    its biologically plausible range. Flag any parameter at/over a bound, piling against a bound,
    drifting outside the plausible range, or taking an impossible value. A good fit does **not**
    clear this — implausible values under a good R² mean overfitting, non-identifiability, or
-   compensation between correlated parameters (cf. `mu_j_baseline`↔`rho_deaths`). When you later
+   compensation between correlated parameters (cf. `beta_j0_tot`↔`alpha_1`). When you later
    recommend parameter targets, keep them inside the plausible range too — never buy fit with an
    implausible value. Carry flagged parameters into the brief.
 2. **Prioritise bias → shape → variance.** Bias is most tractable and often the root cause;
    shape/variance diagnostics are confounded when total scale is wrong. Fix/understand bias first.
 3. **Bias.** If cases bias WARN/FAIL: sweep `beta_j0_hum` and `beta_j0_env` ×{0.25,0.5,0.75,1,1.5,2}.
    If beta fixes scale but reporting looks off, check `sigma`, `rho`. Read `bias$by_year` — uniform
-   or concentrated in specific years? If deaths bias WARN/FAIL with cases OK: `mu_j_baseline`, then
-   `rho_deaths`; check `epidemic_threshold` if deaths cluster in an epidemic year.
+   or concentrated in specific years? If deaths bias WARN/FAIL with cases OK: the reported CFR is
+   integrated out per path (MOSAIC >= v0.96.0), so the deaths LEVEL follows the data given the cases;
+   a deaths bias means the case path is off in those years (read `cfr_posterior.csv` beside the cases
+   fit) or the `mu_jt` prior centre is off for a sparse-deaths country. `rho_deaths` does not move
+   reported deaths.
 4. **Shape** (only once bias is PASS or understood). Peak timing off → `psi_star_k` (±30d in 5d
    steps), Fourier `a_1_j/b_1_j` (±20%). Peak too sharp/broad → `iota` (higher = faster rise),
    `gamma_1` (lower = broader). Poor `seasonal_corr` → Fourier amplitude `a_2_j/b_2_j`, `psi_star_a`.
@@ -96,16 +99,17 @@ affect onset. `p_beta` (human vs env fraction): secondary; higher → more self-
 
 **Timing / shape** — `psi_star_k` (suitability time offset, days): peak timing, negative shifts
 earlier. `a_1_j,b_1_j` (Fourier phase): seasonal phase. `a_2_j,b_2_j` (Fourier amplitude): seasonal
-contrast + variance. `epidemic_threshold`: epidemic onset / which years are epidemic; affects deaths
-shape. `gamma_1,gamma_2` (recovery): epidemic duration (lower = longer). `iota` (incubation): onset
+contrast + variance. `epidemic_threshold`: epidemic onset / which years are epidemic; switches the
+case-reporting PPV (chi) only — it no longer enters mortality. `gamma_1,gamma_2` (recovery): epidemic duration (lower = longer). `iota` (incubation): onset
 sharpness (higher = faster rise).
 
 **Observation model (cases)** — `sigma` (symptomatic fraction), `rho` (care-seeking → reported):
 linear cases-scale levers, uniform scaling. `chi_endemic,chi_epidemic` (PPV): cases scale with a
 differential endemic/epidemic effect.
 
-**Mortality** — `mu_j_baseline` (baseline IFR): deaths only. `mu_j_epidemic_factor` (epidemic IFR
-multiplier): deaths during epidemics + deaths shape. `rho_deaths` (death detection): deaths only, linear.
+**Mortality** — `mu_jt` (reported CFR by location and day, `config$mu_jt`): deaths only, linear; in a
+sandbox it is the level the engine draws deaths at (calibration integrates it out). `rho_deaths` sets
+only true deaths (it cancels from reported deaths).
 
 **Initial conditions** — `prop_S_initial` (susceptible): early-period bias + early dynamics (high S =
 faster early epidemic). `prop_R_initial` (immune): early-period bias, dampens early dynamics.

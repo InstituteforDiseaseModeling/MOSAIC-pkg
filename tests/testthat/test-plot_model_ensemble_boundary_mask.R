@@ -25,7 +25,7 @@ make_test_ensemble <- function(n_locs = 2L, n_times = 8L) {
     cases_mean[i, ] <- base_c
 
     base_d <- c(0, 0, 0, 0, 0, 3 + i, 4 + i, 0)       # leading reporting-lag
-    # zeros are REAL (delta_reporting_deaths); final 0 is the engine artifact.
+    # zeros are REAL (reporting lag); final 0 is the engine artifact.
     deaths_mean[i, ] <- base_d
   }
   cases_median  <- cases_mean

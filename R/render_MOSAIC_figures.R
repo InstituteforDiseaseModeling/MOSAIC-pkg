@@ -338,18 +338,8 @@ render_MOSAIC_figures <- function(dir_output,
       "is_best_subset_opt" else "is_best_subset"
   }
 
-  # --- Resolve central_method from control.json (default median) --------------
-  .resolve_central <- function() {
-    cj <- file.path(dirs$inputs, "control.json")
-    cm <- "median"
-    if (file.exists(cj)) {
-      ctrl <- tryCatch(jsonlite::fromJSON(cj, simplifyVector = TRUE),
-                       error = function(e) NULL)
-      v <- tryCatch(ctrl$predictions$central_method, error = function(e) NULL)
-      if (!is.null(v) && length(v) >= 1L) cm <- v
-    }
-    .mosaic_resolve_central_method(cm)
-  }
+  # --- Resolve central_method from the run's control.json -------------------
+  .resolve_central <- function() .mosaic_run_central_method(dirs$inputs)
 
   files <- list(
     samples     = file.path(dirs$calibration, "samples.parquet"),
@@ -898,4 +888,21 @@ render_MOSAIC_figures <- function(dir_output,
   if (is.na(iso_field)) return(NULL)
   bm$iso3 <- as.character(bm[[iso_field]])
   bm[, "iso3"]
+}
+
+# The ensemble central tendency a finished run used, read from its
+# 1_inputs/control.json. run_MOSAIC() writes the control nested under $control
+# (with run metadata beside it); an unnested control is also accepted. A
+# control.json without the setting predates it (v0.38.0), and those runs used the
+# median.
+.mosaic_run_central_method <- function(inputs_dir) {
+  cj <- file.path(inputs_dir, "control.json")
+  cm <- "median"
+  if (file.exists(cj)) {
+    ctrl <- tryCatch(jsonlite::fromJSON(cj, simplifyVector = TRUE), error = function(e) NULL)
+    v <- tryCatch(ctrl$control$predictions$central_method %||% ctrl$predictions$central_method,
+                  error = function(e) NULL)
+    if (!is.null(v) && length(v) >= 1L) cm <- v
+  }
+  .mosaic_resolve_central_method(cm)
 }

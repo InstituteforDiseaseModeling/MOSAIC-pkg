@@ -37,7 +37,8 @@
   "Lambda", "Psi", "beta_jt_human", "beta_jt_env",
   # incidence & infection flows
   "incidence", "incidence_human", "incidence_env", "new_symptomatic",
-  # burden channel (disease_deaths = true burden, before death reporting)
+  # true deaths (disease_deaths: fatal onsets before death reporting; reported
+  # deaths / rho_deaths, so they rest on the pinned rho_deaths assumption)
   "disease_deaths"
 )
 
@@ -316,13 +317,14 @@
 #'   returned series here; it is recorded in the returned \code{artifact_mask}
 #'   element so downstream scoring (R2/bias) can exclude these positions. Set to
 #'   \code{0L} to record "no cases warm-up mask".
-#' @param mask_final_deaths_step Logical. If \code{TRUE} (default, matching
-#'   \code{\link{plot_model_ensemble}}), record that the FINAL deaths timestep is
-#'   a laser-cholera structural zero (\code{reported_deaths} written at tick
-#'   then leading-trimmed, so the last slot is never written; laser-cholera issue #82).
-#'   This value is NOT applied to any returned series here; it
-#'   is recorded in the returned \code{artifact_mask} element for downstream
-#'   scoring.
+#' @param mask_final_deaths_step Logical. If \code{TRUE}, record that the FINAL
+#'   deaths timestep is a structural zero to exclude from scoring. That was true
+#'   of the laser-cholera engine (\code{reported_deaths} written at tick and
+#'   leading-trimmed, so the last slot was never written; laser-cholera issue #82).
+#'   Since v0.96.0 the R engine reports deaths on the same row as cases, and the
+#'   post-hoc death redraw fills the final column, so the default is \code{FALSE}.
+#'   This value is NOT applied to any returned series here; it is recorded in the
+#'   returned \code{artifact_mask} element for downstream scoring.
 #' @param score_idx_cases,score_idx_deaths Integer (1-based). Per-channel scored
 #'   time-window START index (burn-in / deaths-era start). Columns strictly
 #'   BEFORE these indices are unscored and recorded in \code{artifact_mask} so
@@ -357,6 +359,17 @@
 #'   When \code{FALSE}, the channels are spilled to scratch but NOT reduced; the
 #'   scratch handle is returned in \code{$trajectory_scratch} so the caller can
 #'   reduce over a final (e.g. optimized) subset without re-simulating.
+#' @param deaths_integration Optional run-level setup from
+#'   \code{run_MOSAIC()} (\code{control$likelihood$.deaths_integration}). When
+#'   supplied, each member's deaths are redrawn after its simulation from the
+#'   reported CFR's posterior given that member's path -- the same integration
+#'   calibration scores with -- so predicted deaths, true deaths and forecast
+#'   years carry the calibrated CFR; the ensemble also returns
+#'   \code{cfr_posterior}. When \code{NULL} (default) deaths are the engine's,
+#'   drawn at the config's \code{mu_jt} -- for configs sampled from the priors
+#'   that is the PRIOR reported CFR, not the calibrated one. To reproduce a
+#'   run's calibrated deaths post hoc, pass
+#'   \code{readRDS("<dir_output>/2_calibration/deaths_integration.rds")}.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return S3 object of class \code{"mosaic_ensemble"} containing:
@@ -389,6 +402,18 @@
 #'     1-based per-channel scored-window start; columns before are dropped). The
 #'     central/quantile/array fields above are RAW (unmasked); this spec is the
 #'     contract scoring sites use to drop artifact positions.}
+#'   \item{cfr_posterior}{When \code{deaths_integration} is supplied: a data frame
+#'     with one row per location and calendar year -- \code{location},
+#'     \code{year}, \code{cfr_median}, \code{cfr_lower}, \code{cfr_upper} (the
+#'     weighted median and 95% interval over members of each member's mean daily
+#'     reported CFR in that year) and \code{prior_cfr} (the prior \code{mu_jt}'s
+#'     mean over the same days). Conditional on each member's modelled cases.
+#'     \code{NULL} otherwise.}
+#'   \item{forecast_shift}{When \code{deaths_integration} is supplied: one value
+#'     per location, the weighted mean over members of the posterior-mode logit
+#'     CFR deviation for the location's latest observed year (\code{NA} for a
+#'     location with no forecast years). \code{run_MOSAIC()} centres forecast
+#'     years on it. \code{NULL} otherwise.}
 #' }
 #'
 #' @seealso \code{\link{plot_model_ensemble}} to render plots from this object.
@@ -404,7 +429,7 @@ calc_model_ensemble <- function(config,
                                 priors = NULL,
                                 sampling_args = list(),
                                 n_cases_warmup_mask = 2L,
-                                mask_final_deaths_step = TRUE,
+                                mask_final_deaths_step = FALSE,
                                 score_idx_cases = 1L,
                                 score_idx_deaths = 1L,
                                 parallel = FALSE,
@@ -415,6 +440,7 @@ calc_model_ensemble <- function(config,
                                 trajectory_n_lines = 150L,
                                 trajectory_scratch_dir = NULL,
                                 reduce_trajectories = TRUE,
+                                deaths_integration = NULL,
                                 verbose = TRUE) {
 
   # ===========================================================================
@@ -568,6 +594,14 @@ calc_model_ensemble <- function(config,
 
   n_locations   <- length(location_names)
   n_time_points <- if (is.matrix(obs_cases)) ncol(obs_cases) else length(obs_cases)
+  if (!is.null(deaths_integration) &&
+      (!identical(as.integer(deaths_integration$setup$nL), as.integer(n_locations)) ||
+       !identical(as.integer(deaths_integration$n_time), as.integer(n_time_points))))
+    stop(sprintf(paste0("deaths_integration was resolved for %d location(s) x %d days, but these ",
+                        "configs have %d x %d; pass the deaths_integration.rds of the run these ",
+                        "configs come from."),
+                 deaths_integration$setup$nL, deaths_integration$n_time, n_locations, n_time_points),
+         call. = FALSE)
   total_sims    <- n_param_sets * n_simulations_per_config
 
   if (verbose) {
@@ -637,6 +671,7 @@ calc_model_ensemble <- function(config,
   .capture_traj  <- isTRUE(capture_trajectories)
   .traj_channels <- as.character(trajectory_channels)
   .traj_scratch  <- traj_scratch   # NULL unless capturing (set above)
+  .deaths_int    <- deaths_integration
 
   # The per-task simulation worker is the package-level
   # .mosaic_ensemble_sim_task() (R/calc_model_ensemble_task.R). PSOCK workers
@@ -694,7 +729,7 @@ calc_model_ensemble <- function(config,
     .ens_sim_task <- .mosaic_ensemble_sim_task
     parallel::clusterExport(cl, c("param_configs", ".ens_sim_task",
                                    ".capture_traj", ".traj_channels",
-                                   ".traj_scratch"),
+                                   ".traj_scratch", ".deaths_int"),
                             envir = environment())
 
     if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
@@ -707,7 +742,7 @@ calc_model_ensemble <- function(config,
     .ens_idle_timeout <- as.numeric(
       getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
     .ens_task_fun <- function(row) .ens_sim_task(
-      row, param_configs, .capture_traj, .traj_channels, .traj_scratch)
+      row, param_configs, .capture_traj, .traj_channels, .traj_scratch, .deaths_int)
     environment(.ens_task_fun) <- .GlobalEnv  # resolve names worker-side
     results_list <- .mosaic_cluster_lapply_robust(
       cl = cl,
@@ -730,7 +765,7 @@ calc_model_ensemble <- function(config,
       split(task_list, seq_len(nrow(task_list))),
       function(row) .mosaic_ensemble_sim_task(row, param_configs,
                                               .capture_traj, .traj_channels,
-                                              .traj_scratch)
+                                              .traj_scratch, .deaths_int)
     )
   }
 
@@ -956,6 +991,59 @@ calc_model_ensemble <- function(config,
   cases_stats  <- calculate_overall_stats(cases_array)
   deaths_stats <- calculate_overall_stats(deaths_array)
 
+  # Posterior reported CFR by location and year -- each member's mean daily CFR
+  # over the year, from the post-hoc death redraw (member weights shared equally
+  # across its stochastic runs, as for the predictions) -- beside the prior's
+  # yearly mean CFR on the same footing. It is conditional on each member's
+  # modelled cases: a year whose cases a member over-predicts gets a lower CFR, so
+  # read it with the cases fit. NULL when deaths were not redrawn.
+  cfr_posterior <- NULL
+  forecast_shift <- NULL
+  if (!is.null(deaths_integration)) {
+    n_infeasible <- sum(vapply(results_list, function(r)
+      if (isTRUE(r$success) && !is.null(r$cfr_infeasible)) as.numeric(r$cfr_infeasible) else 0, numeric(1)))
+    if (n_infeasible > 0)
+      warning(sprintf(paste0("%d member-location(s) needed a reported CFR the reporting parameters ",
+                             "cannot produce (per-onset fatality >= 1: the path has far too few onsets ",
+                             "for the observed deaths); they keep the engine's deaths at the prior mu_jt."),
+                      as.integer(n_infeasible)), call. = FALSE)
+    yrs <- deaths_integration$years
+    cfr_arr <- array(NA_real_, dim = c(n_locations, length(yrs), n_param_sets, n_simulations_per_config))
+    for (result in results_list) {
+      if (isTRUE(result$success) && !is.null(result$cfr_year)) {
+        cfr_arr[, , result$param_idx, result$stoch_idx] <- result$cfr_year
+      }
+    }
+    sim_w <- rep(parameter_weights, times = n_simulations_per_config) / n_simulations_per_config
+    rows <- vector("list", n_locations * length(yrs))
+    r <- 0L
+    for (i in seq_len(n_locations)) for (y in seq_along(yrs)) {
+      v <- as.vector(cfr_arr[i, y, , ])
+      q <- weighted_quantiles(v, sim_w, c(0.5, 0.025, 0.975))
+      r <- r + 1L
+      rows[[r]] <- data.frame(location = location_names[i], year = yrs[y],
+                              cfr_median = q[1], cfr_lower = q[2], cfr_upper = q[3],
+                              prior_cfr = mean(stats::plogis(deaths_integration$base_logit_full[
+                                i, deaths_integration$year_full == yrs[y]])),
+                              stringsAsFactors = FALSE)
+    }
+    cfr_posterior <- do.call(rbind, rows)
+
+    # The members' latest-year CFR shift: the weighted mean over members of each
+    # path's posterior-mode deviation for the location's anchor (latest observed)
+    # year. Each path's own deviation also absorbs its case error that year; the
+    # mean keeps the shift the members share.
+    anc_arr <- array(NA_real_, dim = c(n_locations, n_param_sets, n_simulations_per_config))
+    for (result in results_list) {
+      if (isTRUE(result$success) && !is.null(result$anchor_dev))
+        anc_arr[, result$param_idx, result$stoch_idx] <- result$anchor_dev
+    }
+    forecast_shift <- vapply(seq_len(n_locations), function(i) {
+      v <- as.vector(anc_arr[i, , ]); ok <- is.finite(v) & sim_w > 0
+      if (any(ok)) sum(v[ok] * sim_w[ok]) / sum(sim_w[ok]) else NA_real_
+    }, numeric(1))
+  }
+
   # ===========================================================================
   # Per-member seeds, aligned with cases_array's param dimension (member i <->
   # seeds[i]). Bound to the parameter set that PRODUCED each member so downstream
@@ -1012,6 +1100,8 @@ calc_model_ensemble <- function(config,
       pi_ij_ensemble            = pi_ij_ensemble,
       trajectories              = trajectories,
       trajectory_scratch        = trajectory_scratch,
+      cfr_posterior             = cfr_posterior,
+      forecast_shift            = forecast_shift,
       artifact_mask             = list(
         cases_warmup     = as.integer(n_cases_warmup_mask),
         deaths_final     = isTRUE(mask_final_deaths_step),
@@ -1056,8 +1146,8 @@ calc_model_ensemble <- function(config,
                                        location_names, date_start, date_stop,
                                        n_successful, obs_cases, obs_deaths,
                                        trajectory_channels,
-                                       central_method = c(cases = "median",
-                                                          deaths = "median"),
+                                       central_method = c(cases = "mean",
+                                                          deaths = "mean"),
                                        n_lines = 150L,
                                        line_stride = 7L, verbose = TRUE) {
   if (is.null(scratch_dir) || !dir.exists(scratch_dir)) return(NULL)
@@ -1227,6 +1317,11 @@ calc_model_ensemble <- function(config,
   summary_list[["reported_deaths"]] <- list(median = rd$median)
   thin_store[["reported_deaths"]]   <- rd$thin
 
+  # The mass-balance check needs the compartments' weighted MEANS: each member
+  # balances exactly, and a mean of balanced members balances too, while a sum of
+  # per-compartment medians does not (it drifted by up to 1.6%).
+  mb_comp <- c("S", "E", "Isym", "Iasym", "R", "V1", "V2")
+  mean_store <- list()
   for (ch in present_ch) {
     con <- file(file.path(chan_dir, paste0("c_", ch)), "rb")
     arr <- array(NA_real_, dim = c(n_locations, n_time_points, n_disp, n_stoch))
@@ -1235,9 +1330,12 @@ calc_model_ensemble <- function(config,
       if (!is.null(m) && is.matrix(m)) arr[, , j, s] <- m
     }
     close(con)
-    r <- reduce_arr(arr)
+    # True deaths share the reported deaths' central method, so the two deaths
+    # panels are comparable; the other channels use the weighted median.
+    r <- reduce_arr(arr, if (ch == "disease_deaths") central_method[["deaths"]] else "median")
     summary_list[[ch]] <- list(median = r$median)
     thin_store[[ch]]   <- r$thin
+    if (ch %in% c(mb_comp, "N")) mean_store[[ch]] <- reduce_arr(arr, "mean")$median
     rm(arr)
   }
   unlink(chan_dir, recursive = TRUE, force = TRUE)
@@ -1252,17 +1350,18 @@ calc_model_ensemble <- function(config,
     thin_store[["I_total"]] <- thin_store[["Isym"]] + ia_thn
   }
 
-  # mass_balance = (S+E+Isym+Iasym+R+V1+V2)/N -- POINT series, ratio of medians
-  mb_comp <- c("S", "E", "Isym", "Iasym", "R", "V1", "V2")
-  if (all(vapply(mb_comp, function(c) !is.null(.med(c)), logical(1))) &&
-      !is.null(.med("N"))) {
-    num <- Reduce(`+`, lapply(mb_comp, .med))
-    den <- .med("N"); den[den == 0] <- NA_real_
+  # mass_balance = (S+E+Isym+Iasym+R+V1+V2)/N -- POINT series, ratio of the
+  # compartments' weighted means (exactly 1 when every member balances).
+  if (all(vapply(c(mb_comp, "N"), function(c) !is.null(mean_store[[c]]), logical(1)))) {
+    num <- Reduce(`+`, mean_store[mb_comp])
+    den <- mean_store[["N"]]; den[den == 0] <- NA_real_
     summary_list[["mass_balance"]] <- list(median = num / den)
   }
 
-  # CFR(t) = rolling(reported_deaths,W)/rolling(reported_cases,W) from medians;
-  # W = min(28, n_time) so short series don't error.
+  # CFR(t) = rolling(reported_deaths,W)/rolling(reported_cases,W) of the weighted
+  # MEAN series; W = min(28, n_time) so short series don't error. A ratio of
+  # median series is 0 wherever the median daily death count is 0, which is most
+  # days in a sparse-deaths country, so it cannot show the reported CFR.
   if (!is.null(.med("reported_cases")) && !is.null(.med("reported_deaths"))) {
     roll_w <- min(28L, n_time_points)
     roll28 <- function(M) {
@@ -1271,7 +1370,8 @@ calc_model_ensemble <- function(config,
         out[i, ] <- as.numeric(stats::filter(M[i, ], rep(1, roll_w), sides = 1))
       out
     }
-    rc28 <- roll28(.med("reported_cases")); rd28 <- roll28(.med("reported_deaths"))
+    rc28 <- roll28(reduce_arr(cases_array,  "mean")$median)
+    rd28 <- roll28(reduce_arr(deaths_array, "mean")$median)
     cfr <- rd28 / rc28
     cfr[!is.finite(cfr) | rc28 <= 5] <- NA_real_
     summary_list[["CFR"]] <- list(median = cfr)

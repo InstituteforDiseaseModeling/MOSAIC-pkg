@@ -25,3 +25,12 @@
     .cache[[key]]
   }
 })
+
+# Relative-error expectation. expect_equal(x, y, tolerance = t) switches to an
+# ABSOLUTE difference when mean(abs(y)) <= t, so a CFR near 0.03 checked with
+# tolerance = 0.1 passes for anything within +/-0.1. Use this for small
+# quantities such as rates and CFRs.
+expect_rel_equal <- function(object, expected, rel) {
+  err <- max(abs(object / expected - 1))
+  testthat::expect_lt(err, rel, label = sprintf("max relative error %.4g", err))
+}

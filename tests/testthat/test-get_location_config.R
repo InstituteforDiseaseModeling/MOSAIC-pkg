@@ -190,7 +190,9 @@ test_that("get_location_config correctly subsets time-varying parameters", {
      eth_idx <- which(config_default$location_name == "ETH")
      
      # Check time-varying parameters (matrices)
-     time_params <- c("b_jt", "d_jt", "nu_1_jt", "nu_2_jt", "mu_jt", "psi_jt",
+     # mu_jt is the reported CFR by location and day (config_default v5.0).
+     expect_true(is.matrix(config_default$mu_jt))
+     time_params <- c("b_jt", "d_jt", "nu_1_jt", "nu_2_jt", "psi_jt", "mu_jt",
                      "reported_cases", "reported_deaths")
      
      for (param in time_params) {

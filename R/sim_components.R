@@ -170,34 +170,45 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
      ndd_total <- rh$non_disease_deaths + ndd
 
      # -- symptomatic: disease deaths ------------------------------------------
-     # This N is summed from the compartments at `tick`, NOT read from the
-     # Census output `state$N` (infectious.py:191-196). The two differ, and the
-     # reported-cases block further down deliberately uses the OTHER one. Both
-     # are reproduced as written.
-     n_manual <- rh$S + rh$E + rh$Isym + rh$Iasym + rh$R
-     if ("V1" %in% par$compartments) n_manual <- n_manual + rh$V1
-     if ("V2" %in% par$compartments) n_manual <- n_manual + rh$V2
+     # MODE-DEPENDENT, DELIBERATELY (the same contract as the sigma split below).
+     #
+     # Production ("rng") decides each symptomatic onset's outcome AT ONSET:
+     # the fatal ones are drawn from the new onsets further down, at this tick's
+     # value of the time-varying reported CFR `mu_jt`, and never enter Isym. So
+     # the only mortality work here is reporting: the draw reads the fatal onsets
+     # recorded at row `tick - delta_reporting_cases` -- the very row the
+     # reported-cases draw reads `new_symptomatic` from -- so a death is reported
+     # in the same tick as its case, as the surveillance data record it.
+     #
+     # Replay reproduces laser-cholera 0.16.1, whose mortality is a daily hazard
+     # on the symptomatic stock, reported `delta_reporting_deaths` days after the
+     # death. Replay exists to validate the port draw for draw, and the oracle IS
+     # that form, so it is kept here verbatim for replay only.
+     if (isTRUE(ctl$mode == "replay")) {
+          # This N is summed from the compartments at `tick`, NOT read from the
+          # Census output `state$N` (infectious.py:191-196). The two differ, and
+          # the reported-cases block further down deliberately uses the OTHER one.
+          n_manual <- rh$S + rh$E + rh$Isym + rh$Iasym + rh$R
+          if ("V1" %in% par$compartments) n_manual <- n_manual + rh$V1
+          if ("V2" %in% par$compartments) n_manual <- n_manual + rh$V2
 
-     treport <- tick - par$delta_reporting_cases
-     epidemic_flag <- if (treport >= 0L) {
-          as.integer(state$rows[[.row_at(treport)]]$Isym >
-                          par$epidemic_threshold * n_manual)
+          treport <- tick - par$delta_reporting_cases
+          epidemic_flag <- if (treport >= 0L) {
+               as.integer(state$rows[[.row_at(treport)]]$Isym >
+                               par$epidemic_threshold * n_manual)
+          } else {
+               rep(0L, state$.npatches)
+          }
+          hazard <- par$mu_j_baseline * (1 + par$mu_j_epidemic_factor * epidemic_flag)
+
+          dd <- .sim_binom(ctl, "infectious/disease_deaths", is_next, -expm1(-hazard))
+          rh$disease_deaths <- dd     # assignment, not accumulation
+          is_next <- is_next - dd
+
+          idx_death_report <- tick - par$delta_reporting_deaths
      } else {
-          rep(0L, state$.npatches)
+          idx_death_report <- tick - par$delta_reporting_cases
      }
-
-     t_factor <- tick / par$nticks        # 0 <= t_factor <= 1
-     mu_jt <- par$mu_j_baseline *
-              (1 + par$mu_j_slope * t_factor) *
-              (1 + par$mu_j_epidemic_factor * epidemic_flag)
-
-     dd <- .sim_binom(ctl, "infectious/disease_deaths", is_next, -expm1(-mu_jt))
-     rh$disease_deaths <- dd     # assignment, not accumulation
-     is_next <- is_next - dd
-
-     # Reported deaths lag the disease deaths they describe, so this draw reads
-     # `disease_deaths` at an EARLIER row and fires only once the lag is served.
-     idx_death_report <- tick - par$delta_reporting_deaths
      if (idx_death_report >= 0L) {
           rep_d <- .sim_binom(ctl, "infectious/reported_deaths",
                               state$rows[[.row_at(idx_death_report)]]$disease_deaths,
@@ -265,7 +276,18 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
           new_sym <- .sim_binom(ctl, "infectious/sigma_split", progressing, par$sigma)
      }
      new_asym <- progressing - new_sym
-     is_next <- is_next + new_sym
+
+     # Fate at onset (production only; see the disease-deaths block above). The
+     # fatal onsets are true cholera deaths, recorded in the same row as the
+     # onsets that produced them, and they never enter Isym. `new_symptomatic`
+     # still counts every onset, fatal or not, so reported cases are unchanged.
+     if (isTRUE(ctl$mode == "replay")) {
+          is_next <- is_next + new_sym
+     } else {
+          fatal <- .sim_binom(ctl, "infectious/fatal_onsets", new_sym, par$p_fatal_jt[here, ])
+          rn$disease_deaths <- fatal     # assignment, not accumulation
+          is_next <- is_next + (new_sym - fatal)
+     }
      ia_next <- ia_next + new_asym
 
      # Written at tick + 1, not tick -- and read back at a lagged row below.
@@ -278,8 +300,8 @@ sim_phase_infectious <- function(state, par, ctl, tick) {
      idx_probe <- tick - par$delta_reporting_cases
      if (idx_probe >= 0L) {
           probe <- .row_at(idx_probe)
-          # Note: the Census `N`, unlike the manual sum used for the epidemic
-          # flag above.
+          # Note: the Census `N`, unlike the manual sum used for the replay-mode
+          # mortality flag above.
           infected_fraction <- state$rows[[probe]]$Isym / state$rows[[probe]]$N
           chi_eff <- ifelse(infected_fraction < par$epidemic_threshold,
                             par$chi_endemic, par$chi_epidemic)

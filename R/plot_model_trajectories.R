@@ -7,24 +7,26 @@
 #' surveillance fit (reported cases/deaths), burden, incidence drivers, force of
 #' infection, the SVEIR + W compartments, and sanity checks (mass balance,
 #' population, epidemic fraction) — with a uniform-thinned set of \strong{actual}
-#' posterior member trajectories (the spaghetti, conveying spread) and the
-#' weighted \strong{median} overlaid in bold. Observed surveillance points are
+#' posterior member trajectories (the spaghetti, conveying spread) and a bold
+#' central line (see \strong{Central line}). Observed surveillance points are
 #' overlaid only on the \code{reported_cases}/\code{reported_deaths} panels.
 #'
 #' \strong{Pure read-render:} this function never runs the engine, never
 #' re-simulates, and never re-weights — it consumes only the compact artifact
-#' (per-channel weighted median + thinned actual lines, both already reduced over
+#' (per-channel central series + thinned actual lines, both already reduced over
 #' the best subset). It is the trajectory analogue of
 #' \code{\link{plot_model_ensemble}}.
 #'
 #' \strong{Central line:} for \code{reported_cases} / \code{reported_deaths} the
 #' bold line is the ensemble \emph{central} series following
-#' \code{control$predictions$central_method} (weighted median or weighted mean,
-#' per channel) and is \strong{bit-identical} to the cases/deaths \emph{prediction}
-#' plots -- it is reduced from the same captured draws over the same final
-#' displayed member set and weights (no re-simulation). All other channels
-#' (compartments, FOI, incidence, derived) have no prediction-plot counterpart and
-#' use the conventional weighted \emph{median}.
+#' \code{control$predictions$central_method} (weighted mean by default, or weighted
+#' median, per channel) and is \strong{bit-identical} to the cases/deaths
+#' \emph{prediction} plots -- it is reduced from the same captured draws over the
+#' same final displayed member set and weights (no re-simulation). True deaths
+#' (\code{disease_deaths}) follow the deaths channel's method so the two deaths
+#' panels are comparable. All other channels (compartments, FOI, incidence,
+#' derived) have no prediction-plot counterpart and use the weighted
+#' \emph{median}.
 #'
 #' \strong{Weighting note:} the central series and lines are reduced over the
 #' \emph{final displayed} member set and weights: the \emph{candidate} best subset
@@ -32,9 +34,9 @@
 #' and the \emph{optimized} subset (\code{is_best_subset_opt} /
 #' \code{weight_best_opt}) when \code{control$predictions$optimize_subset = TRUE}.
 #' Channels are captured at sim time (stream-to-disk) and reduced over the
-#' optimized members with NO re-simulation. The CFR(t) panel carries dashed
-#' endemic/epidemic regime reference lines when \code{trajectories$cfr_refs} is
-#' present.
+#' optimized members with NO re-simulation. The CFR(t) panel carries a dashed
+#' step line at the posterior median reported CFR for each year when
+#' \code{trajectories$cfr_refs} is present.
 #'
 #' @param trajectories A \code{mosaic_trajectories} object (from
 #'   \code{readRDS("2_calibration/trajectories_ensemble.rds")}).
@@ -84,7 +86,7 @@ plot_model_trajectories <- function(trajectories,
                 "mass_balance", "N", "epidemic_frac"),
     label = c("Reported cases (model + observed)",
               "Reported deaths (model + observed)",
-              "Disease deaths (model, true burden)",
+              "True cholera deaths (model; fatal onsets, dated at onset)",
               "New symptomatic infections (E->I flow)",
               "New infections (S->E flow)",
               "Human-driven new infections",
@@ -93,7 +95,7 @@ plot_model_trajectories <- function(trajectories,
               "Environmental force of infection Psi(t) [per-capita/day]",
               "Per-time human transmission rate beta_human(t)",
               "Per-time environmental transmission rate beta_env(t)",
-              "Reported CFR(t) = reported deaths / reported cases (28d roll)",
+              "Reported CFR(t) = mean reported deaths / mean reported cases (28d roll)",
               "Infectious (Isym + Iasym)", "Exposed (E)",
               "Environmental reservoir W(t)", "Two-dose vaccinated (V2)",
               "One-dose vaccinated (V1)", "Recovered (R)", "Susceptible (S)",
@@ -154,23 +156,24 @@ plot_model_trajectories <- function(trajectories,
     if (nrow(obs)) obs$label <- factor(obs$label, levels = levels(spec$label))
   }
 
-  # --- Dashed endemic/epidemic CFR regime reference lines on the CFR panel
-  # (DM F4). Weighted over the same best subset; drawn only when present.
+  # --- Dashed posterior reported-CFR reference on the CFR panel: one segment
+  # per calendar year at the ensemble's posterior median (the calibrated mu_jt),
+  # clipped to the plotted dates. Drawn only when present.
   ref_df  <- NULL
   cfr_lab <- spec$label[spec$channel == "CFR"]
   refs    <- trajectories$cfr_refs
-  if (length(cfr_lab) == 1L && !is.null(refs) && is.data.frame(refs)) {
-    row <- refs[refs$location == location, , drop = FALSE]
-    if (nrow(row) == 1L) {
-      vals <- c(endemic = row$cfr_baseline[1], epidemic = row$cfr_epidemic[1])
-      vals <- vals[is.finite(vals)]
-      if (length(vals))
+  if (length(cfr_lab) == 1L && !is.null(refs) && is.data.frame(refs) && nrow(med) > 0L) {
+    rows <- refs[refs$location == location & is.finite(refs$cfr_median), , drop = FALSE]
+    if (nrow(rows)) {
+      d_lo <- min(med$date); d_hi <- max(med$date)
+      x0 <- pmax(as.Date(paste0(rows$year, "-01-01")), d_lo)
+      x1 <- pmin(as.Date(paste0(rows$year, "-12-31")), d_hi)
+      ok <- x0 <= x1
+      if (any(ok))
         ref_df <- data.frame(
-          label  = factor(cfr_lab, levels = levels(spec$label)),
-          yint   = as.numeric(vals),
-          regime = names(vals),
-          col    = ifelse(names(vals) == "endemic", "#2e8b57", "#c0504d"),
-          stringsAsFactors = FALSE)
+          label = factor(cfr_lab, levels = levels(spec$label)),
+          x0 = x0[ok], x1 = x1[ok], yint = rows$cfr_median[ok],
+          col = "#c0504d", stringsAsFactors = FALSE)
     }
   }
 
@@ -187,12 +190,14 @@ plot_model_trajectories <- function(trajectories,
   }
   if (!is.null(ref_df)) {
     p <- p +
-      ggplot2::geom_hline(data = ref_df,
-                          ggplot2::aes(yintercept = .data$yint, color = .data$col),
-                          linetype = "dashed", linewidth = 0.4) +
-      ggplot2::geom_text(data = ref_df,
-                         ggplot2::aes(x = min(med$date), y = .data$yint,
-                                      label = .data$regime, color = .data$col),
+      ggplot2::geom_segment(data = ref_df,
+                            ggplot2::aes(x = .data$x0, xend = .data$x1,
+                                         y = .data$yint, yend = .data$yint,
+                                         color = .data$col),
+                            linetype = "dashed", linewidth = 0.4) +
+      ggplot2::geom_text(data = ref_df[1L, , drop = FALSE],
+                         ggplot2::aes(x = .data$x0, y = .data$yint,
+                                      label = "posterior CFR", color = .data$col),
                          hjust = 0, vjust = -0.3, size = 2, show.legend = FALSE)
   }
   # Identity colour scale needed whenever a layer maps the hex `col` aesthetic

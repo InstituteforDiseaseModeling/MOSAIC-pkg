@@ -22,8 +22,30 @@
 #' @export
 
 plot_CFR_by_country <- function(PATHS) {
+     # Resolve the CFR artifact by end-year, never by a hardcoded name.
+     # process_CFR_data() writes sprintf("case_fatality_ratio_2014_%d.csv", max_year)
+     # (R/process_CFR_data.R:120), so the filename moves every time surveillance
+     # coverage extends. This function used to read a hardcoded
+     # "case_fatality_ratio_2014_2024.csv" while the processor had moved on to
+     # ..._2014_2026.csv; both sat on disk and the figure silently rendered the
+     # stale one (they differ by up to 4.4 CFR percentage points). Select the
+     # highest end-year rather than the newest mtime: the end-year is the
+     # artifact's own statement of coverage and does not change if an old file is
+     # touched or re-copied.
+     cfr_files <- list.files(PATHS$DATA_WHO_ANNUAL,
+                             pattern = "^case_fatality_ratio_2014_[0-9]{4}\\.csv$",
+                             full.names = TRUE)
+     if (!length(cfr_files)) {
+          stop("plot_CFR_by_country: no case_fatality_ratio_2014_<year>.csv found in ",
+               PATHS$DATA_WHO_ANNUAL, " - run process_CFR_data() first.")
+     }
+     end_years <- as.integer(sub("^case_fatality_ratio_2014_([0-9]{4})\\.csv$", "\\1",
+                                 basename(cfr_files)))
+     cfr_file <- cfr_files[which.max(end_years)]
+     message("plot_CFR_by_country: reading ", basename(cfr_file))
+
      # Load cholera data
-     cholera_data <- utils::read.csv(file.path(PATHS$DATA_WHO_ANNUAL, "case_fatality_ratio_2014_2024.csv"), stringsAsFactors = FALSE)
+     cholera_data <- utils::read.csv(cfr_file, stringsAsFactors = FALSE)
 
      # Ensure AFRO Region is at the top, followed by other countries in alphabetical order
      cholera_data <- cholera_data %>%

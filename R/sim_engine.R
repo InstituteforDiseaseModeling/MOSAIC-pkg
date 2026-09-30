@@ -87,7 +87,7 @@ run_simulation <- function(config,
      # `Susceptible`, say, sums the previous tick's compartments.
      components <- SIM_PIPELINE[SIM_PIPELINE %in% components]
 
-     par <- sim_params(config, components = components)
+     par <- sim_params(config, components = components, mode = rng)
 
      if (is.null(seed)) {
           seed <- if (!is.null(par$seed)) as.integer(par$seed) else 123L

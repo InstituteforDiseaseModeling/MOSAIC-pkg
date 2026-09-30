@@ -6,7 +6,7 @@
 #' parameters that have prior distributions and are part of the parameter
 #' estimation process.
 #'
-#' @format A data frame with 54 rows and 14 columns:
+#' @format A data frame with 46 rows and 14 columns:
 #' \describe{
 #'   \item{parameter_name}{Character. Parameter names as used in configuration files and sampling functions}
 #'   \item{display_name}{Character. Human-readable display names for plotting and reporting}
@@ -37,9 +37,14 @@
 #'
 #' The inventory is organized hierarchically:
 #' \itemize{
-#'   \item **Global parameters** (22): Same value across all locations
-#'   \item **Location-specific parameters** (21): Vary by geographic location
+#'   \item **Global parameters** (27): Same value across all locations
+#'   \item **Location-specific parameters** (19): Vary by geographic location
 #' }
+#'
+#' The reported case fatality ratio \code{mu_jt} is not listed: it is not
+#' sampled but integrated out of the deaths likelihood (see
+#' \code{\link{calc_log_likelihood_deaths_integrated}}), and its calibrated value
+#' is \code{3_results/posterior/cfr_posterior.csv}.
 #'
 #' Categories reflect biological processes in cholera transmission:
 #' \itemize{
@@ -47,7 +52,7 @@
 #'   \item **environmental**: V. cholerae survival, shedding, dose-response
 #'   \item **disease**: Recovery rates, incubation, symptom proportions
 #'   \item **immunity**: Natural and vaccine-induced protection
-#'   \item **surveillance**: Reporting rates and delays
+#'   \item **surveillance**: Reporting rates, delays and the case-reporting PPV switch
 #'   \item **mobility**: Human movement parameters
 #'   \item **spatial**: Geographic covariates (WASH coverage)
 #'   \item **initial_conditions**: Starting compartment proportions
@@ -98,7 +103,7 @@
 #' @seealso
 #' \code{\link{sample_parameters}}, \code{\link{priors_default}}, \code{\link{config_default}}
 #'
-#' @source Created by \code{data-raw/make_parameters_inventory.R}
+#' @source Created by \code{data-raw/make_estimated_parameters_inventory.R}
 #' @author John Giles
 #' @keywords datasets
 "estimated_parameters"

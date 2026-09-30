@@ -98,10 +98,14 @@ test_that("a run carries its provenance and draw-site coverage", {
 
   cov <- attr(out, "sim_coverage")
   expect_s3_class(cov, "data.frame")
-  # A full free run exercises every draw site; a gap here means a branch that
-  # no test is reaching.
+  # A full free run exercises every draw site except the replay-only ones (the
+  # oracle's mortality hazard, which production replaced with fate at onset in
+  # v0.96.0); a gap here means a branch that no test is reaching.
   expect_setequal(cov$site, MOSAIC:::.SIM_DRAW_SITES)
-  expect_true(all(cov$n_calls > 0L))
+  replay_only <- cov$site %in% MOSAIC:::.SIM_REPLAY_ONLY_SITES
+  expect_true(any(replay_only))
+  expect_true(all(cov$n_calls[!replay_only] > 0L))
+  expect_true(all(cov$n_calls[replay_only] == 0L))
 })
 
 test_that("the end-of-run diagnostics obey their own shape rules", {

@@ -165,10 +165,9 @@ build_regime_config <- function(date_start, date_stop,
   R_j  <- as.integer(N_J - S_j - V1_j - V2_j - E_j - I_j)
   if (any(R_j < 0)) stop("Initial S + V1 + I exceed N for at least one patch; lower S_prop/V1_prop.")
 
-  # Demography / IFR (held constant across settings)
+  # Demography (held constant across settings)
   b_jt    <- matrix(0.00005, N_LOC, T_len, dimnames = list(J, t))
   d_jt    <- matrix(0.00004, N_LOC, T_len, dimnames = list(J, t))
-  mu_jt   <- matrix(0.01,    N_LOC, T_len, dimnames = list(J, t))
   nu_1_jt <- nu_2_jt <- matrix(0, N_LOC, T_len, dimnames = list(J, t))
 
   # Transmission: split total beta into human + environmental shares so the
@@ -196,13 +195,11 @@ build_regime_config <- function(date_start, date_stop,
     b_jt = b_jt, d_jt = d_jt, nu_1_jt = nu_1_jt, nu_2_jt = nu_2_jt,
     phi_1 = 0.64, phi_2 = 0.85, omega_1 = omega_1, omega_2 = omega_2,
     nu_jt_sources = c("S", "E", "Isym", "Iasym", "R"), iota = 1 / 1.4,
-    gamma_1 = 0.2, gamma_2 = 0.1, epsilon = epsilon, mu_jt = mu_jt,
-    mu_j_baseline = setNames(rep(0.01, N_LOC), J),
-    mu_j_slope = setNames(rep(0, N_LOC), J),
-    mu_j_epidemic_factor = setNames(rep(0, N_LOC), J),
+    gamma_1 = 0.2, gamma_2 = 0.1, epsilon = epsilon,
+    mu_jt = 0.02,
     chi_endemic = 0.5, chi_epidemic = 0.75, epidemic_threshold = 0.0001,
     rho = 0.52, rho_deaths = 0.42, sigma = 0.24,
-    delta_reporting_cases = 0, delta_reporting_deaths = 5,
+    delta_reporting_cases = 0,
     longitude = setNames(c(-1.0232, 45.9062, 27.8493), J),
     latitude  = setNames(c(7.9465, -0.0236, -13.1339), J),
     mobility_omega = 2e-6, mobility_gamma = 1.7,

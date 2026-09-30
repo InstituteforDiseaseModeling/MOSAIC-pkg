@@ -19,8 +19,12 @@
 #' \itemize{
 #'   \item Page 1: Overview plot with temporal trend and data summary
 #'   \item Following pages: Faceted plots of country-specific CFR trends
-#'   \item Each panel shows observed CFR (points) and model predictions (lines with CI)
-#'   \item Color coding indicates data quality and model fit
+#'   \item Each panel shows observed CFR (points) and model predictions (lines with 95% predictive intervals for one year's CFR)
+#'   \item Years after a country's last fitted year (\code{is_forecast}) are drawn dashed on
+#'     a shaded background: the model holds each trend at its last fitted year there
+#'   \item A page of each country's deviation from the population trend (the model's
+#'     country intercept is weakly identified, so the deviation is taken from the
+#'     fitted country curve)
 #' }
 #'
 #' @return Invisibly returns a list of ggplot objects. Saves PDF to DOCS_FIGURES directory.
@@ -67,7 +71,6 @@ plot_CFR_hierarchical <- function(
     # Check that model outputs exist
     estimates_file <- file.path(PATHS$MODEL_INPUT, "cfr_hierarchical_estimates.csv")
     trend_file <- file.path(PATHS$MODEL_INPUT, "cfr_temporal_trend.csv")
-    effects_file <- file.path(PATHS$MODEL_INPUT, "cfr_country_effects.csv")
     who_data_file <- file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual.csv")
     
     if (!file.exists(estimates_file)) {
@@ -81,13 +84,6 @@ plot_CFR_hierarchical <- function(
     temporal_trend <- utils::read.csv(trend_file, stringsAsFactors = FALSE)
     who_data <- utils::read.csv(who_data_file, stringsAsFactors = FALSE)
     
-    # Load country effects if available
-    if (file.exists(effects_file)) {
-        country_effects <- utils::read.csv(effects_file, stringsAsFactors = FALSE)
-    } else {
-        country_effects <- NULL
-    }
-    
     # Prepare observed data - filter for MOSAIC countries only
     obs_data <- who_data[
         who_data$country != "AFRO Region" &
@@ -96,8 +92,22 @@ plot_CFR_hierarchical <- function(
         !is.na(who_data$deaths_total) &
         who_data$cases_total > 0,
     ]
+    # A year still in progress when its snapshot was taken is excluded, as in
+    # est_CFR_hierarchical() (its deaths lag its cases).
+    if ("source" %in% names(obs_data)) obs_data <- obs_data[!.cfr_in_progress(obs_data), ]
     obs_data$cfr_observed <- obs_data$deaths_total / obs_data$cases_total
     obs_data$log_cases <- log10(obs_data$cases_total + 1)
+
+    # Years come from the model outputs: the trend runs past the data, holding
+    # each curve at its last fitted year (is_forecast).
+    temporal_trend$is_forecast <- as.logical(temporal_trend$is_forecast %||% FALSE)
+    estimates$is_forecast <- as.logical(estimates$is_forecast %||% FALSE)
+    yr_min <- min(temporal_trend$year)
+    yr_max <- max(c(temporal_trend$year, estimates$year))
+    yr_fit <- max(temporal_trend$year[!temporal_trend$is_forecast])
+    brk <- function(by) seq(yr_min - yr_min %% by + by * (yr_min %% by > 0), yr_max, by = by)
+    fc_band <- if (yr_max > yr_fit) ggplot2::annotate("rect", xmin = yr_fit + 0.5, xmax = yr_max + 0.5,
+                                                      ymin = -Inf, ymax = Inf, fill = "gray92") else NULL
     
     # Select countries to plot
     if (is.null(countries_to_plot)) {
@@ -148,6 +158,7 @@ plot_CFR_hierarchical <- function(
     
     # Page 1: Overview plot with temporal trend and summary statistics
     p1 <- ggplot2::ggplot(temporal_trend, ggplot2::aes(x = year)) +
+        fc_band +
         # Confidence interval
         ggplot2::geom_ribbon(
             ggplot2::aes(ymin = cfr_trend_lower * 100, 
@@ -172,20 +183,22 @@ plot_CFR_hierarchical <- function(
             labels = c("100", "1K", "10K", "100K")
         ) +
         ggplot2::scale_x_continuous(
-            breaks = seq(1970, 2025, by = 5),
-            minor_breaks = seq(1970, 2025, by = 1)
+            breaks = brk(5),
+            minor_breaks = seq(yr_min, yr_max, by = 1)
         ) +
         ggplot2::scale_y_continuous(
             labels = scales::percent_format(scale = 1),
             limits = c(0, NA)
         ) +
         ggplot2::labs(
-            title = "Cholera Case Fatality Rate in Africa: Temporal Trend (1970-2024)",
-            subtitle = "Population average trend with 95% confidence interval",
+            title = sprintf("Cholera Case Fatality Ratio in Africa: Temporal Trend (%d-%d)", yr_min, yr_fit),
+            subtitle = if (yr_max > yr_fit) sprintf(
+                "Population average trend with 95%% confidence interval; %d-%d (shaded) held at %d",
+                yr_fit + 1L, yr_max, yr_fit) else "Population average trend with 95% confidence interval",
             caption = paste("Model: Hierarchical GAM with spline smoothing | Data: WHO AFRO Region",
                           "\nPoints show country-level observations sized by case count"),
             x = "Year",
-            y = "Case Fatality Rate (%)"
+            y = "Case Fatality Ratio (%)"
         ) +
         ggplot2::theme_minimal(base_size = 11) +
         ggplot2::theme(
@@ -222,16 +235,26 @@ plot_CFR_hierarchical <- function(
         
         # Create faceted plot
         p_facet <- ggplot2::ggplot(est_page, ggplot2::aes(x = year)) +
+            fc_band +
             # Model predictions with CI
             {if(show_ci) ggplot2::geom_ribbon(
                 ggplot2::aes(ymin = cfr_lower * 100, 
                             ymax = cfr_upper * 100),
                 alpha = 0.2, fill = model_color
             )} +
-            # Model prediction line
+            # Model prediction line: solid over fitted years, dashed where the
+            # country's trend is held (its forecast years)
             ggplot2::geom_line(
+                data = est_page[!est_page$is_forecast, ],
                 ggplot2::aes(y = cfr_estimate * 100),
                 color = model_color, linewidth = 1
+            ) +
+            ggplot2::geom_line(
+                data = est_page[est_page$is_forecast |
+                                (est_page$year == ave(est_page$year * !est_page$is_forecast,
+                                                      est_page$iso_code, FUN = max)), ],
+                ggplot2::aes(y = cfr_estimate * 100),
+                color = model_color, linewidth = 0.7, linetype = "22"
             ) +
             # Observed data points
             ggplot2::geom_point(
@@ -248,8 +271,8 @@ plot_CFR_hierarchical <- function(
             ) +
             # Scales
             ggplot2::scale_x_continuous(
-                breaks = seq(1970, 2020, by = 20),
-                minor_breaks = seq(1970, 2025, by = 10)
+                breaks = brk(20),
+                minor_breaks = brk(10)
             ) +
             ggplot2::scale_y_continuous(
                 labels = scales::percent_format(scale = 1),
@@ -265,9 +288,9 @@ plot_CFR_hierarchical <- function(
             # Labels
             ggplot2::labs(
                 title = sprintf("Country-Specific CFR Trends (Page %d of %d)", page, n_pages),
-                subtitle = "Model predictions (blue line with 95% CI) vs. observed data (purple points)",
+                subtitle = "Model predictions (blue line with 95% predictive interval; dashed and shaded where held) vs. observed data (purple points)",
                 x = "Year",
-                y = "Case Fatality Rate (%)",
+                y = "Case Fatality Ratio (%)",
                 caption = if(page == n_pages) "Point size indicates number of reported cases" else ""
             ) +
             # Theme
@@ -287,60 +310,54 @@ plot_CFR_hierarchical <- function(
         print(p_facet)
     }
     
-    # Page with country effects if available
-    if (!is.null(country_effects)) {
-        # Filter for plotted countries
-        effects_subset <- country_effects[country_effects$country %in% 
-                                         unique(estimates_subset$country),]
-        
-        if (nrow(effects_subset) > 0) {
-            # Sort by effect size
-            effects_subset <- effects_subset[order(effects_subset$random_effect),]
-            # Handle potential duplicates in country names
-            effects_subset$country <- make.unique(as.character(effects_subset$country))
-            effects_subset$country <- factor(effects_subset$country, 
-                                            levels = unique(effects_subset$country))
-            
-            # Create lollipop plot of country effects
-            p_effects <- ggplot2::ggplot(effects_subset, 
-                                        ggplot2::aes(x = random_effect, y = country)) +
-                ggplot2::geom_segment(
-                    ggplot2::aes(x = 0, xend = random_effect, 
-                                y = country, yend = country),
-                    color = "gray60", linewidth = 0.5
-                ) +
-                ggplot2::geom_point(
-                    ggplot2::aes(color = random_effect > 0),
-                    size = 3
-                ) +
-                ggplot2::geom_vline(xintercept = 0, linetype = "dashed", 
-                                   color = "gray40", alpha = 0.5) +
-                ggplot2::scale_color_manual(
-                    values = c("TRUE" = "#D32F2F", "FALSE" = "#1976D2"),
-                    labels = c("TRUE" = "Above average", "FALSE" = "Below average"),
-                    name = "CFR relative to average"
-                ) +
-                ggplot2::labs(
-                    title = "Country-Specific Random Effects",
-                    subtitle = "Deviation from population average CFR (on logit scale)",
-                    x = "Random Effect (logit scale)",
-                    y = "Country",
-                    caption = "Negative values indicate lower than average CFR; positive values indicate higher than average CFR"
-                ) +
-                ggplot2::theme_minimal(base_size = 10) +
-                ggplot2::theme(
-                    plot.title = ggplot2::element_text(face = "bold", size = 14),
-                    plot.subtitle = ggplot2::element_text(color = "gray40", size = 11),
-                    plot.caption = ggplot2::element_text(size = 8, color = "gray50"),
-                    legend.position = "bottom",
-                    axis.text.y = ggplot2::element_text(size = 8),
-                    plot.margin = ggplot2::margin(0.5, 0.5, 0.5, 0.5, "cm")
-                )
-            
-            print(p_effects)
-        }
+    # Page: each country's CFR relative to the population trend. The model's
+    # country intercept (s(iso, re)) is weakly identified -- the per-country trend
+    # smooth carries the level -- so the deviation comes from the fitted country
+    # curve: its mean logit difference from the population trend over the
+    # country's fitted (non-forecast) years.
+    tr_logit <- stats::setNames(stats::qlogis(temporal_trend$cfr_trend), temporal_trend$year)
+    fit_rows <- estimates_subset[!estimates_subset$is_forecast, , drop = FALSE]
+    if (nrow(fit_rows) > 0) {
+        dev <- tapply(stats::qlogis(fit_rows$cfr_estimate) - tr_logit[as.character(fit_rows$year)],
+                      fit_rows$iso_code, mean, na.rm = TRUE)
+        effects_subset <- data.frame(iso_code = names(dev), deviation = as.numeric(dev),
+                                     stringsAsFactors = FALSE)
+        effects_subset$country <- country_names$country[match(effects_subset$iso_code, country_names$iso_code)]
+        effects_subset <- effects_subset[order(effects_subset$deviation), ]
+        effects_subset$country <- factor(effects_subset$country, levels = unique(effects_subset$country))
+
+        p_effects <- ggplot2::ggplot(effects_subset, ggplot2::aes(x = deviation, y = country)) +
+            ggplot2::geom_segment(
+                ggplot2::aes(x = 0, xend = deviation, y = country, yend = country),
+                color = "gray60", linewidth = 0.5
+            ) +
+            ggplot2::geom_point(ggplot2::aes(color = deviation > 0), size = 3) +
+            ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "gray40", alpha = 0.5) +
+            ggplot2::scale_color_manual(
+                values = c("TRUE" = "#D32F2F", "FALSE" = "#1976D2"),
+                labels = c("TRUE" = "Above the population trend", "FALSE" = "Below the population trend"),
+                name = NULL
+            ) +
+            ggplot2::labs(
+                title = "Country CFR Relative to the Population Trend",
+                subtitle = "Mean logit difference of each fitted country curve from the population trend, fitted years",
+                x = "Deviation (logit scale)",
+                y = "Country",
+                caption = "exp(deviation) is roughly the country's odds ratio against the population average"
+            ) +
+            ggplot2::theme_minimal(base_size = 10) +
+            ggplot2::theme(
+                plot.title = ggplot2::element_text(face = "bold", size = 14),
+                plot.subtitle = ggplot2::element_text(color = "gray40", size = 11),
+                plot.caption = ggplot2::element_text(size = 8, color = "gray50"),
+                legend.position = "bottom",
+                axis.text.y = ggplot2::element_text(size = 8),
+                plot.margin = ggplot2::margin(0.5, 0.5, 0.5, 0.5, "cm")
+            )
+
+        print(p_effects)
     }
-    
+
     # Summary statistics page - FOR ALL MOSAIC COUNTRIES
     # Calculate summary stats for ALL MOSAIC countries with sufficient data
     all_mosaic_obs_sufficient <- obs_data[
@@ -352,8 +369,9 @@ plot_CFR_hierarchical <- function(
     countries_with_stats <- unique(all_mosaic_obs_sufficient$iso_code)
     
     if (length(countries_with_stats) > 0) {
+        # Keyed on iso_code: the WHO file spells some countries more than one way.
         summary_stats <- aggregate(
-            cfr_observed ~ iso_code + country,
+            cfr_observed ~ iso_code,
             data = all_mosaic_obs_sufficient,
             FUN = function(x) c(
                 mean = mean(x, na.rm = TRUE),
@@ -364,7 +382,6 @@ plot_CFR_hierarchical <- function(
         )
         summary_df <- data.frame(
             iso_code = summary_stats$iso_code,
-            country = summary_stats$country,
             summary_stats$cfr_observed
         )
     } else {
@@ -379,15 +396,15 @@ plot_CFR_hierarchical <- function(
         )
     }
     
-    # Get 2024 predictions for ALL MOSAIC countries
-    all_mosaic_2024 <- estimates[
-        estimates$iso_code %in% MOSAIC::iso_codes_mosaic & 
-        estimates$year == 2024,
+    # Model predictions for ALL MOSAIC countries in the last fitted year
+    all_mosaic_pred <- estimates[
+        estimates$iso_code %in% MOSAIC::iso_codes_mosaic &
+        estimates$year == yr_fit,
     ]
     
     # Create complete summary including countries without historical data
-    all_countries_df <- unique(all_mosaic_2024[, c("iso_code", "country", "cfr_estimate")])
-    names(all_countries_df)[names(all_countries_df) == "cfr_estimate"] <- "cfr_2024_pred"
+    all_countries_df <- unique(all_mosaic_pred[, c("iso_code", "country", "cfr_estimate")])
+    names(all_countries_df)[names(all_countries_df) == "cfr_estimate"] <- "cfr_pred"
     
     # Merge with historical stats (will have NA for countries without data)
     if (nrow(summary_df) > 0) {
@@ -405,12 +422,10 @@ plot_CFR_hierarchical <- function(
     # Add indicator for data availability
     summary_df$has_historical_data <- !is.na(summary_df$mean)
     
-    # Sort by 2024 prediction (check if cfr_2024_pred exists)
-    if ("cfr_2024_pred" %in% names(summary_df) && nrow(summary_df) > 0) {
-        summary_df <- summary_df[order(summary_df$cfr_2024_pred, decreasing = TRUE),]
+    # Sort by the prediction (check if cfr_pred exists)
+    if ("cfr_pred" %in% names(summary_df) && nrow(summary_df) > 0) {
+        summary_df <- summary_df[order(summary_df$cfr_pred, decreasing = TRUE),]
     }
-    # Handle potential duplicates in country names
-    summary_df$country <- make.unique(as.character(summary_df$country))
     summary_df$country <- factor(summary_df$country, levels = unique(summary_df$country))
     
     # Split into two plots if too many countries
@@ -434,9 +449,9 @@ plot_CFR_hierarchical <- function(
                             ymax = (mean + sd) * 100),
                 color = "gray50", size = 0.3, fatten = 1
             ) +
-            # 2024 prediction - different symbols for with/without historical data
+            # last-fitted-year prediction - different symbols for with/without historical data
             ggplot2::geom_point(
-                ggplot2::aes(y = cfr_2024_pred * 100,
+                ggplot2::aes(y = cfr_pred * 100,
                             shape = has_historical_data,
                             color = has_historical_data),
                 size = 2.5
@@ -457,10 +472,10 @@ plot_CFR_hierarchical <- function(
                 limits = c(0, NA)
             ) +
             ggplot2::labs(
-                title = "All MOSAIC Countries: Historical CFR vs. 2024 Model Predictions",
-                subtitle = "Gray bars: historical mean \u00B1 SD | Points: 2024 model predictions",
+                title = sprintf("All MOSAIC Countries: Historical CFR vs. %d Model Predictions", yr_fit),
+                subtitle = sprintf("Gray bars: historical mean \u00B1 SD | Points: %d model predictions", yr_fit),
                 x = "",
-                y = "Case Fatality Rate (%)",
+                y = "Case Fatality Ratio (%)",
                 caption = sprintf("Total: %d countries | With historical data: %d | Population average: %d",
                                 n_mosaic_countries,
                                 sum(summary_df$has_historical_data),
@@ -505,9 +520,9 @@ plot_CFR_hierarchical <- function(
                                 ymax = (mean + sd) * 100),
                     color = "gray50", size = 0.3, fatten = 1
                 ) +
-                # 2024 prediction - different symbols for with/without historical data
+                # last-fitted-year prediction - different symbols for with/without historical data
                 ggplot2::geom_point(
-                    ggplot2::aes(y = cfr_2024_pred * 100,
+                    ggplot2::aes(y = cfr_pred * 100,
                                 shape = has_historical_data,
                                 color = has_historical_data),
                     size = 2.5
@@ -528,10 +543,10 @@ plot_CFR_hierarchical <- function(
                     limits = c(0, NA)
                 ) +
                 ggplot2::labs(
-                    title = "All MOSAIC Countries: Historical CFR vs. 2024 Model Predictions",
+                    title = sprintf("All MOSAIC Countries: Historical CFR vs. %d Model Predictions", yr_fit),
                     subtitle = plot_subtitle,
                     x = "",
-                    y = "Case Fatality Rate (%)",
+                    y = "Case Fatality Ratio (%)",
                     caption = if (plot_num == 2) {
                         sprintf("Total: %d countries | With historical data: %d | Population average: %d",
                               n_mosaic_countries,
@@ -609,6 +624,7 @@ plot_CFR_hierarchical <- function(
         
         # Create plot
         p_all <- ggplot2::ggplot(est_page, ggplot2::aes(x = year)) +
+            fc_band +
             # Model predictions with CI - different transparency for countries with/without data
             ggplot2::geom_ribbon(
                 ggplot2::aes(ymin = cfr_lower * 100, 
@@ -651,8 +667,8 @@ plot_CFR_hierarchical <- function(
                 guide = "none"
             ) +
             ggplot2::scale_x_continuous(
-                breaks = seq(1980, 2020, by = 20),
-                limits = c(1970, 2025)
+                breaks = brk(20),
+                limits = c(yr_min, yr_max)
             ) +
             ggplot2::scale_y_continuous(
                 labels = scales::percent_format(scale = 1),
@@ -670,9 +686,9 @@ plot_CFR_hierarchical <- function(
                 title = sprintf("All MOSAIC Countries CFR Trends (Page %d of %d)", page, n_all_pages),
                 subtitle = paste("Solid lines: Countries with sufficient data (\u226520 cases) | ",
                                "Dashed lines: Population-average estimates\n",
-                               "Points indicate years with observed data"),
+                               "Points indicate years with observed data | Shaded: trends held at the last fitted year"),
                 x = "Year",
-                y = "Case Fatality Rate (%)",
+                y = "Case Fatality Ratio (%)",
                 caption = if(page == n_all_pages) paste(
                     sprintf("Total countries: %d | With sufficient data: %d | Without data: %d",
                            n_all_countries, 
