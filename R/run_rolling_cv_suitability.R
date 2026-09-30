@@ -212,6 +212,77 @@
           seed_aggregation = "cross-seed median on the logit scale")
 }
 
+#' Provenance block of the psi manifest (psi_suitability_config.json).
+#'
+#' Everything needed to reproduce an lstm_v2 fit, or to prove two artefacts are
+#' not comparable: the source panel, the sequence/CV geometry, the country pool,
+#' every post-processing constant that survives into psi (LOESS span, surface and
+#' degree; logit clamp), the fully resolved architecture/loss hyperparameters the
+#' seeds were trained with, and the software identity.
+#' @param source_csv Path of the suitability panel the fit read.
+#' @param ac Resolved arch_control list (fixture merged with overrides).
+#' @param arch_hp Hyperparameter list passed to .psi_run_seed_ensemble().
+#' @param n_rw_steps Number of rolling-window CV steps in the data bundle.
+#' @return Named list written under config_info$provenance.
+#' @keywords internal
+#' @noRd
+.psi_manifest_provenance <- function(source_csv, ac, arch_hp, n_rw_steps) {
+     list(
+          source_csv        = source_csv,
+          source_csv_md5    = tryCatch(unname(tools::md5sum(source_csv)),
+                                       error = function(e) NA_character_),
+          source_csv_bytes  = tryCatch(as.numeric(file.info(source_csv)$size),
+                                       error = function(e) NA_real_),
+          source_csv_mtime  = tryCatch(as.character(file.info(source_csv)$mtime),
+                                       error = function(e) NA_character_),
+          # which countries' sequences were pooled into training
+          country_pool      = ac$country_pool %||% "all_mosaic",
+          # sequence + CV geometry (what makes a fold grid reproducible)
+          timesteps         = ac$timesteps,
+          lead              = as.integer(ac$lead %||% 0L),
+          max_gap_days      = ac$max_gap_days,
+          rw_step_months    = ac$rw_step_months,
+          rw_test_months    = ac$rw_test_months,
+          rw_subsample      = ac$rw_subsample,
+          rw_gap_weeks      = ac$rw_gap_weeks,
+          rw_step_days      = ac$step_days,
+          rw_test_days      = ac$test_days,
+          rw_min_test_days  = ac$min_test_days,
+          rw_min_train_years = ac$min_train_years,
+          n_rw_steps        = n_rw_steps,
+          # post-processing constants that survive into psi (defaults mirror the
+          # .psi_run_seed_ensemble() call)
+          smooth_span       = ac$smooth_span,
+          loess_surface     = ac$loess_surface %||% "direct",
+          loess_degree      = as.integer(ac$loess_degree %||% 2L),
+          ensemble_logit_eps = ac$ensemble_logit_eps,
+          loss_kind         = ac$loss_kind,
+          use_confidence_weight = isTRUE(ac$use_confidence_weight),
+          # the resolved architecture + loss hyperparameters every seed used
+          arch_hp           = arch_hp,
+          # software identity
+          mosaic_version    = as.character(utils::packageVersion("MOSAIC")),
+          # NOTE: no `backend` field. A `backend` variable exists only on the
+          # feature/psi-torch-port branch; on main there is one keras path.
+          # Referencing it here was cross-branch contamination and it killed
+          # every shard of an arm at the END of its first cutoff -- after all
+          # the fitting work, when the manifest is written.
+          r_version         = paste(R.version$major, R.version$minor, sep = "."),
+          tf_version        = tryCatch(
+               as.character(reticulate::py_get_attr(
+                    reticulate::import("tensorflow"), "__version__")),
+               error = function(e) NA_character_),
+          keras3_version    = tryCatch(
+               as.character(utils::packageVersion("keras3")),
+               error = function(e) NA_character_),
+          torch_version     = tryCatch(
+               as.character(utils::packageVersion("torch")),
+               error = function(e) NA_character_),
+          host              = tryCatch(unname(Sys.info()[["nodename"]]),
+                                       error = function(e) NA_character_),
+          written_at        = as.character(Sys.time()))
+}
+
 #' Auto-detect the lstm_v2 fit/prediction window from the suitability panel.
 #'
 #' `fit_date_stop` is the last week with BOTH observed cholera cases and complete
@@ -498,53 +569,9 @@
           # the same way but with the fix" could not be done reliably. Everything
           # needed to reproduce the fit, or to prove two artefacts are not
           # comparable, is recorded here. Additive: no existing key changed.
-          provenance = list(
-               source_csv        = source_csv,
-               source_csv_md5    = tryCatch(unname(tools::md5sum(source_csv)),
-                                            error = function(e) NA_character_),
-               source_csv_bytes  = tryCatch(as.numeric(file.info(source_csv)$size),
-                                            error = function(e) NA_real_),
-               source_csv_mtime  = tryCatch(as.character(file.info(source_csv)$mtime),
-                                            error = function(e) NA_character_),
-               # sequence + CV geometry (what makes a fold grid reproducible)
-               timesteps         = ac$timesteps,
-               lead              = as.integer(ac$lead %||% 0L),
-               max_gap_days      = ac$max_gap_days,
-               rw_step_months    = ac$rw_step_months,
-               rw_test_months    = ac$rw_test_months,
-               rw_subsample      = ac$rw_subsample,
-               rw_gap_weeks      = ac$rw_gap_weeks,
-               rw_step_days      = ac$step_days,
-               rw_test_days      = ac$test_days,
-               rw_min_test_days  = ac$min_test_days,
-               rw_min_train_years = ac$min_train_years,
-               n_rw_steps        = length(bundle$rw_steps),
-               # post-processing constants that survive into psi
-               smooth_span       = ac$smooth_span,
-               ensemble_logit_eps = ac$ensemble_logit_eps,
-               loss_kind         = ac$loss_kind,
-               use_confidence_weight = isTRUE(ac$use_confidence_weight),
-               # software identity
-               mosaic_version    = as.character(utils::packageVersion("MOSAIC")),
-               # NOTE: no `backend` field. A `backend` variable exists only on the
-               # feature/psi-torch-port branch; on main there is one keras path.
-               # Referencing it here was cross-branch contamination and it killed
-               # every shard of an arm at the END of its first cutoff -- after all
-               # the fitting work, when the manifest is written.
-               r_version         = paste(R.version$major, R.version$minor, sep = "."),
-               tf_version        = tryCatch(
-                    as.character(reticulate::py_get_attr(
-                         reticulate::import("tensorflow"), "__version__")),
-                    error = function(e) NA_character_),
-               keras3_version    = tryCatch(
-                    as.character(utils::packageVersion("keras3")),
-                    error = function(e) NA_character_),
-               torch_version     = tryCatch(
-                    as.character(utils::packageVersion("torch")),
-                    error = function(e) NA_character_),
-               host              = tryCatch(unname(Sys.info()[["nodename"]]),
-                                            error = function(e) NA_character_),
-               written_at        = as.character(Sys.time()))))
+          provenance = .psi_manifest_provenance(
+               source_csv = source_csv, ac = ac, arch_hp = arch_hp,
+               n_rw_steps = length(bundle$rw_steps))))
      p_cfg <- file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json")
      jsonlite::write_json(config_info, p_cfg, pretty = TRUE, auto_unbox = TRUE,
                           digits = NA, null = "null")

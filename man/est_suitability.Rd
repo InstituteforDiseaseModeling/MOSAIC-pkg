@@ -200,6 +200,10 @@ affected. For a retrospective / forecast-CV psi use
 \code{response_var = "transmission_intensity"} or a per-cutoff panel compiled with
 \code{target_anchor_stop}. Covariate climatologies in the panel remain full-window
 (see \code{\link{compile_suitability_data}}).
+The frozen \code{lstm_v1_legacy} path is never leak-free for a retrospective
+cutoff: it counts unobserved weeks as zero cases and scales its response by an
+anchor over the whole panel. Its numerics are frozen, so it warns instead when
+\code{fit_date_stop} precedes the last observed surveillance week.
 }
 
 \section{Migration (reproduce v0.33 production behavior)}{

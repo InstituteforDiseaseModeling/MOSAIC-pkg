@@ -189,6 +189,10 @@
 #' `response_var = "transmission_intensity"` or a per-cutoff panel compiled with
 #' `target_anchor_stop`. Covariate climatologies in the panel remain full-window
 #' (see \code{\link{compile_suitability_data}}).
+#' The frozen `lstm_v1_legacy` path is never leak-free for a retrospective
+#' cutoff: it counts unobserved weeks as zero cases and scales its response by an
+#' anchor over the whole panel. Its numerics are frozen, so it warns instead when
+#' `fit_date_stop` precedes the last observed surveillance week.
 #'
 #' @section Migration (reproduce v0.33 production behavior):
 #' The current defaults set `response_var` to
@@ -332,6 +336,7 @@ est_suitability <- function(PATHS,
           if (!is.null(source_csv))
                stop("est_suitability: `source_csv` override is only supported by the lstm_v2_hierarchical_film path (the legacy path is frozen at its canonical panel).",
                     call. = FALSE)
+          .psi_legacy_leakage_warning(PATHS, fit_date_stop)
           return(.est_suitability_legacy(
                PATHS            = PATHS,
                fit_date_start   = fit_date_start,
@@ -357,6 +362,49 @@ est_suitability <- function(PATHS,
           arch_control     = arch_control,
           source_csv       = source_csv,
           plot_country_diagnostics = plot_country_diagnostics)
+}
+
+
+#' Leakage warning for the frozen legacy path used retrospectively.
+#'
+#' The frozen v0.33 body is not edited (legacy parity). It counts NA cases as 0
+#' and scales every response by an anchor computed over the whole panel (the
+#' in-function cases p99, or the full-window compile_suitability_data anchors
+#' of a target_* column), so a fit whose cutoff precedes the end of surveillance
+#' trains on targets scaled by later outbreaks and on unobserved weeks recorded
+#' as zero transmission. Warns in that case; silent when fit_date_stop is NULL
+#' (the production refresh) or at/after the last observed week, or when the
+#' panel cannot be read (the legacy body then fails with its own error).
+#' @param PATHS List from get_paths().
+#' @param fit_date_stop The user-supplied cutoff (NULL = auto-detect).
+#' @return Invisibly, TRUE if a warning was raised.
+#' @keywords internal
+#' @noRd
+.psi_legacy_leakage_warning <- function(PATHS, fit_date_stop) {
+     if (is.null(fit_date_stop)) return(invisible(FALSE))
+     cutoff <- as.Date(fit_date_stop)
+     path <- file.path(PATHS$DATA_CHOLERA_WEEKLY %||% "",
+                       "cholera_country_weekly_suitability_data.csv")
+     if (is.na(cutoff) || !file.exists(path)) return(invisible(FALSE))
+     d <- tryCatch(utils::read.csv(path, stringsAsFactors = FALSE),
+                   error = function(e) NULL)
+     if (is.null(d) || !all(c("iso_code", "date", "cases") %in% names(d)))
+          return(invisible(FALSE))
+     obs <- d$iso_code %in% MOSAIC::iso_codes_mosaic & !is.na(d$cases)
+     if (!any(obs)) return(invisible(FALSE))
+     last_obs <- max(as.Date(d$date[obs]), na.rm = TRUE)
+     if (cutoff >= last_obs) return(invisible(FALSE))
+     warning(sprintf(paste0(
+          "est_suitability(architecture = 'lstm_v1_legacy'): fit_date_stop = %s precedes ",
+          "the last observed surveillance week (%s). The frozen v0.33 path is NOT ",
+          "leak-free for a retrospective cutoff: its response is scaled by an anchor ",
+          "computed over the whole panel, including weeks after the cutoff, and it counts ",
+          "unobserved weeks (NA cases) as zero transmission. Out-of-sample skill measured ",
+          "from this fit is optimistic. For retrospective or forecast-CV psi use the default ",
+          "lstm_v2_hierarchical_film path with response_var = 'transmission_intensity' or a ",
+          "panel compiled with target_anchor_stop (see ?est_suitability, Leakage)."),
+          format(cutoff), format(last_obs)), call. = FALSE)
+     invisible(TRUE)
 }
 
 
