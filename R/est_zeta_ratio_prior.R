@@ -533,14 +533,18 @@ est_zeta_ratio_prior <- function(PATHS,
      p_sources <-
           ggplot2::ggplot(plot_df,
                           ggplot2::aes(y = source, x = ratio, colour = study_type)) +
+          # Band, median and interval lines describe the SHIPPED prior (direct
+          # channel truncated below at 1), not the diagnostic combined channel.
           ggplot2::annotate("rect",
-                            xmin  = ci_lower, xmax = ci_upper,
-                            ymin  = -Inf,     ymax = Inf,
+                            xmin  = fit$ci_lower, xmax = fit$ci_upper,
+                            ymin  = -Inf,         ymax = Inf,
                             fill  = "grey85", alpha = 0.35) +
-          ggplot2::geom_vline(xintercept = lognormal_median,
+          ggplot2::geom_vline(xintercept = fit$median,
                               linetype = "solid", colour = "grey30", linewidth = 0.6) +
-          ggplot2::geom_vline(xintercept = c(ci_lower, ci_upper),
+          ggplot2::geom_vline(xintercept = c(fit$ci_lower, fit$ci_upper),
                               linetype = "dashed", colour = "grey40", linewidth = 0.4) +
+          ggplot2::geom_vline(xintercept = fit$lower,
+                              linetype = "dotted", colour = "grey20", linewidth = 0.5) +
           ggplot2::geom_errorbar(ggplot2::aes(xmin = ratio_lo, xmax = ratio_hi,
                                               alpha = weight_label),
                                  orientation = "y", width = 0, linewidth = 0.6) +
@@ -559,6 +563,7 @@ est_zeta_ratio_prior <- function(PATHS,
                                        mid = ggplot2::unit(0.1, "cm"),
                                        long = ggplot2::unit(0.15, "cm")) +
           ggplot2::labs(title = expression("A. Direct-literature anchors for " * zeta[ratio] * " = " * zeta[1] / zeta[2]),
+                        subtitle = "Band and lines: shipped prior (direct, truncated at 1) median and 95% interval; dotted: bound at 1",
                         x = expression(zeta[ratio] ~ "  (log scale)"),
                         y = NULL) +
           ggplot2::theme_classic(base_size = 13) +
@@ -572,7 +577,9 @@ est_zeta_ratio_prior <- function(PATHS,
                axis.title.x      = ggplot2::element_text(margin = ggplot2::margin(t = 8)),
                axis.text.y       = ggplot2::element_text(size = 10),
                plot.title        = ggplot2::element_text(face = "bold", size = 14,
-                                                         margin = ggplot2::margin(b = 8))
+                                                         margin = ggplot2::margin(b = 4)),
+               plot.subtitle     = ggplot2::element_text(size = 9.5, colour = "grey25",
+                                                         margin = ggplot2::margin(b = 6))
           )
 
      # Rug of direct-literature anchors on the density panel
@@ -598,10 +605,16 @@ est_zeta_ratio_prior <- function(PATHS,
                                           colour   = channel,
                                           linetype = channel),
                              linewidth = 1) +
-          ggplot2::geom_vline(xintercept = lognormal_median,
+          ggplot2::annotate("rect",
+                            xmin  = fit$ci_lower, xmax = fit$ci_upper,
+                            ymin  = -Inf,         ymax = Inf,
+                            fill  = "grey85", alpha = 0.35) +
+          ggplot2::geom_vline(xintercept = fit$median,
                               linetype = "solid", colour = "grey20", linewidth = 0.6) +
-          ggplot2::geom_vline(xintercept = c(ci_lower, ci_upper),
+          ggplot2::geom_vline(xintercept = c(fit$ci_lower, fit$ci_upper),
                               linetype = "dashed", colour = "grey40", linewidth = 0.4) +
+          ggplot2::geom_vline(xintercept = fit$lower,
+                              linetype = "dotted", colour = "grey20", linewidth = 0.5) +
           ggplot2::geom_rug(data = rug_df,
                             ggplot2::aes(x = ratio),
                             sides = "b", length = ggplot2::unit(0.04, "npc"),
@@ -621,16 +634,15 @@ est_zeta_ratio_prior <- function(PATHS,
                                        mid = ggplot2::unit(0.1, "cm"),
                                        long = ggplot2::unit(0.15, "cm")) +
           ggplot2::annotate("text",
-                            x = fit$median, y = peak_density * 1.08,
+                            x = fit$median, y = peak_density * 1.12,
                             label = sprintf("shipped (direct, truncated at 1) median\n%.1e", fit$median),
                             hjust = 0.5, vjust = 0, size = 3.4, colour = "grey20",
                             lineheight = 0.9) +
-          ggplot2::annotate("text",
-                            x = 10^-0.8, y = peak_density * 1.25,
-                            hjust = 0, vjust = 0.5, size = 3.6, colour = "#1B4F72",
-                            label = sprintf("Shipped: Direct(meanlog = %.2f, sdlog = %.2f), truncated at 1",
-                                            meanlog_A, sdlog_A)) +
-          ggplot2::labs(title = "B. Direct, derived, and combined lognormal densities (rug = direct-literature anchors)",
+          ggplot2::labs(title = "B. Candidate lognormal densities",
+                        subtitle = sprintf(paste0("Shipped: direct LN(meanlog = %.2f, sdlog = %.2f) truncated at 1 ",
+                                                  "(band = its 95%% interval)\n",
+                                                  "Derived and combined are diagnostic only; rug = direct-literature anchors"),
+                                           meanlog_A, sdlog_A),
                         x = expression(zeta[ratio] ~ "  (log scale)"),
                         y = expression("Density (per log"[10] ~ zeta[ratio] * ")")) +
           ggplot2::theme_classic(base_size = 13) +
@@ -642,7 +654,9 @@ est_zeta_ratio_prior <- function(PATHS,
                axis.title.x       = ggplot2::element_text(margin = ggplot2::margin(t = 8)),
                axis.title.y       = ggplot2::element_text(margin = ggplot2::margin(r = 8)),
                plot.title         = ggplot2::element_text(face = "bold", size = 14,
-                                                          margin = ggplot2::margin(b = 8))
+                                                          margin = ggplot2::margin(b = 4)),
+               plot.subtitle      = ggplot2::element_text(size = 9.5, colour = "grey25",
+                                                          margin = ggplot2::margin(b = 6))
           )
 
      combo <- cowplot::plot_grid(p_sources, p_density,

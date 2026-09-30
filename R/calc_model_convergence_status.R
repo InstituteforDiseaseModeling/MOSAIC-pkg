@@ -311,10 +311,18 @@ calc_model_convergence_status <- function(results_dir,
               .ess_is_value(is_best), "-", expression(bold(ESS[IS]~"(B)")))
     }
     if (!is.null(is_all)) {
-      khat_desc <- if (!is.null(is_all$khat_status)) {
-        paste0("Pareto k-hat: ", is_all$khat_status)
+      # khat_status is the status of the tail fit ("ok", "insufficient
+      # draws", ...), not a reliability verdict, so it is shown only when the
+      # fit did not succeed; the reliability reading is khat against 0.7.
+      khat_desc <- "Pareto k-hat, all draws (not gated)"
+      fit_status <- is_all$khat_status
+      if (length(fit_status) == 1L && !is.na(fit_status) &&
+          !identical(as.character(fit_status), "ok")) {
+        khat_desc <- paste0(khat_desc, "; fit: ", fit_status)
       } else {
-        "Pareto k-hat, all draws (not gated)"
+        khat_num <- suppressWarnings(as.numeric(is_all$khat))
+        if (length(khat_num) == 1L && is.finite(khat_num) && khat_num >= 0.7)
+          khat_desc <- paste0(khat_desc, "; IS estimate unreliable")
       }
       .is_row("Pareto k-hat", khat_desc, .mosaic_format_status_value(is_all$khat),
               "< 0.7", expression(bold(hat(k))))

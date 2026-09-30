@@ -767,7 +767,7 @@ fit_beta_safe <- function(x, label = "") {
 #' (0, 1) tighten, values > 1 widen, and 0 or 1 leave the spread unchanged. The
 #' concentration is floored at 2 (SD capped at \eqn{\sqrt{m(1-m)/3}}) so a very
 #' large factor cannot produce an invalid Beta, and at \eqn{1/m} so shape1 stays
-#' >= 1: with prop_R means of 1e-3 to 1e-2, a factor of 13-100 otherwise gave
+#' at least 1: with prop_R means of 1e-3 to 1e-2, a factor of 13-100 otherwise gave
 #' shape1 of ~0.004-0.06, a prior whose median sat tens of decades below its
 #' mean (e.g. ETH median 5.5e-87 against mean 1.8e-3). The mean is kept
 #' regardless; the factor is effectively capped where it would break that floor.

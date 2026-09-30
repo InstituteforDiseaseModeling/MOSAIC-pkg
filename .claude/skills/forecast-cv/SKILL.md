@@ -89,7 +89,8 @@ cutoff×location×date×metric: `segment`=IS/embargo/OOS, held-out `observed`, `
 (**separate exported fns** — not inside `run_rolling_cv`; see `?evaluate_rolling_cv`).
 - **Gate on per-cutoff ESS + coverage FIRST.** The cheap CV control is a *short FIXED-mode* run
   (`n_simulations=2000`, `n_iterations=3`, `ESS_param=100`): the ESS stopping criterion is never evaluated
-  (`summary.json` has `converged = FALSE`, `convergence_evaluated = FALSE`, status `completed_fixed`), so
+  (`summary.json` has `mode = "fixed"`, `converged = FALSE`, `convergence_evaluated = FALSE`; the log's
+  `[RUN_SUMMARY]` line has `status=completed_fixed` — `status` is not a summary.json field), so
   weights can be under-converged and a "win" may be a lucky draw. Read per-cutoff ESS before trusting a score.
 - **Primary verdict = WIS-skill-vs-baseline + bias_ratio.** R²-corr is scale/offset-invariant — blind to
   the magnitude/level that `psi_star_b` controls — so it is **diagnostic-only**, never the ψ verdict. (Eval

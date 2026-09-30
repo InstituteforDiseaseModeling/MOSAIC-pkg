@@ -169,6 +169,13 @@ test_that("convergence status table includes subset, cap, IS diagnostics and ove
   expect_identical(m$Status[m$Metric == "Best Subset (B) cap"], "pass")
   expect_identical(m$Value[m$Metric == "ESS_IS (all)"], "1 of 100")
   expect_identical(m$Status[m$Metric == "Overall"], tolower(d$summary$convergence_status))
+  # khat_status is the tail-fit status, not a verdict: an "ok" fit must not
+  # read as "Pareto k-hat: ok" next to an unreliable k-hat.
+  khat_desc <- m$Description[m$Metric == "Pareto k-hat"]
+  expect_false(grepl(": ok$", khat_desc))
+  expect_match(khat_desc, "^Pareto k-hat, all draws \\(not gated\\)")
+  if (identical(is_all$khat_status, "ok") && is.finite(is_all$khat) && is_all$khat >= 0.7)
+    expect_match(khat_desc, "unreliable")
 })
 
 # ---- weighting-posterior-08: KL is KL(posterior || prior), uncapped ----------
