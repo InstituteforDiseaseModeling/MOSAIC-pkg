@@ -171,7 +171,7 @@ plot_mobility_flux_network <- function(flux,
                              point.padding = 0.3, box.padding = 0.4,
                              min.segment.length = 0, segment.size = 0.2,
                              segment.color = "grey40") +
-    ggplot2::scale_size_continuous(range = c(0.001, 2.5)) +
+    ggplot2::scale_linewidth_continuous(range = c(0.001, 2.5)) +
     ggplot2::theme(legend.position = 'none')
 
   # Crop the view AFTER the legend extraction and second pass so coord_sf

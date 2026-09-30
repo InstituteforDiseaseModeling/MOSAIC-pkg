@@ -111,12 +111,15 @@ plot_model_ppc <- function(predictions_dir = NULL,
         if (verbose) message("=== Loading predictions from CSV files ===")
 
         if (!is.null(predictions_dir)) {
-            ensemble_files   <- list.files(predictions_dir,
+            # Per-location files only: the combined *_all.csv that run_MOSAIC()
+            # writes for multi-location runs repeats every row of them.
+            .per_location <- function(f) f[!grepl("_all\\.csv$", f)]
+            ensemble_files   <- .per_location(list.files(predictions_dir,
                                            pattern = "^predictions_ensemble_.*\\.csv$",
-                                           full.names = TRUE)
-            stochastic_files <- list.files(predictions_dir,
+                                           full.names = TRUE))
+            stochastic_files <- .per_location(list.files(predictions_dir,
                                            pattern = "^predictions_stochastic_.*\\.csv$",
-                                           full.names = TRUE)
+                                           full.names = TRUE))
             csv_files <- if (length(ensemble_files) > 0) {
                 if (verbose) message("Using ensemble predictions (", length(ensemble_files), " files)")
                 ensemble_files
@@ -209,10 +212,8 @@ plot_model_ppc <- function(predictions_dir = NULL,
         pred_cases_flat  <- as.vector(pred_cases)
         pred_deaths_flat <- as.vector(pred_deaths)
 
-        n_times     <- if (is.matrix(obs_cases)) nrow(obs_cases) else length(obs_cases)
-        n_locations <- if (is.matrix(obs_cases)) ncol(obs_cases) else 1
-
-        time_vec_legacy     <- rep(1:n_times, n_locations)
+        # Engine matrices are [locations, days].
+        n_locations <- if (is.matrix(obs_cases)) nrow(obs_cases) else 1
         location_names      <- model$params$location_name
         available_locations <- if (!is.null(location_names)) location_names else "Location"
         has_dates           <- FALSE
@@ -284,6 +285,10 @@ plot_model_ppc <- function(predictions_dir = NULL,
         )
 
         pdf(file.path(ppc_dir, paste0("ppc", suffix, ".pdf")), width = 14, height = 7)
+        pdf_dev <- grDevices::dev.cur()
+        # Close this device even if drawing errors, so a failure cannot leave it open
+        # (truncated PDF, later base graphics redirected into it).
+        on.exit(if (pdf_dev %in% grDevices::dev.list()) grDevices::dev.off(pdf_dev), add = TRUE)
 
         # ======================================================================
         # PAGE 1: Density overlays
@@ -376,7 +381,9 @@ plot_model_ppc <- function(predictions_dir = NULL,
                 cov50 <- mean(obs_v_valid >= lo50_v & obs_v_valid <= hi50_v, na.rm = TRUE) * 100
                 cov95 <- mean(obs_v_valid >= lo95_v & obs_v_valid <= hi95_v, na.rm = TRUE) * 100
 
-                # Bayesian p-value: P(pred > obs)
+                # Share of time steps where the CENTRAL series exceeds the
+                # observation: a sign-balance/bias check, not a posterior
+                # predictive p-value (that needs replicate draws, absent here).
                 bp <- mean(pred_v[valid] > obs_v_valid, na.rm = TRUE)
 
                 # Use the metric's own color: lighter shade for 50% CI, solid for 95% CI
@@ -388,7 +395,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
                      xaxt = "n", yaxt = "n",
                      xlab = "", ylab = "Coverage (%)",
                      main = paste0("CI Coverage: ", metric),
-                     sub  = paste0("Bayesian p = ", round(bp, 3),
+                     sub  = paste0("P(central > obs) = ", round(bp, 3),
                                    "  (n = ", length(obs_v_valid), ")"))
                 add_grid()
                 axis(2, at = seq(0, 100, 10))
@@ -707,7 +714,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
               else "PPC: Temporal Residual Patterns",
               outer = TRUE, cex = 1.3, font = 2, line = 1)
 
-        dev.off()
+        grDevices::dev.off(pdf_dev)
 
         if (verbose) {
             suffix_text <- if (nchar(suffix) > 0) paste0(" (", location_label, ")") else ""

@@ -103,14 +103,20 @@ plot_model_subset_optimization <- function(subset_opt,
   optimal_n     <- as.integer(subset_opt$optimal_n)
   diagnostics_n <- as.integer(subset_opt$diagnostics_n)
   objective     <- subset_opt$objective %||% "mae"
-  cm            <- subset_opt$central_method
-  central_lab   <- if (is.null(cm)) {
-    "median"
-  } else if (length(cm) > 1L) {
-    paste0("cases=", cm[["cases"]], "/deaths=", cm[["deaths"]])
+  # Resolved exactly as the rest of the package resolves it (NULL -> the
+  # package default, scalar -> both channels).
+  cm            <- .mosaic_resolve_central_method(subset_opt$central_method)
+  central_lab   <- if (identical(cm[["cases"]], cm[["deaths"]])) {
+    cm[["cases"]]
   } else {
-    as.character(cm)
+    paste0("cases=", cm[["cases"]], "/deaths=", cm[["deaths"]])
   }
+  # optimize_ensemble_subset() picks the LARGEST N, not the argmax, when the
+  # score profile is flat (stability_flag); the marker and subtitle say so.
+  flat_profile  <- isTRUE(subset_opt$stability_flag)
+  optimal_score <- suppressWarnings(as.numeric(subset_opt$optimal_score))
+  if (length(optimal_score) != 1L || !is.finite(optimal_score))
+    optimal_score <- ev$score[match(optimal_n, ev$n)]
 
   # Whether cairo can ACTUALLY render. capabilities("cairo") is necessary but
   # not sufficient -- on some macOS installs the cairo DLL fails to load at draw
@@ -168,11 +174,12 @@ plot_model_subset_optimization <- function(subset_opt,
     # Optimal marker point on the score panel.
     pt_opt  <- data.frame(panel = factor(panel_levels[1], levels = panel_levels),
                           n = optimal_n,
-                          value = ev$score[which.max(ev$score)])
+                          value = optimal_score)
 
+    rule_lab <- if (flat_profile) "largest N (flat score profile)" else "argmax-score N"
     subtitle <- sprintf(
-      "central = %s   |   preliminary (tier) N = %d [dashed]  %s  optimized argmax-score N = %d [solid]   (%s = %d members)",
-      central_lab, diagnostics_n, glyph_arrow, optimal_n, glyph_delta,
+      "central = %s   |   preliminary (tier) N = %d [dashed]  %s  optimized %s = %d [solid]   (%s = %d members)",
+      central_lab, diagnostics_n, glyph_arrow, rule_lab, optimal_n, glyph_delta,
       diagnostics_n - optimal_n
     )
 

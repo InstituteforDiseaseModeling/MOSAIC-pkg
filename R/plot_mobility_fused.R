@@ -21,7 +21,8 @@
 #'     outflow reaching a land neighbour, air vs fused. The single scalar that
 #'     captures what the method fixes.}
 #'   \item{\code{fused_od_3_tau_prior.png}}{Daily departure probability, air fit
-#'     vs overland prior with 95% intervals, log scale.}
+#'     vs overland prior (the rake target) with 95% intervals, log scale. Read
+#'     from the unsuffixed prior files, so \code{suffix} does not affect it.}
 #'   \item{\code{fused_od_4_corridors.png}}{Dominant destination per origin drawn
 #'     on the map, air vs fused.}
 #' }
@@ -210,9 +211,12 @@ plot_mobility_fused <- function(PATHS,
      # ======================================================================
      # FIG 3 - departure probability: air fit vs overland prior
      # ======================================================================
-     # air comparator stays unsuffixed by design; the fitted series must be
-     # the suffixed run, otherwise this figure plots the rake TARGET and is
-     # structurally unable to reveal a target-vs-fit divergence.
+     # This panel compares two PRIOR inputs, both unsuffixed: the air-fit tau
+     # (param_tau_departure.csv, the current prior) and the overland rake
+     # TARGET (param_tau_departure_overland.csv, written by
+     # rake_mobility_od_to_tau()). `suffix` does not enter it, and it does not
+     # show the suffixed est_mobility() fit, so it cannot reveal a
+     # target-vs-fit divergence.
      ta <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "param_tau_departure.csv"))
      ta <- ta[ta$parameter_name == "mean", c("i", "parameter_value")]
      names(ta) <- c("iso", "air")

@@ -13,8 +13,8 @@ Must include MODEL_INPUT (for reading prediction files) and DOCS_FIGURES (for sa
 \item{plot_iso_code}{The ISO code of the country to plot (e.g., "AGO", "CMR").}
 }
 \value{
-A combined plot showing both cholera case bars and smoothed suitability predictions
-for the specified country.
+Invisibly, the combined plot showing both cholera case bars and the
+suitability series for the specified country.
 }
 \description{
 This function plots the reported cholera cases and predicted environmental suitability
@@ -22,6 +22,9 @@ for a specific country over time, with shaded regions indicating cholera outbrea
 Requires that est_suitability() has been run first to generate prediction files.
 }
 \details{
-The function reads pred_psi_suitability_day.csv created by est_suitability(),
-which contains: date, cases, pred, pred_smooth, and iso_code columns.
+The function reads pred_psi_suitability_day.csv created by est_suitability()
+(columns date, cases, iso_code and psi) and plots the canonical \code{psi}
+column (smoothed and bias-corrected), the series that becomes the engine's
+\code{psi_jt}. A pre-v0.34 file without \code{psi} falls back to
+\code{pred_smooth}, with a message.
 }

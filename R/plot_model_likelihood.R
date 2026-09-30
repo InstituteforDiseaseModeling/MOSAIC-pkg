@@ -81,9 +81,11 @@ plot_model_likelihood <- function(results,
     # Prepare data
     # ============================================================================
     
-    # Filter out NA likelihoods first
+    # Keep finite likelihoods only: calc_model_likelihood() returns -Inf for a
+    # failed or degenerate simulation, and run_MOSAIC() counts
+    # n_successful = sum(is.finite(likelihood)), so -Inf is a failure here too.
     results_valid <- results %>%
-        dplyr::filter(!is.na(likelihood))
+        dplyr::filter(is.finite(likelihood))
     
     # Check if we have any valid results
     if (nrow(results_valid) == 0) {
