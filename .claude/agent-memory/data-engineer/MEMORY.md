@@ -20,3 +20,4 @@
 - [IDMC role=Triangulation](idmc_role_triangulation.md) — IDU CSVs mix Recommended + Triangulation rows (31% rows, ~25% persons); process_IDMC_data sums both; filter to Recommended
 - [update pipeline raw-writer compliance](update_pipeline_raw_writer_compliance.md) — v0.93.0: only EMDAT logs provenance; WB/WPP/EMDAT-api non-atomic; DEM + WHO-vacc unlisted raw writers; est_mobility edge blocks compile on dugong
 - [surveillance "revisions" are source precedence](surveillance_revision_is_source_precedence.md) — 379/507 changed cells were AI→WHO, only 81 were WHO→WHO; diagnose with source+disaggregation_method+confidence_weight, never the case value alone
+- [R Open-Meteo download path retired](open_meteo_r_download_path_retired.md) — download_climate_data/get_climate_future DELETED v0.23.0, open-meteo-pipeline owns download; PR #51 edits deleted files

@@ -68,6 +68,10 @@ removes the random INTERCEPT but not the `s(year, country_factor, bs="fs")` fact
 **2.83-3.45x the true population average** (3.10% vs 1.10% in 2021). Currently affects **BWA only**
 (39 of 40 ISOs clear the >=20-case filter), but it fires silently whenever a country drops out.
 
+**FIXED by v0.99.9 (verified 2026-09-29):** `.cfr_predict()` zeroes every column whose smooth term contains `iso`
+(the RE and the fs smooth), so a pooled location now gets exactly the global curve + tau^2. BWA is fitted
+(pooled=FALSE, 2 country-years) but `plot_CFR_hierarchical()` still labels it "[No data]"/population-average.
+
 ## Redundancy verdicts
 
 - `mu_j_slope`: **inert.** deaths-weighted factor 1.0008 +/- 0.021; profiles at 113 nats = the engine RNG

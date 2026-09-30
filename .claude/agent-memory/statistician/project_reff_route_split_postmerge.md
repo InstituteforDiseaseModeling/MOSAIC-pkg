@@ -33,3 +33,10 @@ config_medoid.json is written at 15 digits even on the branch. recompute_ci uses
 (tier weights) because optimize re-sorts p (breaks p*1000+s seeds); correct fix = resim candidate,
 reweight by weight_best_opt. Kernel ignores mu: Isym survival is exactly exp(-(gamma_1+mu)); mean_hum
 9.12/8.04/6.53 d at mu 0/0.017/0.058.
+
+**Update 2026-09-29 (v0.99.9 deep review):** v0.92.2 fixes ARE merged (0d8d95581, v0.99.5): 17-digit
+1_inputs JSON, 7-day windowed peak_Rt, robust gather. Onset-death (CFR v2.1) omission in the kernel
+verified: +0.10/0.22/0.36% R_hum bias at r=0.02/0.05/0.10 (p_fatal 2.8%), +1.3% at p_fatal 10%.
+STILL OPEN: recompute_ci resims ensemble_candidate -> with optimize_subset=TRUE its medoid/weights are
+NOT run_MOSAIC's final (optimized) posterior; per-channel central_method loses names in control.json
+-> silent median fallback; any member resim error aborts the whole CI.
