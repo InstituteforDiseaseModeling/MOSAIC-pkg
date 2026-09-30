@@ -330,6 +330,76 @@
   out
 }
 
+#' Git provenance of the MOSAIC code and of the working directory
+#'
+#' \code{sha}/\code{branch} describe the MOSAIC package that is running:
+#' the \code{RemoteSha} (or \code{GithubSHA1}) recorded by a remotes/pak
+#' install when present (\code{source = "remote"}), otherwise the git checkout
+#' the package was loaded from (\code{devtools::load_all()}; the checkout's
+#' DESCRIPTION must name MOSAIC; \code{source = "checkout"}), otherwise NA (\code{source = "unknown"}, e.g.
+#' a plain \code{R CMD INSTALL}, whose version is in \code{R$MOSAIC}). The
+#' repository of the working directory, which is often a country repo rather
+#' than MOSAIC, is recorded separately as \code{cwd_path}/\code{cwd_sha}/
+#' \code{cwd_branch}.
+#'
+#' @param pkg_dir Directory the MOSAIC package was loaded from.
+#' @param cwd Working directory.
+#' @param desc \code{utils::packageDescription("MOSAIC")} (a list), or NULL.
+#' @return Named list (empty when git is unavailable).
+#' @noRd
+.mosaic_git_provenance <- function(pkg_dir = system.file(package = "MOSAIC"),
+                                   cwd = getwd(),
+                                   desc = tryCatch(utils::packageDescription("MOSAIC"),
+                                                   error = function(e) NULL)) {
+  out <- list(sha = NA_character_, branch = NA_character_, source = "unknown")
+  remote_sha <- NULL
+  if (is.list(desc)) {
+    remote_sha <- desc$RemoteSha %||% desc$GithubSHA1
+    if (!is.null(remote_sha) && nzchar(remote_sha)) {
+      out$sha    <- substr(remote_sha, 1L, 9L)
+      out$branch <- desc$RemoteRef %||% desc$GithubRef %||% NA_character_
+      out$source <- "remote"
+    }
+  }
+  if (!nzchar(Sys.which("git"))) return(if (identical(out$source, "remote")) out else list())
+
+  git_cmd <- function(dir, ...) {
+    res <- tryCatch(
+      system2("git", c("-C", shQuote(dir), ...), stdout = TRUE, stderr = FALSE),
+      error = function(e) NULL, warning = function(w) NULL
+    )
+    if (is.null(res) || !is.character(res) || length(res) == 0) return(NA_character_)
+    trimws(res[1])
+  }
+  in_repo <- function(dir) {
+    length(dir) == 1L && nzchar(dir) && dir.exists(dir) &&
+      identical(git_cmd(dir, "rev-parse", "--is-inside-work-tree"), "true")
+  }
+
+  # A MOSAIC source checkout: pkg_dir (under load_all, <src>/inst) sits in a
+  # git work tree whose top level is the MOSAIC package itself -- not, say, a
+  # project repo that happens to hold an renv library.
+  is_mosaic_checkout <- function(dir) {
+    if (!in_repo(dir)) return(FALSE)
+    top <- git_cmd(dir, "rev-parse", "--show-toplevel")
+    d <- file.path(top, "DESCRIPTION")
+    !is.na(top) && file.exists(d) &&
+      identical(tryCatch(unname(read.dcf(d, fields = "Package")[1, 1]),
+                         error = function(e) NA_character_), "MOSAIC")
+  }
+  if (!identical(out$source, "remote") && is_mosaic_checkout(pkg_dir)) {
+    out$sha    <- git_cmd(pkg_dir, "rev-parse", "--short", "HEAD")
+    out$branch <- git_cmd(pkg_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    out$source <- "checkout"
+  }
+  if (in_repo(cwd)) {
+    out$cwd_path   <- git_cmd(cwd, "rev-parse", "--show-toplevel")
+    out$cwd_sha    <- git_cmd(cwd, "rev-parse", "--short", "HEAD")
+    out$cwd_branch <- git_cmd(cwd, "rev-parse", "--abbrev-ref", "HEAD")
+  }
+  out
+}
+
 #' Capture Full Environment Snapshot
 #'
 #' Records all version, system, and runtime information needed to reproduce
@@ -405,25 +475,7 @@
   }
 
   # --- Git ---
-  git_env <- list()
-  if (nzchar(Sys.which("git"))) {
-    .git_cmd <- function(...) {
-      out <- tryCatch(
-        system2("git", c(...), stdout = TRUE, stderr = FALSE),
-        error = function(e) NULL, warning = function(w) NULL
-      )
-      if (is.null(out) || !is.character(out) || length(out) == 0) return(NA_character_)
-      trimws(out[1])
-    }
-    pkg_dir <- system.file(package = "MOSAIC")
-    git_dir <- if (file.exists(file.path(".", ".git"))) "."
-               else if (file.exists(file.path(pkg_dir, ".git"))) pkg_dir
-               else NA_character_
-    if (!is.na(git_dir)) {
-      git_env$sha    <- .git_cmd("-C", git_dir, "rev-parse", "--short", "HEAD")
-      git_env$branch <- .git_cmd("-C", git_dir, "rev-parse", "--abbrev-ref", "HEAD")
-    }
-  }
+  git_env <- .mosaic_git_provenance()
 
   # --- Data versions ---
   data_env <- list()
@@ -470,35 +522,6 @@
     return(NA_real_)
   }
   min(finite_x, na.rm = na.rm)
-}
-
-#' Safe Parse of Simulation ID from Filename
-#'
-#' Robust extraction of sim IDs from filenames.
-#'
-#' @param filenames Vector of filenames
-#' @param pattern Regex pattern
-#' @return Integer vector of sim IDs
-#' @noRd
-.mosaic_parse_sim_ids <- function(filenames, pattern = "^sim_0*([0-9]+)\\.parquet$") {
-  # Extract IDs
-  ids_str <- sub(pattern, "\\1", filenames)
-
-  # Convert to integer
-  ids <- suppressWarnings(as.integer(ids_str))
-
-  # Remove NAs (failed conversions)
-  valid_ids <- ids[!is.na(ids)]
-
-  if (length(valid_ids) < length(filenames)) {
-    warning(
-      "Failed to parse ", length(filenames) - length(valid_ids),
-      " simulation IDs from filenames",
-      call. = FALSE
-    )
-  }
-
-  valid_ids
 }
 
 # =============================================================================
