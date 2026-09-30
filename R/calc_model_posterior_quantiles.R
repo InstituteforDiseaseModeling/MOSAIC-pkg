@@ -567,28 +567,31 @@ calc_model_posterior_quantiles <- function(results,
 #'
 #' Information gain KL(posterior || prior) = \eqn{\int p \log(p/q)} from a
 #' weighted kernel density estimate \eqn{p} of the posterior draws and an
-#' unweighted KDE \eqn{q} of the prior draws.
+#' unweighted KDE \eqn{q} of the prior draws, computed by
+#' \code{.kl_divergence_kde()} (the core of \code{calc_kl_divergence()}).
 #'
-#' The integral is only non-zero where \eqn{p > 0}, so it is evaluated by the
-#' trapezoidal rule on a fine grid spanning the posterior's own support
-#' (\eqn{\pm 4} posterior bandwidths), with \eqn{q} interpolated from a
-#' full-range prior KDE whose grid is sized to the prior bandwidth. A single
-#' grid over the pooled range (as in \code{calc_kl_divergence()}) instead
-#' levels off near \code{log(n_points)} once the posterior is narrower than one
-#' grid cell. Because KL is invariant under a monotone reparameterisation, a
-#' strictly positive parameter is evaluated on the log scale when that makes
-#' the prior draws less skewed, which keeps a single KDE bandwidth appropriate
-#' for heavy-tailed (lognormal, gamma) priors.
+#' The posterior bandwidth is the weighted Silverman rule on the weighted SD
+#' and IQR with the Kish effective sample size \eqn{n_{eff} = 1/\sum w_i^2}.
+#' An unweighted bandwidth takes the spread of the draws rather than of the
+#' posterior, so importance weights concentrated on a few draws spread over
+#' the prior were smoothed back towards the prior (point-mass weights on a
+#' U(0,1) prior gave KL ~0.85). The integral is evaluated on a grid over the
+#' posterior's own support, where the integrand is non-zero. Because KL is
+#' invariant under a monotone reparameterisation, a strictly positive
+#' parameter is evaluated on the log scale when that makes the prior draws
+#' less skewed, which keeps a single KDE bandwidth appropriate for
+#' heavy-tailed (lognormal, gamma) priors.
 #'
 #' Non-finite draws are dropped (with their weights). Returns \code{NA_real_}
 #' when either sample has fewer than 10 finite draws, 0 for identical
-#' constants, and \code{NA_real_} for different constants.
+#' constants, and \code{NA_real_} for different constants or when all the
+#' posterior weight sits on one value.
 #'
 #' @param prior_samples Numeric prior draws (unweighted).
 #' @param posterior_samples Numeric posterior draws.
 #' @param posterior_weights Optional non-negative weights aligned with
 #'   \code{posterior_samples}.
-#' @param n_grid Integer number of grid points over the posterior support.
+#' @param n_grid Integer minimum number of grid points over the posterior support.
 #' @return Numeric scalar.
 #' @keywords internal
 #' @noRd
@@ -629,34 +632,8 @@ calc_model_posterior_quantiles <- function(results,
         posterior_samples <- log(posterior_samples)
     }
 
-    tryCatch({
-        bw_post  <- stats::bw.nrd0(posterior_samples)
-        bw_prior <- stats::bw.nrd0(prior_samples)
-
-        # Posterior density on its own support (the integrand vanishes elsewhere)
-        lo <- min(posterior_samples) - 4 * bw_post
-        hi <- max(posterior_samples) + 4 * bw_post
-        p_dens <- suppressWarnings(stats::density(
-            posterior_samples, weights = posterior_weights, bw = bw_post,
-            from = lo, to = hi, n = n_grid))
-
-        # Prior density: full-range KDE, grid resolving the prior bandwidth
-        prior_lo <- min(prior_samples, lo) - 4 * bw_prior
-        prior_hi <- max(prior_samples, hi) + 4 * bw_prior
-        n_prior <- 2^min(16L, max(10L, ceiling(log2(8 * (prior_hi - prior_lo) / bw_prior))))
-        q_dens <- stats::density(prior_samples, bw = bw_prior,
-                                 from = prior_lo, to = prior_hi, n = n_prior)
-
-        x <- p_dens$x
-        p <- p_dens$y
-        q <- stats::approx(q_dens$x, q_dens$y, xout = x, rule = 2)$y
-        dx <- diff(x)
-        trapz <- function(f) sum(dx * (f[-1] + f[-length(f)]) / 2)
-
-        p <- p / trapz(p)
-        q <- pmax(q, .Machine$double.xmin)
-        integrand <- ifelse(p > 0, p * (log(p) - log(q)), 0)
-        kl <- trapz(integrand)
-        if (!is.finite(kl)) NA_real_ else max(kl, 0)
-    }, error = function(e) NA_real_)
+    tryCatch(.kl_divergence_kde(posterior_samples, posterior_weights,
+                                prior_samples, rep(1, length(prior_samples)),
+                                n_grid = n_grid),
+             error = function(e) NA_real_)
 }
