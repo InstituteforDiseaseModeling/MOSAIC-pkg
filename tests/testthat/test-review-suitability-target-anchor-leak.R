@@ -82,9 +82,27 @@ test_that("the train-only intensity target never warns", {
      expect_true(is.na(r$value$target_anchor_end))
 })
 
-test_that("compile_suitability_data records the anchor window end in the panel", {
-     src <- testthat::test_path("..", "..", "R", "compile_suitability_data.R")
-     skip_if_not(file.exists(src), "R/ source not available (installed check)")
-     txt <- paste(readLines(src, warn = FALSE), collapse = "\n")
-     expect_true(grepl("d$target_anchor_stop <-", txt, fixed = TRUE))
+test_that("compile's anchor rows are trusted rows bounded by target_anchor_stop", {
+     d <- data.frame(date = seq(as.Date("2020-01-02"), by = "week", length.out = 10L),
+                     cases = c(1, 2, NA, 4, 5, 6, NA, 8, 9, 10))
+     is_ai <- c(rep(FALSE, 4L), TRUE, rep(FALSE, 5L))
+     expect_identical(MOSAIC:::.csd_anchor_rows(d, is_ai, NULL), !is_ai)
+     rows <- suppressMessages(MOSAIC:::.csd_anchor_rows(d, is_ai, "2020-02-06"))
+     expect_identical(rows, !is_ai & d$date <= as.Date("2020-02-06"))
+     expect_error(MOSAIC:::.csd_anchor_rows(d, is_ai, "2019-01-01"), "zero trusted rows")
+     expect_error(MOSAIC:::.csd_anchor_rows(d, is_ai, "not-a-date"))
+})
+
+test_that("the recorded target_anchor_stop is the last trusted, observed anchor date", {
+     d <- data.frame(date = seq(as.Date("2020-01-02"), by = "week", length.out = 10L),
+                     cases = c(1, 2, NA, 4, 5, 6, NA, 8, 9, 10))
+     is_ai <- c(rep(FALSE, 4L), TRUE, TRUE, rep(FALSE, 4L))
+     # per-cutoff build at 2020-02-13 (row 7): row 7 is unobserved and rows 5-6
+     # are AI, so the effective anchor end is row 4 -- earlier than the bound.
+     rows <- suppressMessages(MOSAIC:::.csd_anchor_rows(d, is_ai, "2020-02-13"))
+     expect_identical(MOSAIC:::.csd_anchor_stop(d, rows), format(d$date[4]))
+     # full-window build: last trusted observed row
+     expect_identical(MOSAIC:::.csd_anchor_stop(d, !is_ai), format(d$date[10]))
+     # no trusted observed row -> NA
+     expect_identical(MOSAIC:::.csd_anchor_stop(d, rep(FALSE, 10L)), NA_character_)
 })

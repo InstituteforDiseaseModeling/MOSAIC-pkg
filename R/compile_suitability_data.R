@@ -473,29 +473,13 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      is_ai <- if ("source" %in% names(d)) (!is.na(d$source) & d$source == "AI") else rep(FALSE, nrow(d))
 
      # ANCHOR WINDOW (target-side leakage hygiene; sibling of gam_train_stop).
-     # `in_anchor_window` additionally bounds the anchor rows ABOVE by
+     # .csd_anchor_rows() additionally bounds the anchor rows ABOVE by
      # target_anchor_stop. A per-cutoff panel keeps date_stop = NULL so it can
      # still predict past the cutoff, so without this bound the p99 that scales
      # the target at time t is computed from rows AFTER t. Every row of the
      # panel still receives a target; only the rows that DEFINE the scale are
      # restricted. NULL (default) = full window, bit-identical to before.
-     if (is.null(target_anchor_stop)) {
-          in_anchor_window <- rep(TRUE, nrow(d))
-     } else {
-          .tas <- as.Date(target_anchor_stop)
-          if (is.na(.tas))
-               stop("compile_suitability_data: target_anchor_stop must be a Date or ",
-                    "'YYYY-MM-DD' string; got '", target_anchor_stop, "'")
-          in_anchor_window <- !is.na(d$date) & d$date <= .tas
-          if (!any(in_anchor_window & !is_ai))
-               stop("compile_suitability_data: target_anchor_stop = ", format(.tas),
-                    " leaves zero trusted rows to anchor on (panel spans ",
-                    format(min(d$date, na.rm = TRUE)), " to ",
-                    format(max(d$date, na.rm = TRUE)), ").")
-          message(sprintf("  - Target anchors bounded at %s (%d of %d trusted rows)",
-                          format(.tas), sum(in_anchor_window & !is_ai), sum(!is_ai)))
-     }
-     is_anchor <- !is_ai & in_anchor_window
+     is_anchor <- .csd_anchor_rows(d, is_ai, target_anchor_stop)
 
      # ---- transmission_intensity: reproduction of est_suitability() ----
      # est_suitability() sets NA cases to 0 and negatives to 0, then normalizes by
@@ -503,7 +487,8 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # over TRUSTED MOSAIC rows so the column is invariant to include_ai AND remains
      # bit-identical to production when include_ai = FALSE (all rows trusted).
      # est_suitability()/the LSTM sandbox recompute their own target from `cases`, so
-     # this column is a diagnostic/back-compat alias and does NOT propagate NA.
+     # this column is a diagnostic/back-compat alias and does NOT propagate NA
+     # (the lstm_v2 intensity recipe, unlike this alias, sets unobserved weeks NA).
      ti_cases <- d$cases
      ti_cases[is.na(ti_cases)] <- 0
      ti_cases[ti_cases < 0]    <- 0
@@ -584,9 +569,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # cannot tell a full-window panel from a per-cutoff one, and a fit whose
      # cutoff precedes this date trains on targets scaled by later outbreaks.
      # .psi_build_data() compares it with the cutoff and warns.
-     anchor_obs <- is_anchor & !is.na(d$cases)
-     d$target_anchor_stop <- if (any(anchor_obs))
-          format(max(d$date[anchor_obs])) else NA_character_
+     d$target_anchor_stop <- .csd_anchor_stop(d, is_anchor)
 
      # 2. World Bank socioeconomic indicators (annual, forward-fill for future years)
      message("  - Adding socioeconomic indicators...")
@@ -1919,6 +1902,36 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      message("Processed suitability data saved here: ", path)
 }
 
+
+# Rows that DEFINE the target anchors: trusted (non-AI) rows, bounded above by
+# target_anchor_stop when given (NULL = full window).
+#' @keywords internal
+#' @noRd
+.csd_anchor_rows <- function(d, is_ai, target_anchor_stop = NULL) {
+     if (is.null(target_anchor_stop)) return(!is_ai)
+     .tas <- as.Date(target_anchor_stop)
+     if (is.na(.tas))
+          stop("compile_suitability_data: target_anchor_stop must be a Date or ",
+               "'YYYY-MM-DD' string; got '", target_anchor_stop, "'")
+     in_anchor_window <- !is.na(d$date) & d$date <= .tas
+     if (!any(in_anchor_window & !is_ai))
+          stop("compile_suitability_data: target_anchor_stop = ", format(.tas),
+               " leaves zero trusted rows to anchor on (panel spans ",
+               format(min(d$date, na.rm = TRUE)), " to ",
+               format(max(d$date, na.rm = TRUE)), ").")
+     message(sprintf("  - Target anchors bounded at %s (%d of %d trusted rows)",
+                     format(.tas), sum(in_anchor_window & !is_ai), sum(!is_ai)))
+     !is_ai & in_anchor_window
+}
+
+# Effective anchor window end recorded in the panel's target_anchor_stop column:
+# the last anchor row with observed cases ("YYYY-MM-DD"), NA if there is none.
+#' @keywords internal
+#' @noRd
+.csd_anchor_stop <- function(d, is_anchor) {
+     anchor_obs <- is_anchor & !is.na(d$cases)
+     if (any(anchor_obs)) format(max(d$date[anchor_obs])) else NA_character_
+}
 
 # Resolve a processed World Bank file: prefer the name the process_WB_*()
 # processor writes; fall back to the legacy name (with a message) only when the

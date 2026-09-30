@@ -50,11 +50,23 @@ test_that("no warning when every seed succeeds", {
 })
 
 test_that("the manifest records the seeds actually pooled and the aggregation rule", {
-     src <- testthat::test_path("..", "..", "R", "run_rolling_cv_suitability.R")
-     skip_if_not(file.exists(src), "R/ source not available (installed check)")
-     txt <- paste(readLines(src, warn = FALSE), collapse = "\n")
-     for (k in c("n_seeds_ok", "seeds_failed", "seed_aggregation"))
-          expect_true(grepl(k, txt, fixed = TRUE), info = k)
+     bad_fit <- function(data_bundle, seed, hyperparams) {
+          if (seed != 22L) stop("simulated OOM")
+          list(pred = rep(0.4, length(data_bundle$dates_pred)), n_epochs = 5L)
+     }
+     ens <- suppressWarnings(MOSAIC:::.psi_run_seed_ensemble(
+          bad_fit, mk_seed_bundle(), seeds = c(11L, 22L, 33L), verbose = FALSE))
+     f <- MOSAIC:::.psi_manifest_seed_fields(ens)
+     expect_identical(f$n_seeds_ok, 1L)
+     expect_identical(as.integer(f$seeds_ok), 22L)
+     expect_identical(as.integer(f$seeds_failed), c(11L, 33L))
+     expect_match(f$seed_aggregation, "logit")
+     # seed vectors are JSON arrays whatever their length (auto_unbox = TRUE)
+     js <- jsonlite::fromJSON(jsonlite::toJSON(f, auto_unbox = TRUE), simplifyVector = FALSE)
+     expect_true(is.list(js$seeds_ok) && length(js$seeds_ok) == 1L)
+     expect_length(js$seeds_failed, 2L)
+     f0 <- MOSAIC:::.psi_manifest_seed_fields(list(seeds_ok = c(1L, 2L), seeds_failed = integer(0)))
+     expect_match(as.character(jsonlite::toJSON(f0, auto_unbox = TRUE)), '"seeds_failed":\\[\\]')
 })
 
 test_that("parallel seed fitting refuses a load_all() namespace and falls back to serial", {

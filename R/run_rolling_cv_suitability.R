@@ -196,6 +196,22 @@
                                  verbose = verbose)
 }
 
+#' Seed-ensemble fields of the psi manifest (psi_suitability_config.json).
+#'
+#' Records what the pooled psi was actually built from (requested seeds minus
+#' failures) and how the seeds were combined. The seed vectors are wrapped in
+#' I() so they are always JSON arrays under auto_unbox, whatever their length.
+#' @param ens Result of .psi_run_seed_ensemble() (uses seeds_ok, seeds_failed).
+#' @return Named list: n_seeds_ok, seeds_ok, seeds_failed, seed_aggregation.
+#' @keywords internal
+#' @noRd
+.psi_manifest_seed_fields <- function(ens) {
+     list(n_seeds_ok       = length(ens$seeds_ok),
+          seeds_ok         = I(as.integer(ens$seeds_ok)),
+          seeds_failed     = I(as.integer(ens$seeds_failed)),
+          seed_aggregation = "cross-seed median on the logit scale")
+}
+
 #' Auto-detect the lstm_v2 fit/prediction window from the suitability panel.
 #'
 #' `fit_date_stop` is the last week with BOTH observed cholera cases and complete
@@ -208,12 +224,15 @@
 #' covariate week, so its last target is `h` weeks later).
 #' @param dd Suitability panel (data.frame with date, cases, IOD, ENSO3, ENSO34, ENSO4).
 #' @param lead Forecast lead in weeks (default 0).
-#' @return list(fit_date_stop, pred_date_stop), both Date.
+#' @param need_fit Logical; detect `fit_date_stop` too (default TRUE). FALSE
+#'   (caller supplied the cutoff) needs only ENSO completeness, not a cases column.
+#' @return list(fit_date_stop, pred_date_stop), both Date (`fit_date_stop` is NA
+#'   when `need_fit = FALSE`).
 #' @keywords internal
 #' @noRd
-.psi_auto_detect_dates <- function(dd, lead = 0L) {
+.psi_auto_detect_dates <- function(dd, lead = 0L, need_fit = TRUE) {
      enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
-     miss <- setdiff(c("date", "cases", enso_cols), names(dd))
+     miss <- setdiff(c("date", if (need_fit) "cases", enso_cols), names(dd))
      if (length(miss))
           stop("est_suitability: cannot auto-detect dates; panel lacks column(s): ",
                paste(miss, collapse = ", "), call. = FALSE)
@@ -221,12 +240,16 @@
      if (!any(enso_ok))
           stop("est_suitability: no rows with complete ENSO/IOD data; cannot auto-detect dates.",
                call. = FALSE)
-     fit_ok <- enso_ok & !is.na(dd$cases)
-     if (!any(fit_ok))
-          stop("est_suitability: no periods found with both cholera case data and complete ENSO data.",
-               call. = FALSE)
+     fit_date_stop <- as.Date(NA)
+     if (need_fit) {
+          fit_ok <- enso_ok & !is.na(dd$cases)
+          if (!any(fit_ok))
+               stop("est_suitability: no periods found with both cholera case data and complete ENSO data.",
+                    call. = FALSE)
+          fit_date_stop <- max(as.Date(dd$date[fit_ok]))
+     }
      lead <- as.integer(lead %||% 0L)
-     list(fit_date_stop  = max(as.Date(dd$date[fit_ok])),
+     list(fit_date_stop  = fit_date_stop,
           pred_date_stop = max(as.Date(dd$date[enso_ok])) + 7L * max(0L, lead))
 }
 
@@ -286,7 +309,8 @@
           dd <- utils::read.csv(source_csv, stringsAsFactors = FALSE)
           dd$date <- as.Date(dd$date)
           dd <- dd[dd$iso_code %in% MOSAIC::iso_codes_mosaic, ]
-          auto <- .psi_auto_detect_dates(dd, lead = as.integer(ac$lead %||% 0L))
+          auto <- .psi_auto_detect_dates(dd, lead = as.integer(ac$lead %||% 0L),
+                                         need_fit = is.null(fit_date_stop))
           if (is.null(fit_date_stop)) {
                fit_date_stop <- auto$fit_date_stop
                if (verbose) message(glue::glue("Auto-detected fit_date_stop (cutoff; last week with cases + complete ENSO): {fit_date_stop}"))
@@ -440,7 +464,7 @@
      utils::write.csv(obs_out, p_data, row.names = FALSE)
      if (verbose) message("Observed data and metadata saved to: ", p_data)
 
-     config_info <- list(
+     config_info <- c(list(
           architecture     = "lstm_v2_hierarchical_film",
           fit_date_start   = as.character(fit_date_start),
           fit_date_stop    = as.character(cutoff_date),
@@ -455,13 +479,9 @@
           bias_correct     = isTRUE(bias_correct),
           region_map       = ac$region_map,
           n_seeds          = ac$n_seeds,
-          seeds            = seeds,
-          # What the pooled psi was actually built from (requested seeds minus
-          # failures) and how the seeds were combined.
-          n_seeds_ok       = length(ens$seeds_ok),
-          seeds_ok         = ens$seeds_ok,
-          seeds_failed     = ens$seeds_failed,
-          seed_aggregation = "cross-seed median on the logit scale",
+          seeds            = seeds),
+          .psi_manifest_seed_fields(ens),
+          list(
           parallel_seeds   = ac$parallel_seeds,
           n_countries      = bundle$encoders$n_countries,
           n_regions        = bundle$encoders$n_regions,
@@ -524,7 +544,7 @@
                     error = function(e) NA_character_),
                host              = tryCatch(unname(Sys.info()[["nodename"]]),
                                             error = function(e) NA_character_),
-               written_at        = as.character(Sys.time())))
+               written_at        = as.character(Sys.time()))))
      p_cfg <- file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json")
      jsonlite::write_json(config_info, p_cfg, pretty = TRUE, auto_unbox = TRUE,
                           digits = NA, null = "null")
