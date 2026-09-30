@@ -33,14 +33,14 @@ mosaic_control_defaults(
 
 \item{sampling}{List of parameter sampling flags (what to sample). Default is:
 \itemize{
-\item \code{sample_tau_i}: Sample transmission rate (default: TRUE)
-\item \code{sample_mobility_gamma}: Sample mobility gamma (default: TRUE)
-\item \code{sample_mobility_omega}: Sample mobility omega (default: TRUE)
-\item \code{sample_iota}: Sample importation rate (default: TRUE)
-\item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
+\item \code{sample_tau_i}: Sample the daily departure (travel) probability by location (default: TRUE)
+\item \code{sample_mobility_gamma}: Sample the gravity-model distance-decay exponent (default: TRUE)
+\item \code{sample_mobility_omega}: Sample the gravity-model population-scaling exponent (default: TRUE)
+\item \code{sample_iota}: Sample the incubation rate, E to I (default: TRUE)
+\item \code{sample_gamma_2}: Sample the asymptomatic recovery rate (default: TRUE; second-dose vaccine effectiveness is \code{sample_phi_2})
 \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: FALSE, PINNED)
 \item \code{sample_alpha_2}: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)
-\item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
+\item ... (see \code{mosaic_control_defaults()} for complete list of 40 flags)
 }}
 
 \item{likelihood}{List of likelihood calculation settings (how to score model fit). Default is:
@@ -58,8 +58,11 @@ mosaic_control_defaults(
 \item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
 \item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
 \item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
-\item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
+\item \code{min_best_subset}: Smallest best-subset size searched (default: 30)
+\item \code{max_best_subset}: Largest best-subset size searched (default: 1000)
 \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "perplexity")
+\item \code{ESS_marginal_method}: Per-parameter marginal ESS method, "kde" or "binned" (default: "kde")
+\item \code{best_subset_weighting}: Best-subset posterior weights, "saturated" or "tempered" (default: "saturated"; "tempered" is sharper, not softer)
 }}
 
 \item{predictions}{List of prediction generation settings. Default is:
@@ -128,7 +131,7 @@ The number of parameter sets in the ensemble is determined by the best subset
 
 \item{io}{List of I/O settings (output format). Default is:
 \itemize{
-\item \code{format}: Output format, "parquet" or "csv" (default: "parquet")
+\item \code{format}: Output format; only "parquet" is supported ("csv" is coerced to "parquet" with a warning)
 \item \code{compression}: Compression algorithm (default: "zstd")
 \item \code{compression_level}: Compression level (default: 3L)
 \item \code{persist_ensemble_arrays}: Retain the dense 4-D

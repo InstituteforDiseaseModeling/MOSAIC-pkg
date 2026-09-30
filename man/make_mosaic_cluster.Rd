@@ -15,14 +15,14 @@ make_mosaic_cluster(
 \code{parallel::detectCores() - 1}). Clamped down to the number of free R
 connections if that is smaller, with a message -- see Details.}
 
-\item{type}{Character. Cluster type: \code{"PSOCK"} (default, all platforms) or}
+\item{type}{Character. Cluster type: \code{"PSOCK"} (default, all platforms) or
+\code{"FORK"} (Linux/Mac only, faster startup).}
 
 \item{require_root}{Logical. When \code{TRUE} (default) a root directory must
 be set and is propagated to the workers, which simulation workers need to
 resolve \code{get_paths()}. \code{FALSE} allows a cluster without one, for
 workers handed explicit paths -- \code{\link{render_MOSAIC_figures}} runs
-post-hoc on a finished run directory and may have no MOSAIC tree at all.
-\code{"FORK"} (Linux/Mac only, faster startup).}
+post-hoc on a finished run directory and may have no MOSAIC tree at all.}
 }
 \value{
 A \code{cluster} object (from \code{parallel::makeCluster}) ready to

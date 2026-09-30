@@ -7,18 +7,42 @@
 get_paths(root = NULL)
 }
 \arguments{
-\item{root}{A string specifying the root directory of the MOSAIC project. All other paths will be generated relative to this root.}
+\item{root}{A string specifying the root directory of the MOSAIC project; if \code{NULL}, \code{getOption("root_directory")} (see \code{\link{set_root_directory}}).}
 }
 \value{
-A named list containing the following paths:
-\item{ROOT}{The root directory provided by the user.}
-\item{DATA_RAW}{Path to the raw data directory (under "MOSAIC-data/data/raw").}
-\item{DATA_PROCESSED}{Path to the processed data directory (under "MOSAIC-data/data/processed").}
-\item{MODEL_INPUT}{\code{NULL}, reserved for the path to the model input (if applicable).}
-\item{MODEL_OUTPUT}{\code{NULL}, reserved for the path to the model output (if applicable).}
-\item{DOCS_FIGURES}{Path to the figures directory (under "MOSAIC-docs/figures").}
-\item{DOCS_TABLES}{Path to the tables directory (under "MOSAIC-docs/tables").}
-\item{DOCS_PARAMS}{Path to the parameters directory (under "MOSAIC-docs/parameters").}
+A named list of paths, all built with \code{file.path(root, ...)}:
+\item{ROOT}{The root directory.}
+\item{DATA_RAW, DATA_PROCESSED}{\code{MOSAIC-data/raw} and \code{MOSAIC-data/processed}.}
+\item{DATA_SCRAPE_WHO_VACCINATION}{\code{MOSAIC-data/raw/WHO/vaccination}.}
+\item{DATA_SCRAPE_WHO_WEEKLY, DATA_SCRAPE_GTFCC}{WHO AWD and GTFCC scrapes under
+\code{ees-cholera-mapping/data/cholera/}.}
+\item{DATA_DEM, DATA_EMDAT_RAW, DATA_IDMC_RAW}{Raw inputs under \code{MOSAIC-data/raw/}
+(\code{DEM}, \code{EMDAT}, \code{IDMC}).}
+\item{DATA_SHAPEFILES, DATA_SIMILARITY_MATRIX, DATA_ELEVATION, DATA_ENSO, DATA_OAG,
+DATA_UNICEF, DATA_WORLD_BANK, DATA_DEMOGRAPHICS, DATA_WASH, DATA_SYMPTOMATIC,
+DATA_IMMUNITY, DATA_SUSPECTED, DATA_VACCINE_EFFECTIVENESS}{Processed data under
+\code{MOSAIC-data/processed/} (\code{shapefiles}, \code{similarity_matrix},
+\code{elevation}, \code{enso}, \code{OAG}, \code{UNICEF}, \code{world_bank},
+\code{demographics}, \code{WASH}, \code{symptomatic}, \code{immunity},
+\code{suspected_cases}, \code{vaccine_effectiveness}).}
+\item{DATA_CLIMATE, DATA_CLIMATE_DAILY}{\code{MOSAIC-data/processed/climate/weekly}
+and \code{.../climate/daily}.}
+\item{DATA_WHO_ANNUAL, DATA_WHO_WEEKLY, DATA_WHO_DAILY}{\code{MOSAIC-data/processed/WHO/}
+\code{annual}, \code{weekly}, \code{daily}.}
+\item{DATA_JHU_WEEKLY, DATA_JHU_DAILY}{\code{MOSAIC-data/processed/JHU/weekly} and \code{.../daily}.}
+\item{DATA_SUPP_WEEKLY, DATA_SUPP_DAILY}{Both \code{MOSAIC-data/processed/SUPP/daily}:
+the weekly supplemental file \code{cholera_country_weekly_processed.csv} is
+written and read there.}
+\item{DATA_CHOLERA_WEEKLY, DATA_CHOLERA_DAILY, DATA_AI_WEEKLY}{Combined surveillance under
+\code{MOSAIC-data/processed/cholera/} (\code{weekly}, \code{daily}, \code{ai/weekly}).}
+\item{DATA_GTFCC_VACCINATION}{\code{MOSAIC-data/processed/GTFCC/vaccination}.}
+\item{DATA_EMDAT, DATA_IDMC}{\code{MOSAIC-data/processed/EMDAT/weekly} and
+\code{.../IDMC/weekly}.}
+\item{ENSO_DATA_REPO, OPEN_METEO_REPO, AI_CHOLERA_REPO}{Sibling repositories
+\code{enso-data}, \code{open-meteo-pipeline}, \code{ai-cholera-data-mining}.}
+\item{MODEL_INPUT, MODEL_OUTPUT}{\code{MOSAIC-pkg/model/input} and \code{MOSAIC-pkg/model/output}.}
+\item{DOCS_FIGURES, DOCS_TABLES, DOCS_PARAMS}{\code{MOSAIC-docs/figures}, \code{tables},
+\code{parameters}.}
 }
 \description{
 The \code{get_paths()} function generates a structured list of file paths for different data and document directories in the MOSAIC project, based on the provided root directory.

@@ -505,6 +505,18 @@
 # OUTPUT GENERATION
 # =============================================================================
 
+#' Coerce a possibly-absent JSON scalar to a rounded numeric
+#' @param x Value read back from convergence_diagnostics.json.
+#' @return Numeric scalar, or NA_real_ when absent/non-finite.
+#' @keywords internal
+#' @noRd
+.mosaic_diag_num <- function(x) {
+  if (is.null(x)) return(NA_real_)
+  x <- suppressWarnings(as.numeric(x))
+  if (length(x) != 1L || !is.finite(x)) return(NA_real_)
+  round(x, 6)
+}
+
 #' Write Summary JSON at Run Completion
 #'
 #' @param dirs Directory structure
@@ -534,20 +546,9 @@
 #'   median, independent of \code{central_method}, for transition cross-walk.
 #' @param bias_ratio_cases_ensemble_mean,bias_ratio_deaths_ensemble_mean,bias_ratio_cases_ensemble_median,bias_ratio_deaths_ensemble_median
 #'   Ensemble bias ratios against both tendencies (see above).
+#' @param posthoc_criteria_met Whether a post-hoc best-subset tier met all its targets.
 #' @param io I/O settings for JSON writing
 #' @noRd
-#' Coerce a possibly-absent JSON scalar to a rounded numeric
-#' @param x Value read back from convergence_diagnostics.json.
-#' @return Numeric scalar, or NA_real_ when absent/non-finite.
-#' @keywords internal
-#' @noRd
-.mosaic_diag_num <- function(x) {
-  if (is.null(x)) return(NA_real_)
-  x <- suppressWarnings(as.numeric(x))
-  if (length(x) != 1L || !is.finite(x)) return(NA_real_)
-  round(x, 6)
-}
-
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
                                        nb_dispersion = NULL,
                                        r2_cases_ensemble = NA_real_,

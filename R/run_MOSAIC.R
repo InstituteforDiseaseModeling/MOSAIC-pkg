@@ -177,26 +177,6 @@
 # SIMULATION WORKER FUNCTION
 # =============================================================================
 
-#' Simulation Worker Function
-#'
-#' Runs n_iterations iterations per simulation, samples parameters once per sim_id,
-#' collapses likelihoods via log-mean-exp, and writes parquet files.
-#'
-#' @section Seed Scheme:
-#' \itemize{
-#'   \item \code{sim_id}: Unique simulation ID (1-based integer)
-#'   \item \code{seed_sim}: Parameter sampling seed (equals sim_id)
-#'   \item \code{seed_iter}: engine seed for iteration j
-#'                           = (sim_id - 1) * n_iterations + j
-#' }
-#'
-#' This ensures:
-#' - Same sim_id always gets same parameters
-#' - Different iterations have different stochastic realizations
-#' - Seeds don't overlap between simulations
-#'
-#' @noRd
-
 #' Run several simulations and write them as one shard
 #'
 #' Runs \code{sim_ids} one at a time through
@@ -267,6 +247,25 @@
   ok & written
 }
 
+#' Simulation Worker Function
+#'
+#' Runs n_iterations iterations per simulation, samples parameters once per sim_id,
+#' collapses likelihoods via log-mean-exp, and writes parquet files.
+#'
+#' @section Seed Scheme:
+#' \itemize{
+#'   \item \code{sim_id}: Unique simulation ID (1-based integer)
+#'   \item \code{seed_sim}: Parameter sampling seed (equals sim_id)
+#'   \item \code{seed_iter}: engine seed for iteration j
+#'                           = (sim_id - 1) * n_iterations + j
+#' }
+#'
+#' This ensures:
+#' - Same sim_id always gets same parameters
+#' - Different iterations have different stochastic realizations
+#' - Seeds don't overlap between simulations
+#'
+#' @noRd
 .mosaic_run_simulation_worker <- function(sim_id, n_iterations, priors, config, PATHS,
                                           dir_cal_samples,
                                           dir_cal_simresults = NULL,

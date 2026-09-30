@@ -56,7 +56,11 @@ present, and is removed when the run completes; otherwise the state is
 reconstructed from the shards). Behaviour by mode: in adaptive (auto) mode
 the run continues from \code{max(sim_id)+1} and does \emph{not} backfill
 interior gaps (a lost/quarantined shard reduces the pool); in fixed mode any
-missing id within the target is re-run so the exact target is met.
+missing id within the target is re-run so the exact target is met. With
+\code{resume = FALSE}, shards already in the samples directory are moved to
+\code{2_calibration/samples_stale_<time>/} (never pooled), and the
+post-calibration artifacts of an earlier run into the same directory are
+removed before they are rebuilt.
 
 Resume is \strong{rejected} (hard error) when:
 \itemize{
@@ -97,7 +101,7 @@ Invisibly returns a list with:
 \describe{
 \item{dirs}{Named list of output directories}
 \item{files}{Named list of key output files}
-\item{summary}{Named list with run statistics (batches, sims, converged, runtime)}
+\item{summary}{Named list with run statistics (batches, sims, converged, runtime); \code{converged} is \code{NA} in fixed mode, which never evaluates the ESS stopping criterion}
 }
 }
 \description{
@@ -181,9 +185,11 @@ run_MOSAIC(config, priors, "./output", ctrl)
 config <- get_location_config(iso = "ETH")
 priors <- get_location_priors(iso = "ETH")
 
-# Tighten transmission rate prior
-priors$tau_i$shape <- 20
-priors$tau_i$rate <- 4
+# Tighten the departure-probability (tau_i) prior for ETH. Location priors
+# live under priors$parameters_location; tau_i is lognormal(meanlog, sdlog).
+tau_eth <- priors$parameters_location$tau_i$location$ETH$parameters
+tau_eth$sdlog <- tau_eth$sdlog / 2
+priors$parameters_location$tau_i$location$ETH$parameters <- tau_eth
 
 run_MOSAIC(config, priors, "./output")
 
