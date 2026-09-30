@@ -7,9 +7,18 @@
 #' original ensemble untouched.
 #'
 #' For each candidate size N (from \code{min_n} to the full ensemble), the
-#' function re-computes Gibbs weights within the top-N subset, re-computes
-#' weighted median predictions from the 4D arrays, and scores with the selected
-#' objective function.
+#' function re-computes the best-subset weights within the top-N subset,
+#' re-computes weighted median predictions from the 4D arrays, and scores with
+#' the selected objective function.
+#'
+#' The per-N weights use the same scheme as the \code{weight_best} posterior
+#' that \code{run_MOSAIC()} builds the candidate ensemble from (by default
+#' \eqn{w \propto \exp(-0.5 \min(\Delta, 4))}{w ~ exp(-0.5 min(Delta, 4))} with
+#' \eqn{\Delta = -2(\ell - \max \ell)}{Delta = -2 (ll - max ll)} within the top N).
+#' So at N = the full ensemble the weights, and therefore
+#' \code{diagnostics_score}, reproduce the candidate ensemble, and any score
+#' change reported for a smaller N is due to the subset, not to a change of
+#' weighting scheme.
 #'
 #' @details
 #' The evaluation loop is organized \emph{cell-outer}: each
@@ -84,6 +93,9 @@
 #'   serial path. Must be a \code{"PSOCK"} cluster (FORK is unsafe at this point
 #'   in the pipeline). For trivially small problems the function falls back to
 #'   serial regardless of \code{cl}.
+#' @param weighting Best-subset weighting scheme for the per-N weights:
+#'   \code{"saturated"} (default, the \code{weight_best} scheme) or \code{"tempered"}.
+#' @param ess_method ESS formula for \code{evaluation_table$ess}: \code{"kish"} (default) or \code{"perplexity"}.
 #' @param verbose Logical; if \code{TRUE}, emit progress messages.
 #'
 #' @return An S3 object of class \code{mosaic_subset_optimization} containing:
@@ -93,7 +105,7 @@
 #'       N, not every N in \code{min_n:max_n}.}
 #'     \item{optimal_n}{Selected subset size.}
 #'     \item{optimal_score}{Score at optimal N.}
-#'     \item{optimal_weights}{Re-computed Gibbs weights for the optimal subset.}
+#'     \item{optimal_weights}{Re-computed best-subset weights for the optimal subset.}
 #'     \item{optimal_indices}{Integer indices into the original ensemble arrays.}
 #'     \item{optimal_seeds}{Simulation seeds of the optimal subset in
 #'       likelihood-sorted order, aligned with \code{optimal_weights} (when
@@ -129,9 +141,13 @@ optimize_ensemble_subset <- function(ensemble,
                                      central_method = "median",
                                      stride = 1L,
                                      cl = NULL,
+                                     weighting = c("saturated", "tempered"),
+                                     ess_method = c("kish", "perplexity"),
                                      verbose = TRUE) {
 
   objective <- match.arg(objective)
+  weighting <- match.arg(weighting)
+  ess_method <- match.arg(ess_method)
   central_method <- .mosaic_resolve_central_method(central_method)
   stride <- max(as.integer(stride), 1L)
 
@@ -139,6 +155,12 @@ optimize_ensemble_subset <- function(ensemble,
 
   if (!inherits(ensemble, "mosaic_ensemble")) {
     stop("'ensemble' must be a mosaic_ensemble object.", call. = FALSE)
+  }
+  if (is.null(ensemble$cases_array) || is.null(ensemble$deaths_array)) {
+    stop("'ensemble' carries no cases_array/deaths_array. Saved ensemble files ",
+         "have their prediction arrays stripped by default; re-run with ",
+         "control$io$persist_ensemble_arrays = TRUE to re-optimize a saved ensemble.",
+         call. = FALSE)
   }
 
   n_params <- ensemble$n_param_sets
@@ -292,23 +314,14 @@ optimize_ensemble_subset <- function(ensemble,
     ns <- as.integer(ns)
     n_grid <- length(ns)
 
-    # 4a. Per-N Gibbs weights and per-param weight shares (weight / n_stoch),
-    #     computed once up front so the per-cell kernel only does the masked
-    #     weighted quantile/mean. `weights_by_n` is indexed by grid position.
+    # 4a. Per-N best-subset weights and per-param weight shares (weight /
+    #     n_stoch), computed once up front so the per-cell kernel only does the
+    #     masked weighted quantile/mean. `weights_by_n` is indexed by grid
+    #     position. Same scheme as weight_best (see .mosaic_best_subset_weights).
     weights_by_n      <- vector("list", n_grid)  # full per-param weights (for ESS)
     w_per_param_by_n  <- vector("list", n_grid)  # weights / n_stoch (kernel input)
     for (g in seq_len(n_grid)) {
-      n       <- ns[g]
-      ll_n    <- likelihoods[1:n]
-      aic_n   <- -2 * ll_n
-      delta_n <- aic_n - min(aic_n)
-      actual_range <- diff(range(delta_n))
-      if (actual_range < .Machine$double.eps) {
-        w_n <- rep(1 / n, n)
-      } else {
-        eta_n <- 0.5 * (4.0 / actual_range)
-        w_n <- calc_model_weights_gibbs(x = delta_n, eta = eta_n)
-      }
+      w_n <- .mosaic_best_subset_weights(likelihoods[1:ns[g]], scheme = weighting)$weights
       weights_by_n[[g]]     <- w_n
       w_per_param_by_n[[g]] <- w_n / n_stoch
     }
@@ -409,7 +422,7 @@ optimize_ensemble_subset <- function(ensemble,
       r2_d_n   <- calc_model_R2(obs_d_flat, cen_d_flat)
       bias_c_n <- calc_bias_ratio(obs_c_flat, cen_c_flat)
       bias_d_n <- calc_bias_ratio(obs_d_flat, cen_d_flat)
-      ess_n    <- calc_model_ess(weights_by_n[[g]])
+      ess_n    <- calc_model_ess(weights_by_n[[g]], method = ess_method)
 
       rows[[g]] <- list(
         n = n, r2_cases = r2_c_n, r2_deaths = r2_d_n,
@@ -508,18 +521,9 @@ optimize_ensemble_subset <- function(ensemble,
   # back to optimal_seeds when the ensemble carried no per-member seeds.
   opt_member_seeds <- if (!is.null(ens_member_seeds)) ens_member_seeds[optimal_indices] else optimal_seeds
 
-  # Re-compute Gibbs weights at optimal N
-  ll_opt    <- likelihoods[optimal_indices]
-  aic_opt   <- -2 * ll_opt
-  delta_opt <- aic_opt - min(aic_opt)
-  range_opt <- diff(range(delta_opt))
-
-  if (range_opt < .Machine$double.eps) {
-    optimal_weights <- rep(1 / optimal_n, optimal_n)
-  } else {
-    eta_opt <- 0.5 * (4.0 / range_opt)
-    optimal_weights <- calc_model_weights_gibbs(x = delta_opt, eta = eta_opt)
-  }
+  # Re-compute the best-subset weights at optimal N (same scheme as the loop)
+  optimal_weights <- .mosaic_best_subset_weights(likelihoods[optimal_indices],
+                                                 scheme = weighting)$weights
 
   # Slice arrays
   opt_cases  <- cases_array[, , optimal_indices, , drop = FALSE]

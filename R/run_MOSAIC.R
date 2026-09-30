@@ -1815,13 +1815,14 @@ run_MOSAIC <- function(config,
       min_size = control$targets$min_best_subset,
       max_size = control$targets$max_best_subset,
       ess_method = control$targets$ESS_method,
+      weighting = control$targets$best_subset_weighting %||% "saturated",
       verbose = control$logging$verbose
     )
 
     if (tier_result$converged) {
       # CRITICAL: Calculate percentile from absolute count
       tier_percentile <- (tier_result$n / nrow(results)) * 100
-      log_msg("    \u2713 Tier '%s' converged at n=%d (%.1f%% of retained)",
+      log_msg("    \u2713 Tier '%s' converged at n=%d (%.1f%% of all draws)",
               tier$name, tier_result$n, tier_percentile)
       optimal_subset_result <- tier_result
       tier_used <- tier$name
@@ -2473,6 +2474,7 @@ run_MOSAIC <- function(config,
         objective   = control$predictions$optimize_objective %||% "mae",
         central_method = central_method,
         stride      = as.integer(control$predictions$optimize_stride %||% 3L),
+        ess_method  = control$targets$ESS_method,
         verbose     = control$logging$verbose
       ),
       error = function(e) {

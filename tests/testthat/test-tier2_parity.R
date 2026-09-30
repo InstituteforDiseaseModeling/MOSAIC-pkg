@@ -37,6 +37,15 @@
 #    downward bias can produce. The `mae` objective's optimal subset changed
 #    (optimal_n 7 -> 12) because the objective surface is computed from the
 #    corrected medians; that is a real behavioural change, recorded in NEWS.
+#  * The optimize_ensemble_subset() references moved to
+#    fixtures/parity_tier2_opt.rds when the optimizer's per-N weights were
+#    switched from the range-scaled exp(-2*delta/range(delta)) to the production
+#    weight_best scheme exp(-0.5*min(delta, 4)) (review finding
+#    weighting-posterior-04). The INPUTS (ens, lls, seeds) are still read from
+#    parity_tier2.rds, whose stale `opt` element is no longer used. Before the
+#    new references were written, every objective's optimal_weights was checked
+#    against a hand computation of the saturated weights (tolerance 1e-14).
+#    optimal_n: mae 12 -> 12, r2_bias 12 -> 12, wis 4 -> 12.
 #  * Cross-platform tolerance (v0.36.13): the #1+#2b and #2b fixture comparisons
 #    use testthat::testthat_tolerance() (~1.5e-8), not tolerance = 0. The
 #    fixture was baked on the author's local machine; a Linux x86_64 + OpenBLAS
@@ -88,11 +97,12 @@ test_that("#1: sort-once-per-cell reproduces naive per-N weighted medians (incl.
 })
 
 test_that("#1+#2b: optimize_ensemble_subset is bit-identical to the fixed reference", {
-  fx <- readRDS(test_path("fixtures", "parity_tier2.rds"))
+  fx  <- readRDS(test_path("fixtures", "parity_tier2.rds"))
+  opt <- readRDS(test_path("fixtures", "parity_tier2_opt.rds"))
   for (o in c("mae", "r2_bias", "wis")) {
     new <- optimize_ensemble_subset(fx$ens, fx$lls, seeds = fx$seeds,
                                     min_n = 4L, objective = o, verbose = FALSE)
-    ref <- fx$opt[[o]]
+    ref <- opt[[o]]
     expect_identical(new$optimal_n, ref$optimal_n, info = o)
     expect_identical(new$optimal_seeds, ref$optimal_seeds, info = o)
     expect_equal(new$optimal_weights, ref$optimal_weights, tolerance = testthat::testthat_tolerance(), info = o)

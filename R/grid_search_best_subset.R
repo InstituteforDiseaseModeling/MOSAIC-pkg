@@ -11,6 +11,7 @@
 #' @param max_size Integer maximum subset size to search
 #' @param step_size Integer step size for search (default 1)
 #' @param ess_method Character ESS calculation method: "kish" or "perplexity"
+#' @param weighting Character best-subset weighting scheme, matching \code{control$targets$best_subset_weighting}: "saturated" (default) or "tempered"
 #' @param verbose Logical print progress messages
 #'
 #' @return List with elements:
@@ -29,18 +30,19 @@
 #' - A >= target_A
 #' - CVw <= target_CVw
 #'
-#' Metrics are calculated using Gibbs weighting with dynamic temperature:
-#' 1. Calculate AIC = -2 * likelihood for subset
-#' 2. Calculate Delta AIC (relative to best in subset)
-#' 3. Calculate dynamic temperature:
-#'    - effective_range = 4.0 (standard Akaike range)
-#'    - actual_range = range(Delta AIC)
-#'    - temperature = 0.5 * (effective_range / actual_range)
-#' 4. Apply Gibbs weighting: weights = exp(-Delta AIC / temperature) / Z
-#' 5. Calculate ESS, A, CVw from Gibbs-weighted samples
-#'
-#' The temperature adapts to the data's actual Delta AIC range, providing
-#' consistent discrimination across different likelihood spreads.
+#' For each candidate size n the top-n draws by likelihood are weighted with
+#' exactly the scheme that \code{run_MOSAIC()} uses for the final ESS_B/A/CVw
+#' gate, so the subset that is selected is scored on the weights that are then
+#' gated:
+#' \itemize{
+#'   \item \code{"saturated"}: \eqn{\Delta_i = -2(\ell_i - \max \ell)}{Delta_i = -2 (ll_i - max ll)},
+#'     saturated at 4, and \eqn{w_i \propto \exp(-0.5 \min(\Delta_i, 4))}{w_i ~ exp(-0.5 min(Delta_i, 4))}
+#'     (MOSAIC-docs calibration chapter, equation aic-weights). Weights lie in
+#'     \eqn{[e^{-2}, 1]} before normalisation.
+#'   \item \code{"tempered"}: the adaptive-eta Gibbs weights of the internal
+#'     helper used by \code{run_MOSAIC()} for \code{best_subset_weighting = "tempered"}.
+#' }
+#' ESS, A and CVw are then calculated from these weights.
 #'
 #' If no size meets criteria, returns results at max_size with converged=FALSE.
 #'
@@ -66,6 +68,7 @@ grid_search_best_subset <- function(
     max_size,
     step_size = 1,
     ess_method = c("kish", "perplexity"),
+    weighting = c("saturated", "tempered"),
     verbose = FALSE
 ) {
 
@@ -109,6 +112,7 @@ grid_search_best_subset <- function(
   }
 
   ess_method <- match.arg(ess_method)
+  weighting  <- match.arg(weighting)
 
   # Rank by likelihood (descending). Compute the ORDER once and slice the
   # likelihood VECTOR in the loop (the metrics use only $likelihood); the full
@@ -126,35 +130,11 @@ grid_search_best_subset <- function(
   for (n in n_values) {
     evaluations <- evaluations + 1
 
-    # Calculate Gibbs weights based on likelihood (matching identify_best_subset logic)
-    # 1. Calculate AIC for the top-n likelihoods (vector slice; no wide-frame copy)
-    aic_subset <- -2 * ll_sorted[1:n]
+    # Weights on the top-n likelihoods (vector slice; no wide-frame copy),
+    # using the same scheme as the final gate in run_MOSAIC().
+    weights_n <- .mosaic_best_subset_weights(ll_sorted[1:n], scheme = weighting)$weights
 
-    # 2. Calculate delta AIC within subset (relative to best in subset)
-    best_aic_in_subset <- min(aic_subset)
-    delta_subset <- aic_subset - best_aic_in_subset
-
-    # 3. Calculate dynamic Gibbs temperature
-    # Use fixed effective AIC range of 4.0 (standard for Akaike weighting)
-    effective_range <- 4.0
-    actual_range <- diff(range(delta_subset))
-
-    # Avoid division by zero if all models have same likelihood
-    if (actual_range < .Machine$double.eps) {
-      gibbs_temperature <- 1  # Default to standard if no variation
-    } else {
-      # Scale to get similar discrimination as standard Akaike
-      gibbs_temperature <- 0.5 * (effective_range / actual_range)
-    }
-
-    # 4. Calculate Gibbs weights
-    weights_n <- calc_model_weights_gibbs(
-      x = delta_subset,
-      eta = gibbs_temperature,
-      verbose = FALSE
-    )
-
-    # 5. Calculate metrics using Gibbs weights
+    # Calculate metrics from the best-subset weights
     ESS <- calc_model_ess(weights_n, method = ess_method)
 
     # Agreement Index (A) - using unnormalized weights
@@ -190,27 +170,8 @@ grid_search_best_subset <- function(
     }
   }
 
-  # No convergence - return results at max_size with Gibbs weights
-  # Calculate Gibbs weights for fallback (with dynamic temperature)
-  aic_max <- -2 * ll_sorted[1:max_size]
-  best_aic_max <- min(aic_max)
-  delta_max <- aic_max - best_aic_max
-
-  # Dynamic temperature for fallback
-  effective_range_max <- 4.0
-  actual_range_max <- diff(range(delta_max))
-
-  if (actual_range_max < .Machine$double.eps) {
-    gibbs_temperature_max <- 1
-  } else {
-    gibbs_temperature_max <- 0.5 * (effective_range_max / actual_range_max)
-  }
-
-  weights_max <- calc_model_weights_gibbs(
-    x = delta_max,
-    eta = gibbs_temperature_max,
-    verbose = FALSE
-  )
+  # No convergence - return results at max_size with the same weighting
+  weights_max <- .mosaic_best_subset_weights(ll_sorted[1:max_size], scheme = weighting)$weights
 
   # Calculate metrics
   ESS_max <- calc_model_ess(weights_max, method = ess_method)
@@ -238,4 +199,31 @@ grid_search_best_subset <- function(
     converged = FALSE,
     evaluations = evaluations
   ))
+}
+
+
+#' Best-subset weights (shared by subset selection and subset optimization)
+#'
+#' Computes the weights \code{run_MOSAIC()} assigns within a best subset, so
+#' that \code{grid_search_best_subset()} and \code{optimize_ensemble_subset()}
+#' score candidate subsets on the same weights the final gate and the
+#' \code{weight_best} posterior use.
+#'
+#' @param likelihood Numeric vector of finite log-likelihoods for the subset.
+#' @param scheme "saturated" (\eqn{w \propto \exp(-0.5 \min(\Delta, 4))}) or
+#'   "tempered" (adaptive-eta Gibbs weights).
+#' @return List with \code{weights} (normalised, same order as
+#'   \code{likelihood}) and \code{temperature} (the eta applied).
+#' @keywords internal
+#' @noRd
+.mosaic_best_subset_weights <- function(likelihood, scheme = c("saturated", "tempered")) {
+  scheme <- match.arg(scheme)
+  if (identical(scheme, "tempered")) {
+    res <- .mosaic_calc_adaptive_gibbs_weights(likelihood = likelihood, verbose = FALSE)
+    return(list(weights = res$weights, temperature = res$temperature))
+  }
+  aic   <- -2 * likelihood
+  delta <- aic - min(aic)
+  list(weights = calc_model_weights_gibbs(x = pmin(delta, 4.0), eta = 0.5, verbose = FALSE),
+       temperature = 0.5)
 }
