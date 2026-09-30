@@ -122,26 +122,41 @@ process_WHO_weekly_data <- function(PATHS) {
 #'
 #' @param year Integer WHO epi year (\code{epiyr}).
 #' @param week Integer WHO epi week (\code{epiwk}), 1-53.
-#' @return A \code{Date} vector of week-start Mondays.
+#' @param invalid \code{"error"} (default) stops on a week outside 1..53 or a
+#'   week 53 that does not exist in that epi year; \code{"na"} returns NA for it.
+#' @return A \code{Date} vector of week-start Mondays; NA where year or week is NA.
 #' @noRd
-.who_epiweek_start <- function(year, week) {
+.who_epiweek_start <- function(year, week, invalid = c("error", "na")) {
+     invalid <- match.arg(invalid)
      year <- as.integer(year)
      week <- as.integer(week)
-     if (any(!is.na(week) & (week < 1L | week > 53L))) {
-          stop("WHO epi week must be in 1..53")
-     }
-     jan4 <- as.Date(sprintf("%04d-01-04", year))
-     # Sunday that starts MMWR week 1 (as.POSIXlt()$wday: 0 = Sunday)
-     wk1_sunday <- jan4 - as.POSIXlt(jan4)$wday
-     start <- wk1_sunday + 1L + 7L * (week - 1L)
-     # A week 53 is only valid if it still belongs to that epi year, i.e. its
-     # Sunday precedes the next year's week-1 Sunday.
-     next_jan4 <- as.Date(sprintf("%04d-01-04", year + 1L))
-     next_wk1_sunday <- next_jan4 - as.POSIXlt(next_jan4)$wday
-     bad <- !is.na(start) & (start - 1L) >= next_wk1_sunday
-     if (any(bad)) {
-          stop(sprintf("WHO epi week does not exist: %s",
-                       paste(unique(paste0(year[bad], "-W", week[bad])), collapse = ", ")))
+     n <- max(length(year), length(week))
+     year <- rep_len(year, n); week <- rep_len(week, n)
+     out_of_range <- !is.na(week) & (week < 1L | week > 53L)
+     if (any(out_of_range) && invalid == "error") stop("WHO epi week must be in 1..53")
+     week[out_of_range] <- NA_integer_
+
+     start <- rep(as.Date(NA), n)
+     have <- !is.na(year) & !is.na(week)
+     if (any(have)) {
+          y <- year[have]
+          jan4 <- as.Date(sprintf("%04d-01-04", y))
+          # Sunday that starts MMWR week 1 (as.POSIXlt()$wday: 0 = Sunday)
+          wk1_sunday <- jan4 - as.POSIXlt(jan4)$wday
+          start[have] <- wk1_sunday + 1L + 7L * (week[have] - 1L)
+          # A week 53 is only valid if it still belongs to that epi year, i.e. its
+          # Sunday precedes the next year's week-1 Sunday.
+          next_jan4 <- as.Date(sprintf("%04d-01-04", y + 1L))
+          next_wk1_sunday <- next_jan4 - as.POSIXlt(next_jan4)$wday
+          bad <- rep(FALSE, n)
+          bad[have] <- (start[have] - 1L) >= next_wk1_sunday
+          if (any(bad)) {
+               if (invalid == "error") {
+                    stop(sprintf("WHO epi week does not exist: %s",
+                                 paste(unique(paste0(year[bad], "-W", week[bad])), collapse = ", ")))
+               }
+               start[bad] <- as.Date(NA)
+          }
      }
      start
 }

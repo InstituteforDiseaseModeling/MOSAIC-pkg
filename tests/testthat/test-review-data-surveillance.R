@@ -86,3 +86,12 @@ test_that("process_JHU_weekly_data keeps missing deaths and cases as NA", {
      expect_true(is.na(out$deaths[1]))                # NA deaths is not an observed zero
      expect_equal(out$deaths[2:3], c(1, 0))
 })
+
+test_that(".who_epiweek_start returns NA for missing or non-existent weeks in 'na' mode", {
+     f <- MOSAIC:::.who_epiweek_start
+     expect_equal(f(c(2025, NA, 2024, 2026), c(53, 5, 53, 1), invalid = "na"),
+                  as.Date(c("2025-12-29", NA, NA, "2026-01-05")))
+     expect_equal(f(NA, 5), as.Date(NA))
+     expect_error(f(2024, 53), "does not exist")
+     expect_error(f(2024, 54), "1..53")
+})

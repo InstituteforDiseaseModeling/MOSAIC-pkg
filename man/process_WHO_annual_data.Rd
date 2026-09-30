@@ -62,6 +62,12 @@ each new snapshot is logged in \code{who_global_dashboard/PROVENANCE.md}.
 CSV in \code{raw/WHO/annual/who_global_dashboard/} named
 \code{cholera_adm0_public_YYYY.csv} (downloaded from the WHO dashboard UI
 with the year filter applied). Re-run \code{process_WHO_annual_data()}.
+Precedence: a hand-placed year file replaces a dated snapshot's row for that
+year only if it covers MORE days (\code{coverage_days}). At equal coverage the
+dated snapshot wins, because undated files rank below every dated one (file
+modification times are not used; a git checkout resets them). To force a
+hand-placed revision of an already-covered year, save it as
+\code{cholera_adm0_public_snapshot_YYYY-MM-DD.csv} dated the day it was downloaded.
 
 Outputs (in \code{PATHS$DATA_WHO_ANNUAL}):
 \itemize{

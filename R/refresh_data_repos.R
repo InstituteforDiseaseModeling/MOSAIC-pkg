@@ -154,9 +154,14 @@ refresh_data_repos <- function(root       = NULL,
           if (is.null(df) || !nrow(df)) return(NULL)
           # The AWD CSV carries WHO epi year/week, not dates
           dr <- if (all(c("year", "week") %in% names(df))) {
-               ok <- !is.na(df$year) & !is.na(df$week) & df$week >= 1 & df$week <= 53
-               d <- tryCatch(.who_epiweek_start(df$year[ok], df$week[ok]),
-                             error = function(e) as.Date(character(0)))
+               # Invalid year/week pairs (e.g. W53 in a 52-week epi year) are
+               # excluded and counted, never allowed to blank the whole range.
+               d <- .who_epiweek_start(df$year, df$week, invalid = "na")
+               n_bad <- sum(is.na(d))
+               if (n_bad) {
+                    message(sprintf("  WHO AWD: %d row(s) with a missing or non-existent epi year/week excluded from the date range", n_bad))
+               }
+               d <- d[!is.na(d)]
                if (length(d)) range(d) else NA
           } else NA
           ctry_col <- intersect(c("iso_code", "country", "country_name"), names(df))[1L]
