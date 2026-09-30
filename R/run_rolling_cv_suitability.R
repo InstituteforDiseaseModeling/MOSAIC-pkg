@@ -177,6 +177,25 @@
      ac
 }
 
+#' Build the per-seed fit function (RW-CV + full-IS refit over the gauge_A arch).
+#'
+#' A factory so the closure's environment holds only `verbose`: defined inline
+#' in the orchestrator it captured the whole frame, including the data bundle,
+#' which was then serialized to every PSOCK worker a second time alongside the
+#' explicitly exported `data_bundle`.
+#' @param verbose Logical, passed to .psi_fit_predict_rw_cv().
+#' @return function(data_bundle, seed, hyperparams).
+#' @keywords internal
+#' @noRd
+.psi_make_rw_cv_fit_fn <- function(verbose) {
+     force(verbose)
+     function(data_bundle, seed, hyperparams)
+          .psi_fit_predict_rw_cv(data_bundle = data_bundle,
+                                 fit_predict_fn = .psi_fit_predict_lstm,
+                                 seed = seed, hyperparams = hyperparams,
+                                 verbose = verbose)
+}
+
 #' Auto-detect the lstm_v2 fit/prediction window from the suitability panel.
 #'
 #' `fit_date_stop` is the last week with BOTH observed cholera cases and complete
@@ -220,7 +239,7 @@
                                      pred_date_start = NULL,
                                      pred_date_stop = NULL,
                                      feature_set = "v7.3",
-                                     response_var = "transmission_intensity",
+                                     response_var = "target_D_rate_per_country_floored",
                                      bias_correct = TRUE,
                                      arch_control = NULL,
                                      source_csv = NULL,
@@ -318,11 +337,7 @@
 
      # ---- Seed ensemble (each seed = whole RW-CV + refit + predict) --------
      seeds <- seq.int(ac$seed_base, by = ac$seed_step, length.out = ac$n_seeds)
-     fit_fn <- function(data_bundle, seed, hyperparams)
-          .psi_fit_predict_rw_cv(data_bundle = data_bundle,
-                                 fit_predict_fn = .psi_fit_predict_lstm,
-                                 seed = seed, hyperparams = hyperparams,
-                                 verbose = verbose)
+     fit_fn <- .psi_make_rw_cv_fit_fn(verbose)
      arch_hp <- list(
           arch_kind = "hierarchical", hier_mode = "film",
           units_1 = ac$units_1, units_2 = ac$units_2, units_3 = ac$units_3,
@@ -441,6 +456,12 @@
           region_map       = ac$region_map,
           n_seeds          = ac$n_seeds,
           seeds            = seeds,
+          # What the pooled psi was actually built from (requested seeds minus
+          # failures) and how the seeds were combined.
+          n_seeds_ok       = length(ens$seeds_ok),
+          seeds_ok         = ens$seeds_ok,
+          seeds_failed     = ens$seeds_failed,
+          seed_aggregation = "cross-seed median on the logit scale",
           parallel_seeds   = ac$parallel_seeds,
           n_countries      = bundle$encoders$n_countries,
           n_regions        = bundle$encoders$n_regions,
