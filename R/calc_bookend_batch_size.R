@@ -1,14 +1,24 @@
 #' Calculate Batch Size for Bookend Strategy
 #'
 #' Predicts the number of simulations needed to reach a target ESS based on
-#' the observed ESS trajectory. Fits sqrt, linear, and log models to the
-#' cumulative (n_sims, threshold_ESS) data and returns a batch size.
+#' the observed ESS trajectory. Fits sqrt and linear models to the cumulative
+#' (n_sims, threshold_ESS) data and predicts from the sqrt model unless the
+#' linear model fits clearly better. A log model is also fitted, but only as a
+#' diagnostic (a warning when it fits best); it is never used for prediction.
+#'
+#' The extrapolation is only defined when the chosen model's ESS increases with
+#' the number of simulations. When its slope is zero or negative the target is
+#' unreachable on the fitted trajectory, and the function returns
+#' \code{phase = "no_progress"} with \code{batch_size = 0} instead of squaring a
+#' negative root into a positive requirement.
 #'
 #' @param ess_history ESS measurements from calibration phase
 #' @param target_ess Target ESS value
 #' @param max_total_sims Maximum total simulations allowed
 #' @param target_r_squared Target R-squared for ESS regression (default: 0.95)
-#' @return List with batch size recommendation
+#' @return List with batch size recommendation. \code{phase} is one of
+#'   \code{"complete"}, \code{"low_confidence"}, \code{"no_progress"} or
+#'   \code{"predictive"}.
 #' @export
 calc_bookend_batch_size <- function(ess_history,
                                    target_ess,
@@ -84,22 +94,27 @@ calc_bookend_batch_size <- function(ess_history,
         ))
     }
 
-    # Predict total simulations needed
-    if (best_model == "linear") {
-        a <- coef(best_fit)[1]
-        b <- coef(best_fit)[2]
-        total_needed <- (target_ess - a) / b
+    # Predict total simulations needed. Both models are ESS = a + b * f(n) with
+    # f increasing, so the target is reachable only when b > 0.
+    a <- unname(coef(best_fit)[1])
+    b <- unname(coef(best_fit)[2])
 
-    } else if (best_model == "sqrt") {
-        a <- coef(best_fit)[1]
-        b <- coef(best_fit)[2]
-        total_needed <- ((target_ess - a) / b)^2
-
-    } else if (best_model == "log") {
-        a <- coef(best_fit)[1]
-        b <- coef(best_fit)[2]
-        total_needed <- exp((target_ess - a) / b)
+    if (!is.finite(b) || b <= 0) {
+        return(list(
+            phase = "no_progress",
+            batch_size = 0,
+            model = best_model,
+            r_squared = best_r2,
+            message = sprintf(
+                "ESS is not increasing with simulations (%s-model slope = %.4g); target %.1f is unreachable on the fitted trajectory",
+                best_model, b, target_ess)
+        ))
     }
+
+    # With b > 0, a negative root means the fit places the target below its
+    # intercept (reached at n <= 0); clamp it rather than squaring it positive.
+    root <- (target_ess - a) / b
+    total_needed <- if (best_model == "linear") root else max(root, 0)^2
 
     total_needed <- ceiling(total_needed)
 

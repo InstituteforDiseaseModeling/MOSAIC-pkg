@@ -51,7 +51,13 @@ The function:
 \item Calls the appropriate fit_*_from_ci function based on distribution type
 \item Updates the corresponding entry in the posteriors structure
 }
-\item Preserves all non-estimated parameters from the priors unchanged
+\item Removes from the output every parameter (global, or location/parameter
+pair) that does not appear in the quantiles file, so posteriors.json holds
+only the estimated parameters and is not a drop-in full priors file
+(use \code{\link{update_priors_from_posteriors}} to merge it back into a
+priors object). Rows of scale \code{"unknown"} (columns outside the
+\code{estimated_parameters} template) are skipped silently and are not
+counted as failures
 \item Properly handles location-specific parameters for single or multiple countries
 \item Writes posteriors.json to the output directory
 }

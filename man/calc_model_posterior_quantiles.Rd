@@ -44,18 +44,23 @@ Data frame with both prior and posterior quantiles plus KL divergence
 }
 \description{
 Calculates quantiles for both prior (all simulations) and posterior (weighted best subset)
-distributions, with KL divergence between them using KDE.
+distributions, with the KL divergence of the posterior from the prior.
 }
 \details{
 The function:
 \enumerate{
 \item Calculates unweighted quantiles from ALL finite simulations (prior)
 \item Calculates weighted quantiles from best subset (posterior)
-\item Computes KL divergence using KDE on empirical distributions
+\item Computes the information gain KL(posterior || prior) with
+\code{\link{calc_kl_divergence}} on weighted kernel density estimates
+(no cap). For a Uniform prior and a posterior of width \eqn{w} relative to
+the prior range this is about \eqn{\log(1/w)}, so it keeps ranking
+well-identified parameters rather than saturating
 \item Returns both prior and posterior rows with a 'type' identifier
 \item KL divergence appears only in posterior rows
 }
 }
 \seealso{
-\code{\link{weighted_quantiles}}, \code{\link{calc_model_ess}}
+\code{\link{weighted_quantiles}}, \code{\link{calc_model_ess}},
+\code{\link{calc_kl_divergence}}
 }

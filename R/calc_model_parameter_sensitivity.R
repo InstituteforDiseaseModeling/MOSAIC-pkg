@@ -165,17 +165,7 @@ calc_model_parameter_sensitivity <- function(results_file,
 
   if (!is.null(priors_file) && file.exists(priors_file)) {
     priors <- jsonlite::fromJSON(priors_file, simplifyVector = FALSE)
-
-    for (nm in param_cols_active) {
-      if (!is.null(priors$parameters_global[[nm]]$description)) {
-        descriptions[nm] <- priors$parameters_global[[nm]]$description
-      }
-      for (loc in names(priors$parameters_location)) {
-        if (!is.null(priors$parameters_location[[loc]][[nm]]$description)) {
-          descriptions[nm] <- priors$parameters_location[[loc]][[nm]]$description
-        }
-      }
-    }
+    descriptions <- .mosaic_sensitivity_descriptions(priors, param_cols_active)
   }
 
   # -----------------------------------------------------------------------
@@ -249,4 +239,24 @@ calc_model_parameter_sensitivity <- function(results_file,
     subset_label = subset_label,
     n_used       = nrow(params_df)
   ))
+}
+
+
+# Parameter descriptions for sensitivity output. Global parameters are looked
+# up by name; location-scale columns ("<base>_<ISO>") use the single
+# description stored per base parameter at parameters_location[[base]].
+# @keywords internal
+.mosaic_sensitivity_descriptions <- function(priors, param_cols) {
+  descriptions <- stats::setNames(rep("", length(param_cols)), param_cols)
+  for (nm in param_cols) {
+    if (!is.null(priors$parameters_global[[nm]]$description)) {
+      descriptions[nm] <- priors$parameters_global[[nm]]$description
+    }
+    base_nm <- sub("_[A-Z]{3}$", "", nm)
+    if (!identical(base_nm, nm) &&
+        !is.null(priors$parameters_location[[base_nm]]$description)) {
+      descriptions[nm] <- priors$parameters_location[[base_nm]]$description
+    }
+  }
+  descriptions
 }
