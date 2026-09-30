@@ -11,8 +11,9 @@ calc_log_likelihood_negbin(
   observed,
   estimated,
   k = NULL,
-  k_min = 3,
+  k_min = NULL,
   weights = NULL,
+  eps_rel = 0.02,
   verbose = TRUE
 )
 ```
@@ -35,14 +36,26 @@ calc_log_likelihood_negbin(
 
 - k_min:
 
-  Numeric scalar; minimum dispersion floor applied when `k` is finite
-  (either supplied or estimated). Default `3`. If `k = Inf` (Poisson
-  limit), no flooring is applied.
+  Deprecated and ignored; retained only so existing calls do not error.
+  Dispersion is estimated by
+  [`est_nb_dispersion`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md)
+  and arrives already bounded. If `k = Inf` (Poisson limit), no flooring
+  is applied.
 
 - weights:
 
   Optional numeric vector of non-negative weights, same length as
   `observed`. Default is `NULL`, which sets all weights to 1.
+
+- eps_rel:
+
+  Positive scalar; the predicted mean of every cell is floored at
+  `max(1e-4, eps_rel * mean(observed))` before the density is evaluated.
+  Default `0.02`. This floor is the only thing standing between a zero
+  prediction and `log(0)`, and its SIZE sets how hard a spurious zero is
+  punished, so it is channel-specific: see
+  [`calc_model_likelihood`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
+  (`eps_rel_cases` / `eps_rel_deaths`).
 
 - verbose:
 
@@ -56,23 +69,20 @@ A scalar representing the total log-likelihood (numeric).
 ## Details
 
 If `k` is not supplied, it is estimated as \\k = \bar{x}^2 / (s^2 -
-\bar{x})\\ from `observed`. When this estimate is finite, it is
-constrained to be at least `k_min`. If \\s^2 \le \bar{x}\\, the function
-uses the Poisson limit (`k = Inf`).
+\bar{x})\\ from `observed`. If \\s^2 \le \bar{x}\\, the function uses
+the Poisson limit (`k = Inf`).
 
 ## Examples
 
 ``` r
-# Default k_min = 3
+# k is used as supplied
 calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
 #> Estimated k = 1.390 (from Var = 20.333, Mean = 4.667)
-#> k = 1.390 < k_min = 3.000; using k_min.
-#> Negative Binomial log-likelihood (k=3.000): -7.54
-#> [1] -7.540079
+#> Negative Binomial log-likelihood (k=1.390): -7.50
+#> [1] -7.498757
 # Provide k but allow flooring if too small
 calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5), k = 1.2)
 #> Using provided k = 1.200
-#> k = 1.200 < k_min = 3.000; using k_min.
-#> Negative Binomial log-likelihood (k=3.000): -7.54
-#> [1] -7.540079
+#> Negative Binomial log-likelihood (k=1.200): -7.51
+#> [1] -7.513423
 ```

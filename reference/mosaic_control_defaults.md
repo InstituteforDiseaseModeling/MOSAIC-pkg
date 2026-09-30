@@ -81,8 +81,6 @@ mosaic_control_defaults(
 
   - `sample_mobility_omega`: Sample mobility omega (default: TRUE)
 
-  - `sample_mu_j`: Sample recovery rate (default: TRUE)
-
   - `sample_iota`: Sample importation rate (default: TRUE)
 
   - `sample_gamma_2`: Sample second dose efficacy (default: TRUE)
@@ -181,12 +179,13 @@ mosaic_control_defaults(
     function's own `stride` default remains `1L` to preserve
     bit-identicality.)
 
-  - `central_method`: Ensemble central tendency, `"median"` (default;
-    lower calibration bias) or `"mean"` (unbiased for expected counts,
-    never collapses on sparse deaths, unmasks implied-CFR bias). Scalar
-    or per-channel `c(cases=, deaths=)`. Governs the prediction
-    trajectory + plots, the canonical `*_ensemble` R^2/bias metrics, the
-    medoid target, and the subset-selection objective consistently.
+  - `central_method`: Ensemble central tendency, `"mean"` (default; the
+    expected count, which never collapses to zero on sparse deaths) or
+    `"median"` (the typical trajectory, robust to a few explosive
+    members; the default from v0.46.1 to v0.97.x). Scalar or per-channel
+    `c(cases=, deaths=)`. Governs the prediction trajectory + plots, the
+    canonical `*_ensemble` R^2/bias metrics, the medoid target, and the
+    subset-selection objective consistently.
 
   The number of parameter sets in the ensemble is determined by the best
   subset (all sims with non-zero importance weights).
@@ -291,7 +290,7 @@ ctrl <- mosaic_control_defaults(
     sample_tau_i = TRUE,
     sample_mobility_gamma = FALSE,
     sample_mobility_omega = FALSE,
-    sample_mu_j_baseline = TRUE,
+    sample_beta_j0_tot = TRUE,
     sample_iota = FALSE,
     sample_gamma_2 = FALSE,
     sample_alpha_1 = FALSE
@@ -314,7 +313,7 @@ ctrl <- mosaic_control_defaults(
 # Full workflow configuration (demonstrates logical order)
 ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
-  sampling = list(sample_tau_i = TRUE, sample_mu_j_baseline = TRUE), # What to sample
+  sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure

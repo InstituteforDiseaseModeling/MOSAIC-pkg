@@ -196,7 +196,8 @@ produced) -
 [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
 computes posterior-weighted predictions (weighted median/mean across
 parameter sets × stochastic reruns) - R² and bias ratio computed from
-weighted median vs observed data -
+the weighted mean (`control$predictions$central_method`; median before
+v0.98.0) vs observed data -
 [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
 generates prediction plots (only when `plots=TRUE`)
 
@@ -222,8 +223,16 @@ Sys.setenv(OMP_NUM_THREADS="1", MKL_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
 [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
 computes a multi-component log-likelihood:
 
-**Core:** Negative Binomial time-series likelihood for cases and deaths
-(weighted MoM dispersion, k_min floor).
+**Core:** cases — Negative Binomial on daily cells (per-location weekly
+dispersion from
+[`est_nb_dispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md),
+eps-floored mean). Deaths (v0.96.0+) — the reported CFR `mu_jt` is
+integrated out per simulated path
+([`calc_log_likelihood_deaths_integrated()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_deaths_integrated.md)):
+weekly quasi-Poisson with a per-location dispersion and a small
+background, Laplace over a location offset + smooth year deviations.
+Ensemble deaths are redrawn from that CFR posterior
+(`cfr_posterior.csv`).
 
 **Shape terms (all T-normalized, weight \> 0 enables):** - Peak timing
 (Normal LL on time differences) - Peak magnitude (log-Normal on peak
@@ -231,7 +240,9 @@ ratios) - Cumulative progression (NB at fractions 0.25/0.5/0.75/1.0) -
 WIS (Weighted Interval Score per Bracher et al. 2021)
 
 **Assembly:**
-`LL = w_cases*NB_cases + w_deaths*NB_deaths + (T/N_peaks)*w_pt*peaks + T*w_cum*cumulative + T*w_wis*WIS`
+`LL = w_cases*NB_cases + w_deaths*deaths_core + (T/N_peaks)*w_pt*peaks + T*w_cum*cumulative + T*w_wis*WIS`
+(the level-dependent deaths shape terms are dropped when the CFR is
+integrated out)
 
 All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 

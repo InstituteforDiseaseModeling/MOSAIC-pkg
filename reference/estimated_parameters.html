@@ -15,7 +15,7 @@ estimation process."><meta property="og:image" content="https://institutefordise
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,7 +62,7 @@ estimation process.</p>
 
     <div class="section level2">
     <h2 id="format">Format<a class="anchor" aria-label="anchor" href="#format"></a></h2>
-    <p>A data frame with 54 rows and 14 columns:</p><dl><dt>parameter_name</dt>
+    <p>A data frame with 46 rows and 14 columns:</p><dl><dt>parameter_name</dt>
 <dd><p>Character. Parameter names as used in configuration files and sampling functions</p></dd>
 
 <dt>display_name</dt>
@@ -108,7 +108,7 @@ estimation process.</p>
 </dl></div>
     <div class="section level2">
     <h2 id="source">Source<a class="anchor" aria-label="anchor" href="#source"></a></h2>
-    <p>Created by <code>data-raw/make_parameters_inventory.R</code></p>
+    <p>Created by <code>data-raw/make_estimated_parameters_inventory.R</code></p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -118,13 +118,17 @@ It does not include:</p><ul><li><p>Fixed model constants</p></li>
 <li><p>Non-stochastic derived quantities</p></li>
 <li><p>Intermediate calculations</p></li>
 <li><p>Data inputs (observed cases, demographics, etc.)</p></li>
-</ul><p>The inventory is organized hierarchically:</p><ul><li><p><strong>Global parameters</strong> (22): Same value across all locations</p></li>
-<li><p><strong>Location-specific parameters</strong> (21): Vary by geographic location</p></li>
-</ul><p>Categories reflect biological processes in cholera transmission:</p><ul><li><p><strong>transmission</strong>: Population mixing, frequency dependence</p></li>
+</ul><p>The inventory is organized hierarchically:</p><ul><li><p><strong>Global parameters</strong> (27): Same value across all locations</p></li>
+<li><p><strong>Location-specific parameters</strong> (19): Vary by geographic location</p></li>
+</ul><p>The reported case fatality ratio <code>mu_jt</code> is not listed: it is not
+sampled but integrated out of the deaths likelihood (see
+<code><a href="calc_log_likelihood_deaths_integrated.html">calc_log_likelihood_deaths_integrated</a></code>), and its calibrated value
+is <code>3_results/posterior/cfr_posterior.csv</code>.</p>
+<p>Categories reflect biological processes in cholera transmission:</p><ul><li><p><strong>transmission</strong>: Population mixing, frequency dependence</p></li>
 <li><p><strong>environmental</strong>: V. cholerae survival, shedding, dose-response</p></li>
 <li><p><strong>disease</strong>: Recovery rates, incubation, symptom proportions</p></li>
 <li><p><strong>immunity</strong>: Natural and vaccine-induced protection</p></li>
-<li><p><strong>surveillance</strong>: Reporting rates and delays</p></li>
+<li><p><strong>surveillance</strong>: Reporting rates, delays and the case-reporting PPV switch</p></li>
 <li><p><strong>mobility</strong>: Human movement parameters</p></li>
 <li><p><strong>spatial</strong>: Geographic covariates (WASH coverage)</p></li>
 <li><p><strong>initial_conditions</strong>: Starting compartment proportions</p></li>
@@ -164,7 +168,7 @@ It does not include:</p><ul><li><p>Fixed model constants</p></li>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># View parameter structure</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">estimated_parameters</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 'data.frame':	54 obs. of  14 variables:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 'data.frame':	46 obs. of  14 variables:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  $ parameter_name        : chr  "alpha_1" "alpha_2" "decay_days_short" "decay_days_spread" ...</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  $ display_name          : chr  "Population Mixing" "Frequency-Driven Transmission" "Minimum V. cholerae Survival" "V. cholerae Survival Spread" ...</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  $ description           : chr  "Population mixing within metapops (0-1, 1 = well-mixed)" "Degree of frequency driven transmission (0-1)" "Minimum V. cholerae survival time in environment" "Spread between min and max V. cholerae survival time (decay_days_long - decay_days_short)" ...</span>
@@ -179,21 +183,21 @@ It does not include:</p><ul><li><p>Fixed model constants</p></li>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  $ posterior_distribution: chr  "beta" "beta" "truncnorm" "truncnorm" ...</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  $ posterior_lower       : num  NA NA NA NA 1.01 NA NA NA NA NA ...</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  $ posterior_upper       : num  NA NA NA NA 425 NA NA NA NA NA ...</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  - attr(*, "creation_date")= Date[1:1], format: "2026-06-04"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  - attr(*, "version")= chr "1.1.0"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  - attr(*, "creation_date")= Date[1:1], format: "2026-09-28"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  - attr(*, "version")= chr "1.2.0"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  - attr(*, "description")= chr "Comprehensive parameter inventory for MOSAIC cholera transmission model. Includes metadata, categorization, and"| __truncated__</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Global vs location-specific parameters</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">estimated_parameters</span><span class="op">$</span><span class="va">scale</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   global location </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>       28       26 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>       27       19 </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Parameters by biological category</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">estimated_parameters</span><span class="op">$</span><span class="va">category</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>            disease      environmental           immunity initial_conditions </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                 12                 13                  5                  6 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                  4                 13                  5                  6 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>           mobility        seasonality            spatial       surveillance </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                  3                  4                  1                  6 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>       transmission </span>
@@ -203,62 +207,62 @@ It does not include:</p><ul><li><p>Fixed model constants</p></li>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">estimated_parameters</span><span class="op">$</span><span class="va">distribution</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      beta     gamma lognormal    normal truncnorm </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>        23         6         9         6        10 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>        19         4         9         5         9 </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Transmission parameters</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">estimated_parameters</span>, <span class="va">category</span> <span class="op">==</span> <span class="st">"transmission"</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    parameter_name                  display_name</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1         alpha_1             Population Mixing</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2         alpha_2 Frequency-Driven Transmission</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 35    beta_j0_tot  Total Base Transmission Rate</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 36         p_beta     Human-to-Human Proportion</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 34    beta_j0_tot  Total Base Transmission Rate</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 35         p_beta     Human-to-Human Proportion</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                                                description      units</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1  Population mixing within metapops (0-1, 1 = well-mixed) proportion</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2            Degree of frequency driven transmission (0-1) proportion</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 35    Total base transmission rate (human + environmental)    per day</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 36 Proportion of total transmission that is human-to-human proportion</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 34    Total base transmission rate (human + environmental)    per day</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 35 Proportion of total transmission that is human-to-human proportion</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    distribution    scale     category order order_scale order_category</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1          beta   global transmission     1          01             01</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2          beta   global transmission     2          01             01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 35    lognormal location transmission    35          02             02</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 36         beta location transmission    36          02             02</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 34    lognormal location transmission    34          02             02</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 35         beta location transmission    35          02             02</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    order_parameter posterior_distribution posterior_lower posterior_upper</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1               01                   beta              NA              NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2               02                   beta              NA              NA</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 35              01              lognormal              NA              NA</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 36              02                   beta              NA              NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 34              01              lognormal              NA              NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 35              02                   beta              NA              NA</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Location-specific initial conditions</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">estimated_parameters</span>,</span></span>
 <span class="r-in"><span>       <span class="va">scale</span> <span class="op">==</span> <span class="st">"location"</span> <span class="op">&amp;</span> <span class="va">category</span> <span class="op">==</span> <span class="st">"initial_conditions"</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     parameter_name                           display_name</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 29  prop_S_initial         Initial Susceptible Proportion</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 30  prop_E_initial             Initial Exposed Proportion</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 31  prop_I_initial            Initial Infected Proportion</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 32  prop_R_initial           Initial Recovered Proportion</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 33 prop_V1_initial Initial One-Dose Vaccinated Proportion</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 34 prop_V2_initial Initial Two-Dose Vaccinated Proportion</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 28  prop_S_initial         Initial Susceptible Proportion</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 29  prop_E_initial             Initial Exposed Proportion</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 30  prop_I_initial            Initial Infected Proportion</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 31  prop_R_initial           Initial Recovered Proportion</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 32 prop_V1_initial Initial One-Dose Vaccinated Proportion</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 33 prop_V2_initial Initial Two-Dose Vaccinated Proportion</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                                           description      units distribution</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 29      Proportion of population susceptible at start proportion         beta</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 30          Proportion of population exposed at start proportion         beta</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 31         Proportion of population infected at start proportion         beta</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 32 Proportion of population recovered/immune at start proportion         beta</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 33          Proportion with one vaccine dose at start proportion         beta</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 34         Proportion with two vaccine doses at start proportion         beta</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 28      Proportion of population susceptible at start proportion         beta</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 29          Proportion of population exposed at start proportion         beta</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 30         Proportion of population infected at start proportion         beta</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 31 Proportion of population recovered/immune at start proportion         beta</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 32          Proportion with one vaccine dose at start proportion         beta</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 33         Proportion with two vaccine doses at start proportion         beta</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>       scale           category order order_scale order_category order_parameter</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 29 location initial_conditions    29          02             01              01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 30 location initial_conditions    30          02             01              02</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 31 location initial_conditions    31          02             01              03</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 32 location initial_conditions    32          02             01              04</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 33 location initial_conditions    33          02             01              05</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 34 location initial_conditions    34          02             01              06</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 28 location initial_conditions    28          02             01              01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 29 location initial_conditions    29          02             01              02</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 30 location initial_conditions    30          02             01              03</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 31 location initial_conditions    31          02             01              04</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 32 location initial_conditions    32          02             01              05</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 33 location initial_conditions    33          02             01              06</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    posterior_distribution posterior_lower posterior_upper</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 28                   beta              NA              NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 29                   beta              NA              NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 30                   beta              NA              NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 31                   beta              NA              NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 32                   beta              NA              NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 33                   beta              NA              NA</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 34                   beta              NA              NA</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

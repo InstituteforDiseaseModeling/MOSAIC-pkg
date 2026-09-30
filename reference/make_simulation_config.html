@@ -21,7 +21,7 @@ The file extension determines which output format is used:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -297,8 +297,8 @@ first doses proportionally from all listed compartments.</p><div class="section"
 <h3 id="infection-dynamics">Infection dynamics<a class="anchor" aria-label="anchor" href="#infection-dynamics"></a></h3>
 
 
-<p>Transition rates between SEIR compartments and the infection-fatality-ratio
-model parameters.</p>
+<p>Transition rates between SEIR compartments and the reported case fatality
+ratio <code>mu_jt</code>.</p>
 </div></dd>
 
 
@@ -321,24 +321,43 @@ a <em>rate</em>, not a period – prior median ~0.71/day. The engine uses
 
 
 <dt id="arg-mu-jt">mu_jt<a class="anchor" aria-label="anchor" href="#arg-mu-jt"></a></dt>
-<dd><p>A matrix of time-varying probabilities of mortality due to infection, with rows equal to
-length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
-If mu_j_baseline is provided with other IFR parameters, mu_jt can be generated using calc_deaths_from_infections().</p></dd>
+<dd><p>Reported case fatality ratio (reported deaths per reported
+suspected case) by location and day: a matrix with rows equal to
+length(location_name) and columns equal to the daily sequence from
+date_start to date_stop, a per-location vector (constant in time) or a
+scalar. Values in [0, 1). The returned config always carries the full
+matrix. The engine converts it each tick to the probability that a new
+symptomatic onset is fatal, <code>mu_jt * rho / (rho_deaths * chi_epidemic)</code>,
+so reported deaths over reported cases equal <code>mu_jt</code> on epidemic-PPV
+ticks. On endemic-PPV ticks the reported CFR is
+<code>mu_jt * chi_endemic / chi_epidemic</code>, so in an endemic-dominated location
+the calibrated <code>mu_jt</code> (and true deaths with it) can exceed the observed
+CFR by up to <code>chi_epidemic / chi_endemic</code>. Build it from WHO annual data
+with <code><a href="est_CFR_hierarchical.html">est_CFR_hierarchical()</a></code> and <code><a href="make_mu_jt.html">make_mu_jt()</a></code>.</p></dd>
 
 
 <dt id="arg-mu-j-baseline">mu_j_baseline<a class="anchor" aria-label="anchor" href="#arg-mu-j-baseline"></a></dt>
-<dd><p>Baseline infection fatality ratio for threshold-dependent IFR model.
-Numeric vector of length(location_name). Values must be in [0, 1].</p></dd>
+<dd><p><strong>Removed in v0.96.0.</strong> The pre-v0.96.0 baseline daily
+mortality hazard. Supplying it marks the input as a config written for
+the retired mortality model, whose <code>mu_jt</code> field was never read by any
+engine, so the call is refused rather than silently reinterpreting that
+matrix. Retained in the signature so the refusal names the problem.</p></dd>
 
 
 <dt id="arg-mu-j-slope">mu_j_slope<a class="anchor" aria-label="anchor" href="#arg-mu-j-slope"></a></dt>
-<dd><p>Temporal trend in baseline IFR (proportion change over simulation period).
-Numeric vector of length(location_name). Default is 0 (no temporal trend).</p></dd>
+<dd><p><strong>Deprecated and ignored.</strong> The linear-in-time mortality trend
+<code>(1 + mu_j_slope * tick/nticks)</code> was removed from the engine in v0.95.0
+(CFR restructure R3): it is not estimable from the deaths series, it
+double-counted the <code>s(year)</code> term already inside <code>CFR_target</code>, and no
+secular trend in cholera CFR is documented. Retained only so that configs
+written before v0.95.0 can still be replayed through
+<code>do.call(make_simulation_config, config)</code>; any value supplied is silently
+dropped and is <strong>not</strong> returned in the config.</p></dd>
 
 
 <dt id="arg-mu-j-epidemic-factor">mu_j_epidemic_factor<a class="anchor" aria-label="anchor" href="#arg-mu-j-epidemic-factor"></a></dt>
-<dd><p>Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50% increase).
-Numeric vector of length(location_name). Must be &gt;= 0.</p><div class="section">
+<dd><p><strong>Removed in v0.96.0.</strong> The pre-v0.96.0 epidemic
+mortality multiplier; treated exactly like <code>mu_j_baseline</code>.</p><div class="section">
 <h3 id="observation-processes">Observation Processes<a class="anchor" aria-label="anchor" href="#observation-processes"></a></h3>
 
 
@@ -355,7 +374,7 @@ step of the surveillance cascade.</p></dd>
 
 
 <dt id="arg-rho-deaths">rho_deaths<a class="anchor" aria-label="anchor" href="#arg-rho-deaths"></a></dt>
-<dd><p>Death detection rate: probability a true cholera death is captured by surveillance (numeric in [0, 1] or NULL). Consumed by the engine to produce reported_deaths (originally laser-cholera#49; the pure-R engine implements the same rule).</p></dd>
+<dd><p>Death detection rate: probability a true cholera death is captured by surveillance (numeric in (0, 1]). The engine thins true deaths by it to produce reported_deaths, and divides by it when converting the reported CFR <code>mu_jt</code> to a per-onset fatality probability, so it sets true deaths without moving reported deaths.</p></dd>
 
 
 <dt id="arg-sigma">sigma<a class="anchor" aria-label="anchor" href="#arg-sigma"></a></dt>
@@ -371,8 +390,8 @@ step of the surveillance cascade.</p></dd>
 
 
 <dt id="arg-epidemic-threshold">epidemic_threshold<a class="anchor" aria-label="anchor" href="#arg-epidemic-threshold"></a></dt>
-<dd><p>Isym/N point prevalence threshold for epidemic regime activation. Used for both
-case reporting and IFR threshold models. Numeric scalar or length-n vector in [0, 1].</p></dd>
+<dd><p>Isym/N point prevalence threshold that switches the case-reporting PPV
+between <code>chi_endemic</code> and <code>chi_epidemic</code>. Numeric scalar or length-n vector in [0, 1].</p></dd>
 
 
 <dt id="arg-delta-reporting-cases">delta_reporting_cases<a class="anchor" aria-label="anchor" href="#arg-delta-reporting-cases"></a></dt>
@@ -382,8 +401,10 @@ incubation is handled separately by the E compartment and <code>iota</code>.</p>
 
 
 <dt id="arg-delta-reporting-deaths">delta_reporting_deaths<a class="anchor" aria-label="anchor" href="#arg-delta-reporting-deaths"></a></dt>
-<dd><p>Symptom-onset-to-death-report delay in days
-(non-negative integer).</p><div class="section">
+<dd><p><strong>Deprecated and ignored.</strong> Since v0.96.0 a death
+is reported on the same lag as its case (<code>delta_reporting_cases</code>), as the
+surveillance record it is scored against does. Retained so older configs
+still load; any value supplied is dropped and not returned.</p><div class="section">
 <h3 id="spatial-model">Spatial model<a class="anchor" aria-label="anchor" href="#spatial-model"></a></h3>
 
 
@@ -603,7 +624,7 @@ in the format determined by the file extension.</p>
 <span class="r-in"><span>     gamma_1 <span class="op">=</span> <span class="fl">0.2</span>,</span></span>
 <span class="r-in"><span>     gamma_2 <span class="op">=</span> <span class="fl">0.25</span>,</span></span>
 <span class="r-in"><span>     epsilon <span class="op">=</span> <span class="fl">0.05</span>,</span></span>
-<span class="r-in"><span>     mu_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0.01</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">31</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     mu_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.02</span>, <span class="fl">0.015</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     rho <span class="op">=</span> <span class="fl">0.9</span>,</span></span>
 <span class="r-in"><span>     sigma <span class="op">=</span> <span class="fl">0.5</span>,</span></span>
 <span class="r-in"><span>     beta_j0_hum <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.03</span><span class="op">)</span>,</span></span>

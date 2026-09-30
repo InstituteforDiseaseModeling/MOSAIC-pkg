@@ -24,7 +24,7 @@ run_rolling_cv(
   optimize_subset = TRUE,
   models = c("ensemble", "ensemble_opt", "medoid"),
   n_reps_best_medoid = 50L,
-  central_method = "median",
+  central_method = "mean",
   est_suitability_spec = list(),
   psi_cache = NULL,
   dir_output,
@@ -118,12 +118,12 @@ run_rolling_cv(
 - central_method:
 
   Ensemble central tendency used for the compiled predictions and the
-  in-sample calibration metrics/medoid: `"median"` (default; lower
-  calibration bias) or `"mean"` (unbiased for expected counts, never
-  collapses on sparse deaths). Scalar or per-channel
-  `c(cases=, deaths=)`. The predictions table carries `pred_central`
-  (this choice) plus `pred_mean`/`pred_median` for cross-walk;
-  WIS/coverage remain quantile-based and are unaffected.
+  in-sample calibration metrics/medoid: `"mean"` (default; the expected
+  count, which never collapses to zero on sparse deaths) or `"median"`
+  (the typical trajectory; the default from v0.46.1 to v0.97.x). Scalar
+  or per-channel `c(cases=, deaths=)`. The predictions table carries
+  `pred_central` (this choice) plus `pred_mean`/`pred_median` for
+  cross-walk; WIS/coverage remain quantile-based and are unaffected.
 
 - est_suitability_spec:
 
@@ -186,7 +186,12 @@ arguments to
 [`est_suitability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
 and overrides any date keys passed via `est_suitability_spec` (with a
 warning). `est_suitability_spec` therefore controls only modeling
-choices (target, features, architecture), not the cutoff window.
+choices (target, features, architecture), not the cutoff window. The
+reported CFR `mu_jt` and its prior are rebuilt per cutoff from a
+WHO-annual GAM fitted only to years up to `year(T) - 1` (a calendar
+year's annual total is not known until the year has ended), and carried
+flat past that year's 1 July. So no post-cutoff surveillance year
+reaches the config, the prior centres or the prior widths.
 
 **Coupled metapopulation.** `iso` may be a single country or a vector; a
 vector runs as the coupled metapopulation (one calibration per cutoff

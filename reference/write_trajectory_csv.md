@@ -75,12 +75,25 @@ The per-member `$lines` component is deliberately NOT exported: at 6
 significant figures it measured 62.7 MB raw / 7.8 MB packed for a single
 national model, which belongs in blob storage rather than git.
 
+## Deaths and the population balance
+
+When the run integrated the reported CFR out (MOSAIC \>= v0.96.0),
+`reported_deaths` and `disease_deaths` are the members' deaths redrawn
+from the calibrated CFR. The population compartments and `N` carry the
+engine's own fatal draws at the prior `mu_jt` (the fatal share `p_fatal`
+of symptomatic onsets, a few percent, never enters `Isym`), so `N`
+balances against those, not against the redrawn `disease_deaths`.
+`disease_deaths` are true deaths, i.e. reported deaths / `rho_deaths`,
+and rest on the pinned `rho_deaths`.
+
 ## What is lost
 
-The summary carries the weighted **median** only, so these are central
-trajectories with no credible intervals. Intervals for these channels
-require the per-member data. `reported_cases` and `reported_deaths` keep
-their intervals in the prediction CSVs.
+The summary carries one central line per channel and no credible
+intervals: `disease_deaths` follows the run's deaths `central_method`
+(default mean), and every other channel is the weighted **median**.
+Intervals for these channels require the per-member data.
+`reported_cases` and `reported_deaths` keep their intervals in the
+prediction CSVs.
 
 ## Examples
 

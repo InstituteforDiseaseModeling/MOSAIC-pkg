@@ -1,8 +1,10 @@
 # Rake the fused OD structure to per-country outbound departure margins
 
-Iterative proportional fitting (`mipfp::Ipfp`) of the unit-free fused
-structure onto real daily person-flow margins, giving an OD matrix that
-carries both the fused structure AND a defensible amplitude.
+Iterative proportional fitting
+([`mipfp::Ipfp`](https://rdrr.io/pkg/mipfp/man/Ipfp.html)) of the
+unit-free fused structure onto real daily person-flow margins, giving an
+OD matrix that carries both the fused structure AND a defensible
+amplitude.
 
 ## Usage
 

@@ -11,7 +11,7 @@ explicit control over which parameters to sample."><meta property="og:image" con
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -107,6 +107,14 @@ survival; decay_days_long is derived as short + spread (default TRUE)</p></li>
 <li><p>sample_chi_endemic: PPV among suspected cases during endemic periods (default TRUE)</p></li>
 <li><p>sample_chi_epidemic: PPV among suspected cases during epidemic periods (default TRUE)</p></li>
 <li><p>sample_rho: Care-seeking rate (default TRUE)</p></li>
+<li><p>sample_rho_deaths: Surveillance capture rate of true cholera deaths
+(default FALSE; PINNED at <code>config_default$rho_deaths</code> = 0.42). The
+engine converts the reported CFR <code>mu_jt</code> to a per-onset fatality
+probability by dividing by <code>rho_deaths</code> and then thins true deaths
+by it, so the parameter cancels from reported deaths exactly and carries
+no likelihood information; it sets only the level of true deaths. The
+Beta(36.95, 51.02) prior is retained in <code>priors_default</code> as the
+literature record and for sensitivity runs; set TRUE to re-enable the draw.</p></li>
 <li><p>sample_sigma: Symptomatic fraction (default TRUE)</p></li>
 <li><p>sample_zeta_1: Symptomatic shedding rate (default TRUE)</p></li>
 <li><p>sample_zeta_ratio: Symptomatic-to-asymptomatic shedding ratio (default TRUE)</p></li>
@@ -118,23 +126,8 @@ survival; decay_days_long is derived as short + spread (default TRUE)</p></li>
 <li><p>sample_a_2_j: Seasonality (default TRUE)</p></li>
 <li><p>sample_b_1_j: Seasonality (default TRUE)</p></li>
 <li><p>sample_b_2_j: Seasonality (default TRUE)</p></li>
-<li><p>sample_CFR_target: Per-country target reported case-fatality ratio
-(B2 lognormal location prior). When the priors object carries a
-<code>CFR_target</code> location prior, this gates whether CFR_target is drawn
-(TRUE) or held at its config default / prior median (FALSE) (default TRUE)</p></li>
-<li><p>sample_mu_j_baseline: Under B2 (priors object has a <code>CFR_target</code>
-location prior) this gates the <em>derivation</em> of <code>mu_j_baseline</code>
-from <code>CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)</code>
-(the B2.1 engine-correct chain factor) rather than an
-independent draw; <code>mu_j_baseline</code> is no longer an independently
-sampled location parameter. Under a legacy priors object (no
-<code>CFR_target</code> prior) it gates the old independent mu_j_baseline draw.
-(default TRUE)</p></li>
-<li><p>sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)</p></li>
-<li><p>sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)</p></li>
-<li><p>sample_epidemic_threshold: Location-specific epidemic activation threshold (default TRUE)</p></li>
-<li><p>sample_delta_reporting_cases: Infection-to-case reporting delay in days (default TRUE)</p></li>
-<li><p>sample_delta_reporting_deaths: Infection-to-death reporting delay in days (default TRUE)</p></li>
+<li><p>sample_epidemic_threshold: Location-specific case-reporting PPV switch threshold (default TRUE)</p></li>
+<li><p>sample_delta_reporting_cases: Symptom-onset-to-case reporting delay in days (default TRUE)</p></li>
 <li><p>sample_psi_star_a: Suitability calibration shape/gain (default TRUE)</p></li>
 <li><p>sample_psi_star_b: Suitability calibration scale/offset (default TRUE)</p></li>
 <li><p>sample_psi_star_z: Suitability calibration smoothing (default TRUE)</p></li>
@@ -143,7 +136,15 @@ sampled location parameter. Under a legacy priors object (no
 <li><p>ic_moment_match: Derive E/I from observed week-1 cases and the sampled
 reporting chain (sigma, rho, chi_endemic, iota). Only active when
 sample_initial_conditions is TRUE. (default FALSE)</p></li>
-</ul><p>If NULL, all parameters are sampled (default behavior).</p></dd>
+</ul><p>If NULL, all parameters are sampled (default behavior).</p>
+<p>The reported case fatality ratio <code>mu_jt</code> is not sampled. It is a
+[location x day] matrix carried by the config, and calibration integrates
+its level and year-to-year deviations out of the deaths likelihood
+analytically (<code><a href="calc_log_likelihood_deaths_integrated.html">calc_log_likelihood_deaths_integrated</a></code>). The
+flags <code>sample_CFR_target</code>, <code>sample_mu_j_baseline</code>,
+<code>sample_mu_j_epidemic_factor</code> and <code>sample_delta_reporting_deaths</code>
+were removed with the parameters they controlled in v0.96.0; supplying one
+raises a warning and has no effect.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

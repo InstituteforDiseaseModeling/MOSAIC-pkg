@@ -18,10 +18,12 @@ Such a site must be drawn ONLY in `"rng"` mode. Drawing it under
 desynchronise every subsequent draw, destroying parity for the other 22
 sites.
 
-`infectious/sigma_split` is the first and only entry (v0.89.0): the spec
-specifies a stochastic symptomatic split and the oracle does a
-deterministic `np.round`, which is wrong in the mean at low counts. See
-`sim_components.R` for the full rationale.
+`infectious/sigma_split` (v0.89.0): the spec specifies a stochastic
+symptomatic split and the oracle does a deterministic `np.round`, which
+is wrong in the mean at low counts. `infectious/fatal_onsets` (v0.96.0):
+production draws fatal outcomes at symptom onset from the time-varying
+reported CFR `mu_jt`, where the oracle applies a daily hazard to the
+symptomatic stock. See `sim_components.R` for the full rationale.
 
 NOTE for anyone extending this: CLAUDE.md lesson \#15 records that a
 PHANTOM `infectious/sigma_split` was once invented in this registry by

@@ -64,9 +64,15 @@ The function creates a multi-page PDF containing:
 - Following pages: Faceted plots of country-specific CFR trends
 
 - Each panel shows observed CFR (points) and model predictions (lines
-  with CI)
+  with 95% predictive intervals for one year's CFR)
 
-- Color coding indicates data quality and model fit
+- Years after a country's last fitted year (`is_forecast`) are drawn
+  dashed on a shaded background: the model holds each trend at its last
+  fitted year there
+
+- A page of each country's deviation from the population trend (the
+  model's country intercept is weakly identified, so the deviation is
+  taken from the fitted country curve)
 
 ## Examples
 

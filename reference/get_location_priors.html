@@ -11,7 +11,7 @@ filters location-specific parameters to only include the requested location(s)."
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,12 +72,15 @@ If NULL, will use MOSAIC::priors_default.</p></dd>
     <p>A priors list object with the same structure as the input, containing:</p><ul><li><p>All metadata (unchanged)</p></li>
 <li><p>All global parameters (unchanged)</p></li>
 <li><p>Location-specific parameters filtered to only the requested location(s)</p></li>
+<li><p>The reported-CFR prior block <code>mu_jt</code> (when present), its
+per-location table filtered the same way</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>This function preserves the exact structure of the priors object:</p><ul><li><p><code>metadata</code>: Copied unchanged</p></li>
 <li><p><code>parameters_global</code>: All global parameters preserved</p></li>
 <li><p><code>parameters_location</code>: Filtered to include only the specified ISO codes</p></li>
+<li><p><code>mu_jt</code>: Global widths kept; per-location table filtered</p></li>
 </ul><p>The function validates that all requested locations exist in the priors before
 extracting. If any location is missing, an error is thrown listing the missing
 locations and available locations.</p>

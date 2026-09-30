@@ -17,7 +17,7 @@ plot_model_ensemble to render plots from the returned object."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,7 +71,7 @@ envelopes for cases and deaths.</p>
 <span>  priors <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sampling_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  n_cases_warmup_mask <span class="op">=</span> <span class="fl">2L</span>,</span>
-<span>  mask_final_deaths_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  mask_final_deaths_step <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  score_idx_cases <span class="op">=</span> <span class="fl">1L</span>,</span>
 <span>  score_idx_deaths <span class="op">=</span> <span class="fl">1L</span>,</span>
 <span>  parallel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
@@ -82,6 +82,7 @@ envelopes for cases and deaths.</p>
 <span>  trajectory_n_lines <span class="op">=</span> <span class="fl">150L</span>,</span>
 <span>  trajectory_scratch_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  reduce_trajectories <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  deaths_integration <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -145,13 +146,14 @@ element so downstream scoring (R2/bias) can exclude these positions. Set to
 
 
 <dt id="arg-mask-final-deaths-step">mask_final_deaths_step<a class="anchor" aria-label="anchor" href="#arg-mask-final-deaths-step"></a></dt>
-<dd><p>Logical. If <code>TRUE</code> (default, matching
-<code><a href="plot_model_ensemble.html">plot_model_ensemble</a></code>), record that the FINAL deaths timestep is
-a laser-cholera structural zero (<code>reported_deaths</code> written at tick
-then leading-trimmed, so the last slot is never written; laser-cholera issue #82).
-This value is NOT applied to any returned series here; it
-is recorded in the returned <code>artifact_mask</code> element for downstream
-scoring.</p></dd>
+<dd><p>Logical. If <code>TRUE</code>, record that the FINAL
+deaths timestep is a structural zero to exclude from scoring. That was true
+of the laser-cholera engine (<code>reported_deaths</code> written at tick and
+leading-trimmed, so the last slot was never written; laser-cholera issue #82).
+Since v0.96.0 the R engine reports deaths on the same row as cases, and the
+post-hoc death redraw fills the final column, so the default is <code>FALSE</code>.
+This value is NOT applied to any returned series here; it is recorded in the
+returned <code>artifact_mask</code> element for downstream scoring.</p></dd>
 
 
 <dt id="arg-score-idx-cases-score-idx-deaths">score_idx_cases, score_idx_deaths<a class="anchor" aria-label="anchor" href="#arg-score-idx-cases-score-idx-deaths"></a></dt>
@@ -213,6 +215,20 @@ reduction runs here over all members and is attached as <code>$trajectories</cod
 When <code>FALSE</code>, the channels are spilled to scratch but NOT reduced; the
 scratch handle is returned in <code>$trajectory_scratch</code> so the caller can
 reduce over a final (e.g. optimized) subset without re-simulating.</p></dd>
+
+
+<dt id="arg-deaths-integration">deaths_integration<a class="anchor" aria-label="anchor" href="#arg-deaths-integration"></a></dt>
+<dd><p>Optional run-level setup from
+<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> (<code>control$likelihood$.deaths_integration</code>). When
+supplied, each member's deaths are redrawn after its simulation from the
+reported CFR's posterior given that member's path – the same integration
+calibration scores with – so predicted deaths, true deaths and forecast
+years carry the calibrated CFR; the ensemble also returns
+<code>cfr_posterior</code>. When <code>NULL</code> (default) deaths are the engine's,
+drawn at the config's <code>mu_jt</code> – for configs sampled from the priors
+that is the PRIOR reported CFR, not the calibrated one. To reproduce a
+run's calibrated deaths post hoc, pass
+<code>readRDS("&lt;dir_output&gt;/2_calibration/deaths_integration.rds")</code>.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -286,6 +302,22 @@ timestep), and <code>$score_idx_cases</code>/<code>$score_idx_deaths</code> (int
 1-based per-channel scored-window start; columns before are dropped). The
 central/quantile/array fields above are RAW (unmasked); this spec is the
 contract scoring sites use to drop artifact positions.</p></dd>
+
+<dt>cfr_posterior</dt>
+<dd><p>When <code>deaths_integration</code> is supplied: a data frame
+with one row per location and calendar year – <code>location</code>,
+<code>year</code>, <code>cfr_median</code>, <code>cfr_lower</code>, <code>cfr_upper</code> (the
+weighted median and 95% interval over members of each member's mean daily
+reported CFR in that year) and <code>prior_cfr</code> (the prior <code>mu_jt</code>'s
+mean over the same days). Conditional on each member's modelled cases.
+<code>NULL</code> otherwise.</p></dd>
+
+<dt>forecast_shift</dt>
+<dd><p>When <code>deaths_integration</code> is supplied: one value
+per location, the weighted mean over members of the posterior-mode logit
+CFR deviation for the location's latest observed year (<code>NA</code> for a
+location with no forecast years). <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> centres forecast
+years on it. <code>NULL</code> otherwise.</p></dd>
 
 
 </dl></div>

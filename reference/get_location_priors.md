@@ -34,6 +34,9 @@ A priors list object with the same structure as the input, containing:
 - Location-specific parameters filtered to only the requested
   location(s)
 
+- The reported-CFR prior block `mu_jt` (when present), its per-location
+  table filtered the same way
+
 ## Details
 
 This function preserves the exact structure of the priors object:
@@ -44,6 +47,8 @@ This function preserves the exact structure of the priors object:
 
 - `parameters_location`: Filtered to include only the specified ISO
   codes
+
+- `mu_jt`: Global widths kept; per-location table filtered
 
 The function validates that all requested locations exist in the priors
 before extracting. If any location is missing, an error is thrown

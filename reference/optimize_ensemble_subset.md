@@ -77,7 +77,7 @@ optimize_ensemble_subset(
   Tier-2 bit-for-bit parity guarantee;
   [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   passes the resolved `control$predictions$central_method` (package
-  default `"median"` as of v0.46.1) explicitly.
+  default `"mean"` as of v0.98.0) explicitly.
 
 - stride:
 

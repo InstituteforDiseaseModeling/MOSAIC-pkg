@@ -11,7 +11,7 @@ replay fixtures no longer certify about production."><meta property="og:image" c
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,6 +73,14 @@ progression &lt;= 2 at sigma = 0.2). Covered by test-sigma-split.R.</p></dd>
 <code>W/(kappa + W)</code> with W an absolute cell count; kappa is a
 concentration. Production divides by N. Covered by
 test-env-dose-response.R.</p></dd>
+
+<dt>infectious/fatal_onsets</dt>
+<dd><p>v0.96.0. The oracle's mortality is a daily
+hazard <code>mu_j_baseline * (1 + mu_j_epidemic_factor * flag)</code> on the
+symptomatic stock, reported <code>delta_reporting_deaths</code> days after the
+death. Production draws each onset's outcome at onset from the
+time-varying reported CFR <code>mu_jt</code> and reports deaths on the case
+lag. Covered by test-sim-mortality-onset.R.</p></dd>
 
 
 </dl></div>

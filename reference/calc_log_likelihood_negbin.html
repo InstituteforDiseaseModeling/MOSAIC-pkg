@@ -11,7 +11,7 @@ weighted."><meta property="og:image" content="https://institutefordiseasemodelin
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,8 +55,9 @@ weighted.</p>
 <span>  <span class="va">observed</span>,</span>
 <span>  <span class="va">estimated</span>,</span>
 <span>  k <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  k_min <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  k_min <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  weights <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  eps_rel <span class="op">=</span> <span class="fl">0.02</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -78,14 +79,24 @@ weighted.</p>
 
 
 <dt id="arg-k-min">k_min<a class="anchor" aria-label="anchor" href="#arg-k-min"></a></dt>
-<dd><p>Numeric scalar; minimum dispersion floor applied when <code>k</code> is finite
-(either supplied or estimated). Default <code>3</code>. If <code>k = Inf</code> (Poisson limit),
+<dd><p>Deprecated and ignored; retained only so existing calls do not
+error. Dispersion is estimated by <code><a href="est_nb_dispersion.html">est_nb_dispersion</a></code> and
+arrives already bounded. If <code>k = Inf</code> (Poisson limit),
 no flooring is applied.</p></dd>
 
 
 <dt id="arg-weights">weights<a class="anchor" aria-label="anchor" href="#arg-weights"></a></dt>
 <dd><p>Optional numeric vector of non-negative weights, same length as <code>observed</code>.
 Default is <code>NULL</code>, which sets all weights to 1.</p></dd>
+
+
+<dt id="arg-eps-rel">eps_rel<a class="anchor" aria-label="anchor" href="#arg-eps-rel"></a></dt>
+<dd><p>Positive scalar; the predicted mean of every cell is floored at
+<code>max(1e-4, eps_rel * mean(observed))</code> before the density is evaluated.
+Default <code>0.02</code>. This floor is the only thing standing between a zero
+prediction and <code>log(0)</code>, and its SIZE sets how hard a spurious zero is
+punished, so it is channel-specific: see <code><a href="calc_model_likelihood.html">calc_model_likelihood</a></code>
+(<code>eps_rel_cases</code> / <code>eps_rel_deaths</code>).</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -99,24 +110,22 @@ Default is <code>NULL</code>, which sets all weights to 1.</p></dd>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>If <code>k</code> is not supplied, it is estimated as \(k = \bar{x}^2 / (s^2 - \bar{x})\) from
-<code>observed</code>. When this estimate is finite, it is constrained to be at least <code>k_min</code>.
+<code>observed</code>.
 If \(s^2 \le \bar{x}\), the function uses the Poisson limit (<code>k = Inf</code>).</p>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Default k_min = 3</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># k is used as supplied</span></span></span>
 <span class="r-in"><span><span class="fu">calc_log_likelihood_negbin</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">5</span>, <span class="fl">9</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">4</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Estimated k = 1.390 (from Var = 20.333, Mean = 4.667)</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> k = 1.390 &lt; k_min = 3.000; using k_min.</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Negative Binomial log-likelihood (k=3.000): -7.54</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] -7.540079</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Negative Binomial log-likelihood (k=1.390): -7.50</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] -7.498757</span>
 <span class="r-in"><span><span class="co"># Provide k but allow flooring if too small</span></span></span>
 <span class="r-in"><span><span class="fu">calc_log_likelihood_negbin</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">5</span>, <span class="fl">9</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">4</span>, <span class="fl">5</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">1.2</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Using provided k = 1.200</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> k = 1.200 &lt; k_min = 3.000; using k_min.</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Negative Binomial log-likelihood (k=3.000): -7.54</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] -7.540079</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Negative Binomial log-likelihood (k=1.200): -7.51</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] -7.513423</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

@@ -119,13 +119,15 @@ calc_convergence_diagnostics(
 
 - is_diagnostics:
 
-  Optional list of pre-computed diagnostics with elements `best` and
-  `all`, supplied instead of recomputing them from the draws. `NULL`
-  (default) computes them internally. (default TRUE)
+  Optional list of exact importance-sampling diagnostics from
+  [`calc_is_diagnostics`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_is_diagnostics.md),
+  with elements `best` and `all`. Reported under `$importance_sampling`
+  but never gated: these are untruncated-weight quantities, unlike the
+  gated ESS_B.
 
 - verbose:
 
-  Logical indicating whether to print diagnostic messages
+  Logical indicating whether to print diagnostic messages (default TRUE)
 
 ## Value
 

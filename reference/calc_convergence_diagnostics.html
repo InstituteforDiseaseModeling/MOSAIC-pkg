@@ -13,7 +13,7 @@ and aggregates to an overall convergence status."><meta property="og:image" cont
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -166,14 +166,15 @@ workflow.</p></dd>
 
 
 <dt id="arg-is-diagnostics">is_diagnostics<a class="anchor" aria-label="anchor" href="#arg-is-diagnostics"></a></dt>
-<dd><p>Optional list of pre-computed diagnostics with
-elements <code>best</code> and <code>all</code>, supplied instead of recomputing them from
-the draws. <code>NULL</code> (default) computes them internally.
-(default TRUE)</p></dd>
+<dd><p>Optional list of exact importance-sampling diagnostics
+from <code><a href="calc_is_diagnostics.html">calc_is_diagnostics</a></code>, with elements <code>best</code> and
+<code>all</code>. Reported under <code>$importance_sampling</code> but never gated:
+these are untruncated-weight quantities, unlike the gated ESS_B.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
-<dd><p>Logical indicating whether to print diagnostic messages</p></dd>
+<dd><p>Logical indicating whether to print diagnostic messages
+(default TRUE)</p></dd>
 
 </dl></div>
     <div class="section level2">

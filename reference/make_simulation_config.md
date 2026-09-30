@@ -266,8 +266,8 @@ make_simulation_config(
 
   ### Infection dynamics
 
-  Transition rates between SEIR compartments and the
-  infection-fatality-ratio model parameters.
+  Transition rates between SEIR compartments and the reported case
+  fatality ratio `mu_jt`.
 
 - iota:
 
@@ -292,27 +292,47 @@ make_simulation_config(
 
 - mu_jt:
 
-  A matrix of time-varying probabilities of mortality due to infection,
-  with rows equal to length(location_name) and columns equal to
-  length(t). All values must be numeric and between 0 and 1. If
-  mu_j_baseline is provided with other IFR parameters, mu_jt can be
-  generated using calc_deaths_from_infections().
+  Reported case fatality ratio (reported deaths per reported suspected
+  case) by location and day: a matrix with rows equal to
+  length(location_name) and columns equal to the daily sequence from
+  date_start to date_stop, a per-location vector (constant in time) or a
+  scalar. Values in \[0, 1). The returned config always carries the full
+  matrix. The engine converts it each tick to the probability that a new
+  symptomatic onset is fatal,
+  `mu_jt * rho / (rho_deaths * chi_epidemic)`, so reported deaths over
+  reported cases equal `mu_jt` on epidemic-PPV ticks. On endemic-PPV
+  ticks the reported CFR is `mu_jt * chi_endemic / chi_epidemic`, so in
+  an endemic-dominated location the calibrated `mu_jt` (and true deaths
+  with it) can exceed the observed CFR by up to
+  `chi_epidemic / chi_endemic`. Build it from WHO annual data with
+  [`est_CFR_hierarchical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_CFR_hierarchical.md)
+  and
+  [`make_mu_jt()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mu_jt.md).
 
 - mu_j_baseline:
 
-  Baseline infection fatality ratio for threshold-dependent IFR model.
-  Numeric vector of length(location_name). Values must be in \[0, 1\].
+  **Removed in v0.96.0.** The pre-v0.96.0 baseline daily mortality
+  hazard. Supplying it marks the input as a config written for the
+  retired mortality model, whose `mu_jt` field was never read by any
+  engine, so the call is refused rather than silently reinterpreting
+  that matrix. Retained in the signature so the refusal names the
+  problem.
 
 - mu_j_slope:
 
-  Temporal trend in baseline IFR (proportion change over simulation
-  period). Numeric vector of length(location_name). Default is 0 (no
-  temporal trend).
+  **Deprecated and ignored.** The linear-in-time mortality trend
+  `(1 + mu_j_slope * tick/nticks)` was removed from the engine in
+  v0.95.0 (CFR restructure R3): it is not estimable from the deaths
+  series, it double-counted the `s(year)` term already inside
+  `CFR_target`, and no secular trend in cholera CFR is documented.
+  Retained only so that configs written before v0.95.0 can still be
+  replayed through `do.call(make_simulation_config, config)`; any value
+  supplied is silently dropped and is **not** returned in the config.
 
 - mu_j_epidemic_factor:
 
-  Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50%
-  increase). Numeric vector of length(location_name). Must be \>= 0.
+  **Removed in v0.96.0.** The pre-v0.96.0 epidemic mortality multiplier;
+  treated exactly like `mu_j_baseline`.
 
   ### Observation Processes
 
@@ -329,9 +349,10 @@ make_simulation_config(
 - rho_deaths:
 
   Death detection rate: probability a true cholera death is captured by
-  surveillance (numeric in \[0, 1\] or NULL). Consumed by the engine to
-  produce reported_deaths (originally laser-cholera#49; the pure-R
-  engine implements the same rule).
+  surveillance (numeric in (0, 1\]). The engine thins true deaths by it
+  to produce reported_deaths, and divides by it when converting the
+  reported CFR `mu_jt` to a per-onset fatality probability, so it sets
+  true deaths without moving reported deaths.
 
 - sigma:
 
@@ -349,9 +370,9 @@ make_simulation_config(
 
 - epidemic_threshold:
 
-  Isym/N point prevalence threshold for epidemic regime activation. Used
-  for both case reporting and IFR threshold models. Numeric scalar or
-  length-n vector in \[0, 1\].
+  Isym/N point prevalence threshold that switches the case-reporting PPV
+  between `chi_endemic` and `chi_epidemic`. Numeric scalar or length-n
+  vector in \[0, 1\].
 
 - delta_reporting_cases:
 
@@ -361,7 +382,10 @@ make_simulation_config(
 
 - delta_reporting_deaths:
 
-  Symptom-onset-to-death-report delay in days (non-negative integer).
+  **Deprecated and ignored.** Since v0.96.0 a death is reported on the
+  same lag as its case (`delta_reporting_cases`), as the surveillance
+  record it is scored against does. Retained so older configs still
+  load; any value supplied is dropped and not returned.
 
   ### Spatial model
 
@@ -604,7 +628,7 @@ make_simulation_config(
      gamma_1 = 0.2,
      gamma_2 = 0.25,
      epsilon = 0.05,
-     mu_jt = matrix(0.01, nrow = 2, ncol = 31),
+     mu_jt = c(0.02, 0.015),
      rho = 0.9,
      sigma = 0.5,
      beta_j0_hum = c(0.05, 0.03),

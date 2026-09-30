@@ -26,9 +26,7 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_affine_normalization.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bias_ratio.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bookend_batch_size.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_cases_from_infections.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_diagnostics.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_deaths_from_infections.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_diffusion_matrix_pi.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_fit_diagnostics.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_is_diagnostics.html</loc></url>
@@ -36,6 +34,7 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_beta.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_binomial.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_deaths_integrated.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_gamma.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_negbin.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_normal.html</loc></url>
@@ -65,7 +64,6 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_mosaic_data_freshness.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_mosaic_manual_inputs.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_psi_amplitude.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_python_env.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_sampled_parameter.html</loc></url>
@@ -87,13 +85,23 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/detect_sampled_parameters_from_configs.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dgompertz.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/disagg_annual_cases_to_daily.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-MOSAIC_REMOVED_MORTALITY_PARAMS.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-SIM_REPLAY_ONLY_SITES.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-SIM_RNG_ONLY_CORRECTIONS.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-SIM_RNG_ONLY_SITES.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-infer_posterior_family_uniform.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_dist_core_fields.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_ensemble_drop_arrays.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_mu_jt_prior.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_reject_removed_args.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_resolve_nb_dispersion.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_stop_cluster.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_block.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_cadence.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_fit_one.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_mom.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_shrink.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_weekly.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-psi_make_rw_cv_steps.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-sim_at.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-sim_binom.html</loc></url>
@@ -125,6 +133,7 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_kappa_prior.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_overland_tau_prior.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.html</loc></url>
@@ -201,6 +210,7 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_forecast_cv_table.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mu_jt.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_simulation_config.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_color_variant.html</loc></url>

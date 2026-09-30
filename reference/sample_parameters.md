@@ -94,6 +94,16 @@ sample_parameters(
 
   - sample_rho: Care-seeking rate (default TRUE)
 
+  - sample_rho_deaths: Surveillance capture rate of true cholera deaths
+    (default FALSE; PINNED at `config_default$rho_deaths` = 0.42). The
+    engine converts the reported CFR `mu_jt` to a per-onset fatality
+    probability by dividing by `rho_deaths` and then thins true deaths
+    by it, so the parameter cancels from reported deaths exactly and
+    carries no likelihood information; it sets only the level of true
+    deaths. The Beta(36.95, 51.02) prior is retained in `priors_default`
+    as the literature record and for sensitivity runs; set TRUE to
+    re-enable the draw.
+
   - sample_sigma: Symptomatic fraction (default TRUE)
 
   - sample_zeta_1: Symptomatic shedding rate (default TRUE)
@@ -118,34 +128,11 @@ sample_parameters(
 
   - sample_b_2_j: Seasonality (default TRUE)
 
-  - sample_CFR_target: Per-country target reported case-fatality ratio
-    (B2 lognormal location prior). When the priors object carries a
-    `CFR_target` location prior, this gates whether CFR_target is drawn
-    (TRUE) or held at its config default / prior median (FALSE) (default
-    TRUE)
+  - sample_epidemic_threshold: Location-specific case-reporting PPV
+    switch threshold (default TRUE)
 
-  - sample_mu_j_baseline: Under B2 (priors object has a `CFR_target`
-    location prior) this gates the *derivation* of `mu_j_baseline` from
-    `CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)`
-    (the B2.1 engine-correct chain factor) rather than an independent
-    draw; `mu_j_baseline` is no longer an independently sampled location
-    parameter. Under a legacy priors object (no `CFR_target` prior) it
-    gates the old independent mu_j_baseline draw. (default TRUE)
-
-  - sample_mu_j_slope: Location-specific temporal IFR trend (default
-    TRUE)
-
-  - sample_mu_j_epidemic_factor: Location-specific epidemic IFR
-    multiplier (default TRUE)
-
-  - sample_epidemic_threshold: Location-specific epidemic activation
-    threshold (default TRUE)
-
-  - sample_delta_reporting_cases: Infection-to-case reporting delay in
-    days (default TRUE)
-
-  - sample_delta_reporting_deaths: Infection-to-death reporting delay in
-    days (default TRUE)
+  - sample_delta_reporting_cases: Symptom-onset-to-case reporting delay
+    in days (default TRUE)
 
   - sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
 
@@ -165,6 +152,16 @@ sample_parameters(
     when sample_initial_conditions is TRUE. (default FALSE)
 
   If NULL, all parameters are sampled (default behavior).
+
+  The reported case fatality ratio `mu_jt` is not sampled. It is a
+  \[location x day\] matrix carried by the config, and calibration
+  integrates its level and year-to-year deviations out of the deaths
+  likelihood analytically
+  ([`calc_log_likelihood_deaths_integrated`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_deaths_integrated.md)).
+  The flags `sample_CFR_target`, `sample_mu_j_baseline`,
+  `sample_mu_j_epidemic_factor` and `sample_delta_reporting_deaths` were
+  removed with the parameters they controlled in v0.96.0; supplying one
+  raises a warning and has no effect.
 
 - verbose:
 

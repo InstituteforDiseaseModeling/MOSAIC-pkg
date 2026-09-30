@@ -176,7 +176,7 @@ for complete documentation. The control structure contains:
 
 - sampling:
 
-  sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.
+  sample_tau_i, sample_mobility_gamma, sample_beta_j0_tot, etc.
 
 - parallel:
 

@@ -12,6 +12,7 @@ calc_log_likelihood_poisson(
   estimated,
   weights = NULL,
   zero_buffer = TRUE,
+  eps_rel = 0.02,
   verbose = TRUE
 )
 ```
@@ -37,6 +38,13 @@ calc_log_likelihood_poisson(
   Logical; if `TRUE` (default), rounds observed values to integers and
   adds small buffer to avoid zero estimates. If `FALSE`, enforces strict
   integer requirements.
+
+- eps_rel:
+
+  Positive scalar; the predicted mean of every cell is floored at
+  `max(1e-4, eps_rel * mean(observed))` before the density is evaluated.
+  Default `0.02`. See
+  [`calc_log_likelihood_negbin`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_negbin.md).
 
 - verbose:
 

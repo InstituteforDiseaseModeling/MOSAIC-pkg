@@ -11,7 +11,7 @@ trajectories_&amp;lt;LOC&amp;gt;.csv."><meta property="og:image" content="https:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -123,11 +123,26 @@ significant figures it measured 62.7 MB raw / 7.8 MB packed for a single
 national model, which belongs in blob storage rather than git.</p>
     </div>
     <div class="section level2">
+    <h2 id="deaths-and-the-population-balance">Deaths and the population balance<a class="anchor" aria-label="anchor" href="#deaths-and-the-population-balance"></a></h2>
+
+
+<p>When the run integrated the reported CFR out (MOSAIC &gt;= v0.96.0),
+<code>reported_deaths</code> and <code>disease_deaths</code> are the members' deaths
+redrawn from the calibrated CFR. The population compartments and <code>N</code>
+carry the engine's own fatal draws at the prior <code>mu_jt</code> (the fatal share
+<code>p_fatal</code> of symptomatic onsets, a few percent, never enters
+<code>Isym</code>), so <code>N</code> balances against those,
+not against the redrawn <code>disease_deaths</code>. <code>disease_deaths</code> are true
+deaths, i.e. reported deaths / <code>rho_deaths</code>, and rest on the pinned
+<code>rho_deaths</code>.</p>
+    </div>
+    <div class="section level2">
     <h2 id="what-is-lost">What is lost<a class="anchor" aria-label="anchor" href="#what-is-lost"></a></h2>
 
 
-<p>The summary carries the weighted <strong>median</strong> only, so these are central
-trajectories with no credible intervals. Intervals for these channels
+<p>The summary carries one central line per channel and no credible intervals:
+<code>disease_deaths</code> follows the run's deaths <code>central_method</code> (default
+mean), and every other channel is the weighted <strong>median</strong>. Intervals for these channels
 require the per-member data. <code>reported_cases</code> and
 <code>reported_deaths</code> keep their intervals in the prediction CSVs.</p>
     </div>

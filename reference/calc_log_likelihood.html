@@ -11,7 +11,7 @@ and also allows a top-level weights argument that is passed down to the chosen s
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -90,7 +90,12 @@ Default is <code>NULL</code>, which sets all weights to 1.</p></dd>
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Additional arguments passed to the underlying distribution function:</p><ul><li><p><code>mean_precision</code> (for <code><a href="calc_log_likelihood_beta.html">calc_log_likelihood_beta</a></code>)</p></li>
 <li><p><code>trials</code> (for <code><a href="calc_log_likelihood_binomial.html">calc_log_likelihood_binomial</a></code>)</p></li>
-<li><p><code>k</code>, <code>k_min</code> (for <code><a href="calc_log_likelihood_negbin.html">calc_log_likelihood_negbin</a></code>)</p></li>
+<li><p><code>k</code> (for <code><a href="calc_log_likelihood_negbin.html">calc_log_likelihood_negbin</a></code>)</p></li>
+<li><p><code>eps_rel</code> (for <code><a href="calc_log_likelihood_negbin.html">calc_log_likelihood_negbin</a></code> and
+<code><a href="calc_log_likelihood_poisson.html">calc_log_likelihood_poisson</a></code>) – the relative floor on the
+predicted mean. Passing it with any other <code>family</code> is an error,
+which is deliberate: a scoring knob that is silently dropped is worse
+than one that fails loudly.</p></li>
 <li><p><code>verbose</code> (common to all distributions)</p></li>
 </ul></dd>
 
@@ -144,9 +149,8 @@ function, which multiplies each observation's log-likelihood contribution by <co
 <span class="r-in"><span>  verbose   <span class="op">=</span> <span class="cn">TRUE</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Using provided k = 2.000</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> k = 2.000 &lt; k_min = 3.000; using k_min.</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Negative Binomial log-likelihood (k=3.000): -10.71</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] -10.70527</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Negative Binomial log-likelihood (k=2.000): -10.73</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] -10.72775</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

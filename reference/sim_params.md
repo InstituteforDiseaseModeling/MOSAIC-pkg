@@ -12,7 +12,7 @@ This is that somewhere.
 ## Usage
 
 ``` r
-sim_params(config, components = SIM_PIPELINE)
+sim_params(config, components = SIM_PIPELINE, mode = c("rng", "replay"))
 ```
 
 ## Arguments
@@ -25,6 +25,11 @@ sim_params(config, components = SIM_PIPELINE)
 
   Pipeline subset that will be run; determines which compartments
   `Census` sums and which parameters are required.
+
+- mode:
+
+  `"rng"` (production) or `"replay"` (the laser-cholera parity harness);
+  decides which mortality inputs are read.
 
 ## Value
 

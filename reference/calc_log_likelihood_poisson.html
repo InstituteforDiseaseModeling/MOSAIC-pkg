@@ -9,7 +9,7 @@ Each observation can be weighted via weights, defaulting to equal weights."><met
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,6 +53,7 @@ Each observation can be weighted via <code>weights</code>, defaulting to equal w
 <span>  <span class="va">estimated</span>,</span>
 <span>  weights <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  zero_buffer <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  eps_rel <span class="op">=</span> <span class="fl">0.02</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -78,6 +79,12 @@ Default is <code>NULL</code>, which sets all weights to 1.</p></dd>
 <dd><p>Logical; if <code>TRUE</code> (default), rounds observed values to integers and
 adds small buffer to avoid zero estimates. If <code>FALSE</code>, enforces
 strict integer requirements.</p></dd>
+
+
+<dt id="arg-eps-rel">eps_rel<a class="anchor" aria-label="anchor" href="#arg-eps-rel"></a></dt>
+<dd><p>Positive scalar; the predicted mean of every cell is floored at
+<code>max(1e-4, eps_rel * mean(observed))</code> before the density is evaluated.
+Default <code>0.02</code>. See <code><a href="calc_log_likelihood_negbin.html">calc_log_likelihood_negbin</a></code>.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

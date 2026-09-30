@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -113,7 +113,6 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <dd><p>List of parameter sampling flags (what to sample). Default is:</p><ul><li><p><code>sample_tau_i</code>: Sample transmission rate (default: TRUE)</p></li>
 <li><p><code>sample_mobility_gamma</code>: Sample mobility gamma (default: TRUE)</p></li>
 <li><p><code>sample_mobility_omega</code>: Sample mobility omega (default: TRUE)</p></li>
-<li><p><code>sample_mu_j</code>: Sample recovery rate (default: TRUE)</p></li>
 <li><p><code>sample_iota</code>: Sample importation rate (default: TRUE)</p></li>
 <li><p><code>sample_gamma_2</code>: Sample second dose efficacy (default: TRUE)</p></li>
 <li><p><code>sample_alpha_1</code>: Sample within-metapop population mixing exponent (default: FALSE, PINNED)</p></li>
@@ -178,10 +177,11 @@ the exhaustive search. Note it may select a slightly different
 <code>optimal_n</code> than exhaustive and records only the evaluated N's in the
 diagnostics table. (The <code><a href="optimize_ensemble_subset.html">optimize_ensemble_subset</a></code> function's
 own <code>stride</code> default remains <code>1L</code> to preserve bit-identicality.)</p></li>
-<li><p><code>central_method</code>: Ensemble central tendency, <code>"median"</code>
-(default; lower calibration bias) or <code>"mean"</code> (unbiased for
-expected counts, never collapses on sparse deaths, unmasks implied-CFR
-bias). Scalar or per-channel <code>c(cases=, deaths=)</code>. Governs the prediction
+<li><p><code>central_method</code>: Ensemble central tendency, <code>"mean"</code>
+(default; the expected count, which never collapses to zero on sparse
+deaths) or <code>"median"</code> (the typical trajectory, robust to a few
+explosive members; the default from v0.46.1 to v0.97.x). Scalar or
+per-channel <code>c(cases=, deaths=)</code>. Governs the prediction
 trajectory + plots, the canonical <code>*_ensemble</code> R^2/bias metrics,
 the medoid target, and the subset-selection objective consistently.</p></li>
 </ul><p>The number of parameter sets in the ensemble is determined by the best subset
@@ -274,7 +274,7 @@ in-memory object used during the run is never affected (default:
 <span class="r-in"><span>    sample_tau_i <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
 <span class="r-in"><span>    sample_mobility_gamma <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
 <span class="r-in"><span>    sample_mobility_omega <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
-<span class="r-in"><span>    sample_mu_j_baseline <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
+<span class="r-in"><span>    sample_beta_j0_tot <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
 <span class="r-in"><span>    sample_iota <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
 <span class="r-in"><span>    sample_gamma_2 <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
 <span class="r-in"><span>    sample_alpha_1 <span class="op">=</span> <span class="cn">FALSE</span></span></span>
@@ -297,7 +297,7 @@ in-memory object used during the run is never affected (default:
 <span class="r-in"><span><span class="co"># Full workflow configuration (demonstrates logical order)</span></span></span>
 <span class="r-in"><span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu">mosaic_control_defaults</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  calibration <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>n_simulations <span class="op">=</span> <span class="cn">NULL</span>, n_iterations <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,      <span class="co"># How to run</span></span></span>
-<span class="r-in"><span>  sampling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>sample_tau_i <span class="op">=</span> <span class="cn">TRUE</span>, sample_mu_j_baseline <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>, <span class="co"># What to sample</span></span></span>
+<span class="r-in"><span>  sampling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>sample_tau_i <span class="op">=</span> <span class="cn">TRUE</span>, sample_beta_j0_tot <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,  <span class="co"># What to sample</span></span></span>
 <span class="r-in"><span>  likelihood <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>weight_wis <span class="op">=</span> <span class="fl">0.10</span>, weight_cases <span class="op">=</span> <span class="fl">1.0</span><span class="op">)</span>,        <span class="co"># How to score</span></span></span>
 <span class="r-in"><span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>ESS_param <span class="op">=</span> <span class="fl">100</span>, ESS_param_prop <span class="op">=</span> <span class="fl">0.95</span><span class="op">)</span>,          <span class="co"># When to stop</span></span></span>
 <span class="r-in"><span>  parallel <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>enable <span class="op">=</span> <span class="cn">TRUE</span>, n_cores <span class="op">=</span> <span class="fl">16</span><span class="op">)</span>,                    <span class="co"># Infrastructure</span></span></span>

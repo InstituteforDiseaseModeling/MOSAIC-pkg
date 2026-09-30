@@ -115,6 +115,8 @@ Functions starting with run\_, make\_, or create\_
   : Create Lagged Versions of Data
 - [`make_mosaic_cluster()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
   : Create a Reusable MOSAIC Parallel Cluster
+- [`make_mu_jt()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mu_jt.md)
+  : Build the daily reported-CFR matrix mu_jt from annual estimates
 - [`make_param_df()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.md)
   : Get Template for Parameter Values
 - [`make_simulation_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_simulation_config.md)
@@ -127,8 +129,8 @@ Functions starting with run\_, make\_, or create\_
 Estimation and fitting functions
 
 - [`est_CFR_hierarchical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_CFR_hierarchical.md)
-  : Estimate Case Fatality Rate using Hierarchical GAM with Time Series
-  Splines
+  : Estimate the time-varying reported case fatality ratio (mu_jt) from
+  WHO annual data
 - [`est_WASH_coverage()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_WASH_coverage.md)
   : Estimate, Visualize, and Impute WASH Coverage and Correlation with
   Cholera Incidence
@@ -157,6 +159,8 @@ Estimation and fitting functions
   Constant (kappa)
 - [`est_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.md)
   : Fit Mobility Model Using Flight Data and Distance Matrices
+- [`est_nb_dispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md)
+  : Estimate negative-binomial dispersion from surveillance observations
 - [`est_overland_tau_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_overland_tau_prior.md)
   : Build a per-country overland departure-rate prior for MOSAIC
   calibration
@@ -217,14 +221,9 @@ Calculation functions
   : Bias Ratio Between Estimated and Observed Series
 - [`calc_bookend_batch_size()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bookend_batch_size.md)
   : Calculate Batch Size for Bookend Strategy
-- [`calc_cases_from_infections()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_cases_from_infections.md)
-  : Map infections to suspected and true cholera cases
 - [`calc_convergence_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_diagnostics.md)
   : Calculate comprehensive convergence diagnostics with status
   indicators
-- [`calc_deaths_from_infections()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_deaths_from_infections.md)
-  : Calculate deaths from symptomatic infections with
-  threshold-dependent IFR
 - [`calc_diffusion_matrix_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_diffusion_matrix_pi.md)
   : Compute Diffusion Matrix Based on Gravity Model
 - [`calc_fit_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_fit_diagnostics.md)
@@ -241,6 +240,8 @@ Calculation functions
   : Calculate log-likelihood for Beta-distributed proportions
 - [`calc_log_likelihood_binomial()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_binomial.md)
   : Calculate log-likelihood for Binomial-distributed data
+- [`calc_log_likelihood_deaths_integrated()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_deaths_integrated.md)
+  : Deaths log-likelihood with the reported CFR integrated out
 - [`calc_log_likelihood_gamma()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_gamma.md)
   : Calculate log-likelihood for Gamma-distributed data
 - [`calc_log_likelihood_negbin()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_negbin.md)
@@ -555,8 +556,6 @@ Helper and utility functions
   : Report the freshness of every MOSAIC data input and output
 - [`check_mosaic_manual_inputs()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_mosaic_manual_inputs.md)
   : Report on the MOSAIC data sources that must be refreshed by hand
-- [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
-  : Check for overdispersion in a count time series
 - [`check_psi_amplitude()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_psi_amplitude.md)
   : Amplitude guard for post-correction suitability (psi)
 - [`check_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_python_env.md)
@@ -702,16 +701,9 @@ Other exported functions and internal helpers
 - [`calc_bookend_batch_size()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bookend_batch_size.md)
   : Calculate Batch Size for Bookend Strategy
 
-- [`calc_cases_from_infections()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_cases_from_infections.md)
-  : Map infections to suspected and true cholera cases
-
 - [`calc_convergence_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_diagnostics.md)
   : Calculate comprehensive convergence diagnostics with status
   indicators
-
-- [`calc_deaths_from_infections()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_deaths_from_infections.md)
-  : Calculate deaths from symptomatic infections with
-  threshold-dependent IFR
 
 - [`calc_diffusion_matrix_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_diffusion_matrix_pi.md)
   : Compute Diffusion Matrix Based on Gravity Model
@@ -735,6 +727,9 @@ Other exported functions and internal helpers
 
 - [`calc_log_likelihood_binomial()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_binomial.md)
   : Calculate log-likelihood for Binomial-distributed data
+
+- [`calc_log_likelihood_deaths_integrated()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_deaths_integrated.md)
+  : Deaths log-likelihood with the reported CFR integrated out
 
 - [`calc_log_likelihood_gamma()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_gamma.md)
   : Calculate log-likelihood for Gamma-distributed data
@@ -826,9 +821,6 @@ Other exported functions and internal helpers
 
 - [`check_mosaic_manual_inputs()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_mosaic_manual_inputs.md)
   : Report on the MOSAIC data sources that must be refreshed by hand
-
-- [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
-  : Check for overdispersion in a count time series
 
 - [`check_psi_amplitude()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_psi_amplitude.md)
   : Amplitude guard for post-correction suitability (psi)
@@ -929,8 +921,8 @@ Other exported functions and internal helpers
   : Cholera Epidemic Peaks Data
 
 - [`est_CFR_hierarchical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_CFR_hierarchical.md)
-  : Estimate Case Fatality Rate using Hierarchical GAM with Time Series
-  Splines
+  : Estimate the time-varying reported case fatality ratio (mu_jt) from
+  WHO annual data
 
 - [`est_WASH_coverage()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_WASH_coverage.md)
   : Estimate, Visualize, and Impute WASH Coverage and Correlation with
@@ -971,6 +963,9 @@ Other exported functions and internal helpers
 
 - [`est_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.md)
   : Fit Mobility Model Using Flight Data and Distance Matrices
+
+- [`est_nb_dispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md)
+  : Estimate negative-binomial dispersion from surveillance observations
 
 - [`est_overland_tau_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_overland_tau_prior.md)
   : Build a per-country overland departure-rate prior for MOSAIC
@@ -1213,6 +1208,9 @@ Other exported functions and internal helpers
 
 - [`make_mosaic_cluster()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
   : Create a Reusable MOSAIC Parallel Cluster
+
+- [`make_mu_jt()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mu_jt.md)
+  : Build the daily reported-CFR matrix mu_jt from annual estimates
 
 - [`make_param_df()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.md)
   : Get Template for Parameter Values

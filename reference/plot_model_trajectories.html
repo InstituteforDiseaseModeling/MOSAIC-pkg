@@ -6,8 +6,8 @@ TRUE). Each panel shows the comprehensive internal-state channels over time —
 surveillance fit (reported cases/deaths), burden, incidence drivers, force of
 infection, the SVEIR + W compartments, and sanity checks (mass balance,
 population, epidemic fraction) — with a uniform-thinned set of actual
-posterior member trajectories (the spaghetti, conveying spread) and the
-weighted median overlaid in bold. Observed surveillance points are
+posterior member trajectories (the spaghetti, conveying spread) and a bold
+central line (see Central line). Observed surveillance points are
 overlaid only on the reported_cases/reported_deaths panels.'><meta property="og:description" content='Renders the multi-panel "Model trajectories" figure for a single location from
 a persisted mosaic_trajectories artifact (written by
 run_MOSAIC() when control$predictions$capture_trajectories =
@@ -15,8 +15,8 @@ TRUE). Each panel shows the comprehensive internal-state channels over time —
 surveillance fit (reported cases/deaths), burden, incidence drivers, force of
 infection, the SVEIR + W compartments, and sanity checks (mass balance,
 population, epidemic fraction) — with a uniform-thinned set of actual
-posterior member trajectories (the spaghetti, conveying spread) and the
-weighted median overlaid in bold. Observed surveillance points are
+posterior member trajectories (the spaghetti, conveying spread) and a bold
+central line (see Central line). Observed surveillance points are
 overlaid only on the reported_cases/reported_deaths panels.'><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
@@ -25,7 +25,7 @@ overlaid only on the reported_cases/reported_deaths panels.'><meta property="og:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,8 +65,8 @@ TRUE</code>). Each panel shows the comprehensive internal-state channels over ti
 surveillance fit (reported cases/deaths), burden, incidence drivers, force of
 infection, the SVEIR + W compartments, and sanity checks (mass balance,
 population, epidemic fraction) — with a uniform-thinned set of <strong>actual</strong>
-posterior member trajectories (the spaghetti, conveying spread) and the
-weighted <strong>median</strong> overlaid in bold. Observed surveillance points are
+posterior member trajectories (the spaghetti, conveying spread) and a bold
+central line (see <strong>Central line</strong>). Observed surveillance points are
 overlaid only on the <code>reported_cases</code>/<code>reported_deaths</code> panels.</p>
     </div>
 
@@ -116,26 +116,28 @@ overlaid only on the <code>reported_cases</code>/<code>reported_deaths</code> pa
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p><strong>Pure read-render:</strong> this function never runs the engine, never
 re-simulates, and never re-weights — it consumes only the compact artifact
-(per-channel weighted median + thinned actual lines, both already reduced over
+(per-channel central series + thinned actual lines, both already reduced over
 the best subset). It is the trajectory analogue of
 <code><a href="plot_model_ensemble.html">plot_model_ensemble</a></code>.</p>
 <p><strong>Central line:</strong> for <code>reported_cases</code> / <code>reported_deaths</code> the
 bold line is the ensemble <em>central</em> series following
-<code>control$predictions$central_method</code> (weighted median or weighted mean,
-per channel) and is <strong>bit-identical</strong> to the cases/deaths <em>prediction</em>
-plots – it is reduced from the same captured draws over the same final
-displayed member set and weights (no re-simulation). All other channels
-(compartments, FOI, incidence, derived) have no prediction-plot counterpart and
-use the conventional weighted <em>median</em>.</p>
+<code>control$predictions$central_method</code> (weighted mean by default, or weighted
+median, per channel) and is <strong>bit-identical</strong> to the cases/deaths
+<em>prediction</em> plots – it is reduced from the same captured draws over the
+same final displayed member set and weights (no re-simulation). True deaths
+(<code>disease_deaths</code>) follow the deaths channel's method so the two deaths
+panels are comparable. All other channels (compartments, FOI, incidence,
+derived) have no prediction-plot counterpart and use the weighted
+<em>median</em>.</p>
 <p><strong>Weighting note:</strong> the central series and lines are reduced over the
 <em>final displayed</em> member set and weights: the <em>candidate</em> best subset
 (<code>is_best_subset</code> / <code>weight_best</code>) when subset optimization is off,
 and the <em>optimized</em> subset (<code>is_best_subset_opt</code> /
 <code>weight_best_opt</code>) when <code>control$predictions$optimize_subset = TRUE</code>.
 Channels are captured at sim time (stream-to-disk) and reduced over the
-optimized members with NO re-simulation. The CFR(t) panel carries dashed
-endemic/epidemic regime reference lines when <code>trajectories$cfr_refs</code> is
-present.</p>
+optimized members with NO re-simulation. The CFR(t) panel carries a dashed
+step line at the posterior median reported CFR for each year when
+<code>trajectories$cfr_refs</code> is present.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

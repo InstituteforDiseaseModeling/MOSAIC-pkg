@@ -16,7 +16,7 @@ config_simulation_epidemic
 A named **list** identical in structure to
 [config_default](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
 but much smaller. Key elements include day-by-day matrices (`b_jt`,
-`psi_jt`, `mu_jt`, …), initial state vectors, and placeholder
+`d_jt`, `psi_jt`, …), initial state vectors, and placeholder
 `reported_cases` / `reported_deaths`.
 
 ## Details

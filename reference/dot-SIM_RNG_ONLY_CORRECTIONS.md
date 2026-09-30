@@ -32,3 +32,12 @@ non-replay test, because the parity harness structurally cannot cover it
   v0.89.0. The oracle's dose-response is `W/(kappa + W)` with W an
   absolute cell count; kappa is a concentration. Production divides
   by N. Covered by test-env-dose-response.R.
+
+- infectious/fatal_onsets:
+
+  v0.96.0. The oracle's mortality is a daily hazard
+  `mu_j_baseline * (1 + mu_j_epidemic_factor * flag)` on the symptomatic
+  stock, reported `delta_reporting_deaths` days after the death.
+  Production draws each onset's outcome at onset from the time-varying
+  reported CFR `mu_jt` and reports deaths on the case lag. Covered by
+  test-sim-mortality-onset.R.

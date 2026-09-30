@@ -61,8 +61,16 @@ calc_log_likelihood(
   - `trials` (for
     [`calc_log_likelihood_binomial`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_binomial.md))
 
-  - `k`, `k_min` (for
+  - `k` (for
     [`calc_log_likelihood_negbin`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_negbin.md))
+
+  - `eps_rel` (for
+    [`calc_log_likelihood_negbin`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_negbin.md)
+    and
+    [`calc_log_likelihood_poisson`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_poisson.md))
+    – the relative floor on the predicted mean. Passing it with any
+    other `family` is an error, which is deliberate: a scoring knob that
+    is silently dropped is worse than one that fails loudly.
 
   - `verbose` (common to all distributions)
 
@@ -130,7 +138,6 @@ calc_log_likelihood(
   verbose   = TRUE
 )
 #> Using provided k = 2.000
-#> k = 2.000 < k_min = 3.000; using k_min.
-#> Negative Binomial log-likelihood (k=3.000): -10.71
-#> [1] -10.70527
+#> Negative Binomial log-likelihood (k=2.000): -10.73
+#> [1] -10.72775
 ```

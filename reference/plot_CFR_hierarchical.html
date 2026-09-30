@@ -11,7 +11,7 @@ with faceted plots showing country-specific CFR trends over time."><meta propert
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -103,8 +103,12 @@ countries by data availability</p></dd>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The function creates a multi-page PDF containing:</p><ul><li><p>Page 1: Overview plot with temporal trend and data summary</p></li>
 <li><p>Following pages: Faceted plots of country-specific CFR trends</p></li>
-<li><p>Each panel shows observed CFR (points) and model predictions (lines with CI)</p></li>
-<li><p>Color coding indicates data quality and model fit</p></li>
+<li><p>Each panel shows observed CFR (points) and model predictions (lines with 95% predictive intervals for one year's CFR)</p></li>
+<li><p>Years after a country's last fitted year (<code>is_forecast</code>) are drawn dashed on
+a shaded background: the model holds each trend at its last fitted year there</p></li>
+<li><p>A page of each country's deviation from the population trend (the model's
+country intercept is weakly identified, so the deviation is taken from the
+fitted country curve)</p></li>
 </ul></div>
 
     <div class="section level2">

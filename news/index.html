@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,9 +39,289 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.93.2" id="mosaic-0932">MOSAIC 0.93.2<a class="anchor" aria-label="anchor" href="#mosaic-0932"></a></h2>
-<ul><li>The <code><a href="../reference/calc_Reff.html">calc_Reff()</a></code> kernel caveat no longer hand-escapes its percent signs, which main’s roxygen guard (<code>test-mobility-od.R</code>) rejects.</li>
+<h2 class="pkg-version" data-toc-text="0.99.9" id="mosaic-0999">MOSAIC 0.99.9<a class="anchor" aria-label="anchor" href="#mosaic-0999"></a></h2>
+<div class="section level3">
+<h3 id="carried-forward-cfr-years-are-exactly-flat-on-every-blas-v0999-0-99-9">Carried-forward CFR years are exactly flat on every BLAS (v0.99.9)<a class="anchor" aria-label="anchor" href="#carried-forward-cfr-years-are-exactly-flat-on-every-blas-v0999-0-99-9"></a></h3>
+<p>Under <code>forecast_method = "carry_forward"</code>, <code><a href="../reference/est_CFR_hierarchical.html">est_CFR_hierarchical()</a></code> gives every year after the last data year the same design row, but OpenBLAS can sum identical rows in different orders, so their <code>logit_mean</code> differed in the last bit on Linux and the as-of <code>mu_jt</code> was not exactly flat (a CI-only test failure). Those years now copy the first occurrence. On macOS the values were already identical, so no data object changes.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.99.8" id="mosaic-0998">MOSAIC 0.99.8<a class="anchor" aria-label="anchor" href="#mosaic-0998"></a></h2>
+<p>Merges <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/127" class="external-link">#127</a>’s 0.93.2 fix. <code>calc_Reff.R</code> keeps the v0.96.0 mortality caveat, which never had the escaped percents.</p>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.99.7" id="mosaic-0997">MOSAIC 0.99.7<a class="anchor" aria-label="anchor" href="#mosaic-0997"></a></h2>
+<div class="section level3">
+<h3 id="pre-merge-review-fixes-v0997-0-99-7">Pre-merge review fixes (v0.99.7)<a class="anchor" aria-label="anchor" href="#pre-merge-review-fixes-v0997-0-99-7"></a></h3>
+<ul><li>
+<code><a href="../reference/calc_convergence_diagnostics.html">calc_convergence_diagnostics()</a></code> documented <code>is_diagnostics</code> twice after the v0.99.2 merge, which moved <code>verbose</code>’s default under the wrong parameter and dropped the link to <code><a href="../reference/calc_is_diagnostics.html">calc_is_diagnostics()</a></code>.</li>
+<li>NEWS now records the removal of <code>calc_cases_from_infections()</code> and <code>calc_deaths_from_infections()</code>.</li>
+<li>
+<code><a href="../reference/write_trajectory_csv.html">write_trajectory_csv()</a></code> no longer says the summary is the weighted median throughout: <code>disease_deaths</code> follows the deaths <code>central_method</code>.</li>
 </ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.99.6" id="mosaic-0996">MOSAIC 0.99.6<a class="anchor" aria-label="anchor" href="#mosaic-0996"></a></h2>
+<div class="section level3">
+<h3 id="r-cmd-check-hygiene-v0996-0-99-6">R CMD check hygiene (v0.99.6)<a class="anchor" aria-label="anchor" href="#r-cmd-check-hygiene-v0996-0-99-6"></a></h3>
+<ul><li>
+<code>test-psi-manifest-provenance.R</code> read <code>R/</code> source before checking it exists, so it errored under R CMD check (where <code>R/</code> is absent) instead of skipping. CI never saw it because CI runs <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_local()</a></code> from source.</li>
+<li>
+<code>cfr_pred</code>, <code>deviation</code> (<code><a href="../reference/plot_CFR_hierarchical.html">plot_CFR_hierarchical()</a></code>) and <code>.dp</code> (<code><a href="../reference/impute_drought_probability.html">impute_drought_probability()</a></code>) are declared in <code>globals.R</code>.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.99.5" id="mosaic-0995">MOSAIC 0.99.5<a class="anchor" aria-label="anchor" href="#mosaic-0995"></a></h2>
+<div class="section level3">
+<h3 id="merge-the-r_eff-post-merge-fixes-v0995-0-99-5">Merge the R_eff post-merge fixes (v0.99.5)<a class="anchor" aria-label="anchor" href="#merge-the-r_eff-post-merge-fixes-v0995-0-99-5"></a></h3>
+<p>Brings in <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/127" class="external-link">#127</a> (0.93.1): run inputs written at 17 significant digits, the <code>peak_window</code> argument to <code><a href="../reference/calc_Reff.html">calc_Reff()</a></code>, and the review’s caveat and test fixes. <code><a href="../reference/calc_Reff.html">calc_Reff()</a></code> keeps the “mean” cases default and the CFR v2.1 mortality caveat, because deaths now leave at onset rather than at a rate from Isym.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.99.4" id="mosaic-0994">MOSAIC 0.99.4<a class="anchor" aria-label="anchor" href="#mosaic-0994"></a></h2>
+<div class="section level3">
+<h3 id="declare-the-data-pipelines-optional-packages-v0994-0-99-4">Declare the data pipeline’s optional packages (v0.99.4)<a class="anchor" aria-label="anchor" href="#declare-the-data-pipelines-optional-packages-v0994-0-99-4"></a></h3>
+<p><code><a href="../reference/get_travel_time_matrix.html">get_travel_time_matrix()</a></code> uses gdistance and malariaAtlas, and <code><a href="../reference/rake_mobility_od_to_tau.html">rake_mobility_od_to_tau()</a></code> uses mipfp, each behind <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace()</a></code>. They were never declared, so R CMD check raised a WARNING on every run; they are now in Suggests. <code>mosaic_run_suffix()</code> calls <code><a href="https://rdrr.io/r/utils/str.html" class="external-link">utils::str()</a></code> explicitly, clearing the matching NOTE.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.99.3" id="mosaic-0993">MOSAIC 0.99.3<a class="anchor" aria-label="anchor" href="#mosaic-0993"></a></h2>
+<div class="section level3">
+<h3 id="the-human-r-recovery-test-pools-seeds-v0993-0-99-3">The human-R recovery test pools seeds (v0.99.3)<a class="anchor" aria-label="anchor" href="#the-human-r-recovery-test-pools-seeds-v0993-0-99-3"></a></h3>
+<p><code>test-reproductive_numbers.R</code> compared one realization’s median R_hum ratio with a 5% tolerance. That ratio scatters by about +/-5% seed to seed (0.91-1.08 at the epidemic fixture), and the merged engine’s fatal-onset draws change the realization, so seed 3 fell outside it (0.909). The check now pools 8 seeds (median ratio 0.98). The route kernel ignores the fatal onsets that never enter Isym; at this config (p_fatal 3.3%) that moves the ratio by about -0.5%.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.99.2" id="mosaic-0992">MOSAIC 0.99.2<a class="anchor" aria-label="anchor" href="#mosaic-0992"></a></h2>
+<div class="section level3">
+<h3 id="the-cfr-v21-line-merges-into-main-v0992-0-99-2">The CFR v2.1 line merges into main (v0.99.2)<a class="anchor" aria-label="anchor" href="#the-cfr-v21-line-merges-into-main-v0992-0-99-2"></a></h3>
+<p>This release merges the CFR v2.1 development line into main. That line was numbered 0.92.0-0.99.1 in parallel with main’s 0.92.1-0.93.0 (route-split R_eff, the psi_evolve close-out, the automated data refresh), so both sets of changes are listed: the CFR line’s under this heading (its own 0.92.0 and 0.93.0 entries are labelled), main’s under their versions below. What users will notice:</p>
+<ul><li>Deaths come from the fate-at-onset reported-CFR model: <code>mu_jt</code> is the reported CFR, integrated out of the deaths likelihood per simulated path, and a config carrying the retired mortality fields (<code>mu_j_baseline</code>, <code>mu_j_epidemic_factor</code>, <code>CFR_target</code>, <code>delta_reporting_deaths</code>, <code>mu_j_slope</code>) is converted (a <code>CFR_target</code> becomes a constant <code>mu_jt</code>, with a warning) or refused. Rebuild such configs with <code>make_config_default()</code>.</li>
+<li>The ensemble central line is the weighted mean (<code>central_method = "median"</code> restores the previous behaviour), and forecast years carry the ensemble’s latest-year CFR shift.</li>
+<li>The integrated deaths likelihood adds a median 13% (11-25%) to each scored iteration on the 40-location config.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="pre-merge-audit-fixes-figures-follow-the-runs-central-line-stale-deaths-text-v0991-0-99-2">Pre-merge audit fixes: figures follow the run’s central line; stale deaths text (v0.99.1)<a class="anchor" aria-label="anchor" href="#pre-merge-audit-fixes-figures-follow-the-runs-central-line-stale-deaths-text-v0991-0-99-2"></a></h3>
+<ul><li>
+<strong>render_MOSAIC_figures() drew the median for every mean run.</strong> It read <code>central_method</code> from the top of <code>1_inputs/control.json</code>, but run_MOSAIC() nests the control under <code>$control</code>, so the lookup always fell back to the median; since the v0.98.0 default flip every re-rendered prediction figure (and the in-run <code>plots = TRUE</code> figures) showed the median while the CSVs and summary metrics used the mean. The lookup is now <code>.mosaic_run_central_method()</code>, which reads the nested shape and still treats a control.json without the setting (pre-v0.38.0) as median; the test fixture writes the real shape.</li>
+<li>
+<strong>The final deaths step is no longer masked.</strong> <code>mask_final_deaths_step</code> defaulted to TRUE for a laser-cholera off-by-one (issue <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/82" class="external-link">#82</a>) that the R engine does not have: since v0.96.0 deaths are reported on the cases’ row and the post-hoc redraw fills the last column, so the mask blanked a real day in the CSVs, plots and R^2/bias. The default is now FALSE in calc_model_ensemble(), plot_model_ensemble() and the prediction table; an ensemble saved without an <code>artifact_mask</code> (laser-cholera era) still masks. A regression test checks the engine’s final deaths column is populated.</li>
+<li>
+<strong>Plot labels.</strong> The PPC names the plotted central series from the CSV’s <code>central_method</code> (“Predicted Mean”/“Median”); plot_forecast_cv_grid() draws <code>pred_central</code> (falling back to <code>pred_median</code>); the ensemble caption names the nested intervals correctly (“95% and 50%”); the trajectory true-deaths panel follows the deaths channel’s central method and is labelled as fatal onsets dated at onset; plot_model_posteriors_detail() draws truncated-normal priors (delta_reporting_cases, epidemic_threshold, decay_<em>, psi_star_</em>).</li>
+<li>
+<strong>plot_CFR_hierarchical()</strong> takes its years from the model outputs (it had 1970-2024 and 2024 hard-coded), shades and dashes the years each trend is held at its last fitted year, drops in-progress years as the model does, replaces the random-effects page (the country intercept is weakly identified, about 1e-5) with each fitted country curve’s deviation from the population trend, keys its summary on iso_code (Cote d’Ivoire was split in two), and says “Case Fatality Ratio”.</li>
+<li>
+<strong>Docs:</strong> the fatal share of symptomatic onsets is a few percent, not “a fraction of a percent”; the NB deaths dispersion is diagnostic only and the retired-setting warning no longer suggests <code>nb_k_deaths</code>; the Deployment vignette’s install/run chunks are <code>eval = FALSE</code>; skill and agent notes updated (central_method default, the integrated deaths core, retired <code>nb_k_min_*</code>).</li>
+<li>Removed the orphaned <code>model/input/parameters_inventory.csv</code> (no reader; its <code>mu_j</code> row was the retired mortality model) and <code>local/calibration/ calibration_test_43.R</code> (it set removed <code>sample_mu_j_*</code> flags).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="forecast-years-carry-the-ensembles-shared-cfr-shift-not-each-members-own-v0990-0-99-2">Forecast years carry the ensemble’s shared CFR shift, not each member’s own (v0.99.0)<a class="anchor" aria-label="anchor" href="#forecast-years-carry-the-ensembles-shared-cfr-shift-not-each-members-own-v0990-0-99-2"></a></h3>
+<p>v0.98.0 centred each ensemble member’s forecast-year CFR on that member’s own deviation for the latest observed year. That deviation also absorbs the member’s case error that year: a member that under-shoots the year’s cases gets a high CFR, and members like that tend to have larger waves later, so the carried error amplified the forecast. In the calibration test SSD’s 2026 deaths went from 1.05x to 2.50x observed while NGA’s improved.</p>
+<p>Each forecast year is now centred on one shift per location: the weighted mean, over the posterior ensemble’s members, of their posterior-mode deviations for the latest observed year. The members’ shared CFR change carries forward; each member’s own case error does not, and each member keeps its own location offset. <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> estimates the shift after calibration from one run per ensemble member, logs it, and stores it in the deaths integration, so the ensemble, the medoid, <code>cfr_posterior.csv</code>, <code>config_medoid.json</code> and a post-hoc re-run from <code>deaths_integration.rds</code> all use it. The forecast-year prior is a normal centred on the shift (the v0.98.0 prior coupled forecast years to each member’s latest year). The calibration likelihood is unchanged except where a scored day’s blend reaches a forecast year, where it now uses a zero shift. <code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> returns the shift as <code>forecast_shift</code>, and <code><a href="../reference/calc_log_likelihood_deaths_integrated.html">calc_log_likelihood_deaths_integrated()</a></code> gains a <code>forecast_shift</code> argument (default 0: forecast years revert to the prior level). The likelihood version is <code>R/v0.99.0+deaths_forecastshift</code>. Six test assertions that compared small quantities (CFRs near 0.01-0.08) with <code>expect_equal(tolerance =)</code> were vacuous, because testthat switches to an absolute difference when the values are smaller than the tolerance; they now use a relative-error check (<code>expect_rel_equal()</code>).</p>
+</div>
+<div class="section level3">
+<h3 id="the-ensemble-central-line-is-the-mean-forecast-years-continue-the-latest-cfr-v0980-0-99-2">The ensemble central line is the mean; forecast years continue the latest CFR (v0.98.0)<a class="anchor" aria-label="anchor" href="#the-ensemble-central-line-is-the-mean-forecast-years-continue-the-latest-cfr-v0980-0-99-2"></a></h3>
+<ul><li>
+<strong>Ensemble central tendency defaults to the mean</strong> for both cases and deaths (<code>control$predictions$central_method = "mean"</code>; it was <code>"median"</code> from v0.46.1). It drives the prediction line and <code>predicted_central</code>, the headline <code>*_ensemble</code> R^2/bias, the medoid target and the subset objective. The daily median of sparse deaths is zero on most days in low-count countries, so it read 0x in-sample deaths bias for MOZ and KEN in the CFR-v2.1 calibration test; across the 8 countries the median in-sample deaths bias moves from 0.65x to 0.78x and out-of-sample from 0.51x to 1.30x. Cases move from slightly low to slightly high (0.94x to 1.08x in sample). WIS, coverage, the calibration and the posterior are unchanged. <strong>Behaviour change:</strong> the medoid (and so <code>config_medoid.json</code>, the medoid plots and the R_eff central line) is now the member closest to the mean cases series. <code>summary.json</code> keeps both <code>*_ensemble_mean</code> and <code>*_ensemble_median</code>, and <code>central_method = "median"</code> reproduces the previous behaviour. Completed runs whose <code>control.json</code> predates the setting are still read as median by <code><a href="../reference/render_MOSAIC_figures.html">render_MOSAIC_figures()</a></code> and <code><a href="../reference/add_reproductive_numbers.html">add_reproductive_numbers()</a></code>.</li>
+<li>
+<strong>Forecast years continue the latest calibrated CFR.</strong> The integrated CFR’s year deviations were independent, so a year past the data reverted to the prior’s long-run country level; in the calibration test this under-forecast COD’s 2026 deaths after its CFR rose from about 1% to 3%. Each forecast year’s deviation is now centred on the latest observed year’s, with the same year-to-year spread (<code>sd_year</code>). The latest observed year is the year of the last scored day minus 30 days, so data reaching only into a new year’s 1 January blend leave the year before as the anchor. The prior is a product of conditional densities with unit Jacobian, so the calibration likelihood is unchanged except where a scored day’s blend reaches a forecast year (data ending within 30 days of a 1 January). The post-hoc death redraw, <code>cfr_posterior.csv</code> and <code>config_medoid.json</code> follow. The likelihood version is <code>R/v0.98.0+deaths_carryforward</code>. A <code>deaths_integration.rds</code> saved by an earlier version re-runs with independent year deviations, as it was calibrated.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="est_cfr_hierarchical-documents-the-weak-identification-of-tau-v0973-0-99-2">est_CFR_hierarchical() documents the weak identification of tau (v0.97.3)<a class="anchor" aria-label="anchor" href="#est_cfr_hierarchical-documents-the-weak-identification-of-tau-v0973-0-99-2"></a></h3>
+<p>Documentation only. <code><a href="../reference/est_CFR_hierarchical.html">?est_CFR_hierarchical</a></code> now states that the between-country SD <code>tau</code> is weakly identified: the per-country factor smooth carries its own intercept, so the fit can put the between-country spread in either term (about 0.003 on the full 1970-2025 data, 0.31 through 2024). Per-country estimates are unaffected, and every MOSAIC location is in the WHO annual data, so no MOSAIC prior depends on <code>tau</code>. The help page also describes the exclusion of in-progress years and the per-country carry-forward of forecast years, both added in v0.97.0.</p>
+</div>
+<div class="section level3">
+<h3 id="the-cfrs-year-deviations-are-yearly-levels-not-an-interpolated-curve-v0972-0-99-2">The CFR’s year deviations are yearly levels, not an interpolated curve (v0.97.2)<a class="anchor" aria-label="anchor" href="#the-cfrs-year-deviations-are-yearly-levels-not-an-interpolated-curve-v0972-0-99-2"></a></h3>
+<p>v0.97.0 interpolated the integrated CFR’s year deviations linearly between 1 July anchors. That extrapolates the within-year trend past the end of the data. Every calibration ends partway through a year, so the forecast for the rest of that year overshot. With the true CFR at 3% through 2024 and 1.5% in Jan-May 2025, it forecast June-December 2025 at 1.3%, below the fitted Jan-May level. The calibration test showed the effect on NGA (out-of-sample deaths 0.7x).</p>
+<p>Each year’s deviation is now a level for that calendar year, blended linearly over the 60 days centred on each 1 January, so the CFR still has no step at a year boundary. A year observed only in part is forecast at the level of its observed months. The medoid config’s posterior shift uses the same basis. The likelihood version is <code>R/v0.97.2+deaths_yearlevel</code>.</p>
+</div>
+<div class="section level3">
+<h3 id="posteriorsjson-no-longer-copies-the-prior-reported-cfr-block-v0971-0-99-2">posteriors.json no longer copies the prior reported-CFR block (v0.97.1)<a class="anchor" aria-label="anchor" href="#posteriorsjson-no-longer-copies-the-prior-reported-cfr-block-v0971-0-99-2"></a></h3>
+<ul><li>
+<code><a href="../reference/calc_model_posterior_distributions.html">calc_model_posterior_distributions()</a></code> drops the top-level <code>mu_jt</code> block that it had copied verbatim from the priors. The reported CFR is integrated out, not sampled, so that block is a prior, and its calibrated value is <code>3_results/posterior/cfr_posterior.csv</code>. Staged estimation is unaffected, because <code><a href="../reference/update_priors_from_posteriors.html">update_priors_from_posteriors()</a></code> starts from the priors.</li>
+<li>The <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> log line for the deaths likelihood now names the quasi-Poisson score and reports the median dispersion.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="cfr-v21-red-team-fixes-a-total-preserving-deaths-score-and-a-corrected-prior-v0970-0-99-2">CFR-v2.1 red-team fixes: a total-preserving deaths score and a corrected prior (v0.97.0)<a class="anchor" aria-label="anchor" href="#cfr-v21-red-team-fixes-a-total-preserving-deaths-score-and-a-corrected-prior-v0970-0-99-2"></a></h3>
+<p>A line-by-line red-team review of v0.96.1 (engine, likelihood, prior, completeness and an end-to-end calibration), then fixes.</p>
+<ul><li>
+<strong>The integrated deaths score under-predicted deaths.</strong> The negative-binomial score for the CFR level, Σ(D − m)/(k + m) = 0, weights low-count weeks about 1/k and peak weeks about 1/m. So whenever a path’s weekly shape differed from the data (always), the fitted CFR tracked the low weeks, not the totals.
+<ul><li>On ZMB the redrawn deaths came out at 0.6-0.8× observed, and the posterior CFR at half the observed CFR.</li>
+<li>The score is now <strong>quasi-Poisson</strong>. The Poisson score preserves totals, so given the path the fitted CFR reproduces observed deaths.</li>
+<li>The Poisson log-likelihood is divided by a per-location dispersion φ ≥ 1, estimated from observed weekly deaths regressed on observed cases with year effects.</li>
+<li>Implied/observed deaths moved: ZMB 0.74 → 1.00, MOZ 1.09 → 0.95; NGA, COD and ETH stayed at 1.00.</li>
+</ul></li>
+<li>
+<strong>A week with no onsets but observed deaths</strong> used to cost ~23 log-likelihood per death through an arbitrary 1e-10 floor. It now carries an additive background of <code>eps_rel_cases</code> × the location’s mean scored weekly deaths, the same relative floor as a cases cell with zero prediction.</li>
+<li>
+<strong>Smooth year deviations.</strong> The CFR’s year deviations interpolate between 1 July anchors (the rule <code><a href="../reference/make_mu_jt.html">make_mu_jt()</a></code> uses for the prior), so the CFR and the redrawn deaths no longer step on 1 January. Forecast years ease back to the calibrated location level over half a year.</li>
+<li>
+<strong>Deaths weighting and windows:</strong>
+<ul><li>deaths confidence weights are mass-preserving, like cases;</li>
+<li>a reporting week cut by the edge of the scored window is scored on its own days (MWI lost 20% of its scored deaths to the leading partial week);</li>
+<li>convergence is judged on the gradient when the line search stalls.</li>
+</ul></li>
+<li>
+<strong>Deaths shape terms.</strong> When the CFR is integrated out, the level-dependent deaths shape terms (peak magnitude, cumulative, WIS) are dropped with a warning: they scored engine deaths drawn at the prior <code>mu_jt</code>.</li>
+<li>
+<strong><code>config_medoid.json</code></strong> now carries the medoid’s own posterior CFR, from the medoid ensemble. The ensemble’s posterior is only the fallback. With the ensemble’s, a re-simulation over-predicted the medoid’s deaths by 7-12%.</li>
+<li>
+<strong><code>summary.json</code> <code>cfr_implied</code></strong> now uses the scored observed window for both predicted and observed totals, and weights the members. Before, predicted totals included the burn-in and the forecast tail, and members were unweighted.</li>
+<li>
+<strong>The CFR prior (<code><a href="../reference/est_CFR_hierarchical.html">est_CFR_hierarchical()</a></code>):</strong>
+<ul><li>a calendar year still in progress at its dashboard snapshot is excluded;</li>
+<li>each country’s trend is held at that country’s own last WHO-annual year instead of being extrapolated (SOM, BFA, LBR, BEN end in 2022);</li>
+<li>the out-of-sample coverage check now scores the observed count against its predictive distribution: 0.95, previously understated as 0.83-0.86;</li>
+<li>
+<code>config_default</code> v5.1 and <code>priors_default</code> v16.1 rebuild <code>mu_jt</code> from it, and nothing else changes (34 of 40 locations move more than 5% in 2026);</li>
+<li>
+<code>sd_product</code> is re-described as the centre’s residual error against the observed CFR. It is not a product mismatch: the two products agree to sd(log) 0.03.</li>
+</ul></li>
+<li>
+<strong>Displays:</strong>
+<ul><li>the trajectory CFR(t) and mass-balance panels use weighted mean series (a ratio of medians showed CFR 0 in sparse countries, and mass balance drifting by 1.6%);</li>
+<li>prediction captions total the same days as their bias;</li>
+<li>the true-deaths channel is labelled as reported / <code>rho_deaths</code>.</li>
+</ul></li>
+<li>
+<strong>Data and docs:</strong>
+<ul><li>
+<code>estimated_parameters</code> drops the retired mortality rows (46 rows);</li>
+<li>the <code>priors_default</code> roxygen matches v16;</li>
+<li>the <code>Installation.Rmd</code> chunks carry <code>eval = FALSE</code> (<code>R CMD check</code> executed its installs);</li>
+<li>
+<code><a href="../reference/run_rolling_cv.html">run_rolling_cv()</a></code> checks for mgcv and the WHO annual file before writing anything.</li>
+</ul></li>
+<li>
+<strong>New tests:</strong>
+<ul><li>the calibration worker uses the integrated deaths score;</li>
+<li>
+<code>config_medoid.json</code> gets the medoid’s own CFR;</li>
+<li>the fatality conversion uses <code>chi_epidemic</code> (threshold-forced arms);</li>
+<li>totals are preserved under the redraw;</li>
+<li>year boundaries are continuous;</li>
+<li>in-progress-year exclusion and per-country carry-forward in the prior.</li>
+</ul></li>
+<li>
+<strong>Resume.</strong> The likelihood version is now <code>R/v0.97.0+deaths_quasipoisson</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="calibrated-cfr-outside-the-calibration-loop-leak-free-rolling-cv-v0961-0-99-2">Calibrated CFR outside the calibration loop; leak-free rolling CV (v0.96.1)<a class="anchor" aria-label="anchor" href="#calibrated-cfr-outside-the-calibration-loop-leak-free-rolling-cv-v0961-0-99-2"></a></h3>
+<ul><li>
+<strong><code>config_medoid.json</code> carries the calibrated reported CFR.</strong> Because the CFR is integrated out rather than sampled, the medoid config used to keep the prior <code>mu_jt</code>, so re-simulating it (rolling-CV medoid projections, scenarios) drew deaths at the prior level.
+<ul><li>Its <code>mu_jt</code> is now shifted, per location and calendar year on the logit scale, to the run’s posterior (<code>cfr_posterior</code>).</li>
+<li>The within-year shape is kept.</li>
+<li>A shift that needs a per-onset fatality probability &gt;= 1 is refused, not clamped.</li>
+</ul></li>
+<li>
+<strong><code>2_calibration/deaths_integration.rds</code></strong> is saved, so a post-hoc <code>calc_model_ensemble(deaths_integration = readRDS(...))</code> redraws deaths from the calibrated CFR exactly as the run did.</li>
+<li>
+<strong>The trajectory CFR reference line survives the subset optimizer.</strong> It vanished when <code>optimize_subset = TRUE</code>, because the optimized ensemble carries no <code>cfr_posterior</code>. It now reads the candidate ensemble’s posterior.</li>
+<li>
+<strong><code><a href="../reference/run_rolling_cv.html">run_rolling_cv()</a></code> no longer leaks post-cutoff CFR information.</strong> Each cutoff T refits the WHO-annual GAM on years &lt;= year(T) - 1 and rebuilds both the config’s <code>mu_jt</code> and <code>priors$mu_jt</code> (centres, SEs, <code>sd_year</code>). Values are carried flat past that year’s 1 July. The old freeze at T interpolated toward year(T) and year(T)+1 estimates from a fit on all years. It is removed, along with <code>make_mu_jt(freeze_after =)</code>.</li>
+<li>
+<code><a href="../reference/est_CFR_hierarchical.html">est_CFR_hierarchical()</a></code> now wraps a non-writing core, <code>.cfr_estimate()</code>, which takes a <code>last_year</code>. Its outputs are unchanged, byte for byte.</li>
+<li>The priors <code>mu_jt</code> block is built by <code><a href="../reference/dot-mosaic_mu_jt_prior.html">.mosaic_mu_jt_prior()</a></code>, which both <code>data-raw/make_priors_default.R</code> and rolling CV use. Only the block’s description text changed.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="cfr-v21-deaths-decided-at-onset-from-a-time-varying-reported-cfr-v0960-0-99-2">CFR-v2.1: deaths decided at onset from a time-varying reported CFR (v0.96.0)<a class="anchor" aria-label="anchor" href="#cfr-v21-deaths-decided-at-onset-from-a-time-varying-reported-cfr-v0960-0-99-2"></a></h3>
+<p><strong>Engine.</strong> Each symptomatic onset is fatal with probability <code>mu_jt * rho / (rho_deaths * chi_epidemic)</code>, drawn at onset (new rng-only draw site <code>infectious/fatal_onsets</code>), and fatal onsets never enter Isym. Deaths are reported on the case lag, so a death is reported in the same tick as its case. <code>mu_jt</code> is the reported CFR by location and day, and it replaces <code>mu_j_baseline</code>, <code>mu_j_epidemic_factor</code>, <code>CFR_target</code> and <code>delta_reporting_deaths</code>. At epidemic PPV, expected reported deaths / expected reported cases = <code>mu_jt</code> exactly. Replay mode keeps the laser-cholera daily hazard verbatim for parity. <code>disease_deaths</code> now lands one results column after the onsets that produced them.</p>
+<p><strong>Deaths likelihood.</strong> <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> integrates the reported CFR out of each simulated path instead of sampling it. The CFR is <code>logit mu0_jt + a_j + delta_{j,year}</code>, the deaths are scored with a weekly negative binomial, and a Laplace step solves for the offsets (<code><a href="../reference/calc_log_likelihood_deaths_integrated.html">calc_log_likelihood_deaths_integrated()</a></code>). The <code>eps_rel_deaths</code> floor does not apply to this score. The ensemble redraws each member’s deaths from the CFR’s conditional posterior, and writes <code>3_results/posterior/cfr_posterior.csv</code> (reported CFR by location and year). The <code>cfr_*</code> implied-CFR columns in <code>samples.parquet</code> are removed.</p>
+<p><strong>Prior.</strong> <code><a href="../reference/est_CFR_hierarchical.html">est_CFR_hierarchical()</a></code> is rewritten as a binomial GAM on all WHO-annual years. It has a global trend, country intercepts, per-country drift (<code>fs</code>, k = 10, m = 2) and a country-year random effect. Its widths are predictive, and nothing is clamped. <code><a href="../reference/make_mu_jt.html">make_mu_jt()</a></code> expands the estimates to the daily matrix.</p>
+<p><strong>Data objects.</strong> - <code>config_default</code> v5.0 carries <code>mu_jt</code>. - <code>priors_default</code> v16.0 carries a top-level <code>mu_jt</code> block (per-year centres and SEs, <code>sd_year</code> 0.70, <code>sd_product</code> 0.3). The <code>CFR_target</code>, <code>mu_j_epidemic_factor</code> and <code>delta_reporting_deaths</code> priors are removed. - The toy simulation configs use a constant 2% reported CFR. - Both defaults were built as v0.95.0 plus these deltas only, not as a full rebuild.</p>
+<p><strong>Legacy configs.</strong> A config carrying <code>mu_j_baseline</code>, <code>mu_j_epidemic_factor</code>, <code>CFR_target</code> or <code>mu_j</code> is handled the same way by the engine and the likelihood, through one resolver: - its <code>CFR_target</code> becomes a constant <code>mu_jt</code>, with a warning; - its dead <code>mu_jt</code> matrix is ignored; - without a <code>CFR_target</code> it is refused.</p>
+<p><code><a href="../reference/make_simulation_config.html">make_simulation_config()</a></code> refuses such configs outright. The retired <code>sample_*</code> flags and priors warn and are ignored.</p>
+<p><strong>Resume.</strong> The likelihood version is now <code>R/v0.96.0+deaths_integrated</code>, so a resume refuses to pool shards across this change.</p>
+</div>
+<div class="section level3">
+<h3 id="mu_j_slope-is-removed-cfr-restructure-r3-0-99-2">mu_j_slope is removed (CFR restructure R3)<a class="anchor" aria-label="anchor" href="#mu_j_slope-is-removed-cfr-restructure-r3-0-99-2"></a></h3>
+<p>The per-location <code>N(0, 0.05)</code> prior on a linear-in-time trend in baseline IFR is deleted, along with the engine term it fed: <code><a href="../reference/run_simulation.html">run_simulation()</a></code> no longer multiplies the mortality hazard by <code>(1 + mu_j_slope * tick/nticks)</code>, so <code>mu_jt</code> is now two multiplicative components (per-patch baseline x epidemic escalation) rather than three. 40 sampled dimensions go away. No other prior moves.</p>
+<p>Four independent lines of evidence agree. It is <strong>not estimable</strong>: posterior shrinkage 0.5 would need ~74,300 deaths in one country, the largest shipped series is COD at 4,139, and all 40 locations pooled hold ~15,600; measured posterior/prior SD on a 50,000-draw reference run is 0.969, i.e. the posterior IS the prior. It is <strong>not in the data</strong>: 3 of 21 countries show a significant weekly CFR trend and the signs are mixed, the between-country spread of the implied trend is 7.3x wider than the prior, and in COD the weekly and annual trends have opposite signs. It is <strong>not in the literature</strong>: WHO’s own Yemen-excluded global series is flat (1.7 / 1.4 / 1.5% for 2017 / 2019 / 2020). And it is <strong>double-counted</strong>: <code><a href="../reference/est_CFR_hierarchical.html">est_CFR_hierarchical()</a></code> already fits an <code>s(year)</code> smooth, so the temporal component of country CFR is inside <code>CFR_target</code>.</p>
+<p><strong>Shipped artifacts are bit-identical.</strong> <code>config_default</code> has carried <code>mu_j_slope = 0</code> for every location since the field existed, so <code>(1 + 0*t) == 1</code> exactly. Verified over 26 scenarios / 722 result-channel digests in both engine modes (<code>rng</code> and <code>replay</code>), at 40 and 1 patches, including the 1,398-tick full-length oracle fixture: 25/26 bit-identical, the one difference being a deliberate non-zero-slope sentinel that confirms the harness was not blind. The golden fixtures therefore did NOT need regenerating – which matters, because they are frozen recordings of the read-only Python engine and could not have been regenerated here. <code><a href="../reference/make_simulation_config.html">make_simulation_config()</a></code> keeps a deprecated, ignored <code>mu_j_slope</code> formal so pre-v0.95.0 configs on disk still replay.</p>
+<p><strong>A correction to the evidence base.</strong> The pre-registered claim that this term “injects +/-30% of uncontrolled deaths level per draw” is NOT reproduced. That figure came from a sweep running the slope out to about +/-1.2, which is 24 prior SD. Measured inside the actual <code>N(0, 0.05)</code> 95% interval (+/-0.098), total deaths move only +/-4% (<code>log(deaths ratio) = 0.403 * slope</code>; the death-weighted mean <code>t_factor</code> is 0.40). The identifiability report’s further prediction that the deaths-bias IQR would narrow by &gt;=20% is also falsified (measured -2.6% to +1.6%, i.e. noise). Removal is justified as deleting dead weight – 40 sampled dimensions carrying ~0.01 nats – not as removing a large level injection.</p>
+<p>Pinning was verified inert before removal (5 national medoids x 24 parameter draws x 8 seeds/arm, arms paired at the PARAMETER level because <code>rbinom</code> rejection sampling desynchronises the RNG stream): deaths ratio geomean 1.0034, 95% CI [0.9991, 1.0077], sd(log) 0.0239 – smaller than the 0.0331 Monte-Carlo noise floor of the same comparison. Cases pooled ratio 1.0000.</p>
+</div>
+<div class="section level3">
+<h3 id="r-cmd-check-regressions-from-r6r1r2-are-fixed-0-99-2">R CMD check regressions from R6/R1/R2 are fixed<a class="anchor" aria-label="anchor" href="#r-cmd-check-regressions-from-r6r1r2-are-fixed-0-99-2"></a></h3>
+<p>A paired <code>devtools::check()</code> at the branch base and at v0.94.0 showed the latter had added 5 warnings and 1 note. All traced to two causes, both now fixed: a malformed roxygen block in <code>calc_model_likelihood.R</code> (bare <code>\item</code>s outside any container, cascading into the install / Rd files / Rd cross-references warnings and the Rd contents note, plus 9 undocumented arguments), and non-ASCII characters in shipped description strings. Also fixed: the spurious <code>sample_parameters.Rd</code> “missing link <code>1, 14</code>” from <code>[1, 14]</code> parsing as an Rd link, and a genuinely missing <code>@param is_diagnostics</code>.</p>
+<p>Note for contributors: the CLAUDE.md check baseline of <code>0E/3W/2N</code> is wrong – the real base is <code>0E/2W/4N</code> – and <code>R CMD check .</code> cannot pass on this package at all, because <code>Authors@R</code> is only expanded at build time, so a source-directory check always reports <code>1 ERROR: Required fields missing or empty 'Author' 'Maintainer'</code>. Use <code>devtools::check()</code>.</p>
+</div>
+<div class="section level3">
+<h3 id="the-epsilon-floor-is-sized-per-channel-cfr-restructure-r1-0-99-2">The epsilon floor is sized per channel (CFR restructure R1)<a class="anchor" aria-label="anchor" href="#the-epsilon-floor-is-sized-per-channel-cfr-restructure-r1-0-99-2"></a></h3>
+<p>0.93.0 put the eps-floored density in place but applied <strong>one constant, 0.02, to both channels</strong>. That is the right fraction for cases and roughly 12x too small for deaths. Because production scores a <strong>single stochastic realisation</strong> per draw, a low-count deaths series is mostly structural zeros; each zero-against-a- positive-observation cell is scored at <code>log NB(y | eps)</code>, so too small a floor makes those cells ruinous and the likelihood optimum moves onto draws that <strong>over-predict the deaths level by ~2.5x</strong>. This is a scoring-rule (Jensen) artifact – <code>E_seed[LL(est)]</code> peaks far above <code>LL(E_seed[est])</code> – not a CFR misspecification: the NB scale-MLE on the mean path is unbiased for every <code>k</code>.</p>
+<p><code><a href="../reference/calc_log_likelihood_negbin.html">calc_log_likelihood_negbin()</a></code> and <code><a href="../reference/calc_log_likelihood_poisson.html">calc_log_likelihood_poisson()</a></code> gain an <code>eps_rel</code> argument (default <code>0.02</code>, so every existing call is unchanged), and <code><a href="../reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> gains <code>eps_rel_cases</code> (0.02) and <code>eps_rel_deaths</code> (<strong>0.25</strong>), exposed as <code>control$likelihood$eps_rel_cases</code> / <code>eps_rel_deaths</code>.</p>
+<p><strong>How 0.25 was chosen.</strong> A profile over a multiplicative scale on <code>mu_j_baseline</code>, on four contrasting countries (ETH, COD high-burden, MOZ, KEN degenerate-sparse), 4 accepted base draws x 3 seed groups x 12 stochastic replicates each, with a <strong>real 365-day holdout</strong> masked out of the likelihood. Every eps arm re-scores the identical cached simulation pool, so the arms are exactly paired. Per-block median deaths bias at the likelihood optimum:</p>
+<table style="width:100%;" class="table"><colgroup><col width="10%"><col width="10%"><col width="10%"><col width="10%"><col width="10%"><col width="10%"><col width="10%"><col width="10%"><col width="10%"><col width="10%"></colgroup><thead><tr><th><code>eps_rel_deaths</code></th>
+<th>0.02</th>
+<th>0.05</th>
+<th>0.10</th>
+<th>0.15</th>
+<th>0.20</th>
+<th><strong>0.25</strong></th>
+<th>0.30</th>
+<th>0.40</th>
+<th>0.50</th>
+</tr></thead><tbody><tr><td>in-sample bias</td>
+<td>2.34</td>
+<td>2.12</td>
+<td>1.74</td>
+<td>1.33</td>
+<td>1.12</td>
+<td><strong>0.97</strong></td>
+<td>0.87</td>
+<td>0.50</td>
+<td>0.35</td>
+</tr><tr><td>held-out bias</td>
+<td>1.43</td>
+<td>1.40</td>
+<td>1.39</td>
+<td>1.29</td>
+<td>1.20</td>
+<td><strong>1.11</strong></td>
+<td>1.10</td>
+<td>0.98</td>
+<td>0.80</td>
+</tr></tbody></table><p>0.25 minimises <code>|log bias_in| + |log bias_out|</code> both pooled over all four countries and pooled over the three where the mechanism operates. <strong>0.5 is past the crossing</strong> (in-sample bias 0.35, a 3x under-prediction) and is not used.</p>
+<p><strong>Cross-check.</strong> Replicate-averaging – scoring the mean of <code>n</code> realisations at the <em>unchanged</em> 0.02 floor – moves the same pooled in-sample bias 2.51 (n=1) -&gt; 1.20 (n=6) -&gt; 1.10 (n=24), landing where the eps route lands. The two independent routes agree, as the Jensen diagnosis requires.</p>
+<p><strong>Known limit.</strong> On a very sparse deaths channel (KEN: 0.07 deaths/day, every non-zero day equal to 1) <code>eps_rel</code> is inert – the floor never binds – and the bias there is not eps-mediated. Replicate-averaging does move KEN. The eps fix is the cheap 90% of the problem, not all of it.</p>
+<p>The pinned values in <code>test-calc_model_likelihood_reference.R</code> shift by 0.57-1.12 nats; each is re-derived from an independent hand computation carrying the per-channel eps. <code>.mosaic_likelihood_impl_version()</code> is bumped so resume refuses to pool shards scored under the old floor (it was <strong>not</strong> bumped at 0.93.0, which also changed likelihood values).</p>
+</div>
+<div class="section level3">
+<h3 id="the-likelihood-scores-every-cell-by-its-density-arm-a1b-cfr-line-0-99-2">The likelihood scores every cell by its density (arm A1b; CFR line 0.93.0)<a class="anchor" aria-label="anchor" href="#the-likelihood-scores-every-cell-by-its-density-arm-a1b-cfr-line-0-99-2"></a></h3>
+<p><code><a href="../reference/calc_log_likelihood_negbin.html">calc_log_likelihood_negbin()</a></code> and <code><a href="../reference/calc_log_likelihood_poisson.html">calc_log_likelihood_poisson()</a></code> special-cased a zero prediction against a positive observation with <code>ll &lt;- -observed[i] * log(1e6)</code> – a loss <strong>linear in the observed count</strong>, not a log-density, and a zero-vs-zero cell with a flat <code>ll &lt;- 0</code>. The linear term carried essentially all of the log-likelihood’s between-draw variance, so the ensemble’s delta-AIC ranking described that constant rather than model fit.</p>
+<p>Every cell now goes through the density with the mean floored at <code>eps = max(1e-4, 0.02 * mean(observed))</code>. The floor is <strong>channel-relative</strong>: a fixed absolute floor calibrated on cases (mean ~30/day) sits far above the typical deaths rate (ETH ~0.4/day), which would flatten the predicted rate above the observations and destroy discrimination exactly where the deaths signal is.</p>
+<p>Validated across ETH, MOZ and COD at a 6-month holdout: held-out cases MAE falls from 26.4 to 19.7 pooled, and deaths MAE from 1.07 to 0.59, with bias moving toward 1 on both channels.</p>
+</div>
+<div class="section level3">
+<h3 id="note-on-the-two-changes-in-the-cfr-lines-0-99-2">Note on the two changes in the CFR line’s 0.92.0-0.93.0<a class="anchor" aria-label="anchor" href="#note-on-the-two-changes-in-the-cfr-lines-0-99-2"></a></h3>
+<p>The conditional dispersion estimator (0.92.0) and the epsilon-floored density (0.93.0) were measured together in a 2x2 factorial at a 6-month holdout. A1b improves held-out skill on both channels. The estimated dispersion is consistently <em>below</em> the retired floor of 3 (ETH 1.78 cases, MOZ 0.43, COD 0.98), which flattens the likelihood; on that experiment it degraded held-out MAE, most sharply for MOZ. Both are retained: the estimator is the statistically correct observation model, and the sharpness it removes is a separate concern that belongs in an explicit temperature rather than in the dispersion. Set <code>control$likelihood$nb_k_cases</code> / <code>nb_k_deaths</code> to override the estimate if a sharper kernel is wanted for a given run.</p>
+</div>
+<div class="section level3">
+<h3 id="nb-dispersion-is-now-estimated-not-floored-cfr-line-0-99-2">NB dispersion is now estimated, not floored (CFR line 0.92.0)<a class="anchor" aria-label="anchor" href="#nb-dispersion-is-now-estimated-not-floored-cfr-line-0-99-2"></a></h3>
+<p><code><a href="../reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> previously estimated the negative-binomial dispersion <code>k</code> with a marginal method-of-moments form, <code>k = m^2/(v - m)</code>, computed across the whole observation series. By the law of total variance that estimates <code>Var(mu)</code> – the epidemic signal – rather than the observation dispersion the surrounding comment claimed it measured. Consequently the <code>nb_k_min_*</code> floor bound in <strong>27 of 28</strong> estimable locations for cases and 17 of 20 for deaths, so the shipped “estimator” returned the constant 3 almost everywhere. On synthetic data with a known <code>k = 4</code>, the old form returns 1.10; the new one returns 3.88.</p>
+<p><strong>New:</strong> <code><a href="../reference/est_nb_dispersion.html">est_nb_dispersion()</a></code> estimates <code>k</code> per location by conditional maximum likelihood (<code><a href="https://rdrr.io/pkg/MASS/man/glm.nb.html" class="external-link">MASS::glm.nb</a></code>) at the data’s native <strong>weekly</strong> reporting cadence, honouring the per-observation <code>reported_*_weight</code> confidence weights. The mean is modelled with a spline trend plus seasonal harmonics, following the Farrington/Noufaily convention used by the <code>surveillance</code> package.</p>
+<ul><li>
+<strong>Weekly aggregation</strong> with the reporting-week boundary <strong>detected</strong> per location, not assumed. All 40 current locations report Monday-Sunday; the estimate is invariant to the config’s start weekday.</li>
+<li>
+<strong>Computed once per calibration</strong>, not inside the likelihood. <code>k</code> depends only on the observations, so the previous code recomputed an identical value roughly 7.2 million times per 40-location, 30,000-simulation run.</li>
+<li>
+<strong>Edge cases are explicit.</strong> All-zero and otherwise uninformative series, and a dispersion running to the Poisson boundary, resolve to <code>k = Inf</code> (Poisson). A six-rung mean-model ladder handles IRLS failures on series with long zero runs. Every location resolves to a finite <code>k</code> or Poisson – never <code>NA</code>.</li>
+<li>
+<strong>Cross-location shrinkage</strong> toward a mean-dispersion trend (DESeq2-style, with a no-shrink escape) stabilises sparse locations.</li>
+<li>Diagnostics are written to <code>2_calibration/diagnostics/nb_dispersion.csv</code> and summarised in <code>summary.json</code>, including the <strong>bound-bind rate</strong> – in a well-specified fit the hard bounds should rarely bind.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="breaking-changes-cfr-line-0-99-2">Breaking changes (CFR line 0.92.0)<a class="anchor" aria-label="anchor" href="#breaking-changes-cfr-line-0-99-2"></a></h3>
+<ul><li><p><code>control$likelihood$nb_k_min_cases</code> / <code>nb_k_min_deaths</code> are <strong>retired</strong>. Setting either now warns and is ignored. To set the dispersion explicitly use <code>control$likelihood$nb_k_cases</code> / <code>nb_k_deaths</code>, which <strong>replace</strong> the estimate (scalar or one value per location) rather than silently flooring it.</p></li>
+<li><p><code><a href="../reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> gains <code>nb_k_cases</code> / <code>nb_k_deaths</code> (scalar or length-<code>n_locations</code>) in place of <code>nb_k_min_cases</code> / <code>nb_k_min_deaths</code>. Passing a vector previously either collapsed to <code><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max()</a></code> without warning or errored.</p></li>
+<li><p><code><a href="../reference/calc_log_likelihood_negbin.html">calc_log_likelihood_negbin()</a></code>’s <code>k_min</code> is deprecated and ignored.</p></li>
+<li><p><code>check_overdispersion()</code> and the internal <code>.nb_size_from_obs_weighted()</code> are removed; both are superseded by <code><a href="../reference/est_nb_dispersion.html">est_nb_dispersion()</a></code>.</p></li>
+<li><p><code>calc_cases_from_infections()</code> and <code>calc_deaths_from_infections()</code> are removed. Neither had a caller, and the deaths one was a third, divergent copy of the CFR algebra.</p></li>
+<li><p><strong>All calibration results change.</strong> Every likelihood value moves, so previous runs are not comparable. The likelihood-provenance string used by the resume guard is bumped accordingly, so resuming a pre-0.92.0 run stops with an actionable error rather than silently mixing two scoring rules.</p></li>
+<li><p>New dependencies: <code>MASS</code>, <code>splines</code>. # MOSAIC 0.93.2</p></li>
+<li><p>The <code><a href="../reference/calc_Reff.html">calc_Reff()</a></code> kernel caveat no longer hand-escapes its percent signs, which main’s roxygen guard (<code>test-mobility-od.R</code>) rejects.</p></li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.93.1" id="mosaic-0931">MOSAIC 0.93.1<a class="anchor" aria-label="anchor" href="#mosaic-0931"></a></h2>
 <div class="section level3">

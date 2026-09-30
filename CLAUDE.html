@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.93.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.99.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -122,7 +122,7 @@
 <p>The <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> workflow is the <strong>centerpiece</strong> of the package — it orchestrates the complete Bayesian calibration pipeline.</p>
 <p><strong>Key files:</strong> - <code>R/run_MOSAIC.R</code> — main workflow and simulation worker - <code>R/run_MOSAIC_helpers.R</code> — convergence detection, weight calculation - <code>R/run_MOSAIC_infrastructure.R</code> — directory setup, I/O, summary generation</p>
 <p><strong>BFRS calibration (2 phases):</strong> 1. <strong>Adaptive calibration</strong> — batches of simulations until convergence (R² target, ESS thresholds) 2. <strong>Predictive batches</strong> — model-based batch sizing with ESS re-evaluation until convergence</p>
-<p><strong>Post-calibration:</strong> - Medoid model identified, config saved to <code>2_calibration/best_model/config_medoid.json</code> (no <code>config_best.json</code> is produced) - <code><a href="reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> computes posterior-weighted predictions (weighted median/mean across parameter sets × stochastic reruns) - R² and bias ratio computed from weighted median vs observed data - <code><a href="reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> generates prediction plots (only when <code>plots=TRUE</code>)</p>
+<p><strong>Post-calibration:</strong> - Medoid model identified, config saved to <code>2_calibration/best_model/config_medoid.json</code> (no <code>config_best.json</code> is produced) - <code><a href="reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> computes posterior-weighted predictions (weighted median/mean across parameter sets × stochastic reruns) - R² and bias ratio computed from the weighted mean (<code>control$predictions$central_method</code>; median before v0.98.0) vs observed data - <code><a href="reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> generates prediction plots (only when <code>plots=TRUE</code>)</p>
 <p><strong>Output structure:</strong></p>
 <pre><code>dir_output/
 ├── 1_inputs/          # config.json, priors.json, control.json, environment.json
@@ -138,9 +138,9 @@
 <div class="section level2">
 <h2 id="likelihood-calculation">Likelihood Calculation<a class="anchor" aria-label="anchor" href="#likelihood-calculation"></a></h2>
 <p><code><a href="reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> computes a multi-component log-likelihood:</p>
-<p><strong>Core:</strong> Negative Binomial time-series likelihood for cases and deaths (weighted MoM dispersion, k_min floor).</p>
+<p><strong>Core:</strong> cases — Negative Binomial on daily cells (per-location weekly dispersion from <code><a href="reference/est_nb_dispersion.html">est_nb_dispersion()</a></code>, eps-floored mean). Deaths (v0.96.0+) — the reported CFR <code>mu_jt</code> is integrated out per simulated path (<code><a href="reference/calc_log_likelihood_deaths_integrated.html">calc_log_likelihood_deaths_integrated()</a></code>): weekly quasi-Poisson with a per-location dispersion and a small background, Laplace over a location offset + smooth year deviations. Ensemble deaths are redrawn from that CFR posterior (<code>cfr_posterior.csv</code>).</p>
 <p><strong>Shape terms (all T-normalized, weight &gt; 0 enables):</strong> - Peak timing (Normal LL on time differences) - Peak magnitude (log-Normal on peak ratios) - Cumulative progression (NB at fractions 0.25/0.5/0.75/1.0) - WIS (Weighted Interval Score per Bracher et al. 2021)</p>
-<p><strong>Assembly:</strong> <code>LL = w_cases*NB_cases + w_deaths*NB_deaths + (T/N_peaks)*w_pt*peaks + T*w_cum*cumulative + T*w_wis*WIS</code></p>
+<p><strong>Assembly:</strong> <code>LL = w_cases*NB_cases + w_deaths*deaths_core + (T/N_peaks)*w_pt*peaks + T*w_cum*cumulative + T*w_wis*WIS</code> (the level-dependent deaths shape terms are dropped when the CFR is integrated out)</p>
 <p>All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.</p>
 </div>
 <div class="section level2">

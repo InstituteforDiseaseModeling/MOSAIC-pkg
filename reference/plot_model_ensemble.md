@@ -2,9 +2,9 @@
 
 Renders time-series plots from a `mosaic_ensemble` object produced by
 [`calc_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md).
-Shows the weighted median prediction line with confidence interval
-ribbons and observed data points. Optionally saves per-location
-prediction CSVs for downstream use.
+Shows the central prediction line (the weighted mean by default;
+`central_method`) with interval ribbons and observed data points.
+Optionally saves per-location prediction CSVs for downstream use.
 
 ## Usage
 
@@ -16,8 +16,8 @@ plot_model_ensemble(
   file_prefix = "ensemble",
   title_label = "Posterior Ensemble",
   save_predictions = FALSE,
-  central_method = "median",
-  mask_final_deaths_step = TRUE,
+  central_method = "mean",
+  mask_final_deaths_step = FALSE,
   n_cases_warmup_mask = 2L,
   score_idx_cases = NULL,
   score_idx_deaths = NULL,
@@ -69,22 +69,23 @@ plot_model_ensemble(
 
 - central_method:
 
-  Central tendency for the plotted/scored line: `"median"` (default;
-  lower calibration bias) or `"mean"` (unbiased for expected counts,
-  never collapses on sparse deaths, unmasks implied-CFR bias). Scalar or
-  per-channel `c(cases=, deaths=)`.
+  Central tendency for the plotted/scored line: `"mean"` (default; the
+  expected count, which never collapses to zero on sparse deaths) or
+  `"median"` (the typical trajectory; the default from v0.46.1 to
+  v0.97.x). Scalar or per-channel `c(cases=, deaths=)`.
 
 - mask_final_deaths_step:
 
-  Logical. If `TRUE` (default), blank the FINAL timestep of every Deaths
+  Logical. If `TRUE`, blank the FINAL timestep of every Deaths
   prediction (set the predicted/CI cells to `NA`) in the exported CSV
-  and the rendered lines. This masks a laser-cholera engine off-by-one
-  in which `reported_deaths` is written at `[tick]` on an array of
-  length `nticks + 1`, so the final slot is never written and reads as
-  an artificial drop-to-zero. DISPLAY ONLY: the underlying ensemble
-  arrays are untouched, so any R2/bias/likelihood computed upstream from
-  the raw object is unaffected. Cases are written at `[tick + 1]` and
-  are not affected.
+  and the rendered lines. This masked a laser-cholera engine off-by-one
+  in which `reported_deaths` was written at `[tick]` on an array of
+  length `nticks + 1`, so the final slot was never written and read as
+  an artificial drop-to-zero. Since v0.96.0 the R engine reports deaths
+  on the same row as cases, so the default is `FALSE`; set `TRUE` for an
+  ensemble from the laser-cholera engine. DISPLAY ONLY: the underlying
+  ensemble arrays are untouched, so any R2/bias/likelihood computed
+  upstream from the raw object is unaffected.
 
 - n_cases_warmup_mask:
 
@@ -94,8 +95,9 @@ plot_model_ensemble(
   transient (seeded E/I progressing into new_symptomatic before the SEIR
   dynamics settle), which is visually dominant for low-count countries.
   DISPLAY ONLY (raw arrays untouched). The legitimate leading
-  reporting-lag zeros in Deaths (from `delta_reporting_deaths`) are REAL
-  and are NOT masked by this argument. Set to `0L` to disable.
+  reporting-lag zeros in Deaths (from `delta_reporting_cases`, the lag
+  deaths share with cases) are REAL and are NOT masked by this argument.
+  Set to `0L` to disable.
 
 - score_idx_cases, score_idx_deaths:
 

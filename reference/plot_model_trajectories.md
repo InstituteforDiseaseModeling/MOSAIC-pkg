@@ -9,7 +9,7 @@ fit (reported cases/deaths), burden, incidence drivers, force of
 infection, the SVEIR + W compartments, and sanity checks (mass balance,
 population, epidemic fraction) — with a uniform-thinned set of
 **actual** posterior member trajectories (the spaghetti, conveying
-spread) and the weighted **median** overlaid in bold. Observed
+spread) and a bold central line (see **Central line**). Observed
 surveillance points are overlaid only on the
 `reported_cases`/`reported_deaths` panels.
 
@@ -58,18 +58,20 @@ Invisibly, a named list of the file paths written.
 
 **Pure read-render:** this function never runs the engine, never
 re-simulates, and never re-weights — it consumes only the compact
-artifact (per-channel weighted median + thinned actual lines, both
+artifact (per-channel central series + thinned actual lines, both
 already reduced over the best subset). It is the trajectory analogue of
 [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md).
 
 **Central line:** for `reported_cases` / `reported_deaths` the bold line
 is the ensemble *central* series following
-`control$predictions$central_method` (weighted median or weighted mean,
-per channel) and is **bit-identical** to the cases/deaths *prediction*
-plots – it is reduced from the same captured draws over the same final
-displayed member set and weights (no re-simulation). All other channels
-(compartments, FOI, incidence, derived) have no prediction-plot
-counterpart and use the conventional weighted *median*.
+`control$predictions$central_method` (weighted mean by default, or
+weighted median, per channel) and is **bit-identical** to the
+cases/deaths *prediction* plots – it is reduced from the same captured
+draws over the same final displayed member set and weights (no
+re-simulation). True deaths (`disease_deaths`) follow the deaths
+channel's method so the two deaths panels are comparable. All other
+channels (compartments, FOI, incidence, derived) have no prediction-plot
+counterpart and use the weighted *median*.
 
 **Weighting note:** the central series and lines are reduced over the
 *final displayed* member set and weights: the *candidate* best subset
@@ -77,8 +79,9 @@ counterpart and use the conventional weighted *median*.
 the *optimized* subset (`is_best_subset_opt` / `weight_best_opt`) when
 `control$predictions$optimize_subset = TRUE`. Channels are captured at
 sim time (stream-to-disk) and reduced over the optimized members with NO
-re-simulation. The CFR(t) panel carries dashed endemic/epidemic regime
-reference lines when `trajectories$cfr_refs` is present.
+re-simulation. The CFR(t) panel carries a dashed step line at the
+posterior median reported CFR for each year when `trajectories$cfr_refs`
+is present.
 
 ## See also
 

@@ -23,7 +23,7 @@ calc_model_ensemble(
   priors = NULL,
   sampling_args = list(),
   n_cases_warmup_mask = 2L,
-  mask_final_deaths_step = TRUE,
+  mask_final_deaths_step = FALSE,
   score_idx_cases = 1L,
   score_idx_deaths = 1L,
   parallel = FALSE,
@@ -34,6 +34,7 @@ calc_model_ensemble(
   trajectory_n_lines = 150L,
   trajectory_scratch_dir = NULL,
   reduce_trajectories = TRUE,
+  deaths_integration = NULL,
   verbose = TRUE
 )
 ```
@@ -101,13 +102,15 @@ calc_model_ensemble(
 
 - mask_final_deaths_step:
 
-  Logical. If `TRUE` (default, matching
-  [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)),
-  record that the FINAL deaths timestep is a laser-cholera structural
-  zero (`reported_deaths` written at tick then leading-trimmed, so the
-  last slot is never written; laser-cholera issue \#82). This value is
-  NOT applied to any returned series here; it is recorded in the
-  returned `artifact_mask` element for downstream scoring.
+  Logical. If `TRUE`, record that the FINAL deaths timestep is a
+  structural zero to exclude from scoring. That was true of the
+  laser-cholera engine (`reported_deaths` written at tick and
+  leading-trimmed, so the last slot was never written; laser-cholera
+  issue \#82). Since v0.96.0 the R engine reports deaths on the same row
+  as cases, and the post-hoc death redraw fills the final column, so the
+  default is `FALSE`. This value is NOT applied to any returned series
+  here; it is recorded in the returned `artifact_mask` element for
+  downstream scoring.
 
 - score_idx_cases, score_idx_deaths:
 
@@ -169,6 +172,21 @@ calc_model_ensemble(
   channels are spilled to scratch but NOT reduced; the scratch handle is
   returned in `$trajectory_scratch` so the caller can reduce over a
   final (e.g. optimized) subset without re-simulating.
+
+- deaths_integration:
+
+  Optional run-level setup from
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  (`control$likelihood$.deaths_integration`). When supplied, each
+  member's deaths are redrawn after its simulation from the reported
+  CFR's posterior given that member's path – the same integration
+  calibration scores with – so predicted deaths, true deaths and
+  forecast years carry the calibrated CFR; the ensemble also returns
+  `cfr_posterior`. When `NULL` (default) deaths are the engine's, drawn
+  at the config's `mu_jt` – for configs sampled from the priors that is
+  the PRIOR reported CFR, not the calibrated one. To reproduce a run's
+  calibrated deaths post hoc, pass
+  `readRDS("<dir_output>/2_calibration/deaths_integration.rds")`.
 
 - verbose:
 
@@ -263,6 +281,24 @@ S3 object of class `"mosaic_ensemble"` containing:
   1-based per-channel scored-window start; columns before are dropped).
   The central/quantile/array fields above are RAW (unmasked); this spec
   is the contract scoring sites use to drop artifact positions.
+
+- cfr_posterior:
+
+  When `deaths_integration` is supplied: a data frame with one row per
+  location and calendar year – `location`, `year`, `cfr_median`,
+  `cfr_lower`, `cfr_upper` (the weighted median and 95% interval over
+  members of each member's mean daily reported CFR in that year) and
+  `prior_cfr` (the prior `mu_jt`'s mean over the same days). Conditional
+  on each member's modelled cases. `NULL` otherwise.
+
+- forecast_shift:
+
+  When `deaths_integration` is supplied: one value per location, the
+  weighted mean over members of the posterior-mode logit CFR deviation
+  for the location's latest observed year (`NA` for a location with no
+  forecast years).
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  centres forecast years on it. `NULL` otherwise.
 
 ## See also
 

@@ -2,7 +2,8 @@
 
 Scores model fits against observed data using a Negative Binomial (NB)
 time-series log-likelihood per location and outcome (cases, deaths) with
-a weighted MoM dispersion estimate and a `k_min` floor.
+a per-location NB dispersion estimated by
+[`est_nb_dispersion`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md).
 
 ## Usage
 
@@ -19,8 +20,11 @@ calc_model_likelihood(
   weights_obs_cases = NULL,
   weights_obs_deaths = NULL,
   config = NULL,
-  nb_k_min_cases = 3,
-  nb_k_min_deaths = 3,
+  nb_k_cases = NULL,
+  nb_k_deaths = NULL,
+  eps_rel_cases = 0.02,
+  eps_rel_deaths = 0.25,
+  ll_deaths_core = NULL,
   verbose = FALSE,
   weight_peak_timing = 0,
   weight_peak_magnitude = 0,
@@ -74,13 +78,49 @@ calc_model_likelihood(
   Optional simulation config list (location_name, date_start,
   date_stop).
 
-- nb_k_min_cases:
+- nb_k_cases:
 
-  Minimum NB dispersion floor for cases. Default `3`.
+  NB dispersion for the cases channel: a scalar applied to every
+  location, or a vector with one entry per location. `Inf` selects the
+  Poisson limit. When `NULL` (default) the dispersion is estimated from
+  `obs_cases` via
+  [`est_nb_dispersion`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md);
+  in
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  it is precomputed once and supplied here.
 
-- nb_k_min_deaths:
+- nb_k_deaths:
 
-  Minimum NB dispersion floor for deaths. Default `3`.
+  NB dispersion for the deaths channel; see `nb_k_cases`.
+
+- eps_rel_cases, eps_rel_deaths:
+
+  Positive scalars. Within each location the predicted mean is floored
+  at `max(1e-4, eps_rel * mean(obs))` before the NB density is
+  evaluated, separately per channel. The floor is not cosmetic:
+  production scores a SINGLE stochastic realisation, so a low-count
+  series is full of cells where the realisation is 0 against a positive
+  observation, and the size of the floor is what the likelihood pays for
+  such a cell. Too small a floor makes zeros ruinous and the optimum
+  moves to a draw that over-predicts the level (a Jensen gap:
+  `E_seed[LL(est)]` peaks well above `LL(E_seed[est])`). Cases default
+  `0.02`; deaths default `0.25`, sized by sweep so the deaths level at
+  the likelihood optimum is unbiased. Cases are far less exposed: 13.6
+  percent of scored deaths cells predict zero against a positive
+  observation, versus 1.7 percent of cases cells.
+
+- ll_deaths_core:
+
+  Optional numeric vector, one value per location: the deaths
+  log-likelihood computed with the reported case fatality ratio
+  integrated out (`calc_log_likelihood_deaths_integrated()$ll`). When
+  supplied it replaces the negative-binomial deaths core, so
+  `eps_rel_deaths` and `nb_k_deaths` are not used for the core;
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  always supplies it. The level-dependent deaths shape terms (peak
+  magnitude, cumulative, WIS) are then dropped, with a warning, because
+  `est_deaths` is drawn at the prior CFR; deaths peak timing, which does
+  not depend on the level, is kept.
 
 - verbose:
 
