@@ -36,7 +36,8 @@ for every cutoff fit. Held fixed so all frozen CSVs share one date grid.}
 \value{
 Invisibly, the manifest list (also written to
 \code{dir_cache/psi_manifest.json}). Side effects: one \code{psi_<T>.csv}
-per fitted cutoff plus the manifest under \code{dir_cache}.
+per fitted cutoff plus the manifest under \code{dir_cache}; nothing is
+written to \code{PATHS$MODEL_INPUT}.
 }
 \description{
 Fits the environmental-suitability (psi) LSTM once per rolling-origin cutoff
@@ -64,9 +65,16 @@ then predicts every row -- writes it to \code{dir_cache/panel_v74_<T>.csv},
 and fits psi via \code{est_suitability(source_csv = <panel>, feature_set =
 "v7.4", fit_date_stop = T)}. The panel is compiled ONCE per cutoff and reused
 across the whole \eqn{\ge}10-seed psi ensemble (the 3 GAMs are not refit per
-seed). When v7.4 is not requested the DEFAULT path is byte-unchanged: psi is
-fit from the canonical panel with no \code{source_csv} and no
-\code{gam_train_stop} (v1/v7.3 behaviour).
+seed). When v7.4 is not requested the DEFAULT path is unchanged: psi is fit
+from the canonical panel with no \code{source_csv} and no
+\code{gam_train_stop} (v1/v7.3 behaviour). That panel is \strong{not}
+leak-free: its per-country target anchors (for the precomputed
+\code{target_*} responses, including the default) and the flood-probability
+GAM behind the \code{emdat_flood_prob*} channels of the default
+\code{"v7.3"} feature set were fitted on every row, including rows after
+\code{T}. The function warns in that case, and the manifest entries carry no
+\code{hazard_panel = "v7.4_leakfree"} marker, which
+\code{\link{run_rolling_cv}} also warns about.
 
 \strong{Panel-window alignment (v7.4).} The leak-free panel's compile/GAM-fit
 window is deliberately aligned to the psi-LSTM \emph{training} window
@@ -81,10 +89,16 @@ resolved from the spec's LSTM \code{fit_date_start}
 resolved window is folded into the cache spec-hash (below) so a panel built
 over a different window cannot be silently reused.
 
-\strong{Atomic cache (concurrency-safe).} \code{est_suitability()} writes a
-single global \code{MODEL_INPUT/pred_psi_suitability_day.csv}; this function
-copies that file into \code{dir_cache/psi_<T>.csv} via a tempfile +
-\code{file.rename} so a partially-written cache file can never be observed.
+\strong{Isolated, atomic writes.} Each cutoff's \code{est_suitability()} fit
+runs with \code{MODEL_INPUT} (and \code{DOCS_FIGURES}) redirected to a
+private scratch directory, so it never overwrites the canonical
+\code{PATHS$MODEL_INPUT/pred_psi_suitability_day.csv} that
+\code{data-raw/make_config_default.R} reads, and concurrent calls sharing one
+\code{PATHS} cannot pick up each other's psi. The fitted file is copied into
+\code{dir_cache/psi_<T>.csv} via a tempfile + \code{file.rename} so a
+partially-written cache file can never be observed. Concurrent calls must
+still use different \code{dir_cache} directories: the manifest itself is
+not locked.
 
 \strong{Cache key (spec hash).} For each cutoff a \code{spec_hash} is computed
 over \code{list(fit_date_stop = T, est_suitability_spec)} where the resolved
@@ -99,8 +113,12 @@ recomputes the same hash from its own \code{est_suitability_spec} and
 \strong{hard-errors} on a mismatch.
 
 \strong{Idempotent / resume.} A cutoff is skipped when its \code{psi_<T>.csv}
-exists and the manifest already records a matching \code{spec_hash} for that
-cutoff; rerunning therefore only fits the missing/changed cutoffs.
+exists and the manifest already records a matching \code{spec_hash} and the
+same prediction window for that cutoff; rerunning therefore only fits the
+missing/changed cutoffs. The cache can be extended over several calls: the
+manifest keeps every previously frozen cutoff, not only those in the current
+call. Each entry records its own \code{pred_date_start}/\code{pred_date_stop};
+the top-level values describe the most recent call.
 }
 \seealso{
 \code{\link{run_rolling_cv}}, \code{\link{est_suitability}}
