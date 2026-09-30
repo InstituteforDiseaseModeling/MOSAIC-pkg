@@ -13,7 +13,10 @@
 #' @details
 #' The function converts the R list to JSON text using \code{jsonlite::toJSON()} (with pretty printing enabled) and then writes it out either to a
 #' plain text file or to a gzipped file if \code{compress = TRUE}. The gzipped file is created using a connection
-#' opened with \code{gzfile()}.
+#' opened with \code{gzfile()}. Numbers are written with 17 significant digits, enough to round-trip every double
+#' exactly, so a config read back from the file reproduces a simulation bit for bit. The text is written to a
+#' temporary file in the target directory and then renamed over \code{file_path}, so an interrupted write never
+#' leaves a truncated file behind.
 #'
 #' @examples
 #' \dontrun{
@@ -64,28 +67,29 @@ write_list_to_json <- function(data_list, file_path, compress = FALSE) {
      output_dir <- dirname(file_path)
      if (!dir.exists(output_dir)) stop("The directory for the output file path does not exist: ", output_dir)
 
-     # Remove any existing file at the specified file path.
-     if (file.exists(file_path)) {
-          if (!file.remove(file_path)) {
-               stop("Unable to remove existing file at: ", normalizePath(file_path, winslash = "/"))
-          }
-     }
-
+     # 17 significant digits round-trip every double exactly (15, jsonlite's
+     # digits = NA, does not); same constant as the run_MOSAIC() writers.
      json_text <- jsonlite::toJSON(data_list,
-                                   digits = NA,   # Full R precision (~15-16 sig figs)
+                                   digits = .MOSAIC_JSON_DIGITS,
                                    pretty = TRUE,
                                    auto_unbox = TRUE)
 
-     if (compress) {
+     # Atomic write: temp file in the same directory, then rename into place.
+     tmp_path <- tempfile(pattern = ".tmp_write_list_to_json_", tmpdir = output_dir,
+                          fileext = if (compress) ".json.gz" else ".json")
+     on.exit(if (file.exists(tmp_path)) unlink(tmp_path), add = TRUE)
 
-          con <- gzfile(file_path, "wt")
+     if (compress) {
+          con <- gzfile(tmp_path, "wt")
           writeLines(json_text, con = con)
           close(con)
-
      } else {
+          writeLines(json_text, con = tmp_path)
+     }
 
-          writeLines(json_text, con = file_path)
-
+     if (!file.rename(tmp_path, file_path)) {
+          stop("Unable to move the written JSON into place at: ",
+               normalizePath(file_path, winslash = "/", mustWork = FALSE))
      }
 
      if (!file.exists(file_path)) stop("JSON file was not successfully created at: ", normalizePath(file_path, winslash = "/"))

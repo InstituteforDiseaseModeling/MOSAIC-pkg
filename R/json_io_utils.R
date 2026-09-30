@@ -51,7 +51,7 @@ write_model_json <- function(object, path, type = c("priors", "posteriors"), val
     path,
     pretty = TRUE,
     auto_unbox = TRUE,  # Critical: prevents array wrapping of scalars
-    digits = NA,         # Full floating-point precision
+    digits = .MOSAIC_JSON_DIGITS,  # 17 sig. digits: every double round-trips exactly
     na = "null"         # Handle NA consistently
   )
 

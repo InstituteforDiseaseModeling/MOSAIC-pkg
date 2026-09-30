@@ -71,8 +71,10 @@ write_json_or_gz <- function(data_list,
 
      # Serialise once. Both downstream writers consume the same byte
      # string so the .json and .json.gz are byte-equal by construction.
+     # 17 significant digits round-trip every double exactly (digits = NA
+     # gives 15, which does not); same constant as the run_MOSAIC() writers.
      json_text <- jsonlite::toJSON(data_list,
-                                   digits     = NA,
+                                   digits     = .MOSAIC_JSON_DIGITS,
                                    pretty     = TRUE,
                                    auto_unbox = TRUE)
 

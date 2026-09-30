@@ -4,12 +4,12 @@
 #' It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
 #' The file extension determines which output format is used:
 #' - .json or .json.gz → written with write_list_to_json,
-#' - .h5, or .h5.gz → written with write_list_to_hdf5,
+#' - .h5, .hdf5, .h5.gz or .hdf5.gz → written with write_list_to_hdf5,
 #' - .yaml or .yaml.gz → written with write_list_to_yaml.
 #'
 #' @param output_file_path A character string representing the full file path of the output file.
-#'        Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.
-#'        If NULL, no file is written and the parameters are returned.
+#'        Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .hdf5.gz, .yaml, or .yaml.gz extension.
+#'        If NULL, no file is written. The validated parameters are returned either way.
 #' @param seed Integer scalar giving the random seed value for the simulation run.
 #'
 #' ## Initialization
@@ -80,12 +80,12 @@
 #' @param iota Incubation rate `E -> I` (numeric > 0, per day). Note this is
 #'        a *rate*, not a period -- prior median ~0.71/day. The engine uses
 #'        `iota * E` as the flow out of E.
-#' @param gamma_1 Symptomatic shedding-duration rate `I_sym -> R` (numeric
-#'        >= 0, per day; "severe / symptomatic" branch).
-#' @param gamma_2 Asymptomatic shedding-duration rate `I_asym -> R` (numeric
-#'        >= 0, per day; "mild / asymptomatic" branch).
-#' @param epsilon Natural-infection immunity waning rate `R -> S` (numeric
-#'        >= 0, per day). Distinct from vaccine waning (`omega_1`, `omega_2`).
+#' @param gamma_1 Symptomatic shedding-duration rate `I_sym -> R` (numeric,
+#'        `>= 0`, per day; "severe / symptomatic" branch).
+#' @param gamma_2 Asymptomatic shedding-duration rate `I_asym -> R` (numeric,
+#'        `>= 0`, per day; "mild / asymptomatic" branch).
+#' @param epsilon Natural-infection immunity waning rate `R -> S` (numeric,
+#'        `>= 0`, per day). Distinct from vaccine waning (`omega_1`, `omega_2`).
 #' @param mu_jt Reported case fatality ratio (reported deaths per reported
 #'        suspected case) by location and day: a matrix with rows equal to
 #'        length(location_name) and columns equal to the daily sequence from
@@ -103,10 +103,10 @@
 #'        `(1 + mu_j_slope * tick/nticks)` was removed from the engine in v0.95.0
 #'        (CFR restructure R3): it is not estimable from the deaths series, it
 #'        double-counted the `s(year)` term already inside `CFR_target`, and no
-#'        secular trend in cholera CFR is documented. Retained only so that configs
-#'        written before v0.95.0 can still be replayed through
-#'        `do.call(make_simulation_config, config)`; any value supplied is silently
-#'        dropped and is **not** returned in the config.
+#'        secular trend in cholera CFR is documented. Retained only so that
+#'        existing calls that pass `mu_j_slope` explicitly do not fail with an
+#'        unused-argument error; any value supplied is silently dropped and is
+#'        **not** returned in the config.
 #' @param mu_j_baseline **Removed in v0.96.0.** The pre-v0.96.0 baseline daily
 #'        mortality hazard. Supplying it marks the input as a config written for
 #'        the retired mortality model, whose `mu_jt` field was never read by any
@@ -169,8 +169,8 @@
 #' @param alpha_2 Exponent on `N_jt` in the FOI denominator
 #'        (numeric in \[0, 1\]). `alpha_2 = 1` is frequency-dependent
 #'        transmission (FOI proportional to `I/N`); `alpha_2 = 0` is
-#'        density-dependent (FOI proportional to `I`). Dual-mode: scalar or a
-#'        per-location vector of length `length(location_name)`.
+#'        density-dependent (FOI proportional to `I`). A single global scalar:
+#'        the engine rejects a per-location vector.
 #'
 #' ## Force of Infection (environment-to-human)
 #' Environmental suitability, its calibration parameters, shedding rates, and
@@ -217,10 +217,11 @@
 #'        NULL the peak shape terms contribute 0 to the likelihood.
 #'
 #'
-#' @param sigfigs Integer; number of significant figures to round all numeric values to. Default is 4.
+#' @param sigfigs Ignored; retained for backward compatibility. No rounding is applied, and supplying it raises a warning.
 #'
-#' @return Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
-#'         in the format determined by the file extension.
+#' @return The validated list of parameters (invisibly when \code{output_file_path} is
+#'         provided, after the parameters are written to a file in the format
+#'         determined by the file extension).
 #'
 #' @examples
 #' \dontrun{
@@ -381,6 +382,10 @@ make_simulation_config <- function(output_file_path = NULL,
                               # Outputs
                               sigfigs = 8
 ) {
+
+     if (!missing(sigfigs)) {
+          warning("`sigfigs` is ignored: make_simulation_config() applies no rounding.", call. = FALSE)
+     }
 
      message('Validating parameter values...')
 
@@ -751,8 +756,11 @@ make_simulation_config <- function(output_file_path = NULL,
                                    "reporting parameters."), p_max))
           }
      }
-     if (!is.null(epidemic_threshold) && (!is.numeric(epidemic_threshold) || any(epidemic_threshold < 0) || any(epidemic_threshold > 1))) {
-          stop("epidemic_threshold must be NULL or a numeric scalar or vector with all values in [0, 1].")
+     if (!is.null(epidemic_threshold) &&
+         (!is.numeric(epidemic_threshold) ||
+          !(length(epidemic_threshold) == 1L || length(epidemic_threshold) == length(location_name)) ||
+          any(epidemic_threshold < 0) || any(epidemic_threshold > 1))) {
+          stop("epidemic_threshold must be NULL or numeric with all values in [0, 1], either a scalar or a vector of length equal to location_name.")
      }
      # Validate delta_reporting_cases
      if (!is.null(delta_reporting_cases)) {
@@ -835,22 +843,20 @@ make_simulation_config <- function(output_file_path = NULL,
      if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_name)) {
           stop("tau_i must be a numeric vector of length equal to location_name and values between 0 and 1.")
      }
-     # alpha_1 / alpha_2 are dual-mode (laser-cholera v0.16.0+): a global scalar
-     # OR a per-location vector of length(location_name). The engine broadcasts a
-     # scalar across patches and indexes a length-npatches array (np.power in
-     # humantohuman.py). Range invariants match the engine validate_parameters:
-     # alpha_1 in (0, 1] (strict > 0 -- 0 collapses the I-dependence to a
-     # constant), alpha_2 in [0, 1]. MOSAIC's default sampling keeps alpha global
-     # (scalar); the vector form is accepted for direct run_simulation configs.
+     # alpha_1 is dual-mode: a global scalar OR a per-location vector of
+     # length(location_name), which sim_params() broadcasts or indexes by patch
+     # (priors_default carries a per-location alpha_1 prior, pinned by default).
+     # alpha_2 is a single global scalar: sim_params() reads it with .sim_scalar(),
+     # which rejects any other length. Ranges match the engine: alpha_1 in (0, 1]
+     # (strict > 0 -- 0 collapses the I-dependence to a constant), alpha_2 in [0, 1].
      if (!is.numeric(alpha_1) ||
          !(length(alpha_1) == 1L || length(alpha_1) == length(location_name)) ||
          any(alpha_1 <= 0 | alpha_1 > 1)) {
           stop("alpha_1 must be numeric in (0, 1], either a scalar or a vector of length equal to location_name.")
      }
-     if (!is.numeric(alpha_2) ||
-         !(length(alpha_2) == 1L || length(alpha_2) == length(location_name)) ||
-         any(alpha_2 < 0 | alpha_2 > 1)) {
-          stop("alpha_2 must be numeric in [0, 1], either a scalar or a vector of length equal to location_name.")
+     if (!is.numeric(alpha_2) || length(alpha_2) != 1L || is.na(alpha_2) ||
+         alpha_2 < 0 || alpha_2 > 1) {
+          stop("alpha_2 must be a single numeric value in [0, 1].")
      }
 
      # Force of Infection (environment-to-human).
@@ -1014,11 +1020,12 @@ make_simulation_config <- function(output_file_path = NULL,
           } else if (grepl("\\.yaml(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
                MOSAIC::write_list_to_yaml(params, output_file_path, compress = grepl("\\.gz$", output_file_path))
           } else {
-               stop("Unsupported file format. The output file must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.")
+               stop("Unsupported file format. The output file must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .hdf5.gz, .yaml, or .yaml.gz extension.")
           }
-     } else {
-          message("simulation config returned as list object (no file written as output).")
-          return(params)
+          return(invisible(params))
      }
+
+     message("simulation config returned as list object (no file written as output).")
+     return(params)
 
 }
