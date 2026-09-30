@@ -117,7 +117,14 @@ plot_forecast_cv_grid <- function(predictions,
           ci_col   <- MOSAIC::mosaic_color_variant(line_col, "lighten", 0.3)
           colors <- c(line = line_col, ci = ci_col)
      }
-     ylab <- sprintf("Reported %s per week", metric)
+     # Label the count cadence from the date spacing: the harness writes the
+     # config's daily grid, so rows are usually per-day counts, not weekly.
+     step_days <- suppressWarnings(stats::median(diff(sort(unique(as.numeric(d$date))))))
+     cadence <- if (!is.finite(step_days) || step_days <= 1) "per day"
+                else if (step_days == 7) "per week"
+                else sprintf("per %g days", step_days)
+     ylab <- sprintf("Reported %s %s", metric, cadence)
+     ci_lab <- sprintf("%s%% CI", sub("^pi", "", ci))
 
      # Global cutoff factor so every country column shows the SAME rows (empty
      # panels for absent (iso,cutoff), keeping rows aligned across columns).
@@ -184,7 +191,8 @@ plot_forecast_cv_grid <- function(predictions,
           patchwork::plot_annotation(
                title = sprintf("MOSAIC rolling-origin forecast CV -- reported %s (%s)", metric, model),
                subtitle = paste0("filled circle = in-sample train | x = embargo gap | open circle = OOS validation   ||   ",
-                                 "solid + 95% CI up to cutoff (dashed line); solid + lighter CI after ",
+                                 "solid + ", ci_lab, " up to cutoff (dashed line); solid + lighter ",
+                                 ci_lab, " after ",
                                  "(shown to ", forecast_display_months, " mo; dotted line = ",
                                  scored_horizon_months, "-mo scored horizon)"),
                caption = ylab) &
