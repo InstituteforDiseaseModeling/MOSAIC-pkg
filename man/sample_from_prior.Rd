@@ -32,7 +32,9 @@ Supported distributions:
 \itemize{
 \item \strong{beta}: parameters$shape1, parameters$shape2
 \item \strong{gamma}: parameters$shape, parameters$rate
-\item \strong{lognormal}: parameters$meanlog, parameters$sdlog OR parameters$mean, parameters$sd
+\item \strong{lognormal}: parameters$meanlog, parameters$sdlog OR parameters$mean, parameters$sd;
+optional parameters$lower / parameters$upper truncate the draw (meanlog/sdlog
+then describe the untruncated distribution)
 \item \strong{normal}: parameters$mean, parameters$sd
 \item \strong{truncnorm}: parameters$mean, parameters$sd, parameters$a (lower bound), parameters$b (upper bound)
 \item \strong{uniform}: parameters$min, parameters$max

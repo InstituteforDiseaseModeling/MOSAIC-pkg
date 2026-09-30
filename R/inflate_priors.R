@@ -22,7 +22,9 @@
 #'   \item{gamma(shape, rate)}{\code{shape_new = shape/f, rate_new = rate/f}.}
 #'   \item{lognormal(meanlog, sdlog)}{CV² scaled by \code{f}; \code{meanlog}
 #'     adjusted to preserve natural-scale mean.}
-#'   \item{lognormal(mean, sd)}{\code{sd_new = sqrt(f)*sd}.}
+#'   \item{lognormal(mean, sd)}{\code{sd_new = sqrt(f)*sd}. For either
+#'     lognormal form, truncation bounds \code{lower}/\code{upper} are kept and
+#'     apply to the inflated distribution.}
 #'   \item{normal(mean, sd)}{\code{sd_new = sqrt(f)*sd}.}
 #'   \item{uniform(min, max)}{Bounds extended symmetrically around midpoint.
 #'     Skipped with a warning if new bounds violate positivity.}

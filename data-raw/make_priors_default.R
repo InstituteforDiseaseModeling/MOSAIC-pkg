@@ -700,10 +700,10 @@ priors_default$parameters_global$zeta_1 <- list(
 # zeta_2 - Asymptomatic shedding rate (V. cholerae cells per infected person per day)
 # UPDATED v0.29.0: Derived from est_zeta_2_prior(); single-primary-source anchor
 # (Nelson 2009) with hard sdlog floor of 2.0 to reflect n_independent = 1.
-# Stored as a first-class prior; sample_parameters() still derives zeta_2 at
-# sampling time as zeta_2 = zeta_1 / zeta_ratio to guarantee zeta_1 > zeta_2
-# algebraically. This prior is the literature-derived *reference* distribution
-# for validation. See plan_zeta_priors_implementation.md Section 6.
+# Stored as a first-class prior; sample_parameters() derives zeta_2 at
+# sampling time as zeta_2 = zeta_1 / zeta_ratio, and the zeta_ratio prior's
+# truncation at 1 (below) keeps zeta_2 <= zeta_1. This prior is the
+# literature-derived *reference* distribution for validation. See plan_zeta_priors_implementation.md Section 6.
 zeta_2_res <- MOSAIC::est_zeta_2_prior(PATHS)
 priors_default$parameters_global$zeta_2 <- list(
      description = "Asymptomatic shedding rate (V. cholerae cells per infected person per day); derived at sampling time as zeta_1/zeta_ratio, this prior is the literature-derived reference for validation",
@@ -723,20 +723,31 @@ priors_default$parameters_global$zeta_2 <- list(
 # See plan_zeta_priors_implementation.md Section 7.2 (Table 7.A).
 # est_zeta_ratio_prior()$fit IS the direct channel (since v0.99.11; before that
 # $fit and the CSV carried the combined channel while this block shipped A).
-# zeta_2 is derived: zeta_2 = zeta_1 / zeta_ratio, so zeta_1 > zeta_2 only for
-# draws with zeta_ratio > 1. The direct channel puts ~16% of its mass below 1
-# ($fit$p_below_1), inherited from the Smith 2026 household OR interval
-# (0.11-3.23); the draw is not truncated.
+# zeta_2 is derived: zeta_2 = zeta_1 / zeta_ratio, so zeta_1 >= zeta_2 needs
+# zeta_ratio >= 1. The untruncated direct channel puts ~16% of its mass below 1
+# ($fit$p_below_1), inherited from the Smith 2026 household-transmission OR
+# interval (0.11-3.23), which is not a per-day shedding ratio. Symptomatic
+# stool carries 1e5-1e8 cells/mL at up to litres/day (est_zeta_1_prior
+# anchors) vs ~1e3-1e5 cells/g for asymptomatic carriers (Nelson 2009;
+# Kaper 1995; est_zeta_2_prior anchors), and 04-model-description samples the
+# ratio to rule out zeta_1 < zeta_2. So the shipped prior is the direct
+# channel TRUNCATED below at 1 (parameters$lower = 1, honoured by
+# sample_from_prior() and kept through update_priors_from_posteriors() and
+# inflate_priors()). meanlog/sdlog are those of the untruncated lognormal
+# (4.31 / 4.39 at the v0.99.x anchors); truncation removes 16.3% of the mass,
+# moving the median from ~75 to ~185, the mean from ~1.2e6 to ~1.4e6, and
+# the 95% interval to ~[1.4, 5.7e5].
 zeta_ratio_res <- MOSAIC::est_zeta_ratio_prior(
      PATHS,
      zeta_1_fit = zeta_1_res,   # full return list; .extract_fit() unwraps
      zeta_2_fit = zeta_2_res
 )
 priors_default$parameters_global$zeta_ratio <- list(
-     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); direct literature-anchor channel (Smith 2026, Chao 2011, Finger 2018, Nelson 2009 paired, etc.)",
+     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); direct literature-anchor channel (Smith 2026, Chao 2011, Finger 2018, Nelson 2009 paired, etc.), lognormal truncated below at 1 so that the derived zeta_2 = zeta_1 / zeta_ratio never exceeds zeta_1",
      distribution = "lognormal",
      parameters = list(meanlog = zeta_ratio_res$fit$meanlog,
-                       sdlog   = zeta_ratio_res$fit$sdlog)
+                       sdlog   = zeta_ratio_res$fit$sdlog,
+                       lower   = zeta_ratio_res$fit$lower)
 )
 
 # delta_reporting_cases - Symptom-onset-to-case reporting delay
@@ -1352,60 +1363,34 @@ for (iso in j) {
 
 # Update default priors with estimated initial conditions for E and I
 
-# Define location-specific variance inflation for E/I compartments
-# Higher values = more uncertainty in initial E/I estimates
-# E/I have higher baseline uncertainty due to short-term dynamics
-# Meaning (v0.99.11): the Beta keeps the Monte Carlo mean m and its spread is
-# fit to the 95% CI [m / VI, m * VI] on the logit scale (shape1 may be < 1).
-# Before v0.99.11 the refit collapsed to a near point mass whatever VI was (a
-# 110x intent came out ~3x wide), so these values only now take effect as
-# documented; for VI ~ 100 the fitted lower 2.5% reaches ~m / 150 and the upper
-# 97.5% ~4.3 m (a Beta with mean m cannot reach m * VI above).
-# Only includes ISO codes in MOSAIC::iso_codes_mosaic
-variance_inflation_E_I <- c(
-     "AGO" = 120,  # Angola: Improving surveillance
-     "BDI" = 110,  # Burundi: Limited resources
-     "BEN" = 110,  # Benin: Moderate surveillance
-     "BFA" = 110,  # Burkina Faso: Moderate uncertainty
-     "BWA" = 65,   # Botswana: Good health systems
-     "CAF" = 140,  # Central African Republic: Limited data quality
-     "CIV" = 105,  # Cote d'Ivoire: Moderate systems
-     "CMR" = 105,  # Cameroon: Moderate data quality
-     "COD" = 160,  # Democratic Republic of Congo: Large, varied conditions
-     "COG" = 100,  # Congo: Moderate uncertainty
-     "ERI" = 140,  # Eritrea: Limited international data
-     "ETH" = 100,  # Ethiopia: Large system, variable quality
-     "GAB" = 100,  # Gabon: Moderate surveillance (default)
-     "GHA" = 80,   # Ghana: Good health systems
-     "GIN" = 110,  # Guinea: Moderate data quality
-     "GMB" = 110,  # Gambia: Small, limited data
-     "GNB" = 140,  # Guinea-Bissau: Poor data quality
-     "GNQ" = 100,  # Equatorial Guinea: Moderate uncertainty
-     "KEN" = 40,   # Kenya: Good surveillance
-     "LBR" = 100,  # Liberia: Better data quality
-     "MLI" = 80,  # Mali: Some data limitations
-     "MOZ" = 30,  # Mozambique: Moderate uncertainty increase
-     "MRT" = 130,  # Mauritania: Limited resources
-     "MWI" = 30,   # Malawi: Moderate uncertainty increase
-     "NAM" = 80,   # Namibia: Good health systems (default)
-     "NER" = 130,  # Niger: Limited resources
-     "NGA" = 80,   # Nigeria: Large system, better data
-     "RWA" = 55,   # Rwanda: Excellent health systems
-     "SEN" = 95,   # Senegal: Moderate surveillance
-     "SLE" = 100,  # Sierra Leone: Improved surveillance
-     "SOM" = 200,  # Somalia: Very limited surveillance data
-     "SSD" = 180,  # South Sudan: Conflict-affected, high uncertainty
-     "SWZ" = 90,   # Eswatini: Small, moderate systems
-     "TCD" = 150,  # Chad: High cholera burden, more uncertainty
-     "TGO" = 120,  # Togo: Limited resources
-     "TZA" = 90,   # Tanzania: Moderate data quality
-     "UGA" = 80,   # Uganda: Good health systems
-     "ZAF" = 40,   # South Africa: Excellent surveillance
-     "ZMB" = 30,   # Zambia: Good surveillance system
-     "ZWE" = 30   # Zimbabwe: Moderate uncertainty increase
-)
+# Variance inflation for the E/I Beta priors (re-derived for the v0.99.11
+# estimator; replaces the hand-tuned per-country table, 30-200).
+# Meaning: est_initial_E_I() keeps the Monte Carlo MEAN m and fits the Beta's
+# spread to the 95% CI [m / VI, m * VI] on the logit scale. The MC spread itself
+# is not used, so VI is the whole width of the prior.
+# Derivation (uniform VI = 10):
+#   - Reporting chain: E/I scale with chi_endemic / (rho * sigma). Under the
+#     global priors (rho, chi_endemic, sigma Betas in this file) that ratio has
+#     a 95% range of about m / 4.3 to 3.1 m (1e5 draws; chi / rho alone
+#     m / 2.9 to 2.3 m), log-SD ~0.65.
+#   - Dwell times: E ~ onsets / iota, I ~ onsets / gamma_1; the iota and
+#     gamma_1 lognormal priors have sdlog 0.40 and 0.50.
+#   - Combined log-SD sqrt(0.65^2 + 0.45^2) ~ 0.79, i.e. x/ 4.7 at 95%; a
+#     further factor ~2 covers what the MC omits (the 3-day lookback window,
+#     onset-to-report timing, small-count noise). 4.7 x 2 ~ 10.
+# With VI = 10 the mean-anchored Beta has shape1 ~1.6 (at m = 1e-5): unimodal,
+# 95% range ~[m / 13, 3.1 m], and P(< m / 100) ~ 0.001. The old table's values
+# (30-200) give shape1 < 1 -- a density that diverges at zero, i.e. a prior
+# that favours no infection at t0 in countries whose t0 window has reported
+# cases (zero-case windows get the Beta(0.01, 99999.99) template instead).
+# Their per-country "surveillance quality" labels were uncited, and the
+# surveillance difference they described is already in each country's case
+# data; the reporting-chain priors are global, so there is no data basis for a
+# per-country width. They were also never in effect: the pre-v0.99.11 refit
+# collapsed the prior to ~3x wide whatever VI was.
+variance_inflation_E_I <- 10
 
-# Use location-specific variance inflation with single function call
+# Estimate E/I initial-condition priors
 initial_conditions_E_I <- est_initial_E_I(
      PATHS = PATHS,
      priors = priors_default,
@@ -1413,7 +1398,7 @@ initial_conditions_E_I <- est_initial_E_I(
      n_samples = 100,
      t0 = ic_t0,
      lookback_days = 3,
-     variance_inflation = variance_inflation_E_I,  # Named vector for location-specific values
+     variance_inflation = variance_inflation_E_I,  # uniform scalar, see derivation above
      verbose = FALSE,
      parallel = TRUE
 )
@@ -1850,7 +1835,8 @@ EPIDEMIC_THRESHOLD_UPPER_ABS <- 0.01   # global cap: 1% daily symp prevalence = 
 priors_default$parameters_location$epidemic_threshold <- list(
      description = paste0(
           "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation. ",
-          "Compared against Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases] in LASER. ",
+          "Compared against Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases] in run_simulation(), ",
+          "where it switches reported-case ascertainment from chi_endemic to chi_epidemic. ",
           "Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) ",
           "converted via Zheng formula using config rho, chi_endemic, and gamma_1. ",
           "Truncnorm(mean = prior_mean, sd = 0.65*prior_mean, ",

@@ -21,7 +21,9 @@
 #' \itemize{
 #'   \item \strong{beta}: parameters$shape1, parameters$shape2
 #'   \item \strong{gamma}: parameters$shape, parameters$rate
-#'   \item \strong{lognormal}: parameters$meanlog, parameters$sdlog OR parameters$mean, parameters$sd
+#'   \item \strong{lognormal}: parameters$meanlog, parameters$sdlog OR parameters$mean, parameters$sd;
+#'     optional parameters$lower / parameters$upper truncate the draw (meanlog/sdlog
+#'     then describe the untruncated distribution)
 #'   \item \strong{normal}: parameters$mean, parameters$sd
 #'   \item \strong{truncnorm}: parameters$mean, parameters$sd, parameters$a (lower bound), parameters$b (upper bound)
 #'   \item \strong{uniform}: parameters$min, parameters$max
@@ -113,20 +115,39 @@ sample_from_prior <- function(n = 1, prior, verbose = FALSE) {
         if (!is.null(params$meanlog) && !is.null(params$sdlog)) {
           # Standard parameterization
           if (params$sdlog <= 0) stop("Lognormal requires sdlog > 0")
-          rlnorm(n, meanlog = params$meanlog, sdlog = params$sdlog)
-          
+          meanlog <- params$meanlog
+          sdlog <- params$sdlog
+
         } else if (!is.null(params$mean) && !is.null(params$sd)) {
           # Convert from mean/sd
           if (params$mean <= 0) stop("Lognormal mean must be positive")
           if (params$sd <= 0) stop("Lognormal sd must be positive")
-          
+
           cv2 <- (params$sd / params$mean)^2
           sdlog <- sqrt(log(1 + cv2))
           meanlog <- log(params$mean) - sdlog^2/2
-          rlnorm(n, meanlog = meanlog, sdlog = sdlog)
-          
+
         } else {
           stop("Lognormal requires (meanlog, sdlog) or (mean, sd)")
+        }
+
+        lower <- if (is.null(params$lower)) 0 else as.numeric(params$lower)
+        upper <- if (is.null(params$upper)) Inf else as.numeric(params$upper)
+        if (lower > 0 || is.finite(upper)) {
+          # Truncated lognormal by inverse CDF: meanlog/sdlog are the
+          # parameters of the untruncated distribution.
+          if (lower < 0 || upper <= lower) {
+            stop("Truncated lognormal requires 0 <= lower < upper")
+          }
+          p_lo <- stats::plnorm(lower, meanlog = meanlog, sdlog = sdlog)
+          p_hi <- stats::plnorm(upper, meanlog = meanlog, sdlog = sdlog)
+          if (!(p_hi > p_lo)) {
+            stop("Truncated lognormal has no mass between lower and upper")
+          }
+          pmin(pmax(stats::qlnorm(runif(n, p_lo, p_hi), meanlog = meanlog, sdlog = sdlog),
+                    lower), upper)
+        } else {
+          rlnorm(n, meanlog = meanlog, sdlog = sdlog)
         }
       },
       

@@ -1,10 +1,11 @@
 #' Estimate Prior Distribution for the Shedding Ratio (zeta_ratio = zeta_1 / zeta_2)
 #'
-#' Fits a lognormal prior for the per-person-per-day symptomatic-to-
-#' asymptomatic shedding ratio \eqn{\zeta_{\mathrm{ratio}} = \zeta_1 / \zeta_2}
-#' used in `sample_parameters()` to derive \eqn{\zeta_2 = \zeta_1 / \zeta_{\mathrm{ratio}}}
-#' at sampling time (so \eqn{\zeta_1 > \zeta_2} exactly when a draw has
-#' \eqn{\zeta_{\mathrm{ratio}} > 1}; nothing truncates the draw, see Details).
+#' Fits a lognormal prior, truncated below at 1, for the per-person-per-day
+#' symptomatic-to-asymptomatic shedding ratio
+#' \eqn{\zeta_{\mathrm{ratio}} = \zeta_1 / \zeta_2} used in `sample_parameters()`
+#' to derive \eqn{\zeta_2 = \zeta_1 / \zeta_{\mathrm{ratio}}} at sampling time.
+#' The truncation (`lower = 1`, applied by `sample_from_prior()`) is what makes
+#' \eqn{\zeta_2 \le \zeta_1} hold for every draw; see Details.
 #'
 #' The function produces THREE candidate lognormal fits. The \strong{direct
 #' channel (A)} is the shipped prior: it is returned as `$fit`, written to
@@ -51,9 +52,11 @@
 #' @return Invisibly returns a list with elements:
 #' \itemize{
 #'   \item \code{data}: direct-literature anchor table (Table 7.A).
-#'   \item \code{fit}: the shipped direct-channel (A) lognormal parameters
-#'         (`meanlog`, `sdlog`, `median`, `mode`, `mean`, `ci_lower`,
-#'         `ci_upper`, `p_below_1`).
+#'   \item \code{fit}: the shipped direct-channel (A) prior: `meanlog` and
+#'         `sdlog` of the untruncated lognormal, the truncation bound `lower`
+#'         (= 1), the `median`, `mode`, `mean`, `ci_lower` and `ci_upper` of
+#'         the truncated distribution that is sampled, and `p_below_1` (the
+#'         untruncated mass below 1 that the truncation removes).
 #'   \item \code{param_df}: long-format parameter data frame (as saved to disk).
 #'   \item \code{prediction}: density grid for the direct, derived and
 #'         combined channels (tagged via the `channel` column).
@@ -87,13 +90,23 @@
 #' in \code{$diagnostics$ratio_sample}; it does not enter the fit
 #' statistics.
 #'
-#' \strong{Mass below 1.} The direct channel is wide (the anchors span
-#' ~1.6x to ~10^5), so it puts a non-trivial share of its mass below 1
-#' (`$fit$p_below_1`, about 0.16 at the v0.99.x anchors). Those draws give
-#' \eqn{\zeta_2 > \zeta_1}. This is inherited from the Smith 2026
-#' household anchor, whose odds-ratio interval (0.11-3.23) includes
-#' asymptomatic index cases transmitting at least as much as symptomatic ones;
-#' it is not truncated here.
+#' \strong{Truncation at 1.} The direct channel is wide (the anchors span
+#' ~1.6x to ~10^5), so the untruncated lognormal puts a non-trivial share of
+#' its mass below 1 (`$fit$p_below_1`, about 0.16 at the v0.99.x anchors),
+#' inherited from the Smith 2026 household odds-ratio interval (0.11-3.23).
+#' Such draws would give \eqn{\zeta_2 > \zeta_1}, which contradicts the
+#' shedding biology the model encodes: symptomatic stool carries
+#' \eqn{10^5}-\eqn{10^8} cells/mL at up to litres per day (the
+#' `est_zeta_1_prior()` anchors), while asymptomatic carriers shed about
+#' \eqn{10^3} (Nelson 2009) to \eqn{10^5} (Kaper 1995) cells per gram of
+#' formed stool (the `est_zeta_2_prior()` anchors), and the model description
+#' samples the ratio precisely to rule out \eqn{\zeta_1 < \zeta_2}. The Smith 2026 interval concerns
+#' household transmission odds, not per-day shedding, so it does not license
+#' ratios below 1. The shipped prior is therefore the direct-channel lognormal
+#' truncated below at 1 (`lower = 1`): its `meanlog`/`sdlog` are unchanged
+#' and the removed mass is redistributed proportionally over
+#' \eqn{\zeta_{\mathrm{ratio}} \ge 1}, which moves the median up (to
+#' `$fit$median`).
 #'
 #' \strong{Combined channel (C).} Given direct and derived fits
 #' \eqn{\mathrm{LN}(\mu_A, \sigma_A^2)} and \eqn{\mathrm{LN}(\mu_B, \sigma_B^2)},
@@ -359,16 +372,26 @@ est_zeta_ratio_prior <- function(PATHS,
      ci_lower         <- stats::qlnorm(0.025, meanlog = meanlog_C, sdlog = sdlog_C)
      ci_upper         <- stats::qlnorm(0.975, meanlog = meanlog_C, sdlog = sdlog_C)
 
-     # The shipped prior is the direct channel (A); see the roxygen.
+     # The shipped prior is the direct channel (A) truncated below at 1 so that
+     # zeta_2 = zeta_1 / zeta_ratio never exceeds zeta_1 (see the roxygen). The
+     # summaries describe the truncated distribution sample_from_prior() draws.
+     zeta_ratio_lower <- 1
+     p_lower_A <- stats::plnorm(zeta_ratio_lower, meanlog = meanlog_A, sdlog = sdlog_A)
+     q_trunc_A <- function(p) {
+          stats::qlnorm(p_lower_A + p * (1 - p_lower_A), meanlog = meanlog_A, sdlog = sdlog_A)
+     }
      fit <- list(
           meanlog   = meanlog_A,
           sdlog     = sdlog_A,
-          median    = exp(meanlog_A),
-          mode      = exp(meanlog_A - sdlog_A^2),
-          mean      = exp(meanlog_A + sdlog_A^2 / 2),
-          ci_lower  = ci_lower_A,
-          ci_upper  = ci_upper_A,
-          p_below_1 = stats::plnorm(1, meanlog = meanlog_A, sdlog = sdlog_A)
+          lower     = zeta_ratio_lower,
+          median    = q_trunc_A(0.5),
+          mode      = max(zeta_ratio_lower, exp(meanlog_A - sdlog_A^2)),
+          mean      = exp(meanlog_A + sdlog_A^2 / 2) *
+               stats::pnorm((meanlog_A + sdlog_A^2 - log(zeta_ratio_lower)) / sdlog_A) /
+               (1 - p_lower_A),
+          ci_lower  = q_trunc_A(0.025),
+          ci_upper  = q_trunc_A(0.975),
+          p_below_1 = p_lower_A
      )
 
      fit_combined <- list(
@@ -417,8 +440,12 @@ est_zeta_ratio_prior <- function(PATHS,
      pred_A <- data.frame(
           zeta_ratio       = x_vals,
           log10_zeta_ratio = log10(x_vals),
-          density          = stats::dlnorm(x_vals, meanlog = meanlog_A, sdlog = sdlog_A),
-          density_log10    = stats::dnorm(log10(x_vals), mean = mu_log10_A, sd = sigma_log10_A),
+          density          = ifelse(x_vals >= zeta_ratio_lower,
+                                    stats::dlnorm(x_vals, meanlog = meanlog_A, sdlog = sdlog_A) /
+                                         (1 - p_lower_A), 0),
+          density_log10    = ifelse(x_vals >= zeta_ratio_lower,
+                                    stats::dnorm(log10(x_vals), mean = mu_log10_A, sd = sigma_log10_A) /
+                                         (1 - p_lower_A), 0),
           channel          = "direct",
           stringsAsFactors = FALSE
      )
@@ -442,13 +469,13 @@ est_zeta_ratio_prior <- function(PATHS,
 
      param_df <- make_param_df(
           variable_name          = "zeta_ratio",
-          variable_description   = "Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal, the shipped prior",
+          variable_description   = "Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal truncated below at 1, the shipped prior",
           parameter_distribution = c("point", "point", "point", "point",
-                                     "lognormal", "lognormal"),
+                                     "lognormal", "lognormal", "lognormal"),
           parameter_name         = c("low", "median", "mode", "high",
-                                     "meanlog", "sdlog"),
+                                     "meanlog", "sdlog", "lower"),
           parameter_value        = c(fit$ci_lower, fit$median, fit$mode, fit$ci_upper,
-                                     fit$meanlog, fit$sdlog)
+                                     fit$meanlog, fit$sdlog, fit$lower)
      )
 
      #--------------------------------------------------------------------------
@@ -475,15 +502,15 @@ est_zeta_ratio_prior <- function(PATHS,
      #--------------------------------------------------------------------------
 
      cat("\n=== FITTED PRIOR: zeta_ratio (zeta_1 / zeta_2, dimensionless) ===\n")
-     cat(sprintf("  Direct (A)   : meanlog=%.3f, sdlog=%.3f, median=%.2e, n=%d  [SHIPPED prior; P(ratio < 1) = %.3f]\n",
-                 meanlog_A, sdlog_A, exp(meanlog_A), fit_direct$n_sources, fit$p_below_1))
+     cat(sprintf("  Direct (A)   : meanlog=%.3f, sdlog=%.3f, median=%.2e, n=%d  [SHIPPED truncated at 1: removes P(ratio < 1) = %.3f; truncated median=%.2e]\n",
+                 meanlog_A, sdlog_A, exp(meanlog_A), fit_direct$n_sources, fit$p_below_1, fit$median))
      cat(sprintf("  Derived (B)  : meanlog=%.3f, sdlog=%.3f, median=%.2e  [analytic closed form; MC sample n=%d for diagnostics only]\n",
                  meanlog_B, sdlog_B, exp(meanlog_B), n_sim))
      cat(sprintf("  Analytic     : meanlog=%.3f, sdlog=%.3f (independent-lognormal cross-check; identical to derived by construction)\n",
                  analytic_check$meanlog, analytic_check$sdlog))
      cat(sprintf("  Combined (C) : meanlog=%.3f, sdlog=%.3f, median=%.2e  [diagnostic only]\n",
                  meanlog_C, sdlog_C, lognormal_median))
-     cat(sprintf("  95%% CI (A)   : [%.2e, %.2e]\n", fit$ci_lower, fit$ci_upper))
+     cat(sprintf("  95%% CI (A, truncated) : [%.2e, %.2e]\n", fit$ci_lower, fit$ci_upper))
      cat("\n")
 
      #--------------------------------------------------------------------------
@@ -595,13 +622,13 @@ est_zeta_ratio_prior <- function(PATHS,
                                        long = ggplot2::unit(0.15, "cm")) +
           ggplot2::annotate("text",
                             x = fit$median, y = peak_density * 1.08,
-                            label = sprintf("shipped (direct) median\n%.1e", fit$median),
+                            label = sprintf("shipped (direct, truncated at 1) median\n%.1e", fit$median),
                             hjust = 0.5, vjust = 0, size = 3.4, colour = "grey20",
                             lineheight = 0.9) +
           ggplot2::annotate("text",
                             x = 10^-0.8, y = peak_density * 1.25,
                             hjust = 0, vjust = 0.5, size = 3.6, colour = "#1B4F72",
-                            label = sprintf("Shipped: Direct(meanlog = %.2f, sdlog = %.2f)",
+                            label = sprintf("Shipped: Direct(meanlog = %.2f, sdlog = %.2f), truncated at 1",
                                             meanlog_A, sdlog_A)) +
           ggplot2::labs(title = "B. Direct, derived, and combined lognormal densities (rug = direct-literature anchors)",
                         x = expression(zeta[ratio] ~ "  (log scale)"),

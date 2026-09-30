@@ -44,9 +44,11 @@ remains \code{NULL}.}
 Invisibly returns a list with elements:
 \itemize{
 \item \code{data}: direct-literature anchor table (Table 7.A).
-\item \code{fit}: the shipped direct-channel (A) lognormal parameters
-(\code{meanlog}, \code{sdlog}, \code{median}, \code{mode}, \code{mean}, \code{ci_lower},
-\code{ci_upper}, \code{p_below_1}).
+\item \code{fit}: the shipped direct-channel (A) prior: \code{meanlog} and
+\code{sdlog} of the untruncated lognormal, the truncation bound \code{lower}
+(= 1), the \code{median}, \code{mode}, \code{mean}, \code{ci_lower} and \code{ci_upper} of
+the truncated distribution that is sampled, and \code{p_below_1} (the
+untruncated mass below 1 that the truncation removes).
 \item \code{param_df}: long-format parameter data frame (as saved to disk).
 \item \code{prediction}: density grid for the direct, derived and
 combined channels (tagged via the \code{channel} column).
@@ -57,11 +59,12 @@ cross-check only), and \code{candidate_fits}.
 }
 }
 \description{
-Fits a lognormal prior for the per-person-per-day symptomatic-to-
-asymptomatic shedding ratio \eqn{\zeta_{\mathrm{ratio}} = \zeta_1 / \zeta_2}
-used in \code{sample_parameters()} to derive \eqn{\zeta_2 = \zeta_1 / \zeta_{\mathrm{ratio}}}
-at sampling time (so \eqn{\zeta_1 > \zeta_2} exactly when a draw has
-\eqn{\zeta_{\mathrm{ratio}} > 1}; nothing truncates the draw, see Details).
+Fits a lognormal prior, truncated below at 1, for the per-person-per-day
+symptomatic-to-asymptomatic shedding ratio
+\eqn{\zeta_{\mathrm{ratio}} = \zeta_1 / \zeta_2} used in \code{sample_parameters()}
+to derive \eqn{\zeta_2 = \zeta_1 / \zeta_{\mathrm{ratio}}} at sampling time.
+The truncation (\code{lower = 1}, applied by \code{sample_from_prior()}) is what makes
+\eqn{\zeta_2 \le \zeta_1} hold for every draw; see Details.
 }
 \details{
 The function produces THREE candidate lognormal fits. The \strong{direct
@@ -108,13 +111,23 @@ ratio distribution is generated for the diagnostic figure and returned
 in \code{$diagnostics$ratio_sample}; it does not enter the fit
 statistics.
 
-\strong{Mass below 1.} The direct channel is wide (the anchors span
-~1.6x to ~10^5), so it puts a non-trivial share of its mass below 1
-(\verb{$fit$p_below_1}, about 0.16 at the v0.99.x anchors). Those draws give
-\eqn{\zeta_2 > \zeta_1}. This is inherited from the Smith 2026
-household anchor, whose odds-ratio interval (0.11-3.23) includes
-asymptomatic index cases transmitting at least as much as symptomatic ones;
-it is not truncated here.
+\strong{Truncation at 1.} The direct channel is wide (the anchors span
+~1.6x to ~10^5), so the untruncated lognormal puts a non-trivial share of
+its mass below 1 (\verb{$fit$p_below_1}, about 0.16 at the v0.99.x anchors),
+inherited from the Smith 2026 household odds-ratio interval (0.11-3.23).
+Such draws would give \eqn{\zeta_2 > \zeta_1}, which contradicts the
+shedding biology the model encodes: symptomatic stool carries
+\eqn{10^5}-\eqn{10^8} cells/mL at up to litres per day (the
+\code{est_zeta_1_prior()} anchors), while asymptomatic carriers shed about
+\eqn{10^3} (Nelson 2009) to \eqn{10^5} (Kaper 1995) cells per gram of
+formed stool (the \code{est_zeta_2_prior()} anchors), and the model description
+samples the ratio precisely to rule out \eqn{\zeta_1 < \zeta_2}. The Smith 2026 interval concerns
+household transmission odds, not per-day shedding, so it does not license
+ratios below 1. The shipped prior is therefore the direct-channel lognormal
+truncated below at 1 (\code{lower = 1}): its \code{meanlog}/\code{sdlog} are unchanged
+and the removed mass is redistributed proportionally over
+\eqn{\zeta_{\mathrm{ratio}} \ge 1}, which moves the median up (to
+\verb{$fit$median}).
 
 \strong{Combined channel (C).} Given direct and derived fits
 \eqn{\mathrm{LN}(\mu_A, \sigma_A^2)} and \eqn{\mathrm{LN}(\mu_B, \sigma_B^2)},

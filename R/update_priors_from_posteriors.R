@@ -182,6 +182,7 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
 
       # Clean parameters: keep only canonical fields
       clean_entry <- .clean_posterior_entry(post_entry, dist_core_fields)
+      clean_entry <- .carry_lognormal_bounds(clean_entry, updated$parameters_global[[param_name]])
       updated$parameters_global[[param_name]] <- clean_entry
       n_replaced <- n_replaced + 1L
     }
@@ -266,6 +267,8 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
 
         # Clean and replace
         clean_entry <- .clean_posterior_entry(post_entry, dist_core_fields)
+        clean_entry <- .carry_lognormal_bounds(
+          clean_entry, updated$parameters_location[[param_base]]$location[[iso]])
         updated$parameters_location[[param_base]]$location[[iso]] <- clean_entry
         n_loc_replaced <- n_loc_replaced + 1L
       }
@@ -333,6 +336,30 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   }
 
   list(distribution = dist_type, parameters = params)
+}
+
+
+#' Keep a lognormal prior's truncation bounds on the posterior that replaces it
+#'
+#' A truncated lognormal prior (e.g. zeta_ratio, lower = 1, which keeps
+#' zeta_1 >= zeta_2) carries \code{lower}/\code{upper}. The posterior fit is
+#' an untruncated lognormal, so without this the next stage could again draw
+#' outside the support the prior encodes.
+#' @param entry Cleaned posterior entry.
+#' @param prior_entry The prior entry being replaced (may be \code{NULL}).
+#' @return \code{entry}, with the prior's bounds added when both are lognormal.
+#' @noRd
+.carry_lognormal_bounds <- function(entry, prior_entry) {
+  if (is.null(prior_entry) || !identical(tolower(entry$distribution), "lognormal") ||
+      !identical(tolower(prior_entry$distribution), "lognormal")) {
+    return(entry)
+  }
+  for (b in c("lower", "upper")) {
+    if (!is.null(prior_entry$parameters[[b]])) {
+      entry$parameters[[b]] <- prior_entry$parameters[[b]]
+    }
+  }
+  entry
 }
 
 

@@ -101,7 +101,11 @@
 #'     a first-class prior, but is typically *derived at sampling time* as
 #'     `zeta_1 / zeta_ratio` rather than drawn independently.
 #'   \item \code{zeta_ratio} -- `zeta_1 / zeta_2` (Lognormal; ~5-OOM
-#'     literature spread retained intentionally).
+#'     literature spread retained intentionally). `data-raw/make_priors_default.R`
+#'     truncates it below at 1 (`parameters$lower = 1`) so the derived `zeta_2`
+#'     never exceeds `zeta_1`; objects built before that change (v16.1 and
+#'     earlier) carry no `lower`, and about 16\% of their draws have
+#'     `zeta_2 > zeta_1`.
 #' }
 #'
 #' Mobility (gravity-model exponents):
