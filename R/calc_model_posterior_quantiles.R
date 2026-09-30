@@ -584,8 +584,8 @@ calc_model_posterior_quantiles <- function(results,
 #'
 #' Non-finite draws are dropped (with their weights). Returns \code{NA_real_}
 #' when either sample has fewer than 10 finite draws, 0 for identical
-#' constants, and \code{NA_real_} for different constants or when all the
-#' posterior weight sits on one value.
+#' constants, and \code{NA_real_} for different constants or when the
+#' posterior weights have Kish effective sample size below 2.
 #'
 #' @param prior_samples Numeric prior draws (unweighted).
 #' @param posterior_samples Numeric posterior draws.

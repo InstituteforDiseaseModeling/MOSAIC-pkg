@@ -103,15 +103,41 @@ test_that("weighted nrd0 bandwidth reduces to bw.nrd0 and uses Kish n_eff", {
   set.seed(4)
   x <- stats::rnorm(300)
   expect_identical(MOSAIC:::.bw_nrd0_weighted(x, rep(2, 300)), stats::bw.nrd0(x))
-  # Two-point hand check: x = (0, 1), w = (0.75, 0.25): n_eff = 1 / 0.625 = 1.6,
-  # sd_w = sqrt(0.1875 * 1.6 / 0.6) = 0.7071068, weighted IQR = 0.5 (quartiles
-  # at 0 and 0.5) -> 0.5 / 1.34 = 0.3731343 < sd_w, bw = 0.9 * 0.3731343 * 1.6^-0.2
-  q <- weighted_quantiles(c(0, 1), c(0.75, 0.25), c(0.25, 0.75))
-  lo <- min(sqrt(0.1875 * 1.6 / 0.6), diff(q) / 1.34)
-  expect_equal(MOSAIC:::.bw_nrd0_weighted(c(0, 1), c(0.75, 0.25)),
-               0.9 * lo * 1.6^(-0.2), tolerance = 1e-12)
+  # Three-point hand check: x = (0, 1, 2), w = (0.5, 0.25, 0.25):
+  # n_eff = 1 / 0.375 = 2.666667, mu = 0.75, weighted var = 0.6875,
+  # corrected by n_eff / (n_eff - 1) = 1.6 -> sd_w = sqrt(1.1) = 1.048809
+  q <- weighted_quantiles(c(0, 1, 2), c(0.5, 0.25, 0.25), c(0.25, 0.75))
+  lo <- min(sqrt(1.1), diff(q) / 1.34)
+  expect_equal(MOSAIC:::.bw_nrd0_weighted(c(0, 1, 2), c(0.5, 0.25, 0.25)),
+               0.9 * lo * (8 / 3)^(-0.2), tolerance = 1e-12)
   # All mass on one value: bandwidth undefined
   expect_true(is.na(MOSAIC:::.bw_nrd0_weighted(c(0, 1, 2), c(0, 1, 0))))
+})
+
+test_that("near-one-hot weights (Kish n_eff < 2) give NA, not an inflated bandwidth", {
+  # w = (0.999, 0.001): n_eff = 1 / (0.999^2 + 0.001^2) = 1.002002; the
+  # n_eff / (n_eff - 1) correction would be ~501, inflating the SD ~22x and
+  # smoothing a near point mass into a wide density (posterior KL ~2 on U(0,1)).
+  w <- c(0.999, 0.001)
+  expect_equal(1 / sum(w^2), 1.002002, tolerance = 1e-6)
+  expect_true(is.na(MOSAIC:::.bw_nrd0_weighted(c(0.2, 0.1), w)))
+  set.seed(1)
+  prior <- stats::runif(20000)
+  x <- stats::runif(1000)
+  expect_true(is.na(MOSAIC:::.mosaic_posterior_kl(prior, x, c(w, rep(0, 998)))))
+  expect_warning(kl <- calc_kl_divergence(x, weights1 = c(w, rep(0, 998)), samples2 = prior),
+                 "non-finite|NA")
+  expect_true(is.na(kl))
+  # Boundary: n_eff = 1.9 -> NA; n_eff = 2 (two equal weights) -> finite,
+  # equal to the hand value 0.9 * min(sd_w, IQR_w / 1.34) * 2^-0.2
+  p <- (1 + sqrt(2 / 1.9 - 1)) / 2
+  expect_true(is.na(MOSAIC:::.bw_nrd0_weighted(c(0, 1), c(p, 1 - p))))
+  xx <- c(0, 1, 5)
+  ww <- c(1, 1, 0)
+  sd_w <- sqrt(0.25 * 2 / 1)
+  q <- weighted_quantiles(xx, ww / 2, c(0.25, 0.75))
+  expect_equal(MOSAIC:::.bw_nrd0_weighted(xx, ww),
+               0.9 * min(sd_w, diff(q) / 1.34) * 2^(-0.2), tolerance = 1e-12)
 })
 
 test_that("posterior KL uses the weighted bandwidth for importance-weighted draws", {

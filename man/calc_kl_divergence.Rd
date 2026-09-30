@@ -42,8 +42,8 @@ same length as \code{samples2}. If NULL, uniform weights are used.}
 A non-negative numeric value representing the KL divergence.
 Returns 0 when the distributions are identical, and larger values
 indicate greater divergence. Returns \code{NA} with a warning when either
-weight vector puts all its mass on one value (the KDE bandwidth is then
-undefined).
+weight vector has Kish effective sample size below 2 (the KDE bandwidth
+is then undefined).
 }
 \description{
 Computes the Kullback-Leibler (KL) divergence between two probability

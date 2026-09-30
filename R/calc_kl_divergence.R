@@ -40,8 +40,8 @@
 #' @return A non-negative numeric value representing the KL divergence.
 #'   Returns 0 when the distributions are identical, and larger values
 #'   indicate greater divergence. Returns \code{NA} with a warning when either
-#'   weight vector puts all its mass on one value (the KDE bandwidth is then
-#'   undefined).
+#'   weight vector has Kish effective sample size below 2 (the KDE bandwidth
+#'   is then undefined).
 #'
 #' @examples
 #' # Example 1: Compare two normal distributions
@@ -168,7 +168,9 @@ calc_kl_divergence <- function(samples1,
 #' \eqn{0.9 \min(\hat\sigma_w, \mathrm{IQR}_w/1.34) n_{eff}^{-1/5}}. The
 #' weighted variance is bias-corrected by \eqn{n_{eff}/(n_{eff}-1)}. With equal
 #' weights it returns \code{stats::bw.nrd0(x)} exactly. Returns \code{NA_real_}
-#' when the weighted spread is zero (all mass on one value).
+#' when \eqn{n_{eff} < 2} (as \code{bw.nrd0} needs two points; the correction
+#' also diverges as \eqn{n_{eff} \to 1}, inflating a near-point-mass density)
+#' or when the weighted spread is zero.
 #'
 #' @param x Numeric finite values.
 #' @param w Non-negative weights aligned with \code{x}, positive sum.
@@ -180,7 +182,7 @@ calc_kl_divergence <- function(samples1,
      w <- w / sum(w)
      if (max(w) - min(w) <= 1e-12 * max(w)) return(stats::bw.nrd0(x))
      n_eff <- 1 / sum(w^2)
-     if (n_eff <= 1 + 1e-12) return(NA_real_)
+     if (n_eff < 2) return(NA_real_)
      mu <- sum(w * x)
      sd_w <- sqrt(sum(w * (x - mu)^2) * n_eff / (n_eff - 1))
      q <- weighted_quantiles(x, w, c(0.25, 0.75))
@@ -208,7 +210,7 @@ calc_kl_divergence <- function(samples1,
 #' @param n_grid Minimum number of grid points over P's support.
 #' @param q_floor Floor applied to the Q density before taking logs.
 #' @return Non-negative numeric scalar, or \code{NA_real_} when a bandwidth is
-#'   undefined (all weight on one value) or the result is not finite.
+#'   undefined (Kish effective sample size below 2) or the result is not finite.
 #' @keywords internal
 #' @noRd
 .kl_divergence_kde <- function(p_x, p_w, q_x, q_w, n_grid = 1024L,
