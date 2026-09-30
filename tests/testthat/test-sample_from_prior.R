@@ -2,14 +2,6 @@
 
 library(testthat)
 
-# Source the function
-if (file.exists("../../R/sample_from_prior.R")) source("../../R/sample_from_prior.R")
-
-# Helper to check if rgompertz exists (from fit_gompertz_from_ci.R)
-if (file.exists("../../R/fit_gompertz_from_ci.R")) {
-  source("../../R/fit_gompertz_from_ci.R")
-}
-
 test_that("sample_from_prior handles beta distribution", {
   prior <- list(
     distribution = "beta",

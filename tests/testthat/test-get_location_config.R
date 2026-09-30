@@ -1,8 +1,5 @@
 library(MOSAIC)
 
-# Source the function directly for testing to get the latest version
-if (file.exists("../../R/get_location_config.R")) source("../../R/get_location_config.R")
-
 test_that("get_location_config works with default config and single location", {
      # Extract config for single location
      eth_config <- get_location_config(iso = "ETH")
@@ -227,7 +224,7 @@ test_that("get_location_config works with sampled parameters", {
      skip_if_not(exists("sample_parameters"))
      
      # Create sampled config
-     set_root_directory(system.file(package = "MOSAIC"))
+     local_test_root()
      suppressMessages({
           PATHS <- get_paths()
           config_sampled <- sample_parameters(PATHS, seed = 123)

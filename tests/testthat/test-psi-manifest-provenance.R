@@ -6,11 +6,37 @@
 # known cross-process non-determinism that made a psi artefact unreconstructible
 # in principle. This test pins the contract so it cannot silently regress.
 
-test_that("the manifest provenance contract lists every field needed to reproduce a fit", {
-     src_file <- testthat::test_path("..", "..", "R", "run_rolling_cv_suitability.R")
-     skip_if_not(file.exists(src_file), "R/ source not available (installed check)")
-     src <- readLines(src_file, warn = FALSE)
-     blk <- paste(src, collapse = "\n")
+# The keys are read from the `config_info <- list(...)` constructor that feeds
+# write_json(), not grepped from the whole file: most of these names also occur
+# in unrelated code (the data-build call, the arch-control merge), so a
+# file-wide grep kept passing after a key was dropped from the manifest.
+.manifest_keys <- function() {
+     fn <- get(".est_suitability_lstm_v2", envir = asNamespace("MOSAIC"))
+     found <- NULL
+     walk <- function(e) {
+          if (!is.null(found) || !is.call(e)) return(invisible())
+          if (identical(e[[1]], as.name("<-")) && identical(e[[2]], as.name("config_info")) &&
+              is.call(e[[3]]) && identical(e[[3]][[1]], as.name("list"))) {
+               found <<- e[[3]]
+               return(invisible())
+          }
+          el <- as.list(e)
+          for (i in seq_along(el)) {
+               if (identical(el[[i]], quote(expr = ))) next
+               walk(el[[i]])
+          }
+     }
+     walk(body(fn))
+     if (is.null(found)) return(NULL)
+     top <- setdiff(names(found), "")
+     prov <- found[["provenance"]]
+     list(top = top,
+          provenance = if (is.call(prov)) setdiff(names(prov), "") else character(0))
+}
+
+test_that("the manifest provenance block writes every field needed to reproduce a fit", {
+     keys <- .manifest_keys()
+     expect_false(is.null(keys), info = "config_info <- list(...) not found in .est_suitability_lstm_v2")
      required <- c(
           # what data went in
           "source_csv", "source_csv_md5",
@@ -22,26 +48,22 @@ test_that("the manifest provenance contract lists every field needed to reproduc
           "smooth_span", "ensemble_logit_eps",
           # software identity
           "mosaic_version", "tf_version", "host", "written_at")
-     missing <- required[!vapply(required, function(k) grepl(k, blk, fixed = TRUE), logical(1))]
-     expect_equal(missing, character(0),
-                  info = paste("manifest provenance lost:", paste(missing, collapse = ", ")))
+     expect_equal(setdiff(required, keys$provenance), character(0),
+                  info = "manifest provenance lost a key")
 })
 
 test_that("provenance is additive -- the pre-existing manifest keys are still written", {
-     src_file <- testthat::test_path("..", "..", "R", "run_rolling_cv_suitability.R")
-     skip_if_not(file.exists(src_file), "R/ source not available (installed check)")
-     src <- paste(readLines(src_file, warn = FALSE), collapse = "\n")
+     keys <- .manifest_keys()
      legacy <- c("architecture", "fit_date_start", "fit_date_stop", "feature_set",
                  "response_var", "bias_correct", "region_map", "n_seeds", "seeds",
-                 "n_countries", "n_features", "fit_info", "rw_diagnostics")
-     gone <- legacy[!vapply(legacy, function(k) grepl(k, src, fixed = TRUE), logical(1))]
-     expect_equal(gone, character(0),
-                  info = paste("a legacy manifest key was dropped:", paste(gone, collapse = ", ")))
+                 "n_countries", "n_features", "fit_info", "rw_diagnostics", "provenance")
+     expect_equal(setdiff(legacy, keys$top), character(0),
+                  info = "a legacy manifest key was dropped")
 })
 
 test_that("the suitability writers reference no undefined variables (catches cross-branch drift)", {
-     # WHY THIS EXISTS. The provenance test above greps the SOURCE for field names.
-     # It passed while the writer was broken: the block referenced `backend`, a
+     # WHY THIS EXISTS. The provenance tests above read field names statically.
+     # A source-grep version of them passed while the writer was broken: the block referenced `backend`, a
      # variable that exists only on the feature/psi-torch-port branch, and every
      # shard of an arm died at the END of its first cutoff -- after all the fitting
      # work -- when the manifest was written. A static field-name check cannot see

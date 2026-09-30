@@ -1,8 +1,10 @@
 # Generate Running simulations vignette figures
 #
 # This script regenerates the pre-computed figures displayed in the
-# "Running simulations" vignette (vignettes/Running-simulations.Rmd). The vignette chunks
-# are set to eval = FALSE, so the figures must be produced here and committed.
+# "Running simulations" vignette (vignettes/Running-simulations.Rmd). The simulation
+# chunks are eval = FALSE, so the figures must be produced here and committed to
+# vignettes/figures/ (tracked, and shipped in the build so the vignette's
+# eval = TRUE include_graphics() chunks find them).
 #
 # The plotting code below is kept in lockstep with the vignette chunks so the
 # committed PNGs match exactly what the vignette source shows. If you change a
@@ -10,7 +12,7 @@
 #
 # Field names: extract model$results$reported_cases / reported_deaths. These are
 # the surveillance-comparable fields (rho/chi-adjusted cases; rho_deaths-applied,
-# lagged deaths) introduced in laser-cholera v0.13. Do NOT use expected_cases or
+# lagged deaths). Do NOT use expected_cases or
 # disease_deaths here — those are raw (unobserved) quantities and do not match
 # the vignette, which plots reported_* throughout.
 #
@@ -108,7 +110,7 @@ message("  Saved: ", file.path(fig_dir, "running_mosaic_endemic.png"))
 
 message("\n[3/3] Running multi-location scenario (all MOSAIC countries)...")
 
-iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD'] # Current bug with SSD vaccination data
+iso_codes <- iso_codes_mosaic
 
 config <- get_location_config(iso = iso_codes)
 config$beta_j0_hum <- config$beta_j0_hum * 2

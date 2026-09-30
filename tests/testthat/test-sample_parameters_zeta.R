@@ -2,7 +2,7 @@ library(testthat)
 library(MOSAIC)
 
 # Set root directory (required for sample_parameters to load defaults)
-tryCatch(set_root_directory("~/MOSAIC"), error = function(e) NULL)
+local_test_root()  # scoped to this file; see helper-skips.R
 
 test_that("sample_parameters produces valid zeta tuples under new priors", {
      skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")

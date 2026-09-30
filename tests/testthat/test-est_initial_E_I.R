@@ -3,10 +3,6 @@
 
 library(testthat)
 
-# Load the functions by sourcing the R files
-if (file.exists("../../R/fit_beta_from_ci.R")) source("../../R/fit_beta_from_ci.R")
-if (file.exists("../../R/est_initial_E_I.R")) source("../../R/est_initial_E_I.R")
-
 # Mock data and helper functions for testing
 create_mock_surveillance_data <- function(n_days = 60, base_cases = 5) {
   dates <- seq(as.Date("2024-01-01"), by = "day", length.out = n_days)
@@ -235,12 +231,21 @@ test_that("est_initial_E_I wrapper function works with mock data", {
     expect_type(E_loc, "list")
     expect_type(I_loc, "list")
 
-    # If TCD location data was populated, check it has the expected Beta structure
-    if ("TCD" %in% names(E_loc) && !is.null(E_loc$TCD$distribution)) {
-      expect_equal(E_loc$TCD$distribution, "beta")
-      expect_true(E_loc$TCD$parameters$shape1 > 0)
-      expect_true(E_loc$TCD$parameters$shape2 > 0)
+    # Per-location entries hold the Beta shapes directly (no $distribution
+    # level). The mock surveillance has cases for TCD, so its fit must be a real
+    # one: finite positive shapes, not the error fallback, and a mean that is a
+    # small population fraction.
+    expect_true("TCD" %in% names(E_loc))
+    expect_true("TCD" %in% names(I_loc))
+    for (fit in list(E_loc$TCD, I_loc$TCD)) {
+      expect_named(fit, c("shape1", "shape2"), ignore.order = TRUE)
+      expect_true(is.finite(fit$shape1) && fit$shape1 > 0)
+      expect_true(is.finite(fit$shape2) && fit$shape2 > 0)
+      beta_mean <- fit$shape1 / (fit$shape1 + fit$shape2)
+      expect_gt(beta_mean, 0)
+      expect_lt(beta_mean, 0.01)
     }
+    expect_false(isTRUE(all.equal(c(E_loc$TCD$shape1, E_loc$TCD$shape2), c(1, 9999))))
   })
 })
 

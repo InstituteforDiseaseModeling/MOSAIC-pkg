@@ -21,7 +21,7 @@ This guide shows how to run MOSAIC simulations with **parameter stochasticity** 
 
 For running single deterministic simulations, see the **Running simulations** vignette.
 
-**Before you begin**: Complete the Installation vignette to set up MOSAIC and its dependencies.
+**Before you begin**: Complete the Installation vignette to set up MOSAIC and its dependencies. Calibration is pure R, so the optional Python environment is not needed and there is no need to call `attach_mosaic_env()`.
 
 ---
 
@@ -30,8 +30,6 @@ For running single deterministic simulations, see the **Running simulations** vi
 ```{r fixed-one-location, eval=FALSE}
 # Load required packages
 library(MOSAIC)
-
-MOSAIC::attach_mosaic_env(silent = FALSE)
 
 
 # Create output directory and set up logging
@@ -85,8 +83,6 @@ result_ETH <- run_MOSAIC(
 ```{r auto-one-location, eval=FALSE}
 # Load required packages
 library(MOSAIC)
-
-MOSAIC::attach_mosaic_env(silent = FALSE)
 
 
 # Create output directory and set up logging
@@ -145,8 +141,6 @@ result_ETH <- run_MOSAIC(
 ```{r auto-two-locations, eval=FALSE}
 # Load required packages
 library(MOSAIC)
-
-MOSAIC::attach_mosaic_env(silent = FALSE)
 
 # Create output directory and set up logging
 dir_output <- path.expand("~/MOSAIC/output/ETH_KEN")

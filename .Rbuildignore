@@ -26,7 +26,6 @@ pkgdown/
 __pycache__$
 \.pyc$
 ^vignettes/cache$
-^vignettes/figures$
 ^vignettes/articles/cache$
 ^vignettes/articles/figures$
 ^output$

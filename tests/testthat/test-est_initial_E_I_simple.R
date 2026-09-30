@@ -3,9 +3,6 @@
 
 library(testthat)
 
-# Load the functions
-if (file.exists("../../R/est_initial_E_I.R")) source("../../R/est_initial_E_I.R")
-
 # Test the location-specific function with minimal setup
 test_that("est_initial_E_I_location basic functionality", {
   # Simple test data

@@ -15,7 +15,9 @@ No return value
 \description{
 Sets up a conda environment for MOSAIC using the \code{environment.yml} file located in the package.
 The environment is stored in a fixed directory ("~/.virtualenvs/r-mosaic") and exists solely for the
-environmental-suitability model: it installs the R packages \code{keras3} and \code{tensorflow} and ensures the
-Keras + TensorFlow Python backend is available from R. Simulation and calibration are pure R and need
-none of it.
+environmental-suitability model: it installs the Keras + TensorFlow Python backend into that
+environment. It installs the R packages \code{reticulate} and \code{yaml} if they are missing, but it does
+\strong{not} install the R package \code{keras3} (a Suggests dependency), which \code{est_suitability()} also needs:
+install it separately with \code{install.packages("keras3")}. Simulation and calibration are pure R and
+need none of it.
 }
