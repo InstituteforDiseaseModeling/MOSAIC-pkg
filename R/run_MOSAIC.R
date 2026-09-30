@@ -2416,6 +2416,7 @@ run_MOSAIC <- function(config,
 
   subset_opt <- NULL   # initialised here; assigned inside block below if optimize_subset=TRUE
   ensemble_opt_saved <- FALSE   # TRUE once the optimizer writes ensemble_optimized.rds
+  ensemble_is_optimized <- FALSE  # TRUE once `ensemble` is the optimized rebuild
 
   if (!is.null(ensemble) && isTRUE(control$predictions$optimize_subset)) {
 
@@ -2547,6 +2548,7 @@ run_MOSAIC <- function(config,
         calc_bias_ratio(obs_d_flat_tier, cen_d_tier_flat), error = function(e) NA_real_)
 
       ensemble <- subset_opt$ensemble_optimized
+      ensemble_is_optimized <- TRUE
       # Trajectory reduction over the OPTIMIZED subset is handled by the unified
       # stream-to-disk reduce+persist block AFTER this optimize section -- it reads
       # the candidate run's scratch (no re-simulation) over the optimized member
@@ -2674,30 +2676,23 @@ run_MOSAIC <- function(config,
   # a no-op.
   # ===========================================================================
   if (.traj_enabled && !is.null(traj_scratch_handle) && !is.null(ensemble)) {
-    final_pidx    <- NULL
-    final_weights <- NULL
-    if (!is.null(subset_opt) && isTRUE(.optimize_enabled)) {
-      # Optimized: ensemble == ensemble_optimized. Map its per-member seeds to the
-      # candidate scratch param_idx (seed-based, robust to the likelihood sort).
-      opt_seeds <- ensemble$seeds
-      # Seed-based map requires unique candidate seeds (true in normal operation:
-      # one sampling seed per member). If seeds were ever duplicated, match() would
-      # bind channel panels to the wrong member's draws -> fall through to the
-      # positional candidate path instead (anyNA below does not catch duplicates).
-      if (!is.null(opt_seeds) && !is.null(cand_member_seeds) &&
-          !anyDuplicated(cand_member_seeds)) {
-        final_pidx    <- match(opt_seeds, cand_member_seeds)
-        final_weights <- ensemble$parameter_weights
-      }
+    # Scratch keys (candidate param_idx) of the FINAL members, in `ensemble`
+    # order. NULL when an optimized ensemble's seeds cannot be mapped back:
+    # then the artifact is skipped rather than reduced over the wrong members.
+    traj_map <- .mosaic_trajectory_member_map(
+      is_optimized      = ensemble_is_optimized,
+      final_seeds       = ensemble$seeds,
+      cand_member_seeds = cand_member_seeds,
+      n_param           = ensemble$n_param_sets)
+    if (is.null(traj_map)) {
+      log_warn(paste0("trajectory artifact skipped: the optimized ensemble's member seeds ",
+                      "could not be mapped to the candidate scratch (missing, duplicated or ",
+                      "unmatched seeds)"))
     }
-    if (is.null(final_pidx) || anyNA(final_pidx)) {
-      # Candidate (optimize off, or seed-mapping fell through): scratch keys are
-      # 1:n_param in candidate order.
-      final_pidx    <- seq_len(ensemble$n_param_sets)
-      final_weights <- ensemble$parameter_weights
-    }
+    final_pidx    <- traj_map
+    final_weights <- ensemble$parameter_weights
 
-    traj <- tryCatch(
+    traj <- if (is.null(final_pidx)) NULL else tryCatch(
       .mosaic_build_trajectories(
         scratch_dir         = traj_scratch_handle$dir,
         subset_orig_pidx    = final_pidx,

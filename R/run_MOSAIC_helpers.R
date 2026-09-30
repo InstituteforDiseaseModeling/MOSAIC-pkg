@@ -167,9 +167,11 @@
 #' \code{mosaic_ensemble} (\code{$trajectories}; comprehensive internal-state
 #' channels — per-channel weighted median + uniform-thinned actual member lines +
 #' derived series) to \code{2_calibration/trajectories_ensemble.rds},
-#' schema-stamped. Persisted off the CANDIDATE ensemble (PLAN sec 14.B B-PERSIST:
-#' the optimized rebuild drops attached fields), so the trajectories reflect the
-#' candidate best subset / \code{weight_best}. A \code{NULL} \code{$trajectories}
+#' schema-stamped. The channels are reduced from the candidate run's scratch over
+#' the FINAL displayed subset and its weights: the optimized subset
+#' (\code{optimal_weights}) when subset optimization succeeded, otherwise the
+#' candidate best subset (\code{weight_best}); see
+#' \code{.mosaic_trajectory_member_map()}. A \code{NULL} \code{$trajectories}
 #' (capture off, or the capability check warned-and-skipped) is silently skipped.
 #'
 #' @param ensemble A \code{mosaic_ensemble} object.
@@ -2293,6 +2295,33 @@
 # =============================================================================
 # EXECUTION
 # =============================================================================
+
+#' Map the final ensemble members to their trajectory scratch keys
+#'
+#' Trajectory channels are spilled to scratch during the CANDIDATE ensemble run,
+#' keyed by candidate member index. When the displayed ensemble is the
+#' candidate, member i is key i. When it is the optimized rebuild (re-sorted by
+#' likelihood and subset), members are mapped by seed. If that map cannot be
+#' built (seeds missing, duplicated or unmatched), positional keys would bind
+#' the channel panels to the wrong members, so NULL is returned and the caller
+#' skips the artifact.
+#'
+#' @param is_optimized Logical; whether \code{ensemble} is the optimized rebuild.
+#' @param final_seeds Per-member seeds of the final ensemble.
+#' @param cand_member_seeds Per-member seeds of the candidate ensemble.
+#' @param n_param Number of members in the final ensemble.
+#' @return Integer vector of scratch keys (length \code{n_param}), or NULL.
+#' @noRd
+.mosaic_trajectory_member_map <- function(is_optimized, final_seeds, cand_member_seeds,
+                                          n_param) {
+  if (!isTRUE(is_optimized)) return(seq_len(n_param))
+  if (is.null(final_seeds) || is.null(cand_member_seeds) ||
+      length(final_seeds) != n_param || anyNA(cand_member_seeds) ||
+      anyDuplicated(cand_member_seeds)) return(NULL)
+  idx <- match(final_seeds, cand_member_seeds)
+  if (anyNA(idx)) return(NULL)
+  idx
+}
 
 #' Parallelism for the post-calibration ensembles
 #'
