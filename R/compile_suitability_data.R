@@ -86,10 +86,27 @@
 #'   re-baselining -- with a fixed anchor window a data refresh can no longer
 #'   shift the entire historical target series.
 #'
-#'   Default \code{NULL} = full-window anchors (back-compatible; the canonical
-#'   panel is unchanged). Note \code{target_F_rank_per_country} is a rank over
-#'   the country's whole observed series and is full-window BY CONSTRUCTION;
-#'   this argument does not and cannot make it leak-free.
+#'   Default \code{NULL} = full-window anchors (back-compatible). Note
+#'   \code{target_F_rank_per_country} is a rank over the country's whole
+#'   observed series and is full-window BY CONSTRUCTION; this argument does not
+#'   and cannot make it leak-free.
+#'
+#'   The panel records the effective anchor window end (the last trusted,
+#'   observed row used for the anchors) in a constant \code{target_anchor_stop}
+#'   column. \code{est_suitability()} warns when a \code{target_*} response is
+#'   fit with a cutoff earlier than this date.
+#'
+#'   \strong{Leakage scope.} \code{gam_train_stop} and
+#'   \code{target_anchor_stop} bound the hazard GAMs and the target anchors
+#'   only. Covariate standardisations are still computed over the whole panel
+#'   window, including rows after either bound: the week-of-year climatology
+#'   anomalies (\code{precip_anom}, \code{temp_anom},
+#'   \code{soil_moisture_anom}, ...), the per-country \code{spei_approx}
+#'   scaling, the precipitation p90 / temperature p95 extreme thresholds, and
+#'   the \code{emdat_flood_prob_anom} baseline. No post-cutoff case data enters
+#'   these, but in a per-cutoff panel the pre-cutoff values of those covariates
+#'   depend weakly on the post-cutoff climate distribution, so such a panel is
+#'   leak-free on the target and hazard side only.
 #'
 #' @return This function processes the data and merges the climate, ENSO, and cholera cases data into a single dataset. It creates a \code{cases_binary} column indicating environmental suitability based on case patterns using sophisticated temporal logic. The processed dataset is saved as a CSV file.
 #'
@@ -456,29 +473,13 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      is_ai <- if ("source" %in% names(d)) (!is.na(d$source) & d$source == "AI") else rep(FALSE, nrow(d))
 
      # ANCHOR WINDOW (target-side leakage hygiene; sibling of gam_train_stop).
-     # `in_anchor_window` additionally bounds the anchor rows ABOVE by
+     # .csd_anchor_rows() additionally bounds the anchor rows ABOVE by
      # target_anchor_stop. A per-cutoff panel keeps date_stop = NULL so it can
      # still predict past the cutoff, so without this bound the p99 that scales
      # the target at time t is computed from rows AFTER t. Every row of the
      # panel still receives a target; only the rows that DEFINE the scale are
      # restricted. NULL (default) = full window, bit-identical to before.
-     if (is.null(target_anchor_stop)) {
-          in_anchor_window <- rep(TRUE, nrow(d))
-     } else {
-          .tas <- as.Date(target_anchor_stop)
-          if (is.na(.tas))
-               stop("compile_suitability_data: target_anchor_stop must be a Date or ",
-                    "'YYYY-MM-DD' string; got '", target_anchor_stop, "'")
-          in_anchor_window <- !is.na(d$date) & d$date <= .tas
-          if (!any(in_anchor_window & !is_ai))
-               stop("compile_suitability_data: target_anchor_stop = ", format(.tas),
-                    " leaves zero trusted rows to anchor on (panel spans ",
-                    format(min(d$date, na.rm = TRUE)), " to ",
-                    format(max(d$date, na.rm = TRUE)), ").")
-          message(sprintf("  - Target anchors bounded at %s (%d of %d trusted rows)",
-                          format(.tas), sum(in_anchor_window & !is_ai), sum(!is_ai)))
-     }
-     is_anchor <- !is_ai & in_anchor_window
+     is_anchor <- .csd_anchor_rows(d, is_ai, target_anchor_stop)
 
      # ---- transmission_intensity: reproduction of est_suitability() ----
      # est_suitability() sets NA cases to 0 and negatives to 0, then normalizes by
@@ -486,7 +487,8 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # over TRUSTED MOSAIC rows so the column is invariant to include_ai AND remains
      # bit-identical to production when include_ai = FALSE (all rows trusted).
      # est_suitability()/the LSTM sandbox recompute their own target from `cases`, so
-     # this column is a diagnostic/back-compat alias and does NOT propagate NA.
+     # this column is a diagnostic/back-compat alias and does NOT propagate NA
+     # (the lstm_v2 intensity recipe, unlike this alias, sets unobserved weeks NA).
      ti_cases <- d$cases
      ti_cases[is.na(ti_cases)] <- 0
      ti_cases[ti_cases < 0]    <- 0
@@ -562,11 +564,22 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                     (n_obs_iso + 1)
      }
 
+     # Record the EFFECTIVE anchor window end (last trusted, observed row that
+     # defined the A/B/C/D anchors) as a constant column. Without it a consumer
+     # cannot tell a full-window panel from a per-cutoff one, and a fit whose
+     # cutoff precedes this date trains on targets scaled by later outbreaks.
+     # .psi_build_data() compares it with the cutoff and warns.
+     d$target_anchor_stop <- .csd_anchor_stop(d, is_anchor)
+
      # 2. World Bank socioeconomic indicators (annual, forward-fill for future years)
      message("  - Adding socioeconomic indicators...")
 
      # GDP
-     gdp_path <- file.path(PATHS$DATA_PROCESSED, "world_bank", "GDP_data_world_bank.csv")
+     # Read the files process_WB_GDP_data() / process_WB_population_density_data()
+     # actually write (world_bank_*_data.csv). The legacy *_world_bank.csv names
+     # are a fallback only, so a World Bank refresh reaches the panel.
+     gdp_path <- .csd_world_bank_path(PATHS, "world_bank_GDP_data.csv",
+                                      "GDP_data_world_bank.csv")
      if (file.exists(gdp_path)) {
           gdp_data <- utils::read.csv(gdp_path, stringsAsFactors = FALSE)
           gdp_data <- gdp_data[, c("iso_code", "year", "GDP")]
@@ -581,7 +594,8 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      }
 
      # Population density
-     pop_density_path <- file.path(PATHS$DATA_PROCESSED, "world_bank", "population_density_data_world_bank.csv")
+     pop_density_path <- .csd_world_bank_path(PATHS, "world_bank_population_density_data.csv",
+                                              "population_density_data_world_bank.csv")
      if (file.exists(pop_density_path)) {
           pop_density_data <- utils::read.csv(pop_density_path, stringsAsFactors = FALSE)
           pop_density_data <- pop_density_data %>%
@@ -1886,4 +1900,54 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      path <- file.path(PATHS$DATA_CHOLERA_WEEKLY, 'cholera_country_weekly_suitability_data.csv')
      write.csv(d, file = path, row.names = FALSE)
      message("Processed suitability data saved here: ", path)
+}
+
+
+# Rows that DEFINE the target anchors: trusted (non-AI) rows, bounded above by
+# target_anchor_stop when given (NULL = full window).
+#' @keywords internal
+#' @noRd
+.csd_anchor_rows <- function(d, is_ai, target_anchor_stop = NULL) {
+     if (is.null(target_anchor_stop)) return(!is_ai)
+     .tas <- as.Date(target_anchor_stop)
+     if (is.na(.tas))
+          stop("compile_suitability_data: target_anchor_stop must be a Date or ",
+               "'YYYY-MM-DD' string; got '", target_anchor_stop, "'")
+     in_anchor_window <- !is.na(d$date) & d$date <= .tas
+     if (!any(in_anchor_window & !is_ai))
+          stop("compile_suitability_data: target_anchor_stop = ", format(.tas),
+               " leaves zero trusted rows to anchor on (panel spans ",
+               format(min(d$date, na.rm = TRUE)), " to ",
+               format(max(d$date, na.rm = TRUE)), ").")
+     message(sprintf("  - Target anchors bounded at %s (%d of %d trusted rows)",
+                     format(.tas), sum(in_anchor_window & !is_ai), sum(!is_ai)))
+     !is_ai & in_anchor_window
+}
+
+# Effective anchor window end recorded in the panel's target_anchor_stop column:
+# the last anchor row with observed cases ("YYYY-MM-DD"), NA if there is none.
+#' @keywords internal
+#' @noRd
+.csd_anchor_stop <- function(d, is_anchor) {
+     anchor_obs <- is_anchor & !is.na(d$cases)
+     if (any(anchor_obs)) format(max(d$date[anchor_obs])) else NA_character_
+}
+
+# Resolve a processed World Bank file: prefer the name the process_WB_*()
+# processor writes; fall back to the legacy name (with a message) only when the
+# current file is absent. Returns the current path when neither exists, so the
+# caller's file.exists() guard skips the block exactly as before.
+#' @keywords internal
+#' @noRd
+.csd_world_bank_path <- function(PATHS, current, legacy) {
+     dir_wb   <- file.path(PATHS$DATA_PROCESSED, "world_bank")
+     p_cur    <- file.path(dir_wb, current)
+     p_legacy <- file.path(dir_wb, legacy)
+     if (file.exists(p_cur)) return(p_cur)
+     if (file.exists(p_legacy)) {
+          message(sprintf("    %s not found; using legacy %s (re-run the process_WB_*() processor to refresh)",
+                          current, legacy))
+          return(p_legacy)
+     }
+     p_cur
 }

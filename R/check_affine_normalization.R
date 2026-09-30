@@ -18,7 +18,8 @@
 #' @return Invisibly returns \code{NULL} if the check passes. Otherwise, the function stops
 #'         with an error message detailing the failed condition(s).
 #'
-#' @details The check uses a tolerance of \code{1e-8} to account for floating point precision.
+#' @details The check uses a tolerance of \code{1e-2}: the mean must satisfy
+#'          \code{abs(mean) < 1e-2} and the minimum must be at least \code{-1 - 1e-2}.
 #'          The conditions verified correspond to a transformation defined as:
 #'
 #' \deqn{x_{\text{scaled}} = \frac{x - \mu}{\mu - \min(x)}}
@@ -77,5 +78,7 @@ check_affine_normalization <- function(x, verbose = FALSE) {
           }
 
      }
+
+     invisible(NULL)
 
 }

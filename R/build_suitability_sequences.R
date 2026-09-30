@@ -32,12 +32,22 @@
 #'   the model covariates that happen to extend into the future. Note the
 #'   returned `dates` are TARGET dates, so downstream date filtering (train
 #'   cutoffs, validation blocks) is target-anchored automatically.
+#' @param predict_mode Logical (default FALSE). TRUE builds PREDICTION
+#'   sequences: one per input window ending at every row, stamped with the
+#'   nominal target date `input_end + 7 * lead` days and NOT requiring a row to
+#'   exist at that date (`y` is ignored; returned `y` is NA). This is what lets
+#'   a lead-`h` model forecast `h` weeks past the last covariate week. At
+#'   `lead = 0` it is identical to the training mapping. With `lead > 0` the
+#'   stamp is nominal: training labels a window with the date of the row `lead`
+#'   rows ahead, which matches `input_end + 7 * lead` only on a gap-free weekly
+#'   grid (it may be up to `max_gap_days` later across an accepted gap).
 .psi_build_sequences <- function(X, y, countries, dates, timesteps = 13L,
                                  max_gap_days = 14L,
                                  country_id_lookup = NULL,
                                  region_for_country = NULL,
                                  cw = NULL,
-                                 lead = 0L) {
+                                 lead = 0L,
+                                 predict_mode = FALSE) {
      dates <- as.Date(dates)
      uniq  <- unique(countries)
      seqs <- list(); ys <- numeric(0); cs <- character(0)
@@ -52,9 +62,24 @@
           Xi <- Xi[ord, , drop = FALSE]; yi <- yi[ord]; di <- di[ord]
           if (!is.null(cwi)) cwi <- cwi[ord]
           n <- nrow(Xi)
-          if (n < timesteps + lead) next
           cid <- if (!is.null(country_id_lookup)) as.integer(country_id_lookup[[iso]]) else NA_integer_
           rid <- if (!is.null(region_for_country)) as.integer(region_for_country[[iso]]) else NA_integer_
+          if (isTRUE(predict_mode)) {
+               # Prediction: every input window, target stamped lead weeks after
+               # its last input week; no target row needed.
+               if (n < timesteps) next
+               for (i in timesteps:n) {
+                    sub_d <- di[(i - timesteps + 1):i]
+                    if (any(as.numeric(diff(sub_d)) > max_gap_days)) next
+                    seqs[[length(seqs) + 1]] <- Xi[(i - timesteps + 1):i, , drop = FALSE]
+                    ys <- c(ys, NA_real_); cs <- c(cs, iso)
+                    ds <- c(ds, di[i] + 7L * as.integer(lead))
+                    c_ids <- c(c_ids, cid); r_ids <- c(r_ids, rid)
+                    if (!is.null(cwi)) cw_track <- c(cw_track, cwi[i])
+               }
+               next
+          }
+          if (n < timesteps + lead) next
           for (i in timesteps:(n - lead)) {
                sub_d <- di[(i - timesteps + 1):i]
                if (any(as.numeric(diff(sub_d)) > max_gap_days)) next
@@ -116,6 +141,59 @@
      d
 }
 
+# ---- Target-anchor leakage check ---------------------------------------------
+#' Warn when a pre-computed target_* response is normalised by anchors that were
+#' computed over rows AFTER the fit cutoff.
+#'
+#' compile_suitability_data() scales targets A/B/C/D by p99 anchors over its
+#' anchor window (full panel unless built with `target_anchor_stop`); target F is
+#' a whole-series rank. If that window ends after `cutoff_date`, the pre-cutoff
+#' training targets -- and the bias-correction fit on them -- are scaled by later
+#' outbreaks (a ~9x deflation for AGO at a 2024-01 cutoff on the canonical panel).
+#' The anchor end is read from the panel's `target_anchor_stop` column when
+#' present, otherwise inferred as the last date with observed cases (the
+#' full-window build's anchor end).
+#' @param d Full suitability panel (all rows; date as Date).
+#' @param response_var Response name (after the transmission_intensity alias).
+#' @param cutoff_date Fit cutoff (Date).
+#' @return The anchor window end (Date), or NA for the train-only intensity
+#'   target, invisibly.
+#' @keywords internal
+#' @noRd
+.psi_check_target_anchor <- function(d, response_var, cutoff_date) {
+     if (identical(response_var, "intensity") ||
+         identical(response_var, "transmission_intensity") ||
+         !startsWith(response_var, "target_"))
+          return(invisible(as.Date(NA)))
+     cutoff_date <- as.Date(cutoff_date)
+     last_obs <- if ("cases" %in% names(d) && any(!is.na(d$cases)))
+          max(as.Date(d$date[!is.na(d$cases)])) else as.Date(NA)
+     recorded <- if ("target_anchor_stop" %in% names(d))
+          suppressWarnings(as.Date(as.character(d$target_anchor_stop))) else as.Date(NA)
+     recorded <- recorded[!is.na(recorded)]
+     if (identical(response_var, "target_F_rank_per_country")) {
+          anchor_end <- last_obs
+          how <- "whole-series rank, full-window by construction"
+     } else if (length(recorded)) {
+          anchor_end <- max(recorded)
+          how <- "recorded in the panel's target_anchor_stop column"
+     } else {
+          anchor_end <- last_obs
+          how <- "inferred: panel has no target_anchor_stop column, so a full-window anchor is assumed"
+     }
+     if (!is.na(anchor_end) && anchor_end > cutoff_date) {
+          warning(sprintf(paste0(
+               "response_var '%s' is normalised by anchors computed through %s (%s), ",
+               "after the fit cutoff %s. Pre-cutoff training targets and the bias-correction ",
+               "fit are scaled by post-cutoff outbreaks (target-side leakage), so any ",
+               "out-of-sample skill measured from this fit is optimistic. For a leak-free ",
+               "retrospective fit use response_var = 'transmission_intensity' (train-only ",
+               "anchor) or a panel compiled with target_anchor_stop <= the cutoff."),
+               response_var, format(anchor_end), how, format(cutoff_date)), call. = FALSE)
+     }
+     invisible(anchor_end)
+}
+
 # ---- Public entry point -----------------------------------------------------
 #' Build the lstm_v2 data bundle for one cutoff over a country pool.
 #'
@@ -126,7 +204,7 @@
 #' PERIOD statistics only.
 #'
 #' @param source_csv Path to the merged weekly suitability data CSV.
-#' @param cutoff_date Date (or string); IS data is everything < cutoff_date.
+#' @param cutoff_date Date (or string); IS data is everything <= cutoff_date.
 #' @param fit_date_start Start of the data window (default "2015-01-01").
 #' @param pred_date_stop End of the prediction window (default cutoff + ~5 mo).
 #' @param region_map Named character vector iso -> region, or NULL to use the
@@ -202,6 +280,10 @@
      d <- utils::read.csv(source_csv, stringsAsFactors = FALSE)
      d$date <- as.Date(d$date)
 
+     # Target-side leakage check for pre-computed target_* responses, on the
+     # full panel (the anchors were computed over it, not over this window).
+     target_anchor_end <- .psi_check_target_anchor(d, response_var, cutoff_date)
+
      if (country_pool == "all_mosaic") {
           pool <- intersect(unique(d$iso_code), MOSAIC::iso_codes_mosaic)
           if (verbose) message(sprintf("  all_mosaic pool resolved to %d countries", length(pool)))
@@ -210,6 +292,16 @@
      }
      d <- d[d$iso_code %in% pool, ]
      d <- d[d$date >= fit_date_start & d$date <= pred_date_stop, ]
+
+     # A week with NA cases is UNOBSERVED, not a zero-incidence week: the panel
+     # carries explicit zeros for reported quiet weeks (10,700 zeros vs 6,618 NA
+     # rows over MOSAIC countries, 2015-2026, on the canonical panel). Flag every
+     # unobserved row -- before a country's first observation, in interior gaps,
+     # after its last observation, and throughout a never-observed country --
+     # BEFORE the NA -> 0 sanitiser below, so the intensity recipe cannot turn them
+     # into fabricated zero training targets. This matches the pre-computed
+     # target_* columns, which are NA on exactly these rows.
+     unobserved <- is.na(d$cases)
 
      # Sanitize cases (mirrors production).
      d$cases[is.na(d$cases)] <- 0
@@ -234,7 +326,7 @@
 
      # ---- Target: response variable selection (TRAIN-ONLY anchor) ----------
      if (identical(response_var, "intensity")) {
-          d_train_period <- d[d$date <= cutoff_date, ]
+          d_train_period <- d[d$date <= cutoff_date & !unobserved, ]
           cases_99th <- stats::quantile(d_train_period$cases, 0.99, na.rm = TRUE,
                                         names = FALSE)
           if (is.na(cases_99th) || cases_99th < 1) {
@@ -244,6 +336,12 @@
           }
           if (verbose) message(sprintf("  cases_99th (train-only): %.1f", cases_99th))
           d$intensity <- pmin(1.0, log1p(d$cases) / log1p(cases_99th))
+          # No observation => no target (the pre-computed target_* columns
+          # propagate NA the same way).
+          d$intensity[unobserved] <- NA_real_
+          if (verbose && any(unobserved & d$date <= cutoff_date))
+               message(sprintf("  intensity: %d unobserved (NA-case) row(s) at/before the cutoff; target set to NA (not trained as zeros)",
+                               sum(unobserved & d$date <= cutoff_date)))
      } else {
           valid_targets <- c("target_A_count_global",
                               "target_B_count_per_country",
@@ -266,6 +364,8 @@
           # Their anchor is leak-free only if that build passed
           # `target_anchor_stop` -- which .rcv_build_leakfree_panel_v74() does and
           # the canonical panel build deliberately does not.
+          # .psi_check_target_anchor() (above) warns when the anchor window ends
+          # after cutoff_date.
           raw <- as.numeric(d[[response_var]])
           if (any(raw < 0 | raw > 1, na.rm = TRUE)) {
                warning(sprintf("  response_var '%s' had values outside [0,1]; clamping",
@@ -383,7 +483,9 @@
      seq_params <- list(timesteps = timesteps, max_gap_days = max_gap_days,
                         lead = lead)
 
-     # Prediction sequences: ALL pool countries, full date range.
+     # Prediction sequences: ALL pool countries, full date range. predict_mode
+     # stamps each window's target `lead` weeks after its last input week without
+     # requiring a covariate row there, so a lead model forecasts past coverage.
      seqs_pred <- .psi_build_sequences(
           X         = X_all,
           y         = rep(0, nrow(X_all)),
@@ -393,7 +495,8 @@
           max_gap_days = max_gap_days,
           country_id_lookup  = country_to_id,
           region_for_country = region_for_country,
-          lead      = lead)
+          lead      = lead,
+          predict_mode = TRUE)
 
      # ---- Rolling-CV step grid ---------------------------------------------
      gap_weeks <- split_params$rw_gap_weeks %||% 4L
@@ -429,7 +532,7 @@
 
      # Placeholder full-IS train sequences (RW wrapper overrides per step; this
      # is a sensible fallback for any code reading these slots).
-     is_train_row_full <- d$date < cutoff_date & !is.na(d$intensity)
+     is_train_row_full <- d$date <= cutoff_date & !is.na(d$intensity)
      seqs_full <- .psi_build_sequences(
           X         = X_all[is_train_row_full, , drop = FALSE],
           y         = d$intensity[is_train_row_full],
@@ -462,6 +565,7 @@
           pred_date_stop   = pred_date_stop,
           fit_date_start   = fit_date_start,
           cases_99th       = cases_99th,
+          target_anchor_end = target_anchor_end,
           scaler_center    = scaler_center,
           scaler_scale     = scaler_scale,
           features         = feats,

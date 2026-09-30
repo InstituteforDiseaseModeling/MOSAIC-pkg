@@ -118,9 +118,14 @@ test_that("est_suitability(lstm_v2) emits the Option-A schema and bias_correct m
   P <- PATHS; P$MODEL_INPUT <- td
   fast <- list(n_seeds = 1L, rw_subsample = 12L, region_map = "csv")
   for (bc in c(TRUE, FALSE)) {
-    MOSAIC::est_suitability(P, fit_date_start = "2018-01-01",
-                            fit_date_stop = "2023-06-01", pred_date_stop = "2023-11-01",
-                            bias_correct = bc, arch_control = fast)
+    # The default target_D panel is full-window, so a 2023-06 cutoff is
+    # expected to trip the target-side leakage warning; absorbing exactly that
+    # warning lets any other (new) warning surface.
+    expect_warning(
+      MOSAIC::est_suitability(P, fit_date_start = "2018-01-01",
+                              fit_date_stop = "2023-06-01", pred_date_stop = "2023-11-01",
+                              bias_correct = bc, arch_control = fast),
+      "target-side leakage")
     day <- utils::read.csv(file.path(td, "pred_psi_suitability_day.csv"))
     expect_true(all(c("iso_code","date","psi","pred_raw","pred_smooth",
                       "pred_bias_corrected","q025","q25","q75","q975") %in% names(day)))

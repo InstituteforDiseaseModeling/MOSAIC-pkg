@@ -87,9 +87,12 @@ calc_psi_star <- function(psi, a = 1, b = 0, z = 1, k = 0, eps = 1e-6,
      }
 
      # Clean psi
-     if (any(!is.finite(psi), na.rm = TRUE)) {
+     # Only Inf/-Inf warrant the warning; plain NAs are documented input and are
+     # filled below (is.finite(NA) is FALSE, so testing !is.finite() warned on
+     # every NA with a message that claimed Inf).
+     if (any(is.infinite(psi))) {
           warning("Non-finite values detected in `psi` (Inf/-Inf). Treating as NA.")
-          psi[!is.finite(psi)] <- NA_real_
+          psi[is.infinite(psi)] <- NA_real_
      }
      if (any(psi < 0 | psi > 1, na.rm = TRUE)) {
           warning("Some psi values are outside [0,1] and will be clipped.")
@@ -119,14 +122,22 @@ calc_psi_star <- function(psi, a = 1, b = 0, z = 1, k = 0, eps = 1e-6,
           psi_star[] <- stats::plogis(b)
      } else if (fill_method == "linear") {
           idx <- which(!is.na(psi_star))
-          psi_star <- stats::approx(x = idx, y = psi_star[idx],
-                                    xout = seq_len(n),
-                                    method = "linear", rule = 2)$y
+          if (length(idx) == 1L) {
+               # approx() needs two points; a single observed value extends as a
+               # constant, matching rule = 2 edge behaviour.
+               psi_star[] <- psi_star[idx]
+          } else {
+               psi_star <- stats::approx(x = idx, y = psi_star[idx],
+                                         xout = seq_len(n),
+                                         method = "linear", rule = 2)$y
+          }
      } else { # "locf": forward fill then backward pass
+          # seq_len-safe loops: with n == 1, `2L:n` and `(n - 1L):1L` would run
+          # over c(2, 1) and c(0, 1), growing the vector and indexing psi_star[0].
           # forward pass
-          for (i in 2L:n) if (is.na(psi_star[i])) psi_star[i] <- psi_star[i - 1]
+          for (i in seq_len(n)[-1L]) if (is.na(psi_star[i])) psi_star[i] <- psi_star[i - 1L]
           # backward pass for any leading NAs
-          for (i in (n - 1L):1L) if (is.na(psi_star[i])) psi_star[i] <- psi_star[i + 1L]
+          for (i in rev(seq_len(n - 1L))) if (is.na(psi_star[i])) psi_star[i] <- psi_star[i + 1L]
           # if still all NA (paranoid fallback)
           if (all(is.na(psi_star))) psi_star[] <- stats::plogis(b)
      }

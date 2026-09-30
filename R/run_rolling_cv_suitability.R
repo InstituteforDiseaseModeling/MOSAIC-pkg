@@ -177,6 +177,82 @@
      ac
 }
 
+#' Build the per-seed fit function (RW-CV + full-IS refit over the gauge_A arch).
+#'
+#' A factory so the closure's environment holds only `verbose`: defined inline
+#' in the orchestrator it captured the whole frame, including the data bundle,
+#' which was then serialized to every PSOCK worker a second time alongside the
+#' explicitly exported `data_bundle`.
+#' @param verbose Logical, passed to .psi_fit_predict_rw_cv().
+#' @return function(data_bundle, seed, hyperparams).
+#' @keywords internal
+#' @noRd
+.psi_make_rw_cv_fit_fn <- function(verbose) {
+     force(verbose)
+     function(data_bundle, seed, hyperparams)
+          .psi_fit_predict_rw_cv(data_bundle = data_bundle,
+                                 fit_predict_fn = .psi_fit_predict_lstm,
+                                 seed = seed, hyperparams = hyperparams,
+                                 verbose = verbose)
+}
+
+#' Seed-ensemble fields of the psi manifest (psi_suitability_config.json).
+#'
+#' Records what the pooled psi was actually built from (requested seeds minus
+#' failures) and how the seeds were combined. The seed vectors are wrapped in
+#' I() so they are always JSON arrays under auto_unbox, whatever their length.
+#' @param ens Result of .psi_run_seed_ensemble() (uses seeds_ok, seeds_failed).
+#' @return Named list: n_seeds_ok, seeds_ok, seeds_failed, seed_aggregation.
+#' @keywords internal
+#' @noRd
+.psi_manifest_seed_fields <- function(ens) {
+     list(n_seeds_ok       = length(ens$seeds_ok),
+          seeds_ok         = I(as.integer(ens$seeds_ok)),
+          seeds_failed     = I(as.integer(ens$seeds_failed)),
+          seed_aggregation = "cross-seed median on the logit scale")
+}
+
+#' Auto-detect the lstm_v2 fit/prediction window from the suitability panel.
+#'
+#' `fit_date_stop` is the last week with BOTH observed cholera cases and complete
+#' ENSO/IOD covariates -- the documented contract, and the legacy path's rule.
+#' Keying on ENSO alone put the cutoff at the end of the covariate horizon
+#' (months past the last surveillance week), so the post-surveillance weeks were
+#' labelled "training" and, under the intensity target, trained as zeros.
+#' `pred_date_stop` is the last ENSO-complete week, extended by `lead` weeks when
+#' a forecast lead is trained (a lead-`h` model's last input week is the last
+#' covariate week, so its last target is `h` weeks later).
+#' @param dd Suitability panel (data.frame with date, cases, IOD, ENSO3, ENSO34, ENSO4).
+#' @param lead Forecast lead in weeks (default 0).
+#' @param need_fit Logical; detect `fit_date_stop` too (default TRUE). FALSE
+#'   (caller supplied the cutoff) needs only ENSO completeness, not a cases column.
+#' @return list(fit_date_stop, pred_date_stop), both Date (`fit_date_stop` is NA
+#'   when `need_fit = FALSE`).
+#' @keywords internal
+#' @noRd
+.psi_auto_detect_dates <- function(dd, lead = 0L, need_fit = TRUE) {
+     enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
+     miss <- setdiff(c("date", if (need_fit) "cases", enso_cols), names(dd))
+     if (length(miss))
+          stop("est_suitability: cannot auto-detect dates; panel lacks column(s): ",
+               paste(miss, collapse = ", "), call. = FALSE)
+     enso_ok <- stats::complete.cases(dd[, enso_cols])
+     if (!any(enso_ok))
+          stop("est_suitability: no rows with complete ENSO/IOD data; cannot auto-detect dates.",
+               call. = FALSE)
+     fit_date_stop <- as.Date(NA)
+     if (need_fit) {
+          fit_ok <- enso_ok & !is.na(dd$cases)
+          if (!any(fit_ok))
+               stop("est_suitability: no periods found with both cholera case data and complete ENSO data.",
+                    call. = FALSE)
+          fit_date_stop <- max(as.Date(dd$date[fit_ok]))
+     }
+     lead <- as.integer(lead %||% 0L)
+     list(fit_date_stop  = fit_date_stop,
+          pred_date_stop = max(as.Date(dd$date[enso_ok])) + 7L * max(0L, lead))
+}
+
 #' lstm_v2 orchestrator (the est_suitability default path).
 #' @keywords internal
 #' @noRd
@@ -186,7 +262,7 @@
                                      pred_date_start = NULL,
                                      pred_date_stop = NULL,
                                      feature_set = "v7.3",
-                                     response_var = "transmission_intensity",
+                                     response_var = "target_D_rate_per_country_floored",
                                      bias_correct = TRUE,
                                      arch_control = NULL,
                                      source_csv = NULL,
@@ -233,15 +309,14 @@
           dd <- utils::read.csv(source_csv, stringsAsFactors = FALSE)
           dd$date <- as.Date(dd$date)
           dd <- dd[dd$iso_code %in% MOSAIC::iso_codes_mosaic, ]
-          dd$cases[is.na(dd$cases)] <- 0
-          enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
-          enso_ok <- stats::complete.cases(dd[, enso_cols])
+          auto <- .psi_auto_detect_dates(dd, lead = as.integer(ac$lead %||% 0L),
+                                         need_fit = is.null(fit_date_stop))
           if (is.null(fit_date_stop)) {
-               fit_date_stop <- max(dd$date[enso_ok], na.rm = TRUE)
-               if (verbose) message(glue::glue("Auto-detected fit_date_stop (cutoff): {fit_date_stop}"))
+               fit_date_stop <- auto$fit_date_stop
+               if (verbose) message(glue::glue("Auto-detected fit_date_stop (cutoff; last week with cases + complete ENSO): {fit_date_stop}"))
           } else fit_date_stop <- as.Date(fit_date_stop)
           if (is.null(pred_date_stop)) {
-               pred_date_stop <- max(dd$date[enso_ok], na.rm = TRUE)
+               pred_date_stop <- auto$pred_date_stop
                if (verbose) message(glue::glue("Auto-detected pred_date_stop: {pred_date_stop}"))
           } else pred_date_stop <- as.Date(pred_date_stop)
           rm(dd)
@@ -286,11 +361,7 @@
 
      # ---- Seed ensemble (each seed = whole RW-CV + refit + predict) --------
      seeds <- seq.int(ac$seed_base, by = ac$seed_step, length.out = ac$n_seeds)
-     fit_fn <- function(data_bundle, seed, hyperparams)
-          .psi_fit_predict_rw_cv(data_bundle = data_bundle,
-                                 fit_predict_fn = .psi_fit_predict_lstm,
-                                 seed = seed, hyperparams = hyperparams,
-                                 verbose = verbose)
+     fit_fn <- .psi_make_rw_cv_fit_fn(verbose)
      arch_hp <- list(
           arch_kind = "hierarchical", hier_mode = "film",
           units_1 = ac$units_1, units_2 = ac$units_2, units_3 = ac$units_3,
@@ -393,7 +464,7 @@
      utils::write.csv(obs_out, p_data, row.names = FALSE)
      if (verbose) message("Observed data and metadata saved to: ", p_data)
 
-     config_info <- list(
+     config_info <- c(list(
           architecture     = "lstm_v2_hierarchical_film",
           fit_date_start   = as.character(fit_date_start),
           fit_date_stop    = as.character(cutoff_date),
@@ -401,10 +472,16 @@
           pred_date_stop   = as.character(pred_date_stop),
           feature_set      = feature_set,
           response_var     = response_var,
+          # End of the window that defined the target_* anchors (NA for the
+          # train-only intensity target); > fit_date_stop means target leakage.
+          target_anchor_end = if (is.na(bundle$target_anchor_end %||% NA)) NA_character_
+                              else as.character(bundle$target_anchor_end),
           bias_correct     = isTRUE(bias_correct),
           region_map       = ac$region_map,
           n_seeds          = ac$n_seeds,
-          seeds            = seeds,
+          seeds            = seeds),
+          .psi_manifest_seed_fields(ens),
+          list(
           parallel_seeds   = ac$parallel_seeds,
           n_countries      = bundle$encoders$n_countries,
           n_regions        = bundle$encoders$n_regions,
@@ -467,7 +544,7 @@
                     error = function(e) NA_character_),
                host              = tryCatch(unname(Sys.info()[["nodename"]]),
                                             error = function(e) NA_character_),
-               written_at        = as.character(Sys.time())))
+               written_at        = as.character(Sys.time()))))
      p_cfg <- file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json")
      jsonlite::write_json(config_info, p_cfg, pretty = TRUE, auto_unbox = TRUE,
                           digits = NA, null = "null")

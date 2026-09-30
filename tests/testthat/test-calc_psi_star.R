@@ -66,9 +66,10 @@ testthat::test_that("warns when psi values are outside [0,1]", {
 })
 
 testthat::test_that("warns on non-finite psi values", {
-     # Current implementation warns about non-finite values (Inf/-Inf), treating as NA
+     # Inf/-Inf warn and are treated as NA; plain NAs are documented input and
+     # are filled silently (see test-review-suitability-psi-star-edge.R).
      expect_warning(
-          MOSAIC::calc_psi_star(psi = c(0.1, NA, 0.8)),
+          MOSAIC::calc_psi_star(psi = c(0.1, Inf, 0.8)),
           "Non-finite"
      )
 })
