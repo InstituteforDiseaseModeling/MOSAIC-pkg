@@ -4,12 +4,16 @@
 \alias{sim_seed_state}
 \title{Seed t=0 state from the validated parameters}
 \usage{
-sim_seed_state(state, par)
+sim_seed_state(state, par, ctl = NULL)
 }
 \arguments{
 \item{state}{State environment from \code{sim_alloc_state()}.}
 
 \item{par}{Parameters from \code{sim_params()}.}
+
+\item{ctl}{Draw controller from \code{sim_draws()}; in \code{"rng"} mode the
+symptomatic split of \code{I_j_initial} is drawn, otherwise (\code{NULL} or
+\code{"replay"}) it is the oracle's deterministic \code{round()}.}
 }
 \value{
 The state environment with row 1 seeded.

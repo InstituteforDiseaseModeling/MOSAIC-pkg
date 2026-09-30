@@ -24,6 +24,11 @@ harness structurally cannot cover it -- CLAUDE.md lesson #18(v).
 table specifies a binomial. round() is not linear, so the deterministic
 form is wrong in the MEAN at low counts (zero symptomatic for every
 progression <= 2 at sigma = 0.2). Covered by test-sigma-split.R.}
+\item{infectious/sigma_split_t0}{The same correction for the t=0 split of
+\code{I_j_initial}, which the oracle seeds with
+\code{round(sigma * I_j_initial)}: at sigma = 0.25 a patch seeded with 1
+or 2 infections starts with no symptomatic. Covered by
+test-review-engine-initial-split.R.}
 \item{envtohuman/dose_percapita}{v0.89.0. The oracle's dose-response is
 \code{W/(kappa + W)} with W an absolute cell count; kappa is a
 concentration. Production divides by N. Covered by

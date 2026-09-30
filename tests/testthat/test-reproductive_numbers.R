@@ -181,6 +181,9 @@ test_that("human R recovers the engine's true instantaneous R (human-only run)",
   skip_if_not(exists("config_simulation_epidemic", asNamespace("MOSAIC")))
   cfg <- MOSAIC::config_simulation_epidemic
   cfg$tau_i <- rep(0, length(cfg$tau_i))
+  # Seeded with 3 infections the fixture dies out on ~6% of seeds; 10 always
+  # takes off, so every pooled seed contributes.
+  cfg$I_j_initial[1] <- 10L
   kern <- MOSAIC:::.mosaic_reff_config_kernel(cfg)
   # One realization's median ratio scatters by about +/-5% (seed to seed it runs
   # 0.91-1.08 here), so the check pools 8 seeds. The kernel ignores the fatal
@@ -217,18 +220,27 @@ test_that("human R has the engine's timing (growth phase of a linear human route
   nl <- length(cfg$tau_i)
   cfg$tau_i <- rep(0, nl); cfg$alpha_1 <- 1; cfg$alpha_2 <- 1
   cfg$beta_j0_env <- rep(0, nl); cfg$beta_j0_hum <- rep(0.5, nl)
-  r <- run_simulation(config = cfg, seed = 7L, quiet = TRUE)$results
+  # Seeded with 3 infections the fixture dies out on ~6% of seeds; 10 always
+  # takes off. One seed's growth-phase median scatters by about +/-0.1 around
+  # the truth, the same size as the timing error being tested for, so the check
+  # pools 16 seeds rather than trusting one draw sequence.
+  cfg$I_j_initial[1] <- 10L
   kern <- MOSAIC:::.mosaic_reff_config_kernel(cfg)
-  i <- which.max(rowSums(r$incidence_human)); t <- 2:ncol(r$incidence)
-  rr <- MOSAIC:::.mosaic_reff_routes(
-    r$incidence_human[i, ], r$incidence_env[i, ], r$delta_jt[i, ], kern,
-    init = MOSAIC:::.mosaic_reff_init(r$E[i, 1], r$Isym[i, 1], r$Iasym[i, 1],
-                                      r$incidence[i, 1]))
-  I <- (r$Isym + r$Iasym)[i, t - 1L]
-  truth <- r$beta_jt_human[i, t] * r$S[i, t] / r$N[i, t - 1L] * kern$D_h
-  grow <- is.finite(rr$R_hum[t]) & I > 100 & (r$Isym + r$Iasym)[i, t] > 1.02 * I
-  expect_gt(sum(grow), 15L)
-  expect_lt(abs(stats::median(rr$R_hum[t][grow] / truth[grow]) - 1), 0.03)
+  one_seed <- function(seed) {
+    r <- run_simulation(config = cfg, seed = seed, quiet = TRUE)$results
+    i <- which.max(rowSums(r$incidence_human)); t <- 2:ncol(r$incidence)
+    rr <- MOSAIC:::.mosaic_reff_routes(
+      r$incidence_human[i, ], r$incidence_env[i, ], r$delta_jt[i, ], kern,
+      init = MOSAIC:::.mosaic_reff_init(r$E[i, 1], r$Isym[i, 1], r$Iasym[i, 1],
+                                        r$incidence[i, 1]))
+    I <- (r$Isym + r$Iasym)[i, t - 1L]
+    truth <- r$beta_jt_human[i, t] * r$S[i, t] / r$N[i, t - 1L] * kern$D_h
+    grow <- is.finite(rr$R_hum[t]) & I > 100 & (r$Isym + r$Iasym)[i, t] > 1.02 * I
+    c(n = sum(grow), ratio = stats::median(rr$R_hum[t][grow] / truth[grow]))
+  }
+  res <- vapply(1:16, one_seed, numeric(2))
+  expect_true(all(res["n", ] > 15L))
+  expect_lt(abs(stats::median(res["ratio", ]) - 1), 0.03)
 })
 
 test_that("environmental R recovers the engine's true instantaneous R (linear dose)", {

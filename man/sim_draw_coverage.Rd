@@ -10,7 +10,8 @@ sim_draw_coverage(ctl)
 \item{ctl}{Draw controller used for the run.}
 }
 \value{
-Data frame of \code{site} and \code{n_calls}, all 22 sites present.
+Data frame of \code{site} and \code{n_calls}, one row per entry of
+\code{.SIM_DRAW_SITES} (sites never drawn report 0).
 }
 \description{
 Report which draw sites a run exercised

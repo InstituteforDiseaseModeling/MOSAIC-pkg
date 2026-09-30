@@ -10,7 +10,7 @@
 #' @section RNG contract:
 #' A simulation's output is determined solely by its \code{seed} and
 #' \code{config} -- never by worker identity, batch position, or how much
-#' randomness was consumed earlier in the session. \code{.sim_rng_state()}
+#' randomness was consumed earlier in the session. \code{.sim_rng_begin()}
 #' establishes an isolated stream and returns everything needed to restore the
 #' caller's \code{.Random.seed} afterwards, so calling the engine never
 #' perturbs the caller's stream.
@@ -40,6 +40,10 @@ NULL
      # v0.89.0 implements it, so this variate exists in "rng" mode only. Replay
      # keeps the oracle's deterministic form -- see sim_components.R.
      "infectious/sigma_split",             # (R-only, rng mode)
+     # The same correction applied to the t=0 split of I_j_initial, drawn once
+     # in sim_seed_state() before the first tick. The oracle seeds with
+     # np.round(sigma * I) (infectious.py:83-84); replay keeps that.
+     "infectious/sigma_split_t0",          # (R-only, rng mode)
      # NOT an oracle site either. Production (v0.96.0) decides each symptomatic
      # onset's outcome at onset, at the time-varying reported CFR mu_jt; the
      # oracle's daily hazard on the symptomatic stock (infectious/disease_deaths)
@@ -66,11 +70,13 @@ NULL
 #'
 #' Such a site must be drawn ONLY in \code{"rng"} mode. Drawing it under
 #' \code{"replay"} would consume a variate the fixture has no record of and
-#' desynchronise every subsequent draw, destroying parity for the other 22 sites.
+#' desynchronise every subsequent draw, destroying parity for the 22 oracle sites.
 #'
 #' \code{infectious/sigma_split} (v0.89.0): the spec specifies a stochastic
 #' symptomatic split and the oracle does a deterministic \code{np.round}, which
-#' is wrong in the mean at low counts. \code{infectious/fatal_onsets} (v0.96.0):
+#' is wrong in the mean at low counts; \code{infectious/sigma_split_t0} applies
+#' the same correction to the t=0 split of \code{I_j_initial}.
+#' \code{infectious/fatal_onsets} (v0.96.0):
 #' production draws fatal outcomes at symptom onset from the time-varying
 #' reported CFR \code{mu_jt}, where the oracle applies a daily hazard to the
 #' symptomatic stock. See \code{sim_components.R} for the full rationale.
@@ -81,7 +87,8 @@ NULL
 #' R side -- it must never appear in \code{.SIM_ORACLE_SITE_MAP}, and a test
 #' asserts exactly that.
 #' @keywords internal
-.SIM_RNG_ONLY_SITES <- c("infectious/sigma_split", "infectious/fatal_onsets")
+.SIM_RNG_ONLY_SITES <- c("infectious/sigma_split", "infectious/sigma_split_t0",
+                         "infectious/fatal_onsets")
 
 #' Draw sites that exist in replay mode only
 #'
@@ -109,6 +116,11 @@ NULL
 #'     table specifies a binomial. round() is not linear, so the deterministic
 #'     form is wrong in the MEAN at low counts (zero symptomatic for every
 #'     progression <= 2 at sigma = 0.2). Covered by test-sigma-split.R.}
+#'   \item{infectious/sigma_split_t0}{The same correction for the t=0 split of
+#'     \code{I_j_initial}, which the oracle seeds with
+#'     \code{round(sigma * I_j_initial)}: at sigma = 0.25 a patch seeded with 1
+#'     or 2 infections starts with no symptomatic. Covered by
+#'     test-review-engine-initial-split.R.}
 #'   \item{envtohuman/dose_percapita}{v0.89.0. The oracle's dose-response is
 #'     \code{W/(kappa + W)} with W an absolute cell count; kappa is a
 #'     concentration. Production divides by N. Covered by
@@ -121,8 +133,8 @@ NULL
 #'     lag. Covered by test-sim-mortality-onset.R.}
 #' }
 #' @keywords internal
-.SIM_RNG_ONLY_CORRECTIONS <- c("infectious/sigma_split", "envtohuman/dose_percapita",
-                               "infectious/fatal_onsets")
+.SIM_RNG_ONLY_CORRECTIONS <- c("infectious/sigma_split", "infectious/sigma_split_t0",
+                               "envtohuman/dose_percapita", "infectious/fatal_onsets")
 
 #' Create a draw controller for one simulation
 #'
@@ -153,12 +165,12 @@ sim_draws <- function(mode = c("rng", "replay"),
      ctl$cursor    <- 0L
      ctl$tick      <- NA_integer_
      ctl$phase     <- NA_character_
-     # Per-site call counts, so a run can report which of the 22 draw sites it
-     # actually exercised. A site with zero calls is untested code wearing a
+     # Per-site call counts, so a run can report which of the draw sites in
+     # .SIM_DRAW_SITES it actually exercised. A site with zero calls is untested code wearing a
      # passing test, which a short run hides.
      #
      # A hashed environment, not a named integer vector. `coverage[site] <- n`
-     # on a named vector copies the whole 22-element vector AND its name
+     # on a named vector copies the whole site vector AND its name
      # attribute on every one of ~30,750 draws per run; that allocation churn
      # measured 12% of engine runtime on its own. An environment binding is a
      # hashed store with no copy. `sim_draw_coverage()` materialises the
@@ -341,7 +353,7 @@ sim_draws <- function(mode = c("rng", "replay"),
 
 .sim_site_tol <- function(ctl, site) {
      # `[[` on a named vector errors for an absent name, so index with `[` and
-     # test for NA -- the override table holds one entry and misses on 21 sites.
+     # test for NA -- the override table holds one entry and misses on every other site.
      t <- .SIM_SITE_TOL[site]
      if (is.na(t)) ctl$tol_rel else unname(t)
 }
@@ -435,7 +447,8 @@ sim_assert_replay_complete <- function(ctl) {
 #' Report which draw sites a run exercised
 #'
 #' @param ctl Draw controller used for the run.
-#' @return Data frame of \code{site} and \code{n_calls}, all 22 sites present.
+#' @return Data frame of \code{site} and \code{n_calls}, one row per entry of
+#'   \code{.SIM_DRAW_SITES} (sites never drawn report 0).
 #' @keywords internal
 sim_draw_coverage <- function(ctl) {
      data.frame(site = .SIM_DRAW_SITES,

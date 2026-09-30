@@ -414,6 +414,9 @@ test_that("the redrawn deaths reproduce the observed total when cases are misfit
   # totals for a path whose weekly shape differed from the data.
   cfg <- MOSAIC::config_simulation_epidemic
   cfg$mu_jt[] <- 0.15
+  # Seeded with 3 infections the fixture dies out on ~6% of seeds; 10 always
+  # takes off, so the test does not hinge on one seed's draw sequence.
+  cfg$I_j_initial[1] <- 10L
   r <- MOSAIC::run_simulation(cfg, seed = 8L, quiet = TRUE)$results
   obs <- r$reported_deaths
   nT <- ncol(obs)
