@@ -566,7 +566,11 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      message("  - Adding socioeconomic indicators...")
 
      # GDP
-     gdp_path <- file.path(PATHS$DATA_PROCESSED, "world_bank", "GDP_data_world_bank.csv")
+     # Read the files process_WB_GDP_data() / process_WB_population_density_data()
+     # actually write (world_bank_*_data.csv). The legacy *_world_bank.csv names
+     # are a fallback only, so a World Bank refresh reaches the panel.
+     gdp_path <- .csd_world_bank_path(PATHS, "world_bank_GDP_data.csv",
+                                      "GDP_data_world_bank.csv")
      if (file.exists(gdp_path)) {
           gdp_data <- utils::read.csv(gdp_path, stringsAsFactors = FALSE)
           gdp_data <- gdp_data[, c("iso_code", "year", "GDP")]
@@ -581,7 +585,8 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      }
 
      # Population density
-     pop_density_path <- file.path(PATHS$DATA_PROCESSED, "world_bank", "population_density_data_world_bank.csv")
+     pop_density_path <- .csd_world_bank_path(PATHS, "world_bank_population_density_data.csv",
+                                              "population_density_data_world_bank.csv")
      if (file.exists(pop_density_path)) {
           pop_density_data <- utils::read.csv(pop_density_path, stringsAsFactors = FALSE)
           pop_density_data <- pop_density_data %>%
@@ -1886,4 +1891,24 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      path <- file.path(PATHS$DATA_CHOLERA_WEEKLY, 'cholera_country_weekly_suitability_data.csv')
      write.csv(d, file = path, row.names = FALSE)
      message("Processed suitability data saved here: ", path)
+}
+
+
+# Resolve a processed World Bank file: prefer the name the process_WB_*()
+# processor writes; fall back to the legacy name (with a message) only when the
+# current file is absent. Returns the current path when neither exists, so the
+# caller's file.exists() guard skips the block exactly as before.
+#' @keywords internal
+#' @noRd
+.csd_world_bank_path <- function(PATHS, current, legacy) {
+     dir_wb   <- file.path(PATHS$DATA_PROCESSED, "world_bank")
+     p_cur    <- file.path(dir_wb, current)
+     p_legacy <- file.path(dir_wb, legacy)
+     if (file.exists(p_cur)) return(p_cur)
+     if (file.exists(p_legacy)) {
+          message(sprintf("    %s not found; using legacy %s (re-run the process_WB_*() processor to refresh)",
+                          current, legacy))
+          return(p_legacy)
+     }
+     p_cur
 }
