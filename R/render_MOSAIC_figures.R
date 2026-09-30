@@ -345,7 +345,9 @@ render_MOSAIC_figures <- function(dir_output,
   }
 
   # --- Resolve central_method from the run's control.json -------------------
-  .resolve_central <- function() .mosaic_run_central_method(dirs$inputs)
+  .resolve_central <- function()
+    .mosaic_run_central_method(dirs$inputs, results_dir = dirs$results,
+                               calibration_dir = dirs$calibration)
 
   files <- list(
     samples     = file.path(dirs$calibration, "samples.parquet"),
@@ -360,7 +362,8 @@ render_MOSAIC_figures <- function(dir_output,
   # A control.json this renderer cannot interpret must not abort every group.
   central_method <- tryCatch(.resolve_central(), error = function(e) {
     warning("central_method in control.json could not be resolved (",
-            conditionMessage(e), "); using the median.", call. = FALSE)
+            conditionMessage(e), "); assuming the median, the pre-v0.38.0 ",
+            "behaviour (the current package default is the mean).", call. = FALSE)
     .mosaic_resolve_central_method("median")
   })
 
@@ -714,13 +717,15 @@ render_MOSAIC_figures <- function(dir_output,
       # 1_inputs/config.json holds the PRE-calibration mobility values; swap in
       # the posterior medians so figs 2-4 match the posterior fig 1.
       post_mob <- .mosaic_posterior_mobility_config(
-        cfg, file.path(dirs$res_posterior %||% "", "parameter_estimates.csv"))
+        cfg, if (!is.null(dirs$res_posterior))
+               file.path(dirs$res_posterior, "parameter_estimates.csv"))
       cfg <- post_mob$config
-      # A parameter without a posterior was held fixed (or the CSV is absent),
-      # so its config value is the value the calibrated model ran with.
+      # Fixed parameters (degenerate posterior rows) and parameters without a
+      # posterior keep their config value, which is what the model ran with.
       if (!identical(post_mob$source, "posterior"))
-        .vmsg("spatial: mobility figures use %s values for tau_i/mobility_omega/mobility_gamma (no posterior for some or all of them).",
-              post_mob$source)
+        .vmsg("spatial: mobility figures use %s values for tau_i/mobility_omega/mobility_gamma (%d sampled, %d held fixed, %d without a posterior).",
+              post_mob$source, post_mob$n_posterior, post_mob$n_fixed,
+              post_mob$n_missing)
       mf <- tryCatch(calc_mobility_flux(cfg), error = function(e) {
         warning("spatial: calc_mobility_flux failed (", conditionMessage(e),
                 "); skipping mobility figures.", call. = FALSE)
@@ -930,17 +935,52 @@ render_MOSAIC_figures <- function(dir_output,
   bm[, "iso3"]
 }
 
-# The ensemble central tendency a finished run used, read from its
-# 1_inputs/control.json. run_MOSAIC() writes the control nested under $control
-# (with run metadata beside it); an unnested control is also accepted. A
-# control.json without the setting predates it (v0.38.0), and those runs used the
-# median.
-#
-# The per-channel form c(cases = , deaths = ) can reach disk in two shapes:
-# as a JSON object (read back as a named list) or, because jsonlite drops the
-# names of an atomic vector, as a bare 2-element array. The array is read in
-# the order the documented form is written, (cases, deaths).
-.mosaic_run_central_method <- function(inputs_dir) {
+# The ensemble central tendency a finished run used, per channel. Sources, most
+# authoritative first:
+#   1. 3_results/summary.json central_method_cases/_deaths -- the values
+#      run_MOSAIC() resolved, written after the in-run render (so available to
+#      post-hoc renders only);
+#   2. 2_calibration/subset_opt.rds $central_method -- also resolved, present
+#      when best-subset optimization ran;
+#   3. 1_inputs/control.json predictions$central_method -- the RAW user control,
+#      nested under $control (an unnested control is also accepted).
+# control.json is ambiguous because jsonlite drops the names of an atomic
+# vector: c(deaths = "median", cases = "mean") is stored as ["median","mean"]
+# and a single named c(deaths = "median") as the scalar "median". A bare
+# two-element array with DIFFERENT values is therefore read in the documented
+# order (cases, deaths) with a warning that the order is assumed; equal values
+# are unambiguous. A bare scalar is read as applying to both channels, which is
+# the documented meaning of a scalar. A control.json without the setting
+# predates it (v0.38.0), and those runs used the median.
+.mosaic_run_central_method <- function(inputs_dir, results_dir = NULL,
+                                       calibration_dir = NULL) {
+  valid <- c("mean", "median")
+  .pair <- function(cs, dt) {
+    v <- c(cases = as.character(cs %||% NA_character_)[1L],
+           deaths = as.character(dt %||% NA_character_)[1L])
+    if (all(v %in% valid)) v else NULL
+  }
+
+  if (!is.null(results_dir)) {
+    sj <- file.path(results_dir, "summary.json")
+    if (file.exists(sj)) {
+      sm <- tryCatch(jsonlite::fromJSON(sj, simplifyVector = TRUE), error = function(e) NULL)
+      v <- tryCatch(.pair(sm$central_method_cases, sm$central_method_deaths),
+                    error = function(e) NULL)
+      if (!is.null(v)) return(v)
+    }
+  }
+  if (!is.null(calibration_dir)) {
+    so_path <- file.path(calibration_dir, "subset_opt.rds")
+    if (file.exists(so_path)) {
+      so <- tryCatch(readRDS(so_path), error = function(e) NULL)
+      cm <- if (is.list(so)) so$central_method else NULL
+      v <- if (!is.null(cm) && !is.null(names(cm)))
+        tryCatch(.pair(cm[["cases"]], cm[["deaths"]]), error = function(e) NULL)
+      if (!is.null(v)) return(v)
+    }
+  }
+
   cj <- file.path(inputs_dir, "control.json")
   cm <- "median"
   if (file.exists(cj)) {
@@ -949,8 +989,15 @@ render_MOSAIC_figures <- function(dir_output,
                   error = function(e) NULL)
     if (is.list(v)) v <- unlist(v)
     if (!is.null(v) && length(v) == 2L &&
-        (is.null(names(v)) || all(!nzchar(names(v)))))
-      v <- stats::setNames(as.character(v), c("cases", "deaths"))
+        (is.null(names(v)) || all(!nzchar(names(v))))) {
+      v <- as.character(v)
+      if (!identical(v[1L], v[2L]))
+        warning("control.json stores a per-channel central_method without its ",
+                "channel names (", paste(v, collapse = ", "), "); assuming the ",
+                "documented order (cases, deaths). If the run set deaths first, ",
+                "the two channels are swapped.", call. = FALSE)
+      v <- stats::setNames(v, c("cases", "deaths"))
+    }
     if (!is.null(v) && length(v) >= 1L) cm <- v
   }
   .mosaic_resolve_central_method(cm)
@@ -985,14 +1032,19 @@ render_MOSAIC_figures <- function(dir_output,
 # Overwrite a run config's calibrated mobility parameters with their posterior
 # medians from 3_results/posterior/parameter_estimates.csv, so the mobility
 # figures describe the calibrated model rather than the pre-calibration inputs
-# in 1_inputs/config.json. Parameters absent from the CSV (not sampled, or no
-# posterior) keep their config value. Returns list(config, tau_ci, source):
-# tau_ci is the posterior 95% interval of tau_i (location/lower/upper) when every
-# location has one, else NULL; source is "posterior", "partial posterior" or
+# in 1_inputs/config.json. The CSV also carries every FIXED parameter, as a
+# degenerate row (median == Q2.5 == Q97.5), so a row only counts as a posterior
+# when its 95% interval has width; a degenerate or absent row keeps the config
+# value, which is the value the calibrated model ran with. Returns
+# list(config, tau_ci, source, n_posterior, n_fixed, n_missing): tau_ci is the
+# posterior 95% interval of tau_i (location/lower/upper) when every location's
+# tau_i was sampled, else NULL (so the caller can use the upstream
+# mobility_tau_ci.csv interval); source is "posterior", "partial posterior" or
 # "input config".
 .mosaic_posterior_mobility_config <- function(cfg, param_csv) {
-  out <- list(config = cfg, tau_ci = NULL, source = "input config")
-  if (is.null(param_csv) || !file.exists(param_csv)) return(out)
+  out <- list(config = cfg, tau_ci = NULL, source = "input config",
+              n_posterior = 0L, n_fixed = 0L, n_missing = 0L)
+  if (is.null(param_csv) || !nzchar(param_csv) || !file.exists(param_csv)) return(out)
   pe <- tryCatch(utils::read.csv(param_csv, stringsAsFactors = FALSE),
                  error = function(e) NULL)
   if (is.null(pe) || !all(c("parameter", "median") %in% names(pe))) return(out)
@@ -1002,33 +1054,48 @@ render_MOSAIC_figures <- function(dir_output,
     v <- pe[[col]][match(nm, pe$parameter)]
     if (length(v) != 1L || !is.finite(v)) NA_real_ else as.numeric(v)
   }
+  # "posterior" (interval has width), "fixed" (degenerate row) or "missing".
+  # Without quantile columns a fixed parameter cannot be told apart, so a row
+  # with a finite median is taken as a posterior.
+  .status <- function(nm) {
+    med <- .get(nm)
+    if (is.na(med)) return("missing")
+    lo <- .get(nm, "Q2.5"); hi <- .get(nm, "Q97.5")
+    if (is.na(lo) || is.na(hi)) return("posterior")
+    scale <- max(abs(c(lo, hi, med)))
+    if (abs(hi - lo) <= sqrt(.Machine$double.eps) * scale) "fixed" else "posterior"
+  }
 
-  n_set <- 0L; n_try <- 0L
+  status <- character()
   for (nm in c("mobility_omega", "mobility_gamma")) {
-    n_try <- n_try + 1L
-    v <- .get(nm)
-    if (!is.na(v)) { cfg[[nm]] <- v; n_set <- n_set + 1L }
+    st <- .status(nm)
+    status <- c(status, st)
+    if (st == "posterior") cfg[[nm]] <- .get(nm)
   }
 
   loc <- as.character(cfg$location_name)
   if (length(loc) && length(cfg$tau_i) == length(loc)) {
     tau <- as.numeric(cfg$tau_i)
     keys <- paste0("tau_i_", loc)
-    post <- vapply(keys, .get, numeric(1L), USE.NAMES = FALSE)
-    n_try <- n_try + length(loc)
-    hit  <- !is.na(post)
-    tau[hit] <- post[hit]
-    n_set <- n_set + sum(hit)
+    st_tau <- vapply(keys, .status, character(1L), USE.NAMES = FALSE)
+    status <- c(status, st_tau)
+    hit <- st_tau == "posterior"
+    tau[hit] <- vapply(keys[hit], .get, numeric(1L), USE.NAMES = FALSE)
     cfg$tau_i <- tau
-    lo <- vapply(keys, .get, numeric(1L), col = "Q2.5",  USE.NAMES = FALSE)
-    hi <- vapply(keys, .get, numeric(1L), col = "Q97.5", USE.NAMES = FALSE)
-    if (all(hit) && !anyNA(lo) && !anyNA(hi))
-      out$tau_ci <- data.frame(location = loc, lower = lo, upper = hi,
-                               stringsAsFactors = FALSE)
+    if (all(hit)) {
+      lo <- vapply(keys, .get, numeric(1L), col = "Q2.5",  USE.NAMES = FALSE)
+      hi <- vapply(keys, .get, numeric(1L), col = "Q97.5", USE.NAMES = FALSE)
+      if (!anyNA(lo) && !anyNA(hi))
+        out$tau_ci <- data.frame(location = loc, lower = lo, upper = hi,
+                                 stringsAsFactors = FALSE)
+    }
   }
 
-  out$config <- cfg
-  out$source <- if (n_set == 0L) "input config" else
-    if (n_set == n_try) "posterior" else "partial posterior"
+  out$config      <- cfg
+  out$n_posterior <- sum(status == "posterior")
+  out$n_fixed     <- sum(status == "fixed")
+  out$n_missing   <- sum(status == "missing")
+  out$source <- if (out$n_posterior == 0L) "input config" else
+    if (out$n_posterior == length(status)) "posterior" else "partial posterior"
   out
 }

@@ -103,9 +103,10 @@ plot_model_subset_optimization <- function(subset_opt,
   optimal_n     <- as.integer(subset_opt$optimal_n)
   diagnostics_n <- as.integer(subset_opt$diagnostics_n)
   objective     <- subset_opt$objective %||% "mae"
-  # Resolved exactly as the rest of the package resolves it (NULL -> the
-  # package default, scalar -> both channels).
-  cm            <- .mosaic_resolve_central_method(subset_opt$central_method)
+  # Resolved as the rest of the package resolves it (scalar -> both channels).
+  # A NULL comes only from a legacy object that predates the field; those runs
+  # used the median (optimize_ensemble_subset()'s own default).
+  cm            <- .mosaic_resolve_central_method(subset_opt$central_method %||% "median")
   central_lab   <- if (identical(cm[["cases"]], cm[["deaths"]])) {
     cm[["cases"]]
   } else {

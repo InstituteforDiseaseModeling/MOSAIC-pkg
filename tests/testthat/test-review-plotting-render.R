@@ -24,8 +24,61 @@ test_that("a per-channel central_method written by jsonlite round-trips", {
     file.path(d, "control.json"), auto_unbox = TRUE)
   expect_match(paste(readLines(file.path(d, "control.json")), collapse = ""),
                '\\["mean","median"\\]')
-  expect_equal(MOSAIC:::.mosaic_run_central_method(d),
+  # The channel order is not recoverable from the file, so the documented
+  # (cases, deaths) order is assumed out loud.
+  expect_warning(cm <- MOSAIC:::.mosaic_run_central_method(d), "documented order")
+  expect_equal(cm, c(cases = "mean", deaths = "median"))
+  # Equal values are unambiguous and do not warn.
+  jsonlite::write_json(
+    list(control = list(predictions = list(
+      central_method = c(deaths = "median", cases = "median")))),
+    file.path(d, "control.json"), auto_unbox = TRUE)
+  expect_no_warning(cm <- MOSAIC:::.mosaic_run_central_method(d))
+  expect_equal(cm, c(cases = "median", deaths = "median"))
+})
+
+test_that("the resolved central_method in summary.json beats the raw control", {
+  d <- .review_run_dir()
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  inp <- file.path(d, "1_inputs"); res <- file.path(d, "3_results")
+  wctl <- function(cm) jsonlite::write_json(
+    list(control = list(predictions = list(central_method = cm))),
+    file.path(inp, "control.json"), auto_unbox = TRUE)
+  wsum <- function(cs, dt) jsonlite::write_json(
+    list(central_method_cases = cs, central_method_deaths = dt),
+    file.path(res, "summary.json"), auto_unbox = TRUE)
+
+  # Deaths written first: the names are lost, so control.json alone would swap.
+  wctl(c(deaths = "median", cases = "mean"))
+  wsum("mean", "median")
+  expect_no_warning(cm <- MOSAIC:::.mosaic_run_central_method(inp, results_dir = res))
+  expect_equal(cm, c(cases = "mean", deaths = "median"))
+
+  # A single named channel is written as a bare scalar; summary.json has the
+  # value run_MOSAIC() actually resolved (cases keeps the default).
+  wctl(c(deaths = "median"))
+  expect_equal(MOSAIC:::.mosaic_run_central_method(inp, results_dir = res),
                c(cases = "mean", deaths = "median"))
+
+  # A summary.json without the fields (pre-provenance) falls through.
+  wsum(NA, NA)
+  wctl("median")
+  expect_equal(MOSAIC:::.mosaic_run_central_method(inp, results_dir = res),
+               c(cases = "median", deaths = "median"))
+})
+
+test_that("subset_opt.rds supplies the resolved central_method during the in-run render", {
+  d <- .review_run_dir()
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  inp <- file.path(d, "1_inputs"); cal <- file.path(d, "2_calibration")
+  jsonlite::write_json(
+    list(control = list(predictions = list(central_method = c(deaths = "median", cases = "mean")))),
+    file.path(inp, "control.json"), auto_unbox = TRUE)
+  saveRDS(list(central_method = c(cases = "mean", deaths = "median")),
+          file.path(cal, "subset_opt.rds"))
+  expect_no_warning(cm <- MOSAIC:::.mosaic_run_central_method(
+    inp, results_dir = file.path(d, "3_results"), calibration_dir = cal))
+  expect_equal(cm, c(cases = "mean", deaths = "median"))
 })
 
 test_that("an unreadable central_method warns instead of aborting every group", {
@@ -73,11 +126,70 @@ test_that(".mosaic_posterior_mobility_config swaps in posterior medians and CI",
   expect_equal(out$tau_ci$upper, c(0.1, 0.2, 0.3))
   expect_identical(out$tau_ci$location, loc)
 
+  # A NULL path (missing dirs key) short-circuits without probing the filesystem.
+  expect_identical(MOSAIC:::.mosaic_posterior_mobility_config(cfg, NULL)$source,
+                   "input config")
+
   # No posterior -> input config, unchanged.
   none <- MOSAIC:::.mosaic_posterior_mobility_config(cfg, tempfile())
   expect_identical(none$source, "input config")
   expect_equal(none$config$tau_i, cfg$tau_i)
   expect_null(none$tau_ci)
+})
+
+test_that("fixed mobility parameters (degenerate posterior rows) are not posteriors", {
+  cfg <- .spatial_cfg()
+  loc <- cfg$location_name
+  csv <- tempfile(fileext = ".csv")
+  on.exit(unlink(csv), add = TRUE)
+  # parameter_estimates.csv carries FIXED parameters as median == Q2.5 == Q97.5
+  # (calc_model_posterior_quantiles), exactly as in every single-location run.
+  fixed <- c(cfg$tau_i, cfg$mobility_omega, cfg$mobility_gamma)
+  utils::write.csv(data.frame(
+    parameter = c(paste0("tau_i_", loc), "mobility_omega", "mobility_gamma"),
+    median = fixed, Q2.5 = fixed, Q97.5 = fixed), csv, row.names = FALSE)
+  out <- MOSAIC:::.mosaic_posterior_mobility_config(cfg, csv)
+  expect_identical(out$source, "input config")
+  expect_identical(out$n_fixed, length(loc) + 2L)
+  expect_identical(out$n_posterior, 0L)
+  expect_null(out$tau_ci)                     # no zero-width "posterior CI"
+  expect_equal(out$config$tau_i, cfg$tau_i)
+
+  # Sampled omega/gamma with fixed tau_i: partial, and still no tau CI.
+  utils::write.csv(data.frame(
+    parameter = c(paste0("tau_i_", loc), "mobility_omega", "mobility_gamma"),
+    median = c(cfg$tau_i, 0.61, 1.7), Q2.5 = c(cfg$tau_i, 0.5, 1.5),
+    Q97.5 = c(cfg$tau_i, 0.7, 1.9)), csv, row.names = FALSE)
+  out <- MOSAIC:::.mosaic_posterior_mobility_config(cfg, csv)
+  expect_identical(out$source, "partial posterior")
+  expect_equal(out$config$mobility_omega, 0.61)
+  expect_null(out$tau_ci)
+})
+
+test_that("Fig 2 keeps the upstream tau interval when tau_i was held fixed", {
+  skip_if_not_installed("ggplot2")
+  d <- .review_run_dir()
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  cfg <- .spatial_cfg()
+  loc <- cfg$location_name
+  jsonlite::write_json(cfg, file.path(d, "1_inputs", "config.json"),
+                       auto_unbox = TRUE, digits = NA)
+  fixed <- c(cfg$tau_i, cfg$mobility_omega, cfg$mobility_gamma)
+  utils::write.csv(data.frame(
+    parameter = c(paste0("tau_i_", loc), "mobility_omega", "mobility_gamma"),
+    median = fixed, Q2.5 = fixed, Q97.5 = fixed),
+    file.path(d, "3_results", "posterior", "parameter_estimates.csv"), row.names = FALSE)
+  upstream <- data.frame(location = loc, lower = cfg$tau_i / 3, upper = cfg$tau_i * 3)
+  utils::write.csv(upstream, file.path(d, "1_inputs", "mobility_tau_ci.csv"), row.names = FALSE)
+  seen <- new.env()
+  testthat::local_mocked_bindings(
+    plot_departure_tau = function(tau, N, location_name, ci = NULL) {
+      seen$ci <- ci; ggplot2::ggplot()
+    },
+    .package = "MOSAIC")
+  suppressWarnings(render_MOSAIC_figures(d, which = "spatial", verbose = FALSE))
+  expect_equal(seen$ci$lower, upstream$lower)
+  expect_equal(seen$ci$upper, upstream$upper)
 })
 
 .spatial_run <- function() {
@@ -177,6 +289,24 @@ test_that("psi_star diagnostic handles a single-location psi_jt vector", {
   dirs <- MOSAIC:::.mosaic_ensure_dir_tree(r$dir, clean_output = FALSE)
   plots <- plot_psi_star_diagnostic(dirs, location_names = "MOZ", verbose = FALSE)
   expect_equal(plots$MOZ$data$raw, r$psi)
+})
+
+test_that("psi_star diagnostic will not attribute a 1-row psi_jt to several locations", {
+  skip_if_not_installed("ggplot2")
+  r <- .psi_star_run()
+  on.exit(unlink(r$dir, recursive = TRUE), add = TRUE)
+  cj <- file.path(r$dir, "1_inputs", "config.json")
+  cfg <- jsonlite::fromJSON(cj)
+  cfg$psi_jt <- matrix(r$psi[1, ], nrow = 1L)
+  jsonlite::write_json(cfg, cj, auto_unbox = TRUE, digits = NA)
+  dirs <- MOSAIC:::.mosaic_ensure_dir_tree(r$dir, clean_output = FALSE)
+  plots <- plot_psi_star_diagnostic(dirs, location_names = r$loc, verbose = FALSE)
+  expect_length(plots, 0L)                    # no usable psi_jt, no fallback CSV
+})
+
+test_that("psi_star diagnostic skips cleanly when dirs lacks the posterior key", {
+  expect_null(plot_psi_star_diagnostic(list(inputs = tempdir()),
+                                       location_names = "MOZ", verbose = FALSE))
 })
 
 test_that("render's psi_star group works with no MOSAIC root configured", {

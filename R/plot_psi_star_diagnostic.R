@@ -58,8 +58,12 @@ plot_psi_star_diagnostic <- function(dirs,
   stopifnot(is.list(dirs), is.null(PATHS) || is.list(PATHS),
             is.character(location_names))
 
-  param_csv <- file.path(dirs$res_posterior %||% "", "parameter_estimates.csv")
-  config_json <- file.path(dirs$inputs %||% "", "config.json")
+  if (is.null(dirs$res_posterior) || is.null(dirs$inputs)) {
+    if (verbose) message("plot_psi_star_diagnostic: dirs lacks res_posterior/inputs \u2014 skipping.")
+    return(invisible(NULL))
+  }
+  param_csv <- file.path(dirs$res_posterior, "parameter_estimates.csv")
+  config_json <- file.path(dirs$inputs, "config.json")
 
   if (!file.exists(param_csv)) {
     if (verbose) message("plot_psi_star_diagnostic: parameter_estimates.csv not found \u2014 skipping.")
@@ -82,12 +86,14 @@ plot_psi_star_diagnostic <- function(dirs,
   # Raw series = the psi_jt the run was calibrated on (rows = locations, one
   # column per day of the config window). A single-location config may
   # deserialize as a plain vector, so it is lifted to a 1-row matrix and its row
-  # is taken positionally.
+  # is taken positionally. Rows must match the config's locations one-to-one: a
+  # 1-row psi_jt in a multi-location config cannot be attributed to any one
+  # location and is discarded.
   psi_mat <- config$psi_jt
   if (!is.null(psi_mat)) {
     if (is.null(dim(psi_mat))) psi_mat <- matrix(as.numeric(psi_mat), nrow = 1L)
     if (ncol(psi_mat) != length(cfg_dates) ||
-        (nrow(psi_mat) != length(cfg_locs) && nrow(psi_mat) != 1L))
+        nrow(psi_mat) != max(1L, length(cfg_locs)))
       psi_mat <- NULL
   }
 

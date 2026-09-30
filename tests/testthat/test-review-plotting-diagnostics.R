@@ -29,8 +29,8 @@ test_that("flat-profile optimal-N marker sits on the curve and is not called arg
   expect_equal(marker$value, 0.505)
   expect_false(grepl("argmax", p$labels$subtitle))
   expect_match(p$labels$subtitle, "largest N")
-  # NULL central_method is labelled with the package default (mean).
-  expect_match(p$labels$subtitle, "central = mean")
+  # A NULL central_method comes from a legacy object; those runs used the median.
+  expect_match(p$labels$subtitle, "central = median")
 })
 
 # --- plotting-06: -Inf likelihoods are failures --------------------------------
