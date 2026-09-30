@@ -116,6 +116,59 @@
      d
 }
 
+# ---- Target-anchor leakage check ---------------------------------------------
+#' Warn when a pre-computed target_* response is normalised by anchors that were
+#' computed over rows AFTER the fit cutoff.
+#'
+#' compile_suitability_data() scales targets A/B/C/D by p99 anchors over its
+#' anchor window (full panel unless built with `target_anchor_stop`); target F is
+#' a whole-series rank. If that window ends after `cutoff_date`, the pre-cutoff
+#' training targets -- and the bias-correction fit on them -- are scaled by later
+#' outbreaks (a ~9x deflation for AGO at a 2024-01 cutoff on the canonical panel).
+#' The anchor end is read from the panel's `target_anchor_stop` column when
+#' present, otherwise inferred as the last date with observed cases (the
+#' full-window build's anchor end).
+#' @param d Full suitability panel (all rows; date as Date).
+#' @param response_var Response name (after the transmission_intensity alias).
+#' @param cutoff_date Fit cutoff (Date).
+#' @return The anchor window end (Date), or NA for the train-only intensity
+#'   target, invisibly.
+#' @keywords internal
+#' @noRd
+.psi_check_target_anchor <- function(d, response_var, cutoff_date) {
+     if (identical(response_var, "intensity") ||
+         identical(response_var, "transmission_intensity") ||
+         !startsWith(response_var, "target_"))
+          return(invisible(as.Date(NA)))
+     cutoff_date <- as.Date(cutoff_date)
+     last_obs <- if ("cases" %in% names(d) && any(!is.na(d$cases)))
+          max(as.Date(d$date[!is.na(d$cases)])) else as.Date(NA)
+     recorded <- if ("target_anchor_stop" %in% names(d))
+          suppressWarnings(as.Date(as.character(d$target_anchor_stop))) else as.Date(NA)
+     recorded <- recorded[!is.na(recorded)]
+     if (identical(response_var, "target_F_rank_per_country")) {
+          anchor_end <- last_obs
+          how <- "whole-series rank, full-window by construction"
+     } else if (length(recorded)) {
+          anchor_end <- max(recorded)
+          how <- "recorded in the panel's target_anchor_stop column"
+     } else {
+          anchor_end <- last_obs
+          how <- "inferred: panel has no target_anchor_stop column, so a full-window anchor is assumed"
+     }
+     if (!is.na(anchor_end) && anchor_end > cutoff_date) {
+          warning(sprintf(paste0(
+               "response_var '%s' is normalised by anchors computed through %s (%s), ",
+               "after the fit cutoff %s. Pre-cutoff training targets and the bias-correction ",
+               "fit are scaled by post-cutoff outbreaks (target-side leakage), so any ",
+               "out-of-sample skill measured from this fit is optimistic. For a leak-free ",
+               "retrospective fit use response_var = 'transmission_intensity' (train-only ",
+               "anchor) or a panel compiled with target_anchor_stop <= the cutoff."),
+               response_var, format(anchor_end), how, format(cutoff_date)), call. = FALSE)
+     }
+     invisible(anchor_end)
+}
+
 # ---- Public entry point -----------------------------------------------------
 #' Build the lstm_v2 data bundle for one cutoff over a country pool.
 #'
@@ -202,6 +255,10 @@
      d <- utils::read.csv(source_csv, stringsAsFactors = FALSE)
      d$date <- as.Date(d$date)
 
+     # Target-side leakage check for pre-computed target_* responses, on the
+     # full panel (the anchors were computed over it, not over this window).
+     target_anchor_end <- .psi_check_target_anchor(d, response_var, cutoff_date)
+
      if (country_pool == "all_mosaic") {
           pool <- intersect(unique(d$iso_code), MOSAIC::iso_codes_mosaic)
           if (verbose) message(sprintf("  all_mosaic pool resolved to %d countries", length(pool)))
@@ -283,6 +340,8 @@
           # Their anchor is leak-free only if that build passed
           # `target_anchor_stop` -- which .rcv_build_leakfree_panel_v74() does and
           # the canonical panel build deliberately does not.
+          # .psi_check_target_anchor() (above) warns when the anchor window ends
+          # after cutoff_date.
           raw <- as.numeric(d[[response_var]])
           if (any(raw < 0 | raw > 1, na.rm = TRUE)) {
                warning(sprintf("  response_var '%s' had values outside [0,1]; clamping",
@@ -479,6 +538,7 @@
           pred_date_stop   = pred_date_stop,
           fit_date_start   = fit_date_start,
           cases_99th       = cases_99th,
+          target_anchor_end = target_anchor_end,
           scaler_center    = scaler_center,
           scaler_scale     = scaler_scale,
           features         = feats,

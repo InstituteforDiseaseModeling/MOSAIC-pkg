@@ -433,6 +433,10 @@
           pred_date_stop   = as.character(pred_date_stop),
           feature_set      = feature_set,
           response_var     = response_var,
+          # End of the window that defined the target_* anchors (NA for the
+          # train-only intensity target); > fit_date_stop means target leakage.
+          target_anchor_end = if (is.na(bundle$target_anchor_end %||% NA)) NA_character_
+                              else as.character(bundle$target_anchor_end),
           bias_correct     = isTRUE(bias_correct),
           region_map       = ac$region_map,
           n_seeds          = ac$n_seeds,
