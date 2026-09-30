@@ -13,7 +13,8 @@
 #     • Environmental suitability `psi_jt` fluctuates annually **and** on a
 #       4‑year cycle.
 #     • Longer environmental half‑life (`decay_days_long = 365`).
-#     • Moderate immunity waning (ω₁, ω₂ ≈ 1 / 180 days ≈ 0.0056).
+#     • Moderate vaccine-immunity waning (ω₁ = 0.0056 ≈ 1 / 180 days for one dose,
+#       ω₂ = 0.0033 ≈ 1 / 300 days for two doses).
 #     • Immunity coverage at t0: 30 % one-dose vaccinated, 10 % susceptible,
 #       0.125 % infected (E and I floored at 1 per patch), remainder (~60 %) recovered.
 #
@@ -150,7 +151,7 @@ sim_args <- list(
      phi_1            = 0.64,
      phi_2            = 0.85,
      omega_1          = 0.0056,    # ≈ 1 / 180 days (moderate waning)
-     omega_2          = 0.0033,
+     omega_2          = 0.0033,    # ≈ 1 / 300 days (two-dose immunity wanes slower)
      nu_jt_sources    = c("S", "E", "Isym", "Iasym", "R"),
      iota             = 1 / 1.4,
      gamma_1          = 0.20,
