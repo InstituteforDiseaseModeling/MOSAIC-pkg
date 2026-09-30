@@ -67,8 +67,9 @@ the weight totals of \code{n_bins} equal-width bins and rescales by
 weights themselves. Because the KDE bandwidth does not shrink with the
 weights and both results are rescaled by the number of draws, a weight
 vector that has collapsed onto a single draw (exact IS ESS = 1) still yields
-a marginal ESS that grows with \code{n} (on the order of \code{n/5} for
-\code{"kde"} and \code{n / n_bins} for \code{"binned"}), and for a
+a marginal ESS that grows with \code{n} (for \code{"kde"} roughly \code{n/5}
+under a uniform prior and \code{n/25} under a lognormal one; for
+\code{"binned"} about \code{n} over the number of occupied bins), and for a
 non-uniform prior the uniform reference mixes the prior's shape into the
 result. Read these values alongside the exact importance-sampling
 diagnostics of \code{\link{calc_is_diagnostics}}, which do detect the

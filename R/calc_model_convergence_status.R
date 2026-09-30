@@ -118,7 +118,7 @@ calc_model_convergence_status <- function(results_dir,
     }
     metrics_data <- rbind(metrics_data, data.frame(
       Metric = "Subset Selection",
-      Description = "Best subset size as a percentage of all draws (reported, not gated)",
+      Description = "Best subset as % of all draws (not gated)",
       Target = if (is.finite(target_percentile)) sprintf("<=%.1f%%", target_percentile) else "-",
       Value = sprintf("%.1f%%", percentile_val),
       Status = "info",
@@ -303,18 +303,18 @@ calc_model_convergence_status <- function(results_dir,
       if (!is.null(d$n)) paste0(v, " of ", format(d$n, big.mark = ",")) else v
     }
     if (!is.null(is_all)) {
-      .is_row("ESS_IS (all)", "Exact importance-sampling ESS over all draws (reported, not gated)",
+      .is_row("ESS_IS (all)", "Exact IS ESS, all draws (not gated)",
               .ess_is_value(is_all), "-", expression(bold(ESS[IS]~"(all)")))
     }
     if (!is.null(is_best)) {
-      .is_row("ESS_IS (B)", "Exact importance-sampling ESS within the best subset (reported, not gated)",
+      .is_row("ESS_IS (B)", "Exact IS ESS, best subset (not gated)",
               .ess_is_value(is_best), "-", expression(bold(ESS[IS]~"(B)")))
     }
     if (!is.null(is_all)) {
       khat_desc <- if (!is.null(is_all$khat_status)) {
-        paste0("Pareto k-hat, all draws: ", is_all$khat_status)
+        paste0("Pareto k-hat: ", is_all$khat_status)
       } else {
-        "Pareto k-hat, all draws (reported, not gated)"
+        "Pareto k-hat, all draws (not gated)"
       }
       .is_row("Pareto k-hat", khat_desc, .mosaic_format_status_value(is_all$khat),
               "< 0.7", expression(bold(hat(k))))
@@ -326,7 +326,7 @@ calc_model_convergence_status <- function(results_dir,
   if (!is.null(overall) && length(overall) == 1L && nzchar(overall)) {
     metrics_data <- rbind(metrics_data, data.frame(
       Metric = "Overall",
-      Description = "Overall convergence status (worst of the gated metrics)",
+      Description = "Worst of the gated metrics",
       Target = "PASS",
       Value = as.character(overall),
       Status = tolower(as.character(overall)),

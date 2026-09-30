@@ -30,19 +30,24 @@
 #' - A >= target_A
 #' - CVw <= target_CVw
 #'
-#' For each candidate size n the top-n draws by likelihood are weighted with
-#' exactly the scheme that \code{run_MOSAIC()} uses for the final ESS_B/A/CVw
-#' gate, so the subset that is selected is scored on the weights that are then
-#' gated:
+#' For each candidate size n the top-n draws by likelihood are weighted, and
+#' ESS, A and CVw are calculated from those weights:
 #' \itemize{
-#'   \item \code{"saturated"}: \eqn{\Delta_i = -2(\ell_i - \max \ell)}{Delta_i = -2 (ll_i - max ll)},
+#'   \item \code{"saturated"} (default): \eqn{\Delta_i = -2(\ell_i - \max \ell)}{Delta_i = -2 (ll_i - max ll)},
 #'     saturated at 4, and \eqn{w_i \propto \exp(-0.5 \min(\Delta_i, 4))}{w_i ~ exp(-0.5 min(Delta_i, 4))}
 #'     (MOSAIC-docs calibration chapter, equation aic-weights). Weights lie in
-#'     \eqn{[e^{-2}, 1]} before normalisation.
-#'   \item \code{"tempered"}: the adaptive-eta Gibbs weights of the internal
-#'     helper used by \code{run_MOSAIC()} for \code{best_subset_weighting = "tempered"}.
+#'     \eqn{[e^{-2}, 1]} before normalisation. This is the scheme of the
+#'     \code{weight_best} posterior, and \code{run_MOSAIC()} always selects the
+#'     subset with it. Once most of the subset is past \eqn{\Delta = 4} the
+#'     weights are nearly flat, so in practice the ESS target alone sets n and
+#'     the A and CVw targets rarely bind.
+#'   \item \code{"tempered"}: the adaptive-eta Gibbs weights that
+#'     \code{run_MOSAIC()} uses for its final ESS_B/A/CVw gate when
+#'     \code{best_subset_weighting = "tempered"}. They place the worst draw of
+#'     the subset at a weight floor of 1e-15, so on production likelihoods the
+#'     ESS stays far below typical targets and the search usually ends at
+#'     \code{max_size} with \code{converged = FALSE}.
 #' }
-#' ESS, A and CVw are then calculated from these weights.
 #'
 #' If no size meets criteria, returns results at max_size with converged=FALSE.
 #'
@@ -204,10 +209,12 @@ grid_search_best_subset <- function(
 
 #' Best-subset weights (shared by subset selection and subset optimization)
 #'
-#' Computes the weights \code{run_MOSAIC()} assigns within a best subset, so
-#' that \code{grid_search_best_subset()} and \code{optimize_ensemble_subset()}
-#' score candidate subsets on the same weights the final gate and the
-#' \code{weight_best} posterior use.
+#' Computes best-subset weights for \code{grid_search_best_subset()} and
+#' \code{optimize_ensemble_subset()}. "saturated" reproduces the
+#' \code{weight_best} posterior (and the final gate under the default
+#' \code{best_subset_weighting}); "tempered" reproduces only the final gate
+#' under \code{best_subset_weighting = "tempered"}, because \code{weight_best}
+#' is always saturated.
 #'
 #' @param likelihood Numeric vector of finite log-likelihoods for the subset.
 #' @param scheme "saturated" (\eqn{w \propto \exp(-0.5 \min(\Delta, 4))}) or

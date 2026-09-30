@@ -118,14 +118,19 @@ calc_bookend_batch_size <- function(ess_history,
 
     total_needed <- ceiling(total_needed)
 
-    # Check if we're already past the predicted requirement
+    # The fit places the target at or below the current size, yet the observed
+    # ESS is still short of it (gap_to_target > 0 above): the fitted curve
+    # over-predicts the current ESS, so it cannot size the next batch.
     if (total_needed <= current_n) {
         return(list(
-            phase = "complete",
+            phase = "low_confidence",
             batch_size = 0,
+            model = best_model,
+            r_squared = best_r2,
             message = sprintf(
-                "Calibration already at/exceeded predicted requirement (current=%d, predicted=%d)",
-                current_n, total_needed
+                paste0("Fitted %s model predicts target %.1f by n=%d, but ESS at current n=%d ",
+                       "is still %.1f; fitted trajectory over-predicts current ESS"),
+                best_model, target_ess, total_needed, current_n, current_ess
             )
         ))
     }

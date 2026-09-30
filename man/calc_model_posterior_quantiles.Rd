@@ -51,16 +51,20 @@ The function:
 \enumerate{
 \item Calculates unweighted quantiles from ALL finite simulations (prior)
 \item Calculates weighted quantiles from best subset (posterior)
-\item Computes the information gain KL(posterior || prior) with
-\code{\link{calc_kl_divergence}} on weighted kernel density estimates
-(no cap). For a Uniform prior and a posterior of width \eqn{w} relative to
-the prior range this is about \eqn{\log(1/w)}, so it keeps ranking
-well-identified parameters rather than saturating
+\item Computes the information gain KL(posterior || prior) (no cap) from a
+weighted kernel density estimate of the posterior and a KDE of the prior,
+integrated on a grid over the posterior's own support so that the
+estimate is not limited by grid resolution. Strictly positive parameters
+are evaluated on the log scale when that reduces the prior's skewness (KL
+is invariant to monotone reparameterisation). For a Uniform prior and a
+Gaussian posterior of standard deviation \eqn{s} relative to the prior
+range this is \eqn{-\frac{1}{2}\log(2\pi e s^2)}{-0.5 log(2 pi e s^2)}.
+The posterior KDE bandwidth biases it slightly low (about 0.03-0.1 nats
+at 100-plus draws)
 \item Returns both prior and posterior rows with a 'type' identifier
 \item KL divergence appears only in posterior rows
 }
 }
 \seealso{
-\code{\link{weighted_quantiles}}, \code{\link{calc_model_ess}},
-\code{\link{calc_kl_divergence}}
+\code{\link{weighted_quantiles}}, \code{\link{calc_model_ess}}
 }

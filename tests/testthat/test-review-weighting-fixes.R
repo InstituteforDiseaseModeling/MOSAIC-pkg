@@ -83,6 +83,24 @@ test_that("optimizer per-N weights reproduce weight_best at N = full ensemble", 
   expect_equal(res$ensemble_optimized$parameter_weights, w_best, tolerance = 1e-14)
 })
 
+test_that("optimizer argmax selects a subset below the full ensemble when it scores better", {
+  # Top-3 members reproduce the observations exactly; the other five are 10x off,
+  # so WIS is best for N <= 3 and the optimizer must not return N = 8.
+  ens <- mk_opt_ens()
+  for (p in seq_len(8)) {
+    f <- if (p <= 3) 1 else 10
+    ens$cases_array[, , p, ]  <- ens$obs_cases * f
+    ens$deaths_array[, , p, ] <- ens$obs_deaths * f
+  }
+  ll  <- c(-100, -100.5, -101, -103, -110, -140, -200, -500)
+  res <- optimize_ensemble_subset(ens, ll, min_n = 2L, objective = "wis", stride = 1L,
+                                  verbose = FALSE)
+  expect_lte(res$optimal_n, 3L)
+  d <- -2 * ll[seq_len(res$optimal_n)]; d <- d - min(d)
+  w <- exp(-0.5 * pmin(d, 4))
+  expect_equal(res$optimal_weights, w / sum(w), tolerance = 1e-14)
+})
+
 test_that("optimizer evaluation_table$ess honours ess_method", {
   ens <- mk_opt_ens()
   ll  <- c(-100, -100.5, -101, -103, -110, -140, -200, -500)
@@ -158,21 +176,38 @@ test_that("convergence status table includes subset, cap, IS diagnostics and ove
 test_that("posterior KL is the uncapped information gain and ranks identifiability", {
   set.seed(1)
   prior <- runif(20000)
-  post_narrow <- rnorm(115, 0.5, 0.0012)   # 95% width ~0.0047
-  post_wide   <- rnorm(115, 0.5, 0.05)
-  kl_narrow <- MOSAIC:::.mosaic_posterior_kl(prior, post_narrow, rep(1, 115))
-  kl_wide   <- MOSAIC:::.mosaic_posterior_kl(prior, post_wide, rep(1, 115))
-  expect_equal(kl_narrow,
-               calc_kl_divergence(post_narrow, rep(1, 115) / 115, prior, NULL),
+  # Gaussian of sd s inside U(0,1): KL = -0.5 * log(2 * pi * e * s^2), evaluated
+  # at the sample sd. The tight cases are narrower than one cell of a 1000-point
+  # pooled grid, where a pooled-grid KDE KL levels off near 6.2.
+  kl_u <- vapply(c(0.05, 1.2e-3, 1e-4, 1e-5), function(s) {
+    post <- rnorm(115, 0.5, s)
+    c(computed = MOSAIC:::.mosaic_posterior_kl(prior, post, rep(1, 115)),
+      analytic = -0.5 * log(2 * pi * exp(1) * sd(post)^2))
+  }, numeric(2))
+  expect_true(all(abs(kl_u["computed", ] - kl_u["analytic", ]) < 0.1))
+  expect_gt(kl_u["computed", 4], 10)
+  expect_true(all(diff(kl_u["computed", ]) > 0))
+
+  # Lognormal(0, 1.5) prior, lognormal(0, s) posterior:
+  # KL = log(1.5 / s) + s^2 / (2 * 1.5^2) - 1/2 (1.13, 2.21, 3.41, 4.51)
+  prior_ln <- rlnorm(20000, 0, 1.5)
+  kl_ln <- vapply(c(0.3, 0.1, 0.03, 0.01), function(s) {
+    post <- rlnorm(115, 0, s)
+    s_hat <- sd(log(post))
+    c(computed = MOSAIC:::.mosaic_posterior_kl(prior_ln, post),
+      analytic = log(1.5 / s_hat) + (s_hat^2 + mean(log(post))^2) / (2 * 1.5^2) - 0.5)
+  }, numeric(2))
+  expect_true(all(abs(kl_ln["computed", ] - kl_ln["analytic", ]) < 0.15))
+  expect_true(all(diff(kl_ln["computed", ]) > 0))
+
+  # Weights are normalised; non-finite draws are dropped together with their weights
+  post_wide <- rnorm(115, 0.5, 0.05)
+  kl_wide <- MOSAIC:::.mosaic_posterior_kl(prior, post_wide, rep(1, 115))
+  expect_equal(MOSAIC:::.mosaic_posterior_kl(prior, post_wide, rep(7, 115)), kl_wide,
                tolerance = 1e-12)
-  # Gaussian of sd s inside U(0,1): KL = -0.5 * log(2 * pi * e * s^2)
-  expect_lt(kl_narrow, 20)
-  expect_gt(kl_narrow, 3)
-  expect_equal(kl_wide, -0.5 * log(2 * pi * exp(1) * 0.05^2), tolerance = 0.25)
-  expect_gt(kl_narrow, kl_wide)
-  # Non-finite draws are dropped together with their weights
   expect_equal(MOSAIC:::.mosaic_posterior_kl(prior, c(post_wide, NA), c(rep(1, 115), 5)),
                kl_wide, tolerance = 1e-12)
+  expect_true(is.na(MOSAIC:::.mosaic_posterior_kl(prior, post_wide[1:5])))
 })
 
 # ---- weighting-posterior-14 (+ -08 wiring): unknown rows are not failures ----
@@ -248,4 +283,30 @@ test_that("bookend batch size still predicts from an increasing sqrt trajectory"
   expect_identical(res$phase, "predictive")
   expect_identical(res$model, "sqrt")
   expect_equal(res$batch_size, ceiling((40000 - 16000) * 1.05))
+})
+
+test_that("bookend batch size does not call an over-predicting fit 'complete'", {
+  # sqrt fit puts target 280 at n ~ 8100 < current 9000, but ESS is still 250
+  hist <- lapply(list(c(1000, 100), c(4000, 300), c(9000, 250)),
+                 function(v) list(total_sims = v[1], threshold_ess = v[2]))
+  res <- suppressWarnings(calc_bookend_batch_size(hist, target_ess = 280, max_total_sims = 1e5,
+                                                  target_r_squared = 0.1))
+  expect_identical(res$phase, "low_confidence")
+  expect_identical(res$batch_size, 0)
+  expect_match(res$message, "over-predicts current ESS")
+})
+
+# ---- weighting-posterior-01 (DEFERRED): pin the known defect -----------------
+# The default kde marginal ESS does not detect importance-weight collapse. This
+# test documents current behaviour; when the stop rule is fixed it should fail
+# and be replaced by an assertion that a point mass gives a marginal ESS near 1.
+test_that("KNOWN DEFECT: kde marginal ESS stays large for a point-mass weight vector", {
+  set.seed(7)
+  n <- 5000
+  res <- data.frame(gamma_1 = runif(n, 0.05, 1), likelihood = c(0, rep(-1e6, n - 1)))
+  expect_equal(calc_is_diagnostics(res$likelihood, method = "perplexity")$ess_is, 1,
+               tolerance = 1e-8)
+  ess <- calc_model_ess_parameter(res, param_names = "gamma_1", method = "perplexity",
+                                  marginal_method = "kde")
+  expect_gt(ess$ess_marginal[ess$parameter == "gamma_1"], 100)
 })

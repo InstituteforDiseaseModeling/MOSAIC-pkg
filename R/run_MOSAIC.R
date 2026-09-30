@@ -1815,7 +1815,11 @@ run_MOSAIC <- function(config,
       min_size = control$targets$min_best_subset,
       max_size = control$targets$max_best_subset,
       ess_method = control$targets$ESS_method,
-      weighting = control$targets$best_subset_weighting %||% "saturated",
+      # Score on the scheme weight_best (the posterior) actually uses, which is
+      # saturated whatever best_subset_weighting says. Tempered weights are too
+      # sharp for any tier to converge, so scoring on them would force the
+      # max_best_subset fallback.
+      weighting = "saturated",
       verbose = control$logging$verbose
     )
 
