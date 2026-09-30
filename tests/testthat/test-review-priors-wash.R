@@ -1,7 +1,7 @@
 # Regression tests (deep review, priors group) for est_WASH_coverage() helpers.
 
 test_that("WASH imputation pairs each similarity weight with its own country's value", {
-     # Before v0.99.11 values were taken in wash_data row order while the
+     # Before v0.100.0 values were taken in wash_data row order while the
      # weights were sorted by similarity, so weights and values were mispaired.
      values <- c(AAA = 0.1, BBB = 0.5, CCC = 0.9, DDD = 0.3)
      sim <- c(CCC = 0.9, AAA = 0.1, BBB = 0.5, DDD = 0.05)

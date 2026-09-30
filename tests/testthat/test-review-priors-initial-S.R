@@ -1,7 +1,7 @@
 # Regression tests (deep review, priors group) for est_initial_S().
 
 test_that("est_initial_S runs with its default verbose = TRUE and stores metadata", {
-     # Before v0.99.11 the verbose summary summed x$metadata$... over entries
+     # Before v0.100.0 the verbose summary summed x$metadata$... over entries
      # that carried no metadata, so the default call errored after all the work.
      cfg <- list(location_name = c("ETH", "MOZ"), date_start = "2023-01-01")
      set.seed(1)

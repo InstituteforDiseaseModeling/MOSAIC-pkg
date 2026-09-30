@@ -49,7 +49,7 @@ with natural immunity from previous cholera infection, subject to waning immunit
 the engine's observation process: the engine reports
 \code{Binomial(new_symptomatic, rho) / chi} (\code{sim_components.R}), so
 infections = cases * chi / (rho * sigma), with \code{rho} and
-\code{chi_endemic} drawn from the global priors. Before v0.99.11 those
+\code{chi_endemic} drawn from the global priors. Before v0.100.0 those
 lookups never resolved and every draw used the hardcoded fallbacks rho = 0.1,
 chi = 0.5 (chi / rho = 5). At priors_default v16.1 (rho ~ Beta(5.38, 7.10),
 chi_endemic ~ Beta(5.43, 5.01)) \eqn{E[chi/rho] \approx 1.36}, so the

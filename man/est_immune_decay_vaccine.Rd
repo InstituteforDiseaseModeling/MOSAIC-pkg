@@ -24,7 +24,7 @@ meta-regression points and the exponential-decay fits
 \code{\link{est_vaccine_effectiveness}}.
 }
 \details{
-This function does not fit anything. Before v0.99.11 it re-implemented the
+This function does not fit anything. Before v0.100.0 it re-implemented the
 \code{est_vaccine_effectiveness()} fit (without its \eqn{\phi_2 \ge \phi_1}
 bound and with hard-coded omega shapes), announced parameter files it did not
 write, and so plotted a fit that differed from the one behind the priors. It

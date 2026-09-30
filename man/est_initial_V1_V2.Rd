@@ -95,7 +95,7 @@ MOSAIC-docs 04-model-description "Table of vaccination model terms").
 The initial conditions use the same convention ("cumulative effective
 coverage", 04-model-description "Vaccinated initial conditions"), so
 pre-t0 doses are multiplied by \code{phi_1}/\code{phi_2}. (Before
-v0.99.11 this function counted raw doses on the premise that the engine
+v0.100.0 this function counted raw doses on the premise that the engine
 split V into immune and susceptible substates; that split was removed in
 laser-cholera 0.12 and never existed in the R engine, so raw counts
 overstated the protected mass by 1/phi.)

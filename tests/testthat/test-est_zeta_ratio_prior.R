@@ -61,7 +61,7 @@ test_that("est_zeta_ratio_prior writes all four artefacts", {
 })
 
 test_that("$fit and the CSV carry the shipped direct channel (A), not combined (C)", {
-     # Regression (v0.99.11): make_priors_default ships the direct channel, but
+     # Regression (v0.100.0): make_priors_default ships the direct channel, but
      # $fit and param_zeta_ratio_prior.csv used to carry the combined channel,
      # so the documented artefact did not reproduce the sampled prior.
      PATHS <- .mk_test_paths()

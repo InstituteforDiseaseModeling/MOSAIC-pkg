@@ -90,7 +90,7 @@ fit_beta_from_ci <- function(mode_val, ci_lower, ci_upper,
     # as possible to the target CI. Errors are measured on the logit scale, i.e.
     # as relative errors for small proportions (and for 1 - p near 1), so the fit
     # is scale-free: a CI around 1e-6 is matched as well as one around 0.5.
-    # (The pre-v0.99.11 version clamped the mean to [ci_lower + 0.01,
+    # (The pre-v0.100.0 version clamped the mean to [ci_lower + 0.01,
     # ci_upper - 0.01] -- an absolute offset -- which discarded the CI for any
     # quantity below ~0.02.)
     #

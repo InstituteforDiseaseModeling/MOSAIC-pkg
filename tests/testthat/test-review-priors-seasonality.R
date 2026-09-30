@@ -17,7 +17,7 @@ test_that(".seasonal_envelope_scale keeps min(1 + f) at the floor and preserves 
 })
 
 test_that("the human-transmission envelope is evaluated at calendar day-of-year", {
-     # Before v0.99.11 tick 1 was always t = 1 (1 January) whatever date_start
+     # Before v0.100.0 tick 1 was always t = 1 (1 January) whatever date_start
      # was, so a 1 July start forced the season 181 days out of phase.
      par <- list(nticks = 3L, npatches = 1L, p = 365, beta_j0_hum = 1,
                  a_1_j = 1, b_1_j = 0, a_2_j = 0, b_2_j = 0, season_t0 = 181L)

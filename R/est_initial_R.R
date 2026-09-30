@@ -23,7 +23,7 @@
 #' the engine's observation process: the engine reports
 #' \code{Binomial(new_symptomatic, rho) / chi} (\code{sim_components.R}), so
 #' infections = cases * chi / (rho * sigma), with \code{rho} and
-#' \code{chi_endemic} drawn from the global priors. Before v0.99.11 those
+#' \code{chi_endemic} drawn from the global priors. Before v0.100.0 those
 #' lookups never resolved and every draw used the hardcoded fallbacks rho = 0.1,
 #' chi = 0.5 (chi / rho = 5). At priors_default v16.1 (rho ~ Beta(5.38, 7.10),
 #' chi_endemic ~ Beta(5.43, 5.01)) \eqn{E[chi/rho] \approx 1.36}, so the
@@ -606,7 +606,7 @@ disagg_annual_cases_to_daily <- function(
           # Daily weights from the seasonal envelope 1 + f(t), the same
           # multiplicative form and period (p = 365, t = calendar day-of-year)
           # the engine uses (sim_beta_jt_human(); est_seasonal_dynamics()).
-          # f alone is zero-mean, so weighting by pmax(0, f) (before v0.99.11)
+          # f alone is zero-mean, so weighting by pmax(0, f) (before v0.100.0)
           # put every case in the ~half of the year where f > 0. pmax() only
           # guards coefficients whose envelope dips below zero.
           fourier_daily <- a1 * cos(2 * pi * t / 365) +
@@ -768,7 +768,7 @@ fit_beta_safe <- function(x, label = "") {
 #' concentration is floored at 2 (SD capped at \eqn{\sqrt{m(1-m)/3}}) so a very
 #' large factor cannot produce an invalid Beta; the mean is kept regardless.
 #'
-#' Before v0.99.11 the half-widths of the sample 95% CI were scaled linearly,
+#' Before v0.100.0 the half-widths of the sample 95% CI were scaled linearly,
 #' the lower bound floored at 1e-10 and the result passed to
 #' \code{fit_beta_from_ci()}. With the mode-exact logit-scale fitter that
 #' unreachable floored bound dominated the fit (prior mean ~2.5x the sample

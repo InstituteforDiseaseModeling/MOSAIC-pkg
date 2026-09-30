@@ -67,7 +67,7 @@ the support of P only (where the integrand is non-zero), with Q interpolated
 from a full-range KDE, so the value does not level off at
 \code{log(n_points)} when P is much narrower than Q.
 
-Before v0.99.11 both densities used unweighted bandwidths on one grid over
+Before v0.100.0 both densities used unweighted bandwidths on one grid over
 the pooled range and the densities were renormalised as discrete
 probabilities, so a narrow P saturated near \code{log(n_points)}.
 

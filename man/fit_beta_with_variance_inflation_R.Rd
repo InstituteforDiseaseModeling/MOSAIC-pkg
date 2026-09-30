@@ -25,7 +25,7 @@ keeping the sample mean and multiplying the sample SD by
 concentration is floored at 2 (SD capped at \eqn{\sqrt{m(1-m)/3}}) so a very
 large factor cannot produce an invalid Beta; the mean is kept regardless.
 
-Before v0.99.11 the half-widths of the sample 95\% CI were scaled linearly,
+Before v0.100.0 the half-widths of the sample 95\% CI were scaled linearly,
 the lower bound floored at 1e-10 and the result passed to
 \code{fit_beta_from_ci()}. With the mode-exact logit-scale fitter that
 unreachable floored bound dominated the fit (prior mean ~2.5x the sample

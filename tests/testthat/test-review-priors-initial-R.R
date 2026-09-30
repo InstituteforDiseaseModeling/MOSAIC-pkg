@@ -26,7 +26,7 @@
 }
 
 test_that("est_initial_R samples the global rho prior (not a hardcoded 0.1)", {
-     # Before v0.99.11 est_initial_R read priors$parameters_location$rho, which
+     # Before v0.100.0 est_initial_R read priors$parameters_location$rho, which
      # does not exist, and fell back to rho = 0.1 on every draw -- so the model's
      # own rho prior had no effect on prop_R_initial.
      PATHS <- .fake_initial_R_paths()
@@ -62,7 +62,7 @@ test_that("disaggregation reads the shipped a_1_j/b_1_j/a_2_j/b_2_j priors", {
 })
 
 test_that("disaggregation weights days by the envelope 1 + f(t), period 365", {
-     # Before v0.99.11 the weights were pmax(0, f(t)) with period 365.25: f is
+     # Before v0.100.0 the weights were pmax(0, f(t)) with period 365.25: f is
      # zero-mean, so every case went into the ~half of the year where f > 0.
      a1 <- 0.5; b1 <- 0.2; a2 <- 0.1; b2 <- -0.1
      d <- disagg_annual_cases_to_daily(3650, 2023, a1, b1, a2, b2)

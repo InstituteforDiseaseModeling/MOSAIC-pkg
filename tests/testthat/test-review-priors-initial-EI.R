@@ -26,7 +26,7 @@
 .beta_mean <- function(x) x$shape1 / (x$shape1 + x$shape2)
 
 test_that("est_initial_E_I samples the model's rho prior, not a hardcoded U(a, b)", {
-     # Before v0.99.11 both MC branches hardcoded rho ~ U(0.2, 0.7) (parallel)
+     # Before v0.100.0 both MC branches hardcoded rho ~ U(0.2, 0.7) (parallel)
      # or U(0.05, 0.30) (sequential) and ignored priors$parameters_global$rho.
      fx <- .ei_fixture()
      run <- function(rho) {
@@ -42,7 +42,7 @@ test_that("est_initial_E_I samples the model's rho prior, not a hardcoded U(a, b
 })
 
 test_that("E is the stock in balance with the onset rate; reported cases are not put in E", {
-     # Before v0.99.11 E was exp(-iota * (t0 - report - tau_r)) of each report,
+     # Before v0.100.0 E was exp(-iota * (t0 - report - tau_r)) of each report,
      # i.e. it counted already-symptomatic (reported) people as exposed and
      # was zero whenever tau_r >= the lookback.
      dates <- as.Date("2024-01-01") + 0:6
@@ -134,7 +134,7 @@ test_that("the E/I Beta keeps the Monte Carlo mean for wide variance inflation",
 })
 
 test_that("each location's E and I fits receive that location's variance inflation", {
-     # The pre-v0.99.11 loop looked up the I-compartment factor with
+     # The pre-v0.100.0 loop looked up the I-compartment factor with
      # exists("loc_variance_inflation"), which could pick up the previous
      # location's value. The factor is now resolved once per location and passed
      # explicitly; pin that contract by recording what the fit helper receives.

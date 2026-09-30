@@ -205,7 +205,7 @@ test_that("countries absent from the CSV receive the fallback Beta priors", {
 })
 
 # -----------------------------------------------------------------------------
-# 6. Regression (v0.99.11): V1/V2 are EFFECTIVE-immune compartments in the
+# 6. Regression (v0.100.0): V1/V2 are EFFECTIVE-immune compartments in the
 #    engine (V1 += phi_1 * nu_1), so the IC must scale doses by phi. The old
 #    implementation counted raw doses and overstated V by 1/phi.
 # -----------------------------------------------------------------------------

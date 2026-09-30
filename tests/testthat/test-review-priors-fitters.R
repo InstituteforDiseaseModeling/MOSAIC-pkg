@@ -1,7 +1,7 @@
 # Regression tests (deep review, priors group) for the CI fitters.
 
 test_that("fit_beta_from_ci matches the CI for small proportions (no absolute clamp)", {
-     # Before v0.99.11 the mean was clamped to [ci_lower + 0.01, ci_upper - 0.01],
+     # Before v0.100.0 the mean was clamped to [ci_lower + 0.01, ci_upper - 0.01],
      # so any CI below ~0.02 was discarded: mode 1e-6 with CI [1e-7, 1e-5]
      # came back roughly 1.6x wide instead of 100x.
      rel_ok <- function(fit, lo, hi, tol) {
@@ -24,7 +24,7 @@ test_that("fit_beta_from_ci matches the CI for small proportions (no absolute cl
 })
 
 test_that("fit_lognormal_from_ci reproduces a wide CI instead of shifting it up", {
-     # Before v0.99.11 meanlog = log(mode) + sdlog^2 with sdlog from the CI
+     # Before v0.100.0 meanlog = log(mode) + sdlog^2 with sdlog from the CI
      # width, so CI [0.1, 10] with mode 1 came back as [0.42, 66.9].
      f <- fit_lognormal_from_ci(1, 0.1, 10)
      expect_equal(f$fitted_ci, c(0.1, 10), tolerance = 1e-10)
@@ -40,7 +40,7 @@ test_that("fit_lognormal_from_ci reproduces a wide CI instead of shifting it up"
 })
 
 test_that("fit_gompertz_from_ci reports the true mode and matches the interval", {
-     # Before v0.99.11 eta = b * exp(b * mode) was enforced, which makes the
+     # Before v0.100.0 eta = b * exp(b * mode) was enforced, which makes the
      # density monotone decreasing (argmax 0) while reporting fitted_mode = mode,
      # and the lower quantile missed its target (8.9e-4 vs 0.005).
      r <- fit_gompertz_from_ci(0.02, 0.005, 0.1)

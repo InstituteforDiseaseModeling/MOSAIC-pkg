@@ -323,14 +323,14 @@ b2 <- b2[match(j, names(b2))]
 
 # The engine's human-transmission envelope is beta_j0_hum * (1 + f(t)) with a
 # negative rate clamped to zero, so 1 + f(t) must stay positive over the year
-# (est_seasonal_dynamics() >= v0.99.11 keeps min(1 + f) >= 0.1).
+# (est_seasonal_dynamics() >= v0.100.0 keeps min(1 + f) >= 0.1).
 .season_min_envelope <- vapply(seq_along(j), function(i) {
      1 + MOSAIC:::.seasonal_envelope_min(c(a_1 = a1[[i]], b_1 = b1[[i]], a_2 = a2[[i]], b_2 = b2[[i]]))
 }, numeric(1))
 if (any(.season_min_envelope <= 0)) {
      stop("param_seasonal_dynamics.csv gives a non-positive transmission envelope min(1 + f(t)) for: ",
           paste(j[.season_min_envelope <= 0], collapse = ", "),
-          ". Re-run est_seasonal_dynamics() (>= v0.99.11).")
+          ". Re-run est_seasonal_dynamics() (>= v0.100.0).")
 }
 
 

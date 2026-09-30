@@ -721,7 +721,7 @@ priors_default$parameters_global$zeta_2 <- list(
 # 2014, etc. as literature anchors (priors v16.1: meanlog 4.31 = median ~74,
 # sdlog 4.39; the fitted values are in model/input/param_zeta_ratio_prior.csv).
 # See plan_zeta_priors_implementation.md Section 7.2 (Table 7.A).
-# est_zeta_ratio_prior()$fit IS the direct channel (since v0.99.11; before that
+# est_zeta_ratio_prior()$fit IS the direct channel (since v0.100.0; before that
 # $fit and the CSV carried the combined channel while this block shipped A).
 # zeta_2 is derived: zeta_2 = zeta_1 / zeta_ratio, so zeta_1 >= zeta_2 needs
 # zeta_ratio >= 1. The untruncated direct channel puts ~16% of its mass below 1
@@ -734,7 +734,7 @@ priors_default$parameters_global$zeta_2 <- list(
 # channel TRUNCATED below at 1 (parameters$lower = 1, honoured by
 # sample_from_prior() and kept through update_priors_from_posteriors() and
 # inflate_priors()). meanlog/sdlog are those of the untruncated lognormal
-# (4.31 / 4.39 at the v0.99.x anchors); truncation removes 16.3% of the mass,
+# (4.31 / 4.39 at the v0.100.0 anchors); truncation removes 16.3% of the mass,
 # moving the median from ~75 to ~185, the mean from ~1.2e6 to ~1.4e6, and
 # the 95% interval to ~[1.4, 5.7e5].
 zeta_ratio_res <- MOSAIC::est_zeta_ratio_prior(
@@ -1182,7 +1182,7 @@ for (param in names(seasonality_csv_lookup)) {
 # The engine uses the seasonal coefficients as a multiplicative envelope,
 # beta_j0_hum * (1 + f(t)), and clamps a negative rate to zero, so at the prior
 # means 1 + f(t) must stay positive over the year. est_seasonal_dynamics()
-# (v0.99.11) shrinks the case-fit amplitude to keep min(1 + f) >= 0.1
+# (v0.100.0) shrinks the case-fit amplitude to keep min(1 + f) >= 0.1
 # (Keeling & Rohani 2008 section 5.2: |beta_1| < 1 for multiplicative forcing).
 .season_min_envelope <- vapply(j, function(iso) {
      cf <- vapply(names(seasonality_csv_lookup), function(k)
@@ -1196,7 +1196,7 @@ if (any(.season_min_envelope <= 0)) {
      stop("Seasonal prior means give a non-positive transmission envelope min(1 + f(t)) for: ",
           paste(sprintf("%s (%.2f)", j[.season_min_envelope <= 0],
                         .season_min_envelope[.season_min_envelope <= 0]), collapse = ", "),
-          ". Re-run est_seasonal_dynamics() (>= v0.99.11) to rebuild param_seasonal_dynamics.csv.")
+          ". Re-run est_seasonal_dynamics() (>= v0.100.0) to rebuild param_seasonal_dynamics.csv.")
 }
 
 
@@ -1357,13 +1357,13 @@ for (iso in j) {
 
 # V1/V2 initial conditions: the fallback Beta priors above are overridden per
 # country by est_initial_V1_V2() in the v0.28.5 block earlier in this script
-# (OCV campaign history, effective coverage phi * doses since v0.99.11).
+# (OCV campaign history, effective coverage phi * doses since v0.100.0).
 
 
 
 # Update default priors with estimated initial conditions for E and I
 
-# Variance inflation for the E/I Beta priors (re-derived for the v0.99.11
+# Variance inflation for the E/I Beta priors (re-derived for the v0.100.0
 # estimator; replaces the hand-tuned per-country table, 30-200).
 # Meaning: est_initial_E_I() keeps the Monte Carlo MEAN m and fits the Beta's
 # spread to the 95% CI [m / VI, m * VI] on the logit scale. The MC spread itself
@@ -1386,7 +1386,7 @@ for (iso in j) {
 # Their per-country "surveillance quality" labels were uncited, and the
 # surveillance difference they described is already in each country's case
 # data; the reporting-chain priors are global, so there is no data basis for a
-# per-country width. They were also never in effect: the pre-v0.99.11 refit
+# per-country width. They were also never in effect: the pre-v0.100.0 refit
 # collapsed the prior to ~3x wide whatever VI was.
 variance_inflation_E_I <- 10
 
@@ -1445,13 +1445,13 @@ initial_conditions_E_I <- est_initial_E_I(
      }
 
 
-# No post-estimation E/I rescaling (removed v0.99.11). Up to v0.99.10 a table
+# No post-estimation E/I rescaling (removed v0.100.0). Up to v0.99.10 a table
 # of hand-tuned per-country factors (AGO 0.01, COD 0.75, KEN 1.2, MOZ 0.4, ...,
 # 0 = "no active cholera at t0") multiplied the est_initial_E_I() means. They
 # compensated for defects of that estimator: E built from already-reported
 # cases, a hardcoded rho ~ U(0.2, 0.7) instead of the model's rho / chi_endemic
 # / delta_reporting_cases priors, zero draws dropped before averaging, and a
-# Beta refit that collapsed to a near point mass. The v0.99.11 estimator fixes
+# Beta refit that collapsed to a near point mass. The v0.100.0 estimator fixes
 # those at source (E in balance with the onset rate, I from observed onsets,
 # the model's reporting-chain priors, zero draws kept), and a location whose
 # surveillance window has zero reported cases already gets the near-zero
@@ -1466,7 +1466,7 @@ initial_conditions_E_I <- est_initial_E_I(
 # Define location-specific variance inflation for R compartment
 # Higher values = more uncertainty, allowing for greater variation in estimates
 # Meaning: an SD multiplier in a method-of-moments Beta refit that keeps the
-# Monte Carlo mean (v0.99.11; before that the CI half-widths were scaled
+# Monte Carlo mean (v0.100.0; before that the CI half-widths were scaled
 # linearly, which the old mean/variance refit also treated as an SD scaling, so
 # the tuned values keep their meaning). The R draws now use the model's rho /
 # chi_endemic priors (E[chi / rho] ~ 1.36) instead of the never-resolved

@@ -92,7 +92,7 @@
 #'
 #' \strong{Truncation at 1.} The direct channel is wide (the anchors span
 #' ~1.6x to ~10^5), so the untruncated lognormal puts a non-trivial share of
-#' its mass below 1 (`$fit$p_below_1`, about 0.16 at the v0.99.x anchors),
+#' its mass below 1 (`$fit$p_below_1`, about 0.16 at the v0.100.0 anchors),
 #' inherited from the Smith 2026 household odds-ratio interval (0.11-3.23).
 #' Such draws would give \eqn{\zeta_2 > \zeta_1}, which contradicts the
 #' shedding biology the model encodes: symptomatic stool carries

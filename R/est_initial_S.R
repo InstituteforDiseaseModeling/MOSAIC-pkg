@@ -180,7 +180,7 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
         }
 
         # Method of moments on the sample mean and the SD multiplied by
-        # variance_inflation (see .fit_beta_inflated_samples()). Before v0.99.11
+        # variance_inflation (see .fit_beta_inflated_samples()). Before v0.100.0
         # the CI half-widths were scaled linearly, floored at 0.001 and passed to
         # fit_beta_from_ci(), whose mode-exact logit fit is pulled off the sample
         # mean by an unreachable floored bound.

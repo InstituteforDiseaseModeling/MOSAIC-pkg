@@ -1460,7 +1460,7 @@
 #'   per-location offset width now averages over the years each location
 #'   observes (not the pooled years), the n_iterations collapse keeps -Inf
 #'   replicates, and the cumulative shape term sums over scored cells only.
-.mosaic_likelihood_impl_version <- function() "R/v0.99.x+review_likelihood"
+.mosaic_likelihood_impl_version <- function() "R/v0.100.0+review_likelihood"
 
 #' R Engine Semantics Version
 #'
@@ -1471,7 +1471,7 @@
 #' side of the change. It is persisted in \code{1_inputs/environment.json} as
 #' \code{engine_semantics}; a run directory without the field predates the stamp.
 #'
-#' \code{"R/v0.99.x+review_engine"} covers three changes from the deep review:
+#' \code{"R/v0.100.0+review_engine"} covers three changes from the deep review:
 #' the seasonal Fourier term is evaluated at the calendar day of year of
 #' \code{date_start} (\code{par$season_t0} in \code{sim_params()}) instead of
 #' tick 1 = 1 January; the t = 0 split of initial infections into symptomatic
@@ -1480,7 +1480,7 @@
 #' to pinned (unsampled) psi_star values too.
 #' @return A single character string.
 #' @noRd
-.mosaic_engine_semantics_version <- function() "R/v0.99.x+review_engine"
+.mosaic_engine_semantics_version <- function() "R/v0.100.0+review_engine"
 
 #' Likelihood-Value Provenance Descriptor
 #'
