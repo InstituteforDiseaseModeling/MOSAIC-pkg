@@ -205,32 +205,3 @@ grid_search_best_subset <- function(
     evaluations = evaluations
   ))
 }
-
-
-#' Best-subset weights (shared by subset selection and subset optimization)
-#'
-#' Computes best-subset weights for \code{grid_search_best_subset()} and
-#' \code{optimize_ensemble_subset()}. "saturated" reproduces the
-#' \code{weight_best} posterior (and the final gate under the default
-#' \code{best_subset_weighting}); "tempered" reproduces only the final gate
-#' under \code{best_subset_weighting = "tempered"}, because \code{weight_best}
-#' is always saturated.
-#'
-#' @param likelihood Numeric vector of finite log-likelihoods for the subset.
-#' @param scheme "saturated" (\eqn{w \propto \exp(-0.5 \min(\Delta, 4))}) or
-#'   "tempered" (adaptive-eta Gibbs weights).
-#' @return List with \code{weights} (normalised, same order as
-#'   \code{likelihood}) and \code{temperature} (the eta applied).
-#' @keywords internal
-#' @noRd
-.mosaic_best_subset_weights <- function(likelihood, scheme = c("saturated", "tempered")) {
-  scheme <- match.arg(scheme)
-  if (identical(scheme, "tempered")) {
-    res <- .mosaic_calc_adaptive_gibbs_weights(likelihood = likelihood, verbose = FALSE)
-    return(list(weights = res$weights, temperature = res$temperature))
-  }
-  aic   <- -2 * likelihood
-  delta <- aic - min(aic)
-  list(weights = calc_model_weights_gibbs(x = pmin(delta, 4.0), eta = 0.5, verbose = FALSE),
-       temperature = 0.5)
-}

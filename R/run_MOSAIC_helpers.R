@@ -2039,11 +2039,12 @@
 #' The best-subset weights used by the convergence gate (ESS_B, A, CVw) and by
 #' \code{results$weight_best} (which drives the posterior quantiles,
 #' posteriors.json, the ensemble parameter weights and the optimizer), so the
-#' gated weights are the weights the posterior uses. The post-hoc subset-size
-#' tier search (\code{grid_search_best_subset()}) is not covered: it applies
-#' its own dynamic-temperature weighting whatever \code{best_subset_weighting}
-#' is, so under \code{"tempered"} the subset size is chosen with different
-#' weights from those the posterior uses.
+#' gated weights are the weights the posterior uses. Also the single weight
+#' function behind \code{grid_search_best_subset()} and
+#' \code{optimize_ensemble_subset()}. \code{run_MOSAIC()} calls the tier
+#' search with \code{weighting = "saturated"} whatever
+#' \code{best_subset_weighting} is, so under \code{"tempered"} the subset size
+#' is chosen with different weights from those the posterior uses.
 #' \code{"saturated"}: \eqn{w \propto \exp(-0.5 \min(\Delta AIC, 4))};
 #' \code{"tempered"}: adaptive-eta Gibbs weights
 #' (\code{.mosaic_calc_adaptive_gibbs_weights()}).
