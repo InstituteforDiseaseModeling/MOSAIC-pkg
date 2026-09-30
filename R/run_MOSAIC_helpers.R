@@ -281,6 +281,23 @@
   out
 }
 
+#' Prepare the control list for 1_inputs/control.json
+#'
+#' jsonlite writes an atomic vector as a bare array and drops its names, so a
+#' per-channel \code{central_method = c(cases = , deaths = )} would reach
+#' control.json without its channel labels. The resolved value is persisted as a
+#' named list, which serialises as \code{{"cases": ..., "deaths": ...}}. A value
+#' that does not resolve is left as supplied; the ensemble step reports it.
+#' @param control Validated control list.
+#' @return \code{control} with \code{predictions$central_method} as a named list.
+#' @noRd
+.mosaic_control_for_json <- function(control) {
+  cm <- tryCatch(.mosaic_resolve_central_method(control$predictions$central_method),
+                 error = function(e) NULL)
+  if (!is.null(cm)) control$predictions$central_method <- as.list(cm)
+  control
+}
+
 #' Extract the canonical central trajectory matrix from a mosaic_ensemble
 #'
 #' Returns the \code{<channel>_mean} or \code{<channel>_median} matrix
@@ -1445,6 +1462,26 @@
 #'   replicates, and the cumulative shape term sums over scored cells only.
 .mosaic_likelihood_impl_version <- function() "R/v0.99.x+review_likelihood"
 
+#' R Engine Semantics Version
+#'
+#' Identifies what the transmission engine SIMULATES, as distinct from how the
+#' draws are scored (\code{.mosaic_likelihood_impl_version()}). Bump it whenever
+#' a change makes \code{run_simulation()} produce different trajectories for the
+#' same config and seed, so resume refuses to pool shards simulated on either
+#' side of the change. It is persisted in \code{1_inputs/environment.json} as
+#' \code{engine_semantics}; a run directory without the field predates the stamp.
+#'
+#' \code{"R/v0.99.x+review_engine"} covers three changes from the deep review:
+#' the seasonal Fourier term is evaluated at the calendar day of year of
+#' \code{date_start} (\code{par$season_t0} in \code{sim_params()}) instead of
+#' tick 1 = 1 January; the t = 0 split of initial infections into symptomatic
+#' and asymptomatic is a binomial draw at the rng-only site
+#' \code{infectious/sigma_split_t0}; and the psi_star calibration is applied
+#' to pinned (unsampled) psi_star values too.
+#' @return A single character string.
+#' @noRd
+.mosaic_engine_semantics_version <- function() "R/v0.99.x+review_engine"
+
 #' Likelihood-Value Provenance Descriptor
 #'
 #' Captures WHO computed the likelihood stored in each shard, and the version of
@@ -1472,6 +1509,21 @@
   )
 }
 
+#' Stamp Resume Provenance Into the Environment Snapshot
+#'
+#' Adds the two fields \code{.mosaic_resume_check_inputs()} compares on resume:
+#' \code{likelihood_provenance} (who/what scored the shards; the scorer is always
+#' R now, but an R likelihood change that alters values is still a reason to
+#' refuse pooling) and \code{engine_semantics} (what the engine simulates).
+#' @param env_snapshot List from \code{.mosaic_capture_environment()}.
+#' @return \code{env_snapshot} with both fields set.
+#' @noRd
+.mosaic_stamp_resume_provenance <- function(env_snapshot) {
+  env_snapshot$likelihood_provenance <- .mosaic_likelihood_provenance()
+  env_snapshot$engine_semantics      <- .mosaic_engine_semantics_version()
+  env_snapshot
+}
+
 #' Verify Resume Inputs Match the Interrupted Run
 #'
 #' On resume, the incoming config/priors must match those persisted in 1_inputs/.
@@ -1485,7 +1537,11 @@
 #' Also guards the transmission engine: resuming a run directory created before
 #' MOSAIC v0.68.0 is a hard error, because its shards came from the Python
 #' laser-cholera engine and pooling them with R-engine draws would produce a
-#' posterior from neither simulator. When \code{control} is supplied, the
+#' posterior from neither simulator. An R-engine run directory must also carry
+#' the current \code{engine_semantics} stamp
+#' (\code{.mosaic_engine_semantics_version()}); one without it, or with another
+#' value, was simulated by an engine that produces different trajectories and is
+#' refused. When \code{control} is supplied, the
 #' likelihood target (\code{control$likelihood}) is also compared, since it is
 #' not part of config.json/priors.json but changing it re-scores draws under a
 #' different target.
@@ -1632,6 +1688,28 @@
       "resume: the transmission-engine guard was SKIPPED (%s). If this run was started before ",
       "MOSAIC v0.68.0 its shards came from the Python engine, and the resumed posterior would ",
       "mix two simulators."), reason), call. = FALSE)
+  }
+
+  # Engine-semantics check: within the R engine, a release that changes what
+  # run_simulation() produces for a given config and seed makes shards from
+  # before and after it incomparable, even though the MOSAIC version test above
+  # classifies both as "R". A run directory written without the stamp was
+  # simulated before it existed, and therefore before the changes it marks.
+  if (identical(persisted_engine, "R")) {
+    cur_sem  <- .mosaic_engine_semantics_version()
+    pers_sem <- tryCatch(persisted_env$engine_semantics, error = function(e) NULL)
+    if (is.null(pers_sem) || length(pers_sem) != 1L || !identical(as.character(pers_sem), cur_sem)) {
+      pers_lab <- if (is.null(pers_sem) || length(pers_sem) != 1L)
+        "none recorded (the run predates the engine-semantics stamp)" else
+        sprintf("'%s'", as.character(pers_sem))
+      stop(sprintf(paste0(
+        "resume: this run directory was simulated under different engine semantics ",
+        "(persisted: %s; current: '%s'). run_simulation() now produces different ",
+        "trajectories for the same config and seed (seasonal calendar phase, the t = 0 ",
+        "symptomatic split, pinned psi_star), so pooling the existing shards with new draws ",
+        "would mix two models. Start a fresh run in a new directory."),
+        pers_lab, cur_sem), call. = FALSE)
+    }
   }
 
   # Likelihood-value provenance: refuse to pool shards scored by a different

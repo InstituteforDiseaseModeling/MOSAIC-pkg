@@ -1014,19 +1014,28 @@ render_MOSAIC_figures <- function(dir_output,
 
 # Read a run's persisted parameter_sensitivity.csv into the list shape
 # plot_model_parameter_sensitivity(sensitivity = ) accepts, or NULL when the
-# file is absent, unreadable or empty. The CSV does not record how many draws
-# fed the HSIC, so n_used is NA and the subtitle omits it.
+# file is absent, unreadable or empty. The weighting and n_used columns record
+# how the HSIC draws were chosen; a CSV written before they existed yields a
+# generic label and n_used = NA, and the subtitle then omits n.
 .mosaic_read_sensitivity_csv <- function(path) {
   if (!file.exists(path)) return(NULL)
   df <- tryCatch(utils::read.csv(path, stringsAsFactors = FALSE),
                  error = function(e) NULL)
   need <- c("parameter", "hsic_r2", "p_value", "sig", "description")
   if (is.null(df) || !nrow(df) || !all(need %in% names(df))) return(NULL)
+  first_ok <- function(col) {
+    if (!col %in% names(df)) return(NA)
+    v <- df[[col]][!is.na(df[[col]]) & nzchar(as.character(df[[col]]))]
+    if (length(v)) v[1L] else NA
+  }
+  weighting <- first_ok("weighting")
+  n_used    <- suppressWarnings(as.integer(first_ok("n_used")))
   df$sig[is.na(df$sig)] <- ""
   df <- df[order(-df$hsic_r2), need, drop = FALSE]
   rownames(df) <- NULL
-  list(sens_df = df, subset_label = "as computed at calibration",
-       n_used = NA_integer_)
+  list(sens_df = df,
+       subset_label = if (is.na(weighting)) "as computed at calibration" else as.character(weighting),
+       n_used = n_used)
 }
 
 # Overwrite a run config's calibrated mobility parameters with their posterior

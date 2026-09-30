@@ -23,8 +23,7 @@
 # =============================================================================
 
 #' Generate the expanding-window RW step grid.
-#' @keywords internal
-#' @noRd
+#'
 #' HA-01 (2026-09-17) adds three optional overrides for the 12-week-horizon work.
 #' All default to NULL and the month-based path is bit-identical when they are.
 #'
@@ -42,6 +41,8 @@
 #'   fit_date_start = 2010 with a 2026 cutoff it never validates before
 #'   2018-05-31, so 8 years of training data are never validated and psi over
 #'   them is extrapolative.
+#' @keywords internal
+#' @noRd
 .psi_make_rw_cv_steps <- function(fit_date_start, cutoff_date,
                                   step_months   = 1L,
                                   test_months   = 5L,

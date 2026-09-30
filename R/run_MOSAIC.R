@@ -1001,17 +1001,14 @@ run_MOSAIC <- function(config,
   env_snapshot <- .mosaic_capture_environment(
     config = config, priors = priors, control = control
   )
-  # Stamp the likelihood-value provenance (who/what scored the shards) so a
-  # later resume can refuse to pool incomparable likelihoods across an R
-  # likelihood-code change that altered values. The scorer is now always R --
-  # the Dask path's on-worker Python scoring is gone -- but the stamp stays,
-  # because a code change on the R side is still a reason to refuse pooling.
-  env_snapshot$likelihood_provenance <- .mosaic_likelihood_provenance()
+  # Stamp the likelihood-value provenance and the engine semantics so a later
+  # resume can refuse to pool shards scored or simulated by incompatible code.
+  env_snapshot <- .mosaic_stamp_resume_provenance(env_snapshot)
   .mosaic_write_json(env_snapshot, file.path(dirs$inputs, "environment.json"), control$io)
   log_msg("  Saved %s", "1_inputs/environment.json")
 
   control_record <- list(
-    control = control,
+    control = .mosaic_control_for_json(control),
     n_iterations = n_iterations,
     iso_code = iso_code,
     timestamp = Sys.time(),
@@ -3632,73 +3629,10 @@ mosaic_control_defaults <- function(calibration = NULL,
     target_r2_adaptive = 0.90
   )
 
-  # Default sampling settings
-  # All parameters enabled by default - users can selectively disable
-  default_sampling <- list(
-    # === GLOBAL PARAMETERS (21) ===
-    # Transmission dynamics
-    sample_iota = TRUE,              # Incubation rate (E -> I)
-    sample_epsilon = TRUE,           # Waning rate of natural immunity
-    sample_gamma_1 = TRUE,           # Recovery rate (symptomatic)
-    sample_gamma_2 = TRUE,           # Recovery rate (asymptomatic)
-    sample_rho = TRUE,               # Care-seeking (reporting) rate
-
-    # Mobility
-    sample_mobility_gamma = TRUE,    # Gravity-model distance-decay exponent
-    sample_mobility_omega = TRUE,    # Gravity-model population-scaling exponent
-
-    # Transmission mixing exponents
-    sample_alpha_1 = FALSE,          # Within-metapop population mixing exponent: PINNED by default (collinear with beta_j0_tot endemically and
-                                      # with coupling at invasion; posterior moved 0.057 prior SD
-                                      # over 250k draws, inside the 0.146 null)
-    sample_alpha_2 = FALSE,          # Frequency-dependence degree: PINNED by default (weakly identified; psi absorbs the signal)
-    sample_omega_1 = TRUE,           # Waning rate (1 dose)
-    sample_omega_2 = TRUE,           # Waning rate (2 doses)
-    sample_phi_1 = TRUE,             # Vaccine effectiveness (1 dose)
-    sample_phi_2 = TRUE,             # Vaccine effectiveness (2 doses)
-
-    # Reporting/observation
-    sample_sigma = TRUE,             # Symptomatic fraction
-    sample_kappa                  = FALSE,             # 50% infectious dose of V. cholerae
-    sample_chi_endemic = TRUE,       # PPV among suspected cases (endemic)
-    sample_chi_epidemic = TRUE,      # PPV among suspected cases (epidemic)
-    sample_rho_deaths = FALSE,       # Death detection rate: PINNED at 0.42 (cancels from reported deaths exactly; sets only true deaths)
-    sample_delta_reporting_cases = TRUE,  # Symptom-onset-to-case reporting delay (deaths are reported on the same lag)
-
-    # Environmental decay (v0.27.0: decay_days_long is derived = short + spread)
-    sample_decay_days_short = TRUE,  # Short-term environmental decay
-    sample_decay_days_spread = TRUE, # Spread (long - short); long derived
-    sample_decay_shape_1 = TRUE,     # Decay shape parameter 1
-    sample_decay_shape_2 = TRUE,     # Decay shape parameter 2
-
-    # Advanced parameters
-    sample_zeta_1 = TRUE,            # Symptomatic shedding rate
-    sample_zeta_ratio = TRUE,        # Symptomatic-to-asymptomatic shedding ratio
-
-    # === LOCATION-SPECIFIC PARAMETERS ===
-    # Transmission and seasonality
-    sample_beta_j0_tot = TRUE,       # Baseline transmission rate by location
-    sample_p_beta = TRUE,            # Proportion human-to-human transmission
-    sample_tau_i = TRUE,             # Travel/diffusion probability
-    sample_theta_j = TRUE,           # WASH coverage
-    sample_epidemic_threshold = TRUE, # Case-reporting PPV switch threshold
-
-    # Climate relationship
-    sample_a_1_j = TRUE,             # Temperature coefficient 1
-    sample_a_2_j = TRUE,             # Temperature coefficient 2
-    sample_b_1_j = TRUE,             # Rainfall coefficient 1
-    sample_b_2_j = TRUE,             # Rainfall coefficient 2
-
-    # Psi-star calibration
-    sample_psi_star_a = TRUE,        # Psi-star parameter a
-    sample_psi_star_b = TRUE,        # Psi-star parameter b
-    sample_psi_star_z = TRUE,        # Psi-star parameter z
-    sample_psi_star_k = TRUE,        # Psi-star parameter k
-
-    # === INITIAL CONDITIONS ===
-    sample_initial_conditions = TRUE,  # Initial compartment proportions
-    ic_moment_match = FALSE            # Derive E/I from observed week-1 cases + reporting chain
-  )
+  # Default sampling settings: one flag per sampled parameter group. The list
+  # (and the meaning of each flag) lives in .mosaic_default_sample_args() so
+  # sample_parameters(), create_sampling_args() and this function cannot drift.
+  default_sampling <- .mosaic_default_sample_args()
 
   # Default likelihood calculation settings
   default_likelihood <- list(
@@ -3796,7 +3730,11 @@ mosaic_control_defaults <- function(calibration = NULL,
     #     SINGLE draw. It does preserve the likelihood ordering faithfully
     #     (Spearman 1.0 vs 0.16), but at the cost of a near point-mass posterior.
     #     Do not enable it expecting a gentler scheme.
-    # Changing this changes every posterior; it is NOT a cosmetic switch.
+    # This one setting drives both the convergence-gate metrics (ESS_B, A, CVw)
+    # and results$weight_best, the posterior weights read by posterior
+    # quantiles, posteriors.json, the ensemble and the subset optimizer, via
+    # .mosaic_best_subset_weights(). weight_all/weight_retained do not use it.
+    # Changing it changes the posterior; it is NOT a cosmetic switch.
     best_subset_weighting = "saturated"
   )
 

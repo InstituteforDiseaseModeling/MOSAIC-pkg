@@ -262,7 +262,7 @@ calc_model_likelihood <- function(obs_cases,
                     # package dataset when the field is absent so older
                     # configs continue to work.
                     epidemic_peaks <- if (!is.null(config$epidemic_peaks)) {
-                         config$epidemic_peaks
+                         .mosaic_as_peaks_frame(config$epidemic_peaks)
                     } else {
                          MOSAIC::epidemic_peaks
                     }
@@ -777,4 +777,33 @@ calc_model_likelihood <- function(obs_cases,
      fin_c <- is.finite(oc[, s_c:n_t, drop = FALSE])
      fin_d <- is.finite(od[, min(idx_deaths, ncol(od)):ncol(od), drop = FALSE])
      rowSums(fin_c) == 0L & rowSums(fin_d) == 0L
+}
+
+#' Coerce a config's epidemic_peaks to a data frame
+#'
+#' A config read back from JSON does not always carry epidemic_peaks as a data
+#' frame: a 0-row frame is written as \code{[]} and returns as \code{list()},
+#' and \code{simplifyVector = FALSE} returns one list per peak. An empty value
+#' means the config has no peaks, so it becomes a 0-row frame (never the
+#' package dataset, which would re-introduce peaks the config excluded).
+#' @param x \code{config$epidemic_peaks}.
+#' @return A data frame with at least \code{iso_code} and \code{peak_date}.
+#' @noRd
+.mosaic_as_peaks_frame <- function(x) {
+     empty <- data.frame(iso_code = character(0), peak_date = character(0),
+                         stringsAsFactors = FALSE)
+     if (is.data.frame(x)) return(if (nrow(x)) x else empty)
+     if (length(x) == 0L) return(empty)
+     if (is.list(x) && is.null(names(x)) && all(vapply(x, is.list, logical(1)))) {
+          # One record per peak (simplifyVector = FALSE).
+          x <- do.call(rbind, lapply(x, function(r)
+               as.data.frame(lapply(r, function(v) if (is.null(v)) NA else unlist(v)),
+                             stringsAsFactors = FALSE)))
+     } else if (is.list(x)) {
+          x <- as.data.frame(lapply(x, unlist), stringsAsFactors = FALSE)
+     }
+     if (!is.data.frame(x) || !all(c("iso_code", "peak_date") %in% names(x)))
+          stop("config$epidemic_peaks must be a data frame (or its JSON form) with ",
+               "iso_code and peak_date columns.", call. = FALSE)
+     x
 }

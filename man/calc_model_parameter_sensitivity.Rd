@@ -20,8 +20,7 @@ calc_model_parameter_sensitivity(
 
 \item{priors_file}{Path to \code{priors.json} (used for parameter descriptions).}
 
-\item{output_dir}{Optional directory to write \code{parameter_sensitivity.csv}.
-When \code{NULL} (default) no file is written and the data.frame is returned.}
+\item{output_dir}{Optional directory to write \code{parameter_sensitivity.csv} (the \code{sens_df} columns plus run-level \code{weighting} and \code{n_used}). When \code{NULL} (default) no file is written.}
 
 \item{n_samples}{Maximum number of posterior draws to use. Samples are drawn
 with replacement using importance weights. Default 2000.}

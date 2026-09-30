@@ -97,3 +97,33 @@ test_that("calc_model_likelihood falls back to MOSAIC::epidemic_peaks when confi
   )
   expect_true(is.finite(ll))
 })
+
+test_that("a 0-row epidemic_peaks that came back from JSON as list() means no peaks", {
+  set.seed(3)
+  d <- make_inputs()
+  base <- list(location_name = "MOZ", date_start = "2024-01-01",
+               date_stop = as.character(as.Date("2024-01-01") + d$n_t - 1L))
+  ll <- function(peaks) {
+    cfg <- base
+    cfg["epidemic_peaks"] <- list(peaks)
+    MOSAIC::calc_model_likelihood(
+      obs_cases = d$obs_cases, est_cases = d$est_cases,
+      obs_deaths = d$obs_deaths, est_deaths = d$est_deaths,
+      config = cfg, weight_deaths = 0, weight_peak_timing = 1.0)
+  }
+  empty_df <- data.frame(iso_code = character(0), peak_date = character(0))
+  tmp <- tempfile(fileext = ".json"); on.exit(unlink(tmp), add = TRUE)
+  jsonlite::write_json(list(epidemic_peaks = empty_df), tmp, auto_unbox = TRUE)
+  from_json <- jsonlite::fromJSON(tmp)$epidemic_peaks
+  expect_identical(from_json, list())
+
+  ll_df <- ll(empty_df)
+  expect_true(is.finite(ll_df))
+  expect_identical(ll(from_json), ll_df)
+
+  # The record-list form (simplifyVector = FALSE) scores like the data frame.
+  one <- data.frame(iso_code = "MOZ", peak_date = "2024-01-30")
+  jsonlite::write_json(list(epidemic_peaks = one), tmp, auto_unbox = TRUE)
+  recs <- jsonlite::fromJSON(tmp, simplifyVector = FALSE)$epidemic_peaks
+  expect_identical(ll(recs), ll(one))
+})

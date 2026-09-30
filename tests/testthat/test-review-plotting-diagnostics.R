@@ -47,10 +47,25 @@ test_that("plot_model_likelihood counts -Inf draws as failed", {
 
 # --- plotting-09: peak smoother matches est_epidemic_peaks ---------------------
 
-test_that("plot_epidemic_peaks smooths with est_epidemic_peaks' window", {
-  src <- paste(deparse(body(est_epidemic_peaks)), collapse = "\n")
-  est_window <- as.integer(sub(".*window_size <- ([0-9]+).*", "\\1", src))
-  expect_identical(MOSAIC:::.EPIDEMIC_PEAKS_SMOOTH_WINDOW, est_window)
+test_that("est_epidemic_peaks smooths with the shared window plot_epidemic_peaks draws", {
+  d <- withr::local_tempdir()
+  dates <- seq(as.Date("2022-01-01"), by = "day", length.out = 500)
+  i <- seq_along(dates)
+  cases <- round(200 * exp(-((i - 150) / 20)^2) + 150 * exp(-((i - 380) / 25)^2))
+  utils::write.csv(data.frame(iso_code = "ZZZ", date = dates, cases = cases),
+                   file.path(d, "cholera_surveillance_daily_combined.csv"), row.names = FALSE)
+  seen <- integer(0)
+  real <- MOSAIC:::.mosaic_peak_running_mean
+  out <- testthat::with_mocked_bindings(
+    suppressMessages(est_epidemic_peaks(list(DATA_CHOLERA_DAILY = d,
+                                             MODEL_INPUT = file.path(d, "mi")))),
+    .mosaic_peak_running_mean = function(x, window_size) {
+      seen <<- c(seen, window_size)
+      real(x, window_size)
+    })
+  expect_identical(seen, MOSAIC:::.EPIDEMIC_PEAKS_SMOOTH_WINDOW)
+  zzz <- out[out$iso_code == "ZZZ", ]
+  expect_equal(sort(as.Date(zzz$peak_date)), dates[c(150, 380)])
 
   x <- c(0, 5, 3, 8, 10, 2, 1, 0, 4, 6)
   w <- 4L

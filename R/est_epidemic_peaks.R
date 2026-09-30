@@ -60,22 +60,11 @@ est_epidemic_peaks <- function(PATHS) {
           # Simple running mean smoothing
           tryCatch({
 
-               # Apply running mean with window of 21 days (3 weeks) for better smoothing
-               window_size <- 28
-               n <- nrow(loc_data)
-
-               # Initialize smoothed values
-               loc_data$smoothed <- NA
-
-               # Calculate running mean
-               for (i in 1:n) {
-                    # Define window boundaries
-                    start_idx <- max(1, i - floor(window_size/2))
-                    end_idx <- min(n, i + floor(window_size/2))
-
-                    # Calculate mean for window
-                    loc_data$smoothed[i] <- mean(loc_data$cases[start_idx:end_idx], na.rm = TRUE)
-               }
+               # Centred running mean over the shared window (plot_epidemic_peaks()
+               # draws the same smoother, so the markers sit on the curve they were
+               # detected on).
+               loc_data$smoothed <- .mosaic_peak_running_mean(loc_data$cases,
+                                                              .EPIDEMIC_PEAKS_SMOOTH_WINDOW)
 
                # Simple peak detection: find local maxima
                # A peak is where the smoothed value is higher than both neighbors

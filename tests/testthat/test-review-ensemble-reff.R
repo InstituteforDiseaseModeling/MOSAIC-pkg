@@ -194,29 +194,40 @@ test_that(".add_reff_final_posterior maps ensemble_optimized onto the candidate 
 
 # ---- central_method read back from control.json (reff-02) -------------------
 
-test_that("a per-channel central_method survives the control.json round trip", {
+test_that("recompute_ci reads the run's central_method through .mosaic_run_central_method", {
   d <- tempfile("reff_cm_"); dir.create(file.path(d, "1_inputs"), recursive = TRUE)
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   ctl_path <- file.path(d, "1_inputs", "control.json")
-  MOSAIC:::.mosaic_write_json(
-    list(control = list(predictions = list(central_method = c(cases = "mean", deaths = "median")))),
-    ctl_path)
-  ctl <- jsonlite::fromJSON(ctl_path)$control
-  expect_null(names(ctl$predictions$central_method))     # names are lost on disk
-  expect_identical(MOSAIC:::.add_reff_cases_central_method(d, ctl), "mean")
+  wctl <- function(cm) MOSAIC:::.mosaic_write_json(
+    list(control = list(predictions = list(central_method = cm))), ctl_path)
 
-  ctl2 <- list(predictions = list(central_method = c("median", "mean")))
-  expect_identical(MOSAIC:::.add_reff_cases_central_method(d, ctl2), "median")
+  # Current writer: a named list keeps the channel labels on disk.
+  wctl(list(cases = "mean", deaths = "median"))
+  expect_identical(MOSAIC:::.add_reff_cases_central_method(d), "mean")
+  wctl(list(cases = "median", deaths = "mean"))
+  expect_identical(MOSAIC:::.add_reff_cases_central_method(d), "median")
+
+  # Old writer: a names-dropped pair is read in the documented order.
+  wctl(c(cases = "median", deaths = "mean"))
+  expect_warning(cm <- MOSAIC:::.add_reff_cases_central_method(d), "documented order")
+  expect_identical(cm, "median")
 
   # summary.json's resolved value wins when present.
   dir.create(file.path(d, "3_results"))
-  jsonlite::write_json(list(central_method_cases = "median"),
+  jsonlite::write_json(list(central_method_cases = "mean", central_method_deaths = "mean"),
                        file.path(d, "3_results", "summary.json"), auto_unbox = TRUE)
-  expect_identical(MOSAIC:::.add_reff_cases_central_method(d, ctl), "median")
-
-  # A control without the setting predates it: median.
+  expect_identical(MOSAIC:::.add_reff_cases_central_method(d), "mean")
   unlink(file.path(d, "3_results"), recursive = TRUE)
-  expect_identical(MOSAIC:::.add_reff_cases_central_method(d, list()), "median")
+
+  # A control without the setting predates it (v0.38.0): those runs used the median.
+  MOSAIC:::.mosaic_write_json(list(control = list(predictions = list())), ctl_path)
+  expect_identical(MOSAIC:::.add_reff_cases_central_method(d), "median")
+
+  # An unresolvable value falls back to the package default with a warning,
+  # not silently to the median.
+  wctl("trimmed_mean")
+  expect_warning(cm <- MOSAIC:::.add_reff_cases_central_method(d), "package default")
+  expect_identical(cm, "mean")
 })
 
 # ---- recompute_ci does not need the trajectory artifact (reff-07) -----------

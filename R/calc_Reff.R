@@ -342,7 +342,7 @@
                             s1("sigma"), s1("zeta_1"), s1("zeta_2"))
 }
 
-#' Decay-rate matrix delta_jt [nL x Tn] from a config, via the engine itself
+#' Decay-rate matrix delta_jt (nL x Tn) from a config, via the engine itself
 #' @keywords internal
 #' @noRd
 .mosaic_reff_config_delta <- function(config, nL, Tn, location_names = NULL,

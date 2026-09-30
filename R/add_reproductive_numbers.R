@@ -392,7 +392,7 @@ add_reproductive_numbers <- function(output_dir,
   if (verbose) message("  Excluding first ", bid, " day(s) as burn-in.")
 
   # Match run_MOSAIC's medoid target: the run's cases central_method.
-  cases_cm <- .add_reff_cases_central_method(output_dir, control)
+  cases_cm <- .add_reff_cases_central_method(output_dir)
 
   # Re-simulate the candidate (its seeds reproduce every member), but weight the
   # members and pick the medoid by the run's FINAL posterior, as run_MOSAIC()
@@ -496,35 +496,25 @@ add_reproductive_numbers <- function(output_dir,
 
 #' The run's cases central_method, for matching run_MOSAIC()'s medoid target
 #'
-#' Prefers \code{3_results/summary.json}'s \code{central_method_cases} (the
-#' resolved value run_MOSAIC() used). Otherwise reads
-#' \code{control$predictions$central_method} from control.json, where a named
-#' per-channel vector comes back UNNAMED (jsonlite writes it as a plain array):
-#' a length-2 unnamed vector is therefore read positionally as
-#' \code{c(cases, deaths)}, the documented order. A control without the setting
-#' predates it (v0.38.0), and those runs used the median. An unreadable value
-#' falls back to the median with a warning.
+#' Reads the central tendency the run actually used through
+#' \code{.mosaic_run_central_method()} (summary.json, then subset_opt.rds, then
+#' control.json), the same reader the post-hoc renderer uses. A run directory
+#' whose recorded value cannot be resolved falls back to the package default
+#' (the mean) with a warning, rather than silently to the median.
 #' @keywords internal
 #' @noRd
-.add_reff_cases_central_method <- function(output_dir, control) {
-  sum_path <- file.path(output_dir, "3_results", "summary.json")
-  if (file.exists(sum_path)) {
-    v <- tryCatch(jsonlite::fromJSON(sum_path)$central_method_cases,
-                  error = function(e) NULL)
-    if (length(v) == 1L && !is.na(v) && v %in% c("mean", "median"))
-      return(as.character(v))
-  }
-  cm <- control$predictions$central_method %||% "median"
-  if (is.null(names(cm)) && length(cm) == 2L) names(cm) <- c("cases", "deaths")
-  out <- tryCatch(.mosaic_resolve_central_method(cm)[["cases"]],
-                  error = function(e) {
-                    warning("add_reproductive_numbers: could not resolve ",
-                            "control$predictions$central_method (", conditionMessage(e),
-                            "); selecting the medoid against the median.", call. = FALSE)
-                    "median"
-                  })
-  if (length(out) != 1L || is.na(out)) out <- "median"
-  out
+.add_reff_cases_central_method <- function(output_dir) {
+  cm <- tryCatch(
+    .mosaic_run_central_method(file.path(output_dir, "1_inputs"),
+                               results_dir     = file.path(output_dir, "3_results"),
+                               calibration_dir = file.path(output_dir, "2_calibration")),
+    error = function(e) {
+      warning("add_reproductive_numbers: could not resolve the run's central_method (",
+              conditionMessage(e), "); selecting the medoid against the package ",
+              "default (the mean).", call. = FALSE)
+      .mosaic_resolve_central_method(NULL)
+    })
+  cm[["cases"]]
 }
 
 #' Map the run's final posterior onto the candidate ensemble

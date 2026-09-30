@@ -317,65 +317,81 @@ sample_parameters <- function(
 #' Default sampling flags for sample_parameters()
 #'
 #' The single definition of every \code{sample_*} flag that
-#' \code{sample_parameters()} understands, with its default. Both
-#' \code{sample_parameters()} and \code{create_sampling_args()} read it, and a
-#' test asserts it matches \code{mosaic_control_defaults()$sampling}.
+#' \code{sample_parameters()} understands, with its default and the meaning of
+#' the parameter it controls. \code{sample_parameters()},
+#' \code{create_sampling_args()} and \code{mosaic_control_defaults()} all read it.
 #' @noRd
 .mosaic_default_sample_args <- function() {
   list(
-    # Global parameter sampling controls
-    sample_alpha_1 = FALSE,  # PINNED by default: per-location alpha_1 is collinear with
-    # log(beta_j0_tot) in the endemic regime and with any coupling multiplier at
-    # invasion, so 40 free draws buy nothing -- the 250k-draw continental posterior
-    # moved it 0.057 prior SD, inside the 0.146 random-subset null. Set TRUE only
-    # for a deliberate mixing-exponent experiment.
-    sample_alpha_2 = FALSE,  # PINNED by default (weakly identified; psi absorbs the signal)
-    sample_decay_days_short = TRUE,
-    sample_decay_days_spread = TRUE,
-    sample_decay_shape_1 = TRUE,
-    sample_decay_shape_2 = TRUE,
-    sample_epsilon = TRUE,
-    sample_gamma_1 = TRUE,
-    sample_gamma_2 = TRUE,
-    sample_iota = TRUE,
-    sample_kappa = FALSE,  # PINNED at config_default$kappa = 1e6 since v0.89.0 (per-capita dose-response)
-    sample_mobility_gamma = TRUE,
-    sample_mobility_omega = TRUE,
-    sample_omega_1 = TRUE,
-    sample_omega_2 = TRUE,
-    sample_phi_1 = TRUE,
-    sample_phi_2 = TRUE,
-    sample_chi_endemic = TRUE,
-    sample_chi_epidemic = TRUE,
-    sample_rho = TRUE,
-    sample_rho_deaths = FALSE,  # PINNED at config_default$rho_deaths = 0.42 (cancels from reported deaths exactly; see roxygen)
-    sample_sigma = TRUE,
-    sample_zeta_1 = TRUE,
-    sample_zeta_ratio = TRUE,
+    # === GLOBAL PARAMETERS ===
+    # Transmission mixing exponents
+    sample_alpha_1 = FALSE,            # Population mixing exponent. PINNED by default: per-location
+    # alpha_1 is collinear with log(beta_j0_tot) in the endemic regime and with any
+    # coupling multiplier at invasion, so 40 free draws buy nothing -- the 250k-draw
+    # continental posterior moved it 0.057 prior SD, inside the 0.146 random-subset
+    # null. Set TRUE only for a deliberate mixing-exponent experiment.
+    sample_alpha_2 = FALSE,            # Frequency-dependence degree. PINNED by default (weakly identified; psi absorbs the signal)
 
-    # Location-specific parameter sampling controls
-    sample_beta_j0_tot = TRUE,
-    sample_p_beta = TRUE,
-    sample_tau_i = TRUE,
-    sample_theta_j = TRUE,
-    sample_a_1_j = TRUE,
-    sample_a_2_j = TRUE,
-    sample_b_1_j = TRUE,
-    sample_b_2_j = TRUE,
-    sample_epidemic_threshold = TRUE,
-    sample_delta_reporting_cases = TRUE,
+    # Environmental decay (decay_days_long is derived = short + spread)
+    sample_decay_days_short = TRUE,    # Short V. cholerae survival time in the environment (days)
+    sample_decay_days_spread = TRUE,   # Long minus short survival time (days)
+    sample_decay_shape_1 = TRUE,       # First Beta shape mapping suitability to survival time
+    sample_decay_shape_2 = TRUE,       # Second Beta shape mapping suitability to survival time
 
-    # psi_star calibration parameters
-    sample_psi_star_a = TRUE,
-    sample_psi_star_b = TRUE,
-    sample_psi_star_z = TRUE,
-    sample_psi_star_k = TRUE,
+    # Natural history
+    sample_epsilon = TRUE,             # Waning rate of natural immunity (R -> S)
+    sample_gamma_1 = TRUE,             # Recovery rate, symptomatic infections
+    sample_gamma_2 = TRUE,             # Recovery rate, asymptomatic infections
+    sample_iota = TRUE,                # Incubation rate (E -> I)
+    sample_kappa = FALSE,              # Half-saturation (50%) infectious dose of V. cholerae. PINNED at
+                                       # config_default$kappa = 1e6 since v0.89.0 (per-capita dose-response)
+    sample_sigma = TRUE,               # Symptomatic fraction of infections
+    sample_zeta_1 = TRUE,              # Shedding rate, symptomatic infections
+    sample_zeta_ratio = TRUE,          # Symptomatic-to-asymptomatic shedding ratio
 
-    # Initial conditions sampling control
-    sample_initial_conditions = TRUE,
+    # Mobility
+    sample_mobility_gamma = TRUE,      # Gravity-model distance-decay exponent
+    sample_mobility_omega = TRUE,      # Gravity-model population-scaling exponent
 
-    # IC moment-matching: derive E/I from observed week-1 cases
-    ic_moment_match = FALSE
+    # Vaccination
+    sample_omega_1 = TRUE,             # Waning rate of one-dose vaccine immunity
+    sample_omega_2 = TRUE,             # Waning rate of two-dose vaccine immunity
+    sample_phi_1 = TRUE,               # Vaccine effectiveness, one dose
+    sample_phi_2 = TRUE,               # Vaccine effectiveness, two doses
+
+    # Observation process
+    sample_chi_endemic = TRUE,         # PPV among suspected cases (endemic periods)
+    sample_chi_epidemic = TRUE,        # PPV among suspected cases (epidemic periods)
+    sample_rho = TRUE,                 # Care-seeking (reporting) probability of a symptomatic infection
+    sample_rho_deaths = FALSE,         # Death capture probability. PINNED at config_default$rho_deaths =
+                                       # 0.42 (cancels from reported deaths exactly; see roxygen)
+
+    # === LOCATION-SPECIFIC PARAMETERS ===
+    # Transmission
+    sample_beta_j0_tot = TRUE,         # Total baseline transmission rate
+    sample_p_beta = TRUE,              # Proportion of transmission that is human-to-human
+    sample_tau_i = TRUE,               # Daily departure (travel) probability
+    sample_theta_j = TRUE,             # WASH coverage
+
+    # Seasonality: Fourier coefficients of the human transmission rate
+    sample_a_1_j = TRUE,               # Cosine coefficient, first harmonic
+    sample_a_2_j = TRUE,               # Cosine coefficient, second harmonic
+    sample_b_1_j = TRUE,               # Sine coefficient, first harmonic
+    sample_b_2_j = TRUE,               # Sine coefficient, second harmonic
+
+    # Reporting
+    sample_epidemic_threshold = TRUE,  # Symptomatic prevalence (Isym/N) switching the case PPV from endemic to epidemic
+    sample_delta_reporting_cases = TRUE, # Symptom-onset-to-report delay (deaths are reported on the same lag)
+
+    # psi_star calibration of environmental suitability (calc_psi_star())
+    sample_psi_star_a = TRUE,          # Shape/gain
+    sample_psi_star_b = TRUE,          # Scale/offset
+    sample_psi_star_z = TRUE,          # Smoothing
+    sample_psi_star_k = TRUE,          # Time offset
+
+    # === INITIAL CONDITIONS ===
+    sample_initial_conditions = TRUE,  # Initial compartment proportions (S, V1, V2, E, I, R)
+    ic_moment_match = FALSE            # Derive E/I from observed week-1 cases + reporting chain
   )
 }
 

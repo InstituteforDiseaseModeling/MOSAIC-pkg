@@ -335,8 +335,8 @@ plot_epidemic_peaks <- function(PATHS) {
 
 }
 
-# Running-mean window (days) est_epidemic_peaks() smooths the daily case series
-# with before detecting peaks. Must equal its `window_size`; a test pins the two.
+# Running-mean window (days) over which est_epidemic_peaks() smooths the daily
+# case series before detecting peaks, and plot_epidemic_peaks() draws the curve.
 .EPIDEMIC_PEAKS_SMOOTH_WINDOW <- 28L
 
 # Centred running mean over +/- floor(window_size / 2) days, truncated at the
