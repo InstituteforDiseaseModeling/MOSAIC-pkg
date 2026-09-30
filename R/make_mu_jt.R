@@ -38,7 +38,7 @@
 #'   while the centre interpolates between 1 July anchors, so from January to
 #'   June the centre sits partway toward the previous year's value. The
 #'   resulting offset is at most the year-to-year change in the GAM centre
-#'   (under 0.07 logit, about 3\% of the CFR, for 2022-26 estimates) and is
+#'   (under 0.07 logit, about 3 percent of the CFR, for 2022-26 estimates) and is
 #'   absorbed by the year deviation; years past the last estimate are held flat,
 #'   so forecast windows are unaffected.
 #'

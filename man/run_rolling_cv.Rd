@@ -68,9 +68,11 @@ candidate ensemble.}
 \code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
 (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 the optimizer-selected subset, emitted only for cutoffs where the optimizer
-actually ran and selected a subset (\code{subset_opt.rds} present); with
-\code{optimize_subset = FALSE}, or an empty optimizer subset, it is skipped
-with a warning rather than duplicating the candidate ensemble, which
+actually ran and selected a subset (\code{subset_opt.rds} present, or a
+finite \code{n_ensemble_params_tier} in \code{summary.json}); with
+\code{optimize_subset = FALSE} it is dropped from \code{models} up front,
+and a cutoff whose optimizer selected nothing is skipped with a warning
+rather than duplicating the candidate ensemble, which
 \code{run_MOSAIC()} saves as a fallback \code{ensemble_optimized.rds}. \code{"medoid"} is
 re-simulated from its saved config (see \code{n_reps_best_medoid}).
 \code{"best"} is accepted for back-compat but is no longer produced by

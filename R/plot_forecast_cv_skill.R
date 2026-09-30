@@ -106,6 +106,9 @@ plot_forecast_cv_skill <- function(x,
           stop("window '", win, "' not in data. Available: ",
                paste(grep("^OOS", unique(cells$window), value = TRUE), collapse = ", "))
 
+     if (!model %in% cells$model)
+          stop("model '", model, "' not in data (e.g. run with optimize_subset = FALSE). Available: ",
+               paste(unique(cells$model), collapse = ", "))
      d <- cells[cells$model == model & cells$window == win & cells$metric %in% metrics, , drop = FALSE]
      d$val <- suppressWarnings(as.numeric(d[[col]]))
      d <- d[is.finite(d$val), , drop = FALSE]

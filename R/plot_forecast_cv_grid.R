@@ -15,7 +15,7 @@
 #'     dates \eqn{\le} cutoff; solid line + lighter CI ribbon after the cutoff (distinguished by the dashed cutoff rule)
 #'     (clipped to \code{forecast_display_months}).
 #'   \item Dashed vertical line at the cutoff; a faint dotted line at
-#'     \code{cutoff + scored_horizon_months} marks the formally-scored boundary
+#'     the embargo end plus \code{scored_horizon_months} marks the formally-scored boundary
 #'     (the displayed window is longer than the scored window on purpose).
 #' }
 #'
@@ -141,7 +141,14 @@ plot_forecast_cv_grid <- function(predictions,
                             ifelse(oi$segment == "embargo", "gap", "OOS (validation)")),
                            levels = c("IS (train)", "gap", "OOS (validation)"))
           vlines <- di[!duplicated(di$cutoff_date), , drop = FALSE]
-          vlines$scored_end <- vlines$cutoff_date + ceiling(scored_horizon_months * 30.4375)
+          # Scored windows run from the end of the harness embargo (the last
+          # "embargo" date, else the cutoff), as in evaluate_rolling_cv().
+          emb_end <- vapply(seq_len(nrow(vlines)), function(k) {
+               e <- di$date[di$cutoff_date == vlines$cutoff_date[k] & di$segment == "embargo"]
+               as.numeric(max(c(vlines$cutoff_date[k], e)))
+          }, numeric(1))
+          vlines$scored_end <- as.Date(emb_end, origin = "1970-01-01") +
+               ceiling(scored_horizon_months * 30.4375)
 
           # Layer order (bottom -> top): CI ribbon, then cutoff/scored rules,
           # then observed points, then the model median line ON TOP of everything.

@@ -118,6 +118,12 @@ evaluate_rolling_cv <- function(predictions,
      d$cutoff_date <- as.Date(d$cutoff_date)
      if (!"run_id" %in% names(d)) d$run_id <- paste0("cutoff_", d$cutoff_date)
      if (!"model"  %in% names(d)) d$model  <- "ensemble"   # back-compat: single series
+     # Harness embargo end per cell, taken BEFORE the trusted_only filter: that
+     # filter drops whole rows, and if every embargo date in a cell were
+     # AI-sourced the origin would otherwise fall back to the cutoff.
+     emb_rows <- d$segment == "embargo"
+     emb_key  <- paste(d$run_id, d$model, d$iso_code, d$metric, sep = "\r")
+     emb_end  <- if (any(emb_rows)) tapply(d$date[emb_rows], emb_key[emb_rows], max) else numeric(0)
      if (trusted_only && "observed_source" %in% names(d))
           d <- d[is.na(d$observed_source) | d$observed_source != "AI", ]
      horizons_months <- sort(unique(as.numeric(horizons_months)))
@@ -148,7 +154,9 @@ evaluate_rolling_cv <- function(predictions,
           # per-metric embargo. Scored dates are strictly after it, and horizon
           # windows are measured from it -- not from the first date that happens
           # to carry an observation.
-          harness_origin <- max(c(cutoff, cd$date[cd$segment == "embargo"]))
+          ck <- paste(cells$run_id[r], cells$model[r], cells$iso_code[r], this_metric, sep = "\r")
+          harness_origin <- if (ck %in% names(emb_end))
+               max(cutoff, as.Date(emb_end[[ck]], origin = "1970-01-01")) else cutoff
           oos0 <- max(harness_origin, cutoff + emb_of[[this_metric]] * 7)
 
           is_df  <- cd[cd$segment == "IS"  & is.finite(cd$observed) & is.finite(cd$pred_central), ]

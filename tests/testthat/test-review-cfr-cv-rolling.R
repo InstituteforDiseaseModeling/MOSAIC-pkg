@@ -218,7 +218,7 @@ test_that(".rolling_cv_psi_matrix refuses to carry psi flat into the scored wind
   # ends after the scored window but before the config stop -> flat, with warning
   expect_warning(m <- MOSAIC:::.rolling_cv_psi_matrix(csv, "AAA", dates,
                                                       required_stop = as.Date("2024-03-15")),
-                 "held flat over those unscored dates")
+                 "held flat over those dates")
   expect_equal(unname(m["AAA", ncol(m)]), 0.9)
   # starts after the config start -> error (no back-fill of the leading edge)
   late <- .rv_psi_csv(tempfile(fileext = ".csv"), iso = "AAA",
@@ -253,6 +253,43 @@ test_that("ensemble_opt is emitted only when the optimizer selected a subset", {
   rd2 <- .rv_run_dir(with_opt_rds = TRUE, with_subset_opt = TRUE)
   out2 <- .rv_compile(rd2, c("ensemble", "ensemble_opt"))
   expect_setequal(unique(out2$model), c("ensemble", "ensemble_opt"))
+})
+
+test_that("ensemble_opt falls back to summary.json when subset_opt.rds is missing", {
+  # subset_opt.rds is saved in a non-fatal tryCatch; the summary's tier count is
+  # set on the same optimizer-selected branch.
+  rd <- .rv_run_dir(with_opt_rds = TRUE, with_subset_opt = FALSE)
+  dir.create(file.path(rd, "3_results"))
+  jsonlite::write_json(list(n_ensemble_params_tier = 50L), file.path(rd, "3_results", "summary.json"),
+                       auto_unbox = TRUE)
+  out <- .rv_compile(rd, c("ensemble", "ensemble_opt"))
+  expect_setequal(unique(out$model), c("ensemble", "ensemble_opt"))
+  # optimizer off: the tier count is NA (written as null) -> skipped
+  jsonlite::write_json(list(n_ensemble_params_tier = NA), file.path(rd, "3_results", "summary.json"),
+                       auto_unbox = TRUE, null = "null", na = "null")
+  expect_warning(out2 <- .rv_compile(rd, c("ensemble", "ensemble_opt")), "did not select a subset")
+  expect_setequal(unique(out2$model), "ensemble")
+})
+
+test_that("run_rolling_cv(optimize_subset = FALSE) drops ensemble_opt up front", {
+  skip_if_not_installed("mgcv")
+  spec <- list(feature_set = "v7.3", arch_control = list(n_seeds = 10L))
+  cuts <- as.Date("2024-06-01")
+  cache <- .rv_cache(cuts, spec)
+  seen <- new.env(); seen$models <- list()
+  local_mocked_bindings(
+    run_MOSAIC = function(...) invisible(NULL),
+    .rcv_compile_all_models = function(..., models) { seen$models[[length(seen$models) + 1L]] <- models; NULL },
+    .package = "MOSAIC")
+  expect_message(suppressWarnings(run_rolling_cv(
+    PATHS = list(MODEL_INPUT = tempdir(), DATA_WHO_ANNUAL = .rv_who_dir()), iso = "MOZ",
+    n_cutoffs = 1L, latest_cutoff = max(cuts), step_months = 1L,
+    horizons_months = 1, embargo_weeks = 1L, optimize_subset = FALSE,
+    base_config = MOSAIC::config_default, priors = MOSAIC::priors_default,
+    est_suitability_spec = spec, psi_cache = cache,
+    dir_output = tempfile("rv_out_"), verbose = FALSE)), "'ensemble_opt' is dropped")
+  expect_gt(length(seen$models), 0L)
+  expect_false(any(vapply(seen$models, function(m) "ensemble_opt" %in% m, logical(1))))
 })
 
 test_that("compile_rolling_cv_predictions rejects an unknown model name", {

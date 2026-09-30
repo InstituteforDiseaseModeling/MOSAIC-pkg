@@ -42,7 +42,6 @@
 }
 
 test_that("process_CFR_data drops in-progress years, merges CIV spellings, keeps paired counts", {
-  skip_if_not_installed("propvacc")
   who <- .cfr_who_synth()
   r <- .cfr_run_process(who, min_obs = 150)
   out <- r$out
@@ -63,23 +62,74 @@ test_that("process_CFR_data drops in-progress years, merges CIV spellings, keeps
   expect_equal(out$cases_total[out$iso_code == i2], sum(who$cases_total[keep2]))
 })
 
-test_that("process_CFR_data gives AFRO-filled rows the AFRO Beta and fits the 2.5% quantile", {
-  skip_if_not_installed("propvacc")
+test_that("process_CFR_data gives AFRO-filled rows the AFRO Beta", {
   # min_obs = 1: no country falls below it, so the last loop-fitted `prm` used
   # to be a country's own Beta and leaked into every absent country's row.
   r <- .cfr_run_process(.cfr_who_synth(), min_obs = 1)
   out <- r$out
   afro <- out[out$iso_code == "AFRO", ]
-  q <- c(0.025, 0.5, 0.975)
-  afro_prm <- propvacc::get_beta_params(quantiles = q, probs = c(afro$cfr_lo, afro$cfr, afro$cfr_hi))
   absent <- out[is.na(out$cases_total), ]
   expect_gt(nrow(absent), 0L)
-  expect_true(all(absent$shape1 == afro_prm$shape1))
-  expect_true(all(absent$shape2 == afro_prm$shape2))
-  i1 <- out[out$iso_code == MOSAIC::iso_codes_mosaic[1], ]
-  prm1 <- propvacc::get_beta_params(quantiles = q, probs = c(i1$cfr_lo, i1$cfr, i1$cfr_hi))
-  expect_equal(i1$shape1, prm1$shape1)
-  expect_equal(i1$shape2, prm1$shape2)
+  expect_true(all(absent$shape1 == afro$shape1))
+  expect_true(all(absent$shape2 == afro$shape2))
+})
+
+test_that("process_CFR_data writes Betas that reproduce each row's CFR and 95% CI", {
+  # propvacc::get_beta_params() stopped at Beta(~0.009, ~1.9) (mean ~0.005) for
+  # every country with a ~2% CFR, so the shapes did not describe the CFR at all.
+  out <- .cfr_run_process(.cfr_who_synth(), min_obs = 150)$out
+  fitted <- out[is.finite(out$shape1) & is.finite(out$cases_total), ]
+  expect_gt(nrow(fitted), 3L)
+  for (i in seq_len(nrow(fitted))) {
+    r <- fitted[i, ]
+    q <- stats::qbeta(c(0.025, 0.5, 0.975), r$shape1, r$shape2)
+    expect_rel_equal(q, c(r$cfr_lo, r$cfr, r$cfr_hi), rel = 0.01)
+  }
+})
+
+test_that(".cfr_beta_from_ci matches the requested quantiles, including 2.5% vs 2.75%", {
+  for (n in c(3600, 24000, 1.3e6)) {
+    d <- round(0.02 * n)
+    ci <- stats::binom.test(d, n)$conf.int
+    p25 <- MOSAIC:::.cfr_beta_from_ci(d, n, c(0.025, 0.5, 0.975), c(ci[1], d / n, ci[2]))
+    p275 <- MOSAIC:::.cfr_beta_from_ci(d, n, c(0.0275, 0.5, 0.975), c(ci[1], d / n, ci[2]))
+    expect_rel_equal(p25$shape1 / (p25$shape1 + p25$shape2), 0.02, rel = 0.01)
+    expect_rel_equal(stats::qbeta(0.025, p25$shape1, p25$shape2), ci[1], rel = 0.005)
+    expect_rel_equal(stats::qbeta(0.0275, p275$shape1, p275$shape2), ci[1], rel = 0.005)
+    expect_false(isTRUE(all.equal(p25$shape1, p275$shape1)))
+  }
+  # zero deaths: no Beta has median 0, so the Jeffreys posterior is returned
+  z <- MOSAIC:::.cfr_beta_from_ci(0, 50, c(0.025, 0.5, 0.975), c(0, 0, 0.07))
+  expect_equal(c(z$shape1, z$shape2), c(0.5, 50.5))
+})
+
+test_that("process_CFR_data removes a superseded artifact that counted an in-progress year", {
+  who <- .cfr_who_synth()
+  d <- tempfile("cfr_stale_"); dir.create(file.path(d, "who"), recursive = TRUE)
+  dir.create(file.path(d, "tables"))
+  utils::write.csv(who, file.path(d, "who", "who_afro_annual.csv"), row.names = FALSE)
+  for (dd in c("who", "tables")) for (y in c(2024, 2026))
+    writeLines("stale", file.path(d, dd, sprintf("case_fatality_ratio_2014_%d.csv", y)))
+  P <- list(DATA_WHO_ANNUAL = file.path(d, "who"), DOCS_TABLES = file.path(d, "tables"))
+  expect_message(process_CFR_data(P, min_obs = 150), "Removed superseded CFR artifact")
+  for (dd in c("who", "tables")) {
+    f <- sort(list.files(file.path(d, dd), pattern = "^case_fatality_ratio_2014_"))
+    expect_identical(f, c("case_fatality_ratio_2014_2024.csv", "case_fatality_ratio_2014_2025.csv"))
+  }
+})
+
+test_that("process_CFR_data gives a country whose only data are in-progress the AFRO CFR", {
+  who <- .cfr_who_synth()
+  only <- data.frame(iso_code = "TCD", year = 2026, cases_total = 726, deaths_total = 46,
+                     country = "Chad",
+                     source = "dashboard:cholera_adm0_public_snapshot_2026-09-17.csv",
+                     stringsAsFactors = FALSE)
+  out <- .cfr_run_process(rbind(who, only), min_obs = 150)$out
+  caf <- out[out$iso_code == "TCD", ]
+  afro <- out[out$iso_code == "AFRO", ]
+  expect_equal(nrow(caf), 1L)
+  expect_true(is.na(caf$cases_total))
+  expect_equal(caf$cfr, afro$cfr)
 })
 
 test_that("the parameter table labels the logit-normal median as 'median'", {

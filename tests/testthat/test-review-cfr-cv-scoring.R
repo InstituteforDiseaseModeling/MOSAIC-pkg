@@ -64,6 +64,14 @@ test_that("an explicit embargo shorter than the harness one cannot score embargo
   expect_equal(c1$n, 31L)                                     # origin T+14, not T+7
 })
 
+test_that("the scoring origin survives AI-sourced embargo rows being filtered out", {
+  p <- .sc_pred(embargo_days = 14L)
+  p$observed_source[p$segment == "embargo"] <- "AI"
+  ev <- evaluate_rolling_cv(p, n_boot = 10L)
+  c1 <- ev$cells[ev$cells$metric == "cases" & ev$cells$window == "OOS<=1mo", ]
+  expect_equal(c1$n, 31L)                                     # (T+14, T+45], not (T, T+31]
+})
+
 test_that("make_forecast_cv_table: anchor-based train_years, ESS-gated summary, horizon parsing", {
   p <- rbind(.sc_pred(as.Date("2024-06-01"), ess = 100),
              .sc_pred(as.Date("2024-07-01"), ess = 5))

@@ -107,9 +107,11 @@
 #'   \code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
 #'   (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 #'   the optimizer-selected subset, emitted only for cutoffs where the optimizer
-#'   actually ran and selected a subset (\code{subset_opt.rds} present); with
-#'   \code{optimize_subset = FALSE}, or an empty optimizer subset, it is skipped
-#'   with a warning rather than duplicating the candidate ensemble, which
+#'   actually ran and selected a subset (\code{subset_opt.rds} present, or a
+#'   finite \code{n_ensemble_params_tier} in \code{summary.json}); with
+#'   \code{optimize_subset = FALSE} it is dropped from \code{models} up front,
+#'   and a cutoff whose optimizer selected nothing is skipped with a warning
+#'   rather than duplicating the candidate ensemble, which
 #'   \code{run_MOSAIC()} saves as a fallback \code{ensemble_optimized.rds}. \code{"medoid"} is
 #'   re-simulated from its saved config (see \code{n_reps_best_medoid}).
 #'   \code{"best"} is accepted for back-compat but is no longer produced by
@@ -189,6 +191,10 @@ run_rolling_cv <- function(PATHS,
      if (missing(dir_output) || is.null(dir_output)) stop("dir_output is required.")
      models <- .rcv_validate_models(models)
      models <- union("ensemble", models)              # candidate ensemble always emitted
+     if (!isTRUE(optimize_subset) && "ensemble_opt" %in% models) {
+          message("run_rolling_cv: optimize_subset = FALSE, so 'ensemble_opt' is dropped from models.")
+          models <- setdiff(models, "ensemble_opt")
+     }
      n_reps_best_medoid <- as.integer(n_reps_best_medoid)
      horizons_months <- sort(unique(as.numeric(horizons_months)))
      max_h_days      <- ceiling(max(horizons_months) * 30.4375)
@@ -562,7 +568,9 @@ run_rolling_cv <- function(PATHS,
      tail_fill <- last_d < max(dates)
      if (any(tail_fill))
           warning(sprintf(paste0("psi file ends before the config stop (%s) for %s; psi is held ",
-                                 "flat over those unscored dates."),
+                                 "flat over those dates. They lie past the scored window only while ",
+                                 "evaluate_rolling_cv() uses the harness embargo; a larger ",
+                                 "embargo_weeks there shifts the scored window into them."),
                           format(max(dates)),
                           paste(sprintf("%s (%s)", location_names[tail_fill],
                                         format(last_d[tail_fill])), collapse = ", ")),
@@ -845,10 +853,9 @@ compile_rolling_cv_predictions <- function(dir_output,
      if ("ensemble_opt" %in% models) {
           # run_MOSAIC() writes ensemble_optimized.rds as a copy of the candidate
           # ensemble whenever the optimizer is off or selects nothing, so the
-          # file alone does not mean an optimizer arm exists. subset_opt.rds is
-          # written only when the optimizer selected a subset.
+          # file alone does not mean an optimizer arm exists.
           opt_path <- file.path(cal, "ensemble_optimized.rds")
-          if (file.exists(opt_path) && file.exists(file.path(cal, "subset_opt.rds"))) {
+          if (file.exists(opt_path) && .rcv_optimizer_selected(run_dir)) {
                parts[[length(parts) + 1L]] <- emit(readRDS(opt_path), "ensemble_opt")
           } else {
                warning("models includes 'ensemble_opt' but the subset optimizer did not ",
@@ -1044,6 +1051,23 @@ compile_rolling_cv_predictions <- function(dir_output,
      .rcv_write_json(obj, tmp)
      if (!file.rename(tmp, path)) stop("failed to atomically place ", path)
      invisible(path)
+}
+
+#' Whether run_MOSAIC's subset optimizer selected a subset in a run directory
+#'
+#' TRUE when \code{2_calibration/subset_opt.rds} exists (written only when the
+#' optimizer selected a subset), or, because that save sits in a non-fatal
+#' \code{tryCatch}, when \code{3_results/summary.json} records a finite
+#' \code{n_ensemble_params_tier} (set only on the same branch).
+#' @keywords internal
+#' @noRd
+.rcv_optimizer_selected <- function(run_dir) {
+     if (file.exists(file.path(run_dir, "2_calibration", "subset_opt.rds"))) return(TRUE)
+     sj <- file.path(run_dir, "3_results", "summary.json")
+     if (!file.exists(sj)) return(FALSE)
+     smry <- tryCatch(jsonlite::read_json(sj, simplifyVector = TRUE), error = function(e) NULL)
+     n_tier <- suppressWarnings(as.numeric(smry$n_ensemble_params_tier))
+     length(n_tier) == 1L && is.finite(n_tier) && n_tier > 0
 }
 
 #' Epidemic peaks usable at a cutoff
