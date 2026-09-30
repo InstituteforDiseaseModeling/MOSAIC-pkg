@@ -352,16 +352,3 @@ plot_epidemic_peaks <- function(PATHS) {
   }, numeric(1L))
 }
 
-# Days whose surveillance week was not observed: disaggregation_method set and
-# not `observed` / `documented_zero` (AI `fourier_*` reconstructions,
-# `assumed_zero`). Direct WHO/JHU/SUPP rows carry NA and count as observed.
-# est_epidemic_peaks() detects peaks on observed weeks only, and
-# plot_epidemic_peaks() draws the same series.
-.epidemic_peaks_imputed_day <- function(disaggregation_method) {
-  !is.na(disaggregation_method) &
-    !(disaggregation_method %in% c("observed", "documented_zero"))
-}
-
-# Largest share of a detected peak's [peak_start, peak_stop] window that may be
-# imputed days; a peak above it rests mainly on reconstructed data and is dropped.
-.EPIDEMIC_PEAKS_MAX_IMPUTED_FRACTION <- 0.5
