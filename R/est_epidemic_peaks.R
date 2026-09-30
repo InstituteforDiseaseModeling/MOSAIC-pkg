@@ -388,8 +388,8 @@ est_epidemic_peaks <- function(PATHS) {
                # Replace with March 21 peak (actual maximum of the outbreak)
                out$peak_date[eth_2024_feb] <- as.Date("2024-03-21")
                out$reported_cases[eth_2024_feb] <- 190
-               # Use magnitude-based interval calculation with 70% scaling
-               # This gives ~84 days, between 2023 (95 days) and 2025 (61 days) peaks
+               # Use magnitude-based interval calculation with 70% scaling:
+               # round(36 * 0.7) = 25 days, i.e. about +/-13 days around the peak
                interval <- calculate_peak_interval(as.Date("2024-03-21"), 190, scale_factor = 0.7)
                out$peak_start[eth_2024_feb] <- interval$start
                out$peak_stop[eth_2024_feb] <- interval$stop

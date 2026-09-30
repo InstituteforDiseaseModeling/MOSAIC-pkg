@@ -59,3 +59,21 @@ test_that("est_zeta_ratio_prior writes all four artefacts", {
      expect_true(file.exists(file.path(PATHS$MODEL_INPUT, "param_zeta_ratio_prior.csv")))
      expect_true(file.exists(file.path(PATHS$DOCS_FIGURES, "zeta_ratio_prior.png")))
 })
+
+test_that("$fit and the CSV carry the shipped direct channel (A), not combined (C)", {
+     # Regression (v0.99.11): make_priors_default ships the direct channel, but
+     # $fit and param_zeta_ratio_prior.csv used to carry the combined channel,
+     # so the documented artefact did not reproduce the sampled prior.
+     PATHS <- .mk_test_paths()
+     res <- suppressMessages(est_zeta_ratio_prior(PATHS, n_sim = 200L, seed = 1L))
+     expect_equal(res$fit$meanlog, res$diagnostics$fit_direct$meanlog)
+     expect_equal(res$fit$sdlog, res$diagnostics$fit_direct$sdlog)
+     expect_false(isTRUE(all.equal(res$fit$meanlog, res$diagnostics$fit_combined$meanlog)))
+     csv <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "param_zeta_ratio_prior.csv"))
+     expect_equal(csv$parameter_value[csv$parameter_name == "meanlog"],
+                  res$fit$meanlog, tolerance = 1e-10)
+     expect_equal(csv$parameter_value[csv$parameter_name == "sdlog"],
+                  res$fit$sdlog, tolerance = 1e-10)
+     expect_equal(res$fit$p_below_1,
+                  stats::plnorm(1, res$fit$meanlog, res$fit$sdlog))
+})

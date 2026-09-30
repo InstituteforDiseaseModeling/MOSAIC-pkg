@@ -17,12 +17,11 @@ est_zeta_1_prior(
 }}
 
 \item{severity_mix}{Named numeric vector with entries \code{severe}, \code{moderate},
-and \code{mild} that sum to 1. Used to compute the severity-weighted pool
-anchor. Defaults to \code{c(severe = 0.2, moderate = 0.4, mild = 0.4)} (endemic
-mix). The severe fraction (0.2) is informed by Harris 2012's narrative
-that approximately 20 percent of symptomatic cholera cases are severe;
-the moderate/mild split is an expert estimate exposed here as a
-sensitivity argument.}
+and \code{mild} that sum to 1. Used only for the severity-weighted pool row of
+the table and forest plot, which has weight 0 and does not enter the fit.
+Defaults to \code{c(severe = 0.2, moderate = 0.4, mild = 0.4)} (endemic mix;
+the severe fraction follows Harris 2012's ~20 percent of symptomatic cases
+being severe).}
 }
 \value{
 Invisibly returns a list with elements:
@@ -52,26 +51,30 @@ is a daily rate, not a total-per-infection.
 The function assembles a literature table of per-person-per-day shedding
 anchors constructed as stool concentration (\eqn{c}, cells per mL) times
 time-averaged daily stool volume (\eqn{V}, mL per day) for defined
-severity classes (severe, moderate, mild). A severity-weighted pool is
-also constructed using the \code{severity_mix} argument. A weighted lognormal
-is then fit by maximum-likelihood on the log10 scale.
+severity classes (severe, moderate, mild). A weighted lognormal is then fit
+by maximum-likelihood on the log10 scale. A severity-weighted pool row is
+also built from the \code{severity_mix} argument, but it is shown in the forest
+plot only (weight 0; see Details).
 
 \strong{Assembly equation.} Each literature entry contributes
 \eqn{\zeta_{1,i} = c_i \times V_i} with lower and upper bounds taken from
 the spread of the concentration and volume anchors for that severity class.
-Time-averaged stool volumes are used (\code{V_sev} = 8, \code{V_mod} = 4,
-\code{V_mild} = 0.5 L/day) because the engine's Poisson update multiplies the rate
+Time-averaged stool volumes are used (\code{V_sev} = 4, \code{V_mod} = 2,
+\code{V_mild} = 0.3 L/day, lowered in v0.29.1 from 8 / 4 / 0.5 to average over
+the 1-2 week clinical course) because the engine's Poisson update multiplies the rate
 by the current \code{I_sym} compartment, which already integrates the shedding
 course via \eqn{\gamma_1}. Peak purging rates (~1 L/h, ~14-24 L/day) are
 treated as upper-bound sensitivity rows, not the central anchor.
 
-\strong{Severity-weighted pool caveat.} At the default severity mix
-(0.2 / 0.4 / 0.4) the severe class dominates ~94 percent of the arithmetic
-because \eqn{c_{\mathrm{sev}} = 10^8} is 100x larger than \eqn{c_{\mathrm{mild}} = 10^6}.
-This is acceptable: surveillance observes severe cases disproportionately,
-so the effective \eqn{\zeta_1} the data constrains is close to the severe
-value anyway. The \code{severity_mix} argument is exposed so callers can run
-sensitivity analyses (e.g. the outbreak mix 0.35 / 0.40 / 0.25).
+\strong{Severity-weighted pool rows.} The pool rows (endemic mix from
+\code{severity_mix}, and a fixed outbreak mix 0.35 / 0.40 / 0.25) are derived
+from the severe, moderate and mild class rows, so since v0.29.1 they carry
+weight 0: fitting them as well would count the severe class three times.
+\code{severity_mix} therefore changes the pool row shown in the forest plot but
+not the fitted prior. At the default mix the severe class is ~91 percent of
+the pool (\eqn{0.2 \times 4 \times 10^{11}} against
+\eqn{0.4 \times 2 \times 10^{10} + 0.4 \times 3 \times 10^{7}}), because
+\eqn{c_{\mathrm{sev}} = 10^8} is 1000x \eqn{c_{\mathrm{mild}} = 10^5} cells/mL.
 
 \strong{Weighted MLE on log10 scale.} Weighted mean and SD on the log10
 scale are converted to lognormal \code{meanlog} and \code{sdlog}:
@@ -83,8 +86,8 @@ then \code{meanlog = mu_log10 * ln(10)} and \code{sdlog = sigma_log10 * ln(10)}.
 alternative fits: \code{include_calib} (refits WITH the MOSAIC calibration
 posterior row at weight 0.25, producing a much wider sdlog because the
 Frame-B-calibrated value is 7 OOM below biological-units literature
-anchors), \code{volume_peak} (rescales all severe-class V=8 L/day rows to
-V=12 L/day), and \code{volume_low} (rescales to V=6 L/day).
+anchors), \code{volume_peak} (rescales all severe-class V = 4 L/day rows to
+V = 10 L/day), and \code{volume_low} (rescales them to V = 1.5 L/day).
 
 \strong{Per-day vs per-infection.} \code{zeta_1} is a per-day shedding rate
 during the symptomatic infectious period; \eqn{\gamma_1^{-1}} (~10 d)

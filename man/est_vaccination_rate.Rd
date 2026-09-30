@@ -39,6 +39,20 @@ This function does not return an R object but saves the following files to the d
 This function processes vaccination data from WHO or GTFCC, redistributes doses based on a maximum daily rate, and calculates vaccination parameters for use in the MOSAIC cholera model. The processed data includes redistributed daily doses, cumulative doses, and the proportion of the population vaccinated. The results are saved as CSV files for downstream modeling.
 }
 \details{
+\strong{What nu is.} The output \code{nu} is the number of doses
+\emph{shipped} per request, spread over days at \code{max_rate_per_day}. It
+carries no round, regimen or administered-dose information, and
+\code{data-raw/make_config_default.R} routes all of it to first doses
+(\code{nu_1_jt}; \code{nu_2_jt = 0}). For simulation windows from 2023
+onward this is close to right, because the ICG suspended the two-dose regimen
+for outbreak response in October 2022 (global OCV shortage; WHO news release,
+19 October 2022) and reactive
+campaigns have been single-dose since. For earlier windows a two-dose campaign
+is counted as two rounds of first doses, roughly doubling the distinct people
+immunised, and shipped-but-unused doses are counted as delivered.
+Pre-t0 campaigns enter the initial conditions through
+\code{\link{est_initial_V1_V2}}, which does pair rounds.
+
 The function performs the following steps:
 \enumerate{
 \item \strong{Load Vaccination Data}:
