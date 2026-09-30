@@ -1826,11 +1826,9 @@ run_MOSAIC <- function(config,
       min_size = control$targets$min_best_subset,
       max_size = control$targets$max_best_subset,
       ess_method = control$targets$ESS_method,
-      # Score on the scheme weight_best (the posterior) actually uses, which is
-      # saturated whatever best_subset_weighting says. Tempered weights are too
-      # sharp for any tier to converge, so scoring on them would force the
-      # max_best_subset fallback.
-      weighting = "saturated",
+      # Search under the scheme weight_best and the final gate use, so a tier
+      # is only certified at a size where the posterior's own weights meet it.
+      weighting = control$targets$best_subset_weighting %||% "saturated",
       verbose = control$logging$verbose
     )
 
@@ -2468,6 +2466,7 @@ run_MOSAIC <- function(config,
         central_method = central_method,
         stride      = as.integer(control$predictions$optimize_stride %||% 3L),
         ess_method  = control$targets$ESS_method,
+        weighting   = control$targets$best_subset_weighting %||% "saturated",
         verbose     = control$logging$verbose
       ),
       error = function(e) {
