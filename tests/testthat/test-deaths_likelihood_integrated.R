@@ -345,9 +345,9 @@ test_that("the resolver reads the priors' mu_jt widths, estimates dispersion, an
   pri <- MOSAIC::get_location_priors(c("MOZ", "MWI"), MOSAIC::priors_default)
   ctl <- list(likelihood = list())
   di <- MOSAIC:::.mosaic_resolve_deaths_integration(cfg, ctl, pri, score_window = NULL)
-  obs_years <- unique(di$year_full[colSums(is.finite(cfg$reported_deaths)) > 0])
-  se <- vapply(c("MOZ", "MWI"), function(iso) {
-    L <- pri$mu_jt$location[[iso]]; sqrt(mean(L$logit_se[L$year %in% obs_years]^2))
+  se <- vapply(1:2, function(j) {
+    obs_years <- unique(di$year_full[is.finite(cfg$reported_deaths[j, ])])
+    L <- pri$mu_jt$location[[c("MOZ", "MWI")[j]]]; sqrt(mean(L$logit_se[L$year %in% obs_years]^2))
   }, numeric(1))
   expect_equal(di$sd_shift, unname(sqrt(pri$mu_jt$sd_product^2 + se^2)))
   expect_equal(di$sd_year, pri$mu_jt$sd_year)

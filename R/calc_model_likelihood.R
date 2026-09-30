@@ -13,10 +13,17 @@
 #' progression (NB at cumulative fractions), and Weighted Interval Score (WIS).
 #' All weights default to 0 (OFF).
 #'
-#' Shape terms are internally T-normalized so that weight parameters share
-#' a common scale: \code{weight = 0.25} means the term contributes roughly 25
-#' percent as much as the NB core. Peaks are scaled by \code{T / N_peaks},
-#' cumulative and WIS by \code{T} (both return per-evaluation averages).
+#' Each shape term helper returns a per-evaluation value, which is scaled up to
+#' the size of the NB core by \code{N_obs / N_eval}, where \code{N_obs} is the
+#' number of time steps with a finite observation in either channel and
+#' \code{N_eval} is the number of evaluations of that term: peaks are scaled by
+#' \code{N_obs / N_peaks}, WIS by \code{N_obs / length(wis_quantiles)} and the
+#' cumulative term by \code{N_obs / length(cumulative_timepoints)}. Because the
+#' WIS and cumulative helpers already average over their quantiles and
+#' timepoints, a given weight on those two terms carries less influence than the
+#' same weight on the peak terms (with the defaults, 1/5 and 1/4 of \code{N_obs}
+#' times the per-cell value), and changing the number of quantiles or timepoints
+#' changes their influence.
 #'
 #' Non-finite per-location LL values are replaced with \code{-Inf} (zero
 #' importance weight). The NB likelihood naturally produces very negative
@@ -69,33 +76,24 @@
 #'   because \code{est_deaths} is drawn at the prior CFR; deaths peak timing,
 #'   which does not depend on the level, is kept.
 #' @param verbose If \code{TRUE}, prints component summaries per location.
-#' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms
-#'   (T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
-#'   of NB core influence.
-#' @param weight_cumulative_total Weight for cumulative progression (T-normalized).
-#'   Default \code{0} (OFF). Cumulative helper is /end_idx normalized so weights
-#'   are on the same scale as other shape terms.
-#' @param weight_wis Weight for WIS term (T-normalized). Default \code{0} (OFF).
-#'   Ablation tests show 0.10 provides trajectory-shape regularization.
+#' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms, scaled
+#'   by \code{N_obs / N_peaks}. Default \code{0} (OFF); set > 0 to enable.
+#' @param weight_cumulative_total Weight for cumulative progression, scaled by
+#'   \code{N_obs / length(cumulative_timepoints)}. Default \code{0} (OFF).
+#' @param weight_wis Weight for the negated WIS term, scaled by
+#'   \code{N_obs / length(wis_quantiles)}. Default \code{0} (OFF).
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
 #' @param sigma_peak_log Base SD on log-scale for peak magnitude; default \code{0.5}.
 #' @param wis_quantiles Quantiles for WIS if enabled.
 #' @param cumulative_timepoints Fractions for cumulative progression.
 #'
-# NOTE (v0.95.0): the two percentages just above are SPELLED OUT on purpose.
-# A percent sign written as a backslash-escape inside a roxygen comment is
-# re-escaped by roxygen2 into a double backslash in the generated .Rd, which the
-# Rd parser reads as a literal backslash followed by a COMMENT -- everything
-# after it on that line is silently discarded. Here that line also carried the
-# closing brace of its argument entry, so the arguments block never closed: the
-# generated Rd lost its description, every later argument became an unknown
-# macro, and R CMD check reported it as four separate items (install WARNING,
-# Rd files WARNING, Rd cross-references WARNING, Rd contents NOTE) plus nine
-# spuriously "undocumented" arguments. The same escape appears in ~20 other
-# roxygen blocks in this package; it is merely latent there because no closing
-# brace shares the line, but it still truncates the rendered text.
+# NOTE: percentages in this roxygen block are spelled out. A backslash-escaped
+# percent sign here is re-escaped by roxygen2 into a double backslash in the .Rd,
+# which the Rd parser reads as a comment, silently dropping the rest of the line
+# (v0.95.0 lost the closing brace of an argument entry that way).
 #' @return Scalar total log-likelihood (finite), \code{-Inf} if non-finite,
-#'   or \code{NA_real_} if all locations contribute nothing.
+#'   or \code{NA_real_} if no location has data to score (fewer than three
+#'   usable observations in both channels, and no integrated deaths score).
 #' @export
 calc_model_likelihood <- function(obs_cases,
                                   est_cases,
@@ -114,7 +112,7 @@ calc_model_likelihood <- function(obs_cases,
                                   eps_rel_deaths   = 0.25,
                                   ll_deaths_core   = NULL,
                                   verbose          = FALSE,
-                                  # ---- shape term weights (0 = OFF; 0.25 = 25% of NB core) ----
+                                  # ---- shape term weights (0 = OFF; scaling in Details) ----
                                   weight_peak_timing       = 0,
                                   weight_peak_magnitude    = 0,
                                   weight_cumulative_total  = 0,
@@ -308,18 +306,22 @@ calc_model_likelihood <- function(obs_cases,
           triv_d <- .weights_obs_row_trivial(wobs_d_row, obs_d)
 
           # Require minimum observations for meaningful likelihood.
-          # NULL/trivial path: raw finite-count >= 3 (back-compat, preserves the
-          # exact prior gate decision). Weighted path: effective-sample-size gate
+          # NULL/trivial path: count of finite observations that carry positive
+          # time weight >= 3 (with the default all-ones weights_time this is the
+          # raw finite count). Counting cells that weights_time zeroes would pass
+          # a location whose scoring weights are all zero on to the NB density,
+          # which stops. Weighted path: effective-sample-size gate
           # sum(weights_obs[finite & weights_time > 0]) >= 3 (red-team M-3).
           min_obs_for_likelihood <- 3
+          wt_pos <- is.finite(weights_time) & (weights_time > 0)
           if (triv_c) {
-               have_cases <- sum(is.finite(obs_c)) >= min_obs_for_likelihood
+               have_cases <- sum(is.finite(obs_c) & wt_pos) >= min_obs_for_likelihood
           } else {
                sel_c <- is.finite(obs_c) & is.finite(weights_time) & (weights_time > 0)
                have_cases <- sum(wobs_c_row[sel_c], na.rm = TRUE) >= min_obs_for_likelihood
           }
           if (triv_d) {
-               have_deaths <- sum(is.finite(obs_d)) >= min_obs_for_likelihood
+               have_deaths <- sum(is.finite(obs_d) & wt_pos) >= min_obs_for_likelihood
           } else {
                sel_d <- is.finite(obs_d) & is.finite(weights_time) & (weights_time > 0)
                have_deaths <- sum(wobs_d_row[sel_d], na.rm = TRUE) >= min_obs_for_likelihood
@@ -404,8 +406,12 @@ calc_model_likelihood <- function(obs_cases,
           # Cumulative progression (using data-driven k)
           ll_cum_tot_c <- ll_cum_tot_d <- 0
           if (weight_cumulative_total > 0) {
-               if (have_cases)  ll_cum_tot_c <- .ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c, weights_time)
-               if (have_deaths) ll_cum_tot_d <- .ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d, weights_time)
+               if (have_cases)  ll_cum_tot_c <- .ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c,
+                                                                              weights_time, eps_rel = eps_rel_cases,
+                                                                              weights_obs = wobs_c_row)
+               if (have_deaths) ll_cum_tot_d <- .ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d,
+                                                                              weights_time, eps_rel = eps_rel_deaths,
+                                                                              weights_obs = wobs_d_row)
           }
 
 
@@ -427,16 +433,21 @@ calc_model_likelihood <- function(obs_cases,
           #
           # Shape term scaling: N_obs / N_component_observations
           #
-          # Each shape term helper returns O(1) (per-observation scale). The scale
-          # factor inflates it to O(N_obs) to match the NB core. The denominator
-          # is the number of independent observations for that component:
+          # The scale factor is N_obs divided by the number of evaluations of the
+          # component:
           #
           #   NB core:     N_obs observations -> no scaling (reference)
-          #   Peaks:       N_peaks observations -> scale by N_obs / N_peaks
-          #   WIS:         N_quantiles evaluations -> scale by N_obs / N_quantiles
-          #   Cumulative:  N_eval_points evaluations -> scale by N_obs / N_eval_points
+          #   Peaks:       SUM over N_peaks peaks -> scale by N_obs / N_peaks
+          #   WIS:         per-cell WIS averaged over cells (it already includes
+          #                the (K + 0.5) quantile-pair average) -> N_obs / N_quantiles
+          #   Cumulative:  per-cell LL averaged over timepoints -> N_obs / N_eval_points
           #
-          # This makes w=0.05 mean "~5% of NB core influence" for ALL shape terms.
+          # The peak helpers return sums, so N_obs / N_peaks puts them on the
+          # per-cell scale of the core. The WIS and cumulative helpers already
+          # return per-cell averages, so their extra 1/N_quantiles and
+          # 1/N_eval_points make a weight on them weaker than the same weight on
+          # the peaks (v0.22.21 convention, documented in the roxygen and pinned
+          # by tests).
           #
           #   ll_loc = wc * NB_cases + wd * NB_deaths
           #     + (N_obs/N_peaks)      * w_pt  * (wc * pt_c  + wd * pt_d)
@@ -483,6 +494,15 @@ calc_model_likelihood <- function(obs_cases,
                wis_scale * weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
 
           ll_loc_total <- ll_loc_core + ll_loc_peaks + ll_loc_cum + ll_loc_wis
+
+          # A location with no scorable data in either channel contributes
+          # nothing: leave it NA so an all-missing input returns NA rather than a
+          # score of 0 that is identical for every simulation. The integrated
+          # deaths score is exactly 0 when it has no scored weeks.
+          if (!have_cases && !have_deaths &&
+              (is.null(ll_deaths_core) || isTRUE(ll_deaths_core[j] == 0))) {
+               next
+          }
 
           # Non-finite safety net: -Inf gets zero importance weight
           if (!is.finite(ll_loc_total)) {
@@ -602,66 +622,73 @@ calc_model_likelihood <- function(obs_cases,
      ll_total
 }
 
-# Robust cumulative NB progression
+# Cumulative NB progression.
+#
+# At each fraction tp of the series, the observed and predicted counts are summed
+# over the SAME scored cells of the prefix 1..round(n * tp): cells where the
+# observation and prediction are finite, weights_time is positive and, when a
+# per-cell confidence-weight row is supplied, its weight is positive (so the
+# deaths-prefix and other zero-confidence cells are excluded too). Summing the
+# prediction over cells whose observation is missing (or zero-weighted) would
+# penalise a trajectory for predicting cases in a data gap. Each cell's prediction
+# is floored at eps_j = max(1e-4, eps_rel * mean(obs over those cells)) before
+# summing, the same form as the core's floor (whose mean runs over every non-NA
+# observation, so the two coincide only when no cell is zero-weighted); a zero
+# prediction therefore costs a bounded density rather than a count-proportional
+# constant.
+# The sum is scored as NB with dispersion k * n_used (the sum of n_used
+# independent NB(mu, k) cells with equal means has size k * n_used), or Poisson
+# when k is Inf; a NULL/NA k falls back to getOption("MOSAIC.cumulative_k", 10).
+# Each timepoint's LL is divided by n_used (per-cell scale) and the timepoints are
+# averaged.
 .ll_cumulative_progressive_nb <- function(obs_vec,
                                          est_vec,
                                          timepoints = c(0.25, 0.5, 0.75, 1.0),
                                          k_data = NULL,
-                                         weights_time = NULL) {
+                                         weights_time = NULL,
+                                         eps_rel = 0.02,
+                                         weights_obs = NULL) {
      n <- length(obs_vec)
-
-     # Use weights if provided
      if (is.null(weights_time)) weights_time <- rep(1, n)
 
-     # Fallback k when data-driven estimate is unavailable
      k_fallback <- getOption("MOSAIC.cumulative_k", 10)
+     k_missing  <- is.null(k_data) || is.na(k_data)
+     poisson    <- !k_missing && is.infinite(k_data)
 
-     vals <- vector("numeric", length(timepoints))
+     used <- is.finite(obs_vec) & is.finite(est_vec) &
+          is.finite(weights_time) & (weights_time > 0)
+     if (!is.null(weights_obs)) used <- used & !is.na(weights_obs) & (weights_obs > 0)
+     if (!any(used)) return(0)
+
+     eps_j <- max(1e-4, eps_rel * mean(obs_vec[used]))
+     if (!is.finite(eps_j) || eps_j <= 0) eps_j <- 1e-4
+     obs_r <- round(obs_vec)
+     est_f <- pmax(est_vec, eps_j)
+
+     vals <- numeric(length(timepoints))
      n_vals <- 0L
 
      for (tp in timepoints) {
-          # Ensure index is at least 1 and at most n
           end_idx <- min(n, max(1L, round(n * tp)))
+          sel <- used[seq_len(end_idx)]
+          n_used <- sum(sel)
+          if (n_used == 0L) next
 
-          # Scale k proportionally to the number of summed timesteps.
-          # For independent NB(mu_i, k) variables, the sum's dispersion ~= k * n_summed
-          # (exact for identical means; reasonable upper bound for varying means).
-          cum_k <- if (!is.null(k_data) && is.finite(k_data)) {
-               k_data * end_idx
+          idx <- which(sel)
+          o_cum <- sum(obs_r[idx])
+          e_cum <- sum(est_f[idx])
+
+          ll_tp <- if (poisson) {
+               stats::dpois(o_cum, lambda = e_cum, log = TRUE)
           } else {
-               k_fallback
+               cum_k <- if (k_missing) k_fallback else k_data * n_used
+               stats::dnbinom(o_cum, mu = e_cum, size = cum_k, log = TRUE)
           }
 
-          # Use plain cumulative sums (NA-safe).
-          idx_range <- seq_len(end_idx)
-          o_cum <- sum(obs_vec[idx_range], na.rm = TRUE)
-          e_cum <- sum(est_vec[idx_range], na.rm = TRUE)
-
-          if (!is.finite(o_cum) || !is.finite(e_cum)) next
-
-          # Handle zero prediction the same way as the core NB:
-          # proportional penalty for zero est with nonzero obs
-          if (e_cum <= 0 && o_cum > 0) {
-               n_vals <- n_vals + 1L
-               vals[n_vals] <- (-round(o_cum) * log(1e6)) / end_idx
-               next
-          }
-          e_cum <- if (e_cum <= 0) 1e-10 else e_cum
-
-          ll_tp <- stats::dnbinom(round(o_cum), mu = e_cum, size = cum_k, log = TRUE)
-          if (!is.finite(ll_tp)) {
-               # Non-finite NB result: use proportional penalty as fallback
-               n_vals <- n_vals + 1L
-               vals[n_vals] <- (-round(o_cum) * log(1e6)) / end_idx
-               next
-          }
-          # Normalize by end_idx to convert from "LL of sum of end_idx obs"
-          # to "per-observation LL". This makes the helper output O(1),
-          # allowing uniform T-scaling at assembly like other shape terms.
           n_vals <- n_vals + 1L
-          vals[n_vals] <- ll_tp / end_idx
+          vals[n_vals] <- ll_tp / n_used
      }
-     if (n_vals == 0L) return(0)  # No valid timepoints: contribute nothing
+     if (n_vals == 0L) return(0)
      mean(vals[seq_len(n_vals)])
 }
 
@@ -726,3 +753,24 @@ calc_model_likelihood <- function(obs_cases,
 }
 
 
+
+
+# Locations with no finite observation in either channel inside the scored
+# window (cases from min(idx_cases, idx_deaths), the worker's shared slice start;
+# deaths from idx_deaths, since the worker zero-weights the deaths prefix).
+# calc_model_likelihood() leaves such a location NA for every draw, and the
+# integrated deaths score has no week to score there, so a calibration in which
+# EVERY location is unscorable has nothing to weight. run_MOSAIC() calls this
+# before launching workers and stops in that case. This is a sufficient
+# condition for an NA location, not the full min-obs gate: a location with 1-2
+# usable observations is also NA, but depends on weights resolved later.
+.mosaic_unscorable_locations <- function(obs_cases, obs_deaths,
+                                         idx_cases = 1L, idx_deaths = 1L) {
+     as_mat <- function(x) if (is.matrix(x)) x else matrix(x, nrow = 1L)
+     oc <- as_mat(obs_cases); od <- as_mat(obs_deaths)
+     n_t <- ncol(oc)
+     s_c <- min(idx_cases, idx_deaths)
+     fin_c <- is.finite(oc[, s_c:n_t, drop = FALSE])
+     fin_d <- is.finite(od[, min(idx_deaths, ncol(od)):ncol(od), drop = FALSE])
+     rowSums(fin_c) == 0L & rowSums(fin_d) == 0L
+}

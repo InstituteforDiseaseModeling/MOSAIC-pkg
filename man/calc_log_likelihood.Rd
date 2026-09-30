@@ -44,8 +44,8 @@ than one that fails loudly.
 }}
 }
 \value{
-The total log-likelihood (scalar) for most families, or (in the case of Normal)
-a list with \code{log_likelihood}, \code{sigma}, \code{shapiro_p}.
+The total log-likelihood as a numeric scalar, for every family
+(including Normal); \code{NA_real_} where the sub-function cannot score.
 }
 \description{
 This function routes to the appropriate \code{calc_log_likelihood_*()} sub-function
