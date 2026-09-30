@@ -1137,6 +1137,25 @@ run_MOSAIC <- function(config,
             control$likelihood$.score_window_resolved$n_time)
   }
 
+  # A location with no finite observation in either channel inside the scored
+  # window scores NA for every draw. When that holds for every location, there
+  # is nothing to weight, so stop here instead of running a calibration whose
+  # every likelihood is NA.
+  .unscorable <- .mosaic_unscorable_locations(
+    config$reported_cases, config$reported_deaths,
+    control$likelihood$.score_window_resolved$idx_cases,
+    control$likelihood$.score_window_resolved$idx_deaths)
+  if (all(.unscorable)) {
+    stop("No location has a finite reported_cases or reported_deaths observation in the ",
+         "scored window (", paste(config$location_name, collapse = ", "),
+         "), so every likelihood would be NA. Check the observation data, date range ",
+         "and burn-in / deaths-era settings.", call. = FALSE)
+  }
+  if (any(.unscorable)) {
+    log_msg("No observations in the scored window for %s: these locations contribute nothing to the likelihood",
+            paste(config$location_name[.unscorable], collapse = ", "))
+  }
+
   # Estimate the per-location NB dispersion ONCE per calibration. k is a property
   # of the OBSERVATIONS alone, so it is identical for every simulation; the
   # former code recomputed it inside every likelihood call (~7.2M redundant
@@ -3714,10 +3733,10 @@ mosaic_control_defaults <- function(calibration = NULL,
     # === Component weights (0 = OFF; set > 0 to enable) ===
     weight_cases = 1.0,              # Weight for cases vs deaths
     weight_deaths = 1.0,             # Weight for deaths vs cases
-    weight_peak_timing = 0,          # T-normalized (0.25 = 25% of NB core); default OFF
-    weight_peak_magnitude = 0,       # T-normalized; default OFF
-    weight_cumulative_total = 0,     # T-normalized (/end_idx in helper); default OFF
-    weight_wis = 0,                  # T-normalized; default OFF (try 0.10 for regularization)
+    weight_peak_timing = 0,          # Scaled by N_obs / N_peaks; default OFF
+    weight_peak_magnitude = 0,       # Scaled by N_obs / N_peaks; default OFF
+    weight_cumulative_total = 0,     # Scaled by N_obs / N_timepoints; default OFF
+    weight_wis = 0,                  # Scaled by N_obs / N_quantiles; default OFF (see ?calc_model_likelihood)
 
     # === Per-channel epsilon floor on the predicted mean ===
     # The NB density is evaluated at max(1e-4, eps_rel * mean(obs)) per location
@@ -3737,7 +3756,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     eps_rel_deaths = 0.25,           # Relative floor, standalone NB deaths scoring only (not read by run_MOSAIC)
 
     # === Peak controls ===
-    sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in time steps)
+    sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in weeks)
     sigma_peak_log = 0.5,            # Std dev for log peak magnitude
 
     # === Time/location weighting ===

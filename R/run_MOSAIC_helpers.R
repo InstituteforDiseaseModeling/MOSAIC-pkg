@@ -1397,7 +1397,11 @@
 #'   fixed shift that run_MOSAIC() sets after calibration (0 while calibrating).
 #'   Either way the values change only where a scored day's blend reaches a
 #'   forecast year (data ending within 30 days of a 1 January).
-.mosaic_likelihood_impl_version <- function() "R/v0.99.0+deaths_forecastshift"
+#'   The likelihood review re-bumps it: the integrated deaths score's
+#'   per-location offset width now averages over the years each location
+#'   observes (not the pooled years), the n_iterations collapse keeps -Inf
+#'   replicates, and the cumulative shape term sums over scored cells only.
+.mosaic_likelihood_impl_version <- function() "R/v0.99.x+review_likelihood"
 
 #' Likelihood-Value Provenance Descriptor
 #'

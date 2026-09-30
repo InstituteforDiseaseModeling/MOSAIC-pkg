@@ -112,7 +112,7 @@ calc_model_likelihood <- function(obs_cases,
                                   eps_rel_deaths   = 0.25,
                                   ll_deaths_core   = NULL,
                                   verbose          = FALSE,
-                                  # ---- shape term weights (0 = OFF; 0.25 = 25% of NB core) ----
+                                  # ---- shape term weights (0 = OFF; scaling in Details) ----
                                   weight_peak_timing       = 0,
                                   weight_peak_magnitude    = 0,
                                   weight_cumulative_total  = 0,
@@ -407,9 +407,11 @@ calc_model_likelihood <- function(obs_cases,
           ll_cum_tot_c <- ll_cum_tot_d <- 0
           if (weight_cumulative_total > 0) {
                if (have_cases)  ll_cum_tot_c <- .ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c,
-                                                                              weights_time, eps_rel = eps_rel_cases)
+                                                                              weights_time, eps_rel = eps_rel_cases,
+                                                                              weights_obs = wobs_c_row)
                if (have_deaths) ll_cum_tot_d <- .ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d,
-                                                                              weights_time, eps_rel = eps_rel_deaths)
+                                                                              weights_time, eps_rel = eps_rel_deaths,
+                                                                              weights_obs = wobs_d_row)
           }
 
 
@@ -624,12 +626,16 @@ calc_model_likelihood <- function(obs_cases,
 #
 # At each fraction tp of the series, the observed and predicted counts are summed
 # over the SAME scored cells of the prefix 1..round(n * tp): cells where the
-# observation and prediction are finite and weights_time is positive. Summing the
+# observation and prediction are finite, weights_time is positive and, when a
+# per-cell confidence-weight row is supplied, its weight is positive (so the
+# deaths-prefix and other zero-confidence cells are excluded too). Summing the
 # prediction over cells whose observation is missing (or zero-weighted) would
 # penalise a trajectory for predicting cases in a data gap. Each cell's prediction
-# is floored at the core's eps_j = max(1e-4, eps_rel * mean(scored obs)) before
-# summing, so the predicted sum is the sum of the means the core scores and a zero
-# prediction costs a bounded density rather than a count-proportional constant.
+# is floored at eps_j = max(1e-4, eps_rel * mean(obs over those cells)) before
+# summing, the same form as the core's floor (whose mean runs over every non-NA
+# observation, so the two coincide only when no cell is zero-weighted); a zero
+# prediction therefore costs a bounded density rather than a count-proportional
+# constant.
 # The sum is scored as NB with dispersion k * n_used (the sum of n_used
 # independent NB(mu, k) cells with equal means has size k * n_used), or Poisson
 # when k is Inf; a NULL/NA k falls back to getOption("MOSAIC.cumulative_k", 10).
@@ -640,7 +646,8 @@ calc_model_likelihood <- function(obs_cases,
                                          timepoints = c(0.25, 0.5, 0.75, 1.0),
                                          k_data = NULL,
                                          weights_time = NULL,
-                                         eps_rel = 0.02) {
+                                         eps_rel = 0.02,
+                                         weights_obs = NULL) {
      n <- length(obs_vec)
      if (is.null(weights_time)) weights_time <- rep(1, n)
 
@@ -650,6 +657,7 @@ calc_model_likelihood <- function(obs_cases,
 
      used <- is.finite(obs_vec) & is.finite(est_vec) &
           is.finite(weights_time) & (weights_time > 0)
+     if (!is.null(weights_obs)) used <- used & !is.na(weights_obs) & (weights_obs > 0)
      if (!any(used)) return(0)
 
      eps_j <- max(1e-4, eps_rel * mean(obs_vec[used]))
@@ -745,3 +753,24 @@ calc_model_likelihood <- function(obs_cases,
 }
 
 
+
+
+# Locations with no finite observation in either channel inside the scored
+# window (cases from min(idx_cases, idx_deaths), the worker's shared slice start;
+# deaths from idx_deaths, since the worker zero-weights the deaths prefix).
+# calc_model_likelihood() leaves such a location NA for every draw, and the
+# integrated deaths score has no week to score there, so a calibration in which
+# EVERY location is unscorable has nothing to weight. run_MOSAIC() calls this
+# before launching workers and stops in that case. This is a sufficient
+# condition for an NA location, not the full min-obs gate: a location with 1-2
+# usable observations is also NA, but depends on weights resolved later.
+.mosaic_unscorable_locations <- function(obs_cases, obs_deaths,
+                                         idx_cases = 1L, idx_deaths = 1L) {
+     as_mat <- function(x) if (is.matrix(x)) x else matrix(x, nrow = 1L)
+     oc <- as_mat(obs_cases); od <- as_mat(obs_deaths)
+     n_t <- ncol(oc)
+     s_c <- min(idx_cases, idx_deaths)
+     fin_c <- is.finite(oc[, s_c:n_t, drop = FALSE])
+     fin_d <- is.finite(od[, min(idx_deaths, ncol(od)):ncol(od), drop = FALSE])
+     rowSums(fin_c) == 0L & rowSums(fin_d) == 0L
+}

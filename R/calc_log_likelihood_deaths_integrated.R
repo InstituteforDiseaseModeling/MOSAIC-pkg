@@ -440,9 +440,10 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
      base_logit_full <- stats::qlogis(pmin(pmax(mu, 1e-12), 1 - 1e-12))
 
      years <- sort(unique(year_full))
-     # Years with observed deaths in the scored window, per location: a location's
-     # offset width averages the prior centres' SEs over the years IT observes,
-     # not over forecast years or years only another location observes.
+     # Years in which each location has a finite observed deaths cell inside the
+     # kept window: a location's offset width averages the prior centres' SEs over
+     # the years IT observes, not over forecast years or years only another
+     # location observes. (Cells the likelihood later zero-weights still count.)
      obs_fin <- is.finite(obs_d[, keep, drop = FALSE])
      obs_years_by_loc <- lapply(seq_len(nL), function(j) unique(year_full[keep][obs_fin[j, ]]))
      pm <- priors$mu_jt
@@ -458,7 +459,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
           sd_year <- as.numeric(pm$sd_year)
           sd_prod <- as.numeric(pm$sd_product)
           sd_shift <- vapply(seq_len(nL), function(j) {
-               iso <- config$location_name[j]
+               iso <- if (j <= length(config$location_name)) config$location_name[j] else NA_character_
                L <- if (is.na(iso)) NULL else pm$location[[iso]]
                se <- if (is.null(L)) NA_real_ else {
                     yy <- as.integer(unlist(L$year)); ss <- as.numeric(unlist(L$logit_se))
