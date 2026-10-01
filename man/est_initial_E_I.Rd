@@ -11,6 +11,7 @@ est_initial_E_I(
   n_samples = 1000,
   t0 = NULL,
   lookback_days = 21,
+  lookahead_days = 0,
   verbose = TRUE,
   parallel = FALSE,
   variance_inflation = 2,
@@ -29,7 +30,9 @@ Must include \code{config$location_name} and \code{config$date_start}.}
 
 \item{t0}{Target date for estimation (default from \code{config$date_start}).}
 
-\item{lookback_days}{Days of surveillance data to use (default 21).}
+\item{lookback_days}{Days of surveillance data before t0 to use (default 21).}
+
+\item{lookahead_days}{Days of surveillance data from t0 onward that also enter the onset-rate estimate (default 0). With weekly reports downscaled to days, a window that ends at t0 can miss an outbreak already under way at t0; a window straddling t0 estimates the onset rate at t0 itself. A location gets the near-zero template only when the whole window \verb{[t0 - lookback_days, t0 + lookahead_days)} reports no cases.}
 
 \item{verbose}{Print progress messages (default TRUE).}
 

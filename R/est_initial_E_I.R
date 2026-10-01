@@ -25,7 +25,8 @@
 #'   Must include `config$location_name` and `config$date_start`.
 #' @param n_samples Number of Monte Carlo samples (default 1000).
 #' @param t0 Target date for estimation (default from `config$date_start`).
-#' @param lookback_days Days of surveillance data to use (default 21).
+#' @param lookback_days Days of surveillance data before t0 to use (default 21).
+#' @param lookahead_days Days of surveillance data from t0 onward that also enter the onset-rate estimate (default 0). With weekly reports downscaled to days, a window that ends at t0 can miss an outbreak already under way at t0; a window straddling t0 estimates the onset rate at t0 itself. A location gets the near-zero template only when the whole window `[t0 - lookback_days, t0 + lookahead_days)` reports no cases.
 #' @param verbose Print progress messages (default TRUE).
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
 #'   `n_samples >= 100` (default FALSE). Uses `parallel::mclapply()` with all
@@ -60,13 +61,15 @@
 #'
 #' @export
 est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
-                            t0 = NULL, lookback_days = 21,
+                            t0 = NULL, lookback_days = 21, lookahead_days = 0,
                             verbose = TRUE, parallel = FALSE,
                             variance_inflation = 2, seed = NULL) {
 
      # ---- Parameter validation ----
      if (n_samples <= 0) stop("n_samples must be positive")
      if (lookback_days <= 0) stop("lookback_days must be positive")
+     if (!is.numeric(lookahead_days) || length(lookahead_days) != 1L || lookahead_days < 0)
+          stop("lookahead_days must be a single non-negative number")
      if (!is.list(PATHS)) stop("PATHS must be a list")
      if (!is.list(priors)) stop("priors must be a list")
      if (!is.list(config)) stop("config must be a list")
@@ -132,6 +135,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                date = Sys.Date(),
                t0 = t0,
                lookback_days = lookback_days,
+               lookahead_days = lookahead_days,
                n_samples = n_samples,
                method = "monte_carlo_backcalculation"
           ),
@@ -150,7 +154,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      )
 
      # ---- Window & availability ----
-     end_date <- t0 - 1
+     end_date <- t0 + lookahead_days - 1
      start_date <- t0 - lookback_days
      surveillance_window <- surveillance[surveillance$date >= start_date &
                                               surveillance$date <= end_date, ]
@@ -163,7 +167,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           cat(sprintf("Method: Monte Carlo simulation\n"))
           cat(sprintf("Target date (t0): %s\n", t0))
           cat(sprintf("Lookback window: %s to %s (%d days)\n",
-                      start_date, end_date, lookback_days))
+                      start_date, end_date, lookback_days + lookahead_days))
           cat(sprintf("Number of Monte Carlo samples: %d\n", n_samples))
           cat(sprintf("CI bounds: variance_inflation=%.1f\n",
                       variance_inflation))
@@ -217,6 +221,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     population_data = population_data,
                     t0 = t0,
                     lookback_days = lookback_days,
+                    lookahead_days = lookahead_days,
                     n_samples = n_samples,
                     priors = priors,
                     chain_priors = chain_priors,
@@ -322,7 +327,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 #' @param dates Vector of dates corresponding to cases (Date class)
 #' @param population Total population of the location (must be positive)
 #' @param t0 Target date for estimation (Date class)
-#' @param lookback_days Days of reports before t0 to use (default 60, must be positive); also the averaging window for the onset rate
+#' @param lookback_days Days of reports before t0 to use (default 60, must be positive)
+#' @param lookahead_days Days of reports from t0 onward that also enter the onset rate (default 0, non-negative). The onset rate is averaged over the whole window of \code{lookback_days + lookahead_days} days; only reports before t0 enter I directly (later ones are onsets that have not happened yet or that the rate fill-in already covers).
 #' @param sigma Symptomatic proportion (must be in (0,1])
 #' @param rho Reporting rate - proportion of symptomatic cases reported (must be in (0,1])
 #' @param chi Diagnostic positivity - proportion of suspected cases that are true cholera (must be in (0,1])
@@ -338,7 +344,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 #' \item{I}{Number of individuals in Infected compartment (non-negative numeric)}
 #' }
 #'
-#' Returns E=0, I=0 if no cases in lookback window. Includes numerical stability
+#' Returns E=0, I=0 if no cases in the window. Includes numerical stability
 #' protections and parameter validation. Warns if E or I exceed 2% of population.
 #'
 #' @examples
@@ -363,7 +369,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 #'
 #' @export
 est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days = 60,
-                                     sigma, rho, chi, tau_r, iota, gamma_1, gamma_2,
+                                     lookahead_days = 0, sigma, rho, chi, tau_r, iota, gamma_1, gamma_2,
                                      verbose = FALSE) {
 
   # ---- Parameter validation ----
@@ -371,6 +377,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
   if (length(cases) == 0) stop("cases and dates cannot be empty")
   if (population <= 0) stop("population must be positive")
   if (lookback_days <= 0) stop("lookback_days must be positive")
+  if (lookahead_days < 0) stop("lookahead_days must be non-negative")
   if (sigma <= 0 || sigma > 1) stop("sigma must be in (0,1]")
   if (rho <= 0 || rho > 1) stop("rho must be in (0,1]")
   if (chi <= 0 || chi > 1) stop("chi must be in (0,1]")
@@ -398,7 +405,8 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
 
   # ---- Filter surveillance data to lookback window ----
   lookback_start <- t0 - lookback_days
-  lookback_end <- t0 - 1
+  lookback_end <- t0 + lookahead_days - 1
+  window_days <- lookback_days + lookahead_days
 
   # Filter cases within lookback window
   in_window <- dates >= lookback_start & dates <= lookback_end
@@ -407,7 +415,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
 
   if (verbose) {
     cat(sprintf("  Lookback window: %s to %s (%d days)\n",
-                lookback_start, lookback_end, lookback_days))
+                lookback_start, lookback_end, window_days))
     cat(sprintf("  Cases in window: %d (total: %.0f)\n",
                 length(cases_filtered), sum(cases_filtered, na.rm = TRUE)))
   }
@@ -442,7 +450,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
   tau <- round(tau_r)
   total_cases <- sum(cases_filtered, na.rm = TRUE)
   onset_mult <- chi / (rho * sigma)
-  lambda <- total_cases * onset_mult / lookback_days   # all onsets per day
+  lambda <- total_cases * onset_mult / window_days   # all onsets per day
 
   if (verbose) {
     cat(sprintf("  Onset multiplier: chi/(rho\u00D7sigma) = %.2f\n", onset_mult))
@@ -453,9 +461,11 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
     sigma * exp(-gamma_1 * age) + (1 - sigma) * exp(-gamma_2 * age)
   }
 
-  # Observed onsets: report day t0 - j (j >= 1) -> onset age j + tau at t0
+  # Observed onsets: report day t0 - j (j >= 1) -> onset age j + tau at t0.
+  # Reports on or after t0 inform lambda only (onsets after t0, or within the
+  # last tau days before it, which I_recent fills at lambda).
   onset_age <- as.numeric(t0 - dates_filtered) + tau
-  onsets <- ifelse(is.na(cases_filtered), 0, cases_filtered) * onset_mult
+  onsets <- ifelse(is.na(cases_filtered) | dates_filtered >= t0, 0, cases_filtered) * onset_mult
   I_observed <- sum(onsets * survival(onset_age))
 
   # Unobserved recent onsets: ages 1..tau
@@ -543,7 +553,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
 # One Monte Carlo draw of (E, I) counts for a location. Shared by the parallel
 # and sequential branches so both use identical priors.
 .est_initial_E_I_draw <- function(priors, chain_priors, loc_surv, population_t0,
-                                  t0, lookback_days) {
+                                  t0, lookback_days, lookahead_days = 0) {
      pg <- priors$parameters_global
      sigma_i   <- sample_from_prior(n = 1, prior = pg[["sigma"]],   verbose = FALSE)
      iota_i    <- sample_from_prior(n = 1, prior = pg[["iota"]],    verbose = FALSE)
@@ -567,7 +577,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
      ei <- est_initial_E_I_location(
           cases = loc_surv$cases, dates = loc_surv$date,
           population = population_t0, t0 = t0, lookback_days = lookback_days,
-          sigma = sigma_i, rho = rho_i, chi = chi_i, tau_r = tau_r_i,
+          lookahead_days = lookahead_days, sigma = sigma_i, rho = rho_i, chi = chi_i, tau_r = tau_r_i,
           iota = iota_i, gamma_1 = gamma_1_i, gamma_2 = gamma_2_i,
           verbose = FALSE
      )
@@ -591,7 +601,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
                       metadata = list(data_available = TRUE, total_cases = 0,
                                       mean_count = 0, sd_count = 0,
                                       n_samples = length(counts),
-                                      message = "Zero reported cases in lookback window")))
+                                      message = "Zero reported cases in the surveillance window")))
      }
      if (length(prop) < 2 || mean(prop) <= 0) {
           if (verbose) cat(sprintf("  Insufficient %s data for %s - using no-data default\n",
@@ -618,7 +628,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
 # E/I priors for one location: list(E = <entry>, I = <entry>), or NULL when the
 # location has no usable population row (a warning is raised).
 .est_initial_E_I_one <- function(loc, surveillance_window, countries_with_data,
-                                 population_data, t0, lookback_days, n_samples,
+                                 population_data, t0, lookback_days, lookahead_days, n_samples,
                                  priors, chain_priors, loc_variance_inflation,
                                  parallel, verbose, seed = NULL) {
 
@@ -626,7 +636,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
      has_data <- loc %in% countries_with_data && nrow(loc_surv) > 0
      if (!has_data) {
           if (verbose) cat("no data, using default priors\n")
-          msg <- "No surveillance data in lookback window"
+          msg <- "No surveillance data in the surveillance window"
           return(list(E = .est_initial_E_I_no_surveillance(n_samples, msg),
                       I = .est_initial_E_I_no_surveillance(n_samples, msg)))
      }
@@ -650,7 +660,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
      draw <- function(i) {
           .mosaic_maybe_local_seed(draw_seeds[i],
                .est_initial_E_I_draw(priors, chain_priors, loc_surv, population_t0,
-                                     t0, lookback_days))
+                                     t0, lookback_days, lookahead_days))
      }
      if (parallel && n_samples >= 100) {
           if (verbose) cat(sprintf("  Using parallel processing with %d cores\n",

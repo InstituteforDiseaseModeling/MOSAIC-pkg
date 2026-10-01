@@ -86,3 +86,14 @@ test_that("seed arguments are validated", {
                                 list(location_name = "ETH", date_start = "2023-01-01"),
                                 seed = "a"), "seed")
 })
+
+test_that("derived per-location seeds are distinct for every ISO code", {
+     isos <- unique(c(MOSAIC::iso_codes_mosaic, MOSAIC::iso_codes_africa))
+     for (base in c(1L, 20260930L)) {
+          seeds <- vapply(isos, function(k) MOSAIC:::.mosaic_derive_seed(base, k), integer(1))
+          expect_false(anyNA(seeds))
+          expect_equal(length(unique(seeds)), length(isos))
+     }
+     # Different base seeds give different seeds for the same key.
+     expect_false(MOSAIC:::.mosaic_derive_seed(1, "ETH") == MOSAIC:::.mosaic_derive_seed(2, "ETH"))
+})

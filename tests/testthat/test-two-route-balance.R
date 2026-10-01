@@ -34,14 +34,22 @@ test_that("the reservoir term still responds to W (kappa is not inert)", {
 test_that("p_beta can reach parity between the two routes", {
   skip_on_cran()
   d <- MOSAIC::config_default
-  r <- run_simulation(d, seed = 20250418L, quiet = TRUE)
-  I <- r$results$Isym + r$results$Iasym; N <- r$results$N; W <- r$results$W
-  ok <- I > 0
-  skip_if(sum(ok) < 100, "too few infectious cells to characterise the balance")
-
-  num_h <- (I^d$alpha_1[1]) / (N^d$alpha_2)
-  num_e <- (1 - d$theta_j) * ((W / N) / (d$kappa + W / N))
-  ratio <- median((num_e / num_h)[ok])
+  # The env/human ratio is a median over infectious cells of ONE stochastic
+  # run, and single runs of the default config spread widely (p_star 0.48-0.67
+  # over seeds 1-9 at config v6.0). Take the median over five seeds so the
+  # property, not the draw, is tested.
+  route_ratio <- function(seed) {
+    r <- run_simulation(d, seed = seed, quiet = TRUE)
+    I <- r$results$Isym + r$results$Iasym; N <- r$results$N; W <- r$results$W
+    ok <- I > 0
+    if (sum(ok) < 100) return(NA_real_)
+    num_h <- (I^d$alpha_1[1]) / (N^d$alpha_2)
+    num_e <- (1 - d$theta_j) * ((W / N) / (d$kappa + W / N))
+    median((num_e / num_h)[ok])
+  }
+  ratios <- vapply(1:5, route_ratio, numeric(1))
+  skip_if(sum(is.finite(ratios)) < 3, "too few infectious cells to characterise the balance")
+  ratio <- stats::median(ratios, na.rm = TRUE)
 
   # Parity requires p_beta = ratio/(1+ratio); it must sit inside the shipped
   # p_beta prior (shared by every location; read from priors_default rather
@@ -53,4 +61,5 @@ test_that("p_beta can reach parity between the two routes", {
 
   # And the routes must stay the same order of magnitude, not 1000x apart.
   expect_lt(ratio, 50)
+  expect_gt(ratio, 1 / 50)
 })
