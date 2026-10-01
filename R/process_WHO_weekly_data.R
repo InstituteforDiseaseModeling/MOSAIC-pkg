@@ -50,7 +50,18 @@
 #'     report is at least twice the largest of the next four reported weeks, or the
 #'     next two reported weeks both have 0 cases (a batch report between silent
 #'     weeks; a single following zero is not enough, because during an active
-#'     outbreak it is usually a missed week of a continuing series).
+#'     outbreak it is usually a missed week of a continuing series);
+#'   \item when the fall is only of the first kind (the next two reported weeks
+#'     are not both zero), at most four reported zeros precede the report -- the
+#'     four weeks the fall is tested over -- unless at least two of the next four
+#'     reported weeks are zero. More than a month of reported zeros before a
+#'     large report is as consistent with true zeros as with missing reports, and
+#'     an explosive outbreak onset can halve within a week (a point-source
+#'     outbreak: 120, 50, 30, 20 after twelve reported zeros is an onset, not a
+#'     catch-up). A series that keeps alternating between reports and zeros after
+#'     the report is reporting in batches (Nigeria 2023 weeks 35-43, Tanzania 2023
+#'     weeks 19-28), so there the window still reaches back to the previous
+#'     non-zero report.
 #' }
 #' The report then covers week \eqn{t} and the silent weeks immediately before it,
 #' back to the previous non-zero report, never before week 1 of its epi year (the
@@ -76,6 +87,23 @@
 #' \code{catchup_cases} and \code{catchup_deaths} record each window. Rows outside a
 #' window have \code{cases == cases_reported} and missing window fields. Weekly sums
 #' over each country-year are unchanged.
+#'
+#' \strong{Curated windows.} Where a documented source dates the outbreak a report
+#' covers, the package's surveillance curation table
+#' (\code{inst/extdata/surveillance_curation.csv}, action \code{who_window}; see
+#' \code{\link{process_cholera_surveillance_data}}) replaces the rule for that
+#' report: the window starts at the WHO week containing the documented start date
+#' (South Africa 2023: the after-action review's 1 February; Namibia 2025: the
+#' first case on 2 March), and when a documented end date precedes the report,
+#' the cases are spread over the weeks up to that end and the weeks after it, to
+#' the report, carry 0 (South Africa: 31 July, the report arriving in week 35). A
+#' curated window can also spread a report the rule does not test (Cote d'Ivoire
+#' 2025 week 33, the last week of its series). Its rows carry
+#' \code{disaggregation_method = "who_catchup_curated"}, the table row's id in
+#' \code{catchup_curation_id}, and the confidence weight of the weeks that carry
+#' cases. A curated window must lie within the report's epi year and cover only
+#' silent weeks before the report; a curated report that is no longer in the data
+#' (zero or missing) is skipped with a warning.
 #'
 #' \strong{Week convention.} The \code{year}/\code{week} columns are WHO's own
 #' \code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. WHO numbers weeks on
@@ -148,12 +176,14 @@ process_WHO_weekly_data <- function(PATHS) {
      d    <- d[d$iso_code %in% keep, ]
      rownames(d) <- NULL
 
-     # Spread multi-week (catch-up / year-to-date) reports over the weeks they cover
+     # Spread multi-week (catch-up / year-to-date) reports over the weeks they
+     # cover, by rule or, where a source dates the outbreak, by the curation table
      n_rows <- nrow(d)
-     d <- .who_reallocate_catchup_reports(d)
+     d <- .who_reallocate_catchup_reports(d, curation = .surveillance_curation("who_window"))
      n_win <- nrow(unique(d[!is.na(d$catchup_start), c("iso_code", "catchup_start")]))
-     message(sprintf("Spread %d multi-week report(s) over %d country-weeks (%d unreported weeks added as rows)",
-                     n_win, sum(!is.na(d$catchup_start)), nrow(d) - n_rows))
+     n_cur <- length(unique(stats::na.omit(d$catchup_curation_id)))
+     message(sprintf("Spread %d multi-week report(s), %d of them curated, over %d country-weeks (%d unreported weeks added as rows)",
+                     n_win, n_cur, sum(!is.na(d$catchup_start)), nrow(d) - n_rows))
 
      message("Latest observation: ", max(d$date_stop, na.rm = TRUE))
 
@@ -220,6 +250,27 @@ process_WHO_weekly_data <- function(PATHS) {
 .WHO_CATCHUP_MIN_CASES  <- 20
 .WHO_CATCHUP_DROP_RATIO <- 2
 .WHO_CATCHUP_LOOK_AHEAD <- 4L
+# A report passing the drop-ratio test alone may cover at most this many
+# reported zeros (the look-ahead horizon the fall is tested over) ...
+.WHO_CATCHUP_RATIO_MAX_ZEROS <- .WHO_CATCHUP_LOOK_AHEAD
+# ... unless at least this many of the next look-ahead reported weeks are zero
+# (the series keeps alternating between reports and zeros: batch reporting).
+.WHO_CATCHUP_ALTERNATING_ZEROS <- 2L
+
+
+#' WHO week containing a calendar date
+#'
+#' A WHO (MMWR) epi week runs Sunday to Saturday and is stamped with the Monday
+#' after its Sunday (see \code{.who_epiweek_start()}), so the week containing date
+#' \code{x} is stamped with the Sunday on or before \code{x}, plus one day.
+#'
+#' @param x \code{Date} vector.
+#' @return \code{Date} vector of week-start Mondays (NA where \code{x} is NA).
+#' @noRd
+.who_week_of_date <- function(x) {
+     x <- as.Date(x)
+     x - as.POSIXlt(x)$wday + 1L
+}
 
 
 #' WHO epi-year and epi-week of a WHO week
@@ -288,7 +339,9 @@ process_WHO_weekly_data <- function(PATHS) {
 .who_catchup_windows <- function(cases, silent, unreported, epiyear,
                                  min_cases  = .WHO_CATCHUP_MIN_CASES,
                                  drop_ratio = .WHO_CATCHUP_DROP_RATIO,
-                                 look_ahead = .WHO_CATCHUP_LOOK_AHEAD) {
+                                 look_ahead = .WHO_CATCHUP_LOOK_AHEAD,
+                                 ratio_max_zeros = .WHO_CATCHUP_RATIO_MAX_ZEROS,
+                                 alternating_zeros = .WHO_CATCHUP_ALTERNATING_ZEROS) {
      reported <- which(!is.na(cases))
      starts <- integer(0)
      ends   <- integer(0)
@@ -296,23 +349,27 @@ process_WHO_weekly_data <- function(PATHS) {
           if (t == 1L || !silent[t - 1L] || epiyear[t - 1L] != epiyear[t]) next
           nxt <- utils::head(reported[reported > t], look_ahead)
           if (length(nxt) == 0L) next
-          # A fall no epidemic curve produces: the report towers over the next month
-          # of reports, or reporting goes silent for the next two reported weeks.
-          # A single zero after a report is not enough: during an active outbreak it
-          # is usually a missed week of a continuing series.
-          falls <- cases[t] >= drop_ratio * max(cases[nxt]) ||
-               (length(nxt) >= 2L && all(cases[nxt[1:2]] == 0))
-          if (!falls) next
+          # A fall no epidemic curve produces: reporting goes silent for the next
+          # two reported weeks, or the report towers over the next month of
+          # reports. A single zero after a report is not enough: during an active
+          # outbreak it is usually a missed week of a continuing series.
+          falls_zeros <- length(nxt) >= 2L && all(cases[nxt[1:2]] == 0)
+          falls_ratio <- cases[t] >= drop_ratio * max(cases[nxt])
+          if (!falls_zeros && !falls_ratio) next
           retrospective <- length(nxt) == look_ahead && all(cases[nxt] == 0)
           s <- t
           while (s > 1L && silent[s - 1L] && epiyear[s - 1L] == epiyear[t] &&
                  (retrospective || !unreported[s - 1L])) {
                s <- s - 1L
           }
-          if (s < t) {
-               starts <- c(starts, s)
-               ends   <- c(ends, t)
-          }
+          if (s == t) next
+          # The towering-report test alone cannot tell a catch-up from an outbreak
+          # onset that halves within a week. Past a month of reported zeros, accept
+          # it only if the series keeps alternating between reports and zeros.
+          if (!falls_zeros && sum(!unreported[s:(t - 1L)]) > ratio_max_zeros &&
+              sum(cases[nxt] == 0) < alternating_zeros) next
+          starts <- c(starts, s)
+          ends   <- c(ends, t)
      }
      data.frame(start = starts, end = ends)
 }
@@ -323,22 +380,26 @@ process_WHO_weekly_data <- function(PATHS) {
 #' @param d Processed WHO weekly rows (\code{iso_code}, \code{country}, \code{year},
 #'   \code{week}, \code{cases}, \code{deaths}, \code{date_start}, \code{date_stop},
 #'   \code{month}).
+#' @param curation \code{who_window} rows of \code{.surveillance_curation()}, or
+#'   NULL to apply the rule alone.
 #' @return \code{d} with window rows rewritten, unreported window weeks added, and
 #'   the columns \code{cases_reported}, \code{deaths_reported}, \code{catchup_start},
 #'   \code{catchup_weeks}, \code{catchup_cases}, \code{catchup_deaths},
-#'   \code{confidence_weight}, \code{disaggregation_method}; ordered by year, week
-#'   and country.
+#'   \code{catchup_curation_id}, \code{confidence_weight},
+#'   \code{disaggregation_method}; ordered by year, week and country.
 #' @noRd
-.who_reallocate_catchup_reports <- function(d) {
+.who_reallocate_catchup_reports <- function(d, curation = NULL) {
      d$cases_reported        <- d$cases
      d$deaths_reported       <- d$deaths
      d$catchup_start         <- as.Date(rep(NA_character_, nrow(d)))
      d$catchup_weeks         <- rep(NA_integer_, nrow(d))
      d$catchup_cases         <- rep(NA_real_, nrow(d))
      d$catchup_deaths        <- rep(NA_real_, nrow(d))
+     d$catchup_curation_id   <- rep(NA_character_, nrow(d))
      d$confidence_weight     <- rep(NA_real_, nrow(d))
      d$disaggregation_method <- rep(NA_character_, nrow(d))
      if (nrow(d) == 0L) return(d)
+     if (!is.null(curation)) curation <- curation[curation$action == "who_window", ]
 
      per_iso <- lapply(split(d, d$iso_code), function(x) {
           x <- x[order(x$date_start), ]
@@ -350,7 +411,13 @@ process_WHO_weekly_data <- function(PATHS) {
           no_deaths  <- is.na(deaths) | deaths == 0
           unreported <- is.na(cases) & no_deaths
           silent     <- unreported | (!is.na(cases) & cases == 0 & no_deaths)
-          win <- .who_catchup_windows(cases, silent, unreported, .who_epiweek_label(grid)$year)
+          epiyear    <- .who_epiweek_label(grid)$year
+          win <- .who_catchup_windows(cases, silent, unreported, epiyear)
+          win$active_end <- win$end
+          win$curation_id <- rep(NA_character_, nrow(win))
+          cur <- if (is.null(curation)) NULL else curation[curation$iso_code == x$iso_code[1], ]
+          if (!is.null(cur) && nrow(cur) > 0L)
+               win <- .who_apply_curated_windows(win, cur, grid, cases, silent, epiyear)
           if (nrow(win) == 0L) return(x)
 
           for (k in seq_len(nrow(win))) {
@@ -375,14 +442,19 @@ process_WHO_weekly_data <- function(PATHS) {
                     row_of[add] <- n_before + seq_along(add)
                }
                rows <- row_of[idx]
-               x$cases[rows]  <- .spread_count(total_cases, n = n)
-               x$deaths[rows] <- .spread_count(total_deaths, n = n)
+               # Cases go to the weeks up to the window's active end (the report week
+               # unless a curated end date precedes it); later weeks get 0.
+               w <- as.numeric(idx <= win$active_end[k])
+               curated <- !is.na(win$curation_id[k])
+               x$cases[rows]  <- .spread_count(total_cases, w)
+               x$deaths[rows] <- .spread_count(total_deaths, w)
                x$catchup_start[rows]         <- grid[win$start[k]]
                x$catchup_weeks[rows]         <- n
                x$catchup_cases[rows]         <- total_cases
                x$catchup_deaths[rows]        <- total_deaths
-               x$confidence_weight[rows]     <- .reconstruction_confidence(n)
-               x$disaggregation_method[rows] <- "who_catchup_uniform"
+               x$catchup_curation_id[rows]   <- win$curation_id[k]
+               x$confidence_weight[rows]     <- .reconstruction_confidence(sum(w))
+               x$disaggregation_method[rows] <- if (curated) "who_catchup_curated" else "who_catchup_uniform"
           }
           x
      })
@@ -390,4 +462,48 @@ process_WHO_weekly_data <- function(PATHS) {
      out <- out[order(out$year, out$week, out$country), ]
      rownames(out) <- NULL
      out
+}
+
+
+#' Replace rule windows by the curated windows of one country
+#'
+#' Each curated report (WHO epi year and week) gets a window from the WHO week
+#' containing \code{date_start} to the report, with cases only up to the WHO week
+#' containing \code{date_stop} (the report week when \code{date_stop} is missing).
+#' Any rule window ending at, or overlapping, a curated window is dropped.
+#'
+#' @param win Rule windows (\code{start}, \code{end}, \code{active_end},
+#'   \code{curation_id}) as grid indices.
+#' @param cur Curation rows of this country (\code{action == "who_window"}).
+#' @param grid,cases,silent,epiyear The country's weekly grid and its series.
+#' @return \code{win} with the curated windows merged in, ordered by start.
+#' @noRd
+.who_apply_curated_windows <- function(win, cur, grid, cases, silent, epiyear) {
+     for (i in seq_len(nrow(cur))) {
+          id <- cur$id[i]
+          report_week <- .who_epiweek_start(cur$report_year[i], cur$report_week[i])
+          r <- match(report_week, grid)
+          if (is.na(r)) {
+               message(sprintf("Curated WHO window %s: %d-W%02d lies outside the WHO weekly series; skipped",
+                               id, cur$report_year[i], cur$report_week[i]))
+               next
+          }
+          if (is.na(cases[r]) || cases[r] <= 0) {
+               warning(sprintf("Curated WHO window %s: no positive WHO report in %d-W%02d; skipped",
+                               id, cur$report_year[i], cur$report_week[i]), call. = FALSE)
+               next
+          }
+          s <- match(.who_week_of_date(cur$date_start[i]), grid)
+          e <- if (is.na(cur$date_stop[i])) r else match(.who_week_of_date(cur$date_stop[i]), grid)
+          if (is.na(s) || is.na(e) || s > e || e > r || epiyear[s] != epiyear[r])
+               stop(sprintf("Curated WHO window %s: %s..%s must lie in WHO epi year %d, at or before the report week",
+                            id, format(cur$date_start[i]), format(cur$date_stop[i]), epiyear[r]), call. = FALSE)
+          busy <- setdiff(which(!silent[s:r]) + s - 1L, r)
+          if (length(busy) > 0L)
+               stop(sprintf("Curated WHO window %s covers non-silent WHO week(s) %s before its report",
+                            id, paste(format(grid[busy]), collapse = ", ")), call. = FALSE)
+          win <- win[!(win$end >= s & win$start <= r), ]
+          win <- rbind(win, data.frame(start = s, end = r, active_end = e, curation_id = id))
+     }
+     win[order(win$start), ]
 }

@@ -62,6 +62,32 @@ test_that("skip= warns when it severs a dependency edge", {
      )
 })
 
+test_that("the combiner depends on the WHO annual step: a failed annual step blocks it, skipping it warns", {
+     # process_cholera_surveillance_data() reconciles imputed rows against the
+     # WHO annual file, so it must not run against a stale or missing one.
+     reg <- MOSAIC:::.mosaic_data_steps(as.Date("2026-01-01"))
+     ids <- vapply(reg, `[[`, "", "id")
+     ann  <- reg[[match("process_WHO_annual_data", ids)]]
+     comb <- reg[[match("process_cholera_surveillance_data", ids)]]
+     expect_true("process_WHO_annual_data" %in% comb$deps)
+     expect_warning(MOSAIC:::.mosaic_select_steps(reg, NULL, "process_WHO_annual_data"),
+                    "process_WHO_annual_data")
+
+     ran <- FALSE
+     fake <- lapply(reg, function(s) { s$run <- function(P) NULL; s })
+     fake[[match("process_WHO_annual_data", ids)]]$run <- function(P) stop("WHO annual download failed")
+     fake[[match("process_cholera_surveillance_data", ids)]]$run <- function(P) ran <<- TRUE
+     withr::local_options(root_directory = getOption("root_directory"))
+     local_mocked_bindings(.mosaic_data_steps = function(...) fake,
+                           check_mosaic_manual_inputs = function(...) NULL)
+     res <- suppressMessages(update_mosaic_data(withr::local_tempdir(), refresh_repos = FALSE, verbose = FALSE,
+                                                steps = c("process_WHO_annual_data", "process_cholera_surveillance_data")))
+     expect_equal(res$step, c("process_WHO_annual_data", "process_cholera_surveillance_data"))
+     expect_equal(res$status, c("failed", "blocked"))
+     expect_false(ran)
+     expect_match(res$message[2], "process_WHO_annual_data")
+})
+
 test_that("registry validation catches typo'd deps and bad ordering", {
      ok <- list(
           list(id = "a", group = "1A", desc = "", deps = character(0), run = function(P) NULL),

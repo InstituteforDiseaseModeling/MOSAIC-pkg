@@ -1,11 +1,15 @@
 # Regression tests for multi-week surveillance reports and cross-source double
-# counting (v0.100.1 production-suite findings):
+# counting (v0.100.1 production-suite findings, v0.101.0 red-team fixes):
 #   - process_WHO_weekly_data() spreads WHO catch-up / year-to-date reports
-#     (ZAF 2023 week 35, NGA 2023 batch reports) over the weeks they cover;
+#     (NGA 2023 batch reports) over the weeks they cover, caps how far the
+#     drop-ratio test reaches back over reported zeros, and applies the curated
+#     windows of inst/extdata/surveillance_curation.csv (ZAF 2023, NAM 2025,
+#     CIV 2025, NGA 2023 week 52);
 #   - process_cholera_surveillance_data() keeps WHO windows whole, drops AI
 #     copies of the dashboard and AI aggregates mislabelled as a week (NGA 2023
-#     week 21), and removes imputed (fourier) mass that duplicates observed weeks
-#     against the WHO annual total (ZAF 2023 ramp, GHA 2024).
+#     week 21, COG 2023 week 29), applies the curated drops and flags, and limits
+#     imputed (fourier) rows to the gap left by the WHO account (ZAF 2023 ramp,
+#     GHA 2024, SOM 2026, CIV 2025 residue).
 
 # ---- WHO weekly processor --------------------------------------------------
 
@@ -26,10 +30,11 @@
      out[order(out$iso_code, out$date_start), ]
 }
 
-test_that("a year-to-date first report followed by silence is spread back to week 1 (ZAF 2023)", {
-     # WHO's first ZAF 2023 row is week 35: 1,390 cases / 47 deaths, then zeros
-     # (and one sporadic case in week 49). The report is the whole Feb-Jul outbreak.
-     raw <- .raw_who_rows("SOUTH AFRICA", 2023, 35:52,
+test_that("a year-to-date first report followed by silence is spread back to week 1", {
+     # The shape of WHO's first ZAF 2023 row (week 35: 1,390 cases / 47 deaths,
+     # then zeros and one sporadic case in week 49), for a country without a
+     # curated window, so the rule alone applies.
+     raw <- .raw_who_rows("MALAWI", 2023, 35:52,
                           c(1390, rep(0, 13), 1, 0, 0, 0), c(47, rep(0, 17)))
      out <- .run_who_processor(raw)
 
@@ -118,6 +123,148 @@ test_that("multi-week windows never cross an epi-year boundary and need at least
      expect_true(all(out$cases[out$year == 2023 & out$week > 44] == 0))
 })
 
+test_that("the 2x drop ratio is a boundary: 878 vs 2 x 437 spreads, 873 does not (KEN 2023 week 17)", {
+     # KEN 2023 weeks 13-23: a reported zero in week 16, then 878 against a
+     # largest next-four-weeks report of 437 (ratio 2.009).
+     wk <- 13:23
+     cases <- c(504, 382, 376, 0, 878, 310, 149, 109, 437, 239, 144)
+     deaths <- c(10, 5, 5, 0, 15, 5, 2, 3, 10, 5, 0)
+     out <- .run_who_processor(.raw_who_rows("KENYA", 2023, wk, cases, deaths))
+     expect_equal(out$week[!is.na(out$catchup_start)], 16:17)
+     expect_equal(out$cases[out$week %in% 16:17], c(439, 439))
+     cases[5] <- 873                                                     # ratio 1.998
+     out <- .run_who_processor(.raw_who_rows("KENYA", 2023, wk, cases, deaths))
+     expect_true(all(is.na(out$catchup_start)))
+     expect_equal(out$cases[out$week == 17], 873)
+})
+
+test_that("an onset after more than four reported zeros that keeps reporting is not spread", {
+     # The red-team's point-source onset: 120, 50, 30, 20 after twelve reported
+     # zeros halves within a week, so the drop-ratio test alone would spread it.
+     cases <- c(5, rep(0, 12), 120, 50, 30, 20, 10, 5, 2)
+     out <- .run_who_processor(.raw_who_rows("MALAWI", 2024, seq_along(cases), cases, 0))
+     expect_true(all(is.na(out$catchup_start)))
+     expect_equal(out$cases[out$week == 14], 120)
+     # the cap is four reported zeros (the look-ahead): four spread, five do not
+     four <- c(40, 0, 0, 0, 0, 120, 50, 30, 20, 10, 5)
+     out <- .run_who_processor(.raw_who_rows("MALAWI", 2024, seq_along(four), four, 0))
+     expect_equal(out$week[!is.na(out$catchup_start)], 2:6)
+     five <- c(40, 0, 0, 0, 0, 0, 120, 50, 30, 20, 10)
+     out <- .run_who_processor(.raw_who_rows("MALAWI", 2024, seq_along(five), five, 0))
+     expect_true(all(is.na(out$catchup_start)))
+})
+
+test_that("past four reported zeros the drop-ratio test needs a series alternating with zeros (NGA 2023 week 43)", {
+     # Eight reported zeros, 433, then 0, 148, 0, 0: the batch pattern of NGA 2023.
+     cases <- c(40, rep(0, 8), 433, 0, 148, 0, 0, 0, 0)
+     out <- .run_who_processor(.raw_who_rows("MALAWI", 2024, seq_along(cases), cases, 0))
+     wk <- function(start) out$week[!is.na(out$catchup_start) & out$catchup_start == start]
+     expect_equal(wk(.who_epiweek_start(2024, 2)), 2:10)
+     expect_equal(sum(out$cases[out$week %in% 2:10]), 433)
+     # two zeros among the next four reported weeks are needed, one is not enough
+     one <- c(40, rep(0, 5), 120, 0, 50, 30, 20)
+     out <- .run_who_processor(.raw_who_rows("MALAWI", 2024, seq_along(one), one, 0))
+     expect_true(all(is.na(out$catchup_start)))
+     two <- c(40, rep(0, 5), 120, 0, 50, 0, 30)
+     out <- .run_who_processor(.raw_who_rows("MALAWI", 2024, seq_along(two), two, 0))
+     expect_equal(out$week[!is.na(out$catchup_start)], 2:7)
+})
+
+test_that("the curated ZAF 2023 window follows the after-action review (1 Feb - 31 Jul)", {
+     raw <- .raw_who_rows("SOUTH AFRICA", 2023, 35:52,
+                          c(1390, rep(0, 13), 1, 0, 0, 0), c(47, rep(0, 17)))
+     out <- .run_who_processor(raw)
+     win <- out[!is.na(out$catchup_start), ]
+     expect_equal(win$week, 5:35)                                    # from the week of 1 Feb
+     expect_false(any(out$year == 2023 & out$week < 5))              # weeks 1-4 not created
+     act <- win[win$week <= 31, ]                                    # to the week of 31 Jul
+     expect_equal(act$cases, MOSAIC:::.spread_count(1390, n = 27))
+     expect_true(all(act$cases %in% c(51, 52)) && sum(act$cases) == 1390)
+     expect_equal(sum(act$deaths), 47)
+     expect_true(all(win$cases[win$week > 31] == 0))                 # August to the report: 0
+     expect_equal(win$cases_reported[win$week == 35], 1390)
+     expect_true(all(win$disaggregation_method == "who_catchup_curated"))
+     expect_true(all(win$catchup_curation_id == "ZAF-2023-AAR"))
+     expect_true(all(win$catchup_weeks == 31L & win$confidence_weight == 0.5))
+     expect_equal(sum(out$cases), 1391)
+     expect_equal(sum(out$deaths), 47)
+})
+
+test_that("the curated NAM 2025 window starts at the first case (2 Mar 2025), not week 1", {
+     out <- .run_who_processor(.raw_who_rows("NAMIBIA", 2025, 12:23, c(22, rep(0, 11)), 0))
+     win <- out[!is.na(out$catchup_start), ]
+     expect_equal(win$date_start, .who_epiweek_start(2025, 10:12))   # WHO week 10 holds Sun 2 Mar
+     expect_equal(win$cases, c(7, 8, 7))
+     expect_equal(min(out$date_start), .who_epiweek_start(2025, 10))
+     expect_true(all(win$confidence_weight == 0.9 & win$catchup_curation_id == "NAM-2025-first-case"))
+})
+
+.who_rows <- function(iso, year, weeks, cases, deaths = 0) {
+     ds <- .who_epiweek_start(year, weeks)
+     data.frame(iso_code = iso, country = MOSAIC::convert_iso_to_country(iso), year = year, week = weeks,
+                cases = cases, deaths = rep_len(deaths, length(weeks)), date_start = ds, date_stop = ds + 6L,
+                month = as.integer(format(ds, "%m")), stringsAsFactors = FALSE)
+}
+
+test_that("curated windows spread an untested end-of-series report (CIV 2025 week 33) and override the zero cap (NGA 2023 week 52)", {
+     cur <- MOSAIC:::.surveillance_curation("who_window")
+     civ <- .who_rows("CIV", 2025, 23:33, c(45, 0, 0, 55, 9, 0, 280, 0, 0, 0, 114), c(7, 0, 0, 0, 0, 0, 12, 0, 0, 0, 1))
+     rule <- MOSAIC:::.who_reallocate_catchup_reports(civ)
+     expect_true(all(is.na(rule$catchup_start[rule$week >= 30])))           # the series ends at the report
+     out <- MOSAIC:::.who_reallocate_catchup_reports(civ, cur)
+     w <- out[out$week >= 30, ]
+     expect_equal(w$cases, c(28, 29, 29, 28))
+     expect_equal(w$cases_reported, c(0, 0, 0, 114))
+     expect_true(all(w$catchup_curation_id == "CIV-2025-W33" & w$confidence_weight == 0.9))
+     expect_equal(out$cases[out$week %in% 28:29], c(140, 140))           # the rule's window stays
+     # NGA 2023: six reported zeros then 242 and steady weekly reports -> capped by
+     # the rule, restored by the curated window
+     nga <- .who_rows("NGA", 2023, 44:52, c(15, 148, 0, 0, 0, 0, 0, 0, 242), c(0, 6, 0, 0, 0, 0, 0, 0, 20))
+     nga <- rbind(nga, .who_rows("NGA", 2024, 1:4, c(119, 89, 85, 80), 1))
+     expect_true(all(is.na(MOSAIC:::.who_reallocate_catchup_reports(nga)$catchup_start)))
+     out <- MOSAIC:::.who_reallocate_catchup_reports(nga, cur)
+     w <- out[out$year == 2023 & out$week >= 46, ]
+     expect_equal(sum(w$cases), 242)
+     expect_true(all(w$catchup_curation_id == "NGA-2023-W52" & w$catchup_weeks == 7L))
+})
+
+test_that("a curated window must cover only silent weeks of the report's epi year", {
+     cur <- data.frame(id = "T1", iso_code = "MWI", action = "who_window", report_year = 2024L, report_week = 10L,
+                       date_start = as.Date("2024-02-05"), date_stop = as.Date(NA), evidence = "e", reference = "r",
+                       added = "2026-10-01", stringsAsFactors = FALSE)
+     d <- .who_rows("MWI", 2024, 1:12, c(5, 0, 0, 0, 0, 30, 0, 0, 0, 90, 0, 0))
+     expect_error(MOSAIC:::.who_reallocate_catchup_reports(d, cur), "non-silent WHO week")
+     cur$date_start <- as.Date("2023-12-20")
+     expect_error(MOSAIC:::.who_reallocate_catchup_reports(d, cur), "must lie in WHO epi year 2024")
+     cur$date_start <- as.Date("2024-02-19"); cur$report_week <- 11L         # a zero week
+     expect_warning(out <- MOSAIC:::.who_reallocate_catchup_reports(d, cur), "no positive WHO report")
+     expect_true(all(is.na(out$catchup_curation_id)))
+     cur$report_week <- 10L
+     out <- MOSAIC:::.who_reallocate_catchup_reports(d, cur)
+     expect_equal(out$week[!is.na(out$catchup_curation_id)], 8:10)
+     expect_equal(out$cases[out$week %in% 8:10], c(30, 30, 30))
+})
+
+test_that("the surveillance curation table is complete and validated", {
+     cur <- MOSAIC:::.surveillance_curation()
+     expect_false(anyDuplicated(cur$id) > 0)
+     expect_true(all(nzchar(cur$evidence) & nzchar(cur$reference)))
+     expect_true(all(cur$action %in% c("who_window", "drop_imputed", "flag_imputed")))
+     expect_true(all(c("ZAF-2023-AAR", "NAM-2025-first-case", "CIV-2025-W33", "NGA-2023-W52",
+                       "SSD-2023-2024-absence", "AGO-2023-absence", "BFA-2025-unconfirmed") %in% cur$id))
+     win <- cur[cur$action == "who_window", ]
+     expect_true(all(!is.na(win$report_year) & !is.na(win$report_week) & !is.na(win$date_start)))
+     tmp <- withr::local_tempfile(fileext = ".csv")
+     bad <- utils::read.csv(system.file("extdata", "surveillance_curation.csv", package = "MOSAIC"),
+                            colClasses = "character")
+     bad$action[1] <- "rewrite"
+     utils::write.csv(bad, tmp, row.names = FALSE)
+     expect_error(MOSAIC:::.surveillance_curation(path = tmp), "unknown action")
+     bad$action[1] <- "who_window"; bad$id[2] <- bad$id[1]
+     utils::write.csv(bad, tmp, row.names = FALSE)
+     expect_error(MOSAIC:::.surveillance_curation(path = tmp), "duplicated ids")
+})
+
 test_that(".who_epiweek_label inverts .who_epiweek_start", {
      mon <- seq(as.Date("2022-01-03"), as.Date("2027-12-27"), by = "week")
      lab <- MOSAIC:::.who_epiweek_label(mon)
@@ -197,6 +344,9 @@ test_that("ZAF 2023: the WHO year-to-date report replaces the AI fourier ramp in
      # the AI copy of the week-35 report is logged as a dashboard copy
      expect_true(any(res$adj$rule == "who_copy_dropped" & res$adj$cases_before == 1390))
      expect_equal(sum(res$adj$rule == "who_catchup_uniform"), 35L)
+     # the fourier rows inside the window are listed although priority would drop them too
+     expect_equal(sum(res$adj$rule == "imputed_dropped_in_who_window"), 26L)
+     expect_equal(sum(res$adj$cases_before[res$adj$rule == "imputed_dropped_in_who_window"]), sum(ramp))
 
      # the daily fit-target file carries the same totals and no daily spike
      daily <- utils::read.csv(file.path(fx$P$DATA_CHOLERA_DAILY, "cholera_surveillance_daily_combined.csv"),
@@ -252,13 +402,13 @@ test_that("an AI week carrying a year-to-date total beside small WHO weeks is dr
      expect_equal(res$adj$rule[res$adj$cases_before == 1851], "ai_aggregate_dropped")
 })
 
-test_that("imputed rows lose the mass that duplicates observed weeks of the same year (GHA 2024)", {
+test_that("imputed rows only fill the gap between the observed weeks and the WHO annual total (GHA 2024)", {
      # 2023 (weeks 1-52): fourier rows Apr-Aug beside a WHO-reported outbreak whose
      # weekly total equals the WHO annual total -> fourier emptied.
-     # 2024 (weeks 53-104): observed 300, fourier 900, annual 1,000 -> the excess
-     # (200) is removed, the 700 not explained by double counting is kept.
-     # 2025 (weeks 105-156): no observed week at all -> fourier untouched even
-     # though it exceeds the annual total (a disagreement between annual totals).
+     # 2024 (weeks 53-104): observed 300, fourier 900, annual 1,000 -> the fourier
+     # keeps the 700 gap.
+     # 2025 (weeks 105-156): no observed week at all, fourier 800 against an annual
+     # total of 500 -> the fourier keeps 500.
      fx <- .combiner_fixture(iso = "GHA")
      who <- .who_processed(fx, c(40:52, 60:62), c(10, 50, 400, 900, 700, 600, 500, 400, 300, 200, 300, 150, 108, 100, 120, 80),
                            c(rep(1, 13), 2, 2, 2), iso = "GHA")
@@ -278,9 +428,10 @@ test_that("imputed rows lose the mass that duplicates observed weeks of the same
      expect_equal(sum(f24$cases), 700)
      expect_equal(sum(f24$deaths), 10 * 700 / 900)
      f25 <- out[yr == 2025 & out$disaggregation_method %in% "fourier_country_k1", ]
-     expect_equal(sum(f25$cases), 800)
+     expect_equal(sum(f25$cases), 500)
+     expect_equal(f25$deaths, rep(500 / 800, 10))
      expect_equal(sum(res$adj$rule == "imputed_dropped_annual_accounted"), 20L)
-     expect_equal(sum(res$adj$rule == "imputed_scaled_annual_residual"), 10L)
+     expect_equal(sum(res$adj$rule == "imputed_scaled_annual_residual"), 20L)
 })
 
 test_that("without DATA_WHO_ANNUAL the annual reconciliation is skipped with a message", {
@@ -292,6 +443,133 @@ test_that("without DATA_WHO_ANNUAL the annual reconciliation is skipped with a m
      expect_true(any(grepl("not reconciled against WHO annual totals", msgs)))
      out <- utils::read.csv(file.path(fx$P$DATA_CHOLERA_WEEKLY, "cholera_surveillance_weekly_combined.csv"))
      expect_equal(sum(out$cases[out$disaggregation_method %in% "fourier_country_k1"]), 20 * 46.85)
+})
+
+test_that("the gap rule no longer keeps an imputed excess beyond the observed weeks (the SSD 2024 pattern)", {
+     # Observed 300 of an annual 320; fourier 1,000 before them. Capping the
+     # removal at the observed cases kept 700; the gap rule keeps the 20 missing.
+     fx <- .combiner_fixture(iso = "UGA")
+     who <- .who_processed(fx, 40:42, c(100, 100, 100), 1, iso = "UGA")
+     ai <- list(w = 15:34, cases = 50, deaths = 0.5, cw = 0.45, method = "fourier_country_k2")
+     annual <- data.frame(iso_code = "UGA", year = 2023, cases_total = 320)
+     fx <- .combiner_fixture(who = who, ai = ai, annual = annual, iso = "UGA")
+     out <- .run_combiner(fx$P)$out
+     f <- out[out$disaggregation_method %in% "fourier_country_k2", ]
+     expect_equal(nrow(f), 20L)
+     expect_equal(f$cases, rep(1, 20))
+     expect_equal(sum(out$cases, na.rm = TRUE), 320)
+})
+
+test_that("rescaled imputed rows under half a case are emptied, not left as weighted zero weeks (CIV 2025)", {
+     # 2023: observed 503 of an annual 510; 40 fourier weeks of 12.8 keep 7 cases,
+     # 0.175 a week, so every one is emptied (none would survive the daily rounding).
+     # 2024: observed 500 of 526; fourier 10 x 20 + 5 x 6 + 30 x 1 keep 26 -> 2.0,
+     # 0.6 (kept: at least half a case) and 0.1 (emptied).
+     fx <- .combiner_fixture(iso = "CIV")
+     who <- .who_processed(fx, c(30:34, 80:84), c(100, 100, 100, 100, 103, rep(100, 5)), 1, iso = "CIV")
+     ai <- list(w = c(1:29, 35:45, 53:62, 63:67, 68:77, 85:104),
+                cases = c(rep(12.8, 40), rep(20, 10), rep(6, 5), rep(1, 30)), deaths = 0.1,
+                cw = 0.5, method = "fourier_country_k1")
+     annual <- data.frame(iso_code = "CIV", year = c(2023, 2024), cases_total = c(510, 526))
+     fx <- .combiner_fixture(who = who, ai = ai, annual = annual, iso = "CIV")
+     res <- .run_combiner(fx$P)
+     out <- res$out
+     yr <- as.integer(format(out$date_start + 3, "%Y"))
+     expect_false(any(out$disaggregation_method[yr == 2023] %in% "fourier_country_k1"))
+     expect_equal(sum(out$cases[yr == 2023], na.rm = TRUE), 503)
+     f24 <- out[yr == 2024 & out$disaggregation_method %in% "fourier_country_k1", ]
+     expect_equal(f24$cases, c(rep(2, 10), rep(0.6, 5)))
+     adj <- res$adj
+     expect_equal(sum(adj$rule == "imputed_residue_dropped"), 70L)
+     expect_equal(sum(adj$rule == "imputed_scaled_annual_residual"), 15L)
+     expect_true(all(is.na(adj$cases_after[adj$rule == "imputed_residue_dropped"])))
+     # no imputed day reaches the daily fit target as a zero-case day
+     daily <- utils::read.csv(file.path(fx$P$DATA_CHOLERA_DAILY, "cholera_surveillance_daily_combined.csv"))
+     fd <- daily[daily$disaggregation_method %in% "fourier_country_k1", ]
+     expect_equal(sum(fd$cases), 25)                                     # 0.6 rounds to one case
+     expect_true(all(as.Date(fd$date) >= as.Date("2024-01-01")))
+})
+
+test_that("imputed rows are reconciled by the ISO year of their week, not the calendar year of its Monday", {
+     # 2024-12-30 starts ISO week 2025-W01. 2024 is fully accounted (observed =
+     # annual), 2025 has a large gap: a fourier row in that week belongs to 2025.
+     fx <- .combiner_fixture(iso = "MWI")
+     who <- .who_processed(fx, 60:64, rep(100, 5), 1, iso = "MWI")
+     ai <- list(w = c(100, 105), cases = c(30, 40), deaths = 0.2, cw = 0.5, method = "fourier_country_k1")
+     annual <- data.frame(iso_code = "MWI", year = c(2024, 2025), cases_total = c(500, 1000))
+     fx <- .combiner_fixture(who = who, ai = ai, annual = annual, iso = "MWI")
+     out <- .run_combiner(fx$P)$out
+     expect_true(is.na(out$cases[out$date_start == as.Date("2024-11-25")]))
+     expect_equal(out$cases[out$date_start == as.Date("2024-12-30")], 40)
+})
+
+test_that("without an AFRO annual row the WHO weekly year-to-date total is the account (SOM 2026)", {
+     # Somalia (EMRO) has no AFRO annual row. Its three WHO weekly rows of 2026
+     # (82 + 78 + 73 = 233) are the epidemiological update's 2026 total, which the
+     # AI spread again over January-April.
+     fx <- .combiner_fixture(iso = "SOM")
+     who <- .who_processed(fx, c(120:124, 157:159), c(0, 0, 0, 0, 0, 82, 78, 73), 0, iso = "SOM")
+     ai <- list(w = c(125:130, 159:173), cases = c(rep(25, 6), seq(10.8, 17.1, length.out = 15)), deaths = 0,
+                cw = 0.7, method = "fourier_country_k1")
+     annual <- data.frame(iso_code = "GHA", year = 2026, cases_total = 10)
+     fx <- .combiner_fixture(who = who, ai = ai, annual = annual, iso = "SOM")
+     res <- .run_combiner(fx$P)
+     out <- res$out
+     yr <- as.integer(format(out$date_start + 3, "%Y"))
+     expect_false(any(out$disaggregation_method[yr == 2026] %in% "fourier_country_k1"))
+     expect_equal(sum(out$cases[yr == 2026], na.rm = TRUE), 233)
+     expect_true(all(grepl("WHO weekly year-to-date total \\(no AFRO annual row\\) 233",
+                           res$adj$detail[res$adj$rule == "imputed_dropped_annual_accounted"])))
+     # a year whose WHO weekly rows are all zero is not an account (no cases or no report)
+     expect_equal(sum(out$cases[yr == 2025 & out$disaggregation_method %in% "fourier_country_k1"]), 150)
+})
+
+test_that("an AI week repeating a WHO outbreak total is dropped (COG 2023 week 29)", {
+     run <- function(ai_w, ai_cases) {
+          fx <- .combiner_fixture(iso = "COG")
+          who <- .who_processed(fx, 30:40, c(21, 0, 0, 0, 48, rep(0, 6)), c(5, rep(0, 10)), iso = "COG")
+          ai <- list(w = ai_w, cases = ai_cases, deaths = NA, cw = 0.95, method = "observed")
+          fx <- .combiner_fixture(who = who, ai = ai, iso = "COG")
+          .run_combiner(fx$P)
+     }
+     res <- run(29, 63)
+     expect_false(any(res$out$date_start == as.Date("2023-07-17") & !is.na(res$out$cases)))
+     expect_equal(res$adj$rule[res$adj$cases_before %in% 63], "ai_cumulative_dropped")
+     expect_match(res$adj$detail[res$adj$rule == "ai_cumulative_dropped"], "WHO weekly total for the year of 69")
+     expect_equal(sum(res$out$cases, na.rm = TRUE), 69)
+     # not within 15% of a WHO cumulative, or far from any WHO week with cases: kept
+     res <- run(c(5, 29), c(63, 40))
+     expect_equal(res$out$cases[res$out$date_start %in% as.Date(c("2023-01-30", "2023-07-17"))], c(63, 40))
+     expect_false(any(res$adj$rule == "ai_cumulative_dropped"))
+})
+
+test_that("curated documented absences empty imputed weeks and flagged years stay unchanged (AGO, SSD, BFA)", {
+     # AGO 2023: fourier weeks dropped, the observed JHU zero kept
+     fx <- .combiner_fixture(iso = "AGO")
+     ai <- list(w = 1:5, cases = c(1.2, 1.1, 1.1, 1.3, 1.6), deaths = 0.02, cw = 0.45, method = "fourier_country_k2")
+     fx <- .combiner_fixture(jhu = list(w = 16, cases = 0, deaths = 0), ai = ai, iso = "AGO")
+     res <- .run_combiner(fx$P)
+     expect_true(all(is.na(res$out$cases[res$out$date_start < as.Date("2023-02-06")])))
+     expect_equal(res$out$cases[res$out$date_start == as.Date("2023-04-17")], 0)
+     expect_equal(sum(res$adj$rule == "imputed_dropped_curated"), 5L)
+     expect_match(res$adj$detail[res$adj$rule == "imputed_dropped_curated"][1], "^curated AGO-2023-absence")
+     # SSD: only weeks wholly inside 2023-05-17..2024-09-27 are dropped
+     fx <- .combiner_fixture(iso = "SSD")
+     ai <- list(w = 53:91, cases = 26, deaths = 0.3, cw = 0.45, method = "fourier_country_k2")
+     fx <- .combiner_fixture(ai = ai, iso = "SSD")
+     res <- .run_combiner(fx$P)
+     kept <- res$out[!is.na(res$out$cases), ]
+     expect_equal(kept$date_start, as.Date("2024-09-23"))              # the week of the first case
+     expect_equal(sum(res$adj$rule == "imputed_dropped_curated"), 38L)
+     # BFA 2025: kept and listed with unchanged values
+     fx <- .combiner_fixture(iso = "BFA")
+     ai <- list(w = 106:130, cases = 19.3, deaths = 0.8, cw = 0.49, method = "fourier_country_k1")
+     fx <- .combiner_fixture(ai = ai, iso = "BFA")
+     res <- .run_combiner(fx$P)
+     expect_equal(sum(res$out$cases, na.rm = TRUE), 25 * 19.3)
+     fl <- res$adj[res$adj$rule == "imputed_flagged_curated", ]
+     expect_equal(nrow(fl), 25L)
+     expect_equal(fl$cases_after, fl$cases_before)
 })
 
 test_that("raw WHO year-to-date dump + AI ramp end to end: no spike and no double count in the daily file", {
@@ -317,8 +595,14 @@ test_that("raw WHO year-to-date dump + AI ramp end to end: no spike and no doubl
      daily <- utils::read.csv(file.path(P$DATA_CHOLERA_DAILY, "cholera_surveillance_daily_combined.csv"))
      expect_equal(sum(daily$cases, na.rm = TRUE), 1391)
      expect_equal(sum(daily$deaths, na.rm = TRUE), 47)
-     expect_lte(max(daily$cases, na.rm = TRUE), 6)
+     expect_lte(max(daily$cases, na.rm = TRUE), 8)                     # 1,390 over 27 weeks
      expect_false(any(daily$disaggregation_method %in% "fourier_country_k1" & !is.na(daily$cases)))
+     # the curated window: nothing in January, all of it 30 Jan - 6 Aug, zeros after
+     dd <- as.Date(daily$date)
+     expect_true(all(is.na(daily$cases[dd < as.Date("2023-01-30")])))
+     expect_equal(sum(daily$cases[dd >= as.Date("2023-01-30") & dd <= as.Date("2023-08-06")]), 1390)
+     expect_true(all(daily$cases[dd >= as.Date("2023-08-07") & dd <= as.Date("2023-09-03")] == 0))
+     expect_true(all(daily$disaggregation_method[dd >= as.Date("2023-01-30") & dd <= as.Date("2023-09-03")] == "who_catchup_curated"))
 })
 
 test_that(".spread_count splits a whole count into whole weeks that sum exactly", {

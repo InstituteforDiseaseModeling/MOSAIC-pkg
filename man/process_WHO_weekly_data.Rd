@@ -59,7 +59,18 @@ deaths 0 or missing);
 report is at least twice the largest of the next four reported weeks, or the
 next two reported weeks both have 0 cases (a batch report between silent
 weeks; a single following zero is not enough, because during an active
-outbreak it is usually a missed week of a continuing series).
+outbreak it is usually a missed week of a continuing series);
+\item a fall of the first kind only (the report towers over the reports that
+follow it, which are not two zeros) follows at most four reported zeros --
+the four-week horizon the fall is tested over -- unless at least two of the
+next four reported weeks are zero. More than a month of reported zeros
+before a large report is as consistent with true zeros as with missing
+reports, and an explosive outbreak onset can halve within a week (a
+point-source outbreak: 120, 50, 30, 20 after twelve reported zeros is an
+onset, not a catch-up). A series that keeps alternating between reports and
+zeros after the report is reporting in batches (Nigeria 2023 weeks 35-43,
+Tanzania 2023 weeks 19-28), so there the window still reaches back to the
+previous non-zero report.
 }
 The report then covers week \eqn{t} and the silent weeks immediately before it,
 back to the previous non-zero report, never before week 1 of its epi year (the
@@ -85,6 +96,23 @@ weekly count. The as-published values stay in \code{cases_reported} and
 \code{catchup_cases} and \code{catchup_deaths} record each window. Rows outside a
 window have \code{cases == cases_reported} and missing window fields. Weekly sums
 over each country-year are unchanged.
+
+\strong{Curated windows.} Where a documented source dates the outbreak a report
+covers, the package's surveillance curation table
+(\code{inst/extdata/surveillance_curation.csv}, action \code{who_window}; see
+\code{\link{process_cholera_surveillance_data}}) replaces the rule for that
+report: the window starts at the WHO week containing the documented start date
+(South Africa 2023: the after-action review's 1 February; Namibia 2025: the
+first case on 2 March), and when a documented end date precedes the report,
+the cases are spread over the weeks up to that end and the weeks after it, to
+the report, carry 0 (South Africa: 31 July, the report arriving in week 35). A
+curated window can also spread a report the rule does not test (Cote d'Ivoire
+2025 week 33, the last week of its series). Its rows carry
+\code{disaggregation_method = "who_catchup_curated"}, the table row's id in
+\code{catchup_curation_id}, and the confidence weight of the weeks that carry
+cases. A curated window must lie within the report's epi year and cover only
+silent weeks before the report; a curated report that is no longer in the data
+(zero or missing) is skipped with a warning.
 
 \strong{Week convention.} The \code{year}/\code{week} columns are WHO's own
 \code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. WHO numbers weeks on

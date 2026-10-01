@@ -392,8 +392,11 @@ list_mosaic_data_steps <- function() {
             function(P) MOSAIC::process_AI_cholera_data(P)),
           S("downscale_weekly_cholera_data", "2A", "WHO weekly -> daily", "process_WHO_weekly_data",
             function(P) MOSAIC::downscale_weekly_cholera_data(P)),
+          # The combiner reconciles imputed rows against the WHO annual account
+          # (processed/WHO/annual/who_afro_annual.csv), so a failed annual step
+          # blocks it instead of letting it run against a stale or missing file.
           S("process_cholera_surveillance_data", "2A", "Multi-source combine (include_ai)",
-            c("process_WHO_weekly_data", "process_JHU_weekly_data",
+            c("process_WHO_annual_data", "process_WHO_weekly_data", "process_JHU_weekly_data",
               "process_SUPP_weekly_data", "process_AI_cholera_data"),
             function(P) MOSAIC::process_cholera_surveillance_data(P, include_ai = TRUE)),
 
