@@ -278,9 +278,11 @@ calc_model_likelihood <- function(obs_cases,
           week_offset <- .lik_week_offsets(week_offset, .tab_cases, obs_cases, .dates_cases,
                                            n_locations)
           # One block index per distinct boundary (all locations share one on
-          # the current surveillance), not one per location.
+          # the current surveillance), not one per location. A week cut by the
+          # start or end of the grid is not a weekly total, so it is dropped.
           .week_index <- lapply(stats::setNames(nm = unique(week_offset)),
-                                function(o) .mosaic_week_blocks(.dates_cases, o)$index)
+                                function(o) .mosaic_week_blocks(.dates_cases, o,
+                                                                partial = "drop")$index)
      }
      if (length(weights_time)     != n_time_steps) stop("weights_time must match n_time_steps.")
      if (any(weights_location < 0) || any(weights_time < 0)) stop("All weights must be >= 0.")
@@ -672,10 +674,11 @@ calc_model_likelihood <- function(obs_cases,
 # Weekly cells of the cases NB core for one location.
 #
 # Blocks are the reporting weeks of est_nb_dispersion() (.mosaic_week_blocks(),
-# with the offset it detected). A week is scored when all seven of its
-# days are usable -- finite observation, finite confidence weight, positive time
-# weight -- so a week cut by the start or end of the scored window, or holding a
-# missing day, is dropped, as the dispersion estimate drops it. A week whose
+# with the offset it detected). A week is scored when all seven of its days are
+# usable -- in a block, finite observation, finite confidence weight, positive
+# time weight -- so a week cut by the start or end of the scored window (no
+# block under partial = "drop", fewer than seven days under "keep"), or holding
+# a missing day, is dropped, as the dispersion estimate drops it. A week whose
 # simulated count is not finite on every day is dropped too (the daily path
 # zero-weighted such a cell). The gate (scored weeks, or their confidence-weight
 # sum) depends on the observations only, so it is the same for every draw.
@@ -688,16 +691,18 @@ calc_model_likelihood <- function(obs_cases,
 # .weights_obs_effective(): the confidence weights decide which weeks count
 # most, not the location's total weight.
 #
-# `g` is the block of each day, numbered from 1 (.mosaic_week_blocks()$index).
+# `g` is the block of each day, numbered from 1 (.mosaic_week_blocks()$index;
+# NA for a day in no block).
 # Returns list(y, mu, w, n_weeks, gate): weekly observed and simulated totals,
 # weekly scoring weights, the number of scored weeks and the gate value.
 .cases_weekly_cells <- function(obs, est, g, weights_time, wobs = NULL) {
      empty <- list(y = numeric(0), mu = numeric(0), w = numeric(0), n_weeks = 0L, gate = 0)
      n <- length(obs)
      if (n == 0L) return(empty)
-     usable <- is.finite(obs) & is.finite(weights_time) & weights_time > 0
+     usable <- !is.na(g) & is.finite(obs) & is.finite(weights_time) & weights_time > 0
      if (!is.null(wobs)) usable <- usable & is.finite(wobs)
-     n_blk <- g[n]
+     if (!any(usable)) return(empty)
+     n_blk <- max(g[usable])
      full <- tabulate(g[usable], nbins = n_blk) == 7L
      sel_obs <- usable & full[g]
      if (!any(sel_obs)) return(empty)

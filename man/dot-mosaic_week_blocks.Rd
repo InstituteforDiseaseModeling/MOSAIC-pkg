@@ -4,7 +4,7 @@
 \alias{.mosaic_week_blocks}
 \title{Reporting weeks of a daily grid}
 \usage{
-.mosaic_week_blocks(dates, offset = 0L)
+.mosaic_week_blocks(dates, offset = 0L, partial = c("keep", "drop"))
 }
 \arguments{
 \item{dates}{Vector of consecutive daily \code{Date}s.}
@@ -12,25 +12,42 @@
 \item{offset}{Integer 0-6, the day after Monday on which the reporting week
 starts: \code{est_nb_dispersion()$week_offset} (0, Monday, for every current
 MOSAIC location).}
+
+\item{partial}{\code{"keep"} (default) or \code{"drop"}: whether a week cut
+by the start or end of \code{dates} is a block of the days it has, or no
+block at all.}
 }
 \value{
 A list with \code{index} (integer, the block of each day, numbered
-from 1 at the block of \code{dates[1]}), \code{week_start} (\code{Date},
-the first day of each block, one per block) and \code{complete} (logical
-per block: all seven of its days lie in \code{dates}). Partial blocks at
-either end are \code{complete = FALSE}; weekly scoring drops them.
+from 1 at the first block; \code{NA} for the days of a dropped partial
+week), and, one entry per block, \code{week_start} (\code{Date}, the first
+day of the block's week), \code{complete} (logical: all seven of its days
+lie in \code{dates}; \code{FALSE} only for a kept partial week),
+\code{start} and \code{end} (positions in \code{dates} of the block's first
+and last day).
 }
 \description{
-The one definition of the reporting week, shared by the dispersion estimate
-(\code{est_nb_dispersion()}), the weekly cases likelihood
-(\code{calc_model_likelihood()}), the integrated deaths likelihood and any
-other weekly aggregation of a daily series, so all of them sum the same days.
-MOSAIC surveillance weeks run Monday to Sunday: processed weekly rows are
-dated by their Monday, \code{downscale_weekly_values()} spreads each total
-over that Monday to Sunday, and the daily totals of every complete week of
-config_default v6.0 sum exactly to the processed weekly totals it was built
-from (all 39 locations with data, 6,488 weeks). Blocks are
-counted from a fixed Monday (1970-01-05), never from the first day of the
-grid: config_default starts on a Sunday, whose block is a one-day partial week.
+The one definition of the reporting weeks of a daily grid, used by the
+weekly cases likelihood (\code{calc_model_likelihood()}) and the
+observation-level posterior predictive (\code{calc_model_ensemble()}), on
+the block formula \code{.nb_disp_block()} that the dispersion estimate
+(\code{est_nb_dispersion()}) and the integrated deaths likelihood aggregate
+with, so all of them sum the same days. MOSAIC surveillance weeks run Monday
+to Sunday: processed weekly rows are dated by their Monday,
+\code{downscale_weekly_values()} spreads each total over that Monday to
+Sunday, and the daily totals of every complete week of config_default v6.0
+sum exactly to the processed weekly totals it was built from (all 39
+locations with data, 6,488 weeks). Blocks are counted from a fixed Monday
+(1970-01-05), never from the first day of the grid: config_default starts on
+a Sunday, whose block is a one-day partial week.
+}
+\details{
+A week cut by the start or end of the grid is a partial week, and the two
+consumers treat it differently, so each states its choice through
+\code{partial}. The weekly cases likelihood scores weekly totals, which a
+partial week is not, so it drops them (\code{"drop"}: their days belong to
+no block). The observation-level predictive draws noise for every day,
+including days that are never scored, so it keeps them (\code{"keep"}: a
+partial week is a block of the days it has).
 }
 \keyword{internal}

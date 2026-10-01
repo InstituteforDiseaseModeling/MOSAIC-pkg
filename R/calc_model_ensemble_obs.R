@@ -21,12 +21,13 @@
 #           quasi-Poisson dispersion of the integrated deaths likelihood
 #           (deaths_integration$dispersion).
 #
-# Weeks are the blocks the dispersion was estimated on (.nb_disp_block() with
-# the location's reporting-week offset). The two likelihood floors -- the cases
-# eps floor and the deaths background -- are NOT part of the predictive: they
-# price a zero-prediction cell in the score, they are not a data-generating
-# process, and adding them would shift the predictive mean off the engine mean
-# by a tuning constant.
+# Weeks are the reporting weeks the weekly cases likelihood scores
+# (.mosaic_week_blocks() with the location's reporting-week offset), with the
+# partial weeks at the edges of the window kept (.mosaic_observation_blocks()).
+# The two likelihood floors -- the cases eps floor and the deaths background --
+# are NOT part of the predictive: they price a zero-prediction cell in the
+# score, they are not a data-generating process, and adding them would shift
+# the predictive mean off the engine mean by a tuning constant.
 # =============================================================================
 
 #' Resolve the observation model a calibration run scores with
@@ -135,14 +136,18 @@
 
 #' Weekly blocks of the ensemble's daily grid, per location
 #'
-#' Block boundaries follow \code{.nb_disp_block()} (Monday-anchored weeks shifted
-#' by the location's reporting-week offset), so the noise is applied to the same
-#' weekly totals the dispersion was estimated on. A week cut by the start or end
-#' of the window is a block of the days it has.
+#' The reporting weeks of \code{.mosaic_week_blocks()} -- the weeks the weekly
+#' cases likelihood scores, Monday-anchored and shifted by the location's
+#' reporting-week offset -- so the noise is applied to the same weekly totals
+#' the dispersion was estimated on. Unlike the likelihood, which drops a week
+#' cut by the start or end of the window (\code{partial = "drop"}), the
+#' predictive keeps it as a block of the days it has (\code{partial = "keep"}):
+#' every day gets an observation-level draw, including the burn-in days that are
+#' never scored.
 #'
 #' @param n_time Number of daily columns.
 #' @param date_start Date of the first column (\code{NULL}: weeks counted from
-#'   column 1).
+#'   column 1, as if it were a Monday).
 #' @param week_offset Integer offset per location.
 #' @return A list, one element per location, with \code{block} (block index of
 #'   each day, 1-based and contiguous), \code{start} and \code{end} (first and
@@ -150,12 +155,13 @@
 #' @noRd
 .mosaic_observation_blocks <- function(n_time, date_start, week_offset) {
   d0 <- if (is.null(date_start)) NA else tryCatch(as.Date(date_start), error = function(e) NA)
+  # Undated: the block anchor is a Monday, so a grid starting on it counts weeks
+  # from column 1.
+  if (is.na(d0)) d0 <- .NB_DISP_ANCHOR
+  dates <- d0 + seq_len(n_time) - 1L
   one <- function(off) {
-    raw <- if (is.na(d0)) floor((seq_len(n_time) - 1L - off) / 7)
-           else .nb_disp_block(d0 + seq_len(n_time) - 1L, off)
-    block <- cumsum(c(TRUE, diff(raw) != 0))
-    end <- which(c(diff(block) != 0, TRUE))
-    list(block = block, start = c(1L, end[-length(end)] + 1L), end = end)
+    b <- .mosaic_week_blocks(dates, off, partial = "keep")
+    list(block = b$index, start = b$start, end = b$end)
   }
   by_off <- lapply(sort(unique(week_offset)), one)
   names(by_off) <- as.character(sort(unique(week_offset)))

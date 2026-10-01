@@ -161,6 +161,52 @@ test_that("the shared block helper gives Monday-Sunday weeks from any start day"
      expect_identical(format(b3$week_start, "%a"), "Thu")
      expect_error(MOSAIC:::.mosaic_week_blocks(as.Date("2024-01-01") + c(0, 2)), "consecutive")
      expect_error(MOSAIC:::.mosaic_week_blocks(as.Date("2024-01-01") + 0:6, offset = 9), "0 to 6")
+     expect_error(MOSAIC:::.mosaic_week_blocks(as.Date("2024-01-01") + 0:6, partial = "trim"),
+                  "should be one of")
+})
+
+test_that("partial = 'drop' removes the edge weeks that partial = 'keep' makes blocks of", {
+     dates <- as.Date("2023-01-01") + 0:15                            # Sunday to Monday
+     k <- MOSAIC:::.mosaic_week_blocks(dates, partial = "keep")
+     expect_identical(k$start, c(1L, 2L, 9L, 16L))
+     expect_identical(k$end,   c(1L, 8L, 15L, 16L))
+     d <- MOSAIC:::.mosaic_week_blocks(dates, partial = "drop")
+     expect_identical(d$index, c(NA, rep(1L, 7), rep(2L, 7), NA))
+     expect_identical(d$week_start, as.Date(c("2023-01-02", "2023-01-09")))
+     expect_identical(d$complete, c(TRUE, TRUE))
+     expect_identical(d$start, c(2L, 9L))
+     expect_identical(d$end,   c(8L, 15L))
+     # A grid of whole weeks has nothing to drop.
+     w <- as.Date("2023-01-02") + 0:13
+     expect_identical(MOSAIC:::.mosaic_week_blocks(w, partial = "drop"),
+                      MOSAIC:::.mosaic_week_blocks(w, partial = "keep"))
+     # A grid inside one week has no complete block.
+     n <- MOSAIC:::.mosaic_week_blocks(as.Date("2023-01-03") + 0:3, partial = "drop")
+     expect_identical(n$index, rep(NA_integer_, 4))
+     expect_length(n$start, 0L)
+})
+
+test_that("the weekly cells are the same from a dropped-edge and a kept-edge block index", {
+     # The likelihood drops the edge weeks explicitly (partial = "drop"); its
+     # seven-usable-days rule drops them from a kept-edge index too, so the two
+     # give the same cells -- and a grid with no complete week gives none.
+     set.seed(11)
+     for (rep in 1:40) {
+          d0 <- as.Date("2023-01-01") + sample(0:6, 1)
+          n <- sample(c(3L, 20L, 61L), 1)
+          dates <- d0 + seq_len(n) - 1L
+          obs <- stats::rpois(n, 6); est <- stats::rgamma(n, 2, 0.3)
+          obs[sample(n, max(1L, n %/% 10))] <- NA
+          est[sample(n, 1)] <- NA
+          wt <- stats::runif(n, 0, 1); wt[sample(n, 1)] <- 0
+          wob <- rep(stats::runif(ceiling(n / 7) + 1, 0.5, 1), each = 7)[seq_len(n)]
+          off <- sample(0:6, 1)
+          gk <- MOSAIC:::.mosaic_week_blocks(dates, off, partial = "keep")$index
+          gd <- MOSAIC:::.mosaic_week_blocks(dates, off, partial = "drop")$index
+          for (wo in list(NULL, wob))
+               expect_identical(MOSAIC:::.cases_weekly_cells(obs, est, gd, wt, wo),
+                                MOSAIC:::.cases_weekly_cells(obs, est, gk, wt, wo))
+     }
 })
 
 test_that("downscaled weekly totals are recovered exactly on a Sunday-start grid", {

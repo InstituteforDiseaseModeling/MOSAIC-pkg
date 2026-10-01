@@ -69,6 +69,29 @@ test_that("weekly blocks are ISO Monday-Sunday weeks, not weeks counted from dat
   expect_identical(bl[[1]], bl[[3]]); expect_identical(bl[[2]], blk2)
 })
 
+test_that("the predictive's blocks are the likelihood's reporting weeks, edge weeks kept", {
+  # Single source: .mosaic_week_blocks(). The likelihood drops a week cut by
+  # the window edge (partial = "drop"); the predictive keeps it, because every
+  # day -- the never-scored burn-in included -- gets an observation-level draw.
+  d0 <- as.Date("2023-01-01"); n <- 45L
+  dates <- d0 + seq_len(n) - 1L
+  for (off in 0:6) {
+    wb  <- MOSAIC:::.mosaic_week_blocks(dates, off, partial = "keep")
+    blk <- MOSAIC:::.mosaic_observation_blocks(n, d0, off)[[1]]
+    expect_identical(blk, list(block = wb$index, start = wb$start, end = wb$end))
+    expect_identical(sum(!is.na(MOSAIC:::.mosaic_week_blocks(dates, off, partial = "drop")$index)),
+                     7L * sum(wb$complete))
+  }
+  # Undated: weeks counted from column 1 (as if it were a Monday), shifted by
+  # the offset -- the rule the predictive used before it shared the helper.
+  for (off in c(0L, 3L)) {
+    raw <- floor((seq_len(n) - 1L - off) / 7)
+    blk <- MOSAIC:::.mosaic_observation_blocks(n, NULL, off)[[1]]
+    expect_identical(blk$block, cumsum(c(TRUE, diff(raw) != 0)))
+    expect_identical(MOSAIC:::.mosaic_observation_blocks(n, "not a date", off)[[1]], blk)
+  }
+})
+
 # ---- cases: analytic NB moments; weekly coherence -----------------------------
 
 test_that("cases: weekly totals reproduce the analytic NB mean and variance on ISO weeks", {

@@ -125,32 +125,48 @@
 
 #' Reporting weeks of a daily grid
 #'
-#' The one definition of the reporting week, shared by the dispersion estimate
-#' (\code{est_nb_dispersion()}), the weekly cases likelihood
-#' (\code{calc_model_likelihood()}), the integrated deaths likelihood and any
-#' other weekly aggregation of a daily series, so all of them sum the same days.
-#' MOSAIC surveillance weeks run Monday to Sunday: processed weekly rows are
-#' dated by their Monday, \code{downscale_weekly_values()} spreads each total
-#' over that Monday to Sunday, and the daily totals of every complete week of
-#' config_default v6.0 sum exactly to the processed weekly totals it was built
-#' from (all 39 locations with data, 6,488 weeks). Blocks are
-#' counted from a fixed Monday (1970-01-05), never from the first day of the
-#' grid: config_default starts on a Sunday, whose block is a one-day partial week.
+#' The one definition of the reporting weeks of a daily grid, used by the
+#' weekly cases likelihood (\code{calc_model_likelihood()}) and the
+#' observation-level posterior predictive (\code{calc_model_ensemble()}), on
+#' the block formula \code{.nb_disp_block()} that the dispersion estimate
+#' (\code{est_nb_dispersion()}) and the integrated deaths likelihood aggregate
+#' with, so all of them sum the same days. MOSAIC surveillance weeks run Monday
+#' to Sunday: processed weekly rows are dated by their Monday,
+#' \code{downscale_weekly_values()} spreads each total over that Monday to
+#' Sunday, and the daily totals of every complete week of config_default v6.0
+#' sum exactly to the processed weekly totals it was built from (all 39
+#' locations with data, 6,488 weeks). Blocks are counted from a fixed Monday
+#' (1970-01-05), never from the first day of the grid: config_default starts on
+#' a Sunday, whose block is a one-day partial week.
+#'
+#' A week cut by the start or end of the grid is a partial week, and the two
+#' consumers treat it differently, so each states its choice through
+#' \code{partial}. The weekly cases likelihood scores weekly totals, which a
+#' partial week is not, so it drops them (\code{"drop"}: their days belong to
+#' no block). The observation-level predictive draws noise for every day,
+#' including days that are never scored, so it keeps them (\code{"keep"}: a
+#' partial week is a block of the days it has).
 #'
 #' @param dates Vector of consecutive daily \code{Date}s.
 #' @param offset Integer 0-6, the day after Monday on which the reporting week
 #'   starts: \code{est_nb_dispersion()$week_offset} (0, Monday, for every current
 #'   MOSAIC location).
+#' @param partial \code{"keep"} (default) or \code{"drop"}: whether a week cut
+#'   by the start or end of \code{dates} is a block of the days it has, or no
+#'   block at all.
 #' @return A list with \code{index} (integer, the block of each day, numbered
-#'   from 1 at the block of \code{dates[1]}), \code{week_start} (\code{Date},
-#'   the first day of each block, one per block) and \code{complete} (logical
-#'   per block: all seven of its days lie in \code{dates}). Partial blocks at
-#'   either end are \code{complete = FALSE}; weekly scoring drops them.
+#'   from 1 at the first block; \code{NA} for the days of a dropped partial
+#'   week), and, one entry per block, \code{week_start} (\code{Date}, the first
+#'   day of the block's week), \code{complete} (logical: all seven of its days
+#'   lie in \code{dates}; \code{FALSE} only for a kept partial week),
+#'   \code{start} and \code{end} (positions in \code{dates} of the block's first
+#'   and last day).
 #' @keywords internal
-.mosaic_week_blocks <- function(dates, offset = 0L) {
+.mosaic_week_blocks <- function(dates, offset = 0L, partial = c("keep", "drop")) {
+     partial <- match.arg(partial)
      dates <- as.Date(dates)
      if (!length(dates)) return(list(index = integer(0), week_start = as.Date(character(0)),
-                                     complete = logical(0)))
+                                     complete = logical(0), start = integer(0), end = integer(0)))
      if (length(dates) > 1L && any(as.numeric(diff(dates)) != 1))
           stop("dates must be consecutive days.", call. = FALSE)
      if (length(offset) != 1L || !is.finite(offset) || offset < 0 || offset > 6 || offset != round(offset))
@@ -158,9 +174,20 @@
      blk <- .nb_disp_block(dates, offset)
      index <- blk - blk[1L] + 1L
      n_blk <- index[length(index)]
-     list(index = index,
-          week_start = .NB_DISP_ANCHOR + as.integer(offset) + 7L * (blk[1L] + seq_len(n_blk) - 1L),
-          complete = tabulate(index, nbins = n_blk) == 7L)
+     n_days <- tabulate(index, nbins = n_blk)
+     end <- cumsum(n_days)
+     out <- list(index = index,
+                 week_start = .NB_DISP_ANCHOR + as.integer(offset) + 7L * (blk[1L] + seq_len(n_blk) - 1L),
+                 complete = n_days == 7L,
+                 start = end - n_days + 1L,
+                 end = end)
+     if (partial == "drop") {
+          # On consecutive days only the first and last blocks can be partial.
+          kept <- which(out$complete)
+          out <- list(index = match(index, kept), week_start = out$week_start[kept],
+                      complete = out$complete[kept], start = out$start[kept], end = out$end[kept])
+     }
+     out
 }
 
 #' Aggregate a daily observation row to complete Monday-Sunday weeks
