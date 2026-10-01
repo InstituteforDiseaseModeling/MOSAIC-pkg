@@ -8,7 +8,22 @@
 #'   \item \strong{DOCS_FIGURES}: Path to the directory where the plots will be saved.
 #' }
 #'
-#' @return A list containing the two ggplot objects: one for CFR and total cases, and one for Beta distributions.
+#' @details The Beta densities (AFRO Region and the countries with the lowest and
+#' highest CFR) are evaluated on an adaptive grid: a uniform grid of 1,000 points
+#' over the plotted range plus 500 points across each density's central
+#' 99.98% interval, so a very narrow density is resolved (the AFRO Region Beta,
+#' built from more than a million cases, has an SD of about 1e-4, ten times
+#' narrower than the spacing of a uniform 1,000-point grid from 0 to 1). The x axis
+#' runs from 0 to 1.1 times the largest 99.99% quantile of the plotted densities,
+#' and the y axis is on a square-root scale so the tall AFRO density and the much
+#' wider country densities are visible together. A density with
+#' \code{shape1 < 1} (a country with no recorded deaths) is unbounded at 0 and is
+#' drawn from the first grid point above 0.
+#'
+#' @return Invisibly, a list of the two ggplot objects: \code{cfr_and_cases}
+#'   (CFR and total cases) and \code{beta_distributions} (Beta densities;
+#'   \code{NULL} when no density could be drawn). Each figure drawn is also
+#'   saved to \code{PATHS$DOCS_FIGURES}.
 #'
 #' @importFrom ggplot2 ggplot aes geom_point geom_errorbar geom_bar scale_fill_manual scale_color_manual coord_flip labs theme_minimal scale_y_sqrt element_text margin theme geom_line scale_x_continuous scale_y_continuous
 #' @importFrom cowplot plot_grid
@@ -62,9 +77,9 @@ plot_CFR_by_country <- function(PATHS) {
 
      # Plot CFR with CIs
      p1 <- ggplot2::ggplot(cholera_data, ggplot2::aes(x = country, y = cfr, color = country)) +
-          ggplot2::geom_hline(yintercept = cholera_data$cfr[cholera_data$country == "AFRO Region"], linetype = "solid", color = "black", size = 0.25) +
+          ggplot2::geom_hline(yintercept = cholera_data$cfr[cholera_data$country == "AFRO Region"], linetype = "solid", color = "black", linewidth = 0.25) +
           ggplot2::geom_point(size = 3.5) +
-          ggplot2::geom_errorbar(ggplot2::aes(ymin = cfr_lo, ymax = cfr_hi), width = 0, size = 1) +
+          ggplot2::geom_errorbar(ggplot2::aes(ymin = cfr_lo, ymax = cfr_hi), width = 0, linewidth = 1) +
           ggplot2::scale_color_manual(values = pal) +  # Use the dynamically generated color palette
           ggplot2::scale_x_discrete(limits=rev) +
           ggplot2::coord_flip() +
@@ -107,22 +122,22 @@ plot_CFR_by_country <- function(PATHS) {
      cfr_country_max <- as.character(filtered_data$country[which.max(filtered_data$cfr)])
 
      selected_countries <- c("AFRO Region", cfr_country_min, cfr_country_max)  # Customize this list as needed
-     x_vals <- seq(0, 1, length.out = 1000)
 
-     # Filter out rows with missing or invalid shape1 and shape2 parameters
-     beta_density <- cholera_data %>%
-          dplyr::filter(country %in% selected_countries, !is.na(shape1), !is.na(shape2), shape1 > 0, shape2 > 0) %>%
-          dplyr::group_by(country) %>%
-          dplyr::do(data.frame(x = x_vals, density = dbeta(x_vals, .$shape1, .$shape2), country = .$country))
+     # Filter out rows with missing or invalid shape1 and shape2 parameters, then
+     # evaluate each density on an adaptive grid (see @details)
+     beta_params <- cholera_data %>%
+          dplyr::filter(country %in% selected_countries, !is.na(shape1), !is.na(shape2), shape1 > 0, shape2 > 0)
+     beta_density <- .cfr_beta_density_grid(beta_params)
 
+     p3 <- NULL
      if (nrow(beta_density) > 0) {
           p3 <- ggplot2::ggplot(beta_density, ggplot2::aes(x = x, y = density, color = country)) +
                ggplot2::geom_line(linewidth = 1.25) +
                ggplot2::geom_line(data=beta_density[beta_density$country == "AFRO Region",], linewidth = 1.25) +
                ggplot2::scale_color_manual(values = pal[selected_countries]) +
                ggplot2::scale_x_continuous(expand = c(0.005, 0.005)) +
-               ggplot2::scale_y_continuous(expand = c(0.005, 0.005)) +
-               ggplot2::labs(x = "Case Fatality Ratio (CFR)", y = "Density") +
+               ggplot2::scale_y_sqrt(expand = c(0.005, 0.005)) +
+               ggplot2::labs(x = "Case Fatality Ratio (CFR)", y = "Density (square-root scale)") +
                ggplot2::theme_minimal() +
                ggplot2::theme(legend.position = "right", legend.title = ggplot2::element_blank())
 
@@ -136,5 +151,35 @@ plot_CFR_by_country <- function(PATHS) {
           message("Beta distributions could not be generated: insufficient data for min and max CFR countries.")
      }
 
+     invisible(list(cfr_and_cases = combined_plot, beta_distributions = p3))
+}
 
+
+# Beta densities for plot_CFR_by_country() on an adaptive grid. `params` has one
+# row per curve with columns country, shape1, shape2. Each curve is evaluated on
+# a uniform grid of n_base points over [0, x_max], where x_max is 1.1 times the
+# largest (1 - tail_p) quantile (capped at 1), plus n_dense points spanning its
+# own [tail_p, 1 - tail_p] quantile interval. Dense points that fall outside the
+# uniform grid's interior are dropped, so a J-shaped density (shape1 < 1 or
+# shape2 < 1, unbounded at an end) starts at the first grid point inside (0, 1)
+# instead of climbing towards infinity; non-finite densities are removed.
+# Returns a data frame with columns country, x, density.
+.cfr_beta_density_grid <- function(params, n_base = 1000L, n_dense = 500L, tail_p = 1e-4) {
+     empty <- data.frame(country = character(0), x = numeric(0), density = numeric(0))
+     if (is.null(params) || !nrow(params)) return(empty)
+     x_max <- min(1, 1.1 * max(stats::qbeta(1 - tail_p, params$shape1, params$shape2)))
+     base <- seq(0, x_max, length.out = n_base)
+     inner <- base[base > 0 & base < 1]
+     out <- lapply(seq_len(nrow(params)), function(i) {
+          a <- params$shape1[i]
+          b <- params$shape2[i]
+          dense <- seq(stats::qbeta(tail_p, a, b), stats::qbeta(1 - tail_p, a, b), length.out = n_dense)
+          dense <- dense[dense >= min(inner) & dense <= max(inner)]
+          x <- sort(unique(c(base, dense)))
+          dens <- stats::dbeta(x, a, b)
+          keep <- is.finite(dens)
+          data.frame(country = rep(params$country[i], sum(keep)), x = x[keep], density = dens[keep],
+                     stringsAsFactors = FALSE)
+     })
+     do.call(rbind, out)
 }
