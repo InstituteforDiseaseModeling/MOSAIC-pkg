@@ -113,6 +113,12 @@
 .mosaic_mk_render_worker <- function(fn_name, args, arg_name) {
   force(fn_name); force(args); force(arg_name)
   function(el) {
+    # Inlined (not .mosaic_with_null_device()) so a worker running an older
+    # installed build still resolves it.
+    grDevices::pdf(NULL)
+    dev <- grDevices::dev.cur()
+    on.exit(if (dev %in% grDevices::dev.list()) grDevices::dev.off(dev),
+            add = TRUE)
     a <- args
     a[[arg_name]] <- el
     do.call(getExportedValue("MOSAIC", fn_name), a)
@@ -130,12 +136,44 @@
 #' @return Invisibly, whatever \code{plot_model_trajectories()} returns.
 #' @noRd
 .mosaic_traj_render_worker <- function(location) {
+  grDevices::pdf(NULL)
+  dev <- grDevices::dev.cur()
+  on.exit(if (dev %in% grDevices::dev.list()) grDevices::dev.off(dev),
+          add = TRUE)
   plot_model_trajectories(
     trajectories = get("traj", envir = globalenv()),
     location     = location,
     output_dir   = get("out_traj", envir = globalenv()),
     verbose      = FALSE
   )
+}
+
+#' Hold a null graphics device for the duration of a render
+#'
+#' Several plotting functions draw to the current device as a side effect --
+#' \code{plot_spatial_hazard()}, \code{plot_diffusion_pi()},
+#' \code{plot_departure_tau()} and \code{plot_mobility_flux_matrix()} call
+#' \code{print()}, \code{plot_mobility_flux_network()} calls
+#' \code{gridExtra::grid.arrange()}, and \code{plot_model_likelihood()} prints
+#' when \code{verbose = TRUE}. With no device open, R opens the default one,
+#' which under \code{Rscript} is \code{pdf("Rplots.pdf")} in the working
+#' directory. Opening \code{pdf(NULL)} first gives those draws somewhere to go
+#' that writes nothing. \code{ggsave()} opens and closes its own device and
+#' returns to this one, so files are unaffected.
+#'
+#' @return The device number, for \code{.mosaic_release_device()}.
+#' @noRd
+.mosaic_hold_null_device <- function() {
+  grDevices::pdf(NULL)
+  grDevices::dev.cur()
+}
+
+#' Close a device opened by .mosaic_hold_null_device(), if still open
+#' @param dev Device number.
+#' @noRd
+.mosaic_release_device <- function(dev) {
+  if (dev %in% grDevices::dev.list()) grDevices::dev.off(dev)
+  invisible(NULL)
 }
 
 #' Render all MOSAIC figures from a finished run directory
@@ -241,6 +279,10 @@ render_MOSAIC_figures <- function(dir_output,
   # Directory tree (creates any missing figures subdirs; clean_output = FALSE
   # so existing artifacts are never clobbered).
   dirs <- .mosaic_ensure_dir_tree(dir_output, clean_output = FALSE)
+
+  # Stray draws (print() inside plot_* functions) go here, not to Rplots.pdf.
+  null_dev <- .mosaic_hold_null_device()
+  on.exit(.mosaic_release_device(null_dev), add = TRUE)
 
   .vmsg <- function(...) if (verbose) message(sprintf(...))
 
