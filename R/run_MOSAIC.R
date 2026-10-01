@@ -644,8 +644,15 @@
 #'   Resume is \strong{rejected} (hard error) when:
 #'   \itemize{
 #'     \item \code{control$paths$clean_output = TRUE} (the wipe would delete the shards);
-#'     \item the run already completed -- a consolidated \code{2_calibration/samples.parquet}
-#'       exists that the on-disk shards would shrink (start fresh, or remove it to recompute);
+#'     \item the shards were already combined -- a consolidated
+#'       \code{2_calibration/samples.parquet} exists that the on-disk shards would
+#'       shrink (start fresh, or remove it to recompute). Combining deletes the
+#'       shards and the resume checkpoint, so this covers not only a finished run
+#'       but also one that \strong{died after combining shards and before writing
+#'       \code{3_results/summary.json}} (e.g. in the ensemble or figure
+#'       steps). Such a run cannot be resumed and must be restarted with
+#'       \code{resume = FALSE}. \code{3_results/summary.json} is written last and
+#'       is the marker of a completed run;
 #'     \item the supplied \code{config}, \code{priors}, \code{control$likelihood},
 #'       \code{control$sampling}, \code{control$calibration$n_iterations}, or the
 #'       calibration mode (auto vs fixed) differ from those persisted in
@@ -767,6 +774,9 @@
 #' # If a calibration is killed mid-run, re-call with resume = TRUE and the same
 #' # config/priors/output directory. Completed simulations on disk are reused and
 #' # the run continues from the next sim_id (bit-identical to an uninterrupted run).
+#' # This works only while the per-sim shards exist: a run that died after they
+#' # were combined into samples.parquet (no 3_results/summary.json) must be rerun
+#' # with resume = FALSE.
 #' run_MOSAIC(config, priors, "./output", resume = TRUE)
 #' }
 #'
