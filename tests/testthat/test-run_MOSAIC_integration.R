@@ -235,13 +235,14 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   # (7) Ensemble-only fit metrics (v0.39 best-model removal) + central_method
   # provenance (v0.38). The single-model best fields must be GONE; the canonical
   # ensemble fields, the central_method provenance, and the dual cross-walk
-  # fields must all be present (and default to the package "mean").
+  # fields must all be present (and carry the package default: the median for
+  # cases and the mean for deaths since v0.101.0; both mean in v0.98.0-v0.100.x).
   expect_false(any(c("r2_cases", "r2_deaths", "bias_ratio_cases", "bias_ratio_deaths")
                    %in% names(summ)))
   expect_true(all(c("r2_cases_ensemble", "central_method_cases", "central_method_deaths",
                     "r2_cases_ensemble_mean", "r2_cases_ensemble_median")
                   %in% names(summ)))
-  expect_equal(summ$central_method_cases,  "mean")     # the default from v0.98.0
+  expect_equal(summ$central_method_cases,  "median")
   expect_equal(summ$central_method_deaths, "mean")
 
   # (8) Integrated deaths likelihood (v0.96.0): the posterior reported CFR by
