@@ -27,11 +27,16 @@
 #   - Parallel settings
 #
 # RESUME BEHAVIOR:
-#   Script automatically detects completed countries by checking for:
-#   - Existence of output directory
-#   - Presence of 2_calibration/samples.parquet
-#   - Presence of 2_calibration/diagnostics/convergence_results.parquet
-#   If all exist, country is skipped. To force re-run, delete output directory.
+#   A country is complete -- and skipped -- only when
+#   3_results/summary.json exists. run_MOSAIC() writes it last, after the
+#   ensemble and figures, so it is the canonical completion marker.
+#   A directory holding 2_calibration/samples.parquet but no summary.json
+#   crashed AFTER the per-sim shards were combined (and deleted). run_MOSAIC()
+#   cannot resume that state (resume = TRUE is rejected once samples.parquet
+#   exists with no shards behind it), so the country is flagged in the log and
+#   the summary table and rerun fresh. Any other incomplete directory is also
+#   rerun fresh. To force a re-run of a complete country, delete its directory
+#   or set FORCE_RERUN.
 #
 # OUTPUT STRUCTURE:
 #   ~/MOSAIC/output/{ISO_CODE}/        # Per-country output
@@ -127,21 +132,21 @@ log_message <- function(msg, log_file) {
   cat(msg, file = log_file, append = TRUE)
 }
 
-#' Check if country calibration is complete
-is_country_complete <- function(dir_output) {
-  # Check for existence of key output files. As of v0.42.0 these live under
-  # 2_calibration/ (not the dir root): samples.parquet and the convergence
-  # results parquet in 2_calibration/diagnostics/.
-  if (!dir.exists(dir_output)) return(FALSE)
-
-  required_files <- c(
-    file.path(dir_output, "2_calibration", "samples.parquet"),
-    file.path(dir_output, "2_calibration", "diagnostics", "convergence_results.parquet")
-  )
-
-  files_exist <- file.exists(required_files)
-
-  return(all(files_exist))
+#' Classify a country's output directory
+#'
+#' "complete": 3_results/summary.json exists (written last by run_MOSAIC).
+#' "crashed_after_combine": 2_calibration/samples.parquet exists but
+#'   summary.json does not -- the run died after combining (and deleting) its
+#'   shards. Not resumable; must be rerun fresh.
+#' "incomplete": the directory exists but neither marker does.
+#' "absent": no directory.
+country_run_state <- function(dir_output) {
+  if (!dir.exists(dir_output)) return("absent")
+  if (file.exists(file.path(dir_output, "3_results", "summary.json")))
+    return("complete")
+  if (file.exists(file.path(dir_output, "2_calibration", "samples.parquet")))
+    return("crashed_after_combine")
+  "incomplete"
 }
 
 #' Get directory size in GB
@@ -252,7 +257,8 @@ for (i in seq_along(COUNTRIES)) {
   dir_output <- file.path(OUTPUT_BASE, iso)
 
   # Check if already complete
-  if (!FORCE_RERUN && SKIP_COMPLETED && is_country_complete(dir_output)) {
+  run_state <- country_run_state(dir_output)
+  if (!FORCE_RERUN && SKIP_COMPLETED && run_state == "complete") {
     skip_msg <- sprintf("   Country %s already complete (skipping)\n", iso)
     log_message(skip_msg, master_log_file)
 
@@ -266,6 +272,17 @@ for (i in seq_along(COUNTRIES)) {
       stringsAsFactors = FALSE
     ))
     next
+  }
+
+  rerun_note <- NA_character_
+  if (run_state == "crashed_after_combine") {
+    rerun_note <- paste0("previous run crashed after combining shards ",
+                         "(samples.parquet, no summary.json); rerun fresh")
+    log_message(sprintf(paste0(
+      "   WARNING: %s crashed after its shards were combined: ",
+      "2_calibration/samples.parquet exists but 3_results/summary.json does not.\n",
+      "   run_MOSAIC() cannot resume this state; rerunning fresh.\n"), iso),
+      master_log_file)
   }
 
   # Create output directory
@@ -371,7 +388,7 @@ for (i in seq_along(COUNTRIES)) {
       iso_code = iso,
       status = "SUCCESS",
       runtime_hours = as.numeric(country_runtime),
-      error_message = NA_character_,
+      error_message = rerun_note,
       output_size_gb = output_size,
       compressed = compressed,
       stringsAsFactors = FALSE
@@ -381,7 +398,8 @@ for (i in seq_along(COUNTRIES)) {
       iso_code = iso,
       status = "FAILED",
       runtime_hours = as.numeric(country_runtime),
-      error_message = calibration_status$message,
+      error_message = if (is.na(rerun_note)) calibration_status$message else
+        paste0(calibration_status$message, " [", rerun_note, "]"),
       output_size_gb = output_size,
       compressed = FALSE,
       stringsAsFactors = FALSE

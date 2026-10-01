@@ -1,7 +1,8 @@
 "variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
-"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal, the shipped prior","point",NA,NA,NA,"low",0.0135920545333209
-"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal, the shipped prior","point",NA,NA,NA,"median",74.68836389977
-"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal, the shipped prior","point",NA,NA,NA,"mode",3.08443958606471e-07
-"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal, the shipped prior","point",NA,NA,NA,"high",410412.692823529
-"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal, the shipped prior","lognormal",NA,NA,NA,"meanlog",4.31332430891778
-"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal, the shipped prior","lognormal",NA,NA,NA,"sdlog",4.39375124201383
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal truncated below at 1, the shipped prior","point",NA,NA,NA,"low",1.4315099748457
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal truncated below at 1, the shipped prior","point",NA,NA,NA,"median",184.558084087297
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal truncated below at 1, the shipped prior","point",NA,NA,NA,"mode",1
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal truncated below at 1, the shipped prior","point",NA,NA,NA,"high",570871.376911399
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal truncated below at 1, the shipped prior","lognormal",NA,NA,NA,"meanlog",4.31332430891778
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal truncated below at 1, the shipped prior","lognormal",NA,NA,NA,"sdlog",4.39375124201383
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); direct literature-anchor (A) lognormal truncated below at 1, the shipped prior","lognormal",NA,NA,NA,"lower",1

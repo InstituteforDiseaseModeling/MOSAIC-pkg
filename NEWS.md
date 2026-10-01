@@ -1,3 +1,31 @@
+# MOSAIC 0.100.1
+
+Data-object rebuild on the v0.100.0 estimators and the corrected, refreshed data (MOSAIC-data 64b69ab, 6f41244). **Calibration results change.**
+
+## Default data objects
+- `priors_default` v17.0 and `config_default` v6.0 are rebuilt; the window is 2023-01-01 to 2027-04-29 on a new 10-seed production psi (seeds 11-110; an independent 10-seed replicate agrees at median r 0.96 over 2023+). `config_default$date_stop` moves from 2027-02-04 to 2027-04-29.
+- sigma prior Beta(4.30, 13.51) -> Beta(3.75, 7.12) (mean 0.24 -> 0.35) after correcting the Harris et al. 2008 row (127/202 = 0.629, previously mistranscribed as 0.184). The builder now reads `param_sigma_prop_symptomatic.csv`; the config sigma is the prior mean (0.345).
+- chi priors refit at the published 2.5% quantile (means unchanged).
+- alpha_2, phi_1, phi_2, p_beta and theta_j keep their centres and requested CIs, now hit exactly by the corrected `fit_beta_from_ci()` (e.g. p_beta Beta(7.03, 13.24) -> Beta(5.48, 10.10)); theta_j ERI 0.708 -> 0.720. tau_i, the mobility Gammas, kappa, zeta_1/zeta_2, beta_j0_tot and the mu_jt block are unchanged in value.
+- Initial conditions are estimated at `date_start` (2023-01-01). The builder used to seed them at the month with the most active-case countries within a year of the start (2023-02-01), so countries with an outbreak under way on 1 January but none reported just before 1 February (TZA, AGO, BEN, UGA) got the near-zero E/I template and failed to ignite in ~90% of draws. prop_E/I are back-calculated from a 28-day surveillance window straddling `date_start` (`est_initial_E_I(lookahead_days = )`, new), A quiet-start country gets a weak seeding prior, Beta(1, 1e5) for E and for I (`est_initial_E_I(quiet_start = "seed")`, new; mean 1e-5, the v16.1 scale, so ~50-700 people in E + I), standing in for undetected circulation or importation that the model has no mechanism for. A country is a quiet start when it reports at least one case after the window, up to `date_stop`, and either (a) reports no cases in the window or (b) its window-based E/I priors imply fewer than one expected initial infection, N x (E[prop_E] + E[prop_I]) < 1. That seeds BFA CAF CIV GHA NAM NER RWA SWZ TCD TGO under (a) and COG (one case in the window) under (b), listed in `priors_default$metadata$quiet_start_seeded`. Window-based priors implying at least one expected infection (AGO, BEN, UGA, ...) are kept, and the 11 countries with no cases anywhere up to `date_stop` keep the near-zero template. Every other country starts with E + I >= 1 in >= 98% of draws (lowest UGA and AGO, ~4-6 expected initial infections); single-location runs of the seeded countries produce cases in the first 60 days in 90-100% of 100 draws (1-4% before). prop_R priors are about 25x lower (the model's own reporting chain and a mean-keeping refit); V1/V2 are effective immunisations weighted by phi.
+- Seasonal priors and the config give a positive transmission envelope at the prior means (29 of 40 countries were negative at the v16.1 means). Independent draws from the seasonal priors still dip below zero in ~33% of draws, which the engine clamps to zero human transmission; the builder reports this share. Shrinking the prior SDs enough to remove it would have pinned the amplitudes.
+- zeta_ratio prior truncated at 1; config zeta_ratio 185, zeta_2 1.78e6.
+- nu_jt from deduplicated OCV campaigns (-11% doses over 2023-27); theta_j WASH imputation fix (ERI); demographic inputs regenerated (UN WPP 2026-09-18).
+- mu_jt is unchanged: the CFR GAM input is identical.
+- `reported_cases`/`reported_deaths` follow the corrected surveillance: over the v5.1 window 304 case cells change NA status and 2,437 of 36,865 observed case cells change value; `config_default$epidemic_peaks` 54 -> 62 rows.
+- Toy endemic/epidemic configs rebuilt; `estimated_parameters` unchanged (v1.3.0); `epidemic_peaks` 159 peaks detected on observed weeks only.
+
+## Reproducibility
+- `est_initial_E_I()`, `est_initial_R()` and `est_initial_S()` gain an optional `seed` argument, derived per location (a collision-free hash of the ISO code) and per draw, identical with or without forking, and restoring the caller's RNG. The priors builder passes `ic_seed` and uses 1000 E/I draws, so `priors_default` rebuilds are byte-reproducible.
+
+## Tests
+- `test-two-route-balance.R` evaluates the env/human route balance as the median over five seeds (a single run's p_star ranged 0.48-0.76) against the shipped p_beta prior; `test-ic_select_epoch.R` is removed with the selector.
+
+## Fixes
+- `render_MOSAIC_figures()` no longer leaves `Rplots.pdf` in the working directory. Several `plot_*` functions (`plot_spatial_hazard`, `plot_diffusion_pi`, `plot_departure_tau`, `plot_mobility_flux_matrix`, `plot_mobility_flux_network`, and `plot_model_likelihood` when verbose) draw to the current device, which opened R's default PDF device under Rscript; the renderer and its parallel workers now hold a null device while rendering. Written figures are unchanged.
+- `vm/launch_mosaic_individual.R` treats a country as complete only when `3_results/summary.json` exists. A run that crashed after its shards were combined was previously skipped as finished; it is now flagged and rerun fresh.
+- `run_MOSAIC()` docs: a run that dies after combining shards into `samples.parquet` cannot be resumed and must be restarted with `resume = FALSE`; `3_results/summary.json` marks a completed run.
+
 # MOSAIC 0.100.0
 
 Production-readiness deep review of everything since the pure-R engine refactor (v0.67.0): 18 component and cross-cutting reviewers, every finding adversarially verified (249 confirmed), fixed in 12 file-owner groups, red-teamed, and integrated. **Calibration results change**; the resume guard refuses to pool simulations from earlier versions.

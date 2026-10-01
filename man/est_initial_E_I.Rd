@@ -11,9 +11,14 @@ est_initial_E_I(
   n_samples = 1000,
   t0 = NULL,
   lookback_days = 21,
+  lookahead_days = 0,
+  quiet_start = c("template", "seed"),
+  quiet_seed_shape1 = 1,
+  quiet_seed_shape2 = 1e+05,
   verbose = TRUE,
   parallel = FALSE,
-  variance_inflation = 2
+  variance_inflation = 2,
+  seed = NULL
 )
 }
 \arguments{
@@ -28,7 +33,13 @@ Must include \code{config$location_name} and \code{config$date_start}.}
 
 \item{t0}{Target date for estimation (default from \code{config$date_start}).}
 
-\item{lookback_days}{Days of surveillance data to use (default 21).}
+\item{lookback_days}{Days of surveillance data before t0 to use (default 21).}
+
+\item{lookahead_days}{Days of surveillance data from t0 onward that also enter the onset-rate estimate (default 0). With weekly reports downscaled to days, a window that ends at t0 can miss an outbreak already under way at t0; a window straddling t0 estimates the onset rate at t0 itself. A location gets the near-zero template only when the whole window \verb{[t0 - lookback_days, t0 + lookahead_days)} reports no cases.}
+
+\item{quiet_start}{What a "quiet-start" location gets. A location is a quiet start when it reports at least one case after the surveillance window, up to \code{config$date_stop} (the end of the data when \code{config$date_stop} is NULL), and EITHER (a) its window around t0 reports no cases (or is all NA), OR (b) the E/I priors the window gives imply fewer than one expected initial infection, \code{N * (E[prop_E] + E[prop_I]) < 1}, with \code{N} the population at t0 used in the fit and \code{E[.]} the Beta means. \code{"template"} (default) leaves the window's priors in place: the near-zero Beta(0.01, 99999.99) for (a), the data-based Beta for (b). \code{"seed"} gives E and I each the weak seeding prior Beta(\code{quiet_seed_shape1}, \code{quiet_seed_shape2}) instead: it stands in for undetected circulation or importation that the model has no mechanism for, so a single-location fit can still reproduce the later outbreak. Locations with no cases anywhere up to \code{config$date_stop}, and locations whose window-based priors imply at least one expected initial infection, are never changed.}
+
+\item{quiet_seed_shape1, quiet_seed_shape2}{Beta shapes of the quiet-start seeding prior (default 1 and 1e5: mean 1e-5 of the population per compartment, mode at zero).}
 
 \item{verbose}{Print progress messages (default TRUE).}
 
@@ -37,12 +48,15 @@ Must include \code{config$location_name} and \code{config$date_start}.}
 available cores. Note: Not supported on Windows.}
 
 \item{variance_inflation}{Multiplicative CI factor for the Beta refit (default 2): the Beta keeps the Monte Carlo mean and its spread is fit to the target 95\% CI mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be > 1.1 for meaningful variance.}
+
+\item{seed}{Optional integer seed. When given, each location's Monte Carlo draws use seeds derived from \code{seed} and the ISO code, so results are reproducible and identical with or without \code{parallel}; the caller's RNG state is restored. NULL (default) draws from the session RNG.}
 }
 \value{
 A list with two main components:
 \describe{
 \item{metadata}{List containing estimation details: description, version, date, t0,
-lookback_days, n_samples, and method.}
+lookback_days, lookahead_days, n_samples, method, quiet_start and
+quiet_start_seeded (the locations given the seeding prior).}
 \item{parameters_location}{List with \code{prop_E_initial} and \code{prop_I_initial}, each containing:
 \itemize{
 \item parameter_name: Parameter identifier
