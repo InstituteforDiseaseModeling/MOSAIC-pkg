@@ -95,3 +95,55 @@ test_that("quiet_start = 'seed' floors quiet-start locations only", {
      expect_error(run(quiet_start = "seed", quiet_seed_shape2 = -1), "quiet_seed_shape")
      expect_error(run(quiet_start = "bogus"))
 })
+
+test_that("quiet_start = 'seed' also floors a window prior implying < 1 expected infection", {
+     root <- withr::local_tempdir()
+     t0 <- as.Date("2023-01-01")
+     dates <- seq(t0 - 30, t0 + 400, by = "day")
+     surv <- rbind(
+          # COG: one case in the window, an outbreak later
+          data.frame(date = dates, iso_code = "COG",
+                     cases = ifelse(dates == t0 + 3 | dates >= t0 + 100, 1, 0) * ifelse(dates >= t0 + 100, 15, 1)),
+          # AGO: a few cases a day around t0 and later (>= 1 expected infection)
+          data.frame(date = dates, iso_code = "AGO", cases = 2),
+          # LBR: one case in the window, nothing later
+          data.frame(date = dates, iso_code = "LBR", cases = ifelse(dates == t0 + 3, 1, 0)))
+     utils::write.csv(surv, file.path(root, "cholera_surveillance_daily_combined.csv"), row.names = FALSE)
+     pops <- c(COG = 6.2e6, AGO = 3.7e7, LBR = 5.5e6)
+     utils::write.csv(data.frame(date = t0, iso_code = names(pops), total_population = pops),
+                      file.path(root, "UN_world_population_prospects_daily.csv"), row.names = FALSE)
+     PATHS <- list(DATA_CHOLERA_DAILY = root, DATA_DEMOGRAPHICS = root)
+     cfg <- list(location_name = names(pops), date_start = t0, date_stop = t0 + 400)
+     run <- function(...) suppressWarnings(est_initial_E_I(
+          PATHS, MOSAIC::priors_default, cfg, n_samples = 200, t0 = t0, lookback_days = 14,
+          lookahead_days = 14, verbose = FALSE, variance_inflation = 10, seed = 1, ...))
+     expected_EI <- function(res, iso) {
+          m <- function(x) x$shape1 / (x$shape1 + x$shape2)
+          pops[[iso]] * (m(res$parameters_location$prop_E_initial$parameters$location[[iso]]) +
+                         m(res$parameters_location$prop_I_initial$parameters$location[[iso]]))
+     }
+     tmpl <- run()
+     # Preconditions: COG and LBR get a data-based prior below one expected
+     # initial infection, AGO one above it.
+     for (iso in names(pops)) {
+          expect_identical(tmpl$parameters_location$prop_E_initial$parameters$location[[iso]]$method,
+                           "variance_inflation")
+     }
+     expect_lt(expected_EI(tmpl, "COG"), 1)
+     expect_lt(expected_EI(tmpl, "LBR"), 1)
+     expect_gte(expected_EI(tmpl, "AGO"), 1)
+
+     seeded <- run(quiet_start = "seed")
+     loc_E <- seeded$parameters_location$prop_E_initial$parameters$location
+     loc_I <- seeded$parameters_location$prop_I_initial$parameters$location
+     for (fit in list(loc_E$COG, loc_I$COG)) {
+          expect_identical(fit$method, "quiet_start_seed")
+          expect_equal(c(fit$shape1, fit$shape2), c(1, 1e5))
+     }
+     # >= 1 expected infection, or no later cases: the data-based prior stays.
+     for (iso in c("AGO", "LBR")) {
+          expect_identical(loc_E[[iso]], tmpl$parameters_location$prop_E_initial$parameters$location[[iso]])
+          expect_identical(loc_I[[iso]], tmpl$parameters_location$prop_I_initial$parameters$location[[iso]])
+     }
+     expect_identical(seeded$metadata$quiet_start_seeded, "COG")
+})

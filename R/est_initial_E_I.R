@@ -27,7 +27,7 @@
 #' @param t0 Target date for estimation (default from `config$date_start`).
 #' @param lookback_days Days of surveillance data before t0 to use (default 21).
 #' @param lookahead_days Days of surveillance data from t0 onward that also enter the onset-rate estimate (default 0). With weekly reports downscaled to days, a window that ends at t0 can miss an outbreak already under way at t0; a window straddling t0 estimates the onset rate at t0 itself. A location gets the near-zero template only when the whole window `[t0 - lookback_days, t0 + lookahead_days)` reports no cases.
-#' @param quiet_start What a "quiet-start" location gets: one whose surveillance window around t0 reports no cases (or is all NA) but which reports cases later, after the window and up to `config$date_stop` (the end of the data when `config$date_stop` is NULL). `"template"` (default) gives it the near-zero Beta(0.01, 99999.99), like a location with no cases at all. `"seed"` gives E and I each the weak seeding prior Beta(`quiet_seed_shape1`, `quiet_seed_shape2`): it stands in for undetected circulation or importation that the model has no mechanism for, so a single-location fit can still reproduce the later outbreak. Locations with no cases anywhere in that span always keep the near-zero template.
+#' @param quiet_start What a "quiet-start" location gets. A location is a quiet start when it reports at least one case after the surveillance window, up to `config$date_stop` (the end of the data when `config$date_stop` is NULL), and EITHER (a) its window around t0 reports no cases (or is all NA), OR (b) the E/I priors the window gives imply fewer than one expected initial infection, `N * (E[prop_E] + E[prop_I]) < 1`, with `N` the population at t0 used in the fit and `E[.]` the Beta means. `"template"` (default) leaves the window's priors in place: the near-zero Beta(0.01, 99999.99) for (a), the data-based Beta for (b). `"seed"` gives E and I each the weak seeding prior Beta(`quiet_seed_shape1`, `quiet_seed_shape2`) instead: it stands in for undetected circulation or importation that the model has no mechanism for, so a single-location fit can still reproduce the later outbreak. Locations with no cases anywhere up to `config$date_stop`, and locations whose window-based priors imply at least one expected initial infection, are never changed.
 #' @param quiet_seed_shape1,quiet_seed_shape2 Beta shapes of the quiet-start seeding prior (default 1 and 1e5: mean 1e-5 of the population per compartment, mode at zero).
 #' @param verbose Print progress messages (default TRUE).
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
@@ -260,7 +260,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 
           if (is.null(loc_res)) next   # no usable population row (warned)
           if (quiet_start == "seed" && loc %in% countries_with_later_cases &&
-              loc_res$E$method %in% c("observed_zero", "no_data_default")) {
+              .est_initial_E_I_is_quiet(loc_res)) {
                loc_res <- list(E = .est_initial_E_I_quiet_seed(quiet_seed_shape1, quiet_seed_shape2,
                                                                n_samples, loc_res$E$method),
                                I = .est_initial_E_I_quiet_seed(quiet_seed_shape1, quiet_seed_shape2,
@@ -576,15 +576,33 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
                           message = message))
 }
 
-# Weak seeding prior for a quiet-start location (no cases in the window around
-# t0, cases later in the config window): stands in for undetected circulation
-# or importation. `was` records the method the window alone would have given.
+# Is a location with cases later in the config window a quiet start? (a) its
+# window reported no cases (or only NA), or (b) the window's E/I priors imply
+# fewer than one expected initial infection, N * (E[prop_E] + E[prop_I]) < 1,
+# with N the population at t0 the fit used (loc_res$population).
+.est_initial_E_I_is_quiet <- function(loc_res) {
+     if (loc_res$E$method %in% c("observed_zero", "no_data_default")) return(TRUE)
+     N <- loc_res$population
+     if (is.null(N) || length(N) != 1L || !is.finite(N) || N <= 0) return(FALSE)
+     beta_mean <- function(x) x$shape1 / (x$shape1 + x$shape2)
+     N * (beta_mean(loc_res$E) + beta_mean(loc_res$I)) < 1
+}
+
+# Weak seeding prior for a quiet-start location: stands in for undetected
+# circulation or importation. `was` records the method the window alone gave.
 .est_initial_E_I_quiet_seed <- function(shape1, shape2, n_samples, was) {
+     no_cases <- was %in% c("observed_zero", "no_data_default")
      list(shape1 = shape1, shape2 = shape2, method = "quiet_start_seed",
-          metadata = list(data_available = was == "observed_zero", total_cases = 0,
+          metadata = list(data_available = was != "no_data_default",
+                          total_cases = if (no_cases) 0 else NA_real_,
                           mean_count = 0, sd_count = 0, n_samples = n_samples,
-                          message = paste0("No cases in the window around t0 (", was,
-                                           ") but cases later in the config window")))
+                          message = if (no_cases) {
+                               paste0("No cases in the window around t0 (", was,
+                                      ") but cases later in the config window")
+                          } else {
+                               paste0("Window-based prior (", was, ") implied fewer than one ",
+                                      "expected initial infection; cases later in the config window")
+                          }))
 }
 
 # One Monte Carlo draw of (E, I) counts for a location. Shared by the parallel
@@ -719,5 +737,5 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
      I <- .est_initial_E_I_fit(I_samples, population_t0, "I", loc, loc_variance_inflation,
                                n_samples, total_cases, verbose)
      if (verbose) cat("done\n")
-     list(E = E, I = I)
+     list(E = E, I = I, population = population_t0)
 }
