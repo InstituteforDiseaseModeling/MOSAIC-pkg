@@ -13,5 +13,5 @@ metadata:
   symptomatic -> row now 0.629 [0.558, 0.695] (exact binomial). Old 0.184 [0.112,0.256] untraceable.
   sigma prior in builder is HARDCODED Beta(4.30,13.51) (mean 0.24), not refit from the table; the
   table-driven est_symptomatic_prop fit moves Beta(3.49,12.06) -> Beta(3.73,7.08) (mean 0.22 -> 0.35).
-  Whether to re-derive sigma is a user decision (sigma is strongly identified in ETH OAT profiles).
+  DECIDED 2026-09-30: refit to Beta(3.75,7.12) in priors v17.0 (builder reads the CSV) - see [[v0100-rebuild-priors-v17]].
 - zeta_ratio truncation: see [[inert-params-and-prior-defects]].

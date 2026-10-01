@@ -33,3 +33,5 @@
 - [render figure source traps](reference_render_figure_source_traps.md) — spatial figs from INPUT config, psi_star from global PATHS psi, ensemble caption R2 unmasked vs summary.json, subset-opt flat-profile marker
 - [OCV scenarios: CFR v2.1 + engine compat](project_ocv_scenarios_cfr_v21_and_engine_compat.md) — never pass deaths_integration per counterfactual arm (erases averted deaths; bake per-member draw); all registry models pre-v0.89 fade out
 - [merge duplicate internal defs](reference_merge_duplicate_internal_defs.md) — multi-branch merges can leave 2 defs of one helper; no Collate => alphabetically-last file wins silently; uniq -d grep
+- [production suite protocol](project_production_suite_protocol.md) — how national/regional (09-18) + continental (06-25) runs were made, v0.100 breaks, dugong cost model, claude/deploy_v0100 runner
+- [stray Rplots.pdf device trap](reference_stray_rplots_device_trap.md) — options(device=) stack-trap recipe; plot_* that print unconditionally; graphics.off() before the regression test or it false-passes

@@ -43,3 +43,4 @@
 - [OCV WHO/GTFCC request dedup (2026-09-30)](project_ocv_who_gtfcc_request_dedup.md) — GTFCC=per-request totals, WHO=per-shipment; ~17M doses double-counted; request-key matching fix; MWI 2018 residual
 - [Priors rebuild prep h2 (2026-09-30)](project_h2_prior_rebuild_prep.md) — E/I VI uniform 10 (derived from chain priors); Harris 2008 row = 127/202 (0.629); sigma prior hardcoded, not table-fit
 - [Docs sync to v0.100.0](project_docs_sync_v0100.md) — notation added (beta_tot, p_beta, omega/gamma^mob), R0_env unchanged under W/N, sigma prior not refit after Harris fix
+- [v0.100.0 rebuild: priors v17.0 / config v6.0](project_v0100_rebuild_priors_v17.md) — sigma refit 0.24->0.35 (Harris fix), prop_R ~20x down, E/I track t0 window, unseeded IC MC, ic_t0 vs date_start gap

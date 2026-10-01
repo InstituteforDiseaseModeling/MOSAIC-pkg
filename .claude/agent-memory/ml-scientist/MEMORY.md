@@ -15,4 +15,4 @@
 - [Auto cutoff trains fabricated zeros (v0.99.9)](project_auto_cutoff_fabricated_zeros.md) — auto fit_date_stop = ENSO end (2027-04) not surveillance end (2026-08); intensity target trains 1,440 NA->0 rows
 - [Default-path target-anchor leak (v0.93 review)](project_default_path_target_anchor_leak.md) — target_anchor_stop only on opt-in v7.4 prefit; v7.3 default CV still leaks (AGO ~9x); cache key unversioned; prefit manifest drops cutoffs
 - [drought_prob leak-fix sign-off (2026-09-30)](project_drought_prob_leakfix_signoff.md) — old GAM = circular spei nowcast (12w-ahead AUC 0.54); new lagged = 0.66; v7.4-only, v7.3 refit unaffected; re-screen v7.4
-- [psi refit v0.100.0 (2026-09-30)](project_psi_refit_v0100.md) — dugong 15.6 min, parallel_seeds=5 needs R_LIBS for separate lib; new vs shipped r~0.19 on 2023+ window; 11.9 MB manifest
+- [psi refit v0.100.0 (2026-09-30)](project_psi_refit_v0100.md) — 10-seed psi stable (disjoint-seed replicate r 0.96); change vs shipped (r 0.24) is systematic, not noise; R_LIBS for sep lib

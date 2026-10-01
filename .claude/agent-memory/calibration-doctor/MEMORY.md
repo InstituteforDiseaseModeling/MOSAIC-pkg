@@ -1,1 +1,3 @@
 - [epi_threshold + epi_factor deaths-bias levers (NMME 4-country)](project_epi_threshold_epifactor_deaths_levers.md) — how much these 2 levers move deaths bias vs the CFR_target floor; epi_factor=0 floors (NGA 1.60/COD 1.98/MOZ 1.23), COD inert, MOZ medoid-tail, NGA threshold win-win, ETH degenerate medoid
+- [v1.0 acceptance rubric](project_v1_acceptance_rubric.md) — pre-registered go/no-go for the v0.100.1 suite (frozen 2026-09-30); evaluator + where old models land
+- [Weekly coverage needs member arrays](reference_weekly_coverage_needs_member_arrays.md) — daily-sum PI approximation fails at small counts/deaths/pooled; IQR-ratio collapse gate; medoid check pooled for multi-loc
