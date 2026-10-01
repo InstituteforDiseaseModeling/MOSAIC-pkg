@@ -107,10 +107,13 @@ the exhaustive search. Note it may select a slightly different
 diagnostics table. (The \code{\link{optimize_ensemble_subset}} function's
 own \code{stride} default remains \code{1L} to preserve bit-identicality.)
 \item \code{central_method}: Ensemble central tendency, \code{"mean"}
-(default; the expected count, which never collapses to zero on sparse
-deaths) or \code{"median"} (the typical trajectory, robust to a few
-explosive members; the default from v0.46.1 to v0.97.x). Scalar or
-per-channel \code{c(cases=, deaths=)}. Governs the prediction
+(the expected count, which never collapses to zero on sparse deaths) or
+\code{"median"} (the typical trajectory, robust to a few explosive
+members). Scalar or per-channel \code{c(cases=, deaths=)}; default
+\code{c(cases = "median", deaths = "mean")} since v0.101.0 (both mean
+from v0.98.0 to v0.100.x, both median from v0.46.1 to v0.97.x). Either
+way the line is a summary of the engine-level member trajectories; the
+intervals are observation-level. Governs the prediction
 trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
 the medoid target, and the subset-selection objective consistently.
 }
@@ -137,8 +140,10 @@ The number of parameter sets in the ensemble is determined by the best subset
 \item \code{format}: Output format; only "parquet" is supported ("csv" is coerced to "parquet" with a warning)
 \item \code{compression}: Compression algorithm (default: "zstd")
 \item \code{compression_level}: Compression level (default: 3L)
-\item \code{persist_ensemble_arrays}: Retain the dense 4-D
-\code{cases_array}/\code{deaths_array} in the persisted ensemble RDS
+\item \code{persist_ensemble_arrays}: Retain the dense 4-D arrays --
+the observation-level \code{cases_array}/\code{deaths_array} and the
+engine-level \code{cases_engine_array}/\code{deaths_engine_array} --
+in the persisted ensemble RDS
 files (\code{ensemble_candidate.rds}, \code{ensemble_optimized.rds},
 \code{subset_opt.rds}, \code{medoid_ensemble.rds}). Default \code{FALSE}
 strips the arrays at save time so the on-disk artifacts are small

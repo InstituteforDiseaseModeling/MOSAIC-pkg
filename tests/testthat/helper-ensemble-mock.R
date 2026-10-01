@@ -38,7 +38,8 @@ local_mocked_ensemble_sims <- function(records, env = parent.frame()) {
                         capture_traj = FALSE,
                         traj_channels = character(0),
                         traj_scratch = NULL,
-                        deaths_integration = NULL) {
+                        deaths_integration = NULL,
+                        return_expected_deaths = FALSE) {
     param_idx <- task_info$param_idx
     stoch_idx <- task_info$stoch_idx
     rec <- tbl[[paste(param_idx, stoch_idx, sep = "_")]]

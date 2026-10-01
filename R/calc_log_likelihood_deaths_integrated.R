@@ -575,6 +575,12 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 # Mersenne-Twister whatever the caller's RNGkind) and the caller's stream
 # restored, so the redraw is reproducible per (param_idx, stoch_idx) across
 # sequential and parallel runs and never perturbs the caller.
+#
+# `expected_deaths` is the mean of the returned reported_deaths given the path
+# and the drawn CFR, (rho / chi_epidemic) * onsets * mu at the onset day (at the
+# prior mu_jt for an infeasible location, whose engine deaths are kept). The
+# ensemble's observation-level deaths are drawn around it
+# (.mosaic_obs_deaths_row()).
 .mosaic_posthoc_deaths <- function(di, results, params, seed) {
      fit <- .mosaic_deaths_ll_integrated(di, results, params)
      O <- results$new_symptomatic
@@ -594,7 +600,11 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
      n_infeasible <- 0L
      disease <- matrix(0L, nL, nT)
      reported <- matrix(0L, nL, nT)
+     expected <- matrix(0, nL, nT)
      cfr_year <- matrix(NA_real_, nL, length(di$years), dimnames = list(NULL, di$years))
+     # Reported deaths in column c come from onsets in column c - s.
+     s_lag <- lc + 1L
+     e_idx <- if (nT > s_lag) (s_lag + 1L):nT else integer(0)
      for (j in seq_len(nL)) {
           R <- chol(fit$vcov[[j]])
           mu_j <- NULL
@@ -611,9 +621,14 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
                     n_infeasible <- n_infeasible + 1L
                     if (!is.null(eng_dd)) disease[j, ] <- as.integer(eng_dd[j, ])
                     if (!is.null(eng_rd)) reported[j, ] <- as.integer(eng_rd[j, ])
+                    if (length(e_idx))
+                         expected[j, e_idx] <- O[j, e_idx - s_lag] *
+                              stats::plogis(di$base_logit_full[j, e_idx - s_lag]) * conv * params$rho_deaths
                     next
                }
           }
+          if (length(e_idx))
+               expected[j, e_idx] <- O[j, e_idx - s_lag] * mu_j[e_idx - s_lag] * conv * params$rho_deaths
           cfr_year[j, ] <- as.numeric(tapply(mu_j, yr_f, mean))
           # Fatal onsets from column k are recorded in column k + 1 (the engine's
           # next-row write); the final column's onsets fall past the window.
@@ -627,7 +642,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
           }
      }
      list(reported_deaths = reported, disease_deaths = disease, cfr_year = cfr_year,
-          theta = fit$theta, n_infeasible = n_infeasible)
+          theta = fit$theta, n_infeasible = n_infeasible, expected_deaths = expected)
 }
 
 # Move a config's reported CFR to a posterior level.

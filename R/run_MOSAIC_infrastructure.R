@@ -592,8 +592,9 @@
 #' @param state Internal calibration state
 #' @param start_time POSIXct start time for wall-clock calculation
 #' @param config Base simulation config (for provenance fields)
-#' @param r2_cases_ensemble R-squared for cases (central tendency -- mean by
-#'   default, per central_method -- of the canonical posterior ensemble;
+#' @param r2_cases_ensemble R-squared for cases (central tendency -- median for
+#'   cases and mean for deaths by default, per central_method -- of the canonical
+#'   posterior ensemble;
 #'   tier-selected when optimize_subset = FALSE, optimizer-refined when
 #'   optimize_subset = TRUE)
 #' @param r2_deaths_ensemble R-squared for deaths (canonical ensemble, see above)

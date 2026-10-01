@@ -230,27 +230,30 @@
 #' Resolve a central_method specification into a per-channel character vector
 #'
 #' \code{central_method} selects which weighted ensemble summary
-#' (\code{"mean"} or \code{"median"}) is treated as the canonical central
-#' trajectory for predictions, plots, ensemble R^2/bias metrics, the medoid
-#' target, and the subset-selection objective. The weighted MEAN is the
-#' unbiased estimator of expected counts (\eqn{E[\sum]=\sum E}) and never
-#' collapses to zero on sparse deaths, so it is the package default (v0.38.0 to
-#' v0.46.0 and again from v0.98.0); \code{"median"}, the default from v0.46.1 to
-#' v0.97.x, reproduces runs made then.
+#' (\code{"mean"} or \code{"median"}) of the engine-level member trajectories
+#' is treated as the canonical central trajectory for predictions, plots,
+#' ensemble R^2/bias metrics, the medoid target, and the subset-selection
+#' objective. The package default (v0.101.0) is the weighted MEDIAN for cases --
+#' the typical trajectory, robust to a few explosive members -- and the weighted
+#' MEAN for deaths, the expected count, which never collapses to zero on sparse
+#' deaths (the weighted median does). Both were the mean from v0.98.0 to
+#' v0.100.x and from v0.38.0 to v0.46.0, and both the median from v0.46.1 to
+#' v0.97.x; a scalar reproduces runs made then.
 #'
 #' Accepts a scalar (applies to both channels) or a named vector to set cases
 #' and deaths independently, e.g. \code{c(cases = "median", deaths = "mean")}.
 #'
 #' @param x \code{NULL}, a scalar \code{"mean"}/\code{"median"}, or a named
 #'   vector with \code{"cases"} and/or \code{"deaths"}. \code{NULL} or an
-#'   unset channel falls back to \code{"mean"}.
+#'   unset channel falls back to the package default for that channel
+#'   (\code{"median"} for cases, \code{"mean"} for deaths).
 #' @return Named character vector \code{c(cases = ., deaths = .)}, each
 #'   \code{"mean"} or \code{"median"}.
 #' @noRd
 .mosaic_resolve_central_method <- function(x = NULL) {
   valid <- c("mean", "median")
   ch    <- c("cases", "deaths")
-  out   <- stats::setNames(rep("mean", 2L), ch)
+  out   <- stats::setNames(c("median", "mean"), ch)
 
   if (is.null(x) || length(x) == 0L) {
     return(out)
@@ -388,14 +391,17 @@
 #'
 #' The medoid is the member whose predicted cases are closest to the ensemble
 #' central series. Each member is summarised by the median over its stochastic
-#' runs; the distance is the mean absolute difference of \code{log(x + eps)}
+#' runs of its ENGINE-level trajectories (\code{.mosaic_engine_array()}; an
+#' observation-level draw is noise around a member, not the member); the
+#' distance is the mean absolute difference of \code{log(x + eps)}
 #' over every location and every SCORED time step (the central series is
 #' passed through \code{.mosaic_mask_central_for_scoring()} first, so the
 #' burn-in head and engine artifacts do not count). Every location therefore
 #' carries equal weight, and a single-location run reduces to the per-location
 #' log-MAE.
 #'
-#' @param cases_array Numeric array \code{[n_loc, n_time, n_param, n_stoch]}.
+#' @param cases_array Numeric array \code{[n_loc, n_time, n_param, n_stoch]} of
+#'   engine-level reported cases.
 #' @param central Numeric matrix \code{[n_loc, n_time]}, the central cases series.
 #' @param mask_spec Artifact-mask list (\code{ens$artifact_mask}).
 #' @param eps Offset added before the log.
