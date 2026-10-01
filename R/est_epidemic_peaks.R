@@ -804,6 +804,18 @@ est_epidemic_peaks <- function(PATHS) {
                     out <- rbind(out, new_peak)
                     message("Added CIV January 2015 peak (corrected timing, 5-day interval, 7 cases)")
                }
+               # CIV 2025 outbreak (May-August; 503 cases in WHO's 2025 total, 491 by
+               # 3 August per IFRC). Spreading the week-33 catch-up over weeks 30-33
+               # (surveillance curation CIV-2025-W33) gives its smoothed curve two
+               # humps two weeks apart (12.0 and 11.8/day) whose dip between them
+               # fails the prominence test. Peak day = the maximum of the 28-day
+               # smoothed observed series (2025-07-07, 20 cases that day).
+               if (length(which(out$iso_code == "CIV" & out$peak_date >= as.Date("2025-05-01") & out$peak_date <= as.Date("2025-09-30"))) == 0) {
+                    interval <- calculate_peak_interval(as.Date("2025-07-07"), 20)
+                    new_peak <- data.frame(iso_code = "CIV", peak_start = interval$start, peak_date = as.Date("2025-07-07"), peak_stop = interval$stop, reported_cases = 20)
+                    out <- rbind(out, new_peak)
+                    message("Added CIV July 2025 peak (documented outbreak, May-August 2025)")
+               }
           }
 
           # CAF (Central African Republic) additional peaks
@@ -930,6 +942,20 @@ est_epidemic_peaks <- function(PATHS) {
                     new_peak <- data.frame(iso_code = "GHA", peak_start = as.Date("2016-11-01"), peak_date = as.Date("2016-11-12"), peak_stop = as.Date("2016-12-01"), reported_cases = 22)
                     out <- rbind(out, new_peak)
                     message("Added GHA November 2016 peak (small outbreak with 22 cases)")
+               }
+               # GHA 2024-25 outbreak. Ghana Health Service: it began on 4 October
+               # 2024 after a funeral in Ada East (93 suspected cases and 1 death by
+               # 11 October), and reached 4,155 cases by 26 December 2024. With the
+               # WHO week-45 catch-up report spread over weeks 42-45 its smoothed
+               # curve is a run of humps (max 75/day) none of which stands the
+               # required 30/day (8% of GHA's 2014 maximum) above the dips beside
+               # it, so the detector misses it. Peak day = the maximum of the
+               # 28-day smoothed observed series (2024-12-08, 60 cases that day);
+               # the +/-22-day interval reflects a three-month outbreak.
+               if (length(which(out$iso_code == "GHA" & out$peak_date >= as.Date("2024-10-01") & out$peak_date <= as.Date("2025-03-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "GHA", peak_start = as.Date("2024-11-16"), peak_date = as.Date("2024-12-08"), peak_stop = as.Date("2024-12-31"), reported_cases = 60)
+                    out <- rbind(out, new_peak)
+                    message("Added GHA December 2024 peak (documented outbreak from 4 October 2024)")
                }
           }
 
@@ -1335,18 +1361,6 @@ est_epidemic_peaks <- function(PATHS) {
                out$peak_stop[ken_mar_2023_idx] <- as.Date("2023-06-30")
                interval_days <- as.numeric(out$peak_stop[ken_mar_2023_idx] - out$peak_start[ken_mar_2023_idx])
                message(paste("Extended KEN March 2023 interval to the right (", interval_days, "days total)"))
-          }
-
-          # GHA November 2024: Widen the interval (currently 21 days, make it wider)
-          gha_nov_2024_idx <- which(out$iso_code == "GHA" &
-                                   out$peak_date == as.Date("2024-11-18"))
-          if (length(gha_nov_2024_idx) > 0) {
-               # Expand to ~45 days total (22 days on each side)
-               # 74 cases warrants a wider interval than the current 21 days
-               out$peak_start[gha_nov_2024_idx] <- as.Date("2024-11-18") - 22
-               out$peak_stop[gha_nov_2024_idx] <- as.Date("2024-11-18") + 23
-               interval_days <- as.numeric(out$peak_stop[gha_nov_2024_idx] - out$peak_start[gha_nov_2024_idx])
-               message(paste("Widened GHA November 2024 interval (", interval_days, "days total)"))
           }
 
           # SDN February 2025: Reduce the interval width slightly (currently 30 days)
