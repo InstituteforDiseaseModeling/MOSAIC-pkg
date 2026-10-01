@@ -13,7 +13,8 @@ est_initial_E_I(
   lookback_days = 21,
   verbose = TRUE,
   parallel = FALSE,
-  variance_inflation = 2
+  variance_inflation = 2,
+  seed = NULL
 )
 }
 \arguments{
@@ -37,6 +38,8 @@ Must include \code{config$location_name} and \code{config$date_start}.}
 available cores. Note: Not supported on Windows.}
 
 \item{variance_inflation}{Multiplicative CI factor for the Beta refit (default 2): the Beta keeps the Monte Carlo mean and its spread is fit to the target 95\% CI mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be > 1.1 for meaningful variance.}
+
+\item{seed}{Optional integer seed. When given, each location's Monte Carlo draws use seeds derived from \code{seed} and the ISO code, so results are reproducible and identical with or without \code{parallel}; the caller's RNG state is restored. NULL (default) draws from the session RNG.}
 }
 \value{
 A list with two main components:

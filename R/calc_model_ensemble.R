@@ -341,6 +341,36 @@
   expr
 }
 
+# `expr` under .mosaic_with_local_seed(seed, .) when `seed` is non-NULL, else
+# evaluated as is (no change to the caller's RNG use). `expr` is a promise, so
+# assignments inside it land in the caller's frame.
+.mosaic_maybe_local_seed <- function(seed, expr) {
+  if (is.null(seed)) return(expr)
+  .mosaic_with_local_seed(seed, expr)
+}
+
+# A seed for one keyed unit of work (e.g. one location), derived from a base
+# seed and the key alone, so the stream a unit gets does not depend on the
+# order units are processed in or on whether they run in a forked worker.
+.mosaic_derive_seed <- function(seed, key) {
+  k <- utf8ToInt(as.character(key))
+  h <- sum(k * 7919 * seq_along(k))
+  as.integer((as.numeric(seed) + h) %% .Machine$integer.max)
+}
+
+# `n` per-draw seeds from one base seed (caller's RNG state untouched).
+.mosaic_draw_seeds <- function(seed, n) {
+  .mosaic_with_local_seed(seed, sample.int(.Machine$integer.max, n))
+}
+
+# Validate an optional seed argument: NULL or one finite number.
+.mosaic_check_seed <- function(seed) {
+  if (!is.null(seed) && (!is.numeric(seed) || length(seed) != 1L || !is.finite(seed))) {
+    stop("`seed` must be NULL or a single finite number.", call. = FALSE)
+  }
+  invisible(seed)
+}
+
 #' Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 #'
 #' @description

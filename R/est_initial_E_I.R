@@ -30,6 +30,7 @@
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
 #'   `n_samples >= 100` (default FALSE). Uses `parallel::mclapply()` with all
 #'   available cores. Note: Not supported on Windows.
+#' @param seed Optional integer seed. When given, each location's Monte Carlo draws use seeds derived from `seed` and the ISO code, so results are reproducible and identical with or without `parallel`; the caller's RNG state is restored. NULL (default) draws from the session RNG.
 #' @param variance_inflation Multiplicative CI factor for the Beta refit (default 2): the Beta keeps the Monte Carlo mean and its spread is fit to the target 95% CI mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be > 1.1 for meaningful variance.
 #'
 #' @return A list with two main components:
@@ -61,7 +62,7 @@
 est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                             t0 = NULL, lookback_days = 21,
                             verbose = TRUE, parallel = FALSE,
-                            variance_inflation = 2) {
+                            variance_inflation = 2, seed = NULL) {
 
      # ---- Parameter validation ----
      if (n_samples <= 0) stop("n_samples must be positive")
@@ -69,6 +70,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      if (!is.list(PATHS)) stop("PATHS must be a list")
      if (!is.list(priors)) stop("priors must be a list")
      if (!is.list(config)) stop("config must be a list")
+     .mosaic_check_seed(seed)
      # Check variance_inflation validity (only for single values)
      if (length(variance_inflation) == 1 && variance_inflation < 1.1) {
           warning("variance_inflation too low - should be > 1.1 for meaningful variance")
@@ -220,7 +222,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     chain_priors = chain_priors,
                     loc_variance_inflation = loc_variance_inflation,
                     parallel = parallel,
-                    verbose = verbose
+                    verbose = verbose,
+                    seed = if (is.null(seed)) NULL else .mosaic_derive_seed(seed, loc)
                ),
                error = function(e) {
                     warning(sprintf("Error processing %s: %s", loc, e$message))
@@ -617,7 +620,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
 .est_initial_E_I_one <- function(loc, surveillance_window, countries_with_data,
                                  population_data, t0, lookback_days, n_samples,
                                  priors, chain_priors, loc_variance_inflation,
-                                 parallel, verbose) {
+                                 parallel, verbose, seed = NULL) {
 
      loc_surv <- surveillance_window[surveillance_window$iso_code == loc, ]
      has_data <- loc %in% countries_with_data && nrow(loc_surv) > 0
@@ -643,9 +646,11 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
           return(NULL)
      }
 
+     draw_seeds <- if (is.null(seed)) NULL else .mosaic_draw_seeds(seed, n_samples)
      draw <- function(i) {
-          .est_initial_E_I_draw(priors, chain_priors, loc_surv, population_t0,
-                                t0, lookback_days)
+          .mosaic_maybe_local_seed(draw_seeds[i],
+               .est_initial_E_I_draw(priors, chain_priors, loc_surv, population_t0,
+                                     t0, lookback_days))
      }
      if (parallel && n_samples >= 100) {
           if (verbose) cat(sprintf("  Using parallel processing with %d cores\n",
