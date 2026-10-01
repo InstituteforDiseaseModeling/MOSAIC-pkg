@@ -469,6 +469,19 @@ mat_deaths <- matrix(NA_real_, nrow = length(j), ncol = length(t), dimnames = li
 # round-trip -- consumers must align positionally (rows = location_name, cols = t).
 mat_cases_weight  <- matrix(NA_real_, nrow = length(j), ncol = length(t), dimnames = list(j, as.character(t)))
 mat_deaths_weight <- matrix(NA_real_, nrow = length(j), ncol = length(t), dimnames = list(j, as.character(t)))
+# Surveillance trust tier of each observed week (MOSAIC v0.101.0), from the
+# combined file's disaggregation_method via the combiner's own rule
+# (.surveillance_tier): 1 observed (direct WHO/JHU/SUPP rows, AI observed and
+# documented_zero), 2 reconstructed (who_catchup_*: a WHO multi-week report
+# spread over its weeks), 3 imputed (fourier_* and other modelled rows); NA where
+# the week has neither a case nor a death count. est_nb_dispersion() estimates
+# the cases dispersion from tier-1 weeks only. The confidence weights cannot
+# stand in for it: AI observed weeks and documented zeros carry 0.8-0.95 while
+# spread WHO reports carry 0.5-0.9.
+if (!"disaggregation_method" %in% names(df_daily)) {
+     stop("combined daily file lacks disaggregation_method; regenerate via process_cholera_surveillance_data(include_ai = TRUE) before rebuilding config_default.")
+}
+mat_tier <- matrix(NA_integer_, nrow = length(j), ncol = length(t), dimnames = list(j, as.character(t)))
 
 for (i in seq_along(j)) {
 
@@ -492,6 +505,10 @@ for (i in seq_along(j)) {
      # Weight present iff the value is present; matched-but-unweighted -> 1.0.
      mat_cases_weight[i, ]  <- ifelse(is.na(cases_v),  NA_real_, ifelse(is.na(cw_c), 1.0, cw_c))
      mat_deaths_weight[i, ] <- ifelse(is.na(deaths_v), NA_real_, ifelse(is.na(cw_d), 1.0, cw_d))
+     # One surveillance row supplies each week, so its tier holds for both
+     # channels; present wherever either count is.
+     tier_v <- MOSAIC:::.surveillance_tier(iso_data$disaggregation_method[oc][mc])
+     mat_tier[i, ] <- ifelse(is.na(cases_v) & is.na(deaths_v), NA_integer_, tier_v)
 }
 
 message("Define a base list of arguments (all parameters that are common to all calls)")
@@ -769,6 +786,9 @@ params_validated$decay_days_spread <- .decay_days_spread_default
 # calc_log_likelihood_deaths_integrated() reads config$reported_deaths_weight.
 params_validated$reported_cases_weight  <- mat_cases_weight
 params_validated$reported_deaths_weight <- mat_deaths_weight
+# Surveillance trust tiers (n_loc x n_t, aligned likewise): read by the
+# dispersion estimate (.mosaic_resolve_nb_dispersion), ignored by the engine.
+params_validated$reported_tier <- mat_tier
 
 MOSAIC::write_json_or_gz(
      params_validated,
@@ -782,6 +802,7 @@ config_default$zeta_ratio        <- .zeta_ratio_default
 config_default$decay_days_spread <- .decay_days_spread_default
 config_default$reported_cases_weight  <- mat_cases_weight
 config_default$reported_deaths_weight <- mat_deaths_weight
+config_default$reported_tier          <- mat_tier
 
 tmp_config <- MOSAIC::read_json_to_list(fp_json)
 identical(config_default, tmp_config)

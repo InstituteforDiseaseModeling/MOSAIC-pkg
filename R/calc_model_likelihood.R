@@ -8,6 +8,30 @@
 #' time-series log-likelihood per location and outcome (cases, deaths) with
 #' a per-location NB dispersion estimated by \code{\link{est_nb_dispersion}}.
 #'
+#' Cases are scored on weekly totals. The surveillance series are weekly
+#' totals spread over the days of each reporting week, and the dispersion is
+#' estimated on weekly totals, so the observed and simulated daily cases are
+#' summed over the reporting weeks \code{est_nb_dispersion()} uses (the same
+#' block boundaries, from \code{week_offset}) and each week is one NB cell at
+#' the weekly \code{k}. Scoring every day of a spread week at the weekly
+#' \code{k} would count its level information about \code{7 (k + M) / (7 k +
+#' M)} times (\code{M} the weekly mean; a median 5.4 over the v0.100.1 national
+#' runs, exactly 1 in the Poisson limit) and rank draws largely by their
+#' within-week noise against a flat spread. A week is scored only when all seven
+#' of its days lie in the scored window and carry a finite observation, a
+#' finite confidence weight and a positive time weight; a week cut by the start
+#' or end of the window is not a weekly total and is dropped, as in the
+#' dispersion estimate. Each week's weight is the mean of its days' weights: a
+#' confidence weight belongs to the reporting week and is the same on its seven
+#' days, so the week keeps the weight its days had and the weight keeps its role
+#' as an exponent on that week's likelihood. The weights are then made
+#' mass-preserving over the scored weeks, as for the daily cells before. The
+#' cases floor \code{eps_rel_cases} applies to the weekly prediction relative to
+#' the mean weekly observation, and a location needs three scored weeks
+#' (weighted: a weight sum of three) for its cases core to count. Without a
+#' dated daily grid (no \code{config$date_start}), or when the time steps are
+#' weeks, each time step is one cell.
+#'
 #' Optional shape terms are enabled by setting their weight > 0: peak timing
 #' (Normal), peak magnitude (log-Normal with adaptive sigma), cumulative
 #' progression (NB at cumulative fractions), and Weighted Interval Score (WIS).
@@ -23,7 +47,14 @@
 #' timepoints, a given weight on those two terms carries less influence than the
 #' same weight on the peak terms (with the defaults, 1/5 and 1/4 of \code{N_obs}
 #' times the per-cell value), and changing the number of quantiles or timepoints
-#' changes their influence.
+#' changes their influence. The shape terms keep their definitions under the
+#' weekly cases core: they read the daily series, \code{N_obs} still counts
+#' daily time steps, and the cumulative and WIS terms use the same weekly
+#' \code{k} on daily cells as before. Because the weekly cases core carries about
+#' a fifth of the level information of the daily one (less of a change where
+#' \code{k} is large; none in the Poisson limit), a given shape weight weighs
+#' roughly five to seven times more against the cases core than it did with
+#' daily cells.
 #'
 #' Non-finite per-location LL values are replaced with \code{-Inf} (zero
 #' importance weight). The NB likelihood naturally produces very negative
@@ -75,6 +106,17 @@
 #'   terms (peak magnitude, cumulative, WIS) are then dropped, with a warning,
 #'   because \code{est_deaths} is drawn at the prior CFR; deaths peak timing,
 #'   which does not depend on the level, is kept.
+#' @param cases_scoring \code{"weekly"} (default) scores the cases core on
+#'   reporting-week totals (see Description). \code{"daily"} is the legacy rule
+#'   of MOSAIC v0.100.1 and earlier, one NB cell per time step at the same weekly
+#'   \code{k}, kept only to reproduce earlier runs. \code{NULL} means
+#'   \code{"weekly"}.
+#' @param week_offset Reporting-week boundary of each location, 0-6 days after
+#'   Monday (length 1 or one per location; \code{NA} = detect), as returned by
+#'   \code{est_nb_dispersion()}. \code{run_MOSAIC()} supplies the boundaries its
+#'   dispersion estimate detected, so both use the same weeks. \code{NULL}
+#'   (default) detects them from \code{obs_cases}. Used by the weekly cases core
+#'   only.
 #' @param verbose If \code{TRUE}, prints component summaries per location.
 #' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms, scaled
 #'   by \code{N_obs / N_peaks}. Default \code{0} (OFF); set > 0 to enable.
@@ -111,6 +153,8 @@ calc_model_likelihood <- function(obs_cases,
                                   eps_rel_cases    = 0.02,
                                   eps_rel_deaths   = 0.25,
                                   ll_deaths_core   = NULL,
+                                  cases_scoring    = c("weekly", "daily"),
+                                  week_offset      = NULL,
                                   verbose          = FALSE,
                                   # ---- shape term weights (0 = OFF; scaling in Details) ----
                                   weight_peak_timing       = 0,
@@ -190,6 +234,8 @@ calc_model_likelihood <- function(obs_cases,
                             nm, paste(which(bad), collapse = ", ")))
           k
      }
+     cases_scoring <- match.arg(cases_scoring)
+     .tab_cases <- NULL
      if (is.null(nb_k_cases) || is.null(nb_k_deaths)) {
           .ds <- if (!is.null(config)) config$date_start else NULL
           if (is.null(.ds)) {
@@ -205,16 +251,37 @@ calc_model_likelihood <- function(obs_cases,
                if (is.null(nb_k_cases))  nb_k_cases  <- Inf
                if (is.null(nb_k_deaths)) nb_k_deaths <- Inf
           } else {
-               if (is.null(nb_k_cases))
-                    nb_k_cases <- est_nb_dispersion(obs_cases, weights_obs_cases,
-                                                    date_start = .ds)$k
+               # As run_MOSAIC() resolves it: observed weeks only when the config
+               # carries reported_tier, and the cases panel trend for a location
+               # whose own fit gives no estimate.
+               .tier <- .lik_obs_tier(config, obs_cases)
+               if (is.null(nb_k_cases)) {
+                    .tab_cases <- est_nb_dispersion(obs_cases, weights_obs_cases, date_start = .ds,
+                                                    obs_tier = .tier,
+                                                    panel_trend = .NB_DISP_PANEL_TREND)
+                    nb_k_cases <- .tab_cases$k
+               }
                if (is.null(nb_k_deaths))
                     nb_k_deaths <- est_nb_dispersion(obs_deaths, weights_obs_deaths,
-                                                     date_start = .ds)$k
+                                                     date_start = .ds, obs_tier = .tier)$k
           }
      }
      nb_k_cases  <- .expand_k(nb_k_cases,  "nb_k_cases")
      nb_k_deaths <- .expand_k(nb_k_deaths, "nb_k_deaths")
+
+     # Weekly cases core: the dates of the daily grid and each location's
+     # reporting-week boundary. NULL dates (undated input, or time steps that are
+     # weeks) score one cell per time step.
+     .dates_cases <- if (cases_scoring == "weekly") .lik_daily_dates(config, n_time_steps) else NULL
+     .week_index <- NULL
+     if (!is.null(.dates_cases)) {
+          week_offset <- .lik_week_offsets(week_offset, .tab_cases, obs_cases, .dates_cases,
+                                           n_locations)
+          # One block index per distinct boundary (all locations share one on
+          # the current surveillance), not one per location.
+          .week_index <- lapply(stats::setNames(nm = unique(week_offset)),
+                                function(o) .mosaic_week_blocks(.dates_cases, o)$index)
+     }
      if (length(weights_time)     != n_time_steps) stop("weights_time must match n_time_steps.")
      if (any(weights_location < 0) || any(weights_time < 0)) stop("All weights must be >= 0.")
      if (sum(weights_location) == 0 || sum(weights_time) == 0) stop("weights_location and weights_time must not all be zero.")
@@ -328,8 +395,9 @@ calc_model_likelihood <- function(obs_cases,
           }
 
           # Effective scoring weights per channel. Trivial -> exact unweighted
-          # (masked weights_time); weighted -> mass-preserving renorm (B-1).
-          w_eff_c <- if (have_cases) {
+          # (masked weights_time); weighted -> mass-preserving renorm (B-1). The
+          # weekly cases core builds its own weekly weights instead.
+          w_eff_c <- if (have_cases && is.null(.dates_cases)) {
                if (triv_c) .mask_weights(weights_time, obs_c, est_c)
                else        .weights_obs_effective(weights_time, wobs_c_row, obs_c, est_c)
           } else NULL
@@ -346,16 +414,37 @@ calc_model_likelihood <- function(obs_cases,
           k_c <- if (have_cases)  nb_k_cases[j]  else Inf
           k_d <- if (have_deaths) nb_k_deaths[j] else Inf
 
-          # Core NB time series LL (k supplied explicitly; already bounded)
-          ll_cases  <- if (have_cases) MOSAIC::calc_log_likelihood(
-               observed  = obs_c,
-               estimated = est_c,
-               family    = "negbin",
-               weights   = w_eff_c,
-               k         = k_c,
-               eps_rel   = eps_rel_cases,
-               verbose   = FALSE
-          ) else 0
+          # Core NB time series LL (k supplied explicitly; already bounded). Cases:
+          # one cell per reporting week (see .cases_weekly_cells), or per time
+          # step without a dated daily grid or under cases_scoring = "daily".
+          # have_cases (the daily gate) still gates the shape terms; the weekly
+          # core needs three scored weeks of its own.
+          ll_cases <- 0
+          if (have_cases) {
+               if (!is.null(.dates_cases)) {
+                    wk_c <- .cases_weekly_cells(obs_c, est_c,
+                                                .week_index[[as.character(week_offset[j])]],
+                                                weights_time, if (triv_c) NULL else wobs_c_row)
+                    if (wk_c$gate >= min_obs_for_likelihood && sum(wk_c$w) > 0)
+                         ll_cases <- MOSAIC::calc_log_likelihood(
+                              observed  = wk_c$y,
+                              estimated = wk_c$mu,
+                              family    = "negbin",
+                              weights   = wk_c$w,
+                              k         = k_c,
+                              eps_rel   = eps_rel_cases,
+                              verbose   = FALSE)
+               } else {
+                    ll_cases <- MOSAIC::calc_log_likelihood(
+                         observed  = obs_c,
+                         estimated = est_c,
+                         family    = "negbin",
+                         weights   = w_eff_c,
+                         k         = k_c,
+                         eps_rel   = eps_rel_cases,
+                         verbose   = FALSE)
+               }
+          }
 
           ll_deaths <- if (!is.null(ll_deaths_core)) ll_deaths_core[j] else if (have_deaths) MOSAIC::calc_log_likelihood(
                observed  = obs_d,
@@ -578,6 +667,113 @@ calc_model_likelihood <- function(obs_cases,
           return(rep(0, length(weights_time)))
      }
      w_raw / s * target_j
+}
+
+# Weekly cells of the cases NB core for one location.
+#
+# Blocks are the reporting weeks of est_nb_dispersion() (.mosaic_week_blocks(),
+# with the offset it detected). A week is scored when all seven of its
+# days are usable -- finite observation, finite confidence weight, positive time
+# weight -- so a week cut by the start or end of the scored window, or holding a
+# missing day, is dropped, as the dispersion estimate drops it. A week whose
+# simulated count is not finite on every day is dropped too (the daily path
+# zero-weighted such a cell). The gate (scored weeks, or their confidence-weight
+# sum) depends on the observations only, so it is the same for every draw.
+#
+# Weights: a confidence weight belongs to the reporting week and is replicated
+# over its seven days (process_cholera_surveillance_data()), so the week takes
+# the mean of its days' weights -- the common value -- and its time weight is the
+# mean of its days' weights_time. The weekly confidence weights are then
+# rescaled to the sum of the weekly time weights, the mass-preserving rule of
+# .weights_obs_effective(): the confidence weights decide which weeks count
+# most, not the location's total weight.
+#
+# `g` is the block of each day, numbered from 1 (.mosaic_week_blocks()$index).
+# Returns list(y, mu, w, n_weeks, gate): weekly observed and simulated totals,
+# weekly scoring weights, the number of scored weeks and the gate value.
+.cases_weekly_cells <- function(obs, est, g, weights_time, wobs = NULL) {
+     empty <- list(y = numeric(0), mu = numeric(0), w = numeric(0), n_weeks = 0L, gate = 0)
+     n <- length(obs)
+     if (n == 0L) return(empty)
+     usable <- is.finite(obs) & is.finite(weights_time) & weights_time > 0
+     if (!is.null(wobs)) usable <- usable & is.finite(wobs)
+     n_blk <- g[n]
+     full <- tabulate(g[usable], nbins = n_blk) == 7L
+     sel_obs <- usable & full[g]
+     if (!any(sel_obs)) return(empty)
+     gate <- if (is.null(wobs)) sum(full) else sum(wobs[sel_obs]) / 7
+     ok_est <- tabulate(g[sel_obs & is.finite(est)], nbins = n_blk) == 7L
+     sel <- sel_obs & ok_est[g]
+     if (!any(sel)) { empty$gate <- gate; return(empty) }
+     gs <- g[sel]
+     y  <- as.numeric(rowsum(obs[sel], gs, reorder = TRUE))
+     mu <- as.numeric(rowsum(est[sel], gs, reorder = TRUE))
+     wt <- as.numeric(rowsum(weights_time[sel], gs, reorder = TRUE)) / 7
+     w <- if (is.null(wobs)) wt else {
+          raw <- as.numeric(rowsum(weights_time[sel] * wobs[sel], gs, reorder = TRUE)) / 7
+          if (sum(raw) > 0) raw / sum(raw) * sum(wt) else rep(0, length(raw))
+     }
+     list(y = y, mu = mu, w = w, n_weeks = length(y), gate = gate)
+}
+
+# Dates of the daily observation grid, for the weekly cases core. NULL when the
+# input is undated (no config$date_start) or the time steps are weeks (date_stop
+# one week per step); an error when config$date_start/date_stop describe neither
+# grid, since weekly blocks placed on the wrong dates would be silently wrong.
+.lik_daily_dates <- function(config, n_time_steps) {
+     ds <- if (is.null(config)) NULL else config$date_start
+     if (is.null(ds) || length(ds) != 1L) return(NULL)
+     d0 <- tryCatch(as.Date(ds), error = function(e) as.Date(NA))
+     if (is.na(d0)) return(NULL)
+     de <- config$date_stop
+     if (!is.null(de) && length(de) == 1L) {
+          d1 <- tryCatch(as.Date(de), error = function(e) as.Date(NA))
+          if (!is.na(d1) && as.integer(d1 - d0) + 1L != n_time_steps) {
+               if (d1 >= d0 && length(seq(d0, d1, by = "week")) == n_time_steps) return(NULL)
+               stop(sprintf(paste0(
+                    "config$date_start (%s) to date_stop (%s) is %d days, but the observations have ",
+                    "%d time steps, so the reporting weeks of the cases likelihood cannot be placed. ",
+                    "Shift date_start to the first column of sliced observations."),
+                    format(d0), format(d1), as.integer(d1 - d0) + 1L, n_time_steps), call. = FALSE)
+          }
+     }
+     d0 + seq_len(n_time_steps) - 1L
+}
+
+# Reporting-week boundary (0-6 days after Monday) of each location for the
+# weekly cases core: the supplied offsets, else those of the dispersion table
+# estimated in this call, else detected from the observations exactly as
+# est_nb_dispersion() detects them. NA entries are detected.
+.lik_week_offsets <- function(week_offset, tab, obs, dates, n_loc) {
+     off <- if (!is.null(week_offset)) {
+          o <- as.numeric(week_offset)
+          if (length(o) == 1L) o <- rep(o, n_loc)
+          if (length(o) != n_loc)
+               stop(sprintf("week_offset must be length 1 or n_locations (%d), got %d.",
+                            n_loc, length(o)), call. = FALSE)
+          if (any(!is.na(o) & (o < 0 | o > 6 | o != round(o))))
+               stop("week_offset must hold whole numbers of days from 0 to 6 after Monday.",
+                    call. = FALSE)
+          as.integer(o)
+     } else if (!is.null(tab)) as.integer(tab$week_offset) else rep(NA_integer_, n_loc)
+     for (j in which(is.na(off)))
+          off[j] <- as.integer(.nb_disp_cadence(as.numeric(obs[j, ]), dates)$offset)
+     off
+}
+
+# config$reported_tier aligned with the observation matrices, for the
+# standalone dispersion estimate; NULL when absent, or (with a one-time warning)
+# when its dimensions do not match because the observations were sliced.
+.lik_obs_tier <- function(config, obs) {
+     tier <- if (is.null(config)) NULL else config$reported_tier
+     if (is.null(tier)) return(NULL)
+     if (!is.matrix(tier)) tier <- matrix(tier, nrow = 1L)
+     if (identical(dim(tier), dim(obs))) return(tier)
+     .mosaic_warn_once("lik_reported_tier_dims", paste0(
+          "config$reported_tier does not match the observation matrices (were they sliced?), so ",
+          "the standalone dispersion estimate uses every week. run_MOSAIC() estimates it once, ",
+          "from the observed weeks of the scored window."))
+     NULL
 }
 
 

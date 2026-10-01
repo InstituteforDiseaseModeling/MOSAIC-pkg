@@ -43,6 +43,7 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   config$decay_days_spread <- NULL
   config$reported_cases_weight  <- NULL
   config$reported_deaths_weight <- NULL
+  config$reported_tier          <- NULL
   config$output_file_path  <- NULL
 
   priors <- MOSAIC::priors_default

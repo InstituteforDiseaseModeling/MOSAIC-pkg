@@ -38,7 +38,7 @@ test_that("config validator and engine agree on the alpha_2 boundary", {
   # cannot turn this into a skip.
   args <- MOSAIC::config_default
   args[c("metadata", "zeta_ratio", "decay_days_spread", "reported_cases_weight",
-         "reported_deaths_weight", "output_file_path")] <- NULL
+         "reported_deaths_weight", "reported_tier", "output_file_path")] <- NULL
   build <- function(v) { a <- args; a$alpha_2 <- v; do.call(MOSAIC::make_simulation_config, a) }
   for (v in c(0, 1)) {
     expect_no_error(cfg <- build(v))

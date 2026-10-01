@@ -791,11 +791,14 @@
     nb_dispersion       = if (!is.null(nb_dispersion)) {
                               .k <- nb_dispersion$k
                               .ch <- nb_dispersion$channel
+                              .pt <- if (is.null(nb_dispersion$panel_trend)) rep(FALSE, length(.k)) else
+                                        nb_dispersion$panel_trend %in% TRUE
                               f <- function(ch) {
                                    v <- .k[.ch == ch]
                                    list(median_k = if (any(is.finite(v))) round(stats::median(v[is.finite(v)]), 4) else NA_real_,
                                         n_estimated = sum(is.finite(v)),
-                                        n_poisson   = sum(is.infinite(v)))
+                                        n_poisson   = sum(is.infinite(v)),
+                                        n_panel_trend = sum(.pt[.ch == ch]))
                               }
                               # report EVERY status, so a new fit path cannot be
                               # invisible in the diagnostics
