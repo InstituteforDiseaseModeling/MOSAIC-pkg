@@ -17,6 +17,7 @@ plot_model_ensemble(
   score_idx_cases = NULL,
   score_idx_deaths = NULL,
   prediction_table = NULL,
+  show_burn_in = TRUE,
   verbose = TRUE
 )
 }
@@ -64,29 +65,41 @@ DISPLAY ONLY: the underlying ensemble arrays are untouched, so any
 R2/bias/likelihood computed upstream from the raw object is unaffected.}
 
 \item{n_cases_warmup_mask}{Integer. Number of LEADING timesteps of every
-Suspected Cases prediction to blank (set to \code{NA}) in the exported CSV
-and the rendered lines. Default \code{2L}. This masks the initial-condition
-warm-up transient (seeded E/I progressing into new_symptomatic before the
-SEIR dynamics settle), which is visually dominant for low-count countries.
-DISPLAY ONLY (raw arrays untouched). The legitimate leading
-reporting-lag zeros in Deaths (from \code{delta_reporting_cases}, the lag deaths share with cases) are REAL
-and are NOT masked by this argument. Set to \code{0L} to disable.}
+Suspected Cases prediction excluded from the caption metrics. Default
+\code{2L}. This covers the initial-condition warm-up transient (seeded E/I
+progressing into new_symptomatic before the SEIR dynamics settle). With
+\code{show_burn_in = TRUE} these steps are drawn inside the grey unscored
+span; with \code{FALSE} they are blanked, as in the exported CSV. The raw
+arrays are untouched. The legitimate leading reporting-lag zeros in Deaths
+(from \code{delta_reporting_cases}, the lag deaths share with cases) are
+REAL and are NOT masked by this argument. Set to \code{0L} to disable.}
 
 \item{score_idx_cases, score_idx_deaths}{Integer (1-based). Per-channel scored
-time-window START index (burn-in / deaths-era start). Leading timesteps
-strictly BEFORE the index are blanked (set to \code{NA}) in the exported CSV
-and the rendered lines so the plot shows only the scored window. Default
-\code{1L} (no blanking). When \code{NULL} (the typical caller pattern) the
-value is read from \code{ensemble$artifact_mask$score_idx_*} so plots
-automatically track the scored window the ensemble was built with. DISPLAY
-ONLY (raw arrays untouched).}
+time-window START index (burn-in / deaths-era start). Timesteps strictly
+BEFORE the index are excluded from the caption metrics and, like the cases
+warm-up, shaded (\code{show_burn_in = TRUE}) or blanked
+(\code{show_burn_in = FALSE}). When \code{NULL} (default, the typical caller
+pattern) the value is read from \code{ensemble$artifact_mask$score_idx_*}
+so plots track the scored window the ensemble was built with; \code{1}
+means no burn-in. The raw arrays are untouched.}
 
 \item{prediction_table}{Optional precomputed prediction table (a data.frame
-from \code{.mosaic_assemble_prediction_table()}). When supplied, the plotter
-uses it directly instead of re-assembling from \code{ensemble}, guaranteeing
-the rendered lines match an already-written CSV (the renderer path). When
-\code{NULL} (default) the table is assembled internally with the masking
-arguments above.}
+from \code{.mosaic_assemble_prediction_table()}). When supplied, its lines
+are drawn as given, so they match an already-written CSV; with
+\code{show_burn_in = TRUE} its blank unscored head is filled from
+\code{ensemble}'s own central and interval series (if \code{ensemble}
+cannot supply them, a warning is given and the head is left blank). When
+\code{NULL} (default) the table is assembled from \code{ensemble}.}
+
+\item{show_burn_in}{Logical. If \code{TRUE} (default), draw the predicted
+central line and interval ribbons from the first time step, shade the
+steps before each channel's scored window (burn-in and cases warm-up) in
+light grey, and mark the scored-window start with a dashed line labelled
+with its date, e.g. "scored from 2023-02-15" (one label per channel when
+the starts differ). If \code{FALSE}, blank the predictions before the
+scored window, as in the exported CSV. Display only: the caption metrics
+are computed on the scored window either way, and
+\code{mask_final_deaths_step} applies either way.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }
@@ -104,10 +117,15 @@ Renders time-series plots from a \code{mosaic_ensemble} object produced by
 \code{\link{calc_model_ensemble}}. Shows the central prediction line (by
 default the weighted median for cases and the weighted mean for deaths;
 \code{central_method}) with interval ribbons and observed data points. The
-line summarises the engine-level member trajectories; the ribbons are the
-ensemble's \code{ci_bounds}, observation-level posterior predictive intervals
-when the ensemble was built with an observation model. Optionally saves
-per-location prediction CSVs for downstream use.
+line is the model's central trajectory, summarising the engine-level member
+trajectories; the ribbons are the ensemble's \code{ci_bounds},
+observation-level posterior predictive intervals when the ensemble was built
+with an observation model (the caption then says so). By default the
+predictions are drawn from the first time step, and the steps before the
+scored window (burn-in and cases warm-up) are shaded grey, with a dashed line
+at the scored-window start labelled with its date (e.g. "scored from
+2023-02-15"; \code{show_burn_in}). The caption metrics cover the scored
+window only.
 }
 \seealso{
 \code{\link{calc_model_ensemble}} to compute the ensemble.

@@ -610,7 +610,9 @@ render_MOSAIC_figures <- function(dir_output,
     attempted["predictions"] <- TRUE
     .vmsg("Rendering prediction figures...")
 
-    # Posterior ensemble.
+    # Posterior ensemble. show_burn_in = TRUE draws the predictions from the
+    # first time step with the unscored head shaded; the prediction CSVs keep
+    # that head blank.
     ens_rds <- .resolve_ensemble_rds()
     if (!is.na(ens_rds)) {
       ensemble <- .load_rds(ens_rds, "ensemble predictions")
@@ -622,6 +624,7 @@ render_MOSAIC_figures <- function(dir_output,
             file_prefix    = "ensemble",
             title_label    = "Posterior Ensemble",
             central_method = central_method,
+            show_burn_in   = TRUE,
             verbose        = verbose
           ),
           error = function(e) warning("ensemble prediction plot failed: ",
@@ -647,6 +650,7 @@ render_MOSAIC_figures <- function(dir_output,
           file_prefix    = "medoid",
           title_label    = "Medoid Model",
           central_method = central_method,
+          show_burn_in   = TRUE,
           verbose        = verbose
         ),
         error = function(e) warning("medoid prediction plot failed: ",

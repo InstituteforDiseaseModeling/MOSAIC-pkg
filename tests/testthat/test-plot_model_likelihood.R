@@ -132,7 +132,8 @@ test_that("plot_model_likelihood creates output directory if needed", {
 })
 
 test_that("plot_model_likelihood identifies best simulation correctly", {
-    
+    local_null_device()  # verbose = TRUE also prints the plot to the current device
+
     # Create mock results with known best
     results <- data.frame(
         sim = 1:5,

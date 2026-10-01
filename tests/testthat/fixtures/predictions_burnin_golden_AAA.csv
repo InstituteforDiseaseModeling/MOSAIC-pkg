@@ -1,0 +1,17 @@
+"location","date","metric","observed","predicted_central","predicted_mean","predicted_median","central_method","ci_1_lower","ci_1_upper","ci_2_lower","ci_2_upper"
+"AAA",2024-01-01,"Suspected Cases",1,NA,NA,NA,"mean",NA,NA,NA,NA
+"AAA",2024-01-02,"Suspected Cases",4,NA,NA,NA,"mean",NA,NA,NA,NA
+"AAA",2024-01-03,"Suspected Cases",10,NA,NA,NA,"mean",NA,NA,NA,NA
+"AAA",2024-01-04,"Suspected Cases",11,4,4,3.6,"mean",2,6,3.2,4.8
+"AAA",2024-01-05,"Suspected Cases",22,6.66666666666667,6.66666666666667,6,"mean",3.33333333333333,10,5.33333333333333,8
+"AAA",2024-01-06,"Suspected Cases",28,10,10,9,"mean",5,15,8,12
+"AAA",2024-01-07,"Suspected Cases",NA,8.33333333333333,8.33333333333333,7.5,"mean",4.16666666666667,12.5,6.66666666666667,10
+"AAA",2024-01-08,"Suspected Cases",NA,6,6,5.4,"mean",3,9,4.8,7.2
+"AAA",2024-01-01,"Deaths",0,NA,NA,NA,"mean",NA,NA,NA,NA
+"AAA",2024-01-02,"Deaths",0,NA,NA,NA,"mean",NA,NA,NA,NA
+"AAA",2024-01-03,"Deaths",1,0.5,0.5,0,"mean",0.25,0.75,0.4,0.6
+"AAA",2024-01-04,"Deaths",1,1,1,1,"mean",0.5,1.5,0.8,1.2
+"AAA",2024-01-05,"Deaths",2,1.5,1.5,1,"mean",0.75,2.25,1.2,1.8
+"AAA",2024-01-06,"Deaths",2,2.25,2.25,2,"mean",1.125,3.375,1.8,2.7
+"AAA",2024-01-07,"Deaths",NA,1,1,1,"mean",0.5,1.5,0.8,1.2
+"AAA",2024-01-08,"Deaths",NA,0.75,0.75,0,"mean",0.375,1.125,0.6,0.9

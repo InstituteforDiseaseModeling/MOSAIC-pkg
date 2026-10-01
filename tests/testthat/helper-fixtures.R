@@ -34,3 +34,31 @@ expect_rel_equal <- function(object, expected, rel) {
   err <- max(abs(object / expected - 1))
   testthat::expect_lt(err, rel, label = sprintf("max relative error %.4g", err))
 }
+
+# Hold a null graphics device for the calling test. The documentation-figure
+# functions print() each plot to the current device before saving it, which
+# under Rscript would otherwise open the default device and leave Rplots.pdf in
+# the test directory. Devices opened during the test are closed afterwards.
+local_null_device <- function(env = parent.frame()) {
+  before <- grDevices::dev.list()
+  grDevices::pdf(NULL)
+  withr::defer({
+    for (d in rev(setdiff(grDevices::dev.list(), before))) grDevices::dev.off(d)
+  }, envir = env)
+  invisible(NULL)
+}
+
+# Every text label in a rendered ggplot (including plots composed with cowplot,
+# whose panels are embedded grobs), for asserting on titles and legend keys.
+plot_text_labels <- function(p) {
+  walk <- function(g) {
+    out <- character(0)
+    if (!is.null(g$label) && (is.character(g$label) || is.expression(g$label))) {
+      out <- as.character(g$label)
+    }
+    kids <- c(if (inherits(g, "gTree")) as.list(g$children), if (!is.null(g$grobs)) g$grobs)
+    for (k in kids) if (inherits(k, "grob") || inherits(k, "gtable")) out <- c(out, walk(k))
+    out
+  }
+  walk(ggplot2::ggplotGrob(p))
+}
