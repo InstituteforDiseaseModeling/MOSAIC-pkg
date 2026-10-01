@@ -43,9 +43,12 @@ test_that("p_beta can reach parity between the two routes", {
   num_e <- (1 - d$theta_j) * ((W / N) / (d$kappa + W / N))
   ratio <- median((num_e / num_h)[ok])
 
-  # Parity requires p_beta = ratio/(1+ratio); it must sit inside the prior.
+  # Parity requires p_beta = ratio/(1+ratio); it must sit inside the shipped
+  # p_beta prior (shared by every location; read from priors_default rather
+  # than hardcoded, so a prior rebuild cannot leave this test on stale shapes).
   p_star   <- ratio / (1 + ratio)
-  p_prior_hi <- qbeta(0.999, 7.03, 13.2)
+  pb <- MOSAIC::priors_default$parameters_location$p_beta$location[[d$location_name[1]]]$parameters
+  p_prior_hi <- qbeta(0.999, pb$shape1, pb$shape2)
   expect_lt(p_star, p_prior_hi)
 
   # And the routes must stay the same order of magnitude, not 1000x apart.
