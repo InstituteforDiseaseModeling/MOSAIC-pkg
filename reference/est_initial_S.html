@@ -13,7 +13,7 @@ ensuring mathematical consistency while propagating uncertainty from all compart
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,7 +62,8 @@ ensuring mathematical consistency while propagating uncertainty from all compart
 <span>  t0 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  variance_inflation <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  min_S_proportion <span class="op">=</span> <span class="fl">0.01</span></span>
+<span>  min_S_proportion <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -100,6 +101,10 @@ ensuring mathematical consistency while propagating uncertainty from all compart
 
 <dt id="arg-min-s-proportion">min_S_proportion<a class="anchor" aria-label="anchor" href="#arg-min-s-proportion"></a></dt>
 <dd><p>Numeric, minimum allowed S proportion to prevent negative values (default 0.01 = 1%)</p></dd>
+
+
+<dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
+<dd><p>Optional integer seed. When given, each location's Monte Carlo draws use a seed derived from <code>seed</code> and the ISO code, so results are reproducible; the caller's RNG state is restored. NULL (default) draws from the session RNG.</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,45 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.100.1" id="mosaic-01001">MOSAIC 0.100.1<a class="anchor" aria-label="anchor" href="#mosaic-01001"></a></h2>
+<p>Data-object rebuild on the v0.100.0 estimators and the corrected, refreshed data (MOSAIC-data 64b69ab, 6f41244). <strong>Calibration results change.</strong></p>
+<div class="section level3">
+<h3 id="default-data-objects-0-100-1">Default data objects<a class="anchor" aria-label="anchor" href="#default-data-objects-0-100-1"></a></h3>
+<ul><li>
+<code>priors_default</code> v17.0 and <code>config_default</code> v6.0 are rebuilt; the window is 2023-01-01 to 2027-04-29 on a new 10-seed production psi (seeds 11-110; an independent 10-seed replicate agrees at median r 0.96 over 2023+). <code>config_default$date_stop</code> moves from 2027-02-04 to 2027-04-29.</li>
+<li>sigma prior Beta(4.30, 13.51) -&gt; Beta(3.75, 7.12) (mean 0.24 -&gt; 0.35) after correcting the Harris et al. 2008 row (127/202 = 0.629, previously mistranscribed as 0.184). The builder now reads <code>param_sigma_prop_symptomatic.csv</code>; the config sigma is the prior mean (0.345).</li>
+<li>chi priors refit at the published 2.5% quantile (means unchanged).</li>
+<li>alpha_2, phi_1, phi_2, p_beta and theta_j keep their centres and requested CIs, now hit exactly by the corrected <code><a href="../reference/fit_beta_from_ci.html">fit_beta_from_ci()</a></code> (e.g. p_beta Beta(7.03, 13.24) -&gt; Beta(5.48, 10.10)); theta_j ERI 0.708 -&gt; 0.720. tau_i, the mobility Gammas, kappa, zeta_1/zeta_2, beta_j0_tot and the mu_jt block are unchanged in value.</li>
+<li>Initial conditions are estimated at <code>date_start</code> (2023-01-01). The builder used to seed them at the month with the most active-case countries within a year of the start (2023-02-01), so countries with an outbreak under way on 1 January but none reported just before 1 February (TZA, AGO, BEN, UGA) got the near-zero E/I template and failed to ignite in ~90% of draws. prop_E/I are back-calculated from a 28-day surveillance window straddling <code>date_start</code> (<code>est_initial_E_I(lookahead_days = )</code>, new), A quiet-start country gets a weak seeding prior, Beta(1, 1e5) for E and for I (<code>est_initial_E_I(quiet_start = "seed")</code>, new; mean 1e-5, the v16.1 scale, so ~50-700 people in E + I), standing in for undetected circulation or importation that the model has no mechanism for. A country is a quiet start when it reports at least one case after the window, up to <code>date_stop</code>, and either (a) reports no cases in the window or (b) its window-based E/I priors imply fewer than one expected initial infection, N x (E[prop_E] + E[prop_I]) &lt; 1. That seeds BFA CAF CIV GHA NAM NER RWA SWZ TCD TGO under (a) and COG (one case in the window) under (b), listed in <code>priors_default$metadata$quiet_start_seeded</code>. Window-based priors implying at least one expected infection (AGO, BEN, UGA, …) are kept, and the 11 countries with no cases anywhere up to <code>date_stop</code> keep the near-zero template. Every other country starts with E + I &gt;= 1 in &gt;= 98% of draws (lowest UGA and AGO, ~4-6 expected initial infections); single-location runs of the seeded countries produce cases in the first 60 days in 90-100% of 100 draws (1-4% before). prop_R priors are about 25x lower (the model’s own reporting chain and a mean-keeping refit); V1/V2 are effective immunisations weighted by phi.</li>
+<li>Seasonal priors and the config give a positive transmission envelope at the prior means (29 of 40 countries were negative at the v16.1 means). Independent draws from the seasonal priors still dip below zero in ~33% of draws, which the engine clamps to zero human transmission; the builder reports this share. Shrinking the prior SDs enough to remove it would have pinned the amplitudes.</li>
+<li>zeta_ratio prior truncated at 1; config zeta_ratio 185, zeta_2 1.78e6.</li>
+<li>nu_jt from deduplicated OCV campaigns (-11% doses over 2023-27); theta_j WASH imputation fix (ERI); demographic inputs regenerated (UN WPP 2026-09-18).</li>
+<li>mu_jt is unchanged: the CFR GAM input is identical.</li>
+<li>
+<code>reported_cases</code>/<code>reported_deaths</code> follow the corrected surveillance: over the v5.1 window 304 case cells change NA status and 2,437 of 36,865 observed case cells change value; <code>config_default$epidemic_peaks</code> 54 -&gt; 62 rows.</li>
+<li>Toy endemic/epidemic configs rebuilt; <code>estimated_parameters</code> unchanged (v1.3.0); <code>epidemic_peaks</code> 159 peaks detected on observed weeks only.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="reproducibility-0-100-1">Reproducibility<a class="anchor" aria-label="anchor" href="#reproducibility-0-100-1"></a></h3>
+<ul><li>
+<code><a href="../reference/est_initial_E_I.html">est_initial_E_I()</a></code>, <code><a href="../reference/est_initial_R.html">est_initial_R()</a></code> and <code><a href="../reference/est_initial_S.html">est_initial_S()</a></code> gain an optional <code>seed</code> argument, derived per location (a collision-free hash of the ISO code) and per draw, identical with or without forking, and restoring the caller’s RNG. The priors builder passes <code>ic_seed</code> and uses 1000 E/I draws, so <code>priors_default</code> rebuilds are byte-reproducible.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="tests-0-100-1">Tests<a class="anchor" aria-label="anchor" href="#tests-0-100-1"></a></h3>
+<ul><li>
+<code>test-two-route-balance.R</code> evaluates the env/human route balance as the median over five seeds (a single run’s p_star ranged 0.48-0.76) against the shipped p_beta prior; <code>test-ic_select_epoch.R</code> is removed with the selector.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="fixes-0-100-1">Fixes<a class="anchor" aria-label="anchor" href="#fixes-0-100-1"></a></h3>
+<ul><li>
+<code><a href="../reference/render_MOSAIC_figures.html">render_MOSAIC_figures()</a></code> no longer leaves <code>Rplots.pdf</code> in the working directory. Several <code>plot_*</code> functions (<code>plot_spatial_hazard</code>, <code>plot_diffusion_pi</code>, <code>plot_departure_tau</code>, <code>plot_mobility_flux_matrix</code>, <code>plot_mobility_flux_network</code>, and <code>plot_model_likelihood</code> when verbose) draw to the current device, which opened R’s default PDF device under Rscript; the renderer and its parallel workers now hold a null device while rendering. Written figures are unchanged.</li>
+<li>
+<code>vm/launch_mosaic_individual.R</code> treats a country as complete only when <code>3_results/summary.json</code> exists. A run that crashed after its shards were combined was previously skipped as finished; it is now flagged and rerun fresh.</li>
+<li>
+<code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> docs: a run that dies after combining shards into <code>samples.parquet</code> cannot be resumed and must be restarted with <code>resume = FALSE</code>; <code>3_results/summary.json</code> marks a completed run.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.100.0" id="mosaic-01000">MOSAIC 0.100.0<a class="anchor" aria-label="anchor" href="#mosaic-01000"></a></h2>
 <p>Production-readiness deep review of everything since the pure-R engine refactor (v0.67.0): 18 component and cross-cutting reviewers, every finding adversarially verified (249 confirmed), fixed in 12 file-owner groups, red-teamed, and integrated. <strong>Calibration results change</strong>; the resume guard refuses to pool simulations from earlier versions.</p>

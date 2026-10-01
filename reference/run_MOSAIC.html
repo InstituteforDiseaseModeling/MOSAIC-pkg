@@ -35,7 +35,7 @@ Posterior predictive checks and uncertainty quantification
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -149,8 +149,15 @@ missing id within the target is re-run so the exact target is met. With
 post-calibration artifacts of an earlier run into the same directory are
 removed before they are rebuilt.</p>
 <p>Resume is <strong>rejected</strong> (hard error) when:</p><ul><li><p><code>control$paths$clean_output = TRUE</code> (the wipe would delete the shards);</p></li>
-<li><p>the run already completed – a consolidated <code>2_calibration/samples.parquet</code>
-exists that the on-disk shards would shrink (start fresh, or remove it to recompute);</p></li>
+<li><p>the shards were already combined – a consolidated
+<code>2_calibration/samples.parquet</code> exists that the on-disk shards would
+shrink (start fresh, or remove it to recompute). Combining deletes the
+shards and the resume checkpoint, so this covers not only a finished run
+but also one that <strong>died after combining shards and before writing
+<code>3_results/summary.json</code></strong> (e.g. in the ensemble or figure
+steps). Such a run cannot be resumed and must be restarted with
+<code>resume = FALSE</code>. <code>3_results/summary.json</code> is written last and
+is the marker of a completed run;</p></li>
 <li><p>the supplied <code>config</code>, <code>priors</code>, <code>control$likelihood</code>,
 <code>control$sampling</code>, <code>control$calibration$n_iterations</code>, or the
 calibration mode (auto vs fixed) differ from those persisted in
@@ -303,6 +310,9 @@ ignoring it. See <a href="removed_api.html">removed_api</a>.</p></dd>
 <span class="r-in"><span><span class="co"># If a calibration is killed mid-run, re-call with resume = TRUE and the same</span></span></span>
 <span class="r-in"><span><span class="co"># config/priors/output directory. Completed simulations on disk are reused and</span></span></span>
 <span class="r-in"><span><span class="co"># the run continues from the next sim_id (bit-identical to an uninterrupted run).</span></span></span>
+<span class="r-in"><span><span class="co"># This works only while the per-sim shards exist: a run that died after they</span></span></span>
+<span class="r-in"><span><span class="co"># were combined into samples.parquet (no 3_results/summary.json) must be rerun</span></span></span>
+<span class="r-in"><span><span class="co"># with resume = FALSE.</span></span></span>
 <span class="r-in"><span><span class="fu">run_MOSAIC</span><span class="op">(</span><span class="va">config</span>, <span class="va">priors</span>, <span class="st">"./output"</span>, resume <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>

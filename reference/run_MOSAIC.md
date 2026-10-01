@@ -110,9 +110,15 @@ run_mosaic(
   - `control$paths$clean_output = TRUE` (the wipe would delete the
     shards);
 
-  - the run already completed – a consolidated
+  - the shards were already combined – a consolidated
     `2_calibration/samples.parquet` exists that the on-disk shards would
-    shrink (start fresh, or remove it to recompute);
+    shrink (start fresh, or remove it to recompute). Combining deletes
+    the shards and the resume checkpoint, so this covers not only a
+    finished run but also one that **died after combining shards and
+    before writing `3_results/summary.json`** (e.g. in the ensemble or
+    figure steps). Such a run cannot be resumed and must be restarted
+    with `resume = FALSE`. `3_results/summary.json` is written last and
+    is the marker of a completed run;
 
   - the supplied `config`, `priors`, `control$likelihood`,
     `control$sampling`, `control$calibration$n_iterations`, or the
@@ -288,6 +294,9 @@ run_MOSAIC(custom_config, custom_priors, "./output")
 # If a calibration is killed mid-run, re-call with resume = TRUE and the same
 # config/priors/output directory. Completed simulations on disk are reused and
 # the run continues from the next sim_id (bit-identical to an uninterrupted run).
+# This works only while the per-sim shards exist: a run that died after they
+# were combined into samples.parquet (no 3_results/summary.json) must be rerun
+# with resume = FALSE.
 run_MOSAIC(config, priors, "./output", resume = TRUE)
 } # }
 ```

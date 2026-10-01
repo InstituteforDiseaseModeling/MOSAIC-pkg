@@ -17,7 +17,8 @@ est_initial_S(
   t0 = NULL,
   variance_inflation = 0,
   verbose = TRUE,
-  min_S_proportion = 0.01
+  min_S_proportion = 0.01,
+  seed = NULL
 )
 ```
 
@@ -61,6 +62,13 @@ est_initial_S(
 
   Numeric, minimum allowed S proportion to prevent negative values
   (default 0.01 = 1%)
+
+- seed:
+
+  Optional integer seed. When given, each location's Monte Carlo draws
+  use a seed derived from `seed` and the ISO code, so results are
+  reproducible; the caller's RNG state is restored. NULL (default) draws
+  from the session RNG.
 
 ## Value
 

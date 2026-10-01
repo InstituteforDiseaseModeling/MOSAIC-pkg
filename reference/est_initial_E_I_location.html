@@ -15,7 +15,7 @@ reported * chi / (rho * sigma)."><meta property="og:image" content="https://inst
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -63,6 +63,7 @@ reporting chain: a report on day d is a symptomatic onset on day
 <span>  <span class="va">population</span>,</span>
 <span>  <span class="va">t0</span>,</span>
 <span>  lookback_days <span class="op">=</span> <span class="fl">60</span>,</span>
+<span>  lookahead_days <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  <span class="va">sigma</span>,</span>
 <span>  <span class="va">rho</span>,</span>
 <span>  <span class="va">chi</span>,</span>
@@ -95,7 +96,11 @@ reporting chain: a report on day d is a symptomatic onset on day
 
 
 <dt id="arg-lookback-days">lookback_days<a class="anchor" aria-label="anchor" href="#arg-lookback-days"></a></dt>
-<dd><p>Days of reports before t0 to use (default 60, must be positive); also the averaging window for the onset rate</p></dd>
+<dd><p>Days of reports before t0 to use (default 60, must be positive)</p></dd>
+
+
+<dt id="arg-lookahead-days">lookahead_days<a class="anchor" aria-label="anchor" href="#arg-lookahead-days"></a></dt>
+<dd><p>Days of reports from t0 onward that also enter the onset rate (default 0, non-negative). The onset rate is averaged over the whole window of <code>lookback_days + lookahead_days</code> days; only reports before t0 enter I directly (later ones are onsets that have not happened yet or that the rate fill-in already covers).</p></dd>
 
 
 <dt id="arg-sigma">sigma<a class="anchor" aria-label="anchor" href="#arg-sigma"></a></dt>
@@ -139,7 +144,7 @@ reporting chain: a report on day d is a symptomatic onset on day
 <dd><p>Number of individuals in Infected compartment (non-negative numeric)</p></dd>
 
 
-</dl><p>Returns E=0, I=0 if no cases in lookback window. Includes numerical stability
+</dl><p>Returns E=0, I=0 if no cases in the window. Includes numerical stability
 protections and parameter validation. Warns if E or I exceed 2% of population.</p>
     </div>
     <div class="section level2">

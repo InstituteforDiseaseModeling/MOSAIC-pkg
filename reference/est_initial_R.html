@@ -11,7 +11,7 @@ with natural immunity from previous cholera infection, subject to waning immunit
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,8 @@ with natural immunity from previous cholera infection, subject to waning immunit
 <span>  disaggregate <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  parallel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  variance_inflation <span class="op">=</span> <span class="fl">1</span></span>
+<span>  variance_inflation <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -103,6 +104,10 @@ Uses parallel::mclapply() with all available cores. Note: Not supported on Windo
 
 <dt id="arg-variance-inflation">variance_inflation<a class="anchor" aria-label="anchor" href="#arg-variance-inflation"></a></dt>
 <dd><p>Multiplier on the SD of the Monte Carlo R/N samples in the method-of-moments Beta refit, which keeps the sample mean (default 1 = no change; 0 is also treated as no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.</p></dd>
+
+
+<dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
+<dd><p>Optional integer seed. When given, each location's Monte Carlo draws use a seed derived from <code>seed</code> and the ISO code, so results are reproducible and identical with or without <code>parallel</code>; the caller's RNG state is restored. NULL (default) draws from the session RNG.</p></dd>
 
 </dl></div>
     <div class="section level2">

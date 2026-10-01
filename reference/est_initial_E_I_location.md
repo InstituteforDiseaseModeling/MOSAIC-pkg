@@ -15,6 +15,7 @@ est_initial_E_I_location(
   population,
   t0,
   lookback_days = 60,
+  lookahead_days = 0,
   sigma,
   rho,
   chi,
@@ -46,8 +47,15 @@ est_initial_E_I_location(
 
 - lookback_days:
 
-  Days of reports before t0 to use (default 60, must be positive); also
-  the averaging window for the onset rate
+  Days of reports before t0 to use (default 60, must be positive)
+
+- lookahead_days:
+
+  Days of reports from t0 onward that also enter the onset rate (default
+  0, non-negative). The onset rate is averaged over the whole window of
+  `lookback_days + lookahead_days` days; only reports before t0 enter I
+  directly (later ones are onsets that have not happened yet or that the
+  rate fill-in already covers).
 
 - sigma:
 
@@ -96,9 +104,9 @@ A list with two components:
 
   Number of individuals in Infected compartment (non-negative numeric)
 
-Returns E=0, I=0 if no cases in lookback window. Includes numerical
-stability protections and parameter validation. Warns if E or I exceed
-2% of population.
+Returns E=0, I=0 if no cases in the window. Includes numerical stability
+protections and parameter validation. Warns if E or I exceed 2% of
+population.
 
 ## Details
 

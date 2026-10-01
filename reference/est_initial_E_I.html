@@ -11,7 +11,7 @@ through a Monte Carlo simulation approach."><meta property="og:image" content="h
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,9 +58,14 @@ through a Monte Carlo simulation approach.</p>
 <span>  n_samples <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>  t0 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  lookback_days <span class="op">=</span> <span class="fl">21</span>,</span>
+<span>  lookahead_days <span class="op">=</span> <span class="fl">0</span>,</span>
+<span>  quiet_start <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"template"</span>, <span class="st">"seed"</span><span class="op">)</span>,</span>
+<span>  quiet_seed_shape1 <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  quiet_seed_shape2 <span class="op">=</span> <span class="fl">1e+05</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  parallel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  variance_inflation <span class="op">=</span> <span class="fl">2</span></span>
+<span>  variance_inflation <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>  seed <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -90,7 +95,19 @@ Must include <code>config$location_name</code> and <code>config$date_start</code
 
 
 <dt id="arg-lookback-days">lookback_days<a class="anchor" aria-label="anchor" href="#arg-lookback-days"></a></dt>
-<dd><p>Days of surveillance data to use (default 21).</p></dd>
+<dd><p>Days of surveillance data before t0 to use (default 21).</p></dd>
+
+
+<dt id="arg-lookahead-days">lookahead_days<a class="anchor" aria-label="anchor" href="#arg-lookahead-days"></a></dt>
+<dd><p>Days of surveillance data from t0 onward that also enter the onset-rate estimate (default 0). With weekly reports downscaled to days, a window that ends at t0 can miss an outbreak already under way at t0; a window straddling t0 estimates the onset rate at t0 itself. A location gets the near-zero template only when the whole window <code>[t0 - lookback_days, t0 + lookahead_days)</code> reports no cases.</p></dd>
+
+
+<dt id="arg-quiet-start">quiet_start<a class="anchor" aria-label="anchor" href="#arg-quiet-start"></a></dt>
+<dd><p>What a "quiet-start" location gets. A location is a quiet start when it reports at least one case after the surveillance window, up to <code>config$date_stop</code> (the end of the data when <code>config$date_stop</code> is NULL), and EITHER (a) its window around t0 reports no cases (or is all NA), OR (b) the E/I priors the window gives imply fewer than one expected initial infection, <code>N * (E[prop_E] + E[prop_I]) &lt; 1</code>, with <code>N</code> the population at t0 used in the fit and <code>E[.]</code> the Beta means. <code>"template"</code> (default) leaves the window's priors in place: the near-zero Beta(0.01, 99999.99) for (a), the data-based Beta for (b). <code>"seed"</code> gives E and I each the weak seeding prior Beta(<code>quiet_seed_shape1</code>, <code>quiet_seed_shape2</code>) instead: it stands in for undetected circulation or importation that the model has no mechanism for, so a single-location fit can still reproduce the later outbreak. Locations with no cases anywhere up to <code>config$date_stop</code>, and locations whose window-based priors imply at least one expected initial infection, are never changed.</p></dd>
+
+
+<dt id="arg-quiet-seed-shape-quiet-seed-shape-">quiet_seed_shape1, quiet_seed_shape2<a class="anchor" aria-label="anchor" href="#arg-quiet-seed-shape-quiet-seed-shape-"></a></dt>
+<dd><p>Beta shapes of the quiet-start seeding prior (default 1 and 1e5: mean 1e-5 of the population per compartment, mode at zero).</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -106,12 +123,17 @@ available cores. Note: Not supported on Windows.</p></dd>
 <dt id="arg-variance-inflation">variance_inflation<a class="anchor" aria-label="anchor" href="#arg-variance-inflation"></a></dt>
 <dd><p>Multiplicative CI factor for the Beta refit (default 2): the Beta keeps the Monte Carlo mean and its spread is fit to the target 95% CI mean / VI to mean * VI. A scalar or a named per-ISO vector. Should be &gt; 1.1 for meaningful variance.</p></dd>
 
+
+<dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
+<dd><p>Optional integer seed. When given, each location's Monte Carlo draws use seeds derived from <code>seed</code> and the ISO code, so results are reproducible and identical with or without <code>parallel</code>; the caller's RNG state is restored. NULL (default) draws from the session RNG.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with two main components:</p><dl><dt>metadata</dt>
 <dd><p>List containing estimation details: description, version, date, t0,
-lookback_days, n_samples, and method.</p></dd>
+lookback_days, lookahead_days, n_samples, method, quiet_start and
+quiet_start_seeded (the locations given the seeding prior).</p></dd>
 
 <dt>parameters_location</dt>
 <dd><p>List with <code>prop_E_initial</code> and <code>prop_I_initial</code>, each containing:</p><ul><li><p>parameter_name: Parameter identifier</p></li>

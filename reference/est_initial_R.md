@@ -17,7 +17,8 @@ est_initial_R(
   disaggregate = TRUE,
   verbose = TRUE,
   parallel = FALSE,
-  variance_inflation = 1
+  variance_inflation = 1,
+  seed = NULL
 )
 ```
 
@@ -69,6 +70,13 @@ est_initial_R(
   no change; 0 is also treated as no change). A scalar or a named
   per-ISO vector; the variance scales with its square (2 gives 4x) and
   values in (0, 1) tighten the prior.
+
+- seed:
+
+  Optional integer seed. When given, each location's Monte Carlo draws
+  use a seed derived from `seed` and the ISO code, so results are
+  reproducible and identical with or without `parallel`; the caller's
+  RNG state is restored. NULL (default) draws from the session RNG.
 
 ## Value
 
