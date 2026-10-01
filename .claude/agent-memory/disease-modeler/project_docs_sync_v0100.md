@@ -1,17 +1,18 @@
 ---
 name: docs-sync-v0100
-description: MOSAIC-docs brought in line with MOSAIC-pkg v0.100.0 (2026-09-30); notation choices and follow-up claims that turned out wrong
+description: MOSAIC-docs synced to MOSAIC-pkg v0.100.0 then v0.100.1 (priors v17.0 / config v6.0), 2026-09-30; notation choices, package plot defects that bite every docs regen, and spec facts verified on the way
 metadata:
   type: project
 ---
 
-MOSAIC-docs synced to MOSAIC-pkg v0.100.0 on 2026-09-30 (commits 260981e..d43e022 on origin/main).
+Synced twice on 2026-09-30: v0.100.0 (260981e..d43e022, render 73d99ac) and v0.100.1 (11f6f06 text, b7b0a0b tables/figures, 9193e21 render; live on docs.idmod.org/MOSAIC-docs at "11:36 PM PDT").
 
-- New registered notation: beta_{j0}^{tot}, p_beta, omega^{mob}/gamma^{mob} (gravity exponents; bare omega/gamma collided with omega_1/2, gamma_1/2), t_0 (IC epoch), lambda_j (E/I onset rate).
-- R0_env formula is UNCHANGED under the per-capita dose W/N: dose-response slope is 1/(kappa N), times S~N susceptibles gives 1/kappa. (Under old raw-W it should have carried N/kappa.) The review note "1/kappa -> 1/(kappa N)" was only half right.
-- Fixed mode reports converged = FALSE + convergence_evaluated = FALSE (NOT NA as the follow-up list claimed).
-- Tier search + optimizer use control$targets$best_subset_weighting (same as posterior), saturated by default.
-- sigma prior Beta(4.30,13.51) is hardcoded in make_priors_default.R and was NOT refit after the Harris 2008 correction (0.184 -> 0.629); proportion_symptomatic.png will disagree with the stated prior once est_symptomatic_prop() is re-run. Open decision.
-- zeta_ratio figure from est_zeta_ratio_prior() still shades the combined-channel CI and marks the combined median; needs a plotting fix before it goes into the docs.
+- Registered notation: beta_{j0}^{tot}, p_beta, omega^{mob}/gamma^{mob}, t_0 (now = date_start), lambda_j. Avoid d_1/d_2 for doses (d_jt = mortality); describe dose pairing in words.
+- R0_env formula unchanged under per-capita dose W/N (slope 1/(kappa N) x S~N = 1/kappa).
+- Package plot defects (handed off, not fixed in pkg): plot_seasonal_transmission(+_example) hardcode legend years "1994-2024"/"2023-2024", plot_seasonal_clustering hardcodes "2014-2024" AND reads DOCS_TABLES/pred_seasonal_dynamics.csv that nothing writes any more (docs copy is 2024-11; its clusters differ from the current daily ones). Workaround used: relabel display strings at render time + 7-day block means of model/input/pred_seasonal_dynamics_day.csv (Ward clusters verified identical). Script: MOSAIC-pkg/claude/docs_refresh_v01001/regen_docs_figures.R (gitignored scratch).
+- plot_CFR_by_country beta panel: 1000-point grid hides the AFRO spike (sd ~1e-4); colours come from the palette, not red/blue.
+- plot_vaccine_effectiveness panels B/E/C/F show the DATA fits (param_vaccine_effectiveness.csv), not the shipped priors (5%-widened CI; phi ~2-5x wider).
+- Docs vaccination section + vaccination_*.png describe WHO-ICG-only doses (data_vaccinations_WHO_*, unchanged since 2025-08) but config nu_1_jt uses deduplicated GTFCC+WHO; open follow-up.
+- Facts verified: phi_2 < phi_1 in ~48% of independent draws and phi_2 is inert when nu_2_jt = 0 (default); p_beta Beta(5.48,10.10) realized 95% 0.14-0.60 (fit_beta_from_ci keeps the mode, cannot hit the requested 0.1-0.5); 24/40 countries keep template V1/V2 priors (means 1%/0.5%) which exceed their prop_R means (median 0.002).
 
-**How to apply:** when next touching the spec, reuse these symbols; re-check the sigma prior and zeta_ratio figure before the post-rebuild docs refresh.
+**How to apply:** before the next docs regen, check whether swe fixed the seasonal/CFR plot functions; otherwise reuse the scratch workaround and state it in the commit. Reuse the symbols above. See [[v0100-rebuild-priors-v17]].

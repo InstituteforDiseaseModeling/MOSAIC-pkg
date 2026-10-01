@@ -42,5 +42,5 @@
 - [Priors-estimation review @ v0.99.9](project_priors_estimation_review_v0999.md) — fit_beta_from_ci broken <0.02; seasonal envelope <0 in 25/40; V1/V2 IC ignore phi; zeta_ratio A-vs-C mismatch; est_initial_R rho=0.1 fallback
 - [OCV WHO/GTFCC request dedup (2026-09-30)](project_ocv_who_gtfcc_request_dedup.md) — GTFCC=per-request totals, WHO=per-shipment; ~17M doses double-counted; request-key matching fix; MWI 2018 residual
 - [Priors rebuild prep h2 (2026-09-30)](project_h2_prior_rebuild_prep.md) — E/I VI uniform 10 (derived from chain priors); Harris 2008 row = 127/202 (0.629); sigma prior hardcoded, not table-fit
-- [Docs sync to v0.100.0](project_docs_sync_v0100.md) — notation added (beta_tot, p_beta, omega/gamma^mob), R0_env unchanged under W/N, sigma prior not refit after Harris fix
+- [Docs sync to v0.100.0/v0.100.1](project_docs_sync_v0100.md) — notation; seasonal/CFR plot functions hardcode stale years + orphan weekly table (workaround script); phi_2 inert; template V > prop_R
 - [v0.100.0 rebuild: priors v17.0 / config v6.0](project_v0100_rebuild_priors_v17.md) — sigma refit 0.24->0.35 (Harris fix), prop_R ~20x down, E/I track t0 window, unseeded IC MC, ic_t0 vs date_start gap
