@@ -131,7 +131,13 @@ leak-free on the target and hazard side only.}
 short interior gaps in the weekly case series (e.g. holiday non-reporting)
 before the suitability target is built, via
 \code{\link{backfill_weekly_case_gaps}}, so missing weeks inside an active
-outbreak are not stamped as false zeros by the downstream NA->0 sanitiser.}
+outbreak are not stamped as false zeros by the downstream NA->0 sanitiser.
+A filled week is imputed, not observed: it is flagged in
+\code{cases_interpolated}, labelled
+\code{disaggregation_method = "backfill_interpolated"} with
+\code{source} left missing, carries a \code{confidence_weight} of at most
+0.5 (never above the weaker of the two reported weeks it is interpolated
+from), and never defines a target anchor.}
 
 \item{backfill_max_weeks}{Integer (default \code{2L}). Maximum interior gap
 length (in weeks) to interpolate; longer gaps are left for the zero-fill.}
