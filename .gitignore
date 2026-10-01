@@ -22,6 +22,10 @@ claude/psi_evolve/da01_backup/
 claude/psi_evolve/*.log
 claude/psi_evolve/results/
 claude/psi_evolve/psi_cache/
+# Exception: the v0.101.0 validation-gate plan travels with the branch so it can
+# be executed on dugong after integration (the plan only; run outputs stay there).
+!claude/v0101_gate/
+claude/v0101_gate/out/
 *.tar.gz
 *.Rcheck/
 ..Rcheck/
