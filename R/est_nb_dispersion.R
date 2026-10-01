@@ -37,6 +37,39 @@
 .NB_DISP_MIN_TOTAL   <- 15
 .NB_DISP_MIN_NONZERO <- 5L
 
+# A fit has collapsed when its standard error is degenerate relative to the
+# dispersion it would report: se / max(theta, lower bound) below this value. On
+# config_default v6.0, glm.nb runs theta to the zero boundary for CMR, UGA and
+# ZAF (theta 3.6e-30, 5.6e-13 and 6.3e-30, SE of the same order), reported as k
+# = 0.1 with an SE of 2e-31 to 6e-14; the estimate flips between 0.1, 0.22, 3.0
+# and Inf as the spline flexibility changes. The fitted mean has fallen to ~0 in
+# runs of zero weeks, so the count after them is explained by unbounded
+# overdispersion: the smoother failed, not the reporting process. A genuine
+# estimate cannot trip the rule. The Fisher information about log k per weekly
+# count is at most k^2 * trigamma(k), below 1 + pi^2 / 6 for k <= 1, so se / k
+# is at least 1 / sqrt(2.64 n): 0.04 at 200 weeks, 0.006 at 10,000 (identified
+# fits on config_default: 0.11 to 0.61). Below the lower bound the rule therefore
+# needs theta under about 2e-4 at 185 weeks -- the zero boundary.
+.NB_DISP_SE_DEGENERATE <- 1e-4
+
+# Cross-country trend of the weekly cases dispersion on the series level,
+# log k = intercept + slope * log(mean weekly cases), taken by a location whose
+# own fit gives no usable estimate (see est_nb_dispersion(), argument
+# panel_trend). Fitted by .nb_disp_panel_trend_fit() on config_default v6.0,
+# reported_cases, scored from day 46 (burn_in_days = 45, the v0.100.1 production
+# setting): 23 locations with an estimate of their own, residual SD 1.56 on log
+# k, slope 0.14 +/- 0.17 -- a flat, noisy panel, so the trend is a prior centre
+# of about 1 rather than a precise prediction. It gives CMR 1.41, UGA 1.00 and
+# ZAF 1.20, the three locations whose fits collapse on that config. The values
+# depend on config_default: a rebuild of its surveillance must re-derive them
+# (MOSAIC:::.nb_disp_panel_trend_fit(config_default)), which the drift test in
+# test-est_nb_dispersion_panel.R enforces.
+.NB_DISP_PANEL_TREND <- list(intercept = -0.19489564152192,
+                             slope     = 0.143447689065127,
+                             sigma     = 1.55951185444869,
+                             n         = 23L,
+                             source    = "config_default v6.0, reported_cases, burn_in_days 45")
+
 # Weekly blocks must never be anchored on the first observation: whenever a
 # series starts off the reporting-week boundary, anchoring there splits every
 # reporting week across two blocks, inflating the apparent noise and biasing k
@@ -78,12 +111,56 @@
 }
 
 #' Weekly block index
+#'
+#' The block formula behind every weekly aggregation in MOSAIC (see
+#' \code{.mosaic_week_blocks}): week number relative to a fixed Monday,
+#' shifted by \code{offset}.
 #' @param dates Date vector.
 #' @param offset Integer 0-6 shifting the block boundary off Monday.
 #' @return Integer week index relative to the anchor epoch.
 #' @keywords internal
 .nb_disp_block <- function(dates, offset = 0L) {
      as.integer(floor((as.numeric(dates - .NB_DISP_ANCHOR) - offset) / 7))
+}
+
+#' Reporting weeks of a daily grid
+#'
+#' The one definition of the reporting week, shared by the dispersion estimate
+#' (\code{est_nb_dispersion()}), the weekly cases likelihood
+#' (\code{calc_model_likelihood()}), the integrated deaths likelihood and any
+#' other weekly aggregation of a daily series, so all of them sum the same days.
+#' MOSAIC surveillance weeks run Monday to Sunday: processed weekly rows are
+#' dated by their Monday, \code{downscale_weekly_values()} spreads each total
+#' over that Monday to Sunday, and the daily totals of every complete week of
+#' config_default v6.0 sum exactly to the processed weekly totals it was built
+#' from (all 39 locations with data, 6,488 weeks). Blocks are
+#' counted from a fixed Monday (1970-01-05), never from the first day of the
+#' grid: config_default starts on a Sunday, whose block is a one-day partial week.
+#'
+#' @param dates Vector of consecutive daily \code{Date}s.
+#' @param offset Integer 0-6, the day after Monday on which the reporting week
+#'   starts: \code{est_nb_dispersion()$week_offset} (0, Monday, for every current
+#'   MOSAIC location).
+#' @return A list with \code{index} (integer, the block of each day, numbered
+#'   from 1 at the block of \code{dates[1]}), \code{week_start} (\code{Date},
+#'   the first day of each block, one per block) and \code{complete} (logical
+#'   per block: all seven of its days lie in \code{dates}). Partial blocks at
+#'   either end are \code{complete = FALSE}; weekly scoring drops them.
+#' @keywords internal
+.mosaic_week_blocks <- function(dates, offset = 0L) {
+     dates <- as.Date(dates)
+     if (!length(dates)) return(list(index = integer(0), week_start = as.Date(character(0)),
+                                     complete = logical(0)))
+     if (length(dates) > 1L && any(as.numeric(diff(dates)) != 1))
+          stop("dates must be consecutive days.", call. = FALSE)
+     if (length(offset) != 1L || !is.finite(offset) || offset < 0 || offset > 6 || offset != round(offset))
+          stop("offset must be a whole number of days from 0 to 6.", call. = FALSE)
+     blk <- .nb_disp_block(dates, offset)
+     index <- blk - blk[1L] + 1L
+     n_blk <- index[length(index)]
+     list(index = index,
+          week_start = .NB_DISP_ANCHOR + as.integer(offset) + 7L * (blk[1L] + seq_len(n_blk) - 1L),
+          complete = tabulate(index, nbins = n_blk) == 7L)
 }
 
 #' Aggregate a daily observation row to complete Monday-Sunday weeks
@@ -111,6 +188,22 @@
      keep <- n == 7L
      if (!any(keep)) return(NULL)
      data.frame(week = idx[keep], y = tot[keep], w = wk[keep])
+}
+
+#' Whether weekly totals carry enough evidence to estimate a dispersion
+#'
+#' @param y Numeric weekly totals.
+#' @param w Optional weekly weights; weeks with a non-positive or missing weight
+#'   do not count.
+#' @return \code{TRUE} when the weeks meet the minimum number of weeks, total
+#'   count and number of non-zero weeks.
+#' @keywords internal
+.nb_disp_sufficient <- function(y, w = NULL) {
+     ok <- is.finite(y)
+     if (!is.null(w)) ok <- ok & is.finite(w) & w > 0
+     y <- y[ok]
+     length(y) >= .NB_DISP_MIN_WEEKS && sum(y) >= .NB_DISP_MIN_TOTAL &&
+          sum(y > 0) >= .NB_DISP_MIN_NONZERO
 }
 
 #' Fit the conditional dispersion for one location
@@ -145,8 +238,7 @@
      # failure: an all-zero observed series scored against a positive prediction
      # should take the Poisson penalty. DESeq2 likewise drops all-zero units from
      # the dispersion fit while retaining them downstream.
-     if (n < .NB_DISP_MIN_WEEKS || sum(y) < .NB_DISP_MIN_TOTAL ||
-         sum(y > 0) < .NB_DISP_MIN_NONZERO) {
+     if (!.nb_disp_sufficient(y)) {
           out$k <- Inf
           out$status <- "poisson_insufficient_data"
           return(out)
@@ -259,6 +351,15 @@
      p_mean <- length(stats::coef(fit))
      n_eff  <- length(y)
      if (is.finite(p_mean) && n_eff > p_mean + 1L) th <- th * (n_eff - p_mean) / n_eff
+
+     # Collapsed: theta ran to the zero boundary (a bursty series or a reporting
+     # dump defeated the smooth mean), so neither it nor its SE describes the
+     # reporting noise. No estimate, like the non-finite SE above.
+     if (se / max(th, .NB_DISP_K_LO) < .NB_DISP_SE_DEGENERATE) {
+          out$se <- se
+          out$status <- "no_estimate_se_degenerate"
+          return(out)
+     }
 
      out$se <- se
      out$identified <- se < th
@@ -400,6 +501,63 @@
           median_weight = stats::median(wj[shr], na.rm = TRUE))
 }
 
+#' Validate a panel mean-dispersion trend
+#' @param trend List with numeric \code{intercept} and \code{slope}.
+#' @return \code{trend}, unchanged.
+#' @keywords internal
+.nb_disp_check_trend <- function(trend) {
+     ok <- is.list(trend) &&
+          is.numeric(trend$intercept) && length(trend$intercept) == 1L && is.finite(trend$intercept) &&
+          is.numeric(trend$slope) && length(trend$slope) == 1L && is.finite(trend$slope)
+     if (!ok) stop("panel_trend must be NULL or a list with finite numeric `intercept` and `slope` ",
+                   "(log k = intercept + slope * log(mean weekly count)).", call. = FALSE)
+     trend
+}
+
+#' Dispersion predicted by a panel mean-dispersion trend
+#' @param trend List with \code{intercept} and \code{slope}.
+#' @param mean_weekly Numeric vector of positive weekly means.
+#' @return \code{exp(intercept + slope * log(mean_weekly))}, held inside the
+#'   numerical bounds.
+#' @keywords internal
+.nb_disp_panel_predict <- function(trend, mean_weekly) {
+     k <- exp(trend$intercept + trend$slope * log(mean_weekly))
+     pmin(pmax(k, .NB_DISP_K_LO), .NB_DISP_K_HI)
+}
+
+#' Fit the panel mean-dispersion trend from a configuration
+#'
+#' Estimates each location's cases dispersion on the scored window (from day
+#' \code{burn_in_days + 1}, observed weeks only when the config carries
+#' \code{reported_tier}), then regresses log k on log mean weekly cases over the
+#' locations with an estimate of their own: finite, not at a bound, not
+#' collapsed. Used to derive \code{.NB_DISP_PANEL_TREND}.
+#'
+#' @param config A config with \code{reported_cases}, \code{date_start},
+#'   \code{location_name} and optionally \code{reported_cases_weight} and
+#'   \code{reported_tier}.
+#' @param burn_in_days Integer number of leading days left unscored.
+#' @return List with \code{intercept}, \code{slope}, \code{sigma} (residual SD
+#'   of log k), \code{n} and the per-location \code{table}.
+#' @keywords internal
+.nb_disp_panel_trend_fit <- function(config, burn_in_days = 45L) {
+     as_mat <- function(x) if (is.null(x) || is.matrix(x)) x else matrix(x, nrow = 1L)
+     obs <- as_mat(config$reported_cases)
+     keep <- (as.integer(burn_in_days) + 1L):ncol(obs)
+     sl <- function(x) { x <- as_mat(x); if (is.null(x)) NULL else x[, keep, drop = FALSE] }
+     tab <- est_nb_dispersion(sl(obs), sl(config$reported_cases_weight),
+                              date_start = as.Date(config$date_start) + keep[1] - 1L,
+                              location_name = config$location_name, shrink = FALSE,
+                              obs_tier = sl(config$reported_tier), panel_trend = NULL)
+     ok <- is.finite(tab$k_raw) & !(tab$status %in% "clamped_lower_bound") &
+          is.finite(tab$mean_weekly) & tab$mean_weekly > 0
+     if (sum(ok) < 3L) stop("too few locations with a dispersion estimate to fit a panel trend.")
+     lk <- log(tab$k_raw[ok]); lm_ <- log(tab$mean_weekly[ok])
+     fit <- stats::lm(lk ~ lm_)
+     list(intercept = unname(stats::coef(fit)[1]), slope = unname(stats::coef(fit)[2]),
+          sigma = stats::sigma(fit), n = sum(ok), table = tab)
+}
+
 
 #' Estimate negative-binomial dispersion from surveillance observations
 #'
@@ -410,8 +568,22 @@
 #' (\code{MASS::glm.nb}), following the Farrington/Noufaily convention.
 #'
 #' The returned \code{k} is on R's \code{dnbinom(mu=, size=)} scale and is used
-#' directly by \code{\link{calc_model_likelihood}}. \code{k = Inf} denotes the
-#' Poisson limit and is a valid, intended result.
+#' directly by \code{\link{calc_model_likelihood}}, which scores the cases on
+#' the same weekly totals. \code{k = Inf} denotes the Poisson limit and is a
+#' valid, intended result.
+#'
+#' A location with fewer than 20 weeks, 15 cases or 5 non-zero weeks over all
+#' its scored weeks takes the Poisson limit. Otherwise its own fit can still fail
+#' to give an estimate (status \code{no_estimate_*}): every rung of the mean
+#' model fails, the standard error of \code{theta} is not finite, or the fit
+#' collapsed (\code{theta} ran to the zero boundary, so its SE is below 1e-4 of
+#' the dispersion it would report; on config_default this is how bursty series
+#' with reporting dumps defeat the smooth mean), or, with \code{obs_tier}, the
+#' observed weeks alone fall short of the minimum. Such
+#' a location takes \code{panel_trend} when it is supplied, evaluated at its
+#' mean weekly count; without it, it borrows the run's own mean-dispersion trend
+#' (five or more estimated locations), the median of the estimated locations,
+#' or, alone, the Poisson limit.
 #'
 #' @param obs Numeric matrix of observations, \code{n_locations x n_time_steps},
 #'   on a daily grid.
@@ -427,14 +599,29 @@
 #'   model. Default \code{2}.
 #' @param n_harmonics Number of seasonal harmonic pairs. Default \code{2}.
 #' @param verbose Logical; report a summary of the fit. Default \code{FALSE}.
+#' @param obs_tier Optional integer matrix of surveillance trust tiers with the
+#'   same dimensions as \code{obs} (\code{config$reported_tier}: 1 observed, 2
+#'   reconstructed, 3 imputed). When supplied, only weeks whose seven days are
+#'   all tier 1 enter the fit: a reconstructed week (a WHO multi-week report
+#'   spread evenly) or an imputed one (a Fourier curve through an annual total)
+#'   has a synthetic shape that reads as low noise and inflates \code{k}. The
+#'   Poisson rule above still uses every tier. Default \code{NULL} (all weeks).
+#' @param panel_trend Optional list with numeric \code{intercept} and
+#'   \code{slope}: a cross-location trend \code{log k = intercept + slope *
+#'   log(mean weekly count)} taken by a location without an estimate of its own
+#'   (see Details). \code{run_MOSAIC()} supplies the cases trend fitted on
+#'   config_default (\code{MOSAIC:::.NB_DISP_PANEL_TREND}). Default \code{NULL}.
 #'
 #' @importFrom splines ns
 #'
 #' @return A data.frame with one row per location: \code{location},
-#'   \code{n_weeks}, \code{mean_weekly}, \code{weekly_share} and
-#'   \code{week_offset} (detected reporting cadence),
-#'   \code{k_raw}, \code{se}, \code{trend_df}, \code{rung}, \code{identified},
-#'   \code{status}, and \code{k} (the shrunk value actually used).
+#'   \code{weekly_share} and \code{week_offset} (detected reporting cadence),
+#'   \code{n_weeks} (weeks in the fit), \code{n_weeks_excluded} (scored weeks
+#'   left out of the fit as reconstructed or imputed), \code{mean_weekly} (mean
+#'   weekly count over all scored weeks), \code{k_raw}, \code{se},
+#'   \code{trend_df}, \code{rung}, \code{identified}, \code{status},
+#'   \code{panel_trend} (\code{TRUE} where \code{k} comes from
+#'   \code{panel_trend}), and \code{k} (the value actually used).
 #'
 #' @examples
 #' \dontrun{
@@ -451,7 +638,9 @@ est_nb_dispersion <- function(obs,
                               shrink = TRUE,
                               trend_df_per_year = 2,
                               n_harmonics = 2L,
-                              verbose = FALSE) {
+                              verbose = FALSE,
+                              obs_tier = NULL,
+                              panel_trend = NULL) {
 
      if (is.null(dim(obs))) obs <- matrix(obs, nrow = 1L)
      n_loc <- nrow(obs); n_t <- ncol(obs)
@@ -460,56 +649,101 @@ est_nb_dispersion <- function(obs,
           if (!all(dim(weights_obs) == c(n_loc, n_t)))
                stop("weights_obs must have the same dimensions as obs.")
      }
+     if (!is.null(obs_tier)) {
+          if (is.null(dim(obs_tier))) obs_tier <- matrix(obs_tier, nrow = 1L)
+          if (!all(dim(obs_tier) == c(n_loc, n_t)))
+               stop("obs_tier must have the same dimensions as obs.")
+     }
+     if (!is.null(panel_trend)) panel_trend <- .nb_disp_check_trend(panel_trend)
      if (is.null(location_name)) location_name <- as.character(seq_len(n_loc))
      if (length(location_name) != n_loc)
           stop("location_name must have one entry per row of obs.")
 
      dates <- seq(as.Date(date_start), by = "day", length.out = n_t)
+     n_pos <- function(wk) if (is.null(wk)) 0L else sum(is.finite(wk$y) & is.finite(wk$w) & wk$w > 0)
 
      rows <- vector("list", n_loc)
      for (i in seq_len(n_loc)) {
           y <- as.numeric(obs[i, ])
           w <- if (is.null(weights_obs)) NULL else as.numeric(weights_obs[i, ])
+          # The reporting-week boundary is a property of the reporting calendar,
+          # so it is detected on every finite day whatever its tier.
           cad <- .nb_disp_cadence(y, dates)
           share <- cad$share
-          wk <- .nb_disp_weekly(y, dates, w, offset = cad$offset)
-          r <- if (is.null(wk)) {
+          wk_all <- .nb_disp_weekly(y, dates, w, offset = cad$offset)
+          wk <- wk_all
+          if (!is.null(obs_tier) && !is.null(wk_all)) {
+               y_obs <- y
+               y_obs[!(is.finite(obs_tier[i, ]) & obs_tier[i, ] == 1)] <- NA_real_
+               wk <- .nb_disp_weekly(y_obs, dates, w, offset = cad$offset)
+          }
+          n_all <- n_pos(wk_all); n_obs <- n_pos(wk)
+          r <- if (is.null(wk_all)) {
                data.frame(n_weeks = 0L, mean_weekly = NA_real_, k = Inf, se = NA_real_,
                           trend_df = NA_real_, rung = NA_integer_, identified = NA,
                           status = "poisson_no_weekly_data", stringsAsFactors = FALSE)
+          } else if (!.nb_disp_sufficient(wk_all$y, wk_all$w)) {
+               # Sparse over every tier: the Poisson limit (returned by the fit).
+               .nb_disp_fit_one(wk_all$week, wk_all$y, wk_all$w, trend_df_per_year, n_harmonics)
+          } else if (is.null(wk) || !.nb_disp_sufficient(wk$y, wk$w)) {
+               # Enough data, too little of it observed (e.g. an outbreak known
+               # only from a spread multi-week report): no dispersion of its own,
+               # which is not evidence for the Poisson limit.
+               data.frame(n_weeks = n_obs, mean_weekly = NA_real_, k = NA_real_, se = NA_real_,
+                          trend_df = NA_real_, rung = NA_integer_, identified = NA,
+                          status = "no_estimate_observed_insufficient", stringsAsFactors = FALSE)
           } else {
                .nb_disp_fit_one(wk$week, wk$y, wk$w, trend_df_per_year, n_harmonics)
           }
+          # The level of the series the likelihood scores: every scored week.
+          if (n_all > 0L) {
+               pos <- is.finite(wk_all$y) & is.finite(wk_all$w) & wk_all$w > 0
+               r$mean_weekly <- mean(wk_all$y[pos])
+          }
           rows[[i]] <- data.frame(location = location_name[i], weekly_share = share,
-                                  week_offset = cad$offset, r, stringsAsFactors = FALSE)
+                                  week_offset = cad$offset, r["n_weeks"],
+                                  n_weeks_excluded = as.integer(n_all - n_obs),
+                                  r[setdiff(names(r), "n_weeks")], stringsAsFactors = FALSE)
      }
      res <- do.call(rbind, rows)
      names(res)[names(res) == "k"] <- "k_raw"
 
-     if (shrink) {
-          sh <- .nb_disp_shrink(res$mean_weekly, res$k_raw, se = res$se,
-                                identified = res$identified,
-                                clamped = res$status %in% "clamped_lower_bound")
-          res$k <- sh$k
-          attr(res, "shrinkage") <- sh[c("sigma", "n_fit", "n_inherit", "n_poisson", "median_weight")]
-     } else {
-          # shrink = FALSE must still honour the "never NA" contract.
-          k0 <- res$k_raw
-          miss <- !is.finite(k0) & !is.infinite(k0)
-          if (any(miss)) {
-               pool <- k0[is.finite(k0) & k0 > 0]
-               k0[miss] <- if (length(pool)) stats::median(pool) else Inf
+     # A location without an estimate of its own takes the panel trend at its
+     # level, at every scale (a single-location run has no panel of its own to
+     # borrow from). The rest go through shrinkage among themselves.
+     use_panel <- if (is.null(panel_trend)) rep(FALSE, n_loc) else
+          grepl("^no_estimate", res$status) & is.finite(res$mean_weekly) & res$mean_weekly > 0
+     res$panel_trend <- use_panel
+     res$k <- NA_real_
+     if (any(use_panel))
+          res$k[use_panel] <- .nb_disp_panel_predict(panel_trend, res$mean_weekly[use_panel])
+     own <- !use_panel
+     if (any(own)) {
+          if (shrink) {
+               sh <- .nb_disp_shrink(res$mean_weekly[own], res$k_raw[own], se = res$se[own],
+                                     identified = res$identified[own],
+                                     clamped = res$status[own] %in% "clamped_lower_bound")
+               res$k[own] <- sh$k
+               attr(res, "shrinkage") <- sh[c("sigma", "n_fit", "n_inherit", "n_poisson", "median_weight")]
+          } else {
+               # shrink = FALSE must still honour the "never NA" contract.
+               k0 <- res$k_raw[own]
+               miss <- !is.finite(k0) & !is.infinite(k0)
+               if (any(miss)) {
+                    pool <- k0[is.finite(k0) & k0 > 0]
+                    k0[miss] <- if (length(pool)) stats::median(pool) else Inf
+               }
+               res$k[own] <- k0
           }
-          res$k <- k0
      }
 
      if (verbose) {
           fin <- is.finite(res$k)
           message(sprintf(
-               "est_nb_dispersion: %d locations | %d estimated (median k = %.2f) | %d Poisson | %d at a bound | %d unidentified",
+               "est_nb_dispersion: %d locations | %d estimated (median k = %.2f) | %d Poisson | %d at a bound | %d unidentified | %d from the panel trend",
                n_loc, sum(fin), stats::median(res$k[fin]), sum(is.infinite(res$k)),
                sum(res$status == "clamped_lower_bound", na.rm = TRUE),
-               sum(res$status == "ok_not_identified", na.rm = TRUE)))
+               sum(res$status == "ok_not_identified", na.rm = TRUE), sum(use_panel)))
      }
      res
 }
@@ -527,6 +761,14 @@ est_nb_dispersion <- function(obs,
 #' silently overrode a data-driven estimate, which is the behaviour this design
 #' removes.
 #'
+#' The estimate uses observed weeks only when the config carries
+#' \code{reported_tier} (\code{\link{est_nb_dispersion}}, argument
+#' \code{obs_tier}); without it every week enters the fit, as before that field
+#' existed. A cases location whose fit gives no estimate takes the shipped panel
+#' trend (\code{.NB_DISP_PANEL_TREND}) at every scale. Deaths take no panel
+#' trend: \code{run_MOSAIC()} scores deaths with the reported CFR integrated out,
+#' so their NB dispersion is a diagnostic.
+#'
 #' @param config A simulation config with \code{reported_cases},
 #'   \code{reported_deaths} and \code{date_start}.
 #' @param control A control list; \code{control$likelihood} may carry
@@ -534,18 +776,24 @@ est_nb_dispersion <- function(obs,
 #' @param score_window Optional resolved scored window (\code{idx_cases},
 #'   \code{idx_deaths}); the dispersion is estimated on the same window the
 #'   likelihood scores.
-#' @return A list with \code{cases}, \code{deaths} (each \code{k} plus a
-#'   \code{summary} string) and the combined \code{table}.
+#' @return A list with \code{cases}, \code{deaths} (each \code{k},
+#'   \code{week_offset} -- the reporting-week boundary per location, which the
+#'   weekly cases likelihood uses for its blocks -- plus a \code{summary}
+#'   string), the combined \code{table}, and \code{tier_used} (whether
+#'   \code{config$reported_tier} restricted the fit to observed weeks).
 #' @keywords internal
 .mosaic_resolve_nb_dispersion <- function(config, control, score_window = NULL) {
 
+     as_mat <- function(x) if (is.null(x) || is.matrix(x)) x else matrix(x, nrow = 1L)
      n_loc <- if (is.matrix(config$reported_cases)) nrow(config$reported_cases) else 1L
      lik <- control$likelihood
      shrink <- if (is.null(lik$nb_dispersion_shrink)) TRUE else isTRUE(lik$nb_dispersion_shrink)
+     tier_full <- .mosaic_config_tier(config)
 
      one <- function(channel) {
-          obs <- if (channel == "cases") config$reported_cases  else config$reported_deaths
-          wob <- if (channel == "cases") config$reported_cases_weight else config$reported_deaths_weight
+          obs <- as_mat(if (channel == "cases") config$reported_cases  else config$reported_deaths)
+          wob <- as_mat(if (channel == "cases") config$reported_cases_weight else config$reported_deaths_weight)
+          tier <- tier_full
           ovr <- if (channel == "cases") lik$nb_k_cases else lik$nb_k_deaths
 
           # Estimate on the SAME window the likelihood scores. The scored window
@@ -559,6 +807,7 @@ est_nb_dispersion <- function(obs,
                     keep <- idx:ncol(obs)
                     obs <- obs[, keep, drop = FALSE]
                     if (!is.null(wob)) wob <- wob[, keep, drop = FALSE]
+                    if (!is.null(tier)) tier <- tier[, keep, drop = FALSE]
                     d_start <- d_start + (idx - 1L)
                }
           }
@@ -571,24 +820,32 @@ est_nb_dispersion <- function(obs,
                     "NB dispersion for %s is USER-SUPPLIED and replaces the estimate entirely (k = %s).",
                     channel, if (length(unique(k)) == 1L) format(k[1]) else "per-location vector")
                if (exists("log_msg", mode = "function")) log_msg("%s", msg) else message(msg)
+               # The weekly cases likelihood still needs each location's
+               # reporting-week boundary, detected exactly as the estimator does.
+               dates <- seq(d_start, by = "day", length.out = ncol(obs))
+               offs <- vapply(seq_len(n_loc), function(i)
+                    as.integer(.nb_disp_cadence(as.numeric(obs[i, ]), dates)$offset), integer(1))
                # The override table MUST carry the same columns as the estimated
                # one, or rbind() of the two channels fails when only one is
                # overridden.
-               return(list(k = k, summary = "user-supplied",
+               return(list(k = k, week_offset = offs, summary = "user-supplied",
                            table = data.frame(
                                 channel = channel, location = config$location_name,
-                                weekly_share = NA_real_, week_offset = NA_integer_,
-                                n_weeks = NA_integer_, mean_weekly = NA_real_,
+                                weekly_share = NA_real_, week_offset = offs,
+                                n_weeks = NA_integer_, n_weeks_excluded = NA_integer_,
+                                mean_weekly = NA_real_,
                                 k_raw = k, se = NA_real_, trend_df = NA_real_,
                                 rung = NA_integer_, identified = NA,
-                                status = "user_override", k = k,
+                                status = "user_override", panel_trend = FALSE, k = k,
                                 stringsAsFactors = FALSE)))
           }
 
           tab <- est_nb_dispersion(obs, wob, date_start = d_start,
-                                   location_name = config$location_name, shrink = shrink)
+                                   location_name = config$location_name, shrink = shrink,
+                                   obs_tier = tier,
+                                   panel_trend = if (channel == "cases") .NB_DISP_PANEL_TREND else NULL)
           fin <- is.finite(tab$k)
-          list(k = tab$k,
+          list(k = tab$k, week_offset = as.integer(tab$week_offset),
                summary = if (any(fin)) sprintf("%.2f", stats::median(tab$k[fin])) else "all Poisson",
                table = data.frame(channel = channel, tab, stringsAsFactors = FALSE))
      }
@@ -605,5 +862,31 @@ est_nb_dispersion <- function(obs,
                     channel, paste(config$location_name[bad], collapse = ", ")), call. = FALSE)
      }
      .check(cs$k, "cases"); .check(dt$k, "deaths")
-     list(cases = cs, deaths = dt, table = rbind(cs$table, dt$table))
+     list(cases = cs, deaths = dt, table = rbind(cs$table, dt$table),
+          tier_used = !is.null(tier_full))
+}
+
+#' Surveillance trust tiers carried by a config
+#'
+#' \code{config$reported_tier} is an integer matrix aligned with
+#' \code{reported_cases} (1 observed, 2 reconstructed, 3 imputed; \code{NA}
+#' where the week has no observation), built by \code{make_config_default.R}
+#' from the surveillance \code{disaggregation_method}. The confidence weights
+#' cannot stand in for it: observed AI weeks and documented zeros carry
+#' 0.8-0.95 while spread WHO reports carry 0.5-0.9.
+#'
+#' @param config A config list.
+#' @return The tier matrix, or \code{NULL} when the config has none.
+#' @keywords internal
+.mosaic_config_tier <- function(config) {
+     tier <- config$reported_tier
+     if (is.null(tier)) return(NULL)
+     ref <- config$reported_cases
+     if (!is.matrix(ref)) ref <- matrix(ref, nrow = 1L)
+     if (!is.matrix(tier)) tier <- matrix(tier, nrow = 1L)
+     if (!identical(dim(tier), dim(ref)))
+          stop(sprintf("config$reported_tier is %d x %d but reported_cases is %d x %d; the two must be aligned.",
+                       nrow(tier), ncol(tier), nrow(ref), ncol(ref)), call. = FALSE)
+     storage.mode(tier) <- "integer"
+     tier
 }

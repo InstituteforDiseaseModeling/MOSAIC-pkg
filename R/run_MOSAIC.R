@@ -464,6 +464,10 @@
             eps_rel_cases  = likelihood_settings$eps_rel_cases,
             eps_rel_deaths = likelihood_settings$eps_rel_deaths,
             ll_deaths_core = .ll_d_core,
+            # Cases on reporting-week totals, on the weeks the dispersion was
+            # estimated on (offsets resolved once with k).
+            cases_scoring = likelihood_settings$cases_scoring,
+            week_offset   = likelihood_settings$.cases_week_offset_resolved,
             weight_cases = likelihood_settings$weight_cases,
             weight_deaths = likelihood_settings$weight_deaths,
             weight_peak_timing = likelihood_settings$weight_peak_timing,
@@ -1189,18 +1193,32 @@ run_MOSAIC <- function(config,
   control$likelihood$.nb_k_cases_resolved  <- .nb_disp$cases$k
   control$likelihood$.nb_k_deaths_resolved <- .nb_disp$deaths$k
   control$likelihood$.nb_dispersion_table  <- .nb_disp$table
+  # The weekly cases likelihood sums cases over the reporting weeks the
+  # dispersion was estimated on; resolved here once, with k, for every worker.
+  control$likelihood$.cases_week_offset_resolved <- .nb_disp$cases$week_offset
   log_msg("NB dispersion (weekly, conditional ML): cases median k = %s, deaths median k = %s | Poisson: %d cases, %d deaths of %d locations",
           .nb_disp$cases$summary, .nb_disp$deaths$summary,
           sum(is.infinite(.nb_disp$cases$k)), sum(is.infinite(.nb_disp$deaths$k)),
           length(.nb_disp$cases$k))
+  log_msg("Cases likelihood: %s (cases_scoring = '%s'); dispersion from %s",
+          if (identical(control$likelihood$cases_scoring, "daily"))
+            "one NB cell per day at the weekly k (legacy)" else "NB on reporting-week totals at the weekly k",
+          if (is.null(control$likelihood$cases_scoring)) "weekly" else control$likelihood$cases_scoring,
+          if (isTRUE(.nb_disp$tier_used)) {
+            sprintf("observed weeks only (%d reconstructed/imputed weeks excluded)",
+                    sum(.nb_disp$table$n_weeks_excluded[.nb_disp$table$channel == "cases"], na.rm = TRUE))
+          } else "every week (config carries no reported_tier)")
   # Bound-bind rate is a standing fit diagnostic: in a well-specified fit the
   # bounds should rarely bind. The retired k_min floor bound in 27 of 28
   # estimable locations, which was the defect rather than a setting.
   .nb_bind <- sum(.nb_disp$table$status %in% "clamped_lower_bound", na.rm = TRUE)
   .nb_noest <- sum(grepl("^no_estimate", .nb_disp$table$status), na.rm = TRUE)
+  .nb_panel <- .nb_disp$table$location[.nb_disp$table$panel_trend %in% TRUE]
   if (.nb_bind > 0 || .nb_noest > 0)
-    log_msg("NB dispersion: %d clamped at a hard bound, %d with no own estimate (borrowed), of %d location-channels -- see 2_calibration/diagnostics/nb_dispersion.csv",
-            .nb_bind, .nb_noest, nrow(.nb_disp$table))
+    log_msg("NB dispersion: %d clamped at a hard bound, %d with no own estimate (%d cases from the panel trend%s), of %d location-channels -- see 2_calibration/diagnostics/nb_dispersion.csv",
+            .nb_bind, .nb_noest, length(.nb_panel),
+            if (length(.nb_panel)) paste0(": ", paste(.nb_panel, collapse = ", ")) else "",
+            nrow(.nb_disp$table))
   tryCatch({
     if (!dir.exists(dirs$cal_diag)) dir.create(dirs$cal_diag, recursive = TRUE, showWarnings = FALSE)
     utils::write.csv(.nb_disp$table,
@@ -3442,6 +3460,9 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 #'     \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
 #'     \item \code{weight_wis}: WIS regularizer weight (default: 0, try 0.10)
+#'     \item \code{cases_scoring}: \code{"weekly"} (default; cases scored as NB on
+#'       reporting-week totals) or \code{"daily"} (legacy per-day cells of v0.100.1
+#'       and earlier, kept to reproduce those runs)
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list)
 #'   }
 #'
@@ -3678,6 +3699,15 @@ mosaic_control_defaults <- function(calibration = NULL,
     # uses eps_rel_cases as its weekly background, the same relative floor as cases.
     eps_rel_cases = 0.02,            # Relative floor, cases channel (and the integrated deaths background)
     eps_rel_deaths = 0.25,           # Relative floor, standalone NB deaths scoring only (not read by run_MOSAIC)
+
+    # === Cases scoring resolution ===
+    # "weekly" (v0.101.0+): NB on reporting-week totals of observed and simulated
+    # cases, on the weeks est_nb_dispersion() estimates k from. The surveillance
+    # is weekly totals spread over days; scoring each day at the weekly k counted
+    # a week's level information ~5x (median over the v0.100.1 national runs) and
+    # ranked draws by within-week noise. "daily" is the LEGACY per-day rule of
+    # v0.100.1 and earlier, kept only to reproduce those runs.
+    cases_scoring = "weekly",
 
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in weeks)

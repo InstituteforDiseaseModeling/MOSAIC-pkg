@@ -21,6 +21,8 @@ calc_model_likelihood(
   eps_rel_cases = 0.02,
   eps_rel_deaths = 0.25,
   ll_deaths_core = NULL,
+  cases_scoring = c("weekly", "daily"),
+  week_offset = NULL,
   verbose = FALSE,
   weight_peak_timing = 0,
   weight_peak_magnitude = 0,
@@ -90,6 +92,19 @@ terms (peak magnitude, cumulative, WIS) are then dropped, with a warning,
 because \code{est_deaths} is drawn at the prior CFR; deaths peak timing,
 which does not depend on the level, is kept.}
 
+\item{cases_scoring}{\code{"weekly"} (default) scores the cases core on
+reporting-week totals (see Description). \code{"daily"} is the legacy rule
+of MOSAIC v0.100.1 and earlier, one NB cell per time step at the same weekly
+\code{k}, kept only to reproduce earlier runs. \code{NULL} means
+\code{"weekly"}.}
+
+\item{week_offset}{Reporting-week boundary of each location, 0-6 days after
+Monday (length 1 or one per location; \code{NA} = detect), as returned by
+\code{est_nb_dispersion()}. \code{run_MOSAIC()} supplies the boundaries its
+dispersion estimate detected, so both use the same weeks. \code{NULL}
+(default) detects them from \code{obs_cases}. Used by the weekly cases core
+only.}
+
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 
 \item{weight_peak_timing, weight_peak_magnitude}{Weights for peak terms, scaled
@@ -120,6 +135,30 @@ time-series log-likelihood per location and outcome (cases, deaths) with
 a per-location NB dispersion estimated by \code{\link{est_nb_dispersion}}.
 }
 \details{
+Cases are scored on weekly totals. The surveillance series are weekly
+totals spread over the days of each reporting week, and the dispersion is
+estimated on weekly totals, so the observed and simulated daily cases are
+summed over the reporting weeks \code{est_nb_dispersion()} uses (the same
+block boundaries, from \code{week_offset}) and each week is one NB cell at
+the weekly \code{k}. Scoring every day of a spread week at the weekly
+\code{k} would count its level information about \code{7 (k + M) / (7 k +
+M)} times (\code{M} the weekly mean; a median 5.4 over the v0.100.1 national
+runs, exactly 1 in the Poisson limit) and rank draws largely by their
+within-week noise against a flat spread. A week is scored only when all seven
+of its days lie in the scored window and carry a finite observation, a
+finite confidence weight and a positive time weight; a week cut by the start
+or end of the window is not a weekly total and is dropped, as in the
+dispersion estimate. Each week's weight is the mean of its days' weights: a
+confidence weight belongs to the reporting week and is the same on its seven
+days, so the week keeps the weight its days had and the weight keeps its role
+as an exponent on that week's likelihood. The weights are then made
+mass-preserving over the scored weeks, as for the daily cells before. The
+cases floor \code{eps_rel_cases} applies to the weekly prediction relative to
+the mean weekly observation, and a location needs three scored weeks
+(weighted: a weight sum of three) for its cases core to count. Without a
+dated daily grid (no \code{config$date_start}), or when the time steps are
+weeks, each time step is one cell.
+
 Optional shape terms are enabled by setting their weight > 0: peak timing
 (Normal), peak magnitude (log-Normal with adaptive sigma), cumulative
 progression (NB at cumulative fractions), and Weighted Interval Score (WIS).
@@ -135,7 +174,14 @@ WIS and cumulative helpers already average over their quantiles and
 timepoints, a given weight on those two terms carries less influence than the
 same weight on the peak terms (with the defaults, 1/5 and 1/4 of \code{N_obs}
 times the per-cell value), and changing the number of quantiles or timepoints
-changes their influence.
+changes their influence. The shape terms keep their definitions under the
+weekly cases core: they read the daily series, \code{N_obs} still counts
+daily time steps, and the cumulative and WIS terms use the same weekly
+\code{k} on daily cells as before. Because the weekly cases core carries about
+a fifth of the level information of the daily one (less of a change where
+\code{k} is large; none in the Poisson limit), a given shape weight weighs
+roughly five to seven times more against the cases core than it did with
+daily cells.
 
 Non-finite per-location LL values are replaced with \code{-Inf} (zero
 importance weight). The NB likelihood naturally produces very negative

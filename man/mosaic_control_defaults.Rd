@@ -48,6 +48,9 @@ mosaic_control_defaults(
 \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
 \item \code{weight_wis}: WIS regularizer weight (default: 0, try 0.10)
+\item \code{cases_scoring}: \code{"weekly"} (default; cases scored as NB on
+reporting-week totals) or \code{"daily"} (legacy per-day cells of v0.100.1
+and earlier, kept to reproduce those runs)
 \item ... (see \code{mosaic_control_defaults()} for complete list)
 }}
 

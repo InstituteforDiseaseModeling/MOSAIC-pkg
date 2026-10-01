@@ -12,7 +12,9 @@ est_nb_dispersion(
   shrink = TRUE,
   trend_df_per_year = 2,
   n_harmonics = 2L,
-  verbose = FALSE
+  verbose = FALSE,
+  obs_tier = NULL,
+  panel_trend = NULL
 )
 }
 \arguments{
@@ -37,13 +39,30 @@ model. Default \code{2}.}
 \item{n_harmonics}{Number of seasonal harmonic pairs. Default \code{2}.}
 
 \item{verbose}{Logical; report a summary of the fit. Default \code{FALSE}.}
+
+\item{obs_tier}{Optional integer matrix of surveillance trust tiers with the
+same dimensions as \code{obs} (\code{config$reported_tier}: 1 observed, 2
+reconstructed, 3 imputed). When supplied, only weeks whose seven days are
+all tier 1 enter the fit: a reconstructed week (a WHO multi-week report
+spread evenly) or an imputed one (a Fourier curve through an annual total)
+has a synthetic shape that reads as low noise and inflates \code{k}. The
+Poisson rule above still uses every tier. Default \code{NULL} (all weeks).}
+
+\item{panel_trend}{Optional list with numeric \code{intercept} and
+\code{slope}: a cross-location trend \code{log k = intercept + slope *
+log(mean weekly count)} taken by a location without an estimate of its own
+(see Details). \code{run_MOSAIC()} supplies the cases trend fitted on
+config_default (\code{MOSAIC:::.NB_DISP_PANEL_TREND}). Default \code{NULL}.}
 }
 \value{
 A data.frame with one row per location: \code{location},
-\code{n_weeks}, \code{mean_weekly}, \code{weekly_share} and
-\code{week_offset} (detected reporting cadence),
-\code{k_raw}, \code{se}, \code{trend_df}, \code{rung}, \code{identified},
-\code{status}, and \code{k} (the shrunk value actually used).
+\code{weekly_share} and \code{week_offset} (detected reporting cadence),
+\code{n_weeks} (weeks in the fit), \code{n_weeks_excluded} (scored weeks
+left out of the fit as reconstructed or imputed), \code{mean_weekly} (mean
+weekly count over all scored weeks), \code{k_raw}, \code{se},
+\code{trend_df}, \code{rung}, \code{identified}, \code{status},
+\code{panel_trend} (\code{TRUE} where \code{k} comes from
+\code{panel_trend}), and \code{k} (the value actually used).
 }
 \description{
 Estimates the conditional NB dispersion \code{k} for each location, at the
@@ -54,8 +73,22 @@ harmonics and the dispersion estimated by maximum likelihood
 }
 \details{
 The returned \code{k} is on R's \code{dnbinom(mu=, size=)} scale and is used
-directly by \code{\link{calc_model_likelihood}}. \code{k = Inf} denotes the
-Poisson limit and is a valid, intended result.
+directly by \code{\link{calc_model_likelihood}}, which scores the cases on
+the same weekly totals. \code{k = Inf} denotes the Poisson limit and is a
+valid, intended result.
+
+A location with fewer than 20 weeks, 15 cases or 5 non-zero weeks over all
+its scored weeks takes the Poisson limit. Otherwise its own fit can still fail
+to give an estimate (status \code{no_estimate_*}): every rung of the mean
+model fails, the standard error of \code{theta} is not finite, or the fit
+collapsed (\code{theta} ran to the zero boundary, so its SE is below 1e-4 of
+the dispersion it would report; on config_default this is how bursty series
+with reporting dumps defeat the smooth mean), or, with \code{obs_tier}, the
+observed weeks alone fall short of the minimum. Such
+a location takes \code{panel_trend} when it is supplied, evaluated at its
+mean weekly count; without it, it borrows the run's own mean-dispersion trend
+(five or more estimated locations), the median of the estimated locations,
+or, alone, the Poisson limit.
 }
 \examples{
 \dontrun{

@@ -664,6 +664,15 @@
          def$calibration$max_simulations_total, ")", call. = FALSE)
   }
 
+  # The cases scoring rule must be valid before any worker starts: a bad value
+  # would otherwise fail inside every likelihood call and surface only as an
+  # all-NA calibration.
+  cs <- def$likelihood$cases_scoring
+  if (!is.null(cs) && !(is.character(cs) && length(cs) == 1L && cs %in% c("weekly", "daily"))) {
+    stop("likelihood$cases_scoring must be \"weekly\" (default) or \"daily\" (legacy), got: ",
+         paste(format(cs), collapse = ", "), call. = FALSE)
+  }
+
   # LOGICAL CONSISTENCY
   if (def$calibration$min_batches_adaptive > def$calibration$max_batches_adaptive) {
     stop("calibration$min_batches_adaptive (", def$calibration$min_batches_adaptive,
@@ -1462,7 +1471,11 @@
 #'   per-location offset width now averages over the years each location
 #'   observes (not the pooled years), the n_iterations collapse keeps -Inf
 #'   replicates, and the cumulative shape term sums over scored cells only.
-.mosaic_likelihood_impl_version <- function() "R/v0.100.0+review_likelihood"
+#'   v0.101.0 scores cases on reporting-week totals instead of daily cells, and
+#'   changes the cases dispersion: estimated from observed weeks only (config
+#'   \code{reported_tier}), and a location whose fit collapses or has too few
+#'   observed weeks takes the cross-country panel trend.
+.mosaic_likelihood_impl_version <- function() "R/v0.101.0+weekly_cases"
 
 #' R Engine Semantics Version
 #'
