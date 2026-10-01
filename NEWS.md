@@ -1,3 +1,26 @@
+# MOSAIC 0.100.1
+
+Data-object rebuild on the v0.100.0 estimators and the corrected, refreshed data (MOSAIC-data 64b69ab, 6f41244). **Calibration results change.**
+
+## Default data objects
+- `priors_default` v17.0 and `config_default` v6.0 are rebuilt; the window is 2023-01-01 to 2027-04-29 on a new 10-seed production psi (seeds 11-110; an independent 10-seed replicate agrees at median r 0.96 over 2023+). `config_default$date_stop` moves from 2027-02-04 to 2027-04-29.
+- sigma prior Beta(4.30, 13.51) -> Beta(3.75, 7.12) (mean 0.24 -> 0.35) after correcting the Harris et al. 2008 row (127/202 = 0.629, previously mistranscribed as 0.184). The builder now reads `param_sigma_prop_symptomatic.csv`; the config sigma is the prior mean (0.345).
+- chi priors refit at the published 2.5% quantile (means unchanged).
+- Initial conditions come from the revised estimators: prop_R priors are about 20x lower (the model's own reporting chain and a mean-keeping refit); prop_E/I are back-calculated from cases in the t0 window, with a near-zero template where the window has no cases; V1/V2 are effective immunisations weighted by phi.
+- Seasonal priors and the config guarantee a positive transmission envelope (29 of 40 countries had a negative envelope at the v16.1 prior means).
+- zeta_ratio prior truncated at 1; config zeta_ratio 185, zeta_2 1.78e6.
+- nu_jt from deduplicated OCV campaigns (-11% doses over 2023-27); theta_j WASH imputation fix (ERI); demographic inputs regenerated (UN WPP 2026-09-18).
+- mu_jt is unchanged: the CFR GAM input is identical.
+- Toy endemic/epidemic configs rebuilt; `estimated_parameters` unchanged (v1.3.0); `epidemic_peaks` 159 peaks detected on observed weeks only.
+
+## Reproducibility
+- `est_initial_E_I()`, `est_initial_R()` and `est_initial_S()` gain an optional `seed` argument, derived per location and per draw, identical with or without forking, and restoring the caller's RNG. The priors builder passes `ic_seed` and uses 1000 E/I draws, so `priors_default` rebuilds are byte-reproducible.
+
+## Fixes
+- `render_MOSAIC_figures()` no longer leaves `Rplots.pdf` in the working directory. Several `plot_*` functions (`plot_spatial_hazard`, `plot_diffusion_pi`, `plot_departure_tau`, `plot_mobility_flux_matrix`, `plot_mobility_flux_network`, and `plot_model_likelihood` when verbose) draw to the current device, which opened R's default PDF device under Rscript; the renderer and its parallel workers now hold a null device while rendering. Written figures are unchanged.
+- `vm/launch_mosaic_individual.R` treats a country as complete only when `3_results/summary.json` exists. A run that crashed after its shards were combined was previously skipped as finished; it is now flagged and rerun fresh.
+- `run_MOSAIC()` docs: a run that dies after combining shards into `samples.parquet` cannot be resumed and must be restarted with `resume = FALSE`; `3_results/summary.json` marks a completed run.
+
 # MOSAIC 0.100.0
 
 Production-readiness deep review of everything since the pure-R engine refactor (v0.67.0): 18 component and cross-cutting reviewers, every finding adversarially verified (249 confirmed), fixed in 12 file-owner groups, red-teamed, and integrated. **Calibration results change**; the resume guard refuses to pool simulations from earlier versions.
