@@ -2,10 +2,12 @@
 #'
 #' Pure helper extracted from \code{plot_model_ensemble()}. Builds the tidy
 #' per-location prediction table (central series + dynamic CI pairs + observed)
-#' and applies the DISPLAY-ONLY boundary-artifact mask. This is the single
-#' source of truth for both the exported \code{predictions_*.csv} files and the
-#' lines drawn by \code{plot_model_ensemble()}, so the CSV and the plot are
-#' guaranteed identical.
+#' and applies the boundary-artifact mask. This is the single source of truth
+#' for the exported \code{predictions_*.csv} files (whose unscored head stays
+#' \code{NA}) and for every line \code{plot_model_ensemble()} draws: with
+#' \code{show_burn_in = TRUE} the plotter draws this same assembly with the
+#' head masks switched off (\code{.mosaic_display_prediction_table()}), so the
+#' scored-window cells it draws are the CSV's cells.
 #'
 #' The returned data.frame schema (verbatim, in order) is:
 #' \code{location, date, metric, observed, predicted_central, predicted_mean,
@@ -182,6 +184,131 @@
   plot_data
 }
 
+#' Prediction table drawn by plot_model_ensemble() when the burn-in is shown
+#'
+#' The exported CSV blanks every time step before the scored window. For
+#' display, \code{.mosaic_assemble_prediction_table()} is run with the head
+#' masks off (no cases warm-up, scored-window starts of 1), so the cells inside
+#' the scored window are exactly the CSV's cells and the unscored head carries
+#' the ensemble's own central and interval series. \code{mask_final_deaths_step}
+#' is an engine artifact, not part of the head, and is kept.
+#'
+#' When a precomputed \code{prediction_table} is supplied it is drawn verbatim,
+#' except that its blank cells in the unscored head (the first
+#' \code{head_cases}/\code{head_deaths} steps, matched to the ensemble by
+#' location, date and metric) are filled from that unmasked assembly; the
+#' central column follows the table's own \code{central_method} column. If the
+#' ensemble cannot be assembled, the table is returned unfilled with a warning
+#' and its head stays blank.
+#'
+#' @param ensemble A \code{mosaic_ensemble} object.
+#' @param central_method Resolved per-channel central method.
+#' @param mask_final_deaths_step Logical; passed through.
+#' @param head_cases,head_deaths Integer; number of leading unscored steps.
+#' @param prediction_table Optional table from
+#'   \code{.mosaic_assemble_prediction_table()}.
+#' @return A data.frame with the prediction-table schema.
+#' @noRd
+.mosaic_display_prediction_table <- function(ensemble, central_method,
+                                             mask_final_deaths_step,
+                                             head_cases, head_deaths,
+                                             prediction_table = NULL) {
+  .assemble_unmasked <- function() .mosaic_assemble_prediction_table(
+    ensemble               = ensemble,
+    central_method         = central_method,
+    n_cases_warmup_mask    = 0L,
+    mask_final_deaths_step = mask_final_deaths_step,
+    score_idx_cases        = 1L,
+    score_idx_deaths       = 1L
+  )
+
+  if (is.null(prediction_table)) return(.assemble_unmasked())
+
+  tbl <- prediction_table
+  tbl$metric <- factor(as.character(tbl$metric),
+                       levels = c("Suspected Cases", "Deaths"))
+  full <- tryCatch(.assemble_unmasked(), error = function(e) {
+    warning("plot_model_ensemble: the burn-in could not be drawn from the ",
+            "ensemble (", conditionMessage(e), "); drawing prediction_table ",
+            "as supplied, with its unscored head blank.", call. = FALSE)
+    NULL
+  })
+  if (is.null(full)) return(tbl)
+
+  # Time index of every row of `full`, in the assembly's construction order
+  # (per location: the cases block, then the deaths block).
+  full_t <- rep(rep(seq_len(ensemble$n_time_points), 2L), ensemble$n_locations)
+  .key <- function(d) paste(as.character(d$location), as.character(d$date),
+                            as.character(d$metric), sep = "\r")
+  idx      <- match(.key(tbl), .key(full))
+  is_cases <- as.character(tbl$metric) == "Suspected Cases"
+  in_head  <- !is.na(idx) &
+    ((is_cases & full_t[idx] <= head_cases) | (!is_cases & full_t[idx] <= head_deaths))
+  rows <- which(in_head)
+  if (!length(rows)) return(tbl)
+  src <- idx[rows]
+
+  chan_default <- ifelse(is_cases[rows], central_method[["cases"]],
+                         central_method[["deaths"]])
+  cen <- if ("central_method" %in% names(tbl)) as.character(tbl$central_method[rows]) else chan_default
+  bad <- is.na(cen) | !cen %in% c("mean", "median")
+  cen[bad] <- chan_default[bad]
+
+  fill <- list(predicted_central = ifelse(cen == "median",
+                                          full$predicted_median[src],
+                                          full$predicted_mean[src]))
+  for (cc in intersect(c("predicted_mean", "predicted_median",
+                         grep("^ci_[0-9]+_(lower|upper)$", names(full), value = TRUE)),
+                       names(tbl))) {
+    fill[[cc]] <- full[[cc]][src]
+  }
+  for (cc in intersect(names(fill), names(tbl))) {
+    cur <- tbl[[cc]][rows]
+    na  <- is.na(cur)
+    cur[na] <- fill[[cc]][na]
+    tbl[[cc]][rows] <- cur
+  }
+  tbl
+}
+
+#' Unscored spans of a prediction figure, one row per channel
+#'
+#' The steps before each channel's scored window (the cases warm-up and the
+#' burn-in) as a rectangle from the panel edge to the scored-window start, plus
+#' the "scored from YYYY-MM-DD" label for the marker drawn at that start.
+#'
+#' @param dates The figure's time axis (Date, or numeric when undated).
+#' @param head_cases,head_deaths Integer; number of leading unscored steps.
+#' @return A data.frame (\code{metric, xmin, xmax, ymin, ymax, ytop, label}) or
+#'   \code{NULL} when neither channel has an unscored head. \code{xmax} is the
+#'   scored-window start, or \code{Inf} (and \code{label} \code{NA}) when the
+#'   whole series is unscored.
+#' @noRd
+.mosaic_unscored_spans <- function(dates, head_cases, head_deaths) {
+  n     <- length(dates)
+  heads <- c("Suspected Cases" = head_cases, "Deaths" = head_deaths)
+  heads <- heads[heads > 0L]
+  if (!length(heads) || n < 1L) return(NULL)
+
+  is_date <- inherits(dates, "Date")
+  start <- vapply(heads, function(h) if (h < n) as.numeric(dates[h + 1L]) else Inf,
+                  numeric(1L))
+  label <- rep(NA_character_, length(start))
+  ok    <- is.finite(start)
+  label[ok] <- paste0("scored from ",
+                      if (is_date) format(as.Date(start[ok], origin = "1970-01-01"))
+                      else paste0("t = ", start[ok]))
+  xmin <- rep(-Inf, length(start))
+  xmax <- unname(start)
+  if (is_date) {
+    xmin <- as.Date(xmin, origin = "1970-01-01")
+    xmax <- as.Date(xmax, origin = "1970-01-01")
+  }
+  data.frame(metric = factor(names(heads), levels = c("Suspected Cases", "Deaths")),
+             xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, ytop = Inf,
+             label = label, stringsAsFactors = FALSE)
+}
+
 #' Write per-location ensemble prediction CSVs
 #'
 #' Writes the assembled prediction table (one CSV per location) into
@@ -220,8 +347,11 @@
 #' Renders time-series plots from a \code{mosaic_ensemble} object produced by
 #' \code{\link{calc_model_ensemble}}. Shows the central prediction line (the
 #' weighted mean by default; \code{central_method}) with interval ribbons and
-#' observed data points. Optionally saves
-#' per-location prediction CSVs for downstream use.
+#' observed data points. By default the predictions are drawn from the first
+#' time step, and the steps before the scored window (burn-in and cases
+#' warm-up) are shaded grey, with a dashed line at the scored-window start
+#' labelled with its date (e.g. "scored from 2023-02-15"; \code{show_burn_in}).
+#' The caption metrics cover the scored window only.
 #'
 #' @param ensemble A \code{mosaic_ensemble} object returned by
 #'   \code{\link{calc_model_ensemble}}.
@@ -257,27 +387,38 @@
 #'   DISPLAY ONLY: the underlying ensemble arrays are untouched, so any
 #'   R2/bias/likelihood computed upstream from the raw object is unaffected.
 #' @param n_cases_warmup_mask Integer. Number of LEADING timesteps of every
-#'   Suspected Cases prediction to blank (set to \code{NA}) in the exported CSV
-#'   and the rendered lines. Default \code{2L}. This masks the initial-condition
-#'   warm-up transient (seeded E/I progressing into new_symptomatic before the
-#'   SEIR dynamics settle), which is visually dominant for low-count countries.
-#'   DISPLAY ONLY (raw arrays untouched). The legitimate leading
-#'   reporting-lag zeros in Deaths (from \code{delta_reporting_cases}, the lag deaths share with cases) are REAL
-#'   and are NOT masked by this argument. Set to \code{0L} to disable.
+#'   Suspected Cases prediction excluded from the caption metrics. Default
+#'   \code{2L}. This covers the initial-condition warm-up transient (seeded E/I
+#'   progressing into new_symptomatic before the SEIR dynamics settle). With
+#'   \code{show_burn_in = TRUE} these steps are drawn inside the grey unscored
+#'   span; with \code{FALSE} they are blanked, as in the exported CSV. The raw
+#'   arrays are untouched. The legitimate leading reporting-lag zeros in Deaths
+#'   (from \code{delta_reporting_cases}, the lag deaths share with cases) are
+#'   REAL and are NOT masked by this argument. Set to \code{0L} to disable.
 #' @param score_idx_cases,score_idx_deaths Integer (1-based). Per-channel scored
-#'   time-window START index (burn-in / deaths-era start). Leading timesteps
-#'   strictly BEFORE the index are blanked (set to \code{NA}) in the exported CSV
-#'   and the rendered lines so the plot shows only the scored window. Default
-#'   \code{1L} (no blanking). When \code{NULL} (the typical caller pattern) the
-#'   value is read from \code{ensemble$artifact_mask$score_idx_*} so plots
-#'   automatically track the scored window the ensemble was built with. DISPLAY
-#'   ONLY (raw arrays untouched).
+#'   time-window START index (burn-in / deaths-era start). Timesteps strictly
+#'   BEFORE the index are excluded from the caption metrics and, like the cases
+#'   warm-up, shaded (\code{show_burn_in = TRUE}) or blanked
+#'   (\code{show_burn_in = FALSE}). When \code{NULL} (default, the typical caller
+#'   pattern) the value is read from \code{ensemble$artifact_mask$score_idx_*}
+#'   so plots track the scored window the ensemble was built with; \code{1}
+#'   means no burn-in. The raw arrays are untouched.
 #' @param prediction_table Optional precomputed prediction table (a data.frame
-#'   from \code{.mosaic_assemble_prediction_table()}). When supplied, the plotter
-#'   uses it directly instead of re-assembling from \code{ensemble}, guaranteeing
-#'   the rendered lines match an already-written CSV (the renderer path). When
-#'   \code{NULL} (default) the table is assembled internally with the masking
-#'   arguments above.
+#'   from \code{.mosaic_assemble_prediction_table()}). When supplied, its lines
+#'   are drawn as given, so they match an already-written CSV; with
+#'   \code{show_burn_in = TRUE} its blank unscored head is filled from
+#'   \code{ensemble}'s own central and interval series (if \code{ensemble}
+#'   cannot supply them, a warning is given and the head is left blank). When
+#'   \code{NULL} (default) the table is assembled from \code{ensemble}.
+#' @param show_burn_in Logical. If \code{TRUE} (default), draw the predicted
+#'   central line and interval ribbons from the first time step, shade the
+#'   steps before each channel's scored window (burn-in and cases warm-up) in
+#'   light grey, and mark the scored-window start with a dashed line labelled
+#'   with its date, e.g. "scored from 2023-02-15" (one label per channel when
+#'   the starts differ). If \code{FALSE}, blank the predictions before the
+#'   scored window, as in the exported CSV. Display only: the caption metrics
+#'   are computed on the scored window either way, and
+#'   \code{mask_final_deaths_step} applies either way.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return Invisibly returns a list with:
@@ -308,6 +449,7 @@ plot_model_ensemble <- function(ensemble,
                                 score_idx_cases        = NULL,
                                 score_idx_deaths       = NULL,
                                 prediction_table       = NULL,
+                                show_burn_in           = TRUE,
                                 verbose          = TRUE) {
 
   # ---------------------------------------------------------------------------
@@ -319,6 +461,13 @@ plot_model_ensemble <- function(ensemble,
 
   if (missing(output_dir) || is.null(output_dir))
     stop("output_dir is required")
+
+  if (!is.logical(show_burn_in) || length(show_burn_in) != 1L || is.na(show_burn_in))
+    stop("show_burn_in must be TRUE or FALSE")
+
+  warmup_n <- suppressWarnings(as.integer(n_cases_warmup_mask))
+  if (length(warmup_n) != 1L || is.na(warmup_n) || warmup_n < 0L)
+    stop("n_cases_warmup_mask must be a single non-negative integer")
 
   if (!dir.exists(output_dir))
     dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -378,17 +527,47 @@ plot_model_ensemble <- function(ensemble,
   .extract_loc <- function(data, i) if (is.matrix(data)) data[i, ] else data
 
   # ---------------------------------------------------------------------------
+  # Per-channel scored-window starts and unscored heads
+  # ---------------------------------------------------------------------------
+  # Resolved exactly as .mosaic_assemble_prediction_table() resolves them, so
+  # the unscored head is the span the exported CSV blanks: the first
+  # max(warm-up, score_idx_cases - 1) cases steps and score_idx_deaths - 1
+  # deaths steps.
+  .resolve_score_idx <- function(arg, field) {
+    if (!is.null(arg)) {
+      v <- as.integer(arg)
+    } else {
+      v <- tryCatch(as.integer(ensemble$artifact_mask[[field]]), error = function(e) NA_integer_)
+    }
+    if (length(v) != 1L || is.na(v) || v < 1L) 1L else v
+  }
+  score_idx_cases  <- .resolve_score_idx(score_idx_cases,  "score_idx_cases")
+  score_idx_deaths <- .resolve_score_idx(score_idx_deaths, "score_idx_deaths")
+  head_cases  <- min(max(warmup_n, score_idx_cases - 1L), n_time_points)
+  head_deaths <- min(score_idx_deaths - 1L, n_time_points)
+
+  # ---------------------------------------------------------------------------
   # Build (or reuse) tidy plot_data frame
   # ---------------------------------------------------------------------------
-  # The masked prediction table is assembled by the pure helper
-  # .mosaic_assemble_prediction_table() so the plotted lines and the exported
-  # CSVs are guaranteed identical (single source of truth). A precomputed table
-  # may be passed via `prediction_table` (the renderer path); otherwise it is
-  # built here from the ensemble with the same masking arguments.
+  # Every table drawn here comes from the pure helper
+  # .mosaic_assemble_prediction_table(), the single source of the exported
+  # CSVs. With show_burn_in = TRUE the head masks are switched off for drawing
+  # (.mosaic_display_prediction_table()), so the scored window is drawn from
+  # the CSV's own cells and the unscored head from the ensemble; with FALSE the
+  # masked table (or a supplied `prediction_table`) is drawn as is.
 
   if (verbose) message("Building plot data...")
 
-  if (!is.null(prediction_table)) {
+  if (show_burn_in) {
+    plot_data <- .mosaic_display_prediction_table(
+      ensemble               = ensemble,
+      central_method         = central_method,
+      mask_final_deaths_step = mask_final_deaths_step,
+      head_cases             = head_cases,
+      head_deaths            = head_deaths,
+      prediction_table       = prediction_table
+    )
+  } else if (!is.null(prediction_table)) {
     plot_data <- prediction_table
     plot_data$metric <- factor(as.character(plot_data$metric),
                                levels = c("Suspected Cases", "Deaths"))
@@ -405,23 +584,15 @@ plot_model_ensemble <- function(ensemble,
 
   n_ci_pairs <- length(envelope_quantiles) / 2L
 
-  # Re-derive the per-channel scored-window starts for the in-plot annotation
-  # masking below (the table itself is already masked by the helper).
-  .resolve_score_idx <- function(arg, field) {
-    if (!is.null(arg)) {
-      v <- as.integer(arg)
-    } else {
-      v <- tryCatch(as.integer(ensemble$artifact_mask[[field]]), error = function(e) NA_integer_)
-    }
-    if (length(v) != 1L || is.na(v) || v < 1L) 1L else v
-  }
-  score_idx_cases  <- .resolve_score_idx(score_idx_cases,  "score_idx_cases")
-  score_idx_deaths <- .resolve_score_idx(score_idx_deaths, "score_idx_deaths")
+  # Grey span over each channel's unscored head, ending at the scored-window
+  # start (NULL when nothing is unscored or the burn-in is not shown).
+  unscored <- if (show_burn_in) .mosaic_unscored_spans(dates, head_cases, head_deaths)
 
   # Scored central series for the caption R2/bias/totals. Built with the same
   # masking helper run_MOSAIC() uses for summary.json, driven by the same
-  # warm-up / final-deaths / scored-window settings that blank the plotted line,
-  # so the caption scores exactly the time steps the figure draws.
+  # warm-up / final-deaths / scored-window settings that define the unscored
+  # head, so the caption scores exactly the scored window, whether or not the
+  # head is drawn.
   caption_mask <- list(
     cases_warmup     = as.integer(n_cases_warmup_mask),
     deaths_final     = isTRUE(mask_final_deaths_step),
@@ -469,6 +640,69 @@ plot_model_ensemble <- function(ensemble,
     p + ggplot2::scale_x_date(date_breaks = brk, date_labels = lbl)
   }
 
+  # Unscored-span layers (show_burn_in = TRUE): the grey span under the
+  # ribbons, the dashed scored-window marker over the ribbons but under the
+  # observed points and central line, and the "scored from" label on top.
+  # Span rows carry `metric`, which places them in the per-location metric
+  # facets; in the location facets of the per-channel plots they carry no
+  # facet variable and so repeat in every panel.
+  unscored_col  <- unname(mosaic_colors("reference"))
+  unscored_text <- mosaic_color_variant(unscored_col, "darken", 0.35)
+
+  .add_unscored_shade <- function(p, spans) {
+    if (is.null(spans) || !nrow(spans)) return(p)
+    p + ggplot2::geom_rect(
+      data = spans,
+      ggplot2::aes(xmin = .data$xmin, xmax = .data$xmax,
+                   ymin = .data$ymin, ymax = .data$ymax),
+      inherit.aes = FALSE, fill = unscored_col, alpha = 0.18)
+  }
+
+  .add_unscored_marker <- function(p, spans) {
+    if (is.null(spans)) return(p)
+    spans <- spans[is.finite(spans$xmax), , drop = FALSE]
+    if (!nrow(spans)) return(p)
+    p + ggplot2::geom_vline(
+      data = spans, ggplot2::aes(xintercept = .data$xmax),
+      inherit.aes = FALSE, linetype = "dashed", colour = unscored_col,
+      linewidth = 0.45)
+  }
+
+  .add_unscored_label <- function(p, labels) {
+    if (is.null(labels) || !nrow(labels)) return(p)
+    labels$label <- paste0(" ", labels$label)
+    p + ggplot2::geom_text(
+      data = labels,
+      ggplot2::aes(x = .data$xmax, y = .data$ytop, label = .data$label),
+      inherit.aes = FALSE, hjust = 0, vjust = 1.4, size = 2.6,
+      colour = unscored_text)
+  }
+
+  # Per-location figure: one label per channel, or a single label on the
+  # cases panel when both channels' scored windows start on the same step.
+  loc_labels <- NULL
+  if (!is.null(unscored)) {
+    loc_labels <- unscored[!is.na(unscored$label), , drop = FALSE]
+    if (nrow(loc_labels) == 2L && identical(loc_labels$label[1L], loc_labels$label[2L]))
+      loc_labels <- loc_labels[loc_labels$metric == "Suspected Cases", , drop = FALSE]
+  }
+
+  # Per-channel location facets: the channel's span in every panel, its label
+  # in the first panel only (facet_wrap orders a character facet alphabetically).
+  .channel_spans <- function(metric) {
+    if (is.null(unscored)) return(NULL)
+    unscored[unscored$metric == metric, , drop = FALSE]
+  }
+  .channel_label <- function(spans, data) {
+    if (is.null(spans)) return(NULL)
+    lab <- spans[!is.na(spans$label), , drop = FALSE]
+    if (!nrow(lab)) return(NULL)
+    panels <- if (is.factor(data$location)) levels(droplevels(data$location))
+              else sort(unique(as.character(data$location)))
+    lab$location <- panels[1L]
+    lab
+  }
+
   ribbon_alphas <- seq(0.2, 0.5, length.out = n_ci_pairs)
   total_sims    <- n_param_sets * n_stoch_per
 
@@ -499,6 +733,7 @@ plot_model_ensemble <- function(ensemble,
     loc_data_points <- loc_data[!is.na(loc_data$observed), ]
 
     p <- ggplot2::ggplot(loc_data, ggplot2::aes(x = date))
+    p <- .add_unscored_shade(p, unscored)
 
     # Add CI ribbons from widest to narrowest
     for (ci_idx in seq_len(n_ci_pairs)) {
@@ -511,6 +746,7 @@ plot_model_ensemble <- function(ensemble,
                              alpha = ribbon_alphas[ci_idx])
     }
 
+    p <- .add_unscored_marker(p, unscored)
     p <- p +
       ggplot2::geom_point(data = loc_data_points, ggplot2::aes(y = observed),
                           color = mosaic_colors("data"), size = 1.5, alpha = 0.6) +
@@ -559,6 +795,7 @@ plot_model_ensemble <- function(ensemble,
         )
       )
 
+    p <- .add_unscored_label(p, loc_labels)
     p <- .add_date_scale(p)
 
     plot_list$individual[[loc]] <- p
@@ -587,7 +824,9 @@ plot_model_ensemble <- function(ensemble,
     bias_c_all <- tryCatch(round(calc_bias_ratio(all_obs_c, all_pred_c), 2L),
                             error = function(e) NA)
 
+    cases_spans <- .channel_spans("Suspected Cases")
     p_cases <- ggplot2::ggplot(cases_data, ggplot2::aes(x = date))
+    p_cases <- .add_unscored_shade(p_cases, cases_spans)
 
     for (ci_idx in seq_len(n_ci_pairs)) {
       lower_col <- paste0("ci_", ci_idx, "_lower")
@@ -601,6 +840,7 @@ plot_model_ensemble <- function(ensemble,
 
     cases_data_points <- cases_data[!is.na(cases_data$observed), ]
 
+    p_cases <- .add_unscored_marker(p_cases, cases_spans)
     p_cases <- p_cases +
       ggplot2::geom_point(data = cases_data_points, ggplot2::aes(y = observed),
                           color = mosaic_colors("data"), size = 1.5, alpha = 0.6) +
@@ -631,6 +871,7 @@ plot_model_ensemble <- function(ensemble,
         )
       )
 
+    p_cases <- .add_unscored_label(p_cases, .channel_label(cases_spans, cases_data))
     p_cases <- .add_date_scale(p_cases)
     plot_list$cases_faceted <- p_cases
     if (verbose) print(p_cases)
@@ -656,7 +897,9 @@ plot_model_ensemble <- function(ensemble,
     bias_d_all  <- tryCatch(round(calc_bias_ratio(all_obs_d, all_pred_d), 2L),
                             error = function(e) NA)
 
+    deaths_spans <- .channel_spans("Deaths")
     p_deaths <- ggplot2::ggplot(deaths_data, ggplot2::aes(x = date))
+    p_deaths <- .add_unscored_shade(p_deaths, deaths_spans)
 
     for (ci_idx in seq_len(n_ci_pairs)) {
       lower_col <- paste0("ci_", ci_idx, "_lower")
@@ -670,6 +913,7 @@ plot_model_ensemble <- function(ensemble,
 
     deaths_data_points <- deaths_data[!is.na(deaths_data$observed), ]
 
+    p_deaths <- .add_unscored_marker(p_deaths, deaths_spans)
     p_deaths <- p_deaths +
       ggplot2::geom_point(data = deaths_data_points, ggplot2::aes(y = observed),
                           color = mosaic_colors("data"), size = 1.5, alpha = 0.6) +
@@ -700,6 +944,7 @@ plot_model_ensemble <- function(ensemble,
         )
       )
 
+    p_deaths <- .add_unscored_label(p_deaths, .channel_label(deaths_spans, deaths_data))
     p_deaths <- .add_date_scale(p_deaths)
     plot_list$deaths_faceted <- p_deaths
     if (verbose) print(p_deaths)

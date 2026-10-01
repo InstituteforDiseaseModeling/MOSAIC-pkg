@@ -1,6 +1,9 @@
 # MOSAIC (development version)
 
-Release preparation for 1.0.0. Documentation, documentation figures and tests only: no simulation, likelihood, sampling, weighting, ensemble, prior or config data object, or calibration code changes, so 1.0.0 calibrates exactly as 0.100.1.
+Release preparation for 1.0.0. Documentation, figures and tests only: no simulation, likelihood, sampling, weighting, ensemble, prior or config data object, or calibration code changes, so 1.0.0 calibrates exactly as 0.100.1.
+
+## Prediction figures
+- `plot_model_ensemble()` draws the predicted central line and intervals from the first time step. It blanked every step before the scored window (the burn-in and the two-step cases warm-up), so with the production `burn_in_days = 45` the ensemble and medoid figures started on 2023-02-15 although the ensemble holds predictions from 2023-01-01. The unscored steps are now shaded light grey, with a dashed line at the scored-window start labelled with its date ("scored from 2023-02-15"; one label per channel when cases and deaths start on different steps). New argument `show_burn_in` (default `TRUE`; `FALSE` draws the previous figure); `render_MOSAIC_figures()` passes `TRUE`. Display only: the caption R2, bias and totals are computed on the scored window as before, and the exported `predictions_*.csv` files are unchanged, their unscored rows still `NA`. A supplied `prediction_table` is drawn as given, with its blank unscored rows filled from the ensemble.
 
 ## Documentation figures
 - `plot_seasonal_transmission()` and `plot_seasonal_transmission_example()` take the years in their legend labels from the dates of the points drawn, i.e. the `est_seasonal_dynamics()` fit window ("Precipitation (2010-2025)"; the Mozambique example's cases read 2017-2025), instead of the hardcoded "1994-2024" and "2023-2024".
