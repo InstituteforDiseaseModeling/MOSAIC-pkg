@@ -50,12 +50,17 @@
 #'       source reports a positive count for every week of the window, the WHO
 #'       total is redistributed in proportion to those counts
 #'       (\code{who_catchup_shaped}, confidence 0.9); otherwise the even spread
-#'       stands. All non-WHO rows in the window are then dropped, so a window never
-#'       mixes the WHO total with another source's partial weeks.
+#'       stands. A window shaped by a curated epidemic curve
+#'       (\code{who_catchup_curated_shaped}) keeps its curve. All non-WHO rows in
+#'       the window are then dropped, so a window never mixes the WHO total with
+#'       another source's partial weeks.
 #'     \item \strong{Curated corrections.} The surveillance curation table
 #'       (\code{inst/extdata/surveillance_curation.csv}) lists corrections the
 #'       rules cannot derive, each with its evidence and source: WHO windows dated
-#'       by an outbreak report (applied by \code{\link{process_WHO_weekly_data}});
+#'       by an outbreak report, and timed by its documented epidemic curve where
+#'       there is one (South Africa 2023; anchors in
+#'       \code{inst/extdata/surveillance_curation_shapes.csv}), applied by
+#'       \code{\link{process_WHO_weekly_data}};
 #'       documented absences of cholera, whose imputed weeks are emptied
 #'       (\code{drop_imputed}: Angola 2023, South Sudan May 2023 - September
 #'       2024); and contested imputed years that are kept but listed
@@ -698,8 +703,10 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
 #' window, the WHO total is redistributed in proportion to those weekly counts, in
 #' whole counts (\code{who_catchup_shaped}, confidence 0.9) -- the report's total
 #' with an observed shape (a zero week cannot tell no cases from no report, so it
-#' never shapes a window); (3) every non-WHO row in the window is then dropped, so
-#' a window never mixes the WHO total with another source's partial weeks.
+#' never shapes a window), unless the window already follows a curated epidemic
+#' curve (\code{who_catchup_curated_shaped}); (3) every non-WHO row in the window
+#' is then dropped, so a window never mixes the WHO total with another source's
+#' partial weeks.
 #'
 #' @param df Combined source rows with \code{.tier} and the WHO window columns.
 #' @return list(data = df after the rules, log = list of adjustment-log frames).
@@ -734,16 +741,18 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
 
           # Shape donors: positive weekly counts only. A zero cannot tell a week with
           # no cases from a week with no report -- the ambiguity the window resolves --
-          # so a window with another source's zero week keeps the even spread.
+          # so a window with another source's zero week keeps the even spread. A
+          # window already shaped by a curated epidemic curve keeps that curve.
           obs <- other[df$.tier[other] == 1L & !echo & !is.na(df$cases[other]) & df$cases[other] > 0]
           obs <- obs[order(match(df$date_start[obs], weeks), .SURVEILLANCE_PRIORITY[df$source[obs]])]
           obs <- obs[!duplicated(df$date_start[obs])]
-          if (length(obs) == length(weeks) && sum(df$cases[obs]) > 0) {
+          curve <- any(df$disaggregation_method[wr] %in% "who_catchup_curated_shaped")
+          if (!curve && length(obs) == length(weeks) && sum(df$cases[obs]) > 0) {
                shape <- df$cases[obs][match(weeks, df$date_start[obs])]
                df$cases[wr]  <- .spread_count(total_c, shape)
                df$deaths[wr] <- .spread_count(total_d, shape)
                df$disaggregation_method[wr] <- "who_catchup_shaped"
-               df$confidence_weight[wr]     <- 0.9
+               df$confidence_weight[wr]     <- .SHAPED_WINDOW_CONFIDENCE
                shaped_by[w] <- paste(sort(unique(df$source[obs])), collapse = "+")
           }
           inside <- sprintf("week inside a WHO report of %s cases spread over %d weeks from %s",
@@ -764,6 +773,9 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      wr <- which(is_win)
      src <- shaped_by[win_id[wr]]
      cur_id <- if ("catchup_curation_id" %in% names(df)) as.character(df$catchup_curation_id[wr]) else NA_character_
+     how <- ifelse(!is.na(src), paste0(" in proportion to ", src, " weekly counts"),
+                   ifelse(df$disaggregation_method[wr] %in% "who_catchup_curated_shaped",
+                          " in proportion to the curated epidemic curve", " (uniform)"))
      log[[length(log) + 1L]] <- data.frame(
           iso_code = df$iso_code[wr], date_start = df$date_start[wr], source = "WHO",
           disaggregation_method = df$disaggregation_method[wr],
@@ -772,8 +784,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
           cases_after = df$cases[wr], deaths_after = df$deaths[wr],
           detail = sprintf("WHO report of %s cases / %s deaths spread over %d weeks from %s%s%s",
                            format(df$catchup_cases[wr]), format(df$catchup_deaths[wr]),
-                           df$catchup_weeks[wr], as.character(df$catchup_start[wr]),
-                           ifelse(is.na(src), " (uniform)", paste0(" in proportion to ", src, " weekly counts")),
+                           df$catchup_weeks[wr], as.character(df$catchup_start[wr]), how,
                            ifelse(is.na(cur_id), "", paste0("; curated window ", cur_id))),
           stringsAsFactors = FALSE)
      list(data = df[!drop, ], log = log)

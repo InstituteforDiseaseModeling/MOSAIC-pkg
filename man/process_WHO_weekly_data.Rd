@@ -114,6 +114,23 @@ cases. A curated window must lie within the report's epi year and cover only
 silent weeks before the report; a curated report that is no longer in the data
 (zero or missing) is skipped with a warning.
 
+\strong{Shaped curated windows.} When a documented epidemic curve times the
+outbreak within its window, the curation row has \code{shape = "cumulative"}
+and the curve is given as cumulative-count anchors in
+\code{inst/extdata/surveillance_curation_shapes.csv} (daily or weekly counts
+as anchors at the end of each day or week; coarser totals, e.g. monthly, as
+anchors that are interpolated linearly). Each week of the window then gets the
+curve's increment over its Sunday-to-Saturday span, and the report's cases and
+deaths are spread in proportion, in whole counts that sum to the report: the
+curve may count fewer cases than the report (it is rescaled) but must lie
+within the window. South Africa 2023 follows WHO's epidemic curve of the
+outbreak by symptom onset date (external situation report #5, Figure 5): a few
+imported and sporadic cases from February to April, the Hammanskraal surge
+from early May peaking in the week of 21-27 May (394 of the 1,390 cases), and
+no case after early July. These rows carry
+\code{disaggregation_method = "who_catchup_curated_shaped"} and confidence 0.9,
+the weight of a window shaped by another source's weekly counts.
+
 \strong{Week convention.} The \code{year}/\code{week} columns are WHO's own
 \code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. WHO numbers weeks on
 the MMWR (US CDC) calendar -- Sunday-start weeks, week 1 being the week that

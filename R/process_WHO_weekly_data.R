@@ -105,6 +105,23 @@
 #' silent weeks before the report; a curated report that is no longer in the data
 #' (zero or missing) is skipped with a warning.
 #'
+#' \strong{Shaped curated windows.} When a documented epidemic curve times the
+#' outbreak within its window, the curation row has \code{shape = "cumulative"}
+#' and the curve is given as cumulative-count anchors in
+#' \code{inst/extdata/surveillance_curation_shapes.csv} (daily or weekly counts
+#' as anchors at the end of each day or week; coarser totals, e.g. monthly, as
+#' anchors that are interpolated linearly). Each week of the window then gets the
+#' curve's increment over its Sunday-to-Saturday span, and the report's cases and
+#' deaths are spread in proportion, in whole counts that sum to the report: the
+#' curve may count fewer cases than the report (it is rescaled) but must lie
+#' within the window. South Africa 2023 follows WHO's epidemic curve of the
+#' outbreak by symptom onset date (external situation report #5, Figure 5): a few
+#' imported and sporadic cases from February to April, the Hammanskraal surge
+#' from early May peaking in the week of 21-27 May (394 of the 1,390 cases), and
+#' no case after early July. These rows carry
+#' \code{disaggregation_method = "who_catchup_curated_shaped"} and confidence 0.9,
+#' the weight of a window shaped by another source's weekly counts.
+#'
 #' \strong{Week convention.} The \code{year}/\code{week} columns are WHO's own
 #' \code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. WHO numbers weeks on
 #' the MMWR (US CDC) calendar -- Sunday-start weeks, week 1 being the week that
@@ -178,8 +195,11 @@ process_WHO_weekly_data <- function(PATHS) {
 
      # Spread multi-week (catch-up / year-to-date) reports over the weeks they
      # cover, by rule or, where a source dates the outbreak, by the curation table
+     # (and its documented epidemic curve where one is given)
      n_rows <- nrow(d)
-     d <- .who_reallocate_catchup_reports(d, curation = .surveillance_curation("who_window"))
+     curation <- .surveillance_curation("who_window")
+     d <- .who_reallocate_catchup_reports(d, curation = curation,
+                                          shapes = .surveillance_curation_shapes(curation))
      n_win <- nrow(unique(d[!is.na(d$catchup_start), c("iso_code", "catchup_start")]))
      n_cur <- length(unique(stats::na.omit(d$catchup_curation_id)))
      message(sprintf("Spread %d multi-week report(s), %d of them curated, over %d country-weeks (%d unreported weeks added as rows)",
@@ -301,6 +321,11 @@ process_WHO_weekly_data <- function(PATHS) {
      ifelse(n_weeks <= 4, 0.9, ifelse(n_weeks <= 13, 0.8, ifelse(n_weeks <= 26, 0.7, 0.5)))
 }
 
+# Confidence weight of a reported total whose timing within its window is
+# observed: a WHO window shaped by another source's weekly counts
+# (who_catchup_shaped) or by a curated epidemic curve (who_catchup_curated_shaped).
+.SHAPED_WINDOW_CONFIDENCE <- 0.9
+
 
 #' Spread a whole count over weeks in proportion to weights, in whole counts
 #'
@@ -382,13 +407,15 @@ process_WHO_weekly_data <- function(PATHS) {
 #'   \code{month}).
 #' @param curation \code{who_window} rows of \code{.surveillance_curation()}, or
 #'   NULL to apply the rule alone.
+#' @param shapes Anchors of the curated windows with \code{shape = "cumulative"}
+#'   (\code{.surveillance_curation_shapes()}); required when such a window applies.
 #' @return \code{d} with window rows rewritten, unreported window weeks added, and
 #'   the columns \code{cases_reported}, \code{deaths_reported}, \code{catchup_start},
 #'   \code{catchup_weeks}, \code{catchup_cases}, \code{catchup_deaths},
 #'   \code{catchup_curation_id}, \code{confidence_weight},
 #'   \code{disaggregation_method}; ordered by year, week and country.
 #' @noRd
-.who_reallocate_catchup_reports <- function(d, curation = NULL) {
+.who_reallocate_catchup_reports <- function(d, curation = NULL, shapes = NULL) {
      d$cases_reported        <- d$cases
      d$deaths_reported       <- d$deaths
      d$catchup_start         <- as.Date(rep(NA_character_, nrow(d)))
@@ -415,6 +442,7 @@ process_WHO_weekly_data <- function(PATHS) {
           win <- .who_catchup_windows(cases, silent, unreported, epiyear)
           win$active_end <- win$end
           win$curation_id <- rep(NA_character_, nrow(win))
+          win$shape <- rep(NA_character_, nrow(win))
           cur <- if (is.null(curation)) NULL else curation[curation$iso_code == x$iso_code[1], ]
           if (!is.null(cur) && nrow(cur) > 0L)
                win <- .who_apply_curated_windows(win, cur, grid, cases, silent, epiyear)
@@ -443,9 +471,19 @@ process_WHO_weekly_data <- function(PATHS) {
                }
                rows <- row_of[idx]
                # Cases go to the weeks up to the window's active end (the report week
-               # unless a curated end date precedes it); later weeks get 0.
-               w <- as.numeric(idx <= win$active_end[k])
+               # unless a curated end date precedes it); later weeks get 0. Evenly,
+               # or in proportion to a curated epidemic curve.
+               active  <- idx <= win$active_end[k]
+               w       <- as.numeric(active)
                curated <- !is.na(win$curation_id[k])
+               shaped  <- !is.na(win$shape[k])
+               if (shaped) {
+                    a <- if (is.null(shapes)) NULL else shapes[shapes$id == win$curation_id[k], ]
+                    if (is.null(a) || nrow(a) == 0L)
+                         stop(sprintf("Curated WHO window %s has shape '%s' but no anchors were supplied",
+                                      win$curation_id[k], win$shape[k]), call. = FALSE)
+                    w <- .curated_shape_weights(a, grid[idx], active, win$curation_id[k])
+               }
                x$cases[rows]  <- .spread_count(total_cases, w)
                x$deaths[rows] <- .spread_count(total_deaths, w)
                x$catchup_start[rows]         <- grid[win$start[k]]
@@ -453,8 +491,10 @@ process_WHO_weekly_data <- function(PATHS) {
                x$catchup_cases[rows]         <- total_cases
                x$catchup_deaths[rows]        <- total_deaths
                x$catchup_curation_id[rows]   <- win$curation_id[k]
-               x$confidence_weight[rows]     <- .reconstruction_confidence(sum(w))
-               x$disaggregation_method[rows] <- if (curated) "who_catchup_curated" else "who_catchup_uniform"
+               x$confidence_weight[rows]     <- if (shaped) .SHAPED_WINDOW_CONFIDENCE else
+                    .reconstruction_confidence(sum(active))
+               x$disaggregation_method[rows] <- if (shaped) "who_catchup_curated_shaped" else
+                    if (curated) "who_catchup_curated" else "who_catchup_uniform"
           }
           x
      })
@@ -473,7 +513,7 @@ process_WHO_weekly_data <- function(PATHS) {
 #' Any rule window ending at, or overlapping, a curated window is dropped.
 #'
 #' @param win Rule windows (\code{start}, \code{end}, \code{active_end},
-#'   \code{curation_id}) as grid indices.
+#'   \code{curation_id}, \code{shape}) as grid indices.
 #' @param cur Curation rows of this country (\code{action == "who_window"}).
 #' @param grid,cases,silent,epiyear The country's weekly grid and its series.
 #' @return \code{win} with the curated windows merged in, ordered by start.
@@ -503,7 +543,8 @@ process_WHO_weekly_data <- function(PATHS) {
                stop(sprintf("Curated WHO window %s covers non-silent WHO week(s) %s before its report",
                             id, paste(format(grid[busy]), collapse = ", ")), call. = FALSE)
           win <- win[!(win$end >= s & win$start <= r), ]
-          win <- rbind(win, data.frame(start = s, end = r, active_end = e, curation_id = id))
+          shape <- if ("shape" %in% names(cur)) cur$shape[i] else NA_character_
+          win <- rbind(win, data.frame(start = s, end = r, active_end = e, curation_id = id, shape = shape))
      }
      win[order(win$start), ]
 }

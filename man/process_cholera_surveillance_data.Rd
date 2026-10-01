@@ -104,12 +104,17 @@ report total, is a copy of the dashboard and is dropped. When another
 source reports a positive count for every week of the window, the WHO
 total is redistributed in proportion to those counts
 (\code{who_catchup_shaped}, confidence 0.9); otherwise the even spread
-stands. All non-WHO rows in the window are then dropped, so a window never
-mixes the WHO total with another source's partial weeks.
+stands. A window shaped by a curated epidemic curve
+(\code{who_catchup_curated_shaped}) keeps its curve. All non-WHO rows in
+the window are then dropped, so a window never mixes the WHO total with
+another source's partial weeks.
 \item \strong{Curated corrections.} The surveillance curation table
 (\code{inst/extdata/surveillance_curation.csv}) lists corrections the
 rules cannot derive, each with its evidence and source: WHO windows dated
-by an outbreak report (applied by \code{\link{process_WHO_weekly_data}});
+by an outbreak report, and timed by its documented epidemic curve where
+there is one (South Africa 2023; anchors in
+\code{inst/extdata/surveillance_curation_shapes.csv}), applied by
+\code{\link{process_WHO_weekly_data}};
 documented absences of cholera, whose imputed weeks are emptied
 (\code{drop_imputed}: Angola 2023, South Sudan May 2023 - September
 2024); and contested imputed years that are kept but listed
