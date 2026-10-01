@@ -3,6 +3,7 @@
 # "attempt to select less than one element" and silently lost the figure).
 
 test_that("the legend is extracted for right and bottom legend positions", {
+  local_null_device()  # ggplotGrob() measures text on the current device
   p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg, color = factor(gear))) +
     ggplot2::geom_point()
   for (pos in c("right", "bottom")) {
@@ -13,6 +14,8 @@ test_that("the legend is extracted for right and bottom legend positions", {
 })
 
 test_that("a plot with no legend gives an empty grob, not an error", {
+  f <- withr::local_tempfile(fileext = ".png")
+  grDevices::png(f); on.exit(grDevices::dev.off(), add = TRUE)
   empty <- data.frame(x = numeric(0), y = numeric(0), v = numeric(0))
   p <- ggplot2::ggplot() +
     ggplot2::geom_point(data = empty, ggplot2::aes(x, y, color = v)) +
@@ -20,8 +23,6 @@ test_that("a plot with no legend gives an empty grob, not an error", {
   lg <- get_ggplot_legend(p)
   expect_s3_class(lg, "null")
   skip_if_not_installed("gridExtra")
-  f <- withr::local_tempfile(fileext = ".png")
-  grDevices::png(f); on.exit(grDevices::dev.off(), add = TRUE)
   expect_no_error(gridExtra::grid.arrange(grobs = list(p, lg), ncol = 1))
 })
 
