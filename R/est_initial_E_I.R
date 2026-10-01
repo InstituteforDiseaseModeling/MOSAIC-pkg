@@ -27,6 +27,8 @@
 #' @param t0 Target date for estimation (default from `config$date_start`).
 #' @param lookback_days Days of surveillance data before t0 to use (default 21).
 #' @param lookahead_days Days of surveillance data from t0 onward that also enter the onset-rate estimate (default 0). With weekly reports downscaled to days, a window that ends at t0 can miss an outbreak already under way at t0; a window straddling t0 estimates the onset rate at t0 itself. A location gets the near-zero template only when the whole window `[t0 - lookback_days, t0 + lookahead_days)` reports no cases.
+#' @param quiet_start What a "quiet-start" location gets: one whose surveillance window around t0 reports no cases (or is all NA) but which reports cases later, after the window and up to `config$date_stop` (the end of the data when `config$date_stop` is NULL). `"template"` (default) gives it the near-zero Beta(0.01, 99999.99), like a location with no cases at all. `"seed"` gives E and I each the weak seeding prior Beta(`quiet_seed_shape1`, `quiet_seed_shape2`): it stands in for undetected circulation or importation that the model has no mechanism for, so a single-location fit can still reproduce the later outbreak. Locations with no cases anywhere in that span always keep the near-zero template.
+#' @param quiet_seed_shape1,quiet_seed_shape2 Beta shapes of the quiet-start seeding prior (default 1 and 1e5: mean 1e-5 of the population per compartment, mode at zero).
 #' @param verbose Print progress messages (default TRUE).
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
 #'   `n_samples >= 100` (default FALSE). Uses `parallel::mclapply()` with all
@@ -37,7 +39,8 @@
 #' @return A list with two main components:
 #' \describe{
 #'   \item{metadata}{List containing estimation details: description, version, date, t0,
-#'     lookback_days, n_samples, and method.}
+#'     lookback_days, lookahead_days, n_samples, method, quiet_start and
+#'     quiet_start_seeded (the locations given the seeding prior).}
 #'   \item{parameters_location}{List with `prop_E_initial` and `prop_I_initial`, each containing:
 #'     \itemize{
 #'       \item parameter_name: Parameter identifier
@@ -62,6 +65,8 @@
 #' @export
 est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                             t0 = NULL, lookback_days = 21, lookahead_days = 0,
+                            quiet_start = c("template", "seed"),
+                            quiet_seed_shape1 = 1, quiet_seed_shape2 = 1e5,
                             verbose = TRUE, parallel = FALSE,
                             variance_inflation = 2, seed = NULL) {
 
@@ -70,6 +75,10 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      if (lookback_days <= 0) stop("lookback_days must be positive")
      if (!is.numeric(lookahead_days) || length(lookahead_days) != 1L || lookahead_days < 0)
           stop("lookahead_days must be a single non-negative number")
+     quiet_start <- match.arg(quiet_start)
+     if (!is.numeric(quiet_seed_shape1) || length(quiet_seed_shape1) != 1L || !(quiet_seed_shape1 > 0) ||
+         !is.numeric(quiet_seed_shape2) || length(quiet_seed_shape2) != 1L || !(quiet_seed_shape2 > 0))
+          stop("quiet_seed_shape1 and quiet_seed_shape2 must be single positive numbers")
      if (!is.list(PATHS)) stop("PATHS must be a list")
      if (!is.list(priors)) stop("priors must be a list")
      if (!is.list(config)) stop("config must be a list")
@@ -137,6 +146,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                lookback_days = lookback_days,
                lookahead_days = lookahead_days,
                n_samples = n_samples,
+               quiet_start = quiet_start,
+               quiet_start_seeded = character(0),
                method = "monte_carlo_backcalculation"
           ),
           parameters_location = list(
@@ -161,6 +172,13 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      countries_with_data <- unique(surveillance_window$iso_code[
           !is.na(surveillance_window$cases) & surveillance_window$cases >= 0
      ])
+
+     # Locations that report cases after the window (up to date_stop): the
+     # candidates for the quiet-start seeding prior.
+     later_stop <- if (!is.null(config$date_stop)) as.Date(config$date_stop) else max(surveillance$date)
+     later <- surveillance[surveillance$date > end_date & surveillance$date <= later_stop &
+                                !is.na(surveillance$cases) & surveillance$cases > 0, ]
+     countries_with_later_cases <- unique(later$iso_code)
 
      if (verbose) {
           cat("\n=== Estimating Initial E and I Compartments ===\n")
@@ -241,6 +259,14 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           )
 
           if (is.null(loc_res)) next   # no usable population row (warned)
+          if (quiet_start == "seed" && loc %in% countries_with_later_cases &&
+              loc_res$E$method %in% c("observed_zero", "no_data_default")) {
+               loc_res <- list(E = .est_initial_E_I_quiet_seed(quiet_seed_shape1, quiet_seed_shape2,
+                                                               n_samples, loc_res$E$method),
+                               I = .est_initial_E_I_quiet_seed(quiet_seed_shape1, quiet_seed_shape2,
+                                                               n_samples, loc_res$I$method))
+               results$metadata$quiet_start_seeded <- c(results$metadata$quiet_start_seeded, loc)
+          }
           results$parameters_location$prop_E_initial$parameters$location[[loc]] <- loc_res$E
           results$parameters_location$prop_I_initial$parameters$location[[loc]] <- loc_res$I
      }
@@ -548,6 +574,17 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
           metadata = list(data_available = FALSE, total_cases = NA_real_,
                           mean_count = 0, sd_count = 0, n_samples = n_samples,
                           message = message))
+}
+
+# Weak seeding prior for a quiet-start location (no cases in the window around
+# t0, cases later in the config window): stands in for undetected circulation
+# or importation. `was` records the method the window alone would have given.
+.est_initial_E_I_quiet_seed <- function(shape1, shape2, n_samples, was) {
+     list(shape1 = shape1, shape2 = shape2, method = "quiet_start_seed",
+          metadata = list(data_available = was == "observed_zero", total_cases = 0,
+                          mean_count = 0, sd_count = 0, n_samples = n_samples,
+                          message = paste0("No cases in the window around t0 (", was,
+                                           ") but cases later in the config window")))
 }
 
 # One Monte Carlo draw of (E, I) counts for a location. Shared by the parallel

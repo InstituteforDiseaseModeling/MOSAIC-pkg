@@ -12,6 +12,9 @@ est_initial_E_I(
   t0 = NULL,
   lookback_days = 21,
   lookahead_days = 0,
+  quiet_start = c("template", "seed"),
+  quiet_seed_shape1 = 1,
+  quiet_seed_shape2 = 1e+05,
   verbose = TRUE,
   parallel = FALSE,
   variance_inflation = 2,
@@ -34,6 +37,10 @@ Must include \code{config$location_name} and \code{config$date_start}.}
 
 \item{lookahead_days}{Days of surveillance data from t0 onward that also enter the onset-rate estimate (default 0). With weekly reports downscaled to days, a window that ends at t0 can miss an outbreak already under way at t0; a window straddling t0 estimates the onset rate at t0 itself. A location gets the near-zero template only when the whole window \verb{[t0 - lookback_days, t0 + lookahead_days)} reports no cases.}
 
+\item{quiet_start}{What a "quiet-start" location gets: one whose surveillance window around t0 reports no cases (or is all NA) but which reports cases later, after the window and up to \code{config$date_stop} (the end of the data when \code{config$date_stop} is NULL). \code{"template"} (default) gives it the near-zero Beta(0.01, 99999.99), like a location with no cases at all. \code{"seed"} gives E and I each the weak seeding prior Beta(\code{quiet_seed_shape1}, \code{quiet_seed_shape2}): it stands in for undetected circulation or importation that the model has no mechanism for, so a single-location fit can still reproduce the later outbreak. Locations with no cases anywhere in that span always keep the near-zero template.}
+
+\item{quiet_seed_shape1, quiet_seed_shape2}{Beta shapes of the quiet-start seeding prior (default 1 and 1e5: mean 1e-5 of the population per compartment, mode at zero).}
+
 \item{verbose}{Print progress messages (default TRUE).}
 
 \item{parallel}{Enable parallel processing for Monte Carlo sampling when
@@ -48,7 +55,8 @@ available cores. Note: Not supported on Windows.}
 A list with two main components:
 \describe{
 \item{metadata}{List containing estimation details: description, version, date, t0,
-lookback_days, n_samples, and method.}
+lookback_days, lookahead_days, n_samples, method, quiet_start and
+quiet_start_seeded (the locations given the seeding prior).}
 \item{parameters_location}{List with \code{prop_E_initial} and \code{prop_I_initial}, each containing:
 \itemize{
 \item parameter_name: Parameter identifier
