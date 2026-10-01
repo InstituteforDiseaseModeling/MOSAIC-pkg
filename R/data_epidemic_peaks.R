@@ -49,8 +49,9 @@
 #' }
 #'
 #' Detected peaks sit on observed weeks: imputed (AI Fourier, assumed-zero) weeks
-#' are treated as missing, a peak day must be observed with cases > 0, and a
-#' detected peak whose window is at least half imputed days is dropped. The
+#' are treated as missing (a WHO multi-week report spread over its window counts as
+#' observed), a peak day must be observed with cases > 0, and a detected peak whose
+#' window is at least half imputed days is dropped. The
 #' manual corrections below are documented outbreaks and are exempt from that
 #' window filter.
 #'

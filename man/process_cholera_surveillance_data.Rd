@@ -14,6 +14,8 @@ process_cholera_surveillance_data(PATHS, include_ai = FALSE)
 \item \strong{DATA_SUPP_WEEKLY}: Directory containing \code{cholera_country_weekly_processed.csv} from supplemental source (may include extra columns).
 \item \strong{DATA_CHOLERA_WEEKLY}: Directory where the combined weekly output will be saved.
 \item \strong{DATA_CHOLERA_DAILY}: Directory where the combined daily output will be saved.
+\item \strong{DATA_WHO_ANNUAL} (optional): Directory containing \code{who_afro_annual.csv},
+the WHO annual totals that imputed rows are reconciled against (see Details).
 }}
 
 \item{include_ai}{Logical (default \code{FALSE}). When \code{TRUE}, reads the
@@ -37,7 +39,9 @@ Invisibly returns \code{NULL}. Side effects:
 \item Reads weekly CSVs from all three sources and adds a \code{source} column.
 \item Cleans rows with missing key grouping fields (iso_code, year, week).
 \item Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).
-\item Deduplicates by \code{iso_code} and \code{date_start} (the actual week Monday, robust to year-boundary week-1 collisions): observed beats imputed, then the fixed priority WHO > JHU > AI > SUPP (see Details), and adds \code{source_deaths}.
+\item Applies the cross-source rules (AI aggregates, WHO multi-week windows) and deduplicates by \code{iso_code} and \code{date_start} (the actual week Monday, robust to year-boundary week-1 collisions): observed beats reconstructed beats imputed, then the fixed priority WHO > JHU > AI > SUPP (see Details), and adds \code{source_deaths}; then reconciles imputed rows with the WHO annual totals.
+\item Saves the adjustment log to
+\code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_adjustments.csv}.
 \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 \item Saves the combined weekly data to
 \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
@@ -68,13 +72,52 @@ using \code{MOSAIC::downscale_weekly_values} with integer allocation.
 \details{
 Duplicate country-week entries across sources are resolved by
 selecting one whole row per week: a row carrying a count beats an empty one;
-an observed row (WHO/JHU/SUPP, or AI \code{observed}/\code{documented_zero})
-beats an imputed one (AI \code{fourier_*} or any other modelled method),
-whatever the sources; a row with a case count beats a deaths-only row; and
-the fixed priority \strong{WHO > JHU > AI > SUPP} decides the rest. When the
-selected row has no death count, the deaths of the highest-priority other
-observed row reporting the same case count that week are used (the same
-report, compared after half-up rounding) and the week keeps the lower of the
-two rows' \code{confidence_weight}; \code{source_deaths} names the source
-of each death count.
+then the trust tier decides, whatever the sources -- an observed row
+(WHO/JHU/SUPP, or AI \code{observed}/\code{documented_zero}) beats a
+reconstructed one (a WHO multi-week report spread over the weeks it covers,
+\code{who_catchup_*}, see \code{\link{process_WHO_weekly_data}}), which beats
+an imputed one (AI \code{fourier_*} or any other modelled method); a row with
+a case count beats a deaths-only row; and the fixed priority
+\strong{WHO > JHU > AI > SUPP} decides the rest. When the selected row has no
+death count, the deaths of the highest-priority other observed row reporting
+the same case count that week are used (the same report, compared after
+half-up rounding) and the week keeps the lower of the two rows'
+\code{confidence_weight}; \code{source_deaths} names the source of each death
+count.
+
+Three cross-source rules keep one outbreak from being counted twice:
+\enumerate{
+\item \strong{AI aggregates.} An AI \code{observed} week of at least 20 cases
+that is at least five times every direct-source (WHO/JHU/SUPP) count in the
+four weeks either side (two or more of them) is an aggregate mislabelled as
+one week -- Nigeria 2023 week 21 carries 1,851 cases, the year-to-date total
+of the WHO weeks before it -- and is dropped.
+\item \strong{WHO multi-week windows.} Inside the window of a WHO multi-week
+report the report accounts for every week. A non-WHO observed row that
+repeats the dashboard's positive as-published value for its week, or the
+report total, is a copy of the dashboard and is dropped. When another
+source reports a positive count for every week of the window, the WHO
+total is redistributed in proportion to those counts
+(\code{who_catchup_shaped}, confidence 0.9); otherwise the even spread
+stands. All non-WHO rows in the window are then dropped, so a window never
+mixes the WHO total with another source's partial weeks.
+\item \strong{Imputed rows against the WHO annual total.} AI \code{fourier_*}
+rows spread an annual (or other multi-week) total over every week of its
+span, and the observed weeks that later overwrite part of that span are
+not netted out, so the surviving imputed rows can duplicate cases those
+weeks already report (Ghana 2024: 937 imputed cases in April-August beside
+the 4,618 WHO-reported cases of an outbreak that began on 4 October). Per
+country and ISO year with a WHO annual total \eqn{A}
+(\code{DATA_WHO_ANNUAL/who_afro_annual.csv}), with observed plus
+reconstructed cases \eqn{O} and imputed cases \eqn{I}, the imputed rows
+lose \eqn{r = \min(O, \max(0, O + I - A))} cases: the excess over the WHO
+total, up to what the observed weeks report. Any larger excess is a
+disagreement between annual totals, not double counting, and is kept.
+Cases and deaths are scaled by the same factor; rows with less than one
+case left are emptied (NA). Skipped, with a message, when
+\code{PATHS$DATA_WHO_ANNUAL} is not set.
+}
+Every week these rules (or the WHO spreading) change is listed, with its
+before and after values and the evidence, in
+\code{DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_adjustments.csv}.
 }

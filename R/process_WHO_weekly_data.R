@@ -28,7 +28,54 @@
 #'     epidemiological week (see below).
 #'   \item Computes the \code{month} from \code{date_start}.
 #'   \item Drops countries with ten or fewer observations.
+#'   \item Spreads multi-week (catch-up and year-to-date) reports over the weeks they
+#'     cover (see below).
 #' }
+#'
+#' \strong{Multi-week reports.} The dashboard enters a 0 both for a week with no
+#' cases and for a week with no report, and a country that reports late or in
+#' batches has its backlog entered in the week the report arrived. The first report
+#' of a country added to the dashboard part-way through a year can be its
+#' year-to-date total: South Africa's first 2023 row (week 35: 1,390 cases, 47
+#' deaths) is its whole Feb-Jul 2023 outbreak (1,380 cases and 47 deaths in the
+#' WHO AFRO after-action review), followed by zeros. Left in place, such a report
+#' is a one-week spike that no transmission model can reproduce. A report in week
+#' \eqn{t} is read as covering more than one week when all of these hold:
+#' \enumerate{
+#'   \item it has at least 20 cases;
+#'   \item week \eqn{t-1}, in the same WHO epi year, is silent: a reported zero
+#'     (cases 0, deaths 0 or missing) or unreported (no row, or cases missing with
+#'     deaths 0 or missing);
+#'   \item it is followed by a fall that an epidemic curve cannot produce: the
+#'     report is at least twice the largest of the next four reported weeks, or the
+#'     next two reported weeks both have 0 cases (a batch report between silent
+#'     weeks; a single following zero is not enough, because during an active
+#'     outbreak it is usually a missed week of a continuing series).
+#' }
+#' The report then covers week \eqn{t} and the silent weeks immediately before it,
+#' back to the previous non-zero report, never before week 1 of its epi year (the
+#' dashboard's year-to-date counts restart each epi year). Unreported weeks (no
+#' row) are included only when the report is retrospective -- the next four
+#' reported weeks are all zero, i.e. the outbreak was over by the time it was
+#' reported; otherwise the window stops at the first unreported week, so the first
+#' report of a country joining the dashboard during an active outbreak (Uganda,
+#' 2023 week 30) is taken at face value. The report's cases and deaths are spread
+#' evenly over its window: the dashboard gives no timing within it, and an even
+#' split is the allocation that asserts none (\code{process_cholera_surveillance_data}
+#' reshapes a window when another source observes every week of it). The split is
+#' in whole counts -- each week gets the floor or ceiling of the even share, by
+#' cumulative rounding, and the weeks sum to the report exactly -- so the integer
+#' daily downscaling neither inflates nor loses part of the report. Weeks the
+#' window adds that had no row are created. Each window row carries
+#' \code{disaggregation_method = "who_catchup_uniform"} and a
+#' \code{confidence_weight} that falls with the window length (0.9 up to 4 weeks,
+#' 0.8 up to 13, 0.7 up to 26, else 0.5 -- the ladder the AI pipeline applies to
+#' its own disaggregated totals), so the calibration scores it below a direct
+#' weekly count. The as-published values stay in \code{cases_reported} and
+#' \code{deaths_reported}; \code{catchup_start}, \code{catchup_weeks},
+#' \code{catchup_cases} and \code{catchup_deaths} record each window. Rows outside a
+#' window have \code{cases == cases_reported} and missing window fields. Weekly sums
+#' over each country-year are unchanged.
 #'
 #' \strong{Week convention.} The \code{year}/\code{week} columns are WHO's own
 #' \code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. WHO numbers weeks on
@@ -101,6 +148,13 @@ process_WHO_weekly_data <- function(PATHS) {
      d    <- d[d$iso_code %in% keep, ]
      rownames(d) <- NULL
 
+     # Spread multi-week (catch-up / year-to-date) reports over the weeks they cover
+     n_rows <- nrow(d)
+     d <- .who_reallocate_catchup_reports(d)
+     n_win <- nrow(unique(d[!is.na(d$catchup_start), c("iso_code", "catchup_start")]))
+     message(sprintf("Spread %d multi-week report(s) over %d country-weeks (%d unreported weeks added as rows)",
+                     n_win, sum(!is.na(d$catchup_start)), nrow(d) - n_rows))
+
      message("Latest observation: ", max(d$date_stop, na.rm = TRUE))
 
      # Save the processed data to the processed data directory
@@ -159,4 +213,181 @@ process_WHO_weekly_data <- function(PATHS) {
           }
      }
      start
+}
+
+
+# Thresholds of the multi-week report rule (see process_WHO_weekly_data()).
+.WHO_CATCHUP_MIN_CASES  <- 20
+.WHO_CATCHUP_DROP_RATIO <- 2
+.WHO_CATCHUP_LOOK_AHEAD <- 4L
+
+
+#' WHO epi-year and epi-week of a WHO week
+#'
+#' Inverse of \code{.who_epiweek_start()}: a WHO week starting on Monday \code{d}
+#' is the MMWR week containing the Sunday \code{d - 1}.
+#'
+#' @param date_start \code{Date} vector of week-start Mondays.
+#' @return A list with integer vectors \code{year} and \code{week}.
+#' @noRd
+.who_epiweek_label <- function(date_start) {
+     sunday <- as.Date(date_start) - 1L
+     list(year = as.integer(lubridate::epiyear(sunday)),
+          week = as.integer(lubridate::epiweek(sunday)))
+}
+
+
+#' Confidence weight of a total spread over a window of weeks
+#'
+#' The ladder the AI pipeline applies to its own disaggregated totals
+#' (ai-cholera-data-mining py/build_weekly_timeseries.py, conf_factor): the
+#' longer the window, the less a single week's share is worth.
+#'
+#' @param n_weeks Integer window length(s) in weeks.
+#' @return Numeric weight(s) in (0, 1].
+#' @noRd
+.reconstruction_confidence <- function(n_weeks) {
+     ifelse(n_weeks <= 4, 0.9, ifelse(n_weeks <= 13, 0.8, ifelse(n_weeks <= 26, 0.7, 0.5)))
+}
+
+
+#' Spread a whole count over weeks in proportion to weights, in whole counts
+#'
+#' Cumulative rounding: week \eqn{k} receives
+#' \code{round(total * W_k) - round(total * W_{k-1})} with \eqn{W} the cumulative
+#' weight share, so every week gets the floor or ceiling of its exact share and the
+#' weeks sum to \code{total} exactly. Whole counts matter downstream:
+#' \code{downscale_weekly_values(integer = TRUE)} rounds each week independently,
+#' which would turn 47 deaths spread over 35 weeks (1.34 a week) into 35. A
+#' fractional total (never a WHO count) is spread exactly instead.
+#'
+#' @param total A single count (NA gives NA weeks).
+#' @param weights Non-negative weights in week order, not all zero; default even.
+#' @param n Number of weeks when \code{weights} is not given.
+#' @return Numeric vector of length \code{length(weights)} (or \code{n}).
+#' @noRd
+.spread_count <- function(total, weights = rep(1, n), n = length(weights)) {
+     if (is.na(total)) return(rep(NA_real_, length(weights)))
+     if (abs(total - round(total)) > 1e-8) return(total * weights / sum(weights))
+     diff(c(0, round(total * cumsum(weights) / sum(weights))))
+}
+
+
+#' Find WHO multi-week (catch-up / year-to-date) reports in one country's series
+#'
+#' Applies the rule documented in \code{process_WHO_weekly_data()} to a complete
+#' weekly grid (one element per consecutive WHO week).
+#'
+#' @param cases Numeric weekly cases on the grid (NA = no report).
+#' @param silent Logical: reported zero or unreported week.
+#' @param unreported Logical: no report that week.
+#' @param epiyear Integer WHO epi year of each grid week.
+#' @return A data.frame with integer grid indices \code{start} and \code{end} of each
+#'   window (the report sits at \code{end}); zero rows when there is none.
+#' @noRd
+.who_catchup_windows <- function(cases, silent, unreported, epiyear,
+                                 min_cases  = .WHO_CATCHUP_MIN_CASES,
+                                 drop_ratio = .WHO_CATCHUP_DROP_RATIO,
+                                 look_ahead = .WHO_CATCHUP_LOOK_AHEAD) {
+     reported <- which(!is.na(cases))
+     starts <- integer(0)
+     ends   <- integer(0)
+     for (t in which(!is.na(cases) & cases >= min_cases)) {
+          if (t == 1L || !silent[t - 1L] || epiyear[t - 1L] != epiyear[t]) next
+          nxt <- utils::head(reported[reported > t], look_ahead)
+          if (length(nxt) == 0L) next
+          # A fall no epidemic curve produces: the report towers over the next month
+          # of reports, or reporting goes silent for the next two reported weeks.
+          # A single zero after a report is not enough: during an active outbreak it
+          # is usually a missed week of a continuing series.
+          falls <- cases[t] >= drop_ratio * max(cases[nxt]) ||
+               (length(nxt) >= 2L && all(cases[nxt[1:2]] == 0))
+          if (!falls) next
+          retrospective <- length(nxt) == look_ahead && all(cases[nxt] == 0)
+          s <- t
+          while (s > 1L && silent[s - 1L] && epiyear[s - 1L] == epiyear[t] &&
+                 (retrospective || !unreported[s - 1L])) {
+               s <- s - 1L
+          }
+          if (s < t) {
+               starts <- c(starts, s)
+               ends   <- c(ends, t)
+          }
+     }
+     data.frame(start = starts, end = ends)
+}
+
+
+#' Spread WHO multi-week reports over the weeks they cover
+#'
+#' @param d Processed WHO weekly rows (\code{iso_code}, \code{country}, \code{year},
+#'   \code{week}, \code{cases}, \code{deaths}, \code{date_start}, \code{date_stop},
+#'   \code{month}).
+#' @return \code{d} with window rows rewritten, unreported window weeks added, and
+#'   the columns \code{cases_reported}, \code{deaths_reported}, \code{catchup_start},
+#'   \code{catchup_weeks}, \code{catchup_cases}, \code{catchup_deaths},
+#'   \code{confidence_weight}, \code{disaggregation_method}; ordered by year, week
+#'   and country.
+#' @noRd
+.who_reallocate_catchup_reports <- function(d) {
+     d$cases_reported        <- d$cases
+     d$deaths_reported       <- d$deaths
+     d$catchup_start         <- as.Date(rep(NA_character_, nrow(d)))
+     d$catchup_weeks         <- rep(NA_integer_, nrow(d))
+     d$catchup_cases         <- rep(NA_real_, nrow(d))
+     d$catchup_deaths        <- rep(NA_real_, nrow(d))
+     d$confidence_weight     <- rep(NA_real_, nrow(d))
+     d$disaggregation_method <- rep(NA_character_, nrow(d))
+     if (nrow(d) == 0L) return(d)
+
+     per_iso <- lapply(split(d, d$iso_code), function(x) {
+          x <- x[order(x$date_start), ]
+          first_year <- .who_epiweek_label(min(x$date_start))$year
+          grid   <- seq(.who_epiweek_start(first_year, 1L), max(x$date_start), by = 7)
+          row_of <- match(grid, x$date_start)
+          cases  <- x$cases[row_of]
+          deaths <- x$deaths[row_of]
+          no_deaths  <- is.na(deaths) | deaths == 0
+          unreported <- is.na(cases) & no_deaths
+          silent     <- unreported | (!is.na(cases) & cases == 0 & no_deaths)
+          win <- .who_catchup_windows(cases, silent, unreported, .who_epiweek_label(grid)$year)
+          if (nrow(win) == 0L) return(x)
+
+          for (k in seq_len(nrow(win))) {
+               idx <- win$start[k]:win$end[k]
+               n   <- length(idx)
+               report <- row_of[win$end[k]]
+               total_cases  <- x$cases[report]
+               total_deaths <- x$deaths[report]
+               add <- idx[is.na(row_of[idx])]
+               if (length(add) > 0L) {
+                    lab <- .who_epiweek_label(grid[add])
+                    new <- x[rep(report, length(add)), ]
+                    new$year <- lab$year
+                    new$week <- lab$week
+                    new$date_start <- grid[add]
+                    new$date_stop  <- grid[add] + 6L
+                    new$month <- lubridate::month(grid[add])
+                    new$cases_reported  <- NA_real_
+                    new$deaths_reported <- NA_real_
+                    n_before <- nrow(x)
+                    x <- rbind(x, new)
+                    row_of[add] <- n_before + seq_along(add)
+               }
+               rows <- row_of[idx]
+               x$cases[rows]  <- .spread_count(total_cases, n = n)
+               x$deaths[rows] <- .spread_count(total_deaths, n = n)
+               x$catchup_start[rows]         <- grid[win$start[k]]
+               x$catchup_weeks[rows]         <- n
+               x$catchup_cases[rows]         <- total_cases
+               x$catchup_deaths[rows]        <- total_deaths
+               x$confidence_weight[rows]     <- .reconstruction_confidence(n)
+               x$disaggregation_method[rows] <- "who_catchup_uniform"
+          }
+          x
+     })
+     out <- do.call(rbind, per_iso)
+     out <- out[order(out$year, out$week, out$country), ]
+     rownames(out) <- NULL
+     out
 }

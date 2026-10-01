@@ -4,11 +4,15 @@
 #' time series data for all countries with available data. It detects peak timing,
 #' magnitude, and duration of epidemic periods.
 #'
-#' Peaks are detected on observed weeks only: days whose
-#' \code{disaggregation_method} is set and is not \code{observed} or
-#' \code{documented_zero} (AI \code{fourier_*} reconstructions,
-#' \code{assumed_zero}) are treated as missing, and a detected peak whose
-#' \code{[peak_start, peak_stop]} window is at least half imputed days is dropped.
+#' Peaks are detected on observed weeks only: imputed days -- those whose
+#' \code{disaggregation_method} is a modelled method such as an AI
+#' \code{fourier_*} reconstruction or \code{assumed_zero} -- are treated as
+#' missing, and a detected peak whose \code{[peak_start, peak_stop]} window is at
+#' least half imputed days is dropped. A WHO multi-week report spread over the
+#' weeks it covers (\code{who_catchup_*}, see \code{\link{process_WHO_weekly_data}})
+#' counts as observed: its total is a reported count over a known window and the
+#' spreading creates no local maximum, whereas blanking it would carve a false
+#' trough into the outbreak it belongs to.
 #' A detected peak day is the centre of any flat stretch of the smoothed curve and
 #' must itself be observed with cases > 0. The hand-curated peaks the function
 #' appends (documented outbreaks) are exempt from the imputed-window filter.
@@ -46,7 +50,8 @@ est_epidemic_peaks <- function(PATHS) {
      # Detect peaks on observed weeks only. Imputed weeks (AI fourier_*
      # reconstructions, assumed_zero) are blanked like missing weeks: a Fourier
      # series of an annual total has a peak every year by construction, so peaks
-     # found on it describe the reconstruction, not an outbreak.
+     # found on it describe the reconstruction, not an outbreak. A WHO multi-week
+     # report spread over its window (who_catchup_*) is a reported total and is kept.
      imputed_day <- if ("disaggregation_method" %in% names(cholera_data))
           .epidemic_peaks_imputed_day(cholera_data$disaggregation_method)
      else rep(FALSE, nrow(cholera_data))
@@ -1610,14 +1615,15 @@ est_epidemic_peaks <- function(PATHS) {
 }
 
 
-# Days whose surveillance week was not observed: disaggregation_method set and
-# not `observed` / `documented_zero` (AI `fourier_*` reconstructions,
-# `assumed_zero`). Direct WHO/JHU/SUPP rows carry NA and count as observed.
+# Days whose surveillance week is imputed: the imputed trust tier of
+# process_cholera_surveillance_data() (AI `fourier_*` reconstructions,
+# `assumed_zero`, any other modelled method). Direct WHO/JHU/SUPP rows (method NA),
+# AI `observed` / `documented_zero` rows, and WHO multi-week reports spread over
+# their window (`who_catchup_*`, whose total is reported) count as observed.
 # est_epidemic_peaks() detects peaks on observed weeks only, and
 # plot_epidemic_peaks() draws the same series.
 .epidemic_peaks_imputed_day <- function(disaggregation_method) {
-     !is.na(disaggregation_method) &
-          !(disaggregation_method %in% c("observed", "documented_zero"))
+     .surveillance_tier(disaggregation_method) == 3L
 }
 
 # A detected peak is dropped when at least this share of its [peak_start,

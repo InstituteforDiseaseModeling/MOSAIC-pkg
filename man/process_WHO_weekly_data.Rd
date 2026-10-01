@@ -37,7 +37,54 @@ This function performs the following tasks:
 epidemiological week (see below).
 \item Computes the \code{month} from \code{date_start}.
 \item Drops countries with ten or fewer observations.
+\item Spreads multi-week (catch-up and year-to-date) reports over the weeks they
+cover (see below).
 }
+
+\strong{Multi-week reports.} The dashboard enters a 0 both for a week with no
+cases and for a week with no report, and a country that reports late or in
+batches has its backlog entered in the week the report arrived. The first report
+of a country added to the dashboard part-way through a year can be its
+year-to-date total: South Africa's first 2023 row (week 35: 1,390 cases, 47
+deaths) is its whole Feb-Jul 2023 outbreak (1,380 cases and 47 deaths in the
+WHO AFRO after-action review), followed by zeros. Left in place, such a report
+is a one-week spike that no transmission model can reproduce. A report in week
+\eqn{t} is read as covering more than one week when all of these hold:
+\enumerate{
+\item it has at least 20 cases;
+\item week \eqn{t-1}, in the same WHO epi year, is silent: a reported zero
+(cases 0, deaths 0 or missing) or unreported (no row, or cases missing with
+deaths 0 or missing);
+\item it is followed by a fall that an epidemic curve cannot produce: the
+report is at least twice the largest of the next four reported weeks, or the
+next two reported weeks both have 0 cases (a batch report between silent
+weeks; a single following zero is not enough, because during an active
+outbreak it is usually a missed week of a continuing series).
+}
+The report then covers week \eqn{t} and the silent weeks immediately before it,
+back to the previous non-zero report, never before week 1 of its epi year (the
+dashboard's year-to-date counts restart each epi year). Unreported weeks (no
+row) are included only when the report is retrospective -- the next four
+reported weeks are all zero, i.e. the outbreak was over by the time it was
+reported; otherwise the window stops at the first unreported week, so the first
+report of a country joining the dashboard during an active outbreak (Uganda,
+2023 week 30) is taken at face value. The report's cases and deaths are spread
+evenly over its window: the dashboard gives no timing within it, and an even
+split is the allocation that asserts none (\code{process_cholera_surveillance_data}
+reshapes a window when another source observes every week of it). The split is
+in whole counts -- each week gets the floor or ceiling of the even share, by
+cumulative rounding, and the weeks sum to the report exactly -- so the integer
+daily downscaling neither inflates nor loses part of the report. Weeks the
+window adds that had no row are created. Each window row carries
+\code{disaggregation_method = "who_catchup_uniform"} and a
+\code{confidence_weight} that falls with the window length (0.9 up to 4 weeks,
+0.8 up to 13, 0.7 up to 26, else 0.5 -- the ladder the AI pipeline applies to
+its own disaggregated totals), so the calibration scores it below a direct
+weekly count. The as-published values stay in \code{cases_reported} and
+\code{deaths_reported}; \code{catchup_start}, \code{catchup_weeks},
+\code{catchup_cases} and \code{catchup_deaths} record each window. Rows outside a
+window have \code{cases == cases_reported} and missing window fields. Weekly sums
+over each country-year are unchanged.
 
 \strong{Week convention.} The \code{year}/\code{week} columns are WHO's own
 \code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. WHO numbers weeks on
