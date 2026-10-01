@@ -279,6 +279,54 @@ test_that("a supplied prediction_table is drawn as given, its blank head filled 
   expect_equal(lc$y[4:8], ens$cases_median[1, 4:8])
 })
 
+test_that("an observation-model ensemble keeps the shaded burn-in, the central line and its intervals", {
+  skip_if_not_installed("ggplot2")
+  local_null_device()
+  # calc_model_ensemble() since v0.101.0: ci_bounds are observation-level
+  # predictive intervals (wider than the engine envelope, drawn in the unscored
+  # head too) around the engine-level central line, and the package default
+  # central line is the median for cases and the mean for deaths.
+  ens <- make_burnin_ensemble()
+  ci_obs <- function(m) list(list(lower = m * 0.3, upper = m * 2),
+                             list(lower = m * 0.7, upper = m * 1.4))
+  ens$ci_bounds <- list(cases = ci_obs(ens$cases_mean), deaths = ci_obs(ens$deaths_mean))
+  ens$observation_model <- list(cases = TRUE, deaths = TRUE, k_cases = c(2, 3),
+                                week_offset = c(0L, 0L), phi_deaths = c(1.5, 2))
+  out <- withr::local_tempdir()
+  res <- plot_model_ensemble(ens, output_dir = out, verbose = FALSE)
+
+  p <- res$individual$AAA
+  expect_equal(panel_series(p, "GeomLine", 1L)$y, ens$cases_median[1, ])
+  expect_equal(panel_series(p, "GeomLine", 2L)$y, ens$deaths_mean[1, ])
+  rc <- panel_series(p, "GeomRibbon", 1L, c("ymin", "ymax"))
+  rd <- panel_series(p, "GeomRibbon", 2L, c("ymin", "ymax"))
+  expect_equal(rc$ymin, ens$ci_bounds$cases[[1]]$lower[1, ])
+  expect_equal(rc$ymax, ens$ci_bounds$cases[[1]]$upper[1, ])
+  expect_equal(rd$ymax, ens$ci_bounds$deaths[[1]]$upper[1, ])
+  lab <- ggplot2::layer_data(p, layers_of(p, "GeomText"))
+  expect_equal(trimws(lab$label[order(as.integer(lab$PANEL))]),
+               c("scored from 2024-01-04", "scored from 2024-01-03"))
+
+  # The cases median is 0.9 x the mean, so against the golden mean captions the
+  # correlation R2 is unchanged and cases Pred and Bias scale by 0.9 (AAA:
+  # 18.6 of 61 observed, 0.305; all: 55.8 of 183); deaths keep the mean.
+  expected <- c(
+    AAA = paste0("Ribbons show 95% and 50% observation-level predictive intervals | ",
+                 "Central: cases=median, deaths=mean\n",
+                 "Cases: Obs = 61, Pred = 19, R² = 0.947, Bias = 0.3 | ",
+                 "Deaths: Obs = 6, Pred = 5, R² = 0.757, Bias = 0.88"),
+    BBB = paste0("Ribbons show 95% and 50% observation-level predictive intervals | ",
+                 "Central: cases=median, deaths=mean\n",
+                 "Cases: Obs = 122, Pred = 37, R² = 0.947, Bias = 0.3 | ",
+                 "Deaths: Obs = 12, Pred = 10, R² = 0.757, Bias = 0.88"),
+    cases_all  = "Total: Obs = 183, Pred = 56, R² = 0.97, Bias = 0.3 (central: median)",
+    deaths_all = golden_captions[["deaths_all"]])
+  expect_identical(captions_of(res), expected)
+  hidden <- suppressWarnings(plot_model_ensemble(ens, output_dir = out, verbose = FALSE,
+                                                 show_burn_in = FALSE))
+  expect_identical(captions_of(hidden), expected)
+})
+
 test_that("show_burn_in and n_cases_warmup_mask are validated", {
   skip_if_not_installed("ggplot2")
   ens <- make_burnin_ensemble()
