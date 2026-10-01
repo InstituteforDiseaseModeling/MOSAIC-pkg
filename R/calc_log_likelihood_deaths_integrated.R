@@ -121,6 +121,19 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 #
 # phi = NULL estimates each location's dispersion from the observed deaths and
 # cases (.d7_dispersion); a number (or one per location) uses it as given.
+# obs_tier, when supplied with phi = NULL, holds the surveillance trust tier of
+# each cell (config$reported_tier: 1 observed, 2 reconstructed, 3 imputed) and
+# restricts the dispersion estimate to the scored weeks whose days are all
+# observed, as est_nb_dispersion() restricts the cases k: a reconstructed week
+# (a WHO multi-week report spread evenly over its weeks, deaths and cases alike)
+# or an imputed one has a synthetic shape, so its scatter around the cases --
+# smaller or larger -- is not the reporting noise phi describes. A location
+# whose observed weeks alone cannot carry the estimate
+# (.d7_dispersion_estimable(): too few deaths, weeks or years) keeps the
+# estimate from every scored week rather than the Poisson limit (too few
+# observed weeks is not evidence of Poisson scatter); one whose scored weeks
+# fall short over every tier takes 1, as before. Only the dispersion is
+# restricted: every scored week is still scored.
 # mass_weights, when supplied, rescales each location's week weights so they sum
 # to what those weights alone give on the same weeks: the per-observation
 # confidence weights then change which weeks count most, not the location's
@@ -128,7 +141,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 # (.weights_obs_effective in calc_model_likelihood.R).
 .d7_setup <- function(obs_deaths, weights, dates, years, sd_shift, sd_year,
                       phi = NULL, background_rel = 0.02, week_offset = NULL,
-                      obs_cases = NULL, mass_weights = NULL) {
+                      obs_cases = NULL, mass_weights = NULL, obs_tier = NULL) {
      nL <- nrow(obs_deaths); nT <- ncol(obs_deaths)
      years <- as.integer(years)
      if (!length(years) || anyNA(years)) stop("years must be a non-empty integer vector.")
@@ -148,6 +161,8 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
      if (length(background_rel) != 1L || !is.finite(background_rel) || background_rel < 0)
           stop("background_rel must be a single non-negative number.")
      if (!is.null(week_offset)) week_offset <- as.integer(rep_len_chk(week_offset, "week_offset"))
+     if (!is.null(obs_tier) && !identical(dim(obs_tier), dim(obs_deaths)))
+          stop("obs_tier must have the same dimensions as obs_deaths.")
      year_rep <- as.integer(format(dates, "%Y"))
 
      locs <- vector("list", nL)
@@ -171,6 +186,7 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
           sel <- !is.na(wk)
           D_w <- W_w <- numeric(0)
           phi_j <- if (is.null(phi)) 1 else phi[j]
+          phi_excl <- 0L; phi_fallback <- FALSE
           if (any(sel)) {
                nd <- tabulate(wk[sel], nbins = length(good))
                D_w <- as.numeric(rowsum(y[sel], wk[sel], reorder = TRUE))
@@ -183,7 +199,20 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
                if (is.null(phi) && !is.null(obs_cases)) {
                     C_w <- as.numeric(rowsum(obs_cases[j, sel], wk[sel], reorder = TRUE))
                     yr_w <- as.integer(tapply(year_rep[sel], wk[sel], function(z) z[1L]))
-                    phi_j <- .d7_dispersion(D_w, C_w, yr_w)
+                    fit_w <- rep(TRUE, length(D_w))
+                    if (!is.null(obs_tier)) {
+                         t1 <- is.finite(obs_tier[j, ]) & obs_tier[j, ] == 1
+                         obs_w <- tabulate(wk[sel & t1], nbins = length(good)) == nd
+                         if (!all(obs_w)) {
+                              if (.d7_dispersion_estimable(D_w[obs_w], C_w[obs_w], yr_w[obs_w])) {
+                                   fit_w <- obs_w
+                                   phi_excl <- sum(!obs_w)
+                              } else {
+                                   phi_fallback <- TRUE
+                              }
+                         }
+                    }
+                    phi_j <- .d7_dispersion(D_w[fit_w], C_w[fit_w], yr_w[fit_w])
                }
           }
           bg_j <- max(1e-4, background_rel * (if (length(D_w)) mean(D_w) else 0))
@@ -191,7 +220,8 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
           locs[[j]] <- list(day = which(sel), week = wk[sel], D = D_w, W = W_w,
                             sd_shift = sd_shift[j], phi = phi_j, bg = bg_j,
                             anchor = fc$anchor, forecast_years = fc$forecast_years,
-                            forecast_shift = 0)
+                            forecast_shift = 0, phi_weeks_excluded = phi_excl,
+                            phi_observed_insufficient = phi_fallback)
      }
      list(locs = locs, years = years, sd_year = sd_year, nL = nL, nT = nT)
 }
@@ -200,16 +230,28 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 # multiple of the observed cases: how much more than Poisson the deaths scatter
 # once the cases -- the model's exposure -- are known. Clamped at 1 (deaths that
 # track the cases more tightly than Poisson are scored as Poisson), and 1 when the
-# location has too few deaths or weeks to estimate it.
+# location has too few deaths or weeks to estimate it (.d7_dispersion_estimable).
 .d7_dispersion <- function(D, C, yr) {
+     if (!.d7_dispersion_estimable(D, C, yr)) return(1)
      ok <- is.finite(D) & is.finite(C) & C > 0
-     if (sum(D[ok]) < 10 || sum(ok) < length(unique(yr[ok])) + 3L) return(1)
      g <- tryCatch(suppressWarnings(stats::glm(D[ok] ~ 0 + factor(yr[ok]) + offset(log(C[ok])),
                                                family = stats::quasipoisson())),
                    error = function(e) NULL)
      if (is.null(g)) return(1)
      phi <- suppressWarnings(summary(g)$dispersion)
      if (length(phi) != 1L || !is.finite(phi)) 1 else max(1, phi)
+}
+
+# Whether weekly deaths and cases carry enough evidence for .d7_dispersion(): at
+# least 10 deaths over the weeks with positive cases, at least 3 more such weeks
+# than the years they span (one year effect each), and two or more years. The
+# year effects are fitted as a factor, which glm() cannot code with one level;
+# one-year data have always fallen through to the dispersion of 1, and saying
+# so here keeps the observed-weeks estimate from inheriting that silently.
+.d7_dispersion_estimable <- function(D, C, yr) {
+     ok <- is.finite(D) & is.finite(C) & C > 0
+     n_yr <- length(unique(yr[ok]))
+     sum(D[ok]) >= 10 && sum(ok) >= n_yr + 3L && n_yr >= 2L
 }
 
 # Half-width, in days, of the blend between consecutive years' CFR deviations.
@@ -404,7 +446,10 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 # (config$reported_deaths_weight) are mass-preserving, as for cases; the weekly
 # background is eps_rel_cases times the mean scored weekly deaths, the cases
 # channel's relative floor; the dispersion is estimated per location from the
-# observed deaths and cases.
+# observed deaths and cases, on the observed weeks only when the config carries
+# reported_tier (.d7_setup, argument obs_tier). The returned `dispersion` is the
+# phi the likelihood scores with (setup$locs[[j]]$phi) and the phi the
+# observation-level deaths predictive draws with (calc_model_ensemble()).
 .mosaic_resolve_deaths_integration <- function(config, control, priors, score_window) {
      obs_d <- config$reported_deaths
      if (is.null(obs_d)) return(NULL)
@@ -413,6 +458,9 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
      if (!is.null(obs_c) && !is.matrix(obs_c)) obs_c <- matrix(obs_c, nrow = 1L)
      nL <- nrow(obs_d); nT <- ncol(obs_d)
      if (!is.null(obs_c) && !identical(dim(obs_c), dim(obs_d))) obs_c <- NULL
+     # One surveillance row supplies each week's cases and deaths, so the tiers
+     # (aligned with reported_cases) hold for the deaths too.
+     tier <- if (is.null(obs_c)) NULL else .mosaic_config_tier(config)
      dates_full <- as.Date(config$date_start) + seq_len(nT) - 1L
      year_full <- as.integer(format(dates_full, "%Y"))
 
@@ -478,12 +526,19 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
                         sd_shift = sd_shift, sd_year = sd_year, phi = NULL,
                         background_rel = eps,
                         obs_cases = if (is.null(obs_c)) NULL else obs_c[, keep, drop = FALSE],
-                        mass_weights = w_time)
+                        mass_weights = w_time,
+                        obs_tier = if (is.null(tier)) NULL else tier[, keep, drop = FALSE])
      list(setup = setup, base_logit_full = base_logit_full, year_full = year_full,
           dates_full = dates_full, keep = keep, n_time = nT, years = years,
           sd_shift = unname(sd_shift), sd_year = sd_year,
           dispersion = vapply(setup$locs, function(L) L$phi, numeric(1)),
-          background = vapply(setup$locs, function(L) L$bg, numeric(1)))
+          background = vapply(setup$locs, function(L) L$bg, numeric(1)),
+          tier_used = !is.null(tier),
+          dispersion_weeks_excluded = vapply(setup$locs, function(L) as.integer(L$phi_weeks_excluded),
+                                             integer(1)),
+          dispersion_observed_insufficient = vapply(setup$locs,
+                                                    function(L) isTRUE(L$phi_observed_insufficient),
+                                                    logical(1)))
 }
 
 # Whether any location of a deaths integration has forecast years (years after

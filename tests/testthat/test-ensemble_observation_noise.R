@@ -181,6 +181,42 @@ test_that("deaths: weekly totals carry the quasi-Poisson variance phi * E; phi =
   expect_null(ens2$observation_model$phi_deaths)
 })
 
+test_that("the deaths noise draws with the deaths likelihood's phi, from observed weeks under reported_tier", {
+  # 52 Monday-Sunday weeks across two years; deaths scatter about 4x Poisson
+  # around 6% of the cases, except a reconstructed window (weeks 10-21) spread
+  # flat, where the deaths track the cases exactly. Weekly totals are multiples
+  # of 7, so the daily values are whole.
+  set.seed(8)
+  n_wk <- 52L; n <- 7L * n_wk
+  C_w <- 7 * round((200 + 150 * sin(seq_len(n_wk) / 4)^2) / 7)
+  D_w <- 7 * stats::rnbinom(n_wk, mu = 0.06 * C_w / 7, size = 3)
+  rec <- 10:21
+  C_w[rec] <- 7 * round(mean(C_w[rec]) / 7); D_w[rec] <- 7 * round(0.06 * C_w[rec] / 7)
+  cfg <- .obs_cfg(n, date_start = "2023-07-03")
+  cfg$reported_cases  <- matrix(rep(C_w / 7, each = 7), 1L)
+  cfg$reported_deaths <- matrix(rep(D_w / 7, each = 7), 1L)
+  cfg$mu_jt <- 0.02
+  cfg$reported_tier <- matrix(ifelse(rep(seq_len(n_wk), each = 7) %in% rec, 2L, 1L), 1L)
+  pri <- list(mu_jt = list(sd_year = 0.7, sd_product = 0.3,
+                           location = list(AAA = list(year = 2023:2024, logit_mean = rep(qlogis(0.02), 2),
+                                                      logit_se = rep(0.2, 2)))))
+  di <- MOSAIC:::.mosaic_resolve_deaths_integration(cfg, list(likelihood = list()), pri, NULL)
+  yr <- as.integer(format(as.Date("2023-07-03") + 7L * (seq_len(n_wk) - 1L), "%Y"))
+  expect_true(di$tier_used)
+  expect_identical(di$dispersion, MOSAIC:::.d7_dispersion(D_w[-rec], C_w[-rec], yr[-rec]))
+  expect_gt(di$dispersion, MOSAIC:::.d7_dispersion(D_w, C_w, yr))
+  expect_identical(di$dispersion, vapply(di$setup$locs, function(L) L$phi, numeric(1)))
+
+  E_daily <- rep(0.02 * C_w / 7, each = 7)
+  local_mocked_ensemble_sims(.obs_records(1L, 4L, function(p, s) rep(C_w / 7, each = 7),
+                                          function(p, s) round(E_daily), expected = E_daily))
+  ens <- calc_model_ensemble(config = cfg, configs = list(cfg), n_simulations_per_config = 4L,
+                             deaths_integration = di,
+                             observation_model = list(k_cases = 5), verbose = FALSE)
+  expect_true(ens$observation_model$deaths)
+  expect_identical(ens$observation_model$phi_deaths, di$dispersion)
+})
+
 test_that("the deaths coupling thins or tops up the engine deaths within one weekly factor", {
   blk <- MOSAIC:::.mosaic_observation_blocks(14L, "2023-01-02", 0L)[[1]]
   e <- rep(c(0, 1, 2, 3, 2, 1, 0), 2); r <- c(0, 1, 3, 2, 2, 0, 0, 0, 2, 1, 5, 1, 1, 0)

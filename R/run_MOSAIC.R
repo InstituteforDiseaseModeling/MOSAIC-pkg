@@ -1232,16 +1232,26 @@ run_MOSAIC <- function(config,
   # sampled. Everything that depends only on the observations -- weekly blocks,
   # weekly observed totals and weights, the prior widths -- is resolved here once
   # and reaches every worker through likelihood_settings. It estimates its own
-  # per-location dispersion phi_j (deaths against observed cases); the NB deaths
-  # k above is diagnostic only.
+  # per-location dispersion phi_j (deaths against observed cases, on the observed
+  # weeks when the config carries reported_tier, as for the cases k); the NB
+  # deaths k above is diagnostic only. The ensemble's observation-level deaths
+  # draws use the same phi_j.
   control$likelihood$.deaths_integration <- .mosaic_resolve_deaths_integration(
     config, control, priors, score_window = control$likelihood$.score_window_resolved)
   if (!is.null(control$likelihood$.deaths_integration)) {
-    log_msg("Deaths likelihood: reported CFR integrated out per path (weekly quasi-Poisson, %d years, dispersion median %.2f, location sd median %.2f, year sd %.2f)",
-            length(control$likelihood$.deaths_integration$years),
-            stats::median(control$likelihood$.deaths_integration$dispersion),
-            stats::median(control$likelihood$.deaths_integration$sd_shift),
-            control$likelihood$.deaths_integration$sd_year)
+    local({
+      di <- control$likelihood$.deaths_integration
+      log_msg("Deaths likelihood: reported CFR integrated out per path (weekly quasi-Poisson, %d years, dispersion median %.2f, location sd median %.2f, year sd %.2f)",
+              length(di$years), stats::median(di$dispersion), stats::median(di$sd_shift),
+              di$sd_year)
+      if (isTRUE(di$tier_used)) {
+        short <- config$location_name[di$dispersion_observed_insufficient %in% TRUE]
+        log_msg("Deaths dispersion from observed weeks only (%d reconstructed/imputed weeks excluded)%s",
+                sum(di$dispersion_weeks_excluded),
+                if (length(short)) sprintf("; too few observed weeks, so every week used for %s",
+                                           paste(short, collapse = ", ")) else "")
+      }
+    })
     # Persisted so a post-hoc calc_model_ensemble() re-run can redraw deaths from
     # the calibrated CFR exactly as the run's own ensemble does.
     tryCatch({

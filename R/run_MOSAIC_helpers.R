@@ -1480,7 +1480,10 @@
 #'   v0.101.0 scores cases on reporting-week totals instead of daily cells, and
 #'   changes the cases dispersion: estimated from observed weeks only (config
 #'   \code{reported_tier}), and a location whose fit collapses or has too few
-#'   observed weeks takes the cross-country panel trend.
+#'   observed weeks takes the cross-country panel trend. The integrated deaths
+#'   score's dispersion phi is likewise estimated from observed weeks only when
+#'   the config carries \code{reported_tier} (every scored week when they are
+#'   too few).
 .mosaic_likelihood_impl_version <- function() "R/v0.101.0+weekly_cases"
 
 #' R Engine Semantics Version
