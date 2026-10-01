@@ -33,7 +33,8 @@ run with \code{control$io$persist_ensemble_arrays = TRUE}; does not need the
 trajectory artifact. This captures the daily
 route incidence, stock and decay-rate channels that the persisted
 trajectory artifact does not retain at a daily grid. A faithfulness gate
-confirms the re-sim reproduces the saved \code{cases_array} before any CI is written.
+confirms the re-sim reproduces the saved engine-level cases
+(\code{cases_engine_array}) before any CI is written.
 When \code{FALSE} (default) the cheap point-estimate path is used (renewal on
 the weighted-median route incidence from \code{trajectories_ensemble.rds};
 CI columns are populated only if the artifact carries daily-consecutive

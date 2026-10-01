@@ -405,7 +405,8 @@ render_MOSAIC_figures <- function(dir_output,
   central_method <- tryCatch(.resolve_central(), error = function(e) {
     warning("central_method in control.json could not be resolved (",
             conditionMessage(e), "); assuming the median, the pre-v0.38.0 ",
-            "behaviour (the current package default is the mean).", call. = FALSE)
+            "behaviour (the current package default is the median for cases and ",
+            "the mean for deaths).", call. = FALSE)
     .mosaic_resolve_central_method("median")
   })
 

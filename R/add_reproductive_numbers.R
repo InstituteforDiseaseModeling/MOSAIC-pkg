@@ -47,7 +47,8 @@
 #'   trajectory artifact. This captures the daily
 #'   route incidence, stock and decay-rate channels that the persisted
 #'   trajectory artifact does not retain at a daily grid. A faithfulness gate
-#'   confirms the re-sim reproduces the saved \code{cases_array} before any CI is written.
+#'   confirms the re-sim reproduces the saved engine-level cases
+#'   (\code{cases_engine_array}) before any CI is written.
 #'   When \code{FALSE} (default) the cheap point-estimate path is used (renewal on
 #'   the weighted-median route incidence from \code{trajectories_ensemble.rds};
 #'   CI columns are populated only if the artifact carries daily-consecutive
@@ -327,7 +328,7 @@ add_reproductive_numbers <- function(output_dir,
 #' and the calibration \code{control$sampling} + \code{burn_in_days} from
 #' \code{1_inputs/control.json}, re-simulates the posterior members via
 #' \code{\link{.mosaic_reff_resim_ci}} (faithfulness-gated against the saved
-#' \code{cases_array}), computes per-member R_eff = R_hum + R_env with each
+#' engine-level cases, \code{cases_engine_array}), computes per-member R_eff = R_hum + R_env with each
 #' member's own kernel and decay rates, and returns a tidy
 #' \code{reproductive_numbers} data.frame with the same schema as
 #' \code{\link{calc_Reff}}. The leading \code{burn_in_days} are set to
@@ -374,9 +375,12 @@ add_reproductive_numbers <- function(output_dir,
     stop("recompute_ci: missing control.json at ", ctl_path)
 
   ens    <- readRDS(ens_path)
-  if (is.null(ens$cases_array)) {
+  # The engine-level member trajectories (cases_engine_array; the cases_array of
+  # an ensemble saved before v0.101.0): the re-simulation reproduces these, not
+  # the observation-level draws.
+  if (is.null(.mosaic_engine_array(ens, "cases"))) {
     stop("recompute_ci: ensemble_candidate.rds was saved WITHOUT the dense ",
-         "cases_array (run_MOSAIC default control$io$persist_ensemble_arrays = ",
+         "prediction arrays (run_MOSAIC default control$io$persist_ensemble_arrays = ",
          "FALSE strips the 4-D arrays at save time). The posterior ",
          "re-simulation CI path requires the per-member arrays. Re-run the ",
          "calibration with control$io$persist_ensemble_arrays = TRUE, or use ",
@@ -440,7 +444,7 @@ add_reproductive_numbers <- function(output_dir,
                     res$gate_cor_median, res$gate_n_outliers, res$n_members,
                     res$gate_rel_err_max, res$n_members))
 
-  Tn    <- dim(ens$cases_array)[2L]
+  Tn    <- dim(.mosaic_engine_array(ens, "cases"))[2L]
   locs  <- as.character(ens$location_names)
   probs <- res$probs
 
@@ -500,7 +504,7 @@ add_reproductive_numbers <- function(output_dir,
 #' \code{.mosaic_run_central_method()} (summary.json, then subset_opt.rds, then
 #' control.json), the same reader the post-hoc renderer uses. A run directory
 #' whose recorded value cannot be resolved falls back to the package default
-#' (the mean) with a warning, rather than silently to the median.
+#' (the median for cases) with a warning.
 #' @keywords internal
 #' @noRd
 .add_reff_cases_central_method <- function(output_dir) {
@@ -511,7 +515,7 @@ add_reproductive_numbers <- function(output_dir,
     error = function(e) {
       warning("add_reproductive_numbers: could not resolve the run's central_method (",
               conditionMessage(e), "); selecting the medoid against the package ",
-              "default (the mean).", call. = FALSE)
+              "default (the median for cases).", call. = FALSE)
       .mosaic_resolve_central_method(NULL)
     })
   cm[["cases"]]

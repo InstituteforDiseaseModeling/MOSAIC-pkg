@@ -72,7 +72,9 @@
 #' columns: \code{run_id, iso_code, anchor_date, cutoff_date, date, metric,
 #' segment} (IS/embargo/OOS), \code{weeks_ahead, horizon_bucket, observed,
 #' observed_source, pred_central} (the scored series), \code{pred_mean,
-#' pred_median, central_method}, and CI columns (\code{pi*_lo}/\code{pi*_hi}).
+#' pred_median, central_method}, CI columns (\code{pi*_lo}/\code{pi*_hi}) and
+#' \code{pred_median_obs}, the median of the same draws as the CI columns (the
+#' observation-level predictive median since v0.101.0), which WIS pairs with them.
 #' \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
 #' rows carry the real target for post-hoc scoring.
 #'
@@ -125,10 +127,11 @@
 #'   cutoffs and locations.
 #' @param central_method Ensemble central tendency used for the compiled
 #'   predictions and the in-sample calibration metrics/medoid: \code{"mean"}
-#'   (default; the expected count, which never collapses to zero on sparse
-#'   deaths) or \code{"median"} (the typical trajectory; the default from
-#'   v0.46.1 to v0.97.x). Scalar or per-channel
-#'   \code{c(cases=, deaths=)}. The
+#'   (the expected count, which never collapses to zero on sparse deaths) or
+#'   \code{"median"} (the typical trajectory). Scalar or per-channel
+#'   \code{c(cases=, deaths=)}; default \code{c(cases = "median", deaths =
+#'   "mean")} (both mean from v0.98.0 to v0.100.x, both median from v0.46.1 to
+#'   v0.97.x). The
 #'   predictions table carries \code{pred_central} (this choice) plus
 #'   \code{pred_mean}/\code{pred_median} for cross-walk; WIS/coverage remain
 #'   quantile-based and are unaffected.
@@ -181,7 +184,7 @@ run_rolling_cv <- function(PATHS,
                            optimize_subset      = TRUE,
                            models               = c("ensemble", "ensemble_opt", "medoid"),
                            n_reps_best_medoid  = 50L,
-                           central_method       = "mean",
+                           central_method       = c(cases = "median", deaths = "mean"),
                            est_suitability_spec = list(),
                            psi_cache            = NULL,
                            dir_output,
@@ -602,9 +605,10 @@ run_rolling_cv <- function(PATHS,
 #'   replicates to draw for the single-config \code{best}/\code{medoid}
 #'   models. NULL reuses the value stored in the run manifest.
 #' @param central_method Central tendency for \code{pred_central}: \code{NULL}
-#'   (default) reuses the value recorded in the run manifest (or \code{"mean"}
-#'   for older manifests); otherwise a scalar or per-channel
-#'   \code{c(cases=, deaths=)} override.
+#'   (default) reuses the value recorded in the run manifest (or \code{"mean"},
+#'   the default those runs were made under, for manifests that predate the
+#'   field); otherwise a scalar or per-channel \code{c(cases=, deaths=)}
+#'   override.
 #' @param write Logical; write \code{predictions.parquet} (default TRUE).
 #' @return The compiled long predictions data frame (invisibly if written).
 #' @export
@@ -627,8 +631,9 @@ compile_rolling_cv_predictions <- function(dir_output,
      models <- .rcv_validate_models(models)
      if (is.null(n_reps_best_medoid))
           n_reps_best_medoid <- as.integer(man$spec$n_reps_best_medoid %||% 50L)
-     # Reuse the run's recorded central tendency unless the caller overrides it
-     # (older manifests without the field fall back to the package default).
+     # Reuse the run's recorded central tendency unless the caller overrides it.
+     # A manifest without the field was written under the then-default mean
+     # (deliberately not the current package default).
      if (is.null(central_method))
           central_method <- man$spec$central_method %||% "mean"
      central_method <- .mosaic_resolve_central_method(central_method)
@@ -671,7 +676,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rolling_cv_compile_run <- function(ensemble, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, model = "ensemble",
-                                    central_method = "mean") {
+                                    central_method = c(cases = "median", deaths = "mean")) {
      central_method <- .mosaic_resolve_central_method(central_method)
      n_t   <- ensemble$n_time_points
      ds    <- as.Date(ensemble$date_start); de <- as.Date(ensemble$date_stop)
@@ -720,6 +725,13 @@ compile_rolling_cv_predictions <- function(dir_output,
                     df[[paste0(tag, "_lo")]] <- as.numeric(getrow(ci_c[[p]]$lower, i))
                     df[[paste0(tag, "_hi")]] <- as.numeric(getrow(ci_c[[p]]$upper, i))
                }
+               # The median of the draws the CI columns come from: the
+               # observation-level predictive median when the ensemble drew
+               # observation noise (v0.101.0), else the ensemble median. A
+               # proper interval score pairs it with those intervals.
+               pm_obs <- ensemble$predictive_median[[metric]]
+               df$pred_median_obs <- if (is.null(pm_obs)) as.numeric(med)
+                                     else as.numeric(getrow(pm_obs, i))
                out[[length(out) + 1L]] <- df
           }
      }
@@ -832,7 +844,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rcv_compile_all_models <- function(run_dir, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, models, n_reps,
-                                    central_method = "mean") {
+                                    central_method = c(cases = "median", deaths = "mean")) {
      central_method <- .mosaic_resolve_central_method(central_method)
      cal      <- file.path(run_dir, "2_calibration")
      ens_path <- file.path(cal, "ensemble_candidate.rds")

@@ -8,21 +8,24 @@
 # ---- .mosaic_resolve_central_method -----------------------------------------
 
 test_that("resolver: NULL and scalar default/expand correctly", {
-  # Package default is mean (v0.98.0): NULL / empty resolves both channels to mean.
+  # Package default (v0.101.0): NULL / empty resolves cases to median, deaths to mean.
   expect_equal(MOSAIC:::.mosaic_resolve_central_method(NULL),
-               c(cases = "mean", deaths = "mean"))
+               c(cases = "median", deaths = "mean"))
   expect_equal(MOSAIC:::.mosaic_resolve_central_method("median"),
                c(cases = "median", deaths = "median"))
   expect_equal(MOSAIC:::.mosaic_resolve_central_method("mean"),
                c(cases = "mean", deaths = "mean"))
 })
 
-test_that("resolver: per-channel named vector, missing channel falls back to mean", {
+test_that("resolver: per-channel named vector, missing channel falls back to its default", {
   expect_equal(MOSAIC:::.mosaic_resolve_central_method(c(cases = "median", deaths = "mean")),
                c(cases = "median", deaths = "mean"))
-  # Unset channel inherits the package default (mean), not median.
-  expect_equal(MOSAIC:::.mosaic_resolve_central_method(c(cases = "median")),
-               c(cases = "median", deaths = "mean"))
+  # An unset channel inherits that channel's package default (deaths mean,
+  # cases median), not the other channel's setting.
+  expect_equal(MOSAIC:::.mosaic_resolve_central_method(c(cases = "mean")),
+               c(cases = "mean", deaths = "mean"))
+  expect_equal(MOSAIC:::.mosaic_resolve_central_method(c(deaths = "median")),
+               c(cases = "median", deaths = "median"))
 })
 
 test_that("resolver: invalid inputs error", {
@@ -32,23 +35,45 @@ test_that("resolver: invalid inputs error", {
   expect_error(MOSAIC:::.mosaic_resolve_central_method(c(cases = "median", "mean"))) # partially named
 })
 
-test_that("package default central tendency is mean (v0.98.0)", {
+test_that("package default central tendency is cases median, deaths mean (v0.101.0)", {
   # Pin the default at every authoritative site so a partial flip is caught
-  # (mean v0.38.0-v0.46.0, median v0.46.1-v0.97.x, mean again from v0.98.0).
-  expect_equal(MOSAIC:::.mosaic_resolve_central_method(NULL),
-               c(cases = "mean", deaths = "mean"))
-  expect_equal(MOSAIC:::mosaic_control_defaults()$predictions$central_method, "mean")
-  expect_equal(formals(MOSAIC::plot_model_ensemble)$central_method, "mean")
-  expect_equal(formals(MOSAIC:::.mosaic_assemble_prediction_table)$central_method, "mean")
-  expect_equal(formals(MOSAIC::run_rolling_cv)$central_method, "mean")
-  expect_equal(formals(MOSAIC:::.rolling_cv_compile_run)$central_method, "mean")
-  expect_equal(formals(MOSAIC:::.rcv_compile_all_models)$central_method, "mean")
-  expect_equal(formals(MOSAIC:::.mosaic_reff_resim_ci)$cases_central_method, "mean")
-  expect_equal(eval(formals(MOSAIC:::.mosaic_build_trajectories)$central_method),
-               c(cases = "mean", deaths = "mean"))
+  # (mean v0.38.0-v0.46.0, median v0.46.1-v0.97.x, mean v0.98.0-v0.100.x,
+  # cases median / deaths mean from v0.101.0).
+  per_channel <- c(cases = "median", deaths = "mean")
+  expect_equal(MOSAIC:::.mosaic_resolve_central_method(NULL), per_channel)
+  expect_equal(MOSAIC::mosaic_control_defaults()$predictions$central_method, per_channel)
+  expect_equal(eval(formals(MOSAIC::plot_model_ensemble)$central_method), per_channel)
+  expect_equal(eval(formals(MOSAIC:::.mosaic_assemble_prediction_table)$central_method),
+               per_channel)
+  expect_equal(eval(formals(MOSAIC::run_rolling_cv)$central_method), per_channel)
+  expect_equal(eval(formals(MOSAIC:::.rolling_cv_compile_run)$central_method), per_channel)
+  expect_equal(eval(formals(MOSAIC:::.rcv_compile_all_models)$central_method), per_channel)
+  expect_equal(formals(MOSAIC:::.mosaic_reff_resim_ci)$cases_central_method, "median")
+  expect_equal(eval(formals(MOSAIC:::.mosaic_build_trajectories)$central_method), per_channel)
+  # Each formal resolves to the same pair as the resolver's own default.
+  for (f in list(MOSAIC::plot_model_ensemble, MOSAIC::run_rolling_cv,
+                 MOSAIC:::.mosaic_assemble_prediction_table))
+    expect_equal(MOSAIC:::.mosaic_resolve_central_method(eval(formals(f)$central_method)),
+                 MOSAIC:::.mosaic_resolve_central_method(NULL))
   # The optimizer's own formal stays median by design (Tier-2 bit-for-bit parity);
   # run_MOSAIC() passes the resolved control value explicitly.
   expect_equal(formals(MOSAIC::optimize_ensemble_subset)$central_method, "median")
+})
+
+test_that("the per-channel default survives the control merge and control.json", {
+  ctl <- MOSAIC:::.mosaic_validate_and_merge_control(list())
+  expect_equal(MOSAIC:::.mosaic_resolve_central_method(ctl$predictions$central_method),
+               c(cases = "median", deaths = "mean"))
+  # A user scalar still sets both channels.
+  ctl2 <- MOSAIC:::.mosaic_validate_and_merge_control(list(predictions = list(central_method = "mean")))
+  expect_equal(MOSAIC:::.mosaic_resolve_central_method(ctl2$predictions$central_method),
+               c(cases = "mean", deaths = "mean"))
+  # control.json keeps the channel names.
+  tmp <- withr::local_tempfile(fileext = ".json")
+  jsonlite::write_json(MOSAIC:::.mosaic_control_for_json(ctl), tmp, auto_unbox = TRUE)
+  back <- jsonlite::read_json(tmp, simplifyVector = TRUE)
+  expect_equal(MOSAIC:::.mosaic_resolve_central_method(back$predictions$central_method),
+               c(cases = "median", deaths = "mean"))
 })
 
 test_that(".mosaic_central_series selects the requested field per channel", {

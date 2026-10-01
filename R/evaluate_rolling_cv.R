@@ -279,10 +279,11 @@ evaluate_rolling_cv <- function(predictions,
 #' @noRd
 .rcv_window_metrics <- function(df) {
      o <- df$observed
-     # Point metrics use the chosen central series; WIS uses the median point
-     # (quantile-based, central-method-invariant -- matches the in-sample WIS).
+     # Point metrics use the chosen central series; WIS uses the median of the
+     # same predictive draws as the intervals (quantile-based, central-method-
+     # invariant): pred_median_obs since v0.101.0, the ensemble median before.
      p     <- if ("pred_central" %in% names(df)) df$pred_central else df$pred_median
-     p_med <- df$pred_median
+     p_med <- if ("pred_median_obs" %in% names(df)) df$pred_median_obs else df$pred_median
      cov50 <- cov95 <- wis <- NA_real_
      if (all(c("pi50_lo","pi50_hi","pi95_lo","pi95_hi") %in% names(df))) {
           cov50 <- mean(o >= df$pi50_lo & o <= df$pi50_hi, na.rm = TRUE)
@@ -377,7 +378,8 @@ evaluate_rolling_cv <- function(predictions,
 #' @noRd
 .rcv_skill <- function(sl, is_df, baselines) {
      sl_p   <- if ("pred_central" %in% names(sl)) sl$pred_central else sl$pred_median
-     sl_med <- sl$pred_median
+     # Median of the same draws as the intervals (see .rcv_window_metrics()).
+     sl_med <- if ("pred_median_obs" %in% names(sl)) sl$pred_median_obs else sl$pred_median
      mae_m  <- mean(abs(sl$observed - sl_p), na.rm = TRUE)
      wis_m  <- if (all(c("pi50_lo","pi50_hi","pi95_lo","pi95_hi") %in% names(sl)))
           mean(.rcv_wis(sl$observed, sl_med, sl$pi50_lo, sl$pi50_hi,

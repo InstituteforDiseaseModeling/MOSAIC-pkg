@@ -2230,8 +2230,23 @@ run_MOSAIC <- function(config,
   log_msg("Ensemble central tendency: cases=%s, deaths=%s",
           central_method[["cases"]], central_method[["deaths"]])
 
-  # Whether to retain the dense 4-D cases_array/deaths_array in the *persisted*
-  # ensemble RDS files. Default FALSE => arrays are stripped at save time (via
+  # Observation model for the posterior predictive (v0.101.0): the per-location
+  # weekly cases dispersion this run's likelihood scored with
+  # (control$likelihood$.nb_k_cases_resolved) on the same weekly blocks. The
+  # ensemble's intervals and its persisted cases_array/deaths_array are then
+  # draws of the OBSERVED counts (deaths take the integrated deaths likelihood's
+  # quasi-Poisson dispersion from the deaths integration); the central lines and
+  # every consumer of member trajectories (medoid, trajectories, implied CFR,
+  # subset selection) stay engine-level.
+  obs_model_run <- .mosaic_resolve_observation_model(config, control)
+  if (!is.null(obs_model_run))
+    log_msg("Observation-level predictive: cases weekly NB k = %s (week offset %s)",
+            paste(signif(obs_model_run$k_cases, 3), collapse = ", "),
+            paste(obs_model_run$week_offset, collapse = ", "))
+
+  # Whether to retain the dense 4-D arrays (observation-level cases_array/
+  # deaths_array and engine-level cases_engine_array/deaths_engine_array) in the
+  # *persisted* ensemble RDS files. Default FALSE => arrays are stripped at save time (via
   # .mosaic_ensemble_drop_arrays()) so the on-disk artifacts are small (~tens of
   # KB) and travel in git; every light field (central tendencies, envelopes,
   # weights, seeds, obs, metadata) is preserved and all current consumers work.
@@ -2394,6 +2409,7 @@ run_MOSAIC <- function(config,
         trajectory_scratch_dir   = if (.traj_enabled) traj_scratch_dir else NULL,
         reduce_trajectories      = FALSE,
         deaths_integration       = control$likelihood$.deaths_integration,
+        observation_model        = obs_model_run,
         verbose                  = control$logging$verbose
       ),
       error = function(e) {
@@ -2708,7 +2724,8 @@ run_MOSAIC <- function(config,
   #   * optimize ON  -> the OPTIMIZED subset: map ensemble_optimized's per-member
   #     seeds back to the candidate scratch keys (param_idx) via the candidate
   #     member seeds; weights = optimal_weights. reported_* are taken from the
-  #     optimized cases/deaths arrays -> BIT-IDENTICAL to the prediction plots.
+  #     optimized engine cases/deaths arrays -> their central line is
+  #     BIT-IDENTICAL to the prediction plots'.
   #   * optimize OFF -> the candidate subset (all members, weight_best).
   # Then inject the per-location endemic/epidemic CFR reference levels and persist;
   # finally unlink the scratch dir. NULL handle (capture off / no best subset) is
@@ -2736,8 +2753,9 @@ run_MOSAIC <- function(config,
         scratch_dir         = traj_scratch_handle$dir,
         subset_orig_pidx    = final_pidx,
         subset_weights      = final_weights,
-        cases_array         = ensemble$cases_array,
-        deaths_array        = ensemble$deaths_array,
+        # Member trajectories, not their observation-level draws.
+        cases_array         = .mosaic_engine_array(ensemble, "cases"),
+        deaths_array        = .mosaic_engine_array(ensemble, "deaths"),
         n_stoch             = ensemble$n_simulations_per_config,
         n_locations         = ensemble$n_locations,
         n_time_points       = ensemble$n_time_points,
@@ -2797,15 +2815,18 @@ run_MOSAIC <- function(config,
     tryCatch({
       # Deliberate mix: per-member stochastic spread is summarized by its MEDIAN
       # (robust to a member's stochastic outliers), while the ensemble TARGET is
-      # the canonical central series (mean by default) so the chosen
+      # the canonical central series (the cases median by default) so the chosen
       # representative member tracks the reported curve.
+      # Engine-level member trajectories: an observation-level draw is noise
+      # around a member, not the member.
       medoid_distances <- .mosaic_medoid_distances(
-        ensemble$cases_array, .central(ensemble, "cases"), ensemble$artifact_mask)
+        .mosaic_engine_array(ensemble, "cases"), .central(ensemble, "cases"),
+        ensemble$artifact_mask)
 
       medoid_idx <- which.min(medoid_distances)
 
       # Seed of the member the metric actually selected. `ensemble$seeds` is carried
-      # ALONGSIDE cases_array (member i <-> seeds[i]) through both calc_model_ensemble
+      # ALONGSIDE the arrays (member i <-> seeds[i]) through both calc_model_ensemble
       # and optimize_ensemble_subset, so the index that minimises the distance maps
       # to that exact member's seed and cannot drift the way a separately re-derived
       # vector (optimal_seeds / param_seeds) can. Prefer it; fall back only if absent.
@@ -2947,7 +2968,8 @@ run_MOSAIC <- function(config,
 
       # Run N stochastic reruns of the medoid config: R^2/bias and the
       # prediction plot both derive from the ensemble central series
-      # (central_method, mean by default), consistent with the posterior ensemble.
+      # (central_method: cases median, deaths mean by default), consistent with
+      # the posterior ensemble.
       log_msg("Building medoid model stochastic ensemble (%d reruns, source=%s)...",
               n_best_stochastic_per,
               if (ens_parallel) "local-parallel" else "local-sequential")
@@ -2966,6 +2988,7 @@ run_MOSAIC <- function(config,
           # ~100 identically-weighted reruns is meaningless and nothing consumes a
           # medoid trajectory artifact -- never capture for the medoid.
           deaths_integration       = control$likelihood$.deaths_integration,
+          observation_model        = obs_model_run,
           verbose                  = control$logging$verbose
         ),
         error = function(e) {
@@ -3099,8 +3122,9 @@ run_MOSAIC <- function(config,
     # calibrated mu_jt, which these realized period CFRs approach at epidemic PPV).
     cfr_implied <- tryCatch(
          .mosaic_calc_cfr_period_implied(
-              cases_array     = ensemble$cases_array,
-              deaths_array    = ensemble$deaths_array,
+              # The members' own period CFR: engine-level trajectories.
+              cases_array     = .mosaic_engine_array(ensemble, "cases"),
+              deaths_array    = .mosaic_engine_array(ensemble, "deaths"),
               obs_cases       = ensemble$obs_cases,
               obs_deaths      = ensemble$obs_deaths,
               location_names  = ensemble$location_names %||% iso_code,
@@ -3498,10 +3522,13 @@ run_mosaic <- run_MOSAIC
 #'       diagnostics table. (The \code{\link{optimize_ensemble_subset}} function's
 #'       own \code{stride} default remains \code{1L} to preserve bit-identicality.)
 #'     \item \code{central_method}: Ensemble central tendency, \code{"mean"}
-#'       (default; the expected count, which never collapses to zero on sparse
-#'       deaths) or \code{"median"} (the typical trajectory, robust to a few
-#'       explosive members; the default from v0.46.1 to v0.97.x). Scalar or
-#'       per-channel \code{c(cases=, deaths=)}. Governs the prediction
+#'       (the expected count, which never collapses to zero on sparse deaths) or
+#'       \code{"median"} (the typical trajectory, robust to a few explosive
+#'       members). Scalar or per-channel \code{c(cases=, deaths=)}; default
+#'       \code{c(cases = "median", deaths = "mean")} since v0.101.0 (both mean
+#'       from v0.98.0 to v0.100.x, both median from v0.46.1 to v0.97.x). Either
+#'       way the line is a summary of the engine-level member trajectories; the
+#'       intervals are observation-level. Governs the prediction
 #'       trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
 #'       the medoid target, and the subset-selection objective consistently.
 #'   }
@@ -3528,8 +3555,10 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{format}: Output format; only "parquet" is supported ("csv" is coerced to "parquet" with a warning)
 #'     \item \code{compression}: Compression algorithm (default: "zstd")
 #'     \item \code{compression_level}: Compression level (default: 3L)
-#'     \item \code{persist_ensemble_arrays}: Retain the dense 4-D
-#'       \code{cases_array}/\code{deaths_array} in the persisted ensemble RDS
+#'     \item \code{persist_ensemble_arrays}: Retain the dense 4-D arrays --
+#'       the observation-level \code{cases_array}/\code{deaths_array} and the
+#'       engine-level \code{cases_engine_array}/\code{deaths_engine_array} --
+#'       in the persisted ensemble RDS
 #'       files (\code{ensemble_candidate.rds}, \code{ensemble_optimized.rds},
 #'       \code{subset_opt.rds}, \code{medoid_ensemble.rds}). Default \code{FALSE}
 #'       strips the arrays at save time so the on-disk artifacts are small
@@ -3773,13 +3802,14 @@ mosaic_control_defaults <- function(calibration = NULL,
                                           # speed; set 1 for a bit-identical exhaustive
                                           # search. (The optimize_ensemble_subset()
                                           # function default stays 1L for parity.)
-    central_method     = "mean",         # Ensemble central tendency: "mean" (default
-                                          # from v0.98.0; the expected count, never 0 on
-                                          # sparse deaths) or "median" (the typical
-                                          # trajectory; the v0.46.1-v0.97.x default).
-                                          # Scalar or per-channel c(cases=, deaths=).
-                                          # Drives predictions, plots, *_ensemble
-                                          # metrics, medoid, subset.
+    central_method     = c(cases = "median", deaths = "mean"),
+                                          # Ensemble central tendency per channel
+                                          # (default from v0.101.0): "median" (the
+                                          # typical trajectory) for cases, "mean" (the
+                                          # expected count, never 0 on sparse deaths)
+                                          # for deaths. A scalar sets both. Drives
+                                          # predictions, plots, *_ensemble metrics,
+                                          # medoid, subset.
     capture_trajectories = TRUE,          # Capture comprehensive internal-state channels
                                           # (compartments + FOI + incidence + burden) from
                                           # the POSTERIOR ensemble and persist
@@ -3815,7 +3845,7 @@ mosaic_control_defaults <- function(calibration = NULL,
                                        # worker fed.
     save_simresults = FALSE,           # Save raw per-(sim,iter,j,t) output for validation
     verbose_weights = FALSE,           # Print detailed weight calculation diagnostics
-    persist_ensemble_arrays = FALSE    # Retain dense cases_array/deaths_array in persisted ensemble RDS files (FALSE => stripped at save; small artifacts)
+    persist_ensemble_arrays = FALSE    # Retain the dense observation- and engine-level arrays in persisted ensemble RDS files (FALSE => stripped at save; small artifacts)
   )
 
   # Default logging settings

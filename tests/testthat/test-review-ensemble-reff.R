@@ -223,11 +223,11 @@ test_that("recompute_ci reads the run's central_method through .mosaic_run_centr
   MOSAIC:::.mosaic_write_json(list(control = list(predictions = list())), ctl_path)
   expect_identical(MOSAIC:::.add_reff_cases_central_method(d), "median")
 
-  # An unresolvable value falls back to the package default with a warning,
-  # not silently to the median.
+  # An unresolvable value falls back to the package default with a warning
+  # (the median for cases since v0.101.0).
   wctl("trimmed_mean")
   expect_warning(cm <- MOSAIC:::.add_reff_cases_central_method(d), "package default")
-  expect_identical(cm, "mean")
+  expect_identical(cm, "median")
 })
 
 # ---- recompute_ci does not need the trajectory artifact (reff-07) -----------

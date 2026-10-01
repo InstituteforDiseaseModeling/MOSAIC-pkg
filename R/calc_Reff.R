@@ -683,7 +683,7 @@ calc_Reff <- function(ensemble,
 #' seed rather than broadcast.
 #'
 #' @param task List with \code{p}, \code{s} and \code{saved} (the saved
-#'   \code{cases_array[, , p, s]} slice for this member).
+#'   engine-level reported cases \code{[, , p, s]} slice for this member).
 #' @param ctx The shared inputs. Passed explicitly on the serial route; on the
 #'   parallel route the caller exports it once per worker as \code{.rr_ctx} and
 #'   leaves this \code{NULL} so the worker reads it from its own global
@@ -754,8 +754,11 @@ calc_Reff <- function(ensemble,
 #' recipe \code{calc_model_ensemble()} uses (\code{sample_parameters(...,
 #' seed = parameter_seeds[p])} then \code{.mosaic_clamp_transmission_params()}),
 #' simulated with seed \code{param_idx * 1000L + stoch_idx}, and its
-#' \code{reported_cases} compared with the saved \code{cases_array} (the
-#' statistical-equivalence FAITHFULNESS GATE). Each member's R series uses its
+#' \code{reported_cases} compared with the saved ENGINE-level cases
+#' (\code{cases_engine_array}, or the \code{cases_array} of an ensemble saved
+#' before v0.101.0; never the observation-level draws, which a re-simulation
+#' cannot reproduce) -- the statistical-equivalence FAITHFULNESS GATE. Each
+#' member's R series uses its
 #' own kernel, its own engine \code{delta_jt}, and its own initial stocks.
 #'
 #' \strong{Headline = the MEDOID trajectory's R_t (phase-coherent)}, selected by
@@ -765,7 +768,8 @@ calc_Reff <- function(ensemble,
 #' member's time-max of its \code{peak_window}-day Cori R_t.
 #'
 #' @param ensemble A \code{mosaic_ensemble} with \code{seeds},
-#'   \code{parameter_weights}, \code{cases_array}, \code{n_param_sets},
+#'   \code{parameter_weights}, \code{cases_engine_array} (or a pre-v0.101.0
+#'   \code{cases_array}), \code{n_param_sets},
 #'   \code{n_simulations_per_config}, \code{location_names}, \code{date_start},
 #'   \code{cases_median}.
 #' @param base_config Base config the members were sampled from.
@@ -810,7 +814,7 @@ calc_Reff <- function(ensemble,
                                   infectiousness_floor = 1,
                                   burn_in_days = 0L,
                                   peak_window = 7L,
-                                  cases_central_method = "mean",
+                                  cases_central_method = "median",
                                   member_param_weights = NULL,
                                   param_subset = NULL,
                                   medoid_cases_central = NULL,
@@ -819,10 +823,16 @@ calc_Reff <- function(ensemble,
                                   cl = NULL) {
   if (!inherits(ensemble, "mosaic_ensemble"))
     stop(".mosaic_reff_resim_ci: `ensemble` must be a mosaic_ensemble object.")
-  for (nm in c("seeds", "parameter_weights", "cases_array", "n_param_sets",
+  for (nm in c("seeds", "parameter_weights", "n_param_sets",
                "n_simulations_per_config", "location_names"))
     if (is.null(ensemble[[nm]]))
       stop(".mosaic_reff_resim_ci: ensemble is missing `", nm, "`.")
+  # Engine-level member trajectories: the re-simulation reproduces these, not
+  # their observation-level draws.
+  ca <- .mosaic_engine_array(ensemble, "cases")          # [nL, T, nP, nS]
+  if (is.null(ca))
+    stop(".mosaic_reff_resim_ci: ensemble is missing `cases_engine_array` (and has ",
+         "no pre-v0.101.0 `cases_array`).")
 
   # This path drives the engine outside run_MOSAIC(), so pin threads here.
   .mosaic_set_blas_threads(1L)
@@ -836,7 +846,6 @@ calc_Reff <- function(ensemble,
   nS    <- as.integer(ensemble$n_simulations_per_config)
   locs  <- as.character(ensemble$location_names)
   nL    <- length(locs)
-  ca    <- ensemble$cases_array          # [nL, T, nP, nS]
   Tn    <- dim(ca)[2L]
   if (length(parameter_seeds) != nP)
     stop(".mosaic_reff_resim_ci: seeds length != n_param_sets.")
@@ -977,7 +986,7 @@ calc_Reff <- function(ensemble,
   n_compared <- sum(is.finite(re_vec))
   if (n_compared == 0L)
     stop(".mosaic_reff_resim_ci: FAITHFULNESS GATE FAILED -- no overlapping ",
-         "reported_cases cells to compare against the saved cases_array.")
+         "reported_cases cells to compare against the saved engine-level cases.")
   rel_err_pct  <- stats::quantile(re_vec, gate_frac, na.rm = TRUE, names = FALSE)
   rel_err_max  <- max(re_vec, na.rm = TRUE)
   cor_median   <- stats::median(cc_vec, na.rm = TRUE)
@@ -1000,7 +1009,7 @@ calc_Reff <- function(ensemble,
   if (!gate_pass)
     stop(sprintf(paste0(".mosaic_reff_resim_ci: FAITHFULNESS GATE FAILED. ",
                         "Re-simulated reported_cases are not statistically ",
-                        "equivalent to the saved cases_array: p%.0f per-member ",
+                        "equivalent to the saved engine-level cases: p%.0f per-member ",
                         "relative total-case error = %.4f (tol %.4f), ",
                         "ensemble-aggregate relative error = %.4f (tol %.4f), ",
                         "median per-member correlation = %.4f (min %.4f); ",
@@ -1021,7 +1030,7 @@ calc_Reff <- function(ensemble,
   }), ests)
 
   # Phase-coherent headline: the MEDOID member (run_MOSAIC criterion on the
-  # saved cases_array, same per-channel central_method as calibration).
+  # saved engine-level cases, same per-channel central_method as calibration).
   cases_central <- if (!is.null(medoid_cases_central)) {
     medoid_cases_central
   } else if (identical(cases_central_method, "mean") &&
@@ -1111,7 +1120,8 @@ calc_Reff <- function(ensemble,
 #' (no central, degenerate arrays) returns \code{member_id = NA} so the caller can
 #' fall back to the median-peak member.
 #'
-#' @param ca Saved \code{cases_array} \code{[nL, T, nP, nS]} (reported_cases).
+#' @param ca Saved engine-level reported cases \code{[nL, T, nP, nS]}
+#'   (\code{.mosaic_engine_array(ensemble, "cases")}).
 #' @param cases_central Ensemble central cases series, an \code{[nL, T]} matrix
 #'   (a length-T vector is accepted when \code{nL = 1}).
 #' @param nP,nS Number of param sets / stochastic reruns.

@@ -1,7 +1,9 @@
 #' Period-weighted implied case fatality ratio (CFR) per ensemble member
 #'
 #' Computes the period-weighted implied CFR for each location from the
-#' posterior ensemble's cases_array and deaths_array. For each ensemble
+#' posterior ensemble's ENGINE-level arrays (\code{cases_engine_array} and
+#' \code{deaths_engine_array}; the observation-level draws would add reporting
+#' noise to a property of the members' own trajectories). For each ensemble
 #' member (param_set x stochastic rerun), takes the sum of simulated
 #' reported_deaths divided by the sum of simulated reported_cases over the
 #' SCORED OBSERVED window -- days from \code{score_idx} on where both observed
@@ -16,8 +18,8 @@
 #' (reported CFR falls to \code{mu_jt * chi_endemic / chi_epidemic} on
 #' endemic-PPV ticks) and the realised timing of cases and deaths.
 #'
-#' @param cases_array 4-D numeric array of simulated reported cases with
-#'   dimensions \code{[n_locations, n_time, n_param_sets, n_stoch_per]}.
+#' @param cases_array 4-D numeric array of simulated (engine-level) reported
+#'   cases with dimensions \code{[n_locations, n_time, n_param_sets, n_stoch_per]}.
 #' @param deaths_array 4-D numeric array of simulated reported deaths,
 #'   same dimensions as \code{cases_array}.
 #' @param obs_cases 2-D numeric matrix of observed reported cases with

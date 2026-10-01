@@ -30,9 +30,10 @@ replicates to draw for the single-config \code{best}/\code{medoid}
 models. NULL reuses the value stored in the run manifest.}
 
 \item{central_method}{Central tendency for \code{pred_central}: \code{NULL}
-(default) reuses the value recorded in the run manifest (or \code{"mean"}
-for older manifests); otherwise a scalar or per-channel
-\code{c(cases=, deaths=)} override.}
+(default) reuses the value recorded in the run manifest (or \code{"mean"},
+the default those runs were made under, for manifests that predate the
+field); otherwise a scalar or per-channel \code{c(cases=, deaths=)}
+override.}
 
 \item{write}{Logical; write \code{predictions.parquet} (default TRUE).}
 }
