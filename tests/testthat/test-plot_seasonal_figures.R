@@ -134,8 +134,7 @@ test_that(".seasonal_clustering_fits() reads the daily est_seasonal_dynamics() o
      fx <- .seasonal_fixture(mi)
      res <- MOSAIC:::.seasonal_clustering_fits(list(MODEL_INPUT = mi))
      expect_identical(res$source, "daily")
-     expect_identical(res$time_col, "day")
-     expect_equal(nrow(res$fits), 6L * 365L)
+     expect_identical(res$path, file.path(mi, "pred_seasonal_dynamics_day.csv"))
 
      # weekly means of the 7-day blocks of days 1-364 (day 365 is not drawn)
      expect_equal(nrow(res$weekly), 6L * 52L)
@@ -151,24 +150,25 @@ test_that(".seasonal_clustering_fits() reads the daily est_seasonal_dynamics() o
      expect_identical(MOSAIC:::.seasonal_year_span(res$window$cases), "2012")
 })
 
-test_that("the clusters are the estimator's: the same daily matrix, clustered the same way", {
+test_that("weekly means reproduce the estimator's clustering of the daily fits", {
      mi <- withr::local_tempdir()
      fx <- .seasonal_fixture(mi)
      res <- MOSAIC:::.seasonal_clustering_fits(list(MODEL_INPUT = mi))
-     wide <- stats::reshape(res$fits[, c("iso_code", "day", "fitted_values_fourier_precip")],
-                            idvar = "iso_code", timevar = "day", direction = "wide")
-     # The clustering input is the daily fitted values, not the weekly means
-     expect_equal(ncol(wide) - 1L, 365L)
-     expect_equal(unname(unlist(wide[wide$iso_code == "BEN", -1])),
-                  fx$daily$fitted_values_fourier_precip[fx$daily$iso_code == "BEN"])
      # est_seasonal_dynamics() (R/est_seasonal_dynamics.R, clustering block):
      # cutree(hclust(dist(<daily wide matrix>), method = clustering_method), k)
-     est <- stats::cutree(stats::hclust(stats::dist(wide[, -1]), method = "ward.D2"), k = 3)
-     plt <- MOSAIC:::.seasonal_cluster(wide[, -1], "ward.D2", k = 3)
-     expect_identical(unname(plt), unname(est))
-     # and the three seasonal shapes are recovered in pairs
+     daily_wide <- stats::reshape(fx$daily[, c("iso_code", "day", "fitted_values_fourier_precip")],
+                                  idvar = "iso_code", timevar = "day", direction = "wide")
+     est <- stats::setNames(stats::cutree(stats::hclust(stats::dist(daily_wide[, -1]), method = "ward.D2"),
+                                          k = 3), daily_wide$iso_code)
+     weekly_wide <- tidyr::spread(res$weekly[, c("iso_code", "week", "fitted_values_fourier_precip")],
+                                  key = "week", value = "fitted_values_fourier_precip")
+     expect_equal(ncol(weekly_wide) - 1L, 52L)
+     plt <- stats::setNames(MOSAIC:::.seasonal_cluster(weekly_wide[, -1], "ward.D2", k = 3),
+                            weekly_wide$iso_code)
+     tab <- table(est[names(plt)], plt)
+     expect_true(all(rowSums(tab > 0) == 1L) && all(colSums(tab > 0) == 1L))
      expect_identical(as.vector(table(plt)), c(2L, 2L, 2L))
-     expect_identical(unname(plt[wide$iso_code == "AGO"]), unname(plt[wide$iso_code == "BDI"]))
+     expect_identical(unname(plt["AGO"]), unname(plt["BDI"]))
 })
 
 test_that("the legacy weekly table is used only when the daily fits are absent", {
@@ -183,8 +183,7 @@ test_that("the legacy weekly table is used only when the daily fits are absent",
 
      old <- MOSAIC:::.seasonal_clustering_fits(list(MODEL_INPUT = mi, DOCS_TABLES = tabs))
      expect_identical(old$source, "weekly_legacy")
-     expect_identical(old$time_col, "week")
-     expect_equal(nrow(old$fits), 104L)
+     expect_equal(nrow(old$weekly), 104L)
      expect_null(old$window)       # the legacy table records no window: no years in the title
      expect_identical(MOSAIC:::.seasonal_label("Fourier series fitted to weekly precipitation",
                                                old$window$precip),
@@ -251,4 +250,42 @@ test_that("plot_seasonal_clustering() renders from the daily fits with the fit-w
      labs_old <- plot_text_labels(res_old$plot)
      expect_true(any(grepl("weekly\\s+precipitation$", labs_old)))
      expect_true(any(grepl("cholera cases\\s+\\(2012\\)", labs)))
+})
+
+test_that("dbscan keeps its weekly-scale eps: clusters are found on the weekly means", {
+     # dbscan's eps = 1 is a distance on the weekly scale. Daily vectors are about
+     # sqrt(7) times further apart, so clustering the 365-day matrix would leave
+     # every country as noise (this happens on the shipped fits). Here countries
+     # in a group are 5 days apart in phase: ~0.88 apart as weekly means, ~2.3 as
+     # daily vectors.
+     skip_if_not(isTRUE(capabilities("png")), "no png device")
+     local_null_device()
+     mi <- withr::local_tempdir()
+     shp <- withr::local_tempdir()
+     fig <- withr::local_tempdir()
+     isos <- MOSAIC::iso_codes_mosaic[1:12]
+     days <- 1:365
+     daily <- do.call(rbind, lapply(seq_along(isos), function(i) {
+          group <- (i - 1L) %/% 4L
+          shift <- 5 * ((i - 1L) %% 4L)
+          f <- 2 * sin(2 * pi * (days + shift) / 365 + group * 2 * pi / 3)
+          data.frame(day = days, iso_code = isos[i], Country = MOSAIC::convert_iso_to_country(isos[i]),
+                     fitted_values_fourier_precip = f, fitted_values_fourier_cases = f,
+                     inferred_from_neighbor = NA_character_, stringsAsFactors = FALSE)
+     }))
+     utils::write.csv(daily, file.path(mi, "pred_seasonal_dynamics_day.csv"), row.names = FALSE)
+     .write_square_shapefile(file.path(shp, "AFRICA_ADM0.shp"), isos)
+
+     res <- suppressMessages(plot_seasonal_clustering(
+          list(MODEL_INPUT = mi, DATA_SHAPEFILES = shp, DOCS_FIGURES = fig),
+          clustering_method = "dbscan", k = 3))
+     expect_true(file.exists(file.path(fig, "seasonal_precip_dbscan_cluster.png")))
+     cl <- as.character(res$clusters[isos])
+     expect_false(any(cl == "0"))                         # no country left as noise
+     expect_identical(as.vector(table(cl)), c(4L, 4L, 4L))
+     expect_identical(length(unique(cl[1:4])), 1L)
+     # the same rule on the daily matrix would mark every country as noise
+     daily_wide <- stats::reshape(daily[, c("iso_code", "day", "fitted_values_fourier_precip")],
+                                  idvar = "iso_code", timevar = "day", direction = "wide")
+     expect_true(all(as.character(MOSAIC:::.seasonal_cluster(daily_wide[, -1], "dbscan", 3)) == "0"))
 })

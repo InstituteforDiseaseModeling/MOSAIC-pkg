@@ -39,13 +39,15 @@ This function visualizes the clustering of countries based on seasonal precipita
 }
 \details{
 The input is the daily Fourier fits that \code{\link{est_seasonal_dynamics}} writes to
-\code{MODEL_INPUT/pred_seasonal_dynamics_day.csv}. Countries are clustered on those daily
-fitted values, the same matrix \code{est_seasonal_dynamics()} clusters for its neighbour
-inference, so \code{clustering_method = "ward.D2"} with the estimator's \code{k} (4 in the
-standard workflow) maps the clusters it used. Panel B draws weekly means of the daily fits
-(week \emph{w} is the mean of days 7(\emph{w} - 1) + 1 to 7\emph{w}). When the daily fits are
-absent, the weekly table that earlier versions wrote to \code{DOCS_TABLES/pred_seasonal_dynamics.csv}
-is clustered and drawn instead. The years in the panel title are the calendar years of the
-fit window, read from the \code{data_seasonal_precipitation.csv} written next to the daily
-fits; the legacy table does not record its window, so its title carries no years.
+\code{MODEL_INPUT/pred_seasonal_dynamics_day.csv}, averaged to weeks (week \emph{w} is the
+mean of days 7(\emph{w} - 1) + 1 to 7\emph{w}); countries are clustered on, and panel B draws,
+those weekly means. \code{est_seasonal_dynamics()} clusters the daily fits themselves; for
+these two-harmonic curves a 7-day mean scales each harmonic by a near-constant factor (0.9994
+and 0.9976), so \code{clustering_method = "ward.D2"} with the estimator's \code{k} (4 in the
+standard workflow) maps the clusters it used for its neighbour inference. When the daily fits
+are absent, the weekly table that earlier versions wrote to
+\code{DOCS_TABLES/pred_seasonal_dynamics.csv} is used instead. The years in the panel title are
+the calendar years of the fit window, read from the \code{data_seasonal_precipitation.csv}
+written next to the daily fits; the legacy table does not record its window, so its title
+carries no years.
 }

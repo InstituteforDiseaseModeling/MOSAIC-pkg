@@ -32,28 +32,28 @@
        cases  = .seasonal_label("Cholera Cases", dates[!is.na(precip_data$cases_scaled)]))
 }
 
-# Seasonal fits for plot_seasonal_clustering().
+# Weekly seasonal fits for plot_seasonal_clustering().
 #
 # Prefers the daily fits est_seasonal_dynamics() writes
-# (MODEL_INPUT/pred_seasonal_dynamics_day.csv). Falls back to the weekly table
-# that versions before the daily refactor wrote to
-# DOCS_TABLES/pred_seasonal_dynamics.csv; nothing produces that file any more,
-# so it is read only when the daily fits are absent.
+# (MODEL_INPUT/pred_seasonal_dynamics_day.csv), averaged over 7-day blocks:
+# week w is the mean of days 7(w - 1) + 1 to 7w, so day 365 is dropped. The
+# fits are two-harmonic Fourier series, and a 7-day block mean scales each
+# harmonic by a near-constant factor (0.9994 and 0.9976), so the weekly means
+# keep the geometry est_seasonal_dynamics() clusters on (its daily fits) while
+# staying on the weekly scale the clustering options were tuned for (dbscan's
+# fixed eps = 1). Falls back to the weekly table that versions before the daily
+# refactor wrote to DOCS_TABLES/pred_seasonal_dynamics.csv; nothing produces it
+# any more, so it is read only when the daily fits are absent.
 #
 # Returns a list:
-#   fits      data frame the clustering is run on, one row per country and time
-#             step in column `time_col`. For the daily source these are the
-#             daily fitted values themselves, the matrix est_seasonal_dynamics()
-#             clusters for its neighbour inference.
-#   time_col  "day" (daily source) or "week" (legacy table).
-#   weekly    data frame drawn in the per-cluster panel, one row per
-#             country-week (week 1-52). From the daily fits, week w is the mean
-#             of days 7(w - 1) + 1 to 7w, so day 365 is not drawn.
-#   source    "daily" or "weekly_legacy"; path: the file read.
-#   window    list(precip, cases) of the dates with a scaled value in the
-#             data_seasonal_precipitation.csv written next to the daily fits
-#             (the fit window), or NULL for the legacy table, whose window is
-#             not recorded.
+#   weekly  data frame, one row per country-week (week 1-52): week, iso_code,
+#           fitted_values_fourier_precip, fitted_values_fourier_cases,
+#           Country, inferred_from_neighbor.
+#   source  "daily" or "weekly_legacy"; path: the file read.
+#   window  list(precip, cases) of the dates with a scaled value in the
+#           data_seasonal_precipitation.csv written next to the daily fits
+#           (the fit window), or NULL for the legacy table, whose window is
+#           not recorded.
 .seasonal_clustering_fits <- function(PATHS) {
 
      fit_cols <- c("fitted_values_fourier_precip", "fitted_values_fourier_cases")
@@ -89,14 +89,12 @@
                               cases = as.Date(w$date[!is.na(w$cases_scaled)]))
           }
 
-          return(list(fits = daily, time_col = "day", weekly = weekly,
-                      source = "daily", path = daily_path, window = window))
+          return(list(weekly = weekly, source = "daily", path = daily_path, window = window))
      }
 
      if (length(legacy_path) && file.exists(legacy_path)) {
           weekly <- utils::read.csv(legacy_path, stringsAsFactors = FALSE)
-          return(list(fits = weekly, time_col = "week", weekly = weekly,
-                      source = "weekly_legacy", path = legacy_path, window = NULL))
+          return(list(weekly = weekly, source = "weekly_legacy", path = legacy_path, window = NULL))
      }
 
      stop("plot_seasonal_clustering: no seasonal fits found. Looked for ",

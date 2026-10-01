@@ -16,15 +16,17 @@
 #'
 #' @details
 #' The input is the daily Fourier fits that \code{\link{est_seasonal_dynamics}} writes to
-#' \code{MODEL_INPUT/pred_seasonal_dynamics_day.csv}. Countries are clustered on those daily
-#' fitted values, the same matrix \code{est_seasonal_dynamics()} clusters for its neighbour
-#' inference, so \code{clustering_method = "ward.D2"} with the estimator's \code{k} (4 in the
-#' standard workflow) maps the clusters it used. Panel B draws weekly means of the daily fits
-#' (week \emph{w} is the mean of days 7(\emph{w} - 1) + 1 to 7\emph{w}). When the daily fits are
-#' absent, the weekly table that earlier versions wrote to \code{DOCS_TABLES/pred_seasonal_dynamics.csv}
-#' is clustered and drawn instead. The years in the panel title are the calendar years of the
-#' fit window, read from the \code{data_seasonal_precipitation.csv} written next to the daily
-#' fits; the legacy table does not record its window, so its title carries no years.
+#' \code{MODEL_INPUT/pred_seasonal_dynamics_day.csv}, averaged to weeks (week \emph{w} is the
+#' mean of days 7(\emph{w} - 1) + 1 to 7\emph{w}); countries are clustered on, and panel B draws,
+#' those weekly means. \code{est_seasonal_dynamics()} clusters the daily fits themselves; for
+#' these two-harmonic curves a 7-day mean scales each harmonic by a near-constant factor (0.9994
+#' and 0.9976), so \code{clustering_method = "ward.D2"} with the estimator's \code{k} (4 in the
+#' standard workflow) maps the clusters it used for its neighbour inference. When the daily fits
+#' are absent, the weekly table that earlier versions wrote to
+#' \code{DOCS_TABLES/pred_seasonal_dynamics.csv} is used instead. The years in the panel title are
+#' the calendar years of the fit window, read from the \code{data_seasonal_precipitation.csv}
+#' written next to the daily fits; the legacy table does not record its window, so its title
+#' carries no years.
 #'
 #' @return Invisibly, a list with the combined plot (\code{plot}), the cluster of each
 #'   clustered country named by ISO code (\code{clusters}) and the seasonal-fits file read
@@ -50,13 +52,12 @@ plot_seasonal_clustering <- function(PATHS,
 
      clustering_method <- match.arg(clustering_method)
 
-     # Load required data: the est_seasonal_dynamics() daily fits (clustered as
-     # the estimator clusters them, drawn as weekly means), or the legacy weekly table
+     # Load required data: weekly means of the est_seasonal_dynamics() daily fits,
+     # or the legacy weekly table when the daily fits are absent
      seasonal_fits <- .seasonal_clustering_fits(PATHS)
      message("plot_seasonal_clustering: clustering the ", seasonal_fits$source,
              " seasonal fits in ", seasonal_fits$path)
      combined_fitted_values <- seasonal_fits$weekly
-     time_col <- seasonal_fits$time_col
      africa <- sf::st_read(dsn = file.path(PATHS$DATA_SHAPEFILES, "AFRICA_ADM0.shp"), quiet = TRUE)
 
      # Determine whether to use cases or precipitation for clustering
@@ -72,10 +73,10 @@ plot_seasonal_clustering <- function(PATHS,
      }
 
      # Prepare data for clustering
-     precip_fitted_df <- seasonal_fits$fits %>%
+     precip_fitted_df <- combined_fitted_values %>%
           dplyr::filter(!is.na(!!sym(fitted_column))) %>%
-          dplyr::select(iso_code, !!sym(time_col), !!sym(fitted_column)) %>%
-          tidyr::spread(key = !!sym(time_col), value = !!sym(fitted_column))  # Reshape to one row per country, time steps as columns
+          dplyr::select(iso_code, week, !!sym(fitted_column)) %>%
+          tidyr::spread(key = week, value = !!sym(fitted_column))  # Reshape to have one row per country, weeks as columns
 
      # Remove rows with NA values
      precip_fitted_df <- na.omit(precip_fitted_df)
