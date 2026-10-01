@@ -92,7 +92,7 @@ in a week no direct source (WHO/JHU/SUPP) reports a case count for, is an
 aggregate mislabelled as one week, and is dropped, when it is at least
 five times every direct-source count in the four weeks either side (two
 or more of them) -- Nigeria 2023 week 21 carries 1,851 cases, the
-year-to-date total of the WHO weeks before it -- or when it is within 15\\%
+year-to-date total of the WHO weeks before it -- or when it is within 15\%
 of a WHO weekly cumulative of its year (the year-to-date total before it,
 or the year's total) with a WHO week reporting cases within four weeks of
 it: Congo 2023 week 29 carries 63 cases, the running total of the outbreak

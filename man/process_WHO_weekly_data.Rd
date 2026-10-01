@@ -60,17 +60,17 @@ report is at least twice the largest of the next four reported weeks, or the
 next two reported weeks both have 0 cases (a batch report between silent
 weeks; a single following zero is not enough, because during an active
 outbreak it is usually a missed week of a continuing series);
-\item a fall of the first kind only (the report towers over the reports that
-follow it, which are not two zeros) follows at most four reported zeros --
-the four-week horizon the fall is tested over -- unless at least two of the
-next four reported weeks are zero. More than a month of reported zeros
-before a large report is as consistent with true zeros as with missing
-reports, and an explosive outbreak onset can halve within a week (a
-point-source outbreak: 120, 50, 30, 20 after twelve reported zeros is an
-onset, not a catch-up). A series that keeps alternating between reports and
-zeros after the report is reporting in batches (Nigeria 2023 weeks 35-43,
-Tanzania 2023 weeks 19-28), so there the window still reaches back to the
-previous non-zero report.
+\item when the fall is only of the first kind (the next two reported weeks
+are not both zero), at most four reported zeros precede the report -- the
+four weeks the fall is tested over -- unless at least two of the next four
+reported weeks are zero. More than a month of reported zeros before a
+large report is as consistent with true zeros as with missing reports, and
+an explosive outbreak onset can halve within a week (a point-source
+outbreak: 120, 50, 30, 20 after twelve reported zeros is an onset, not a
+catch-up). A series that keeps alternating between reports and zeros after
+the report is reporting in batches (Nigeria 2023 weeks 35-43, Tanzania 2023
+weeks 19-28), so there the window still reaches back to the previous
+non-zero report.
 }
 The report then covers week \eqn{t} and the silent weeks immediately before it,
 back to the previous non-zero report, never before week 1 of its epi year (the

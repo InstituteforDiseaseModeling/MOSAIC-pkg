@@ -38,7 +38,7 @@
 #'       aggregate mislabelled as one week, and is dropped, when it is at least
 #'       five times every direct-source count in the four weeks either side (two
 #'       or more of them) -- Nigeria 2023 week 21 carries 1,851 cases, the
-#'       year-to-date total of the WHO weeks before it -- or when it is within 15\%
+#'       year-to-date total of the WHO weeks before it -- or when it is within 15%
 #'       of a WHO weekly cumulative of its year (the year-to-date total before it,
 #'       or the year's total) with a WHO week reporting cases within four weeks of
 #'       it: Congo 2023 week 29 carries 63 cases, the running total of the outbreak
@@ -639,7 +639,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
 #' Flag AI weekly counts that repeat a WHO cumulative total
 #'
 #' An AI \code{observed} row of at least 20 cases, in a week no direct source
-#' reports a case count for, is flagged when it is within 15\% of a WHO weekly
+#' reports a case count for, is flagged when it is within 15% of a WHO weekly
 #' cumulative of the same year: the year-to-date total of the WHO weeks before it
 #' (what a cumulative report filed that week would show) or the total of all the
 #' year's WHO weeks (an outbreak total), and a WHO week of that year reports
