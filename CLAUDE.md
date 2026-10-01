@@ -143,9 +143,9 @@ The `run_MOSAIC()` workflow is the **centerpiece** of the package — it orchest
 
 **Post-calibration:**
 - Medoid model identified, config saved to `2_calibration/best_model/config_medoid.json` (no `config_best.json` is produced)
-- `calc_model_ensemble()` computes posterior-weighted predictions (weighted median/mean across parameter sets × stochastic reruns)
-- R² and bias ratio computed from the weighted mean (`control$predictions$central_method`; median before v0.98.0) vs observed data
-- `plot_model_ensemble()` generates prediction plots (only when `plots=TRUE`)
+- `calc_model_ensemble()` computes posterior-weighted predictions (weighted median/mean across parameter sets × stochastic reruns). Since v0.101.0 its intervals (`ci_bounds`, `predictive_median`, `cases_array`/`deaths_array`) are observation-level posterior predictive draws (weekly NB at the scored cases k; deaths at the integrated likelihood's phi); the central lines and every member-trajectory consumer stay engine-level (`cases_engine_array`/`deaths_engine_array`, read via `.mosaic_engine_array()`)
+- R² and bias ratio computed from the per-channel central line (`control$predictions$central_method`, default cases = weighted median, deaths = weighted mean; both mean v0.98.0-v0.100.x, both median before) vs observed data, on the scored window
+- `plot_model_ensemble()` generates prediction plots (only when `plots=TRUE`): engine-level central line, observation-level ribbons, burn-in drawn and shaded with a "scored from" marker (`show_burn_in`); the prediction CSVs keep the unscored head `NA`
 
 **Output structure:**
 ```
@@ -167,7 +167,7 @@ Sys.setenv(OMP_NUM_THREADS="1", MKL_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
 
 `calc_model_likelihood()` computes a multi-component log-likelihood:
 
-**Core:** cases — Negative Binomial on daily cells (per-location weekly dispersion from `est_nb_dispersion()`, eps-floored mean). Deaths (v0.96.0+) — the reported CFR `mu_jt` is integrated out per simulated path (`calc_log_likelihood_deaths_integrated()`): weekly quasi-Poisson with a per-location dispersion and a small background, Laplace over a location offset + smooth year deviations. Ensemble deaths are redrawn from that CFR posterior (`cfr_posterior.csv`).
+**Core:** cases (v0.101.0+) — Negative Binomial on reporting-week totals: observed and simulated daily cases are summed over Monday-Sunday reporting weeks (`.mosaic_week_blocks()`; partial edge weeks dropped) and each week is one cell at the per-location weekly k (eps-floored mean). k comes from `est_nb_dispersion()` on the scored window, from observed weeks only when the config carries `reported_tier` (1 observed, 2 reconstructed, 3 imputed); a location whose fit collapses or has too few observed weeks takes the cross-country panel trend `.NB_DISP_PANEL_TREND` (re-derived at every `config_default` rebuild). `control$likelihood$cases_scoring = "daily"` is the legacy per-day rule. Deaths (v0.96.0+) — the reported CFR `mu_jt` is integrated out per simulated path (`calc_log_likelihood_deaths_integrated()`): weekly quasi-Poisson with a per-location dispersion phi (estimated from deaths against observed cases; observed weeks only under `reported_tier`) and a small background, Laplace over a location offset + smooth year deviations. Ensemble deaths are redrawn from that CFR posterior (`cfr_posterior.csv`); the observation-level deaths draws use the same phi.
 
 **Shape terms (each scaled by N_obs / its own point count, weight > 0 enables):**
 - Peak timing (Normal LL on time differences)
@@ -177,7 +177,7 @@ Sys.setenv(OMP_NUM_THREADS="1", MKL_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
 
 **Assembly (per location j, then weighted by `weights_location`):** `LL_j = w_c*NB_cases + w_d*deaths_core + (N_obs/N_peaks_j)*[w_pt*peak_time + w_pm*peak_mag] + (N_obs/N_cum)*w_cum*cumulative + (N_obs/N_quantiles)*w_wis*WIS`, where N_obs counts time steps with any finite observation and every shape term is split `w_c*cases + w_d*deaths` (the level-dependent deaths shape terms are dropped when the CFR is integrated out; deaths peak timing stays)
 
-All shape term weights default to 0 (OFF). A non-finite per-location LL becomes -Inf; a location (or input) with no scorable data returns NA_real_, not a constant score.
+All shape term weights default to 0 (OFF). Under the weekly cases core the shape terms keep their daily definitions (N_obs counts daily steps), so a given shape weight weighs roughly 5-7x more against the cases core than it did with daily cells. A non-finite per-location LL becomes -Inf; a location (or input) with no scorable data returns NA_real_, not a constant score.
 
 ## Python Integration
 
