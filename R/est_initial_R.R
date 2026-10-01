@@ -14,6 +14,7 @@
 #' @param verbose Logical, whether to print progress messages (default TRUE)
 #' @param parallel Logical, whether to use parallel processing for locations when length(location_codes) >= 8 (default FALSE).
 #'   Uses parallel::mclapply() with all available cores. Note: Not supported on Windows.
+#' @param seed Optional integer seed. When given, each location's Monte Carlo draws use a seed derived from `seed` and the ISO code, so results are reproducible and identical with or without `parallel`; the caller's RNG state is restored. NULL (default) draws from the session RNG.
 #' @param variance_inflation Multiplier on the SD of the Monte Carlo R/N samples in the method-of-moments Beta refit, which keeps the sample mean (default 1 = no change; 0 is also treated as no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.
 #'
 #' @return List with structure matching priors_default for prop_R_initial parameters
@@ -51,8 +52,10 @@ est_initial_R <- function(
           disaggregate = TRUE,
           verbose = TRUE,
           parallel = FALSE,
-          variance_inflation = 1
+          variance_inflation = 1,
+          seed = NULL
 ) {
+     .mosaic_check_seed(seed)
      # Set default t0 if not provided
      if (is.null(t0)) {
           t0 <- Sys.Date()
@@ -229,6 +232,7 @@ est_initial_R <- function(
           R_samples <- numeric(n_samples)
 
           # Monte Carlo loop with full uncertainty propagation
+          .mosaic_maybe_local_seed(if (is.null(seed)) NULL else .mosaic_derive_seed(seed, loc),
           for (i in 1:n_samples) {
                # Sample epidemiological parameters
                epsilon_i <- sample_from_prior(n = 1, prior = priors$parameters_global$epsilon, verbose = verbose)
@@ -301,7 +305,7 @@ est_initial_R <- function(
                     gamma_1 = gamma_1_i,
                     gamma_2 = gamma_2_i
                )
-          }
+          })
 
           # Remove any NA or invalid samples
           valid_samples <- R_samples[!is.na(R_samples) & R_samples >= 0 & R_samples <= population_t0]

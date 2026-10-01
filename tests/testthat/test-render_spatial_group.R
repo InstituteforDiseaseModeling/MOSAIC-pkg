@@ -61,6 +61,36 @@ test_that("spatial group renders all six figures from config + artifacts (P5)", 
   }
 })
 
+# plot_spatial_hazard(), plot_diffusion_pi(), plot_departure_tau() and
+# plot_mobility_flux_matrix() print(), and plot_mobility_flux_network() calls
+# grid.arrange(). With no device open that opened the default one, leaving
+# Rplots.pdf in the caller's working directory (seen on dugong after run_MOSAIC).
+test_that("rendering opens no default graphics device and leaves no Rplots.pdf", {
+  skip_if_not_installed("ggplot2")
+  dir_output <- .make_min_run_dir(with_spatial = TRUE)
+  on.exit(unlink(dir_output, recursive = TRUE), add = TRUE)
+
+  # A device left open by an earlier test would absorb the draws and hide the
+  # bug, so start from none.
+  grDevices::graphics.off()
+  wd <- withr::local_tempdir()
+  withr::local_dir(wd)
+  opened <- 0L
+  withr::local_options(device = function(...) {
+    opened <<- opened + 1L
+    grDevices::pdf(NULL)
+  })
+
+  suppressWarnings(
+    render_MOSAIC_figures(dir_output, which = "spatial", verbose = FALSE))
+
+  expect_identical(opened, 0L)
+  expect_false(file.exists(file.path(wd, "Rplots.pdf")))
+  expect_null(grDevices::dev.list())   # the null device is closed again
+  expect_true(file.exists(file.path(dir_output, "3_results", "figures",
+                                    "spatial", "spatial_hazard.png")))
+})
+
 test_that("spatial group is pure read-render: never trips a simulation path (P5)", {
   skip_if_not_installed("ggplot2")
   skip_if(packageVersion("testthat") < "3.0.0")

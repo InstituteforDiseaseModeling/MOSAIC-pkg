@@ -13,6 +13,7 @@
 #' @param t0 Date object, target date for estimation (default NULL, used for metadata)
 #' @param variance_inflation Multiplier on the SD of the S samples in the method-of-moments Beta refit, which keeps the sample mean (default 0 = no change; 1 is also no change). A scalar or a named per-ISO vector; the variance scales with its square (2 gives 4x) and values in (0, 1) tighten the prior.
 #' @param verbose Logical, whether to print progress messages (default TRUE)
+#' @param seed Optional integer seed. When given, each location's Monte Carlo draws use a seed derived from `seed` and the ISO code, so results are reproducible; the caller's RNG state is restored. NULL (default) draws from the session RNG.
 #' @param min_S_proportion Numeric, minimum allowed S proportion to prevent negative values (default 0.01 = 1%)
 #'
 #' @return List with priors_default-compatible structure containing:
@@ -92,9 +93,10 @@
 
 est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
                          t0 = NULL, variance_inflation = 0, verbose = TRUE,
-                         min_S_proportion = 0.01) {
+                         min_S_proportion = 0.01, seed = NULL) {
 
     # Input validation
+    .mosaic_check_seed(seed)
     if (!is.list(PATHS)) {
         stop("PATHS must be a list from get_paths()")
     }
@@ -278,6 +280,7 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
         S_samples <- numeric(n_samples)
         constraint_violations <- 0
 
+        .mosaic_maybe_local_seed(if (is.null(seed)) NULL else .mosaic_derive_seed(seed, loc),
         for (j in 1:n_samples) {
             # Sample from each compartment using unified sample_from_prior
             V1_j <- sample_from_prior(n = 1, prior = V1_prior, verbose = FALSE)
@@ -310,7 +313,7 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
 
             # Ensure S is within bounds
             S_samples[j] <- max(min_S_proportion, min(0.99, S_samples[j]))
-        }
+        })
 
         # Fit Beta distribution to S samples
         # Get location-specific variance inflation
