@@ -1159,23 +1159,30 @@ run_MOSAIC <- function(config,
             control$likelihood$.score_window_resolved$n_time)
   }
 
-  # A location with no finite observation in either channel inside the scored
-  # window scores NA for every draw. When that holds for every location, there
-  # is nothing to weight, so stop here instead of running a calibration whose
-  # every likelihood is NA.
+  # A location with nothing scorable in either channel inside the scored window
+  # scores NA for every draw. When that holds for every location, there is
+  # nothing to weight, so stop here instead of running a calibration whose every
+  # likelihood is NA. The cases gate mirrors calc_model_likelihood(): the weekly
+  # core needs three complete reporting weeks; per-day cells (cases_scoring =
+  # "daily") or an active shape term keep the any-finite-observation gate.
+  .weekly_gate <- .mosaic_weekly_cases_gate(control$likelihood)
   .unscorable <- .mosaic_unscorable_locations(
     config$reported_cases, config$reported_deaths,
     control$likelihood$.score_window_resolved$idx_cases,
-    control$likelihood$.score_window_resolved$idx_deaths)
+    control$likelihood$.score_window_resolved$idx_deaths,
+    weekly_cases = .weekly_gate)
+  .scorable_rule <- if (.weekly_gate) {
+    "three complete reporting weeks of reported_cases or a finite reported_deaths observation"
+  } else "a finite reported_cases or reported_deaths observation"
   if (all(.unscorable)) {
-    stop("No location has a finite reported_cases or reported_deaths observation in the ",
-         "scored window (", paste(config$location_name, collapse = ", "),
+    stop("No location has ", .scorable_rule, " in the scored window (",
+         paste(config$location_name, collapse = ", "),
          "), so every likelihood would be NA. Check the observation data, date range ",
          "and burn-in / deaths-era settings.", call. = FALSE)
   }
   if (any(.unscorable)) {
-    log_msg("No observations in the scored window for %s: these locations contribute nothing to the likelihood",
-            paste(config$location_name[.unscorable], collapse = ", "))
+    log_msg("Nothing scorable in the scored window for %s (needs %s): these locations contribute nothing to the likelihood",
+            paste(config$location_name[.unscorable], collapse = ", "), .scorable_rule)
   }
 
   # Estimate the per-location NB dispersion ONCE per calibration. k is a property
@@ -1204,10 +1211,14 @@ run_MOSAIC <- function(config,
           if (identical(control$likelihood$cases_scoring, "daily"))
             "one NB cell per day at the weekly k (legacy)" else "NB on reporting-week totals at the weekly k",
           if (is.null(control$likelihood$cases_scoring)) "weekly" else control$likelihood$cases_scoring,
-          if (isTRUE(.nb_disp$tier_used)) {
+          if (identical(.nb_disp$cases$summary, "user-supplied")) {
+            "the user-supplied nb_k_cases"
+          } else if (isTRUE(.nb_disp$tier_used)) {
             sprintf("observed weeks only (%d reconstructed/imputed weeks excluded)",
                     sum(.nb_disp$table$n_weeks_excluded[.nb_disp$table$channel == "cases"], na.rm = TRUE))
-          } else "every week (config carries no reported_tier)")
+          } else if (is.null(config$reported_tier)) {
+            "every week (config carries no reported_tier)"
+          } else "every week (reported_tier was not applied; see the warning above)")
   # Bound-bind rate is a standing fit diagnostic: in a well-specified fit the
   # bounds should rarely bind. The retired k_min floor bound in 27 of 28
   # estimable locations, which was the defect rather than a setting.
@@ -3493,10 +3504,21 @@ run_mosaic <- run_MOSAIC
 #'   \itemize{
 #'     \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 #'     \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
-#'     \item \code{weight_wis}: WIS regularizer weight (default: 0, try 0.10)
+#'     \item \code{weight_wis}: WIS regularizer weight (default: 0, off). The 0.10
+#'       suggested before v0.101.0 was tuned against the daily cases core; against
+#'       the weekly core a given weight weighs roughly 5-7 times more (more where
+#'       the cases dispersion is small), so about 0.02 keeps the old balance. Not
+#'       re-tuned since; check the fit before relying on it
 #'     \item \code{cases_scoring}: \code{"weekly"} (default; cases scored as NB on
-#'       reporting-week totals) or \code{"daily"} (legacy per-day cells of v0.100.1
-#'       and earlier, kept to reproduce those runs)
+#'       reporting-week totals) or \code{"daily"} (the per-day cells of v0.100.1
+#'       and earlier, at the dispersion this version estimates). \code{"daily"}
+#'       does not reproduce a v0.100.1 run: a cases fit with no estimate of its own
+#'       now takes the panel trend, a config with \code{reported_tier} restricts
+#'       the cases k and the deaths dispersion to observed weeks, the ensemble
+#'       intervals are observation-level and the cases central line is the median.
+#'       Matching a v0.100.1 likelihood also needs that run's \code{nb_k_cases}
+#'       (its \code{nb_dispersion.csv}) and a config without \code{reported_tier};
+#'       resume refuses to pool with v0.100.1 simulations either way
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list)
 #'   }
 #'
@@ -3660,7 +3682,7 @@ run_mosaic <- run_MOSAIC
 #' # Enable WIS regularizer and peak timing
 #' ctrl <- mosaic_control_defaults(
 #'   likelihood = list(
-#'     weight_wis = 0.10,
+#'     weight_wis = 0.02,
 #'     weight_peak_timing = 0.25
 #'   )
 #' )
@@ -3674,7 +3696,7 @@ run_mosaic <- run_MOSAIC
 #' ctrl <- mosaic_control_defaults(
 #'   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
 #'   sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
-#'   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
+#'   likelihood = list(weight_wis = 0.02, weight_cases = 1.0),        # How to score
 #'   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
 #'   io = mosaic_io_presets("default"),                               # Output format
@@ -3744,8 +3766,11 @@ mosaic_control_defaults <- function(calibration = NULL,
     # cases, on the weeks est_nb_dispersion() estimates k from. The surveillance
     # is weekly totals spread over days; scoring each day at the weekly k counted
     # a week's level information ~5x (median over the v0.100.1 national runs) and
-    # ranked draws by within-week noise. "daily" is the LEGACY per-day rule of
-    # v0.100.1 and earlier, kept only to reproduce those runs.
+    # ranked draws by within-week noise. "daily" is the per-day cell rule of
+    # v0.100.1 and earlier at the dispersion this version estimates; it does NOT
+    # reproduce a v0.100.1 run (panel-trend k for collapsed fits, observed-week k
+    # and deaths phi under reported_tier, observation-level intervals; matching a
+    # v0.100.1 likelihood also needs that run's nb_k_cases and no reported_tier).
     cases_scoring = "weekly",
 
     # === Peak controls ===

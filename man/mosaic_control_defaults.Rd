@@ -47,10 +47,21 @@ mosaic_control_defaults(
 \itemize{
 \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
-\item \code{weight_wis}: WIS regularizer weight (default: 0, try 0.10)
+\item \code{weight_wis}: WIS regularizer weight (default: 0, off). The 0.10
+suggested before v0.101.0 was tuned against the daily cases core; against
+the weekly core a given weight weighs roughly 5-7 times more (more where
+the cases dispersion is small), so about 0.02 keeps the old balance. Not
+re-tuned since; check the fit before relying on it
 \item \code{cases_scoring}: \code{"weekly"} (default; cases scored as NB on
-reporting-week totals) or \code{"daily"} (legacy per-day cells of v0.100.1
-and earlier, kept to reproduce those runs)
+reporting-week totals) or \code{"daily"} (the per-day cells of v0.100.1
+and earlier, at the dispersion this version estimates). \code{"daily"}
+does not reproduce a v0.100.1 run: a cases fit with no estimate of its own
+now takes the panel trend, a config with \code{reported_tier} restricts
+the cases k and the deaths dispersion to observed weeks, the ensemble
+intervals are observation-level and the cases central line is the median.
+Matching a v0.100.1 likelihood also needs that run's \code{nb_k_cases}
+(its \code{nb_dispersion.csv}) and a config without \code{reported_tier};
+resume refuses to pool with v0.100.1 simulations either way
 \item ... (see \code{mosaic_control_defaults()} for complete list)
 }}
 
@@ -231,7 +242,7 @@ ctrl <- mosaic_control_defaults(
 # Enable WIS regularizer and peak timing
 ctrl <- mosaic_control_defaults(
   likelihood = list(
-    weight_wis = 0.10,
+    weight_wis = 0.02,
     weight_peak_timing = 0.25
   )
 )
@@ -245,7 +256,7 @@ ctrl <- mosaic_control_defaults(
 ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
   sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
-  likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
+  likelihood = list(weight_wis = 0.02, weight_cases = 1.0),        # How to score
   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
   io = mosaic_io_presets("default"),                               # Output format

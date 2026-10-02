@@ -385,18 +385,55 @@ test_that("too few observed weeks keep the every-week deaths dispersion, not the
   expect_true(L$phi_observed_insufficient)
   expect_identical(L$phi_weeks_excluded, 0L)
 
-  # Observed weeks inside one calendar year: the year-effect fit needs two, so
-  # they fall back to every week as well, instead of the 1 a one-level year
-  # factor has always given.
+  # Observed weeks inside one calendar year carry the estimate themselves (one
+  # year effect, the intercept): no fallback, and not the Poisson limit.
   one <- x$tier; one[, x$dates >= as.Date("2024-01-01")] <- 2L
-  expect_false(MOSAIC:::.d7_dispersion_estimable(x$D_w[1:52], x$C_w[1:52], x$yr[1:52]))
+  ow <- setdiff(1:52, x$rec)                      # the observed 2023 weeks
+  expect_true(MOSAIC:::.d7_dispersion_estimable(x$D_w[ow], x$C_w[ow], x$yr[ow]))
   sx <- function(tier) MOSAIC:::.d7_setup(x$D, NULL, x$dates, 2023:2024, sd_shift = 0.5,
                                           sd_year = 0.7, phi = NULL, week_offset = 0L,
                                           obs_cases = x$C, obs_tier = tier)$locs[[1]]
   L1 <- sx(one)
-  expect_true(L1$phi_observed_insufficient)
-  expect_identical(L1$phi, sx(NULL)$phi)
-  expect_identical(MOSAIC:::.d7_dispersion(x$D_w[1:52], x$C_w[1:52], x$yr[1:52]), 1)
+  expect_false(L1$phi_observed_insufficient)
+  expect_identical(L1$phi_weeks_excluded, 104L - length(ow))
+  expect_equal(L1$phi, MOSAIC:::.d7_dispersion(x$D_w[ow], x$C_w[ow], x$yr[ow]), tolerance = 1e-10)
+  expect_gt(L1$phi, 1)
+})
+
+test_that("deaths over one calendar year get an intercept-only dispersion, not the Poisson limit", {
+  # glm() cannot code a one-level year factor, so before v0.101.0 a location
+  # whose weeks span one year was scored at phi = 1 (config_default: CAF, NER).
+  # The single year effect is the intercept of D ~ offset(log C), whose Poisson
+  # MLE is sum(D) / sum(C); phi is the Pearson statistic over n - 1.
+  C <- c(100, 150, 80, 200, 60, 120, 160, 90, 140, 70)
+  D <- c(6, 2, 9, 5, 0, 11, 3, 8, 1, 7)
+  pearson <- function(D, C, yr) {
+    r <- tapply(D, yr, sum)[as.character(yr)] / tapply(C, yr, sum)[as.character(yr)]
+    sum((D - C * r)^2 / (C * r)) / (length(D) - length(unique(yr)))
+  }
+  one <- rep(2024L, 10)
+  expect_true(MOSAIC:::.d7_dispersion_estimable(D, C, one))
+  # (glm's IRLS stops about 1e-6 short of the closed form)
+  expect_equal(MOSAIC:::.d7_dispersion(D, C, one), pearson(D, C, one), tolerance = 1e-5)
+  expect_equal(pearson(D, C, one), 4.2397321429, tolerance = 1e-9)
+  # two years: the year-effect fit, unchanged
+  two <- rep(2023:2024, each = 5)
+  expect_equal(MOSAIC:::.d7_dispersion(D, C, two), pearson(D, C, two), tolerance = 1e-5)
+  # still clamped at 1, and still 1 with too few deaths or weeks
+  expect_identical(MOSAIC:::.d7_dispersion(round(C * 0.05), C, one), 1)
+  expect_identical(MOSAIC:::.d7_dispersion(c(5, 4, rep(0, 8)), C, one), 1)
+  expect_false(MOSAIC:::.d7_dispersion_estimable(D[1:3], C[1:3], one[1:3]))
+  # the run's dispersion -- the phi the likelihood scores with and the
+  # observation-level deaths draws use -- is that estimate
+  dates <- as.Date("2024-01-01") + seq_len(70) - 1L
+  cfg <- list(location_name = "AAA", date_start = dates[1], date_stop = dates[70],
+              reported_cases = matrix(rep(C / 7, each = 7), 1L),
+              reported_deaths = matrix(rep(D / 7, each = 7), 1L), mu_jt = 0.03)
+  pri <- list(mu_jt = list(sd_year = 0.7, sd_product = 0.3,
+                           location = list(AAA = list(year = 2024L, logit_mean = qlogis(0.03), logit_se = 0.2))))
+  di <- MOSAIC:::.mosaic_resolve_deaths_integration(cfg, list(likelihood = list()), pri, NULL)
+  expect_equal(di$dispersion, pearson(D, C, one), tolerance = 1e-5)
+  expect_identical(di$dispersion, di$setup$locs[[1]]$phi)
 })
 
 test_that("the run's deaths dispersion comes from the observed weeks and is the phi the likelihood scores with", {

@@ -20,9 +20,11 @@ likelihood scores.}
 \value{
 A list with \code{cases}, \code{deaths} (each \code{k},
 \code{week_offset} -- the reporting-week boundary per location, which the
-weekly cases likelihood uses for its blocks -- plus a \code{summary}
-string), the combined \code{table}, and \code{tier_used} (whether
-\code{config$reported_tier} restricted the fit to observed weeks).
+weekly cases likelihood uses for its blocks -- a \code{summary} string and
+\code{tier_used}, whether \code{config$reported_tier} restricted that
+channel's fit to observed weeks: \code{FALSE} for a user-supplied
+dispersion), the combined \code{table}, and \code{tier_used}, the cases
+channel's (the dispersion the run log reports for the cases likelihood).
 }
 \description{
 Called once by \code{\link{run_MOSAIC}} before the simulation loop. Estimates
@@ -40,8 +42,12 @@ The estimate uses observed weeks only when the config carries
 \code{reported_tier} (\code{\link{est_nb_dispersion}}, argument
 \code{obs_tier}); without it every week enters the fit, as before that field
 existed. A cases location whose fit gives no estimate takes the shipped panel
-trend (\code{.NB_DISP_PANEL_TREND}) at every scale. Deaths take no panel
-trend: \code{run_MOSAIC()} scores deaths with the reported CFR integrated out,
-so their NB dispersion is a diagnostic.
+trend (\code{.NB_DISP_PANEL_TREND}, fitted at \code{burn_in_days = 45}) at
+every scale. Deaths take no panel trend: \code{run_MOSAIC()} scores deaths
+with the reported CFR integrated out, so their NB dispersion is a diagnostic
+(and the dispersion of a standalone deaths NB core). A deaths location whose
+observed weeks alone are too few is estimated from every week
+(\code{.nb_disp_deaths}), the rule the integrated deaths likelihood applies to
+its dispersion.
 }
 \keyword{internal}
