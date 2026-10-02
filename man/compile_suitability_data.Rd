@@ -16,7 +16,7 @@ compile_suitability_data(
   include_flood_prob = TRUE,
   gam_train_stop = NULL,
   target_anchor_stop = NULL,
-  backfill_case_gaps = TRUE,
+  backfill_case_gaps = FALSE,
   backfill_max_weeks = 2L,
   backfill_method = "linear"
 )
@@ -93,9 +93,11 @@ full-data fit (back-compatible).}
 ANCHORS for the response variables -- \code{ti_p99}
 (\code{transmission_intensity}), the global count/rate p99s (targets A, C)
 and the per-country \code{cp99c}/\code{cp99r} and median population
-(targets B, D). When non-\code{NULL}, anchors use only trusted rows with
+(targets B, D). When non-\code{NULL}, the p99 anchors use only trusted
+rows (not AI, not imputed) with \code{date <= target_anchor_stop}, and the
+median population behind the 5-cases/week floor uses the non-AI rows with
 \code{date <= target_anchor_stop}, while every row in the panel still
-RECEIVES a target scored on that anchor.
+RECEIVES a target scored on those anchors.
 
 This is the target-side sibling of \code{gam_train_stop} and closes the
 remaining leak in a per-cutoff panel: because such a panel keeps
@@ -127,17 +129,26 @@ these, but in a per-cutoff panel the pre-cutoff values of those covariates
 depend weakly on the post-cutoff climate distribution, so such a panel is
 leak-free on the target and hazard side only.}
 
-\item{backfill_case_gaps}{Logical (default \code{TRUE}). Linearly interpolate
-short interior gaps in the weekly case series (e.g. holiday non-reporting)
-before the suitability target is built, via
-\code{\link{backfill_weekly_case_gaps}}, so missing weeks inside an active
-outbreak are not stamped as false zeros by the downstream NA->0 sanitiser.
-A filled week is imputed, not observed: it is flagged in
-\code{cases_interpolated}, labelled
-\code{disaggregation_method = "backfill_interpolated"} with
-\code{source} left missing, carries a \code{confidence_weight} of at most
-0.5 (never above the weaker of the two reported weeks it is interpolated
-from), and never defines a target anchor.}
+\item{backfill_case_gaps}{Logical (default \code{FALSE}). When \code{TRUE},
+linearly interpolate short interior gaps in the weekly case series (e.g.
+holiday non-reporting) before the suitability target is built, via
+\code{\link{backfill_weekly_case_gaps}}. Off by default since v0.101.0: the
+lstm_v2 suitability model already leaves unobserved (NA-case) weeks out of
+its training targets, so a filled week only adds an interpolated target; and
+the fill cannot tell a week no source reported from one the surveillance
+reconciliation deliberately emptied (in the v0.101.0 panel, 15 of the 26
+filled weeks were imputed weeks that the WHO annual account or the
+half-case residue rule had removed). The frozen legacy suitability path
+still turns unobserved weeks into zeros (\code{est_suitability()} with the
+v0.33 architecture), the false zeros this fill was written to prevent; set
+\code{TRUE} to rebuild a panel for it. A filled week is imputed, not
+observed: it is flagged in \code{cases_interpolated} (all \code{FALSE}
+when the fill is off), labelled
+\code{disaggregation_method = "backfill_interpolated"} with \code{source}
+and \code{deaths} left missing, carries a \code{confidence_weight} of at
+most 0.5 (never above the weaker of the two reported weeks it is
+interpolated from), and never defines a target anchor. A week some source
+reported, a deaths-only week, is not a gap and is not filled.}
 
 \item{backfill_max_weeks}{Integer (default \code{2L}). Maximum interior gap
 length (in weeks) to interpolate; longer gaps are left for the zero-fill.}

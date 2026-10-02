@@ -74,9 +74,11 @@
 #'   ANCHORS for the response variables -- \code{ti_p99}
 #'   (\code{transmission_intensity}), the global count/rate p99s (targets A, C)
 #'   and the per-country \code{cp99c}/\code{cp99r} and median population
-#'   (targets B, D). When non-\code{NULL}, anchors use only trusted rows with
+#'   (targets B, D). When non-\code{NULL}, the p99 anchors use only trusted
+#'   rows (not AI, not imputed) with \code{date <= target_anchor_stop}, and the
+#'   median population behind the 5-cases/week floor uses the non-AI rows with
 #'   \code{date <= target_anchor_stop}, while every row in the panel still
-#'   RECEIVES a target scored on that anchor.
+#'   RECEIVES a target scored on those anchors.
 #'
 #'   This is the target-side sibling of \code{gam_train_stop} and closes the
 #'   remaining leak in a per-cutoff panel: because such a panel keeps
@@ -141,17 +143,26 @@
 #' \code{\link{get_cases_binary_from_peaks}} for the epidemic peak-based method
 #' \code{\link{est_epidemic_peaks}} for epidemic peak detection
 #'
-#' @param backfill_case_gaps Logical (default \code{TRUE}). Linearly interpolate
-#'   short interior gaps in the weekly case series (e.g. holiday non-reporting)
-#'   before the suitability target is built, via
-#'   \code{\link{backfill_weekly_case_gaps}}, so missing weeks inside an active
-#'   outbreak are not stamped as false zeros by the downstream NA->0 sanitiser.
-#'   A filled week is imputed, not observed: it is flagged in
-#'   \code{cases_interpolated}, labelled
-#'   \code{disaggregation_method = "backfill_interpolated"} with
-#'   \code{source} left missing, carries a \code{confidence_weight} of at most
-#'   0.5 (never above the weaker of the two reported weeks it is interpolated
-#'   from), and never defines a target anchor.
+#' @param backfill_case_gaps Logical (default \code{FALSE}). When \code{TRUE},
+#'   linearly interpolate short interior gaps in the weekly case series (e.g.
+#'   holiday non-reporting) before the suitability target is built, via
+#'   \code{\link{backfill_weekly_case_gaps}}. Off by default since v0.101.0: the
+#'   lstm_v2 suitability model already leaves unobserved (NA-case) weeks out of
+#'   its training targets, so a filled week only adds an interpolated target; and
+#'   the fill cannot tell a week no source reported from one the surveillance
+#'   reconciliation deliberately emptied (in the v0.101.0 panel, 15 of the 26
+#'   filled weeks were imputed weeks that the WHO annual account or the
+#'   half-case residue rule had removed). The frozen legacy suitability path
+#'   still turns unobserved weeks into zeros (\code{est_suitability()} with the
+#'   v0.33 architecture), the false zeros this fill was written to prevent; set
+#'   \code{TRUE} to rebuild a panel for it. A filled week is imputed, not
+#'   observed: it is flagged in \code{cases_interpolated} (all \code{FALSE}
+#'   when the fill is off), labelled
+#'   \code{disaggregation_method = "backfill_interpolated"} with \code{source}
+#'   and \code{deaths} left missing, carries a \code{confidence_weight} of at
+#'   most 0.5 (never above the weaker of the two reported weeks it is
+#'   interpolated from), and never defines a target anchor. A week some source
+#'   reported, a deaths-only week, is not a gap and is not filled.
 #' @param backfill_max_weeks Integer (default \code{2L}). Maximum interior gap
 #'   length (in weeks) to interpolate; longer gaps are left for the zero-fill.
 #' @param backfill_method Interpolation method passed to
@@ -164,7 +175,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                                     include_flood_prob = TRUE,
                                     gam_train_stop = NULL,
                                     target_anchor_stop = NULL,
-                                    backfill_case_gaps = TRUE, backfill_max_weeks = 2L,
+                                    backfill_case_gaps = FALSE, backfill_max_weeks = 2L,
                                     backfill_method = "linear") {
 
      requireNamespace('arrow')
@@ -365,7 +376,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # change, and two of those sites are hard stops that fire immediately --
      # R/est_suitability.R:349 and R/compile_suitability_data.R (the `53 %in% d$week`
      # check near the end of this file), plus the cases side: process_WHO_weekly_data
-     # keeps WHO's own epi-week labels (MMWR calendar, not ISO), so a WHO W53 row
+     # keeps WHO's own epi-week labels (MMWR-numbered, not ISO), so a WHO W53 row
      # (e.g. 2025-W53, dated 2025-12-29) is a real week that does NOT correspond to
      # an ISO W53. Surveillance must be joined on date_start, not (year, week),
      # before this filter can be dropped.
@@ -397,24 +408,26 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      
      message(sprintf("  - Filtered to ENSO data availability: %d observations retained", nrow(d)))
 
-     # ---- Backfill short reporting gaps (e.g. holiday non-reporting) ---------
-     # Genuinely-missing interior weeks bounded by reported weeks (most often the
-     # Christmas/New-Year reporting lapse) are linearly interpolated here -- BEFORE
-     # cases_binary / transmission_intensity are built and before the
-     # est_suitability NA->0 sanitiser -- so a missing holiday week inside an
-     # active outbreak is not stamped as a false zero-incidence week. Gaps longer
-     # than `backfill_max_weeks` (major missing months/years) and the series ends
-     # are left NA for the downstream zero-fill. The canonical surveillance files
-     # are untouched; this only shapes the suitability panel, and a
-     # `cases_interpolated` flag marks the filled weeks. No source reported a
-     # filled week, so it is labelled as imputed (disaggregation_method
-     # "backfill_interpolated", surveillance trust tier 3) with a reduced
-     # confidence_weight: it never defines a target anchor and is down-weighted
-     # in the suitability loss like other imputed weeks.
+     # ---- Optional backfill of short reporting gaps (default off) -------------
+     # With backfill_case_gaps = TRUE, interior weeks with no case count bounded
+     # by reported weeks (most often the Christmas/New-Year reporting lapse) are
+     # linearly interpolated here, BEFORE cases_binary / transmission_intensity
+     # are built, for the frozen legacy suitability path, whose NA->0 sanitiser
+     # would stamp them as zero-incidence weeks. lstm_v2 masks unobserved weeks
+     # instead, and the combined surveillance file leaves NA both where no source
+     # reported and where the reconciliation emptied an imputed week, so the fill
+     # is off by default. A filled week carries no source's count: it is
+     # labelled as imputed (disaggregation_method "backfill_interpolated",
+     # surveillance trust tier 3) with a reduced confidence_weight, never defines
+     # a target anchor, and is down-weighted in the suitability loss like other
+     # imputed weeks. The canonical surveillance files are untouched; the
+     # `cases_interpolated` flag marks the filled weeks (all FALSE when off).
      if (isTRUE(backfill_case_gaps)) {
           d <- backfill_weekly_case_gaps(d, max_interp_weeks = backfill_max_weeks,
                                          method = backfill_method, verbose = TRUE)
           d <- .csd_label_backfill(d)
+     } else {
+          d$cases_interpolated <- FALSE
      }
 
      if ("rain_sum" %in% colnames(d)) d <- d[,-which(colnames(d) == 'rain_sum')]
@@ -476,14 +489,15 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      d$rate[is.na(d$cases) & !bad_pop] <- NA_real_
      # d$rate is now NA iff cases is NA OR population is bad; otherwise the rate.
 
-     # ANCHOR INVARIANCE: every normalization anchor below is computed over TRUSTED
+     # TRUSTED ANCHORS: every p99 anchor below is computed over trusted
      # direct-source rows only (WHO/JHU/SUPP observed or reconstructed weeks),
-     # excluding AI rows and imputed weeks (backfill_interpolated, which no source
-     # reported). This makes the anchors — and therefore the target values for
-     # trusted rows — INVARIANT to whether AI rows are present (include_ai), which
-     # also decides which gaps get backfilled. AI and backfilled rows still receive
-     # target values, scored on the trusted-source scale. `source` is NA for empty
-     # grid cells and backfilled weeks.
+     # excluding AI rows and imputed weeks (backfill_interpolated, which carry no
+     # source's count). The p99 anchors therefore do not depend on the AI rows'
+     # values or on which gaps were backfilled. The 5-cases/week floor does depend
+     # on the AI row set (see pop_rows below), so for the countries whose anchor
+     # is that floor the targets are not invariant to include_ai. AI and
+     # backfilled rows still receive target values, scored on the trusted-source
+     # scale. `source` is NA for empty grid cells and backfilled weeks.
      is_ai <- if ("source" %in% names(d)) (!is.na(d$source) & d$source == "AI") else rep(FALSE, nrow(d))
      is_untrusted <- .csd_untrusted_rows(d)
 
@@ -496,10 +510,13 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # restricted. NULL (default) = full window, bit-identical to before.
      is_anchor <- .csd_anchor_rows(d, is_untrusted, target_anchor_stop)
 
-     # The median population behind the per-country 5-cases/week floor is a
-     # property of the country, not of the observations: it stays the median over
-     # the non-AI rows of the anchor window, so it does not depend on which weeks
-     # were backfilled.
+     # The median population behind the per-country 5-cases/week floor is taken
+     # over the non-AI rows of the anchor window, the row set the floor has always
+     # used (so no floor moved when backfilled weeks left the p99 anchors). It does
+     # not depend on which weeks were backfilled -- a filled week is not an AI
+     # row -- but it does depend on which weeks the AI source supplies: in a build
+     # without AI rows those weeks join the median, which shifts the floor of the
+     # floor-bound countries.
      pop_rows <- !is_ai & .csd_anchor_window(d, target_anchor_stop)
 
      # transmission_intensity + candidate response variables A/B/C/D/F, scaled
@@ -1908,8 +1925,9 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
           trusted_mask <- mask & is_anchor       # trusted rows (not AI, not imputed), within the anchor window
           country_cases <- d$cases[mask]
           country_rate  <- d$rate[mask]
-          # Anchors from trusted rows only (invariant to AI volume). Population is
-          # source-independent; its row set (pop_rows) is chosen for the same invariance.
+          # Anchors from trusted rows only (invariant to the AI rows' values).
+          # The floor's median population is taken over pop_rows (the non-AI rows
+          # of the anchor window in compile_suitability_data()).
           anchor_cases <- d$cases[trusted_mask]
           anchor_rate  <- d$rate[trusted_mask]
           country_pop  <- stats::median(d$total_population[mask & pop_rows], na.rm = TRUE)
@@ -1941,9 +1959,9 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
           # observations receive a rank value like targets A-D. na.last="keep" leaves
           # empty grid cells NA; divide by (n_obs + 1) so the max is < 1 (keeps
           # qlogis() finite for any logit-domain consumer).
-          # NOTE: unlike A-D (which anchor on trusted rows and are therefore invariant
-          # to include_ai), F co-ranks the AI rows, so its values reflect the AI weeks
-          # present in the build.
+          # NOTE: unlike A-D (whose p99 anchors use trusted rows only, so the AI
+          # rows' values never enter them), F co-ranks the AI rows, so its values
+          # reflect the AI weeks present in the build.
           n_obs_iso <- sum(!is.na(country_cases))
           d$target_F_rank_per_country[mask] <-
                rank(country_cases, ties.method = "average", na.last = "keep") /
@@ -2004,11 +2022,14 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
 .BACKFILL_METHOD     <- "backfill_interpolated"
 .BACKFILL_CONFIDENCE <- 0.5
 
-# Label the weeks backfill_weekly_case_gaps() filled (flag_col TRUE). No source
-# reported them: source and deaths stay NA, disaggregation_method becomes
-# "backfill_interpolated" (trust tier 3) and confidence_weight the lower of 0.5
-# and the weights of the two reported weeks the value is interpolated from (a
-# missing weight counts as 1, a direct observation). Other rows are unchanged.
+# Label the weeks backfill_weekly_case_gaps() filled (flag_col TRUE). A week some
+# source reported -- a deaths-only week, with a source or a death count but no
+# case count -- is not a gap: its fill is undone (cases back to NA, flag FALSE).
+# The other filled weeks carry no source's count, so their source and deaths
+# stay NA, disaggregation_method becomes "backfill_interpolated" (trust tier 3)
+# and confidence_weight the lower of 0.5 and the weights of the two reported
+# weeks the value is interpolated from (a missing weight counts as 1, a direct
+# observation). Other rows are unchanged.
 #' @param d Panel after backfill_weekly_case_gaps() (iso_code, date, cases,
 #'   flag_col; confidence_weight and disaggregation_method are added if absent).
 #' @param flag_col Name of the backfill flag column.
@@ -2019,6 +2040,14 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      if (!"disaggregation_method" %in% names(d)) d$disaggregation_method <- NA_character_
      if (!"confidence_weight" %in% names(d)) d$confidence_weight <- NA_real_
      filled <- if (flag_col %in% names(d)) d[[flag_col]] %in% TRUE else rep(FALSE, nrow(d))
+     sourced <- (if ("source" %in% names(d)) !is.na(d$source) else FALSE) |
+          (if ("deaths" %in% names(d)) !is.na(d$deaths) else FALSE)
+     undo <- filled & sourced
+     if (any(undo)) {
+          d$cases[undo]       <- NA
+          d[[flag_col]][undo] <- FALSE
+          filled <- filled & !undo
+     }
      if (!any(filled)) return(d)
      cw <- as.numeric(d$confidence_weight)
      cw[is.na(cw)] <- 1

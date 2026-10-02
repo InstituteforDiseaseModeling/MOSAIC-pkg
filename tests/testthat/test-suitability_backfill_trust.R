@@ -108,3 +108,30 @@ test_that("compile_suitability_data labels the backfilled weeks right after fill
      anchor <- regexpr(".csd_anchor_rows(d, is_untrusted", src, fixed = TRUE)
      expect_true(fill > 0 && fill < label && label < anchor)
 })
+
+test_that("a deaths-only week is not a gap: its fill is undone and its source and deaths kept", {
+     # WHO weeks of 10 and 20 cases around a two-week gap; the first gap week is a
+     # WHO deaths-only week (3 deaths, no case count), the second an empty week
+     d0 <- data.frame(iso_code = "MWI", date = seq(as.Date("2024-01-04"), by = "week", length.out = 4L),
+                      cases = c(10, NA, NA, 20), deaths = c(0, 3, NA, 1),
+                      source = c("WHO", "WHO", NA, "WHO"), confidence_weight = c(1, 1, NA, 1),
+                      disaggregation_method = NA_character_, total_population = 1e7,
+                      stringsAsFactors = FALSE)
+     filled <- backfill_weekly_case_gaps(d0, max_interp_weeks = 2L, verbose = FALSE)
+     expect_equal(which(filled$cases_interpolated), 2:3)              # the generic fill takes both
+     d <- MOSAIC:::.csd_label_backfill(filled)
+     expect_true(is.na(d$cases[2]) && !d$cases_interpolated[2])       # deaths-only week: not filled
+     expect_identical(d[2, c("deaths", "source", "confidence_weight", "disaggregation_method")],
+                      d0[2, c("deaths", "source", "confidence_weight", "disaggregation_method")])
+     expect_true(d$cases_interpolated[3])                             # the empty week is still filled
+     expect_equal(d$disaggregation_method[3], "backfill_interpolated")
+     expect_true(is.na(d$source[3]) && is.na(d$deaths[3]))
+     expect_equal(d$confidence_weight[3], 0.5)
+})
+
+test_that("compile_suitability_data does not backfill by default and keeps the flag column", {
+     fm <- formals(MOSAIC::compile_suitability_data)
+     expect_false(eval(fm$backfill_case_gaps))
+     src <- paste(deparse(MOSAIC::compile_suitability_data), collapse = "\n")
+     expect_true(grepl("d$cases_interpolated <- FALSE", src, fixed = TRUE))
+})
