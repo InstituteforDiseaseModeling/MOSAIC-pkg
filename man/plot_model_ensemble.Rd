@@ -88,17 +88,24 @@ from \code{.mosaic_assemble_prediction_table()}). When supplied, its lines
 are drawn as given, so they match an already-written CSV; with
 \code{show_burn_in = TRUE} its blank unscored head is filled from
 \code{ensemble}'s own central and interval series (if \code{ensemble}
-cannot supply them, a warning is given and the head is left blank). When
-\code{NULL} (default) the table is assembled from \code{ensemble}.}
+cannot supply them, a warning is given and the head is left blank). The
+table's \code{central_method} column, when present, names the line drawn,
+so the caption's central label and its R2, bias and totals follow it per
+channel; an explicitly supplied \code{central_method} that disagrees with
+it draws a warning. When \code{NULL} (default) the table is assembled from
+\code{ensemble}.}
 
 \item{show_burn_in}{Logical. If \code{TRUE} (default), draw the predicted
 central line and interval ribbons from the first time step, shade the
-steps before each channel's scored window (burn-in and cases warm-up) in
-light grey, and mark the scored-window start with a dashed line labelled
+steps before each channel's scoring window (burn-in and cases warm-up) in
+light grey, and mark the scoring-window start with a dashed line labelled
 with its date, e.g. "scored from 2023-02-15" (one label per channel when
-the starts differ). If \code{FALSE}, blank the predictions before the
-scored window, as in the exported CSV. Display only: the caption metrics
-are computed on the scored window either way, and
+the starts differ). The marker is where the caption metrics and the
+calibration's scoring window start; the weekly cases likelihood scores
+the complete reporting weeks inside the window, so its first scored week
+can begin up to six days later. If \code{FALSE}, blank the predictions
+before the scoring window, as in the exported CSV. Display only: the
+caption metrics are computed on the scoring window either way, and
 \code{mask_final_deaths_step} applies either way.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
@@ -117,15 +124,21 @@ Renders time-series plots from a \code{mosaic_ensemble} object produced by
 \code{\link{calc_model_ensemble}}. Shows the central prediction line (by
 default the weighted median for cases and the weighted mean for deaths;
 \code{central_method}) with interval ribbons and observed data points. The
-line is the model's central trajectory, summarising the engine-level member
-trajectories; the ribbons are the ensemble's \code{ci_bounds},
-observation-level posterior predictive intervals when the ensemble was built
-with an observation model (the caption then says so). By default the
+line is the model's central trajectory: the weighted median (or mean) of the
+engine-level member trajectories, before observation noise. The ribbons are
+the ensemble's \code{ci_bounds}, observation-level posterior predictive
+intervals when the ensemble was built with an observation model; the caption
+then says so, and notes that the line can lie above the 50\% band where the
+reporting dispersion is small (a small weekly negative binomial size
+\eqn{k} skews the observation-level predictive toward zero, so its upper
+50\% bound can fall below the engine-level median). By default the
 predictions are drawn from the first time step, and the steps before the
-scored window (burn-in and cases warm-up) are shaded grey, with a dashed line
-at the scored-window start labelled with its date (e.g. "scored from
-2023-02-15"; \code{show_burn_in}). The caption metrics cover the scored
-window only.
+scoring window (burn-in and cases warm-up) are shaded grey, with a dashed
+line at the scoring-window start labelled with its date (e.g. "scored from
+2023-02-15"; \code{show_burn_in}). That is where the caption metrics (R2,
+bias and totals) and the calibration's scoring window start; the weekly
+cases likelihood scores the complete reporting weeks inside that window, so
+its first scored week can begin up to six days after the marker.
 }
 \seealso{
 \code{\link{calc_model_ensemble}} to compute the ensemble.

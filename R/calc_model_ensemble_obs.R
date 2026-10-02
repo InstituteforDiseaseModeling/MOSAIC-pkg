@@ -10,7 +10,9 @@
 # narrow for the observations (on the v0.100.1 national rehearsal, 95% coverage
 # of observed weekly cases had median 0.87, 50% coverage 0.37). The functions
 # here draw, for every member trajectory, an observation consistent with the
-# likelihood's own observation model:
+# likelihood's own observation model (under the default weekly cases scoring;
+# the legacy daily rule keeps the same weekly predictive, see
+# .mosaic_resolve_observation_model()):
 #
 #   cases   weekly totals ~ NB(mu = the member's weekly total, size = k_j), with
 #           k_j the per-location weekly dispersion the calibration scored with
@@ -37,9 +39,21 @@
 #' the vector passed to every \code{calc_model_likelihood()} call) and the
 #' reporting-week offset each location's weekly blocks start on (the
 #' \code{week_offset} of the cases rows of
-#' \code{control$likelihood$.nb_dispersion_table}; a user-supplied
-#' \code{nb_k_cases} carries no offset, so it is detected from the observed cases
-#' over the scored window exactly as \code{est_nb_dispersion()} detects it).
+#' \code{control$likelihood$.nb_dispersion_table}). Inside \code{run_MOSAIC()}
+#' that table always carries the offsets, a user-supplied \code{nb_k_cases}
+#' included (\code{.mosaic_resolve_nb_dispersion()} detects them); for a table
+#' that lacks them, or lacks a location, the offset is detected from the
+#' observed cases over the scored window exactly as \code{est_nb_dispersion()}
+#' detects it.
+#'
+#' The observation model is the same under both cases scoring rules. With the
+#' default \code{cases_scoring = "weekly"} it is the likelihood's own: one
+#' negative binomial at size \eqn{k} per reporting-week total. The legacy
+#' \code{"daily"} rule scores each day as its own negative binomial cell at the
+#' same \eqn{k}, which implies a weekly variance of about \eqn{C + C^2/(7k)}
+#' for a weekly total \eqn{C}; the predictive keeps \eqn{C + C^2/k}, so a daily
+#' run's intervals are wider than its likelihood implies (and are not the
+#' engine-level intervals runs made before v0.101.0 reported).
 #'
 #' @param config The calibration config (\code{location_name},
 #'   \code{reported_cases}, \code{date_start}).
@@ -289,9 +303,13 @@
 #' The member trajectories BEFORE observation noise: what the medoid, R_eff,
 #' trajectory, implied-CFR and subset-selection consumers need. Since v0.101.0
 #' \code{cases_array}/\code{deaths_array} hold observation-level draws and the
-#' engine draws are \code{cases_engine_array}/\code{deaths_engine_array}; an
+#' engine draws are \code{cases_engine_array}/\code{deaths_engine_array}. An
 #' ensemble saved before v0.101.0 carries only \code{cases_array}, which was
-#' engine-level, so it is returned as the fallback.
+#' engine-level, so it is returned as the fallback -- but only for a channel
+#' that received no observation noise (\code{ens$observation_model}): an
+#' observation-model ensemble whose engine arrays were removed has no engine
+#' array to offer, and handing back its observation draws would let the medoid
+#' and subset selection score noise without an error.
 #'
 #' @param ens A \code{mosaic_ensemble}.
 #' @param chan \code{"cases"} or \code{"deaths"}.
@@ -299,5 +317,7 @@
 #' @noRd
 .mosaic_engine_array <- function(ens, chan = c("cases", "deaths")) {
   chan <- match.arg(chan)
-  ens[[paste0(chan, "_engine_array")]] %||% ens[[paste0(chan, "_array")]]
+  eng <- ens[[paste0(chan, "_engine_array")]]
+  if (!is.null(eng) || isTRUE(ens$observation_model[[chan]])) return(eng)
+  ens[[paste0(chan, "_array")]]
 }

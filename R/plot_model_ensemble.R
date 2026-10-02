@@ -19,10 +19,20 @@
 #' matrices on \code{ensemble} are never mutated, so any R2/bias/likelihood
 #' computed upstream from the raw object is unaffected by the mask.
 #'
-#' The \code{predicted_*} columns summarise the engine-level member
-#' trajectories; the \code{ci_*} columns are the ensemble's \code{ci_bounds},
-#' observation-level posterior predictive intervals for an ensemble built with
-#' an observation model (\code{run_MOSAIC()} since v0.101.0).
+#' \code{predicted_central} and \code{predicted_mean} summarise the engine-level
+#' member trajectories. The \code{ci_*} columns are the ensemble's
+#' \code{ci_bounds}, observation-level posterior predictive intervals for an
+#' ensemble built with an observation model (\code{run_MOSAIC()} since
+#' v0.101.0), and \code{predicted_median} is the median of the same draws:
+#' the ensemble's \code{predictive_median} for a channel that received
+#' observation noise (\code{ensemble$observation_model}), else the engine
+#' median, which then shares its draws with the engine-level \code{ci_*}. So
+#' every row's quantiles nest (\code{ci_1_lower <= ci_2_lower <=
+#' predicted_median <= ci_2_upper <= ci_1_upper} for the default envelope) and
+#' a weighted interval score built from them is proper. Where the reporting
+#' dispersion is small the observation-level median falls far below the
+#' engine-level central line, which is why the central line is not taken from
+#' it.
 #'
 #' @param ensemble A \code{mosaic_ensemble} object from \code{calc_model_ensemble()}.
 #' @param central_method Central tendency for \code{predicted_central}. Scalar
@@ -59,6 +69,13 @@
   if (is.null(deaths_mean)) deaths_mean <- deaths_median
   cases_central  <- if (central_method[["cases"]]  == "mean") cases_mean  else cases_median
   deaths_central <- if (central_method[["deaths"]] == "mean") deaths_mean else deaths_median
+  # The median of the draws the ci_* columns come from (see the details above).
+  .quantile_median <- function(chan, engine_median) {
+    pm <- ensemble$predictive_median[[chan]]
+    if (isTRUE(ensemble$observation_model[[chan]]) && !is.null(pm)) pm else engine_median
+  }
+  cases_qmedian  <- .quantile_median("cases",  cases_median)
+  deaths_qmedian <- .quantile_median("deaths", deaths_median)
 
   obs_cases          <- ensemble$obs_cases
   obs_deaths         <- ensemble$obs_deaths
@@ -96,8 +113,8 @@
                             .extract_loc(deaths_central, i)),
       predicted_mean    = c(.extract_loc(cases_mean,   i),
                             .extract_loc(deaths_mean,  i)),
-      predicted_median  = c(.extract_loc(cases_median, i),
-                            .extract_loc(deaths_median, i)),
+      predicted_median  = c(.extract_loc(cases_qmedian,  i),
+                            .extract_loc(deaths_qmedian, i)),
       central_method    = c(rep(central_method[["cases"]],  n_time_points),
                             rep(central_method[["deaths"]], n_time_points)),
       stringsAsFactors = FALSE
@@ -204,9 +221,11 @@
 #' except that its blank cells in the unscored head (the first
 #' \code{head_cases}/\code{head_deaths} steps, matched to the ensemble by
 #' location, date and metric) are filled from that unmasked assembly; the
-#' central column follows the table's own \code{central_method} column. If the
-#' ensemble cannot be assembled, the table is returned unfilled with a warning
-#' and its head stays blank.
+#' central column follows the table's own \code{central_method} column and is
+#' filled with the engine-level weighted median or mean, never with
+#' \code{predicted_median} (the observation-level predictive median for an
+#' observation-model ensemble). If the ensemble cannot be assembled, the table
+#' is returned unfilled with a warning and its head stays blank.
 #'
 #' @param ensemble A \code{mosaic_ensemble} object.
 #' @param central_method Resolved per-channel central method.
@@ -220,9 +239,9 @@
                                              mask_final_deaths_step,
                                              head_cases, head_deaths,
                                              prediction_table = NULL) {
-  .assemble_unmasked <- function() .mosaic_assemble_prediction_table(
+  .assemble_unmasked <- function(cm = central_method) .mosaic_assemble_prediction_table(
     ensemble               = ensemble,
-    central_method         = central_method,
+    central_method         = cm,
     n_cases_warmup_mask    = 0L,
     mask_final_deaths_step = mask_final_deaths_step,
     score_idx_cases        = 1L,
@@ -234,7 +253,15 @@
   tbl <- prediction_table
   tbl$metric <- factor(as.character(tbl$metric),
                        levels = c("Suspected Cases", "Deaths"))
-  full <- tryCatch(.assemble_unmasked(), error = function(e) {
+  # `full` supplies the interval, mean and median cells; the engine-level
+  # weighted median for a median central line comes from a median assembly's
+  # predicted_central, because predicted_median holds the observation-level
+  # predictive median for an observation-model ensemble.
+  full <- tryCatch({
+    f <- .assemble_unmasked()
+    f$.engine_median <- .assemble_unmasked("median")$predicted_central
+    f
+  }, error = function(e) {
     warning("plot_model_ensemble: the burn-in could not be drawn from the ",
             "ensemble (", conditionMessage(e), "); drawing prediction_table ",
             "as supplied, with its unscored head blank.", call. = FALSE)
@@ -262,7 +289,7 @@
   cen[bad] <- chan_default[bad]
 
   fill <- list(predicted_central = ifelse(cen == "median",
-                                          full$predicted_median[src],
+                                          full$.engine_median[src],
                                           full$predicted_mean[src]))
   for (cc in intersect(c("predicted_mean", "predicted_median",
                          grep("^ci_[0-9]+_(lower|upper)$", names(full), value = TRUE)),
@@ -278,11 +305,36 @@
   tbl
 }
 
+#' Per-channel central method a prediction table was assembled with
+#'
+#' Reads the table's \code{central_method} column: a channel whose rows carry a
+#' single valid value (\code{"mean"} or \code{"median"}) takes it; a channel
+#' with none (column absent, blank, mixed or invalid) keeps \code{fallback}.
+#'
+#' @param tbl A prediction table from \code{.mosaic_assemble_prediction_table()}.
+#' @param fallback Resolved per-channel central method.
+#' @return Named character vector \code{c(cases = , deaths = )}.
+#' @noRd
+.mosaic_table_central_method <- function(tbl, fallback) {
+  out <- fallback
+  if (!"central_method" %in% names(tbl)) return(out)
+  metric <- as.character(tbl$metric)
+  for (ch in c("cases", "deaths")) {
+    rows <- metric == if (ch == "cases") "Suspected Cases" else "Deaths"
+    v <- unique(stats::na.omit(as.character(tbl$central_method[rows])))
+    if (length(v) == 1L && v %in% c("mean", "median")) out[[ch]] <- v
+  }
+  out
+}
+
 #' Unscored spans of a prediction figure, one row per channel
 #'
-#' The steps before each channel's scored window (the cases warm-up and the
-#' burn-in) as a rectangle from the panel edge to the scored-window start, plus
-#' the "scored from YYYY-MM-DD" label for the marker drawn at that start.
+#' The steps before each channel's scoring window (the cases warm-up and the
+#' burn-in) as a rectangle from the panel edge to the scoring-window start,
+#' plus the "scored from YYYY-MM-DD" label for the marker drawn at that start:
+#' where the caption metrics and the calibration's scoring window begin (the
+#' weekly cases likelihood's first complete reporting week can start up to six
+#' days later).
 #'
 #' @param dates The figure's time axis (Date, or numeric when undated).
 #' @param head_cases,head_deaths Integer; number of leading unscored steps.
@@ -355,15 +407,21 @@
 #' \code{\link{calc_model_ensemble}}. Shows the central prediction line (by
 #' default the weighted median for cases and the weighted mean for deaths;
 #' \code{central_method}) with interval ribbons and observed data points. The
-#' line is the model's central trajectory, summarising the engine-level member
-#' trajectories; the ribbons are the ensemble's \code{ci_bounds},
-#' observation-level posterior predictive intervals when the ensemble was built
-#' with an observation model (the caption then says so). By default the
+#' line is the model's central trajectory: the weighted median (or mean) of the
+#' engine-level member trajectories, before observation noise. The ribbons are
+#' the ensemble's \code{ci_bounds}, observation-level posterior predictive
+#' intervals when the ensemble was built with an observation model; the caption
+#' then says so, and notes that the line can lie above the 50% band where the
+#' reporting dispersion is small (a small weekly negative binomial size
+#' \eqn{k} skews the observation-level predictive toward zero, so its upper
+#' 50% bound can fall below the engine-level median). By default the
 #' predictions are drawn from the first time step, and the steps before the
-#' scored window (burn-in and cases warm-up) are shaded grey, with a dashed line
-#' at the scored-window start labelled with its date (e.g. "scored from
-#' 2023-02-15"; \code{show_burn_in}). The caption metrics cover the scored
-#' window only.
+#' scoring window (burn-in and cases warm-up) are shaded grey, with a dashed
+#' line at the scoring-window start labelled with its date (e.g. "scored from
+#' 2023-02-15"; \code{show_burn_in}). That is where the caption metrics (R2,
+#' bias and totals) and the calibration's scoring window start; the weekly
+#' cases likelihood scores the complete reporting weeks inside that window, so
+#' its first scored week can begin up to six days after the marker.
 #'
 #' @param ensemble A \code{mosaic_ensemble} object returned by
 #'   \code{\link{calc_model_ensemble}}.
@@ -421,16 +479,23 @@
 #'   are drawn as given, so they match an already-written CSV; with
 #'   \code{show_burn_in = TRUE} its blank unscored head is filled from
 #'   \code{ensemble}'s own central and interval series (if \code{ensemble}
-#'   cannot supply them, a warning is given and the head is left blank). When
-#'   \code{NULL} (default) the table is assembled from \code{ensemble}.
+#'   cannot supply them, a warning is given and the head is left blank). The
+#'   table's \code{central_method} column, when present, names the line drawn,
+#'   so the caption's central label and its R2, bias and totals follow it per
+#'   channel; an explicitly supplied \code{central_method} that disagrees with
+#'   it draws a warning. When \code{NULL} (default) the table is assembled from
+#'   \code{ensemble}.
 #' @param show_burn_in Logical. If \code{TRUE} (default), draw the predicted
 #'   central line and interval ribbons from the first time step, shade the
-#'   steps before each channel's scored window (burn-in and cases warm-up) in
-#'   light grey, and mark the scored-window start with a dashed line labelled
+#'   steps before each channel's scoring window (burn-in and cases warm-up) in
+#'   light grey, and mark the scoring-window start with a dashed line labelled
 #'   with its date, e.g. "scored from 2023-02-15" (one label per channel when
-#'   the starts differ). If \code{FALSE}, blank the predictions before the
-#'   scored window, as in the exported CSV. Display only: the caption metrics
-#'   are computed on the scored window either way, and
+#'   the starts differ). The marker is where the caption metrics and the
+#'   calibration's scoring window start; the weekly cases likelihood scores
+#'   the complete reporting weeks inside the window, so its first scored week
+#'   can begin up to six days later. If \code{FALSE}, blank the predictions
+#'   before the scoring window, as in the exported CSV. Display only: the
+#'   caption metrics are computed on the scoring window either way, and
 #'   \code{mask_final_deaths_step} applies either way.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
@@ -478,6 +543,10 @@ plot_model_ensemble <- function(ensemble,
   if (!is.logical(show_burn_in) || length(show_burn_in) != 1L || is.na(show_burn_in))
     stop("show_burn_in must be TRUE or FALSE")
 
+  # Whether the caller chose the central line (read before the argument is
+  # reassigned below; see prediction_table).
+  central_supplied <- !missing(central_method)
+
   warmup_n <- suppressWarnings(as.integer(n_cases_warmup_mask))
   if (length(warmup_n) != 1L || is.na(warmup_n) || warmup_n < 0L)
     stop("n_cases_warmup_mask must be a single non-negative integer")
@@ -498,6 +567,19 @@ plot_model_ensemble <- function(ensemble,
 
   # Unpack ensemble fields
   central_method     <- .mosaic_resolve_central_method(central_method)
+  # A supplied table is drawn as given, so its own central_method column names
+  # the line on the figure; the caption label and scored series follow it.
+  if (!is.null(prediction_table)) {
+    table_central <- .mosaic_table_central_method(prediction_table, central_method)
+    if (central_supplied && !identical(table_central, central_method))
+      warning(sprintf(paste0(
+        "plot_model_ensemble: prediction_table carries central_method cases=%s, deaths=%s; ",
+        "its line is drawn and the caption is labelled and scored by it, not by ",
+        "central_method = c(cases = \"%s\", deaths = \"%s\")."),
+        table_central[["cases"]], table_central[["deaths"]],
+        central_method[["cases"]], central_method[["deaths"]]), call. = FALSE)
+    central_method <- table_central
+  }
   cases_median       <- ensemble$cases_median
   deaths_median      <- ensemble$deaths_median
   cases_mean         <- ensemble$cases_mean
@@ -519,8 +601,17 @@ plot_model_ensemble <- function(ensemble,
   date_stop          <- ensemble$date_stop
   # The ribbons are predictive intervals for the observed counts when the
   # ensemble drew observation noise; say so, since the line is engine-level.
-  interval_kind      <- if (isTRUE(ensemble$observation_model$cases))
-                          " observation-level predictive" else ""
+  # A small weekly NB size k skews that predictive toward zero, so its upper
+  # 50% bound can fall below the engine-level line; the caption says that too.
+  obs_level          <- isTRUE(ensemble$observation_model$cases)
+  interval_kind      <- if (obs_level) " observation-level predictive" else ""
+  line_note_k        <- "can lie above the 50% band where the reporting dispersion k is small"
+  line_note          <- if (obs_level) paste0(
+    "Line: engine-level central trajectory, before observation noise; it ", line_note_k)
+  .faceted_note      <- function(where) if (obs_level) paste0(
+    "\nRibbons: ", .mosaic_interval_label(envelope_quantiles),
+    " observation-level predictive intervals; line: engine-level central ",
+    "trajectory, before observation noise, which ", where)
 
   # ---------------------------------------------------------------------------
   # Handle dates
@@ -801,6 +892,7 @@ plot_model_ensemble <- function(ensemble,
           "Ribbons show ", .mosaic_interval_label(envelope_quantiles), interval_kind,
           " intervals | Central: cases=", central_method[["cases"]],
           ", deaths=", central_method[["deaths"]], "\n",
+          if (obs_level) paste0(line_note, "\n"),
           "Cases: Obs = ", format(round(.paired_total(obs_c, pred_c)[["obs"]]), big.mark = ","),
           ", Pred = ",     format(round(.paired_total(obs_c, pred_c)[["pred"]]), big.mark = ","),
           ", R\u00b2 = ", ifelse(is.na(r2_c), "NA", r2_c),
@@ -884,6 +976,7 @@ plot_model_ensemble <- function(ensemble,
           ", R\u00b2 = ", ifelse(is.na(r2_c_all), "NA", r2_c_all),
           ", Bias = ",    ifelse(is.na(bias_c_all), "NA", bias_c_all),
           " (central: ", central_method[["cases"]], ")",
+          .faceted_note(line_note_k),
           "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
         )
       )
@@ -957,6 +1050,7 @@ plot_model_ensemble <- function(ensemble,
           ", R\u00b2 = ", ifelse(is.na(r2_d_all), "NA", r2_d_all),
           ", Bias = ",    ifelse(is.na(bias_d_all), "NA", bias_d_all),
           " (central: ", central_method[["deaths"]], ")",
+          .faceted_note("can lie above the 50% band where deaths are sparse or overdispersed"),
           "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
         )
       )
