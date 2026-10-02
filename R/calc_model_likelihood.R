@@ -1014,6 +1014,19 @@ calc_model_likelihood <- function(obs_cases,
 
 
 
+# Which cases gate run_MOSAIC()'s pre-flight applies, mirroring the NA rule in
+# calc_model_likelihood(): the weekly core (cases_scoring "weekly", the default,
+# with no shape term on) needs three complete reporting weeks; per-day cells
+# (cases_scoring = "daily") or an active shape term keep the any-finite gate. A
+# peak weight counts as on even where a location has no peak, so the pre-flight
+# never flags a location the likelihood would score.
+.mosaic_weekly_cases_gate <- function(likelihood) {
+     shape_on <- any(vapply(likelihood[c("weight_peak_timing", "weight_peak_magnitude",
+                                         "weight_cumulative_total", "weight_wis")],
+                            function(w) isTRUE(as.numeric(w)[1] > 0), logical(1)))
+     !identical(likelihood$cases_scoring, "daily") && !shape_on
+}
+
 # Locations that calc_model_likelihood() leaves NA for every draw, judged from
 # the observations alone: no finite deaths observation from idx_deaths on (the
 # worker zero-weights the deaths prefix, and the integrated deaths score has no

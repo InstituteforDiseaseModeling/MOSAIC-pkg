@@ -1159,23 +1159,30 @@ run_MOSAIC <- function(config,
             control$likelihood$.score_window_resolved$n_time)
   }
 
-  # A location with no finite observation in either channel inside the scored
-  # window scores NA for every draw. When that holds for every location, there
-  # is nothing to weight, so stop here instead of running a calibration whose
-  # every likelihood is NA.
+  # A location with nothing scorable in either channel inside the scored window
+  # scores NA for every draw. When that holds for every location, there is
+  # nothing to weight, so stop here instead of running a calibration whose every
+  # likelihood is NA. The cases gate mirrors calc_model_likelihood(): the weekly
+  # core needs three complete reporting weeks; per-day cells (cases_scoring =
+  # "daily") or an active shape term keep the any-finite-observation gate.
+  .weekly_gate <- .mosaic_weekly_cases_gate(control$likelihood)
   .unscorable <- .mosaic_unscorable_locations(
     config$reported_cases, config$reported_deaths,
     control$likelihood$.score_window_resolved$idx_cases,
-    control$likelihood$.score_window_resolved$idx_deaths)
+    control$likelihood$.score_window_resolved$idx_deaths,
+    weekly_cases = .weekly_gate)
+  .scorable_rule <- if (.weekly_gate) {
+    "three complete reporting weeks of reported_cases or a finite reported_deaths observation"
+  } else "a finite reported_cases or reported_deaths observation"
   if (all(.unscorable)) {
-    stop("No location has a finite reported_cases or reported_deaths observation in the ",
-         "scored window (", paste(config$location_name, collapse = ", "),
+    stop("No location has ", .scorable_rule, " in the scored window (",
+         paste(config$location_name, collapse = ", "),
          "), so every likelihood would be NA. Check the observation data, date range ",
          "and burn-in / deaths-era settings.", call. = FALSE)
   }
   if (any(.unscorable)) {
-    log_msg("No observations in the scored window for %s: these locations contribute nothing to the likelihood",
-            paste(config$location_name[.unscorable], collapse = ", "))
+    log_msg("Nothing scorable in the scored window for %s (needs %s): these locations contribute nothing to the likelihood",
+            paste(config$location_name[.unscorable], collapse = ", "), .scorable_rule)
   }
 
   # Estimate the per-location NB dispersion ONCE per calibration. k is a property
@@ -1204,10 +1211,14 @@ run_MOSAIC <- function(config,
           if (identical(control$likelihood$cases_scoring, "daily"))
             "one NB cell per day at the weekly k (legacy)" else "NB on reporting-week totals at the weekly k",
           if (is.null(control$likelihood$cases_scoring)) "weekly" else control$likelihood$cases_scoring,
-          if (isTRUE(.nb_disp$tier_used)) {
+          if (identical(.nb_disp$cases$summary, "user-supplied")) {
+            "the user-supplied nb_k_cases"
+          } else if (isTRUE(.nb_disp$tier_used)) {
             sprintf("observed weeks only (%d reconstructed/imputed weeks excluded)",
                     sum(.nb_disp$table$n_weeks_excluded[.nb_disp$table$channel == "cases"], na.rm = TRUE))
-          } else "every week (config carries no reported_tier)")
+          } else if (is.null(config$reported_tier)) {
+            "every week (config carries no reported_tier)"
+          } else "every week (reported_tier was not applied; see the warning above)")
   # Bound-bind rate is a standing fit diagnostic: in a well-specified fit the
   # bounds should rarely bind. The retired k_min floor bound in 27 of 28
   # estimable locations, which was the defect rather than a setting.

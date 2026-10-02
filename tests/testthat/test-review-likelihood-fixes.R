@@ -252,3 +252,22 @@ test_that("run_MOSAIC stops up front when no location has a scorable observation
       control = mosaic_control_defaults(calibration = list(n_simulations = 10L))))),
     "every likelihood would be NA")
 })
+
+test_that("the pre-flight cases gate mirrors the likelihood's NA rule", {
+  g <- MOSAIC:::.mosaic_weekly_cases_gate
+  expect_true(g(list()))
+  expect_true(g(list(cases_scoring = "weekly", weight_wis = 0, weight_peak_timing = 0)))
+  expect_false(g(list(cases_scoring = "daily")))
+  expect_false(g(list(weight_wis = 0.02)))
+  expect_false(g(list(weight_cumulative_total = 0.1)))
+  expect_false(g(list(weight_peak_timing = 0.25)))
+  expect_false(g(list(weight_peak_magnitude = 1)))
+  expect_true(g(mosaic_control_defaults()$likelihood))
+
+  # run_MOSAIC passes that gate to the pre-flight, and its dispersion log line
+  # names a user-supplied k rather than calling it an every-week estimate
+  src <- paste(deparse(body(MOSAIC::run_MOSAIC)), collapse = "\n")
+  expect_match(src, ".mosaic_weekly_cases_gate(control$likelihood)", fixed = TRUE)
+  expect_match(src, "weekly_cases = .weekly_gate", fixed = TRUE)
+  expect_match(src, "the user-supplied nb_k_cases", fixed = TRUE)
+})
