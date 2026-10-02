@@ -75,8 +75,8 @@
 #' split is the allocation that asserts none (\code{process_cholera_surveillance_data}
 #' reshapes a window when another source observes every week of it). The split is
 #' in whole counts -- each week gets the floor or ceiling of the even share, by
-#' cumulative rounding, and the weeks sum to the report exactly -- so the integer
-#' daily downscaling neither inflates nor loses part of the report. Weeks the
+#' cumulative rounding half up, and the weeks sum to the report exactly -- so the
+#' integer daily downscaling neither inflates nor loses part of the report. Weeks the
 #' window adds that had no row are created. Each window row carries
 #' \code{disaggregation_method = "who_catchup_uniform"} and a
 #' \code{confidence_weight} that falls with the window length (0.9 up to 4 weeks,
@@ -93,10 +93,12 @@
 #' (\code{inst/extdata/surveillance_curation.csv}, action \code{who_window}; see
 #' \code{\link{process_cholera_surveillance_data}}) replaces the rule for that
 #' report: the window starts at the WHO week containing the documented start date
-#' (South Africa 2023: the after-action review's 1 February; Namibia 2025: the
-#' first case on 2 March), and when a documented end date precedes the report,
-#' the cases are spread over the weeks up to that end and the weeks after it, to
-#' the report, carry 0 (South Africa: 31 July, the report arriving in week 35). A
+#' (South Africa 2023: 1 February, the start of the outbreak period in the
+#' Department of Health's statement of 5 July 2023; Namibia 2025: the first case on
+#' Sunday 2 March, i.e. week 9), and when a documented end date precedes the
+#' report, the cases are spread over the weeks up to that end and the weeks after
+#' it, to the report, carry 0 (South Africa: 31 July, the date of WHO AFRO's
+#' after-action review count, the report arriving in week 35). A
 #' curated window can also spread a report the rule does not test (Cote d'Ivoire
 #' 2025 week 33, the last week of its series). Its rows carry
 #' \code{disaggregation_method = "who_catchup_curated"}, the table row's id in
@@ -105,33 +107,47 @@
 #' silent weeks before the report; a curated report that is no longer in the data
 #' (zero or missing) is skipped with a warning.
 #'
-#' \strong{Shaped curated windows.} When a documented epidemic curve times the
-#' outbreak within its window, the curation row has \code{shape = "cumulative"}
-#' and the curve is given as cumulative-count anchors in
-#' \code{inst/extdata/surveillance_curation_shapes.csv} (daily or weekly counts
-#' as anchors at the end of each day or week; coarser totals, e.g. monthly, as
-#' anchors that are interpolated linearly). Each week of the window then gets the
-#' curve's increment over its Sunday-to-Saturday span, and the report's cases and
-#' deaths are spread in proportion, in whole counts that sum to the report: the
-#' curve may count fewer cases than the report (it is rescaled) but must lie
-#' within the window. South Africa 2023 follows WHO's epidemic curve of the
-#' outbreak by symptom onset date (external situation report #5, Figure 5): a few
+#' \strong{Shaped curated windows.} When documented dates time the outbreak within
+#' its window, the curation row has \code{shape = "cumulative"} and the timing is
+#' given as cumulative-count anchors in
+#' \code{inst/extdata/surveillance_curation_shapes.csv}: a case curve
+#' (\code{cumulative_cases}) and optionally a deaths curve
+#' (\code{cumulative_deaths}; without one, deaths follow the case curve). Daily
+#' or weekly counts are written as anchors at the end of each day or week, and
+#' coarser totals (monthly, or dated cumulative reports) as anchors that are
+#' interpolated linearly. Each week of the window then gets the curve's
+#' increment over its Monday-to-Sunday span, and the report's cases and deaths
+#' are spread in proportion, in whole counts that sum to the report. The curve is
+#' rescaled to the report, but its total must lie between half the report and 2\%
+#' above it (a larger gap is an error in the anchors), and it must lie within the
+#' window. The anchors are dated like the rest of the WHO weekly rows, by report
+#' week. South Africa 2023 follows WHO's epidemic curve of the outbreak
+#' (external situation report #5, Figure 5) with its symptom onset dates moved 2
+#' days later, the onset-to-notification lag at which the cumulative curve best
+#' matches the notification-date curve of situation report #4 (Figure 2): a few
 #' imported and sporadic cases from February to April, the Hammanskraal surge
-#' from early May peaking in the week of 21-27 May (394 of the 1,390 cases), and
-#' no case after early July. These rows carry
-#' \code{disaggregation_method = "who_catchup_curated_shaped"} and confidence 0.9,
-#' the weight of a window shaped by another source's weekly counts.
+#' from early May peaking in the week of 22-28 May (432 of the 1,390 cases), few
+#' cases after June, and the imported case of 14 July (onset), placed on 16 July.
+#' Its deaths follow their own curve, the cumulative counts the Department of
+#' Health, the Gauteng Department of Health and WHO reported (1 death by 23
+#' February, 11 by 21 May, 24 by 28 May, 31 by 6 June, 38 by 15 June, 47 by 4
+#' July). These rows carry \code{disaggregation_method = "who_catchup_curated_shaped"}
+#' and confidence 0.9, the weight of a window shaped by another source's weekly
+#' counts.
 #'
 #' \strong{Week convention.} The \code{year}/\code{week} columns are WHO's own
-#' \code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. WHO numbers weeks on
-#' the MMWR (US CDC) calendar -- Sunday-start weeks, week 1 being the week that
-#' contains 4 January -- and stamps each week with the following Monday
-#' (\code{date_wk} in the WHO AWD feature service). This coincides with ISO-8601
-#' except in years whose 4 January falls on a Sunday: e.g. WHO has a genuine
-#' 2025-W53 starting Monday 2025-12-29 (ISO 2025 has only 52 weeks), and WHO
-#' 2026-W01 starts 2026-01-05 (ISO 2026-W01 starts 2025-12-29). Each row is therefore
-#' dated from WHO's calendar, never merged into a neighbouring week. Downstream
-#' consumers key on \code{date_start}, not on \code{(year, week)}.
+#' \code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. A WHO epi week
+#' runs Monday to Sunday and is stamped with its Monday (\code{date_wk} in the WHO
+#' AWD feature service; the dashboard's note: "The date corresponds to the first
+#' day of the epi-week (from Monday to Sunday)"). Weeks are numbered as the MMWR
+#' (US CDC) calendar shifted by one day: week 1 begins on the Monday after the
+#' Sunday that starts MMWR week 1 (the Sunday-Saturday week containing 4 January).
+#' This coincides with ISO-8601 except in years whose 4 January falls on a Sunday:
+#' e.g. WHO has a genuine 2025-W53 starting Monday 2025-12-29 (ISO 2025 has only
+#' 52 weeks), and WHO 2026-W01 starts 2026-01-05 (ISO 2026-W01 starts 2025-12-29).
+#' Each row is therefore dated from WHO's calendar, never merged into a
+#' neighbouring week. Downstream consumers key on \code{date_start}, not on
+#' \code{(year, week)}.
 #'
 #' Missing \code{cases} or \code{deaths} stay \code{NA}; no row is dropped for having
 #' one field missing.
@@ -218,11 +234,14 @@ process_WHO_weekly_data <- function(PATHS) {
 
 #' Monday start date of a WHO epidemiological week
 #'
-#' WHO's cholera AWD feature service labels weeks with MMWR (Sunday-start) epi
-#' weeks -- week 1 is the Sunday-Saturday week containing 4 January -- and stamps
-#' each with the Monday after the MMWR Sunday (field \code{date_wk}). Verified
+#' A WHO epi week runs Monday to Sunday and the cholera AWD feature service stamps
+#' it with that Monday (field \code{date_wk}; the dashboard's note: "the first day
+#' of the epi-week (from Monday to Sunday)"). Weeks are numbered as the MMWR
+#' calendar shifted by one day: week 1 begins on the Monday after the Sunday that
+#' starts MMWR week 1 (the Sunday-Saturday week containing 4 January). Verified
 #' against the service on 2026-09-29: 2025-W01 = 2024-12-30, 2025-W53 = 2025-12-29,
-#' 2026-W01 = 2026-01-05.
+#' 2026-W01 = 2026-01-05; and WHO AFRO's weekly bulletin numbers 3-9 March 2025 as
+#' week 10.
 #'
 #' @param year Integer WHO epi year (\code{epiyr}).
 #' @param week Integer WHO epi week (\code{epiwk}), 1-53.
@@ -280,23 +299,24 @@ process_WHO_weekly_data <- function(PATHS) {
 
 #' WHO week containing a calendar date
 #'
-#' A WHO (MMWR) epi week runs Sunday to Saturday and is stamped with the Monday
-#' after its Sunday (see \code{.who_epiweek_start()}), so the week containing date
-#' \code{x} is stamped with the Sunday on or before \code{x}, plus one day.
+#' A WHO epi week runs Monday to Sunday and is stamped with its Monday (see
+#' \code{.who_epiweek_start()}), so the week containing date \code{x} is stamped
+#' with the Monday on or before \code{x}: a Sunday belongs to the week that began
+#' six days earlier.
 #'
 #' @param x \code{Date} vector.
 #' @return \code{Date} vector of week-start Mondays (NA where \code{x} is NA).
 #' @noRd
 .who_week_of_date <- function(x) {
      x <- as.Date(x)
-     x - as.POSIXlt(x)$wday + 1L
+     x - (as.POSIXlt(x)$wday + 6L) %% 7L
 }
 
 
 #' WHO epi-year and epi-week of a WHO week
 #'
-#' Inverse of \code{.who_epiweek_start()}: a WHO week starting on Monday \code{d}
-#' is the MMWR week containing the Sunday \code{d - 1}.
+#' Inverse of \code{.who_epiweek_start()}: the WHO week starting on Monday
+#' \code{d} carries the MMWR year and number of the Sunday \code{d - 1}.
 #'
 #' @param date_start \code{Date} vector of week-start Mondays.
 #' @return A list with integer vectors \code{year} and \code{week}.
@@ -326,13 +346,45 @@ process_WHO_weekly_data <- function(PATHS) {
 # (who_catchup_shaped) or by a curated epidemic curve (who_catchup_curated_shaped).
 .SHAPED_WINDOW_CONFIDENCE <- 0.9
 
+# A curated curve is rescaled to the WHO report it shapes, so it may count fewer
+# cases than the report (a line list as of an earlier date, cases added without
+# dates) or slightly more (rounding of a digitized curve), but a total below half
+# the report or more than 2% above it is an error in the anchors (a dropped or
+# extra digit would otherwise move most of the report into one week).
+.CURATED_CURVE_TOTAL_RANGE <- c(0.5, 1.02)
+
+
+#' Check a curated curve's total against the report it shapes
+#'
+#' @param curve_total Total of the curve over the window's weeks.
+#' @param report_total The WHO report's total (NA skips the check).
+#' @param id Curation id, for the message.
+#' @param what "case" or "death".
+#' @return Invisibly TRUE; stops when the curve total is outside
+#'   \code{.CURATED_CURVE_TOTAL_RANGE} times the report total.
+#' @noRd
+.check_curve_total <- function(curve_total, report_total, id, what) {
+     if (is.na(report_total)) return(invisible(TRUE))
+     r <- .CURATED_CURVE_TOTAL_RANGE
+     if (curve_total < r[1] * report_total || curve_total > r[2] * report_total)
+          stop(sprintf(paste0("Curated WHO window %s: the %s curve counts %s against a report of %s; ",
+                              "a curve must count between %s and %s times the report"),
+                       id, what, format(curve_total), format(report_total), format(r[1]), format(r[2])),
+               call. = FALSE)
+     invisible(TRUE)
+}
+
 
 #' Spread a whole count over weeks in proportion to weights, in whole counts
 #'
-#' Cumulative rounding: week \eqn{k} receives
-#' \code{round(total * W_k) - round(total * W_{k-1})} with \eqn{W} the cumulative
-#' weight share, so every week gets the floor or ceiling of its exact share and the
-#' weeks sum to \code{total} exactly. Whole counts matter downstream:
+#' Cumulative rounding half up: week \eqn{k} receives
+#' \code{floor(total * W_k + 0.5) - floor(total * W_{k-1} + 0.5)} with \eqn{W} the
+#' cumulative weight share. Each rounded cumulative lies in
+#' \eqn{(total W_k - 0.5, total W_k + 0.5]}, so for any weights every week gets
+#' the floor or ceiling of its exact share (exactly that share when it is a whole
+#' number), and the weeks sum to \code{total} exactly. (Rounding halves to even,
+#' as \code{round()} does, breaks this when two consecutive cumulative targets are
+#' both halves.) Whole counts matter downstream:
 #' \code{downscale_weekly_values(integer = TRUE)} rounds each week independently,
 #' which would turn 47 deaths spread over 35 weeks (1.34 a week) into 35. A
 #' fractional total (never a WHO count) is spread exactly instead.
@@ -345,7 +397,7 @@ process_WHO_weekly_data <- function(PATHS) {
 .spread_count <- function(total, weights = rep(1, n), n = length(weights)) {
      if (is.na(total)) return(rep(NA_real_, length(weights)))
      if (abs(total - round(total)) > 1e-8) return(total * weights / sum(weights))
-     diff(c(0, round(total * cumsum(weights) / sum(weights))))
+     diff(c(0, floor(total * cumsum(weights) / sum(weights) + 0.5)))
 }
 
 
@@ -475,17 +527,28 @@ process_WHO_weekly_data <- function(PATHS) {
                # or in proportion to a curated epidemic curve.
                active  <- idx <= win$active_end[k]
                w       <- as.numeric(active)
+               w_d     <- w
                curated <- !is.na(win$curation_id[k])
                shaped  <- !is.na(win$shape[k])
                if (shaped) {
-                    a <- if (is.null(shapes)) NULL else shapes[shapes$id == win$curation_id[k], ]
+                    id <- win$curation_id[k]
+                    a  <- if (is.null(shapes)) NULL else shapes[shapes$id == id, ]
                     if (is.null(a) || nrow(a) == 0L)
                          stop(sprintf("Curated WHO window %s has shape '%s' but no anchors were supplied",
-                                      win$curation_id[k], win$shape[k]), call. = FALSE)
-                    w <- .curated_shape_weights(a, grid[idx], active, win$curation_id[k])
+                                      id, win$shape[k]), call. = FALSE)
+                    # A curve is rescaled to the report, so its total only has to
+                    # be close to it; deaths follow the case curve unless the
+                    # window has a deaths curve of its own.
+                    w <- .curated_shape_weights(a, grid[idx], active, id, "cumulative_cases")
+                    .check_curve_total(sum(w), total_cases, id, "case")
+                    w_d <- w
+                    if ("cumulative_deaths" %in% names(a) && any(!is.na(a$cumulative_deaths))) {
+                         w_d <- .curated_shape_weights(a, grid[idx], active, id, "cumulative_deaths")
+                         .check_curve_total(sum(w_d), total_deaths, id, "death")
+                    }
                }
                x$cases[rows]  <- .spread_count(total_cases, w)
-               x$deaths[rows] <- .spread_count(total_deaths, w)
+               x$deaths[rows] <- .spread_count(total_deaths, w_d)
                x$catchup_start[rows]         <- grid[win$start[k]]
                x$catchup_weeks[rows]         <- n
                x$catchup_cases[rows]         <- total_cases

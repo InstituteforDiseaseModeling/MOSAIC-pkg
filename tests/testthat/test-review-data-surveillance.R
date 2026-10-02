@@ -25,7 +25,7 @@ test_that("WHO epi weeks follow WHO's calendar, verified against the AWD feature
      got <- MOSAIC:::.who_epiweek_start(c(2023, 2023, 2024, 2025, 2025, 2026), c(1, 52, 52, 1, 53, 1))
      expect_equal(got, as.Date(c("2023-01-02", "2023-12-25", "2024-12-23",
                                  "2024-12-30", "2025-12-29", "2026-01-05")))
-     # MMWR epi weeks (Sunday start) + 1 day, over 30 years
+     # the Monday-Sunday week of Monday m carries the MMWR number of Sunday m - 1, over 30 years
      mon <- seq(as.Date("2000-01-03"), as.Date("2030-12-30"), by = "week")
      expect_equal(MOSAIC:::.who_epiweek_start(lubridate::epiyear(mon - 1), lubridate::epiweek(mon - 1)), mon)
      expect_error(MOSAIC:::.who_epiweek_start(2024, 53), "does not exist")

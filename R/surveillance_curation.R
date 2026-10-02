@@ -77,22 +77,27 @@
 #' Read the cumulative-count anchors that shape curated WHO windows
 #'
 #' One row per anchor: \code{id} (a \code{who_window} row of the curation table
-#' with \code{shape = "cumulative"}), \code{date}, \code{cumulative_cases} (the
-#' outbreak's cumulative count through the end of \code{date}, in the source's own
-#' units: the report total rescales it) and \code{note}. The anchors of one id
-#' define a cumulative curve, linear between anchors, 0 at the first anchor and
-#' flat after the last; each WHO week of the window receives the curve's increment
-#' over its Sunday-to-Saturday span (see \code{.curated_shape_weights()}). Daily
-#' or weekly counts are written as anchors at the end of each day or WHO week, so
-#' the increments reproduce them exactly; coarser anchors (monthly totals)
-#' interpolate the cumulative curve linearly.
+#' with \code{shape = "cumulative"}), \code{date} (YYYY-MM-DD),
+#' \code{cumulative_cases} and the optional \code{cumulative_deaths} (the
+#' outbreak's cumulative counts through the end of \code{date}, in the source's
+#' own units: the report totals rescale them) and \code{note}. A row may carry
+#' either count or both. For each id the case anchors define a cumulative case
+#' curve, linear between anchors, 0 at the first anchor and flat after the last;
+#' the death anchors, when the id has any, define a deaths curve the same way
+#' (otherwise, or when the column is absent, deaths follow the case curve). Each
+#' WHO week of the window receives a curve's increment over its Monday-to-Sunday
+#' span (see \code{.curated_shape_weights()}). Daily or weekly counts are written
+#' as anchors at the end of each day or WHO week (a Sunday), so the increments
+#' reproduce them exactly; coarser anchors (monthly totals, dated cumulative
+#' reports) interpolate the cumulative curve linearly.
 #'
 #' @param curation \code{who_window} rows of \code{.surveillance_curation()}:
 #'   every row with \code{shape = "cumulative"} needs anchors, and every anchor id
 #'   must be such a row.
 #' @param path The anchor table (default: the package copy).
-#' @return Data frame (\code{id}, \code{date}, \code{cumulative_cases}) ordered by
-#'   id and date.
+#' @return Data frame (\code{id}, \code{date}, \code{cumulative_cases},
+#'   \code{cumulative_deaths}) ordered by id and date; counts a row does not carry
+#'   are NA.
 #' @noRd
 .surveillance_curation_shapes <- function(curation,
                                           path = system.file("extdata", "surveillance_curation_shapes.csv",
@@ -103,56 +108,75 @@
      miss <- setdiff(c("id", "date", "cumulative_cases", "note"), names(sh))
      if (length(miss) > 0L)
           stop("Surveillance curation shape table lacks column(s): ", paste(miss, collapse = ", "), call. = FALSE)
+     if (!"cumulative_deaths" %in% names(sh)) sh$cumulative_deaths <- NA_character_
      fail <- function(cond, what) {
           if (any(cond)) stop(sprintf("Surveillance curation shape table: %s (%s)", what,
                                       paste(unique(sh$id[cond]), collapse = ", ")), call. = FALSE)
      }
-     sh$date <- as.Date(sh$date, optional = TRUE)
-     sh$cumulative_cases <- suppressWarnings(as.numeric(sh$cumulative_cases))
-     fail(is.na(sh$id) | is.na(sh$date) | is.na(sh$cumulative_cases), "id, date and cumulative_cases are required")
-     fail(sh$cumulative_cases < 0, "negative cumulative count")
+     num <- function(x) suppressWarnings(as.numeric(x))
+     fail((!is.na(sh$cumulative_cases) & is.na(num(sh$cumulative_cases))) |
+          (!is.na(sh$cumulative_deaths) & is.na(num(sh$cumulative_deaths))), "unreadable count")
+     sh$date <- as.Date(sh$date, format = "%Y-%m-%d")
+     sh$cumulative_cases  <- num(sh$cumulative_cases)
+     sh$cumulative_deaths <- num(sh$cumulative_deaths)
+     fail(is.na(sh$id) | is.na(sh$date), "id and a valid date (YYYY-MM-DD) are required")
+     fail(is.na(sh$cumulative_cases) & is.na(sh$cumulative_deaths), "each anchor needs a case or death count")
+     fail((!is.na(sh$cumulative_cases) & !is.finite(sh$cumulative_cases)) |
+          (!is.na(sh$cumulative_deaths) & !is.finite(sh$cumulative_deaths)), "non-finite count")
+     fail((!is.na(sh$cumulative_cases) & sh$cumulative_cases < 0) |
+          (!is.na(sh$cumulative_deaths) & sh$cumulative_deaths < 0), "negative cumulative count")
      shaped <- curation$id[curation$action == "who_window" & curation$shape %in% "cumulative"]
      fail(!sh$id %in% shaped, "anchors for an id that is not a who_window row with shape 'cumulative'")
      lacking <- setdiff(shaped, sh$id)
      if (length(lacking) > 0L)
           stop("Surveillance curation shape table has no anchors for: ", paste(lacking, collapse = ", "), call. = FALSE)
-     sh <- sh[order(sh$id, sh$date), c("id", "date", "cumulative_cases")]
+     sh <- sh[order(sh$id, sh$date), c("id", "date", "cumulative_cases", "cumulative_deaths")]
      for (i in unique(sh$id)) {
-          a <- sh[sh$id == i, ]
-          fail(sh$id == i & (nrow(a) < 2L | anyDuplicated(a$date) > 0L),
-               "each shape needs at least two anchors on distinct dates")
-          fail(sh$id == i & (any(diff(a$cumulative_cases) < 0) | a$cumulative_cases[1L] != 0 |
-                             a$cumulative_cases[nrow(a)] <= 0),
-               "the cumulative count must start at 0, never decrease and end above 0")
+          rows <- sh$id == i
+          fail(rows & anyDuplicated(sh$date[rows]) > 0L, "each shape needs its anchors on distinct dates")
+          for (col in c("cumulative_cases", "cumulative_deaths")) {
+               v <- sh[[col]][rows & !is.na(sh[[col]])]
+               if (col == "cumulative_deaths" && length(v) == 0L) next   # deaths follow the case curve
+               lab <- if (col == "cumulative_cases") "case" else "death"
+               fail(rows & length(v) < 2L, sprintf("a %s curve needs at least two anchors", lab))
+               fail(rows & v[1L] != 0, sprintf("the cumulative %s count must start at 0", lab))
+               fail(rows & any(diff(v) < 0), sprintf("the cumulative %s count must never decrease", lab))
+               fail(rows & v[length(v)] <= 0, sprintf("the cumulative %s count must end above 0", lab))
+          }
      }
      rownames(sh) <- NULL
      sh
 }
 
 
-#' Weights of the WHO weeks of a curated window under a cumulative shape
+#' Weights of the WHO weeks of a curated window under a cumulative curve
 #'
-#' The cumulative curve through the anchors (linear between them, 0 before the
-#' first, flat after the last) gives each WHO week -- Sunday to Saturday, stamped
-#' with the following Monday -- its increment from the end of the previous
-#' Saturday to the end of its own.
+#' The cumulative curve through the anchors of one series (linear between them,
+#' 0 before the first, flat after the last) gives each WHO week -- Monday to
+#' Sunday, stamped with its Monday -- its increment from the end of the previous
+#' Sunday to the end of its own.
 #'
-#' @param anchors One id's anchors (\code{date}, \code{cumulative_cases}).
+#' @param anchors One id's anchors (\code{date} and the \code{value} column; rows
+#'   where that column is NA are not anchors of this series).
 #' @param week_start Date vector of the window's WHO week stamps (Mondays).
-#' @param active Logical, the weeks that may carry cases (up to the week holding
+#' @param active Logical, the weeks that may carry counts (up to the week holding
 #'   the curated \code{date_stop}).
 #' @param id Curation id, for the error message.
+#' @param value \code{"cumulative_cases"} (default) or \code{"cumulative_deaths"}.
 #' @return Numeric weights, one per week, summing to the curve's total.
 #' @noRd
-.curated_shape_weights <- function(anchors, week_start, active, id) {
-     cum <- function(t) stats::approx(as.numeric(anchors$date), anchors$cumulative_cases,
-                                      xout = as.numeric(t), rule = 2, ties = "ordered")$y
-     w <- cum(week_start + 5L) - cum(week_start - 2L)
-     total <- anchors$cumulative_cases[nrow(anchors)]
+.curated_shape_weights <- function(anchors, week_start, active, id, value = "cumulative_cases") {
+     a <- anchors[!is.na(anchors[[value]]), ]
+     y <- a[[value]][order(a$date)]
+     x <- as.numeric(sort(a$date))
+     cum <- function(t) stats::approx(x, y, xout = as.numeric(t), rule = 2, ties = "ordered")$y
+     w <- cum(week_start + 6L) - cum(week_start - 1L)
+     total <- y[length(y)]
      if (abs(sum(w[active]) - total) > 1e-8 * total || any(w[!active] > 0))
-          stop(sprintf(paste0("Curated WHO window %s: its shape puts cases outside the window's weeks ",
+          stop(sprintf(paste0("Curated WHO window %s: its %s curve puts counts outside the window's weeks ",
                               "(%s to %s); the anchors must lie within them"),
-                       id, format(min(week_start[active]) - 1L), format(max(week_start[active]) + 5L)),
+                       id, if (value == "cumulative_deaths") "death" else "case",
+                       format(min(week_start[active])), format(max(week_start[active]) + 6L)),
                call. = FALSE)
      w
 }

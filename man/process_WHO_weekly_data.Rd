@@ -84,8 +84,8 @@ evenly over its window: the dashboard gives no timing within it, and an even
 split is the allocation that asserts none (\code{process_cholera_surveillance_data}
 reshapes a window when another source observes every week of it). The split is
 in whole counts -- each week gets the floor or ceiling of the even share, by
-cumulative rounding, and the weeks sum to the report exactly -- so the integer
-daily downscaling neither inflates nor loses part of the report. Weeks the
+cumulative rounding half up, and the weeks sum to the report exactly -- so the
+integer daily downscaling neither inflates nor loses part of the report. Weeks the
 window adds that had no row are created. Each window row carries
 \code{disaggregation_method = "who_catchup_uniform"} and a
 \code{confidence_weight} that falls with the window length (0.9 up to 4 weeks,
@@ -102,10 +102,12 @@ covers, the package's surveillance curation table
 (\code{inst/extdata/surveillance_curation.csv}, action \code{who_window}; see
 \code{\link{process_cholera_surveillance_data}}) replaces the rule for that
 report: the window starts at the WHO week containing the documented start date
-(South Africa 2023: the after-action review's 1 February; Namibia 2025: the
-first case on 2 March), and when a documented end date precedes the report,
-the cases are spread over the weeks up to that end and the weeks after it, to
-the report, carry 0 (South Africa: 31 July, the report arriving in week 35). A
+(South Africa 2023: 1 February, the start of the outbreak period in the
+Department of Health's statement of 5 July 2023; Namibia 2025: the first case on
+Sunday 2 March, i.e. week 9), and when a documented end date precedes the
+report, the cases are spread over the weeks up to that end and the weeks after
+it, to the report, carry 0 (South Africa: 31 July, the date of WHO AFRO's
+after-action review count, the report arriving in week 35). A
 curated window can also spread a report the rule does not test (Cote d'Ivoire
 2025 week 33, the last week of its series). Its rows carry
 \code{disaggregation_method = "who_catchup_curated"}, the table row's id in
@@ -114,33 +116,47 @@ cases. A curated window must lie within the report's epi year and cover only
 silent weeks before the report; a curated report that is no longer in the data
 (zero or missing) is skipped with a warning.
 
-\strong{Shaped curated windows.} When a documented epidemic curve times the
-outbreak within its window, the curation row has \code{shape = "cumulative"}
-and the curve is given as cumulative-count anchors in
-\code{inst/extdata/surveillance_curation_shapes.csv} (daily or weekly counts
-as anchors at the end of each day or week; coarser totals, e.g. monthly, as
-anchors that are interpolated linearly). Each week of the window then gets the
-curve's increment over its Sunday-to-Saturday span, and the report's cases and
-deaths are spread in proportion, in whole counts that sum to the report: the
-curve may count fewer cases than the report (it is rescaled) but must lie
-within the window. South Africa 2023 follows WHO's epidemic curve of the
-outbreak by symptom onset date (external situation report #5, Figure 5): a few
+\strong{Shaped curated windows.} When documented dates time the outbreak within
+its window, the curation row has \code{shape = "cumulative"} and the timing is
+given as cumulative-count anchors in
+\code{inst/extdata/surveillance_curation_shapes.csv}: a case curve
+(\code{cumulative_cases}) and optionally a deaths curve
+(\code{cumulative_deaths}; without one, deaths follow the case curve). Daily
+or weekly counts are written as anchors at the end of each day or week, and
+coarser totals (monthly, or dated cumulative reports) as anchors that are
+interpolated linearly. Each week of the window then gets the curve's
+increment over its Monday-to-Sunday span, and the report's cases and deaths
+are spread in proportion, in whole counts that sum to the report. The curve is
+rescaled to the report, but its total must lie between half the report and 2\\%
+above it (a larger gap is an error in the anchors), and it must lie within the
+window. The anchors are dated like the rest of the WHO weekly rows, by report
+week. South Africa 2023 follows WHO's epidemic curve of the outbreak
+(external situation report #5, Figure 5) with its symptom onset dates moved 2
+days later, the onset-to-notification lag at which the cumulative curve best
+matches the notification-date curve of situation report #4 (Figure 2): a few
 imported and sporadic cases from February to April, the Hammanskraal surge
-from early May peaking in the week of 21-27 May (394 of the 1,390 cases), and
-no case after early July. These rows carry
-\code{disaggregation_method = "who_catchup_curated_shaped"} and confidence 0.9,
-the weight of a window shaped by another source's weekly counts.
+from early May peaking in the week of 22-28 May (432 of the 1,390 cases), few
+cases after June, and the imported case of 14 July (onset), placed on 16 July.
+Its deaths follow their own curve, the cumulative counts the Department of
+Health, the Gauteng Department of Health and WHO reported (1 death by 23
+February, 11 by 21 May, 24 by 28 May, 31 by 6 June, 38 by 15 June, 47 by 4
+July). These rows carry \code{disaggregation_method = "who_catchup_curated_shaped"}
+and confidence 0.9, the weight of a window shaped by another source's weekly
+counts.
 
 \strong{Week convention.} The \code{year}/\code{week} columns are WHO's own
-\code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. WHO numbers weeks on
-the MMWR (US CDC) calendar -- Sunday-start weeks, week 1 being the week that
-contains 4 January -- and stamps each week with the following Monday
-(\code{date_wk} in the WHO AWD feature service). This coincides with ISO-8601
-except in years whose 4 January falls on a Sunday: e.g. WHO has a genuine
-2025-W53 starting Monday 2025-12-29 (ISO 2025 has only 52 weeks), and WHO
-2026-W01 starts 2026-01-05 (ISO 2026-W01 starts 2025-12-29). Each row is therefore
-dated from WHO's calendar, never merged into a neighbouring week. Downstream
-consumers key on \code{date_start}, not on \code{(year, week)}.
+\code{epiyr}/\code{epiwk} labels, which are NOT ISO-8601 weeks. A WHO epi week
+runs Monday to Sunday and is stamped with its Monday (\code{date_wk} in the WHO
+AWD feature service; the dashboard's note: "The date corresponds to the first
+day of the epi-week (from Monday to Sunday)"). Weeks are numbered as the MMWR
+(US CDC) calendar shifted by one day: week 1 begins on the Monday after the
+Sunday that starts MMWR week 1 (the Sunday-Saturday week containing 4 January).
+This coincides with ISO-8601 except in years whose 4 January falls on a Sunday:
+e.g. WHO has a genuine 2025-W53 starting Monday 2025-12-29 (ISO 2025 has only
+52 weeks), and WHO 2026-W01 starts 2026-01-05 (ISO 2026-W01 starts 2025-12-29).
+Each row is therefore dated from WHO's calendar, never merged into a
+neighbouring week. Downstream consumers key on \code{date_start}, not on
+\code{(year, week)}.
 
 Missing \code{cases} or \code{deaths} stay \code{NA}; no row is dropped for having
 one field missing.

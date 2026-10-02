@@ -171,28 +171,34 @@ test_that("past four reported zeros the drop-ratio test needs a series alternati
      expect_equal(out$week[!is.na(out$catchup_start)], 2:7)
 })
 
-test_that("the curated ZAF 2023 window follows the after-action review dates and WHO's epidemic curve", {
+test_that("the curated ZAF 2023 window follows WHO's epidemic curve, report-dated, and its own deaths curve", {
      raw <- .raw_who_rows("SOUTH AFRICA", 2023, 35:52,
                           c(1390, rep(0, 13), 1, 0, 0, 0), c(47, rep(0, 17)))
      out <- .run_who_processor(raw)
      win <- out[!is.na(out$catchup_start), ]
      expect_equal(win$week, 5:35)                                    # from the week of 1 Feb
      expect_false(any(out$year == 2023 & out$week < 5))              # weeks 1-4 not created
-     # weekly onsets of WHO sitrep #5 Figure 5 (weeks 5-27), none from week 28 on
+     # weekly cases of WHO sitrep #5 Figure 5, onset + 2 days, Monday-Sunday weeks
+     # 5-28 (the imported case in week 28), none from week 29 on
      cur <- MOSAIC:::.surveillance_curation("who_window")
      sh  <- MOSAIC:::.surveillance_curation_shapes(cur)
-     onsets <- diff(sh$cumulative_cases[sh$id == "ZAF-2023-AAR"])
-     expect_length(onsets, 23L)
-     expect_equal(win$cases, MOSAIC:::.spread_count(1390, c(onsets, rep(0, 8))))
-     expect_equal(win$deaths, MOSAIC:::.spread_count(47, c(onsets, rep(0, 8))))
+     z   <- sh[sh$id == "ZAF-2023-AAR" & !is.na(sh$cumulative_cases), ]
+     weekly <- diff(z$cumulative_cases)
+     expect_length(weekly, 24L)
+     expect_equal(win$cases, MOSAIC:::.spread_count(1390, c(weekly, rep(0, 7))))
      expect_true(sum(win$cases) == 1390 && sum(win$deaths) == 47)
-     expect_true(all(win$cases == round(win$cases)))                 # whole counts
-     # the Hammanskraal surge: peak in the week of 21-27 May, bulk in May-June
-     expect_equal(win$week[which.max(win$cases)], 21L)
+     expect_true(all(win$cases == round(win$cases) & win$deaths == round(win$deaths)))   # whole counts
+     # the Hammanskraal surge: rows of 15, 22 and 29 May, peak in 22-28 May
+     expect_equal(win$cases[win$date_start %in% as.Date(c("2023-05-15", "2023-05-22", "2023-05-29"))],
+                  c(220, 432, 249))
      expect_equal(win$date_start[which.max(win$cases)], as.Date("2023-05-22"))
-     expect_equal(max(win$cases), 394)
-     expect_gt(sum(win$cases[win$week %in% 18:24]), 0.95 * 1390)
-     expect_true(all(win$cases[win$week %in% c(9:11, 16, 28:35)] == 0))
+     expect_gt(sum(win$cases[win$week %in% 18:25]), 0.95 * 1390)       # 1 May - 25 June
+     expect_equal(win$cases[win$week == 28], 1)                      # the Karachi case, 14 + 2 July
+     expect_true(all(win$cases[win$week %in% c(9:11, 16, 29:35)] == 0))
+     # deaths follow the report-dated deaths curve, not the case curve
+     expect_equal(win$deaths[win$week %in% c(8, 20:27)], c(1, 10, 13, 5, 6, 5, 3, 3, 1))
+     expect_true(all(win$deaths[!win$week %in% c(8, 20:27)] == 0))
+     expect_false(isTRUE(all.equal(win$deaths, MOSAIC:::.spread_count(47, c(weekly, rep(0, 7))))))
      expect_equal(win$cases_reported[win$week == 35], 1390)
      expect_true(all(win$disaggregation_method == "who_catchup_curated_shaped"))
      expect_true(all(win$catchup_curation_id == "ZAF-2023-AAR"))
@@ -201,13 +207,21 @@ test_that("the curated ZAF 2023 window follows the after-action review dates and
      expect_equal(sum(out$deaths), 47)
 })
 
-test_that("the curated NAM 2025 window starts at the first case (2 Mar 2025), not week 1", {
+test_that("the curated NAM 2025 window starts at the week of the first case (Sunday 2 Mar 2025: week 9)", {
      out <- .run_who_processor(.raw_who_rows("NAMIBIA", 2025, 12:23, c(22, rep(0, 11)), 0))
      win <- out[!is.na(out$catchup_start), ]
-     expect_equal(win$date_start, .who_epiweek_start(2025, 10:12))   # WHO week 10 holds Sun 2 Mar
-     expect_equal(win$cases, c(7, 8, 7))
-     expect_equal(min(out$date_start), .who_epiweek_start(2025, 10))
+     expect_equal(win$date_start, .who_epiweek_start(2025, 9:12))    # Mon 24 Feb - Sun 2 Mar is week 9
+     expect_equal(win$cases, c(6, 5, 6, 5))                          # 22 over 4 weeks, halves rounded up
+     expect_equal(min(out$date_start), .who_epiweek_start(2025, 9))
      expect_true(all(win$confidence_weight == 0.9 & win$catchup_curation_id == "NAM-2025-first-case"))
+})
+
+test_that("a WHO week runs Monday to Sunday: a date maps to the Monday on or before it", {
+     d <- as.Date(c("2025-03-02", "2025-03-03", "2025-03-09", "2023-02-01", "2023-07-31", "2023-05-21"))
+     expect_equal(MOSAIC:::.who_week_of_date(d),
+                  as.Date(c("2025-02-24", "2025-03-03", "2025-03-03", "2023-01-30", "2023-07-31", "2023-05-15")))
+     expect_true(all(as.POSIXlt(MOSAIC:::.who_week_of_date(as.Date("2024-01-01") + 0:20))$wday == 1L))
+     expect_equal(MOSAIC:::.who_week_of_date(as.Date(NA)), as.Date(NA))
 })
 
 .who_rows <- function(iso, year, weeks, cases, deaths = 0) {
@@ -224,7 +238,7 @@ test_that("curated windows spread an untested end-of-series report (CIV 2025 wee
      expect_true(all(is.na(rule$catchup_start[rule$week >= 30])))           # the series ends at the report
      out <- MOSAIC:::.who_reallocate_catchup_reports(civ, cur)
      w <- out[out$week >= 30, ]
-     expect_equal(w$cases, c(28, 29, 29, 28))
+     expect_equal(w$cases, c(29, 28, 29, 28))                           # halves rounded up
      expect_equal(w$cases_reported, c(0, 0, 0, 114))
      expect_true(all(w$catchup_curation_id == "CIV-2025-W33" & w$confidence_weight == 0.9))
      expect_equal(out$cases[out$week %in% 28:29], c(140, 140))           # the rule's window stays
@@ -257,15 +271,26 @@ test_that("a curated window must cover only silent weeks of the report's epi yea
 })
 
 test_that("cumulative anchors give each WHO week the curve's increment, interpolating coarse anchors", {
-     # WHO 2024 weeks 2-5 run Sunday 7 Jan - Saturday 3 Feb; anchors at the ends of
+     # WHO 2024 weeks 2-5 run Monday 8 Jan - Sunday 4 Feb; anchors at the ends of
      # weeks 1, 3 and 4: the week-2 and week-3 increments split the first segment
-     a <- data.frame(date = as.Date(c("2024-01-06", "2024-01-20", "2024-01-27")),
+     a <- data.frame(date = as.Date(c("2024-01-07", "2024-01-21", "2024-01-28")),
                      cumulative_cases = c(0, 10, 40))
      wk <- .who_epiweek_start(2024, 2:5)
      expect_equal(MOSAIC:::.curated_shape_weights(a, wk, rep(TRUE, 4), "T"), c(5, 5, 30, 0))
-     # a mid-week anchor is interpolated by day: 7 of the 14 days fall in week 2
-     a2 <- data.frame(date = as.Date(c("2024-01-06", "2024-01-17")), cumulative_cases = c(0, 11))
+     # a mid-week anchor is interpolated by day: 7 of the 11 days fall in week 2
+     a2 <- data.frame(date = as.Date(c("2024-01-07", "2024-01-18")), cumulative_cases = c(0, 11))
      expect_equal(MOSAIC:::.curated_shape_weights(a2, wk, rep(TRUE, 4), "T"), c(7, 4, 0, 0))
+     # a Sunday anchor closes its own week; the count a day later opens the next
+     a3 <- data.frame(date = as.Date(c("2024-01-07", "2024-01-14", "2024-01-15")),
+                      cumulative_cases = c(0, 6, 7))
+     expect_equal(MOSAIC:::.curated_shape_weights(a3, wk, rep(TRUE, 4), "T"), c(6, 1, 0, 0))
+     # each series uses its own rows: NA marks a row that is not an anchor of it
+     # (deaths: 2 by Wed 10 Jan, then 1 more over the 18 days to 28 Jan)
+     ad <- data.frame(date = as.Date(c("2024-01-07", "2024-01-10", "2024-01-21", "2024-01-28")),
+                      cumulative_cases = c(0, NA, 10, 40), cumulative_deaths = c(0, 2, NA, 3))
+     expect_equal(MOSAIC:::.curated_shape_weights(ad, wk, rep(TRUE, 4), "T"), c(5, 5, 30, 0))
+     expect_equal(MOSAIC:::.curated_shape_weights(ad, wk, rep(TRUE, 4), "T", "cumulative_deaths"),
+                  c(2 + 4 / 18, 7 / 18, 7 / 18, 0))
      # the curve must lie within the weeks that may carry cases
      expect_error(MOSAIC:::.curated_shape_weights(a, wk[1:2], c(TRUE, TRUE), "T"), "outside the window")
      expect_error(MOSAIC:::.curated_shape_weights(a, wk, c(TRUE, TRUE, FALSE, FALSE), "T"), "outside the window")
@@ -275,28 +300,94 @@ test_that("cumulative anchors give each WHO week the curve's increment, interpol
                   "no anchors were supplied")
 })
 
+# A curated, shaped test window: MWI 2024 week 10 reports 90 cases (and
+# report_deaths deaths) after silent weeks 6-9; the curves time them within weeks
+# 6-10 (anchors on the Sundays ending weeks 5-10).
+.shaped_window <- function(cases_anchor, deaths_anchor = NULL, report_deaths = 6) {
+     cur <- data.frame(id = "T-SHAPE", iso_code = "MWI", action = "who_window", report_year = 2024L,
+                       report_week = 10L, date_start = as.Date("2024-02-05"), date_stop = as.Date(NA),
+                       shape = "cumulative", evidence = "e", reference = "r", added = "2026-10-01",
+                       stringsAsFactors = FALSE)
+     ends <- .who_epiweek_start(2024, 5:10) + 6L
+     shapes <- data.frame(id = "T-SHAPE", date = ends, cumulative_cases = cases_anchor,
+                          cumulative_deaths = if (is.null(deaths_anchor)) NA_real_ else deaths_anchor)
+     d <- .who_rows("MWI", 2024, 1:12, c(5, 0, 0, 0, 0, 0, 0, 0, 0, 90, 0, 0),
+                    c(0, 0, 0, 0, 0, 0, 0, 0, 0, report_deaths, 0, 0))
+     out <- MOSAIC:::.who_reallocate_catchup_reports(d, cur, shapes)
+     out[out$week %in% 6:10, ]
+}
+
+test_that("a curated deaths curve times the deaths; without one deaths follow the case curve", {
+     cum_c <- c(0, 10, 30, 60, 80, 90)                                 # weeks 6-10: 10, 20, 30, 20, 10
+     # no deaths curve: deaths follow the case curve, as before
+     w0 <- .shaped_window(cum_c)
+     expect_equal(w0$cases, c(10, 20, 30, 20, 10))
+     expect_equal(w0$deaths, MOSAIC:::.spread_count(6, c(10, 20, 30, 20, 10)))
+     # a deaths curve: the six deaths in weeks 6 and 9, totals conserved, cases unchanged
+     w1 <- .shaped_window(cum_c, c(0, 3, 3, 3, 6, 6))
+     expect_equal(w1$cases, w0$cases)
+     expect_equal(w1$deaths, c(3, 0, 0, 3, 0))
+     expect_equal(sum(w1$deaths), 6)
+     expect_true(all(w1$disaggregation_method == "who_catchup_curated_shaped" & w1$confidence_weight == 0.9))
+     # a deaths curve against a report without deaths is an error
+     expect_error(.shaped_window(cum_c, c(0, 3, 3, 3, 6, 6), report_deaths = 0), "death curve counts 6")
+})
+
+test_that("a curve whose total is far from the report is refused (an anchor typo)", {
+     # 90 reported: a case curve from 45 (half) to 91.8 (2% above) is rescaled
+     expect_equal(sum(.shaped_window(c(0, 5, 15, 30, 40, 45))$cases), 90)
+     expect_equal(sum(.shaped_window(c(0, 10, 30, 60, 80, 91))$cases), 90)
+     expect_error(.shaped_window(c(0, 10, 30, 60, 80, 44)), "case curve counts 44 against a report of 90")
+     expect_error(.shaped_window(c(0, 10, 30, 60, 80, 900)), "between 0.5 and 1.02 times the report")
+     expect_error(.shaped_window(c(0, 10, 30, 60, 80, 90), c(0, 1, 2, 3, 4, 7)), "death curve counts 7")
+     expect_error(.shaped_window(c(0, 10, 30, 60, 80, 90), c(0, 1, 1, 1, 2, 2)), "death curve counts 2")
+})
+
 test_that("the curation shape table is validated against the curation table", {
      cur <- MOSAIC:::.surveillance_curation("who_window")
      sh  <- MOSAIC:::.surveillance_curation_shapes(cur)
      expect_equal(unique(sh$id), "ZAF-2023-AAR")
-     z <- sh[sh$id == "ZAF-2023-AAR", ]
-     expect_equal(range(z$date), as.Date(c("2023-01-28", "2023-07-08")))  # Saturdays: WHO week ends
-     expect_true(all(as.POSIXlt(z$date)$wday == 6L))
-     expect_equal(z$cumulative_cases[c(1, nrow(z))], c(0, 1271))         # 1,271 of the 1,274 by 9 July
+     z  <- sh[sh$id == "ZAF-2023-AAR" & !is.na(sh$cumulative_cases), ]
+     expect_equal(range(z$date), as.Date(c("2023-01-29", "2023-07-16")))  # Sundays: WHO week ends
+     expect_true(all(as.POSIXlt(z$date)$wday == 0L))
+     expect_equal(z$cumulative_cases[c(1, nrow(z))], c(0, 1272))         # 1,271 digitized + the Karachi case
      expect_false(is.unsorted(z$cumulative_cases))
+     zd <- sh[sh$id == "ZAF-2023-AAR" & !is.na(sh$cumulative_deaths), ]
+     expect_equal(zd$cumulative_deaths[c(1, nrow(zd))], c(0, 47))
+     expect_equal(max(zd$date), as.Date("2023-07-04"))                   # NDoH: 47 as of 4 July
+     expect_false(is.unsorted(zd$cumulative_deaths))
      tmp <- withr::local_tempfile(fileext = ".csv")
-     put <- function(x) { utils::write.csv(x, tmp, row.names = FALSE); tmp }
+     put <- function(x) { utils::write.csv(x, tmp, row.names = FALSE, na = ""); tmp }
      raw <- utils::read.csv(system.file("extdata", "surveillance_curation_shapes.csv", package = "MOSAIC"),
-                            colClasses = "character")
-     bad <- raw; bad$cumulative_cases[3] <- "1"
-     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "never decrease")
+                            colClasses = "character", na.strings = "")
+     cc <- which(!is.na(raw$cumulative_cases))
+     bad <- raw; bad$cumulative_cases[cc[3]] <- "1"
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "case count must never decrease")
      bad <- raw; bad$cumulative_cases[1] <- "1"
-     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "start at 0")
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "case count must start at 0")
+     bad <- raw; bad$cumulative_cases[cc] <- "0"
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "case count must end above 0")
+     bad <- raw; bad$cumulative_deaths[!is.na(bad$cumulative_deaths)] <- "0"
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "death count must end above 0")
+     bad <- raw; bad$cumulative_cases[cc[length(cc)]] <- "Inf"
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "non-finite count")
+     bad <- raw; bad$cumulative_cases[cc[2]] <- "12x"
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "unreadable count")
+     bad <- raw; bad$cumulative_cases[cc[2]] <- NA
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "needs a case or death count")
+     bad <- raw; bad$date[2] <- "2023-02-30"
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "valid date")
      bad <- raw; bad$date[2] <- bad$date[1]
      expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "distinct dates")
      bad <- raw; bad$id <- "NAM-2025-first-case"
      expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "not a who_window row with shape")
      expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(raw[0, ])), "no anchors for: ZAF-2023-AAR")
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, file.path(tempdir(), "no-such-shapes.csv")),
+                  "shape table not found")
+     # the deaths column is optional: without it, every curve's deaths follow its cases
+     nodeaths <- raw[!is.na(raw$cumulative_cases), setdiff(names(raw), "cumulative_deaths")]
+     sh2 <- MOSAIC:::.surveillance_curation_shapes(cur, put(nodeaths))
+     expect_true(all(is.na(sh2$cumulative_deaths)))
      tab <- utils::read.csv(system.file("extdata", "surveillance_curation.csv", package = "MOSAIC"),
                             colClasses = "character")
      tab$shape[tab$id == "AGO-2023-absence"] <- "cumulative"
@@ -684,24 +775,36 @@ test_that("raw WHO year-to-date dump + AI ramp end to end: no spike and no doubl
      dd <- as.Date(daily$date)
      expect_true(all(is.na(daily$cases[dd < as.Date("2023-01-30")])))
      expect_equal(sum(daily$cases[dd >= as.Date("2023-01-30") & dd <= as.Date("2023-08-06")]), 1390)
-     expect_true(all(daily$cases[dd >= as.Date("2023-07-10") & dd <= as.Date("2023-09-03")] == 0))
+     expect_true(all(daily$cases[dd >= as.Date("2023-07-17") & dd <= as.Date("2023-09-03")] == 0))
      expect_true(all(daily$disaggregation_method[dd >= as.Date("2023-01-30") & dd <= as.Date("2023-09-03")] == "who_catchup_curated_shaped"))
-     # on WHO's epidemic curve: the busiest days fall in the week of the 394-case peak
-     expect_lte(max(daily$cases, na.rm = TRUE), 57)                    # 394 / 7, whole counts
-     expect_equal(sum(daily$cases[dd >= as.Date("2023-05-22") & dd <= as.Date("2023-05-28")]), 394)
+     # on WHO's report-dated curve: the busiest days fall in the week of the 432-case peak
+     expect_lte(max(daily$cases, na.rm = TRUE), 62)                    # 432 / 7, whole counts
+     expect_equal(sum(daily$cases[dd >= as.Date("2023-05-22") & dd <= as.Date("2023-05-28")]), 432)
+     expect_equal(sum(daily$deaths[dd >= as.Date("2023-05-15") & dd <= as.Date("2023-05-21")]), 10)
      expect_true(all(dd[which(daily$cases == max(daily$cases, na.rm = TRUE))] >= as.Date("2023-05-22") &
                      dd[which(daily$cases == max(daily$cases, na.rm = TRUE))] <= as.Date("2023-05-28")))
 })
 
 test_that(".spread_count splits a whole count into whole weeks that sum exactly", {
      f <- MOSAIC:::.spread_count
-     expect_equal(f(47, n = 35), diff(c(0, round(47 * (1:35) / 35))))
+     expect_equal(f(47, n = 35), diff(c(0, floor(47 * (1:35) / 35 + 0.5))))
      expect_equal(sum(f(47, n = 35)), 47)
      expect_true(all(f(47, n = 35) %in% c(1, 2)))
      expect_equal(f(0, n = 4), rep(0, 4))
      expect_equal(f(NA, n = 3), rep(NA_real_, 3))
-     expect_equal(f(10, c(1, 0, 3)), c(2, 0, 8))                  # proportional, zero weight -> 0
+     expect_equal(f(10, c(1, 0, 3)), c(3, 0, 7))                  # proportional, halves up, zero weight -> 0
      expect_equal(f(10.5, c(1, 1)), c(5.25, 5.25))                # non-count total spread exactly
+     # halves round up, so every week gets the floor or ceiling of its exact share
+     # (rounding halves to even gave 0,0,2,0 and 0,2,1: an exact share of 1 got 2)
+     expect_equal(f(2, c(1, 0, 2, 1)), c(1, 0, 1, 0))
+     expect_equal(f(3, c(1, 2, 3)), c(1, 1, 1))
+     set.seed(11)
+     for (i in seq_len(300)) {
+          w <- sample(0:5, sample(2:8, 1), replace = TRUE); if (sum(w) == 0) w[1] <- 1
+          tot <- sample(0:12, 1)
+          sp <- f(tot, w); ex <- tot * w / sum(w)
+          expect_true(sum(sp) == tot && all(sp >= floor(ex) & sp <= ceiling(ex)))
+     }
 })
 
 test_that("epidemic-peak detection keeps WHO multi-week reports as observed and blanks only imputed weeks", {
