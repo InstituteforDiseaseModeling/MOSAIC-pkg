@@ -62,15 +62,17 @@
 # k, slope 0.22 +/- 0.14 -- a flat, noisy panel, so the trend is a prior centre
 # of about 1 rather than a precise prediction. On config_default v6.1 it gives
 # BFA 0.89, CIV 0.98, ZAF 1.10 (too few observed weeks) and CMR 1.65 (its fit
-# collapses), the four locations without an estimate of their own there. (The
-# v6.0 fit, on every week: intercept -0.195, slope 0.143, SD 1.56, n 23; CMR,
-# UGA and ZAF at 1.41, 1.00 and 1.20.)
+# collapses), the four locations without an estimate of their own there, and
+# UGA 0.96 (its fit is clamped at the lower bound, which is censoring rather
+# than a measurement; see est_nb_dispersion()). (The v6.0 fit, on every week:
+# intercept -0.195, slope 0.143, SD 1.56, n 23; CMR, UGA and ZAF at 1.41, 1.00
+# and 1.20.)
 #
 # The constants assume burn_in_days = 45; run_MOSAIC() applies them whatever the
 # run's burn-in. Refitted from day 31 (the control default burn_in_days = 30) the
 # trend is intercept -0.37, slope 0.22, residual SD 1.18 on 22 locations, which
-# gives BFA/CIV/CMR/ZAF 0.88/0.97/1.63/1.09: differences of at most 0.014 on
-# log k.
+# gives BFA/CIV/CMR/ZAF/UGA 0.88/0.97/1.63/1.09/0.95: differences of at most
+# 0.014 on log k.
 #
 # Rebuild recipe. The values depend on config_default, and three tests in
 # test-est_nb_dispersion_panel.R read it:
@@ -633,6 +635,25 @@
 #' (five or more estimated locations), the median of the estimated locations,
 #' or, alone, the Poisson limit.
 #'
+#' With \code{panel_trend}, a fit clamped at the lower bound of 0.1 (status
+#' \code{clamped_lower_bound}) takes the trend too, at every scale. The clamp is
+#' censoring, not a measurement. Where a series' few non-zero observed weeks are
+#' mostly the edges of short outbreaks whose middle weeks are reconstructed and
+#' left out of the fit (UGA on config_default v6.1: 10 non-zero of 84 observed
+#' weeks), the smooth mean cannot follow the outbreaks, their variance stays in
+#' the residual, and the fit returns the bound whatever the true \code{k}: on
+#' synthetic series of that shape it did so for a Poisson, a \code{k = 1} and a
+#' \code{k = 5} reporting process alike. At \code{k = 0.1} the cases score is
+#' several times less sensitive to the level (on UGA's two observed years a
+#' twofold level error costs 3.1 nats under the daily cases rule and 0.5 under
+#' the weekly one, against 22 and 4.6 at the trend's 0.96), and the weekly
+#' observation-level predictive puts at least half its mass on 0 for any weekly
+#' mean up to 102. The row keeps
+#' \code{status = "clamped_lower_bound"} and \code{k_raw} (the fit) with
+#' \code{panel_trend = TRUE} (the \code{k} used). Without \code{panel_trend} a
+#' clamped fit keeps the bound, shrunk toward the run's own trend when five or
+#' more locations have an estimate.
+#'
 #' @param obs Numeric matrix of observations, \code{n_locations x n_time_steps},
 #'   on a daily grid.
 #' @param weights_obs Optional numeric matrix of per-observation confidence
@@ -656,13 +677,14 @@
 #'   Poisson rule above still uses every tier. Default \code{NULL} (all weeks).
 #' @param panel_trend Optional list with numeric \code{intercept} and
 #'   \code{slope}: a cross-location trend \code{log k = intercept + slope *
-#'   log(mean weekly count)} taken by a location without an estimate of its own
-#'   (see Details). \code{run_MOSAIC()} supplies the cases trend fitted on
-#'   config_default with \code{burn_in_days = 45}
-#'   (\code{MOSAIC:::.NB_DISP_PANEL_TREND}), whatever the run's burn-in; refitted
-#'   on the window of the control default (30) it barely moves (BFA, CIV, CMR,
-#'   ZAF 0.88, 0.97, 1.63, 1.09 instead of 0.89, 0.98, 1.65, 1.10), far inside
-#'   the trend's residual SD of 1.19 on log k. Default \code{NULL}.
+#'   log(mean weekly count)} taken by a location without a usable estimate of
+#'   its own (no estimate, or a fit clamped at the lower bound; see Details).
+#'   \code{run_MOSAIC()} supplies the cases trend fitted on config_default with
+#'   \code{burn_in_days = 45} (\code{MOSAIC:::.NB_DISP_PANEL_TREND}), whatever
+#'   the run's burn-in; refitted on the window of the control default (30) it
+#'   barely moves (BFA, CIV, CMR, ZAF, UGA 0.88, 0.97, 1.63, 1.09, 0.95 instead
+#'   of 0.89, 0.98, 1.65, 1.10, 0.96), far inside the trend's residual SD of
+#'   1.19 on log k. Default \code{NULL}.
 #'
 #' @importFrom splines ns
 #'
@@ -774,11 +796,20 @@ est_nb_dispersion <- function(obs,
      res <- do.call(rbind, rows)
      names(res)[names(res) == "k"] <- "k_raw"
 
-     # A location without an estimate of its own takes the panel trend at its
-     # level, at every scale (a single-location run has no panel of its own to
-     # borrow from). The rest go through shrinkage among themselves.
+     # A location without a usable estimate of its own takes the panel trend at
+     # its level, at every scale (a single-location run has no panel of its own
+     # to borrow from): no estimate (status no_estimate_*), or a fit clamped at
+     # the lower bound. The clamp is censoring, not a measurement: where the few
+     # non-zero observed weeks are mostly the edges of short outbreaks whose
+     # middles are reconstructed (UGA on config_default v6.1), the fit returns
+     # the bound whatever the true k (Poisson, 1 or 5 on synthetic series of that
+     # shape), and at the bound the cases score is several times less sensitive
+     # to the level. The panel fit already leaves clamped fits out. `status`
+     # keeps describing the fit and `panel_trend` the k used. The rest go through
+     # shrinkage among themselves, so a location routed here is never shrunk.
      use_panel <- if (is.null(panel_trend)) rep(FALSE, n_loc) else
-          grepl("^no_estimate", res$status) & is.finite(res$mean_weekly) & res$mean_weekly > 0
+          (grepl("^no_estimate", res$status) | res$status %in% "clamped_lower_bound") &
+          is.finite(res$mean_weekly) & res$mean_weekly > 0
      res$panel_trend <- use_panel
      res$k <- NA_real_
      if (any(use_panel))
@@ -830,9 +861,10 @@ est_nb_dispersion <- function(obs,
 #' The estimate uses observed weeks only when the config carries
 #' \code{reported_tier} (\code{\link{est_nb_dispersion}}, argument
 #' \code{obs_tier}); without it every week enters the fit, as before that field
-#' existed. A cases location whose fit gives no estimate takes the shipped panel
-#' trend (\code{.NB_DISP_PANEL_TREND}, fitted at \code{burn_in_days = 45}) at
-#' every scale. Deaths take no panel trend: \code{run_MOSAIC()} scores deaths
+#' existed. A cases location whose fit gives no estimate, or is clamped at the
+#' lower bound, takes the shipped panel trend (\code{.NB_DISP_PANEL_TREND},
+#' fitted at \code{burn_in_days = 45}) at every scale. Deaths take no panel
+#' trend (a clamped deaths fit keeps the bound): \code{run_MOSAIC()} scores deaths
 #' with the reported CFR integrated out, so their NB dispersion is a diagnostic
 #' (and the dispersion of a standalone deaths NB core). A deaths location whose
 #' observed weeks alone are too few is estimated from every week

@@ -56,10 +56,11 @@ balance. Not re-tuned since; check the fit before relying on it
 \item \code{cases_scoring}: \code{"weekly"} (default; cases scored as NB on
 reporting-week totals) or \code{"daily"} (the per-day cells of v0.100.1
 and earlier, at the dispersion this version estimates). \code{"daily"}
-does not reproduce a v0.100.1 run: a cases fit with no estimate of its own
-now takes the panel trend, a config with \code{reported_tier} restricts
-the cases k and the deaths dispersion to observed weeks, the ensemble
-intervals are observation-level and the cases central line is the median.
+does not reproduce a v0.100.1 run: a cases fit with no estimate of its
+own, or clamped at the lower bound, now takes the panel trend, a config
+with \code{reported_tier} restricts the cases k and the deaths dispersion
+to observed weeks, the ensemble intervals are observation-level and the
+cases central line is the median.
 Matching a v0.100.1 likelihood also needs that run's \code{nb_k_cases}
 (its \code{nb_dispersion.csv}) and a config without \code{reported_tier};
 resume refuses to pool with v0.100.1 simulations either way

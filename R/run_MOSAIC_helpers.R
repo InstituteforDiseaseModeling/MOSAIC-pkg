@@ -1488,12 +1488,15 @@
 #'   replicates, and the cumulative shape term sums over scored cells only.
 #'   v0.101.0 scores cases on reporting-week totals instead of daily cells, and
 #'   changes the cases dispersion: estimated from observed weeks only (config
-#'   \code{reported_tier}), and a location whose fit collapses or has too few
-#'   observed weeks takes the cross-country panel trend. The integrated deaths
-#'   score's dispersion phi is likewise estimated from observed weeks only when
-#'   the config carries \code{reported_tier} (every scored week when they are
-#'   too few).
-.mosaic_likelihood_impl_version <- function() "R/v0.101.0+weekly_cases"
+#'   \code{reported_tier}), and a location whose fit collapses, is clamped at
+#'   the lower bound or has too few observed weeks takes the cross-country panel
+#'   trend. The integrated deaths score's dispersion phi is likewise estimated
+#'   from observed weeks only when the config carries \code{reported_tier}
+#'   (every scored week when they are too few). Its development builds stamped
+#'   "R/v0.101.0+weekly_cases", whose clamped fits kept the 0.1 bound: the
+#'   resolved k is not part of control.json, so only this tag keeps their shards
+#'   apart.
+.mosaic_likelihood_impl_version <- function() "R/v0.101.0+clamped_k_trend"
 
 #' R Engine Semantics Version
 #'

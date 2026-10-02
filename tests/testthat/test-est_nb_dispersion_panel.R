@@ -5,8 +5,9 @@
 #   (a) k from OBSERVED weeks only -- reconstructed (who_catchup_*) and imputed
 #       (fourier_*) weeks are left out of the fit (config$reported_tier);
 #   (b) censored k -- a location whose fit collapses (theta run to the zero
-#       boundary) or that has too few observed weeks takes the cross-country
-#       panel trend, at every scale. No global floor raise, no per-country values.
+#       boundary), is clamped at the lower bound, or that has too few observed
+#       weeks takes the cross-country panel trend, at every scale. No global
+#       floor raise, no per-country values.
 # =============================================================================
 
 # config_default rows on the scored window from day `from` (burn_in_days = 45),
@@ -27,7 +28,10 @@
 # The table the shipped trend is fitted from: per-location fits on the scored
 # window, no panel trend, no shrinkage (observed weeks only under reported_tier).
 .panel_table <- function() MOSAIC:::.nb_disp_panel_trend_fit(MOSAIC::config_default, burn_in_days = 45L)$table
-.no_own <- function(tab) grepl("^no_estimate", tab$status) & is.finite(tab$mean_weekly) & tab$mean_weekly > 0
+# Locations that take the panel trend: no estimate of their own, or a fit
+# clamped at the lower bound (censored, not a measurement).
+.no_own <- function(tab) (grepl("^no_estimate", tab$status) | tab$status %in% "clamped_lower_bound") &
+     is.finite(tab$mean_weekly) & tab$mean_weekly > 0
 
 test_that("the shipped panel trend is the one config_default implies (drift guard)", {
      # A rebuild of config_default's surveillance must re-derive the constants:
@@ -46,9 +50,10 @@ test_that("the shipped panel trend is the one config_default implies (drift guar
 test_that("locations without an estimate of their own take the panel trend", {
      # The locations and their k come from config_default's own panel table, so a
      # rebuild of its surveillance changes which locations, not the rule. (On
-     # config_default v6.1: BFA, CIV and ZAF, too few observed weeks, and CMR,
-     # fit collapsed to the zero boundary, at k 0.89, 0.98, 1.10 and 1.65; on
-     # v6.0: CMR, UGA and ZAF at 1.41, 1.00 and 1.20.)
+     # config_default v6.1: BFA, CIV and ZAF, too few observed weeks, CMR, fit
+     # collapsed to the zero boundary, and UGA, fit clamped at the lower bound,
+     # at k 0.89, 0.98, 1.10, 1.65 and 0.96; on v6.0: CMR, UGA and ZAF at 1.41,
+     # 1.00 and 1.20.)
      t0 <- .panel_table()
      no_own <- .no_own(t0)
      skip_if_not(any(no_own), "every config_default location has a dispersion estimate of its own")
@@ -58,7 +63,11 @@ test_that("locations without an estimate of their own take the panel trend", {
      # the fits are per location, so the statuses are the panel table's
      expect_identical(tab$status, t0$status)
      expect_identical(tab$panel_trend, no_own)
-     expect_true(all(is.na(tab$k_raw[no_own])))
+     # k_raw describes the fit: none without an estimate, the bound for a clamped fit
+     no_est  <- no_own & grepl("^no_estimate", t0$status)
+     clamped <- no_own & t0$status %in% "clamped_lower_bound"
+     expect_true(all(is.na(tab$k_raw[no_est])))
+     expect_true(all(tab$k_raw[clamped] == 0.1))
      expect_equal(tab$k[no_own], .trend_k(tab$mean_weekly[no_own]), tolerance = 1e-12)
      # identified fits sit far above the collapse rule's threshold
      ok <- is.finite(tab$k_raw) & is.finite(tab$se)
@@ -80,10 +89,12 @@ test_that("the panel trend gives the same k at every scale", {
           noshrink <- MOSAIC::est_nb_dispersion(x$obs, x$w, date_start = x$date_start, shrink = FALSE,
                                                 obs_tier = x$tier, panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)
           expect_identical(noshrink$k, alone$k)
-          # without a panel trend a lone location with no estimate has nothing to borrow
+          # without a panel trend a lone location with no estimate has nothing to
+          # borrow, and a lone clamped fit keeps the bound
           bare <- MOSAIC::est_nb_dispersion(x$obs, x$w, date_start = x$date_start, obs_tier = x$tier)
           expect_false(bare$panel_trend)
-          expect_true(is.infinite(bare$k))
+          if (grepl("^no_estimate", t0$status[i])) expect_true(is.infinite(bare$k), label = iso)
+          else expect_identical(bare$k, 0.1, label = iso)
      }
      # national, regional and full-panel resolutions agree for the first of them
      iso <- t0$location[no_own[1]]
@@ -163,6 +174,92 @@ test_that("an outbreak known only from reconstructed weeks takes the panel trend
      expect_identical(rs$status, "poisson_insufficient_data")
      expect_true(is.infinite(rs$k))
      expect_false(rs$panel_trend)
+})
+
+test_that("a fit clamped at the lower bound takes the panel trend at every scale; an own estimate does not", {
+     # v0.101.0 final review F1: a clamped fit is censored, not a measurement (on
+     # UGA-like series the fit returns the bound whatever the true k), so with a
+     # panel trend it takes the trend, as a location with no estimate does.
+     # Location A: weekly NB with a true k of 0.05 around a flat mean, which the
+     # fit reports at the 0.1 bound with an ordinary SE (not a collapse). The
+     # trend is chosen so the expected k is known by hand: 0.5 * sqrt(mean weekly).
+     n_weeks <- 150L
+     mondays <- as.Date("2023-01-02") + 7L * (seq_len(n_weeks) - 1L)
+     set.seed(1)
+     YA <- stats::rnbinom(n_weeks, mu = 8, size = 0.05)
+     expect_identical(sum(YA), 961)                     # fixture: mean weekly 961 / 150
+     dA <- matrix(MOSAIC::downscale_weekly_values(mondays, YA)$value, 1L)
+     tr <- list(intercept = log(0.5), slope = 0.5)
+     k_hand <- 0.5 * sqrt(961 / 150)                    # 1.26556...
+     a <- MOSAIC::est_nb_dispersion(dA, date_start = mondays[1], panel_trend = tr)
+     expect_identical(a$status, "clamped_lower_bound")  # status describes the fit,
+     expect_identical(a$k_raw, 0.1)
+     expect_gt(a$se / a$k_raw, 0.05)                    # (an identified fit, not a collapse)
+     expect_true(a$panel_trend)                         # panel_trend the k used
+     expect_equal(a$k, k_hand, tolerance = 1e-12)
+     expect_equal(a$k, 1.2655697004, tolerance = 1e-9)
+     expect_identical(MOSAIC::est_nb_dispersion(dA, date_start = mondays[1], panel_trend = tr,
+                                                shrink = FALSE)$k, a$k)
+     # without a panel trend the clamped fit keeps the bound
+     bare <- MOSAIC::est_nb_dispersion(dA, date_start = mondays[1])
+     expect_false(bare$panel_trend)
+     expect_identical(bare$k, 0.1)
+     # In a panel with active shrinkage (five own estimates) A is a trend taker:
+     # never shrunk toward the run's own trend, which would have moved it off the
+     # bound to a blend, and the five keep exactly the k they have without it.
+     five <- do.call(rbind, lapply(11:15, function(sd) .mk_series(n_weeks = n_weeks, k = 1.5, seed = sd)$daily))
+     p6 <- MOSAIC::est_nb_dispersion(rbind(dA, five), date_start = mondays[1], panel_trend = tr)
+     expect_gte(attr(p6, "shrinkage")$n_fit, 5L)
+     expect_identical(p6$status[1], "clamped_lower_bound")
+     expect_identical(p6$panel_trend, c(TRUE, rep(FALSE, 5)))
+     expect_identical(p6$k[1], a$k)
+     p5 <- MOSAIC::est_nb_dispersion(five, date_start = mondays[1], panel_trend = tr)
+     expect_identical(p6$k[-1], p5$k)
+     shrunk <- MOSAIC:::.nb_disp_shrink(p6$mean_weekly, p6$k_raw, se = p6$se, identified = p6$identified,
+                                        clamped = p6$status %in% "clamped_lower_bound")$k[1]
+     expect_gt(abs(log(shrunk) - log(a$k)), 0.1)
+     # an own estimate is never routed: alone it keeps its fit, in the panel its shrunk fit
+     expect_true(all(grepl("^ok", p6$status[-1])))
+     expect_false(any(p6$panel_trend[-1]))
+     b <- MOSAIC::est_nb_dispersion(five[1, , drop = FALSE], date_start = mondays[1], panel_trend = tr)
+     expect_false(b$panel_trend)
+     expect_identical(b$k, b$k_raw)
+     expect_gt(abs(log(b$k) - log(0.5 * sqrt(b$mean_weekly))), 0.1)
+})
+
+test_that("config_default's clamped cases fits take the shipped panel trend in every scope", {
+     # UGA on config_default v6.1 (clamped_lower_bound, k_raw 0.1): the trend's
+     # 0.96 alone, beside data-rich locations with shrinkage active, and in the
+     # full panel, where it previously resolved to 0.100, 0.105 and 0.108. The
+     # locations come from the panel table, so a rebuild changes which, not the rule.
+     t0 <- .panel_table()
+     cl <- which(t0$status %in% "clamped_lower_bound" & is.finite(t0$mean_weekly) & t0$mean_weekly > 0)
+     skip_if_not(length(cl) > 0L, "no config_default location has a clamped cases fit")
+     ctl <- mosaic_control_defaults(); ctl$likelihood$burn_in_days <- 45L
+     row_of <- function(isos, iso) {
+          cfg <- MOSAIC::get_location_config(MOSAIC::config_default, iso = isos)
+          sw <- MOSAIC:::.mosaic_resolve_score_window(cfg, ctl)
+          tb <- MOSAIC:::.mosaic_resolve_nb_dispersion(cfg, ctl, score_window = sw)$table
+          tb[tb$channel == "cases" & tb$location == iso, ]
+     }
+     for (i in cl) {
+          iso <- t0$location[i]
+          k_exp <- .trend_k(t0$mean_weekly[i])
+          with_rich <- c(iso, setdiff(c("KEN", "MOZ", "ETH", "ZMB", "NGA", "COD", "MWI"), iso)[1:6])
+          # shrinkage is active among the others in that set
+          x <- .cd_rows(with_rich)
+          sh <- MOSAIC::est_nb_dispersion(x$obs, x$w, date_start = x$date_start, location_name = x$iso,
+                                          obs_tier = x$tier, panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)
+          expect_gte(attr(sh, "shrinkage")$n_fit, 5L)
+          for (isos in list(iso, with_rich, MOSAIC::config_default$location_name)) {
+               r <- row_of(isos, iso)
+               lab <- sprintf("%s in a %d-location run", iso, length(isos))
+               expect_identical(r$status, "clamped_lower_bound", label = lab)
+               expect_identical(r$k_raw, 0.1, label = lab)
+               expect_true(r$panel_trend, label = lab)
+               expect_equal(r$k, k_exp, tolerance = 1e-12, label = lab)
+          }
+     }
 })
 
 test_that("the resolver reads config$reported_tier and returns the week boundaries", {
@@ -332,8 +429,12 @@ test_that("the cases scoring knob defaults to weekly and is validated", {
      expect_identical(MOSAIC:::.mosaic_validate_and_merge_control(ctl)$likelihood$cases_scoring, "daily")
 })
 
-test_that("the likelihood implementation stamp marks the weekly cases score", {
+test_that("the likelihood implementation stamp separates the clamped-fit routing", {
      # Resume refuses to pool shards across this stamp (test-run_MOSAIC_resume.R).
-     expect_match(MOSAIC:::.mosaic_likelihood_impl_version(), "v0\\.101\\.0")
-     expect_false(identical(MOSAIC:::.mosaic_likelihood_impl_version(), "R/v0.100.0+review_likelihood"))
+     # The resolved k is not in control.json, so only the stamp keeps shards
+     # scored with a clamped fit's 0.1 (the 0.101.0 development builds) apart
+     # from shards scored with the panel trend.
+     v <- MOSAIC:::.mosaic_likelihood_impl_version()
+     expect_match(v, "v0\\.101\\.0")
+     expect_false(v %in% c("R/v0.100.0+review_likelihood", "R/v0.101.0+weekly_cases"))
 })

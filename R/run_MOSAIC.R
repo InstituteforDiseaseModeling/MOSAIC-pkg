@@ -3516,10 +3516,11 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{cases_scoring}: \code{"weekly"} (default; cases scored as NB on
 #'       reporting-week totals) or \code{"daily"} (the per-day cells of v0.100.1
 #'       and earlier, at the dispersion this version estimates). \code{"daily"}
-#'       does not reproduce a v0.100.1 run: a cases fit with no estimate of its own
-#'       now takes the panel trend, a config with \code{reported_tier} restricts
-#'       the cases k and the deaths dispersion to observed weeks, the ensemble
-#'       intervals are observation-level and the cases central line is the median.
+#'       does not reproduce a v0.100.1 run: a cases fit with no estimate of its
+#'       own, or clamped at the lower bound, now takes the panel trend, a config
+#'       with \code{reported_tier} restricts the cases k and the deaths dispersion
+#'       to observed weeks, the ensemble intervals are observation-level and the
+#'       cases central line is the median.
 #'       Matching a v0.100.1 likelihood also needs that run's \code{nb_k_cases}
 #'       (its \code{nb_dispersion.csv}) and a config without \code{reported_tier};
 #'       resume refuses to pool with v0.100.1 simulations either way
@@ -3772,9 +3773,10 @@ mosaic_control_defaults <- function(calibration = NULL,
     # a week's level information ~5x (median over the v0.100.1 national runs) and
     # ranked draws by within-week noise. "daily" is the per-day cell rule of
     # v0.100.1 and earlier at the dispersion this version estimates; it does NOT
-    # reproduce a v0.100.1 run (panel-trend k for collapsed fits, observed-week k
-    # and deaths phi under reported_tier, observation-level intervals; matching a
-    # v0.100.1 likelihood also needs that run's nb_k_cases and no reported_tier).
+    # reproduce a v0.100.1 run (panel-trend k for collapsed and clamped fits,
+    # observed-week k and deaths phi under reported_tier, observation-level
+    # intervals; matching a v0.100.1 likelihood also needs that run's nb_k_cases
+    # and no reported_tier).
     cases_scoring = "weekly",
 
     # === Peak controls ===

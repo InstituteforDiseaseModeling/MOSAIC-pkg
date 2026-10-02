@@ -98,12 +98,13 @@ Description). \code{"daily"} is the per-day cell rule of MOSAIC v0.100.1
 and earlier (one NB cell per time step at the same weekly \code{k}, and the
 cumulative term at size \code{k * n}), applied at the dispersion supplied
 or estimated now. It does not reproduce a v0.100.1 score by itself: when
-\code{nb_k_cases}/\code{nb_k_deaths} are estimated here, a location whose
-fit gives no estimate takes the panel trend (v0.100.1 reported a collapsed
-fit at the 0.1 bound), and a config with \code{reported_tier} restricts the
-estimate to observed weeks. Reproducing a v0.100.1 score needs that run's
-dispersions (\code{nb_k_cases}, \code{nb_k_deaths} from its
-\code{nb_dispersion.csv}) and a config without \code{reported_tier}.
+\code{nb_k_cases}/\code{nb_k_deaths} are estimated here, a cases location
+whose fit gives no estimate, or is clamped at the lower bound, takes the
+panel trend (v0.100.1 kept such fits at the 0.1 bound), and a config with
+\code{reported_tier} restricts the estimate to observed weeks. Reproducing
+a v0.100.1 score needs that run's dispersions (\code{nb_k_cases},
+\code{nb_k_deaths} from its \code{nb_dispersion.csv}) and a config without
+\code{reported_tier}.
 \code{NULL} means \code{"weekly"}.}
 
 \item{week_offset}{Reporting-week boundary of each location, 0-6 days after
