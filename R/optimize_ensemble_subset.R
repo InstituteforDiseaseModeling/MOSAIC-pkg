@@ -11,6 +11,16 @@
 #' re-computes weighted median predictions from the 4D arrays, and scores with
 #' the selected objective function.
 #'
+#' Selection scores the ENGINE-level member trajectories
+#' (\code{ensemble$cases_engine_array}/\code{deaths_engine_array}; the
+#' \code{cases_array}/\code{deaths_array} of an ensemble saved before v0.101.0,
+#' which were engine-level), the series the ensemble's central lines are built
+#' from. The optimized ensemble is then rebuilt exactly as
+#' \code{\link{calc_model_ensemble}} builds one: central lines from the engine
+#' draws and the interval envelope and \code{predictive_median} from the
+#' observation-level draws of the selected members, when the ensemble carries
+#' them. The \code{"wis"} objective therefore scores the engine-level spread.
+#'
 #' The per-N weights use the same scheme as the \code{weight_best} posterior
 #' that \code{run_MOSAIC()} builds the candidate ensemble from (by default
 #' \eqn{w \propto \exp(-0.5 \min(\Delta, 4))}{w ~ exp(-0.5 min(Delta, 4))} with
@@ -80,7 +90,8 @@
 #'   \code{"median"} here is deliberate -- it preserves historical direct-call
 #'   selection and the Tier-2 bit-for-bit parity guarantee; \code{run_MOSAIC()}
 #'   passes the resolved \code{control$predictions$central_method} (package
-#'   default \code{"mean"} as of v0.98.0) explicitly.
+#'   default since v0.101.0: \code{"median"} for cases, \code{"mean"} for
+#'   deaths) explicitly.
 #' @param stride Integer >= 1. \code{1L} (default) evaluates every N in
 #'   \code{min_n:max_n} (exhaustive, bit-identical parity path). \code{> 1L}
 #'   enables a coarse-then-refine two-stage search (see Details). \strong{Opt-in};
@@ -110,8 +121,9 @@
 #'       likelihood-sorted order, aligned with \code{optimal_weights} (when
 #'       \code{seeds} supplied), else \code{NULL}.}
 #'     \item{ensemble_optimized}{Complete \code{mosaic_ensemble} object at optimal
-#'       N. Its \code{$seeds} field is the per-member seed aligned with its
-#'       \code{cases_array} (member-to-seed aligned) when \code{ensemble$seeds} was
+#'       N, carrying the selected members' observation-level and engine-level
+#'       arrays. Its \code{$seeds} field is the per-member seed aligned with its
+#'       arrays (member-to-seed aligned) when \code{ensemble$seeds} was
 #'       present, else it falls back to \code{optimal_seeds}.}
 #'     \item{stability_flag}{TRUE if score profile was flat.}
 #'     \item{diagnostics_n}{Original diagnostics-selected N.}
@@ -155,12 +167,21 @@ optimize_ensemble_subset <- function(ensemble,
   if (!inherits(ensemble, "mosaic_ensemble")) {
     stop("'ensemble' must be a mosaic_ensemble object.", call. = FALSE)
   }
-  if (is.null(ensemble$cases_array) || is.null(ensemble$deaths_array)) {
-    stop("'ensemble' carries no cases_array/deaths_array. Saved ensemble files ",
+  # Selection scores the engine-level member trajectories (the series the
+  # central lines are built from); a pre-v0.101.0 ensemble's cases_array was
+  # engine-level and is the fallback. The observation-level draws, when the
+  # ensemble carries them, are only sliced for the rebuilt envelope.
+  eng_cases  <- .mosaic_engine_array(ensemble, "cases")
+  eng_deaths <- .mosaic_engine_array(ensemble, "deaths")
+  if (is.null(eng_cases) || is.null(eng_deaths)) {
+    stop("'ensemble' carries no prediction arrays. Saved ensemble files ",
          "have their prediction arrays stripped by default; re-run with ",
          "control$io$persist_ensemble_arrays = TRUE to re-optimize a saved ensemble.",
          call. = FALSE)
   }
+  obs_model  <- ensemble$observation_model
+  obs_cases  <- if (isTRUE(obs_model$cases))  ensemble$cases_array  else NULL
+  obs_deaths <- if (isTRUE(obs_model$deaths)) ensemble$deaths_array else NULL
 
   n_params <- ensemble$n_param_sets
   n_stoch  <- ensemble$n_simulations_per_config
@@ -207,15 +228,16 @@ optimize_ensemble_subset <- function(ensemble,
 
   if (needs_sort) {
     likelihoods  <- likelihoods[sort_order]
-    cases_array  <- ensemble$cases_array[, , sort_order, , drop = FALSE]
-    deaths_array <- ensemble$deaths_array[, , sort_order, , drop = FALSE]
+    cases_array  <- eng_cases[, , sort_order, , drop = FALSE]
+    deaths_array <- eng_deaths[, , sort_order, , drop = FALSE]
     if (!is.null(seeds)) seeds <- seeds[sort_order]
     # Carried in lockstep with cases_array so member<->seed alignment survives.
     if (!is.null(ens_member_seeds)) ens_member_seeds <- ens_member_seeds[sort_order]
   } else {
-    cases_array  <- ensemble$cases_array
-    deaths_array <- ensemble$deaths_array
+    cases_array  <- eng_cases
+    deaths_array <- eng_deaths
   }
+  rm(eng_cases, eng_deaths)
 
   # ── 3. PRE-COMPUTE CONSTANTS ──────────────────────────────────────────
 
@@ -256,7 +278,6 @@ optimize_ensemble_subset <- function(ensemble,
   if (!is.finite(mean_obs_d) || mean_obs_d == 0) mean_obs_d <- 1
 
   envelope_quantiles <- ensemble$envelope_quantiles %||% c(0.025, 0.25, 0.75, 0.975)
-  n_ci_pairs <- length(envelope_quantiles) / 2L
   wis_probs  <- c(0.025, 0.25, 0.5, 0.75, 0.975)
 
   max_n <- n_params
@@ -524,70 +545,32 @@ optimize_ensemble_subset <- function(ensemble,
   optimal_weights <- .mosaic_best_subset_weights(likelihoods[optimal_indices],
                                                  scheme = weighting)$weights
 
-  # Slice arrays
+  # Slice arrays: the engine arrays are in likelihood order here; the
+  # observation-level arrays were left in the ensemble's order, so their members
+  # are picked through the sort permutation (no sorted copy of them is made).
   opt_cases  <- cases_array[, , optimal_indices, , drop = FALSE]
   opt_deaths <- deaths_array[, , optimal_indices, , drop = FALSE]
+  orig_idx   <- if (needs_sort) sort_order[optimal_indices] else optimal_indices
+  opt_obs_cases  <- if (!is.null(obs_cases))  obs_cases[, , orig_idx, , drop = FALSE]  else NULL
+  opt_obs_deaths <- if (!is.null(obs_deaths)) obs_deaths[, , orig_idx, , drop = FALSE] else NULL
 
-  # Re-compute all statistics (medians, means, CIs)
-  # `times` (NOT `each`): param-fastest weights to match as.vector(opt_cases[i, j, , ]).
-  sim_weights_opt <- rep(optimal_weights, times = n_stoch) / n_stoch
-
-  cases_mean_m   <- matrix(NA_real_, n_locs, n_times)
-  cases_median_m <- matrix(NA_real_, n_locs, n_times)
-  deaths_mean_m   <- matrix(NA_real_, n_locs, n_times)
-  deaths_median_m <- matrix(NA_real_, n_locs, n_times)
-
-  cases_ci <- lapply(seq_len(n_ci_pairs), function(ci_idx) {
-    list(lower = matrix(NA_real_, n_locs, n_times),
-         upper = matrix(NA_real_, n_locs, n_times))
-  })
-  deaths_ci <- lapply(seq_len(n_ci_pairs), function(ci_idx) {
-    list(lower = matrix(NA_real_, n_locs, n_times),
-         upper = matrix(NA_real_, n_locs, n_times))
-  })
-
-  for (i in seq_len(n_locs)) {
-    for (j in seq_len(n_times)) {
-      vals_c <- as.vector(opt_cases[i, j, , ])
-      vals_d <- as.vector(opt_deaths[i, j, , ])
-
-      # Renormalize over surviving (non-NA) sims so a failed cell doesn't bias
-      # the mean toward 0. Matches calc_model_ensemble()'s mean handling and the
-      # weighted-median path (which renormalizes inside weighted_quantiles), so
-      # the two stats stay consistent. No-op when no sim failed (weights sum to 1).
-      valid_c <- is.finite(vals_c) & is.finite(sim_weights_opt) & sim_weights_opt > 0
-      wsum_c  <- if (any(valid_c)) sum(sim_weights_opt[valid_c]) else 0
-      cases_mean_m[i, j]    <- if (wsum_c > 0) sum(vals_c[valid_c] * sim_weights_opt[valid_c]) / wsum_c else NA_real_
-      valid_d <- is.finite(vals_d) & is.finite(sim_weights_opt) & sim_weights_opt > 0
-      wsum_d  <- if (any(valid_d)) sum(sim_weights_opt[valid_d]) else 0
-      deaths_mean_m[i, j]   <- if (wsum_d > 0) sum(vals_d[valid_d] * sim_weights_opt[valid_d]) / wsum_d else NA_real_
-
-      # One weighted_quantiles call per metric for median + envelope (single sort)
-      qc <- weighted_quantiles(vals_c, sim_weights_opt, c(0.5, envelope_quantiles))
-      qd <- weighted_quantiles(vals_d, sim_weights_opt, c(0.5, envelope_quantiles))
-      cases_median_m[i, j]  <- qc[1]; all_q_c <- qc[-1]
-      deaths_median_m[i, j] <- qd[1]; all_q_d <- qd[-1]
-
-      for (ci_idx in seq_len(n_ci_pairs)) {
-        lower_idx <- ci_idx
-        upper_idx <- length(envelope_quantiles) - ci_idx + 1L
-        cases_ci[[ci_idx]]$lower[i, j]  <- all_q_c[lower_idx]
-        cases_ci[[ci_idx]]$upper[i, j]  <- all_q_c[upper_idx]
-        deaths_ci[[ci_idx]]$lower[i, j] <- all_q_d[lower_idx]
-        deaths_ci[[ci_idx]]$upper[i, j] <- all_q_d[upper_idx]
-      }
-    }
-  }
+  # Re-compute all statistics (means, medians, envelopes) exactly as
+  # calc_model_ensemble() does: central lines from the engine draws, the
+  # envelope and predictive median from the observation-level draws.
+  stats_c <- .mosaic_ensemble_summaries(opt_cases, optimal_weights, envelope_quantiles,
+                                        obs_array = opt_obs_cases)
+  stats_d <- .mosaic_ensemble_summaries(opt_deaths, optimal_weights, envelope_quantiles,
+                                        obs_array = opt_obs_deaths)
 
   ensemble_optimized <- structure(
     list(
-      cases_array               = opt_cases,
-      deaths_array              = opt_deaths,
-      cases_mean                = cases_mean_m,
-      cases_median              = cases_median_m,
-      deaths_mean               = deaths_mean_m,
-      deaths_median             = deaths_median_m,
-      ci_bounds                 = list(cases = cases_ci, deaths = deaths_ci),
+      cases_array               = opt_obs_cases  %||% opt_cases,
+      deaths_array              = opt_obs_deaths %||% opt_deaths,
+      cases_mean                = stats_c$mean,
+      cases_median              = stats_c$median,
+      deaths_mean               = stats_d$mean,
+      deaths_median             = stats_d$median,
+      ci_bounds                 = list(cases = stats_c$ci_bounds, deaths = stats_d$ci_bounds),
       obs_cases                 = ensemble$obs_cases,
       obs_deaths                = ensemble$obs_deaths,
       parameter_weights         = optimal_weights,
@@ -611,7 +594,12 @@ optimize_ensemble_subset <- function(ensemble,
       # likelihood excludes -- which is why it read 0.5037 against the tier
       # ensemble's 0.6302 on identical data, and why the headline moved 5.5%
       # between two engines where the tier metric moved 0.2%.
-      artifact_mask             = ensemble$artifact_mask
+      artifact_mask             = ensemble$artifact_mask,
+      predictive_median         = list(cases  = stats_c$predictive_median,
+                                       deaths = stats_d$predictive_median),
+      cases_engine_array        = opt_cases,
+      deaths_engine_array       = opt_deaths,
+      observation_model         = obs_model
     ),
     class = "mosaic_ensemble"
   )

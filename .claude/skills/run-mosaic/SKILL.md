@@ -95,8 +95,9 @@ deprecation warning, or ignored with a warning if the canonical key is also set 
 **silently ignored** — there is no general unknown-key validator, so check spelling. Common levers:
 `weight_cases` / `weight_deaths`, ESS thresholds, `n_iter_ensemble`, `clean_output`, and the `io`
 preset (`default` / `debug` / `fast` / `archive`; `?mosaic_io_presets`). Multi-location-only samplers:
-`sample_tau_i`, `sample_mobility_*`. `central_method` (`"mean"` default since v0.98.0; `"median"`
-reproduces v0.46.1-v0.97.x) sets the ensemble central tendency — see `?calc_model_ensemble`.
+`sample_tau_i`, `sample_mobility_*`. `central_method` (default `c(cases = "median", deaths = "mean")`
+since v0.101.0; `"mean"` reproduces v0.98.0-v0.100.x, `"median"` v0.46.1-v0.97.x) sets the ensemble
+central line, and with it `r2_*_ensemble`/`bias_ratio_*_ensemble` — see `?calc_model_ensemble`.
 
 **FIXED vs AUTO mode (matters for resumability and for what you can measure):**
 - `n_simulations = <integer>` ⇒ **FIXED**: runs exactly that many simulations in a single batch,

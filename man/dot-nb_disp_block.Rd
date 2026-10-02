@@ -15,6 +15,8 @@
 Integer week index relative to the anchor epoch.
 }
 \description{
-Weekly block index
+The block formula behind every weekly aggregation in MOSAIC (see
+\code{.mosaic_week_blocks}): week number relative to a fixed Monday,
+shifted by \code{offset}.
 }
 \keyword{internal}

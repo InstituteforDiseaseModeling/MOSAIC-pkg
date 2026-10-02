@@ -10,14 +10,16 @@
 \item{ens}{A \code{mosaic_ensemble} object.}
 }
 \value{
-The same object with \code{cases_array}/\code{deaths_array} nulled.
+The same object with the four arrays nulled.
 }
 \description{
-Returns a copy of a \code{mosaic_ensemble} object with the dense
-\code{cases_array} and \code{deaths_array} 4-D arrays set to \code{NULL},
-preserving the S3 class and every light field (central tendencies, envelopes,
-weights, seeds, obs, metadata). Idempotent: safe to call when the arrays are
-already \code{NULL}. Used at \code{run_MOSAIC()} save time so persisted
-ensemble RDS files are small; the in-memory object is never mutated.
+Returns a copy of a \code{mosaic_ensemble} object with the dense 4-D arrays
+-- the observation-level \code{cases_array}/\code{deaths_array} and the
+engine-level \code{cases_engine_array}/\code{deaths_engine_array} -- set to
+\code{NULL}, preserving the S3 class and every light field (central
+tendencies, envelopes, weights, seeds, obs, metadata). Idempotent: safe to
+call when the arrays are already \code{NULL}. Used at \code{run_MOSAIC()} save
+time so persisted ensemble RDS files are small; the in-memory object is never
+mutated.
 }
 \keyword{internal}

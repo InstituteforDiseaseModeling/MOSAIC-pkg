@@ -37,6 +37,10 @@
 #'   attach them to the returned record.
 #' @param deaths_integration Run-level setup for the post-hoc death redraw from
 #'   the reported CFR posterior, or \code{NULL} to keep the engine's deaths.
+#' @param return_expected_deaths Logical. Attach the redraw's expected reported
+#'   deaths (\code{expected_deaths}) to the record, for the observation-level
+#'   deaths draw. Only meaningful with \code{deaths_integration}; off by default
+#'   because it adds one \code{[n_loc x n_time]} matrix to every gathered record.
 #'
 #' @return A list with \code{param_idx}, \code{stoch_idx}, \code{success},
 #'   and on success \code{reported_cases}, \code{reported_deaths},
@@ -44,7 +48,8 @@
 #'   (per-location yearly reported CFR drawn for this member, or \code{NULL}),
 #'   \code{anchor_dev} (per-location posterior-mode CFR deviation of the latest
 #'   observed year, NA without forecast years, or \code{NULL}),
-#'   optionally \code{traj}/\code{traj_epi}; on failure \code{error}.
+#'   optionally \code{expected_deaths} and \code{traj}/\code{traj_epi}; on
+#'   failure \code{error}.
 #'
 #' @keywords internal
 #' @noRd
@@ -52,7 +57,8 @@
                                   capture_traj = FALSE,
                                   traj_channels = character(0),
                                   traj_scratch = NULL,
-                                  deaths_integration = NULL) {
+                                  deaths_integration = NULL,
+                                  return_expected_deaths = FALSE) {
   param_idx <- task_info$param_idx
   stoch_idx <- task_info$stoch_idx
   tryCatch({
@@ -72,6 +78,7 @@
     cfr_year <- NULL
     cfr_infeasible <- 0L
     anchor_dev <- NULL
+    expected_deaths <- NULL
     if (!is.null(deaths_integration)) {
       ph <- .mosaic_posthoc_deaths(deaths_integration, model$results, param_config,
                                    seed = param_config$seed + 7919L)
@@ -80,6 +87,7 @@
       cfr_year <- ph$cfr_year
       cfr_infeasible <- ph$n_infeasible
       anchor_dev <- .mosaic_anchor_deviation(deaths_integration, ph$theta)
+      if (isTRUE(return_expected_deaths)) expected_deaths <- ph$expected_deaths
     }
     # Extract the engine's spatial-structure arrays (J x T hazard, J x J
     # coupling, J x J pi_ij) BEFORE the model is discarded below (F1). These
@@ -100,6 +108,7 @@
                    cfr_year       = cfr_year,
                    cfr_infeasible = cfr_infeasible,
                    anchor_dev     = anchor_dev,
+                   expected_deaths = expected_deaths,
                    success = TRUE)
     # Trajectory channels (comprehensive internal-state capture). Harvested
     # here, where model$results is in hand, at zero marginal sim cost --

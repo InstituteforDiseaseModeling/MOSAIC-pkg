@@ -14,10 +14,26 @@ plot_CFR_by_country(PATHS)
 }}
 }
 \value{
-A list containing the two ggplot objects: one for CFR and total cases, and one for Beta distributions.
+Invisibly, a list of the two ggplot objects: \code{cfr_and_cases}
+(CFR and total cases) and \code{beta_distributions} (Beta densities;
+\code{NULL} when no density could be drawn). Each figure drawn is also
+saved to \code{PATHS$DOCS_FIGURES}.
 }
 \description{
 This function creates two separate plots: one for case fatality ratios (CFR) with confidence intervals and total cases by country, and another for Beta distributions for selected countries. The plots are generated based on cholera data stored in the \code{PATHS$DATA_WHO_ANNUAL} directory.
+}
+\details{
+The Beta densities (AFRO Region and the countries with the lowest and
+highest CFR) are evaluated on an adaptive grid: a uniform grid of 1,000 points
+over the plotted range plus 500 points across each density's central
+99.98\% interval, so a very narrow density is resolved (the AFRO Region Beta,
+built from more than a million cases, has an SD of about 1e-4, ten times
+narrower than the spacing of a uniform 1,000-point grid from 0 to 1). The x axis
+runs from 0 to 1.1 times the largest 99.99\% quantile of the plotted densities,
+and the y axis is on a square-root scale so the tall AFRO density and the much
+wider country densities are visible together. A density with
+\code{shape1 < 1} (a country with no recorded deaths) is unbounded at 0 and is
+drawn from the first grid point above 0.
 }
 \examples{
 \dontrun{

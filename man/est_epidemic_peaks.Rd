@@ -18,11 +18,16 @@ time series data for all countries with available data. It detects peak timing,
 magnitude, and duration of epidemic periods.
 }
 \details{
-Peaks are detected on observed weeks only: days whose
-\code{disaggregation_method} is set and is not \code{observed} or
-\code{documented_zero} (AI \code{fourier_*} reconstructions,
-\code{assumed_zero}) are treated as missing, and a detected peak whose
-\code{[peak_start, peak_stop]} window is at least half imputed days is dropped.
+Peaks are detected on observed weeks only: imputed days -- those whose
+\code{disaggregation_method} is a modelled method such as an AI
+\code{fourier_*} reconstruction or \code{assumed_zero} -- are treated as
+missing, and a detected peak whose \code{[peak_start, peak_stop]} window is at
+least half imputed days is dropped. A WHO multi-week report spread over the
+weeks it covers (\code{who_catchup_*}, see \code{\link{process_WHO_weekly_data}})
+counts as observed: its total is a reported count over a known window, whereas
+blanking it would carve a false trough into the outbreak it belongs to. An even
+spread creates no local maximum of its own; a shaped spread follows another
+source's weekly counts or a documented epidemic curve, so its maxima are real.
 A detected peak day is the centre of any flat stretch of the smoothed curve and
 must itself be observed with cases > 0. The hand-curated peaks the function
 appends (documented outbreaks) are exempt from the imputed-window filter.

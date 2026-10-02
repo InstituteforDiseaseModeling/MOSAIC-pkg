@@ -316,6 +316,164 @@ test_that("the dispersion estimate reads deaths against the observed cases and i
   expect_equal(MOSAIC:::.d7_dispersion(c(1, 2, rep(0, 102)), C, yr), 1)       # too few deaths
 })
 
+# Two years of Monday-Sunday weeks: weekly cases and deaths spread evenly over
+# each week's days (downscaled surveillance). Observed deaths scatter about 4x
+# Poisson around 2% of the cases; weeks 30-49 are a reconstructed window, a
+# multi-week report spread evenly, so cases and deaths are both flat there and
+# the deaths track the cases exactly.
+.d7_tier_data <- function(seed = 3) {
+  set.seed(seed)
+  n_wk <- 104L
+  C_w <- round(150 + 100 * sin(seq_len(n_wk) / 8)^2)
+  D_w <- stats::rnbinom(n_wk, mu = 0.02 * C_w * 3, size = 3)
+  rec <- 30:49
+  C_w[rec] <- 7 * round(mean(C_w[rec]) / 7)
+  D_w[rec] <- 7 * round(0.06 * C_w[rec] / 7)
+  dates <- as.Date("2023-01-02") + seq_len(7L * n_wk) - 1L
+  tier <- matrix(1L, 1L, length(dates)); tier[, rep(seq_len(n_wk), each = 7) %in% rec] <- 2L
+  list(dates = dates, C_w = C_w, D_w = D_w, rec = rec,
+       yr = as.integer(format(dates[seq(1, length(dates), by = 7)], "%Y")),
+       C = matrix(rep(C_w / 7, each = 7), 1L), D = matrix(rep(D_w / 7, each = 7), 1L), tier = tier)
+}
+
+test_that("with reported_tier the deaths dispersion is estimated on the observed weeks only", {
+  x <- .d7_tier_data()
+  setup <- function(tier) MOSAIC:::.d7_setup(x$D, NULL, x$dates, 2023:2024, sd_shift = 0.5,
+                                             sd_year = 0.7, phi = NULL, week_offset = 0L,
+                                             obs_cases = x$C, obs_tier = tier)
+  every <- setup(NULL)$locs[[1]]
+  obs <- setup(x$tier)$locs[[1]]
+  keep <- -x$rec
+  # (The daily values are weekly totals / 7, so the setup's weekly sums carry
+  # rounding at 1e-15.)
+  expect_equal(every$phi, MOSAIC:::.d7_dispersion(x$D_w, x$C_w, x$yr), tolerance = 1e-10)
+  expect_equal(obs$phi, MOSAIC:::.d7_dispersion(x$D_w[keep], x$C_w[keep], x$yr[keep]),
+               tolerance = 1e-10)
+  # The flat window reads as deaths tracking the cases tightly: leaving it in
+  # understates the scatter of the observed weeks.
+  expect_gt(obs$phi, every$phi * 1.15)
+  expect_identical(obs$phi_weeks_excluded, length(x$rec))
+  expect_false(obs$phi_observed_insufficient)
+  expect_identical(every$phi_weeks_excluded, 0L)
+  # Only the dispersion changes: every week is still scored, with the same totals and weights.
+  for (f in c("day", "week", "D", "W", "bg")) expect_identical(obs[[f]], every[[f]], info = f)
+  # All weeks observed: the tiers change nothing.
+  all1 <- setup(x$tier * 0L + 1L)$locs[[1]]
+  expect_identical(all1[c("phi", "phi_weeks_excluded")], every[c("phi", "phi_weeks_excluded")])
+  # A missing tier counts as not observed, as in est_nb_dispersion().
+  na_t <- x$tier; na_t[na_t == 2L] <- NA_integer_
+  expect_identical(setup(na_t)$locs[[1]]$phi, obs$phi)
+  expect_error(setup(x$tier[, -1, drop = FALSE]), "same dimensions as obs_deaths")
+})
+
+test_that("too few observed weeks keep the every-week deaths dispersion, not the Poisson limit", {
+  x <- .d7_tier_data()
+  # Observed weeks with a handful of deaths: below the 10-death minimum alone,
+  # while every week together is estimable.
+  few <- x; obs_wk <- setdiff(seq_along(x$D_w), x$rec)
+  few$D_w[obs_wk] <- 0L; few$D_w[obs_wk[1:4]] <- 1L
+  few$D <- matrix(rep(few$D_w / 7, each = 7), 1L)
+  expect_false(MOSAIC:::.d7_dispersion_estimable(few$D_w[obs_wk], few$C_w[obs_wk], few$yr[obs_wk]))
+  expect_true(MOSAIC:::.d7_dispersion_estimable(few$D_w, few$C_w, few$yr))
+  st <- function(tier) MOSAIC:::.d7_setup(few$D, NULL, few$dates, 2023:2024, sd_shift = 0.5,
+                                          sd_year = 0.7, phi = NULL, week_offset = 0L,
+                                          obs_cases = few$C, obs_tier = tier)$locs[[1]]
+  L <- st(few$tier)
+  expect_identical(L$phi, st(NULL)$phi)
+  expect_equal(L$phi, MOSAIC:::.d7_dispersion(few$D_w, few$C_w, few$yr), tolerance = 1e-10)
+  expect_gt(L$phi, 1)
+  expect_true(L$phi_observed_insufficient)
+  expect_identical(L$phi_weeks_excluded, 0L)
+
+  # Observed weeks inside one calendar year carry the estimate themselves (one
+  # year effect, the intercept): no fallback, and not the Poisson limit.
+  one <- x$tier; one[, x$dates >= as.Date("2024-01-01")] <- 2L
+  ow <- setdiff(1:52, x$rec)                      # the observed 2023 weeks
+  expect_true(MOSAIC:::.d7_dispersion_estimable(x$D_w[ow], x$C_w[ow], x$yr[ow]))
+  sx <- function(tier) MOSAIC:::.d7_setup(x$D, NULL, x$dates, 2023:2024, sd_shift = 0.5,
+                                          sd_year = 0.7, phi = NULL, week_offset = 0L,
+                                          obs_cases = x$C, obs_tier = tier)$locs[[1]]
+  L1 <- sx(one)
+  expect_false(L1$phi_observed_insufficient)
+  expect_identical(L1$phi_weeks_excluded, 104L - length(ow))
+  expect_equal(L1$phi, MOSAIC:::.d7_dispersion(x$D_w[ow], x$C_w[ow], x$yr[ow]), tolerance = 1e-10)
+  expect_gt(L1$phi, 1)
+})
+
+test_that("deaths over one calendar year get an intercept-only dispersion, not the Poisson limit", {
+  # glm() cannot code a one-level year factor, so before v0.101.0 a location
+  # whose weeks span one year was scored at phi = 1 (config_default: CAF, NER).
+  # The single year effect is the intercept of D ~ offset(log C), whose Poisson
+  # MLE is sum(D) / sum(C); phi is the Pearson statistic over n - 1.
+  C <- c(100, 150, 80, 200, 60, 120, 160, 90, 140, 70)
+  D <- c(6, 2, 9, 5, 0, 11, 3, 8, 1, 7)
+  pearson <- function(D, C, yr) {
+    r <- tapply(D, yr, sum)[as.character(yr)] / tapply(C, yr, sum)[as.character(yr)]
+    sum((D - C * r)^2 / (C * r)) / (length(D) - length(unique(yr)))
+  }
+  one <- rep(2024L, 10)
+  expect_true(MOSAIC:::.d7_dispersion_estimable(D, C, one))
+  # (glm's IRLS stops about 1e-6 short of the closed form)
+  expect_equal(MOSAIC:::.d7_dispersion(D, C, one), pearson(D, C, one), tolerance = 1e-5)
+  expect_equal(pearson(D, C, one), 4.2397321429, tolerance = 1e-9)
+  # two years: the year-effect fit, unchanged
+  two <- rep(2023:2024, each = 5)
+  expect_equal(MOSAIC:::.d7_dispersion(D, C, two), pearson(D, C, two), tolerance = 1e-5)
+  # still clamped at 1, and still 1 with too few deaths or weeks
+  expect_identical(MOSAIC:::.d7_dispersion(round(C * 0.05), C, one), 1)
+  expect_identical(MOSAIC:::.d7_dispersion(c(5, 4, rep(0, 8)), C, one), 1)
+  expect_false(MOSAIC:::.d7_dispersion_estimable(D[1:3], C[1:3], one[1:3]))
+  # the run's dispersion -- the phi the likelihood scores with and the
+  # observation-level deaths draws use -- is that estimate
+  dates <- as.Date("2024-01-01") + seq_len(70) - 1L
+  cfg <- list(location_name = "AAA", date_start = dates[1], date_stop = dates[70],
+              reported_cases = matrix(rep(C / 7, each = 7), 1L),
+              reported_deaths = matrix(rep(D / 7, each = 7), 1L), mu_jt = 0.03)
+  pri <- list(mu_jt = list(sd_year = 0.7, sd_product = 0.3,
+                           location = list(AAA = list(year = 2024L, logit_mean = qlogis(0.03), logit_se = 0.2))))
+  di <- MOSAIC:::.mosaic_resolve_deaths_integration(cfg, list(likelihood = list()), pri, NULL)
+  expect_equal(di$dispersion, pearson(D, C, one), tolerance = 1e-5)
+  expect_identical(di$dispersion, di$setup$locs[[1]]$phi)
+})
+
+test_that("the run's deaths dispersion comes from the observed weeks and is the phi the likelihood scores with", {
+  x <- .d7_tier_data()
+  base <- list(location_name = "AAA", date_start = x$dates[1], date_stop = x$dates[length(x$dates)],
+               reported_cases = x$C, reported_deaths = x$D, mu_jt = 0.02)
+  pri <- list(mu_jt = list(sd_year = 0.7, sd_product = 0.3,
+                           location = list(AAA = list(year = 2023:2024, logit_mean = rep(qlogis(0.02), 2),
+                                                      logit_se = rep(0.2, 2)))))
+  tiered <- base; tiered$reported_tier <- x$tier
+  d0 <- MOSAIC:::.mosaic_resolve_deaths_integration(base, list(likelihood = list()), pri, NULL)
+  d1 <- MOSAIC:::.mosaic_resolve_deaths_integration(tiered, list(likelihood = list()), pri, NULL)
+  # Without reported_tier: the pre-v0.101.0 estimate, nothing excluded.
+  expect_false(d0$tier_used)
+  expect_equal(d0$dispersion, MOSAIC:::.d7_dispersion(x$D_w, x$C_w, x$yr), tolerance = 1e-10)
+  expect_identical(d0$dispersion_weeks_excluded, 0L)
+  # With it: the observed-weeks estimate, and the same phi wherever it is read --
+  # by the likelihood (setup$locs[[j]]$phi, through .d7_fit_all) and by the
+  # observation-level deaths noise (deaths_integration$dispersion).
+  expect_true(d1$tier_used)
+  keep <- -x$rec
+  expect_equal(d1$dispersion, MOSAIC:::.d7_dispersion(x$D_w[keep], x$C_w[keep], x$yr[keep]),
+               tolerance = 1e-10)
+  expect_identical(d1$dispersion, vapply(d1$setup$locs, function(L) L$phi, numeric(1)))
+  expect_identical(d1$dispersion_weeks_excluded, length(x$rec))
+  expect_false(d1$dispersion_observed_insufficient)
+  # The tiers change the score through phi alone: with the every-week phi put
+  # back, the tiered setup scores a path exactly as the untiered one.
+  expo <- matrix(x$C * 3, 1L); eta <- matrix(qlogis(0.02), 1L, length(x$dates))
+  f0 <- MOSAIC:::.d7_fit_all(d0$setup, expo, eta, as.numeric(x$dates))
+  f1 <- MOSAIC:::.d7_fit_all(d1$setup, expo, eta, as.numeric(x$dates))
+  expect_false(isTRUE(all.equal(f0$ll, f1$ll)))
+  s1 <- d1$setup; s1$locs[[1]]$phi <- d0$dispersion
+  expect_identical(MOSAIC:::.d7_fit_all(s1, expo, eta, as.numeric(x$dates))$ll, f0$ll)
+  # A misaligned tier matrix is refused, as by the cases dispersion.
+  bad <- tiered; bad$reported_tier <- x$tier[, -1, drop = FALSE]
+  expect_error(MOSAIC:::.mosaic_resolve_deaths_integration(bad, list(likelihood = list()), pri, NULL),
+               "reported_tier")
+})
+
 test_that("the exposure alignment matches the engine: no death is reported without its onset", {
   cfg <- MOSAIC::config_simulation_epidemic
   cfg$mu_jt[] <- 0.3; cfg$rho_deaths <- 1; cfg$delta_reporting_cases <- 2L

@@ -15,7 +15,10 @@
 # =============================================================================
 
 # A small synthetic obs/est fixture: 1 location, 12 daily steps. The first
-# step carries a huge IC-style spike that the model can't match.
+# step carries a huge IC-style spike that the model can't match. Twelve days
+# hold one complete reporting week, short of the three a weekly core needs, so
+# the scoring calls below use per-day cells (cases_scoring = "daily"): the
+# slicing under test does not depend on the cell rule.
 .mk_series <- function(spike = 0) {
   n <- 12L
   obs_cases  <- matrix(c(spike, 5, 6, 7, 8, 20, 9, 7, 6, 5, 4, 3), nrow = 1L)
@@ -73,14 +76,17 @@ test_that("opt-out knobs resolve to idx 1 and scoring is bit-identical", {
   ll_plain <- MOSAIC::calc_model_likelihood(
     config = cfg,
     obs_cases = fx$obs_cases, est_cases = fx$est_cases,
-    obs_deaths = fx$obs_deaths, est_deaths = fx$est_deaths
+    obs_deaths = fx$obs_deaths, est_deaths = fx$est_deaths,
+    cases_scoring = "daily"
   )
   # Emulate the worker's default path: .slice_lik FALSE => arrays untouched.
   ll_default <- MOSAIC::calc_model_likelihood(
     config = cfg,
     obs_cases = fx$obs_cases, est_cases = fx$est_cases,
-    obs_deaths = fx$obs_deaths, est_deaths = fx$est_deaths
+    obs_deaths = fx$obs_deaths, est_deaths = fx$est_deaths,
+    cases_scoring = "daily"
   )
+  expect_true(is.finite(ll_plain))
   expect_identical(ll_default, ll_plain)
 })
 
@@ -116,12 +122,13 @@ test_that("burn-in slicing makes the score invariant to a head spike", {
       est_cases  = fx$est_cases[,  keep, drop = FALSE],
       obs_deaths = fx$obs_deaths[, keep, drop = FALSE],
       est_deaths = fx$est_deaths[, keep, drop = FALSE],
-      weight_peak_magnitude = 0.25
+      weight_peak_magnitude = 0.25, cases_scoring = "daily"
     )
   }
 
   ll_no_spike  <- score_sliced(0)
   ll_big_spike <- score_sliced(1e6)
+  expect_true(is.finite(ll_no_spike))
   expect_equal(ll_no_spike, ll_big_spike)
 
   # Sanity: without slicing, the spike DOES change the (peak-magnitude) score —
@@ -132,7 +139,7 @@ test_that("burn-in slicing makes the score invariant to a head spike", {
       config = cfg,
       obs_cases = fx$obs_cases, est_cases = fx$est_cases,
       obs_deaths = fx$obs_deaths, est_deaths = fx$est_deaths,
-      weight_peak_magnitude = 0.25
+      weight_peak_magnitude = 0.25, cases_scoring = "daily"
     )
   }
   expect_false(isTRUE(all.equal(score_full(0), score_full(1e6))))

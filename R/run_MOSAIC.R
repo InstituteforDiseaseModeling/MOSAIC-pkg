@@ -464,6 +464,11 @@
             eps_rel_cases  = likelihood_settings$eps_rel_cases,
             eps_rel_deaths = likelihood_settings$eps_rel_deaths,
             ll_deaths_core = .ll_d_core,
+            # Cases cell rule (default "daily"; "weekly" sums reporting-week
+            # totals on the weeks the dispersion was estimated on, offsets
+            # resolved once with k). NULL (an older control) means "daily".
+            cases_scoring = likelihood_settings$cases_scoring,
+            week_offset   = likelihood_settings$.cases_week_offset_resolved,
             weight_cases = likelihood_settings$weight_cases,
             weight_deaths = likelihood_settings$weight_deaths,
             weight_peak_timing = likelihood_settings$weight_peak_timing,
@@ -1155,23 +1160,31 @@ run_MOSAIC <- function(config,
             control$likelihood$.score_window_resolved$n_time)
   }
 
-  # A location with no finite observation in either channel inside the scored
-  # window scores NA for every draw. When that holds for every location, there
-  # is nothing to weight, so stop here instead of running a calibration whose
-  # every likelihood is NA.
+  # A location with nothing scorable in either channel inside the scored window
+  # scores NA for every draw. When that holds for every location, there is
+  # nothing to weight, so stop here instead of running a calibration whose every
+  # likelihood is NA. The cases gate mirrors calc_model_likelihood(): the weekly
+  # core (cases_scoring = "weekly") needs three complete reporting weeks; per-day
+  # cells (the default "daily") or an active shape term keep the
+  # any-finite-observation gate.
+  .weekly_gate <- .mosaic_weekly_cases_gate(control$likelihood)
   .unscorable <- .mosaic_unscorable_locations(
     config$reported_cases, config$reported_deaths,
     control$likelihood$.score_window_resolved$idx_cases,
-    control$likelihood$.score_window_resolved$idx_deaths)
+    control$likelihood$.score_window_resolved$idx_deaths,
+    weekly_cases = .weekly_gate)
+  .scorable_rule <- if (.weekly_gate) {
+    "three complete reporting weeks of reported_cases or a finite reported_deaths observation"
+  } else "a finite reported_cases or reported_deaths observation"
   if (all(.unscorable)) {
-    stop("No location has a finite reported_cases or reported_deaths observation in the ",
-         "scored window (", paste(config$location_name, collapse = ", "),
+    stop("No location has ", .scorable_rule, " in the scored window (",
+         paste(config$location_name, collapse = ", "),
          "), so every likelihood would be NA. Check the observation data, date range ",
          "and burn-in / deaths-era settings.", call. = FALSE)
   }
   if (any(.unscorable)) {
-    log_msg("No observations in the scored window for %s: these locations contribute nothing to the likelihood",
-            paste(config$location_name[.unscorable], collapse = ", "))
+    log_msg("Nothing scorable in the scored window for %s (needs %s): these locations contribute nothing to the likelihood",
+            paste(config$location_name[.unscorable], collapse = ", "), .scorable_rule)
   }
 
   # Estimate the per-location NB dispersion ONCE per calibration. k is a property
@@ -1189,18 +1202,39 @@ run_MOSAIC <- function(config,
   control$likelihood$.nb_k_cases_resolved  <- .nb_disp$cases$k
   control$likelihood$.nb_k_deaths_resolved <- .nb_disp$deaths$k
   control$likelihood$.nb_dispersion_table  <- .nb_disp$table
+  # The weekly cases rule (cases_scoring = "weekly") sums cases over the
+  # reporting weeks the dispersion was estimated on; resolved here once, with
+  # k, for every worker.
+  control$likelihood$.cases_week_offset_resolved <- .nb_disp$cases$week_offset
   log_msg("NB dispersion (weekly, conditional ML): cases median k = %s, deaths median k = %s | Poisson: %d cases, %d deaths of %d locations",
           .nb_disp$cases$summary, .nb_disp$deaths$summary,
           sum(is.infinite(.nb_disp$cases$k)), sum(is.infinite(.nb_disp$deaths$k)),
           length(.nb_disp$cases$k))
+  .cases_scoring <- if (is.null(control$likelihood$cases_scoring)) "daily" else
+    control$likelihood$cases_scoring
+  log_msg("Cases likelihood: %s (cases_scoring = '%s'); dispersion from %s",
+          if (identical(.cases_scoring, "weekly"))
+            "NB on reporting-week totals at the weekly k" else "one NB cell per day at the weekly k",
+          .cases_scoring,
+          if (identical(.nb_disp$cases$summary, "user-supplied")) {
+            "the user-supplied nb_k_cases"
+          } else if (isTRUE(.nb_disp$tier_used)) {
+            sprintf("observed weeks only (%d reconstructed/imputed weeks excluded)",
+                    sum(.nb_disp$table$n_weeks_excluded[.nb_disp$table$channel == "cases"], na.rm = TRUE))
+          } else if (is.null(config$reported_tier)) {
+            "every week (config carries no reported_tier)"
+          } else "every week (reported_tier was not applied; see the warning above)")
   # Bound-bind rate is a standing fit diagnostic: in a well-specified fit the
   # bounds should rarely bind. The retired k_min floor bound in 27 of 28
   # estimable locations, which was the defect rather than a setting.
   .nb_bind <- sum(.nb_disp$table$status %in% "clamped_lower_bound", na.rm = TRUE)
   .nb_noest <- sum(grepl("^no_estimate", .nb_disp$table$status), na.rm = TRUE)
+  .nb_panel <- .nb_disp$table$location[.nb_disp$table$panel_trend %in% TRUE]
   if (.nb_bind > 0 || .nb_noest > 0)
-    log_msg("NB dispersion: %d clamped at a hard bound, %d with no own estimate (borrowed), of %d location-channels -- see 2_calibration/diagnostics/nb_dispersion.csv",
-            .nb_bind, .nb_noest, nrow(.nb_disp$table))
+    log_msg("NB dispersion: %d clamped at a hard bound, %d with no own estimate (%d cases from the panel trend%s), of %d location-channels -- see 2_calibration/diagnostics/nb_dispersion.csv",
+            .nb_bind, .nb_noest, length(.nb_panel),
+            if (length(.nb_panel)) paste0(": ", paste(.nb_panel, collapse = ", ")) else "",
+            nrow(.nb_disp$table))
   tryCatch({
     if (!dir.exists(dirs$cal_diag)) dir.create(dirs$cal_diag, recursive = TRUE, showWarnings = FALSE)
     utils::write.csv(.nb_disp$table,
@@ -1214,16 +1248,26 @@ run_MOSAIC <- function(config,
   # sampled. Everything that depends only on the observations -- weekly blocks,
   # weekly observed totals and weights, the prior widths -- is resolved here once
   # and reaches every worker through likelihood_settings. It estimates its own
-  # per-location dispersion phi_j (deaths against observed cases); the NB deaths
-  # k above is diagnostic only.
+  # per-location dispersion phi_j (deaths against observed cases, on the observed
+  # weeks when the config carries reported_tier, as for the cases k); the NB
+  # deaths k above is diagnostic only. The ensemble's observation-level deaths
+  # draws use the same phi_j.
   control$likelihood$.deaths_integration <- .mosaic_resolve_deaths_integration(
     config, control, priors, score_window = control$likelihood$.score_window_resolved)
   if (!is.null(control$likelihood$.deaths_integration)) {
-    log_msg("Deaths likelihood: reported CFR integrated out per path (weekly quasi-Poisson, %d years, dispersion median %.2f, location sd median %.2f, year sd %.2f)",
-            length(control$likelihood$.deaths_integration$years),
-            stats::median(control$likelihood$.deaths_integration$dispersion),
-            stats::median(control$likelihood$.deaths_integration$sd_shift),
-            control$likelihood$.deaths_integration$sd_year)
+    local({
+      di <- control$likelihood$.deaths_integration
+      log_msg("Deaths likelihood: reported CFR integrated out per path (weekly quasi-Poisson, %d years, dispersion median %.2f, location sd median %.2f, year sd %.2f)",
+              length(di$years), stats::median(di$dispersion), stats::median(di$sd_shift),
+              di$sd_year)
+      if (isTRUE(di$tier_used)) {
+        short <- config$location_name[di$dispersion_observed_insufficient %in% TRUE]
+        log_msg("Deaths dispersion from observed weeks only (%d reconstructed/imputed weeks excluded)%s",
+                sum(di$dispersion_weeks_excluded),
+                if (length(short)) sprintf("; too few observed weeks, so every week used for %s",
+                                           paste(short, collapse = ", ")) else "")
+      }
+    })
     # Persisted so a post-hoc calc_model_ensemble() re-run can redraw deaths from
     # the calibrated CFR exactly as the run's own ensemble does.
     tryCatch({
@@ -2230,8 +2274,23 @@ run_MOSAIC <- function(config,
   log_msg("Ensemble central tendency: cases=%s, deaths=%s",
           central_method[["cases"]], central_method[["deaths"]])
 
-  # Whether to retain the dense 4-D cases_array/deaths_array in the *persisted*
-  # ensemble RDS files. Default FALSE => arrays are stripped at save time (via
+  # Observation model for the posterior predictive (v0.101.0): the per-location
+  # weekly cases dispersion this run's likelihood scored with
+  # (control$likelihood$.nb_k_cases_resolved) on the same weekly blocks. The
+  # ensemble's intervals and its persisted cases_array/deaths_array are then
+  # draws of the OBSERVED counts (deaths take the integrated deaths likelihood's
+  # quasi-Poisson dispersion from the deaths integration); the central lines and
+  # every consumer of member trajectories (medoid, trajectories, implied CFR,
+  # subset selection) stay engine-level.
+  obs_model_run <- .mosaic_resolve_observation_model(config, control)
+  if (!is.null(obs_model_run))
+    log_msg("Observation-level predictive: cases weekly NB k = %s (week offset %s)",
+            paste(signif(obs_model_run$k_cases, 3), collapse = ", "),
+            paste(obs_model_run$week_offset, collapse = ", "))
+
+  # Whether to retain the dense 4-D arrays (observation-level cases_array/
+  # deaths_array and engine-level cases_engine_array/deaths_engine_array) in the
+  # *persisted* ensemble RDS files. Default FALSE => arrays are stripped at save time (via
   # .mosaic_ensemble_drop_arrays()) so the on-disk artifacts are small (~tens of
   # KB) and travel in git; every light field (central tendencies, envelopes,
   # weights, seeds, obs, metadata) is preserved and all current consumers work.
@@ -2394,6 +2453,7 @@ run_MOSAIC <- function(config,
         trajectory_scratch_dir   = if (.traj_enabled) traj_scratch_dir else NULL,
         reduce_trajectories      = FALSE,
         deaths_integration       = control$likelihood$.deaths_integration,
+        observation_model        = obs_model_run,
         verbose                  = control$logging$verbose
       ),
       error = function(e) {
@@ -2708,7 +2768,8 @@ run_MOSAIC <- function(config,
   #   * optimize ON  -> the OPTIMIZED subset: map ensemble_optimized's per-member
   #     seeds back to the candidate scratch keys (param_idx) via the candidate
   #     member seeds; weights = optimal_weights. reported_* are taken from the
-  #     optimized cases/deaths arrays -> BIT-IDENTICAL to the prediction plots.
+  #     optimized engine cases/deaths arrays -> their central line is
+  #     BIT-IDENTICAL to the prediction plots'.
   #   * optimize OFF -> the candidate subset (all members, weight_best).
   # Then inject the per-location endemic/epidemic CFR reference levels and persist;
   # finally unlink the scratch dir. NULL handle (capture off / no best subset) is
@@ -2736,8 +2797,9 @@ run_MOSAIC <- function(config,
         scratch_dir         = traj_scratch_handle$dir,
         subset_orig_pidx    = final_pidx,
         subset_weights      = final_weights,
-        cases_array         = ensemble$cases_array,
-        deaths_array        = ensemble$deaths_array,
+        # Member trajectories, not their observation-level draws.
+        cases_array         = .mosaic_engine_array(ensemble, "cases"),
+        deaths_array        = .mosaic_engine_array(ensemble, "deaths"),
         n_stoch             = ensemble$n_simulations_per_config,
         n_locations         = ensemble$n_locations,
         n_time_points       = ensemble$n_time_points,
@@ -2797,15 +2859,18 @@ run_MOSAIC <- function(config,
     tryCatch({
       # Deliberate mix: per-member stochastic spread is summarized by its MEDIAN
       # (robust to a member's stochastic outliers), while the ensemble TARGET is
-      # the canonical central series (mean by default) so the chosen
+      # the canonical central series (the cases median by default) so the chosen
       # representative member tracks the reported curve.
+      # Engine-level member trajectories: an observation-level draw is noise
+      # around a member, not the member.
       medoid_distances <- .mosaic_medoid_distances(
-        ensemble$cases_array, .central(ensemble, "cases"), ensemble$artifact_mask)
+        .mosaic_engine_array(ensemble, "cases"), .central(ensemble, "cases"),
+        ensemble$artifact_mask)
 
       medoid_idx <- which.min(medoid_distances)
 
       # Seed of the member the metric actually selected. `ensemble$seeds` is carried
-      # ALONGSIDE cases_array (member i <-> seeds[i]) through both calc_model_ensemble
+      # ALONGSIDE the arrays (member i <-> seeds[i]) through both calc_model_ensemble
       # and optimize_ensemble_subset, so the index that minimises the distance maps
       # to that exact member's seed and cannot drift the way a separately re-derived
       # vector (optimal_seeds / param_seeds) can. Prefer it; fall back only if absent.
@@ -2947,7 +3012,8 @@ run_MOSAIC <- function(config,
 
       # Run N stochastic reruns of the medoid config: R^2/bias and the
       # prediction plot both derive from the ensemble central series
-      # (central_method, mean by default), consistent with the posterior ensemble.
+      # (central_method: cases median, deaths mean by default), consistent with
+      # the posterior ensemble.
       log_msg("Building medoid model stochastic ensemble (%d reruns, source=%s)...",
               n_best_stochastic_per,
               if (ens_parallel) "local-parallel" else "local-sequential")
@@ -2966,6 +3032,7 @@ run_MOSAIC <- function(config,
           # ~100 identically-weighted reruns is meaningless and nothing consumes a
           # medoid trajectory artifact -- never capture for the medoid.
           deaths_integration       = control$likelihood$.deaths_integration,
+          observation_model        = obs_model_run,
           verbose                  = control$logging$verbose
         ),
         error = function(e) {
@@ -3099,8 +3166,9 @@ run_MOSAIC <- function(config,
     # calibrated mu_jt, which these realized period CFRs approach at epidemic PPV).
     cfr_implied <- tryCatch(
          .mosaic_calc_cfr_period_implied(
-              cases_array     = ensemble$cases_array,
-              deaths_array    = ensemble$deaths_array,
+              # The members' own period CFR: engine-level trajectories.
+              cases_array     = .mosaic_engine_array(ensemble, "cases"),
+              deaths_array    = .mosaic_engine_array(ensemble, "deaths"),
               obs_cases       = ensemble$obs_cases,
               obs_deaths      = ensemble$obs_deaths,
               location_names  = ensemble$location_names %||% iso_code,
@@ -3253,14 +3321,17 @@ run_MOSAIC <- function(config,
     # and tears down its own. So render builds one, sized from the run's own
     # n_cores and capped internally by how many workers the memory-heavy figure
     # families can actually use. Nothing else holds sockets here, so R's
-    # 128-connection ceiling is not in play.
+    # 128-connection ceiling is not in play. The central method this run
+    # resolved is passed in, so the figures cannot take it from a file on disk
+    # (summary.json is written only after this render).
     tryCatch(
-      render_MOSAIC_figures(
-        dir_output = dir_output,
-        plots      = TRUE,
-        verbose    = control$logging$verbose,
-        n_cores    = if (isTRUE(control$parallel$enable))
-                       control$parallel$n_cores else 1L
+      .mosaic_render_figures(
+        dir_output     = dir_output,
+        plots          = TRUE,
+        verbose        = control$logging$verbose,
+        n_cores        = if (isTRUE(control$parallel$enable))
+                           control$parallel$n_cores else 1L,
+        central_method = central_method
       ),
       error = function(e) log_warn("render_MOSAIC_figures failed: %s", e$message)
     )
@@ -3441,7 +3512,27 @@ run_mosaic <- run_MOSAIC
 #'   \itemize{
 #'     \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 #'     \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
-#'     \item \code{weight_wis}: WIS regularizer weight (default: 0, try 0.10)
+#'     \item \code{weight_wis}: WIS regularizer weight (default: 0, off). The 0.10
+#'       suggested before v0.101.0 was tuned against the daily cases core, the
+#'       default; against the weekly core (\code{cases_scoring = "weekly"}) a given
+#'       weight weighs several times more (a median 4.8 times, range 1.8 to 6.5, on
+#'       the v0.100.1 national re-selection pools; more where the cases dispersion
+#'       is small), so about 0.02 keeps that balance there. Not re-tuned since;
+#'       check the fit before relying on it
+#'     \item \code{cases_scoring}: \code{"daily"} (default; one NB cell per day at
+#'       the weekly k, the cell rule of v0.100.1 and earlier) or \code{"weekly"}
+#'       (cases scored as NB on reporting-week totals). The daily rule is the
+#'       default because the weekly rule fitted the cases worse in the v0.101.0
+#'       likelihood gate. Either rule runs at the dispersion this version
+#'       estimates, so the default does not reproduce a v0.100.1 run: a cases fit
+#'       with no estimate of its own, or clamped at the lower bound, now takes the
+#'       panel trend, a config with \code{reported_tier} restricts the cases k and
+#'       the deaths dispersion to observed weeks, the ensemble intervals are
+#'       observation-level (weekly NB at the scored k under either rule) and the
+#'       cases central line is the median. Matching a v0.100.1 likelihood also
+#'       needs that run's \code{nb_k_cases} (its \code{nb_dispersion.csv}) and a
+#'       config without \code{reported_tier}; resume refuses to pool with v0.100.1
+#'       simulations either way
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list)
 #'   }
 #'
@@ -3498,10 +3589,13 @@ run_mosaic <- run_MOSAIC
 #'       diagnostics table. (The \code{\link{optimize_ensemble_subset}} function's
 #'       own \code{stride} default remains \code{1L} to preserve bit-identicality.)
 #'     \item \code{central_method}: Ensemble central tendency, \code{"mean"}
-#'       (default; the expected count, which never collapses to zero on sparse
-#'       deaths) or \code{"median"} (the typical trajectory, robust to a few
-#'       explosive members; the default from v0.46.1 to v0.97.x). Scalar or
-#'       per-channel \code{c(cases=, deaths=)}. Governs the prediction
+#'       (the expected count, which never collapses to zero on sparse deaths) or
+#'       \code{"median"} (the typical trajectory, robust to a few explosive
+#'       members). Scalar or per-channel \code{c(cases=, deaths=)}; default
+#'       \code{c(cases = "median", deaths = "mean")} since v0.101.0 (both mean
+#'       from v0.98.0 to v0.100.x, both median from v0.46.1 to v0.97.x). Either
+#'       way the line is a summary of the engine-level member trajectories; the
+#'       intervals are observation-level. Governs the prediction
 #'       trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
 #'       the medoid target, and the subset-selection objective consistently.
 #'   }
@@ -3528,8 +3622,10 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{format}: Output format; only "parquet" is supported ("csv" is coerced to "parquet" with a warning)
 #'     \item \code{compression}: Compression algorithm (default: "zstd")
 #'     \item \code{compression_level}: Compression level (default: 3L)
-#'     \item \code{persist_ensemble_arrays}: Retain the dense 4-D
-#'       \code{cases_array}/\code{deaths_array} in the persisted ensemble RDS
+#'     \item \code{persist_ensemble_arrays}: Retain the dense 4-D arrays --
+#'       the observation-level \code{cases_array}/\code{deaths_array} and the
+#'       engine-level \code{cases_engine_array}/\code{deaths_engine_array} --
+#'       in the persisted ensemble RDS
 #'       files (\code{ensemble_candidate.rds}, \code{ensemble_optimized.rds},
 #'       \code{subset_opt.rds}, \code{medoid_ensemble.rds}). Default \code{FALSE}
 #'       strips the arrays at save time so the on-disk artifacts are small
@@ -3600,7 +3696,7 @@ run_mosaic <- run_MOSAIC
 #' # Enable WIS regularizer and peak timing
 #' ctrl <- mosaic_control_defaults(
 #'   likelihood = list(
-#'     weight_wis = 0.10,
+#'     weight_wis = 0.02,
 #'     weight_peak_timing = 0.25
 #'   )
 #' )
@@ -3614,7 +3710,7 @@ run_mosaic <- run_MOSAIC
 #' ctrl <- mosaic_control_defaults(
 #'   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
 #'   sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
-#'   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
+#'   likelihood = list(weight_wis = 0.02, weight_cases = 1.0),        # How to score
 #'   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
 #'   io = mosaic_io_presets("default"),                               # Output format
@@ -3678,6 +3774,23 @@ mosaic_control_defaults <- function(calibration = NULL,
     # uses eps_rel_cases as its weekly background, the same relative floor as cases.
     eps_rel_cases = 0.02,            # Relative floor, cases channel (and the integrated deaths background)
     eps_rel_deaths = 0.25,           # Relative floor, standalone NB deaths scoring only (not read by run_MOSAIC)
+
+    # === Cases scoring resolution ===
+    # "daily" (default): one NB cell per day at the weekly k, the cell rule of
+    # v0.100.1 and earlier, at the dispersion this version estimates. It does NOT
+    # reproduce a v0.100.1 run (panel-trend k for collapsed and clamped fits,
+    # observed-week k and deaths phi under reported_tier, observation-level
+    # intervals; matching a v0.100.1 likelihood also needs that run's nb_k_cases
+    # and no reported_tier). "weekly": NB on reporting-week totals of observed and
+    # simulated cases, on the weeks est_nb_dispersion() estimates k from. The
+    # surveillance is weekly totals spread over days, so the daily rule counts a
+    # week's level information ~5x (median over the v0.100.1 national runs); the
+    # weekly rule was the 0.101.0 candidate default, but in the pre-registered
+    # likelihood gate (KEN, ZMB, CMR, GHA; same data, dispersions, intervals and
+    # seeds) it fitted the cases worse than daily on both counts of its direct
+    # test (geometric-mean cases rWIS weekly/daily 1.068, median |log cases bias|
+    # 0.254 vs 0.187), so the default stays daily pending investigation.
+    cases_scoring = "daily",
 
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in weeks)
@@ -3773,13 +3886,14 @@ mosaic_control_defaults <- function(calibration = NULL,
                                           # speed; set 1 for a bit-identical exhaustive
                                           # search. (The optimize_ensemble_subset()
                                           # function default stays 1L for parity.)
-    central_method     = "mean",         # Ensemble central tendency: "mean" (default
-                                          # from v0.98.0; the expected count, never 0 on
-                                          # sparse deaths) or "median" (the typical
-                                          # trajectory; the v0.46.1-v0.97.x default).
-                                          # Scalar or per-channel c(cases=, deaths=).
-                                          # Drives predictions, plots, *_ensemble
-                                          # metrics, medoid, subset.
+    central_method     = c(cases = "median", deaths = "mean"),
+                                          # Ensemble central tendency per channel
+                                          # (default from v0.101.0): "median" (the
+                                          # typical trajectory) for cases, "mean" (the
+                                          # expected count, never 0 on sparse deaths)
+                                          # for deaths. A scalar sets both. Drives
+                                          # predictions, plots, *_ensemble metrics,
+                                          # medoid, subset.
     capture_trajectories = TRUE,          # Capture comprehensive internal-state channels
                                           # (compartments + FOI + incidence + burden) from
                                           # the POSTERIOR ensemble and persist
@@ -3815,7 +3929,7 @@ mosaic_control_defaults <- function(calibration = NULL,
                                        # worker fed.
     save_simresults = FALSE,           # Save raw per-(sim,iter,j,t) output for validation
     verbose_weights = FALSE,           # Print detailed weight calculation diagnostics
-    persist_ensemble_arrays = FALSE    # Retain dense cases_array/deaths_array in persisted ensemble RDS files (FALSE => stripped at save; small artifacts)
+    persist_ensemble_arrays = FALSE    # Retain the dense observation- and engine-level arrays in persisted ensemble RDS files (FALSE => stripped at save; small artifacts)
   )
 
   # Default logging settings

@@ -220,3 +220,36 @@ test_that("evaluate_rolling_cv drops AI-sourced observations when trusted_only",
   n_drop <- ev_drop$cells$n[ev_drop$cells$window == "OOS<=5mo"]
   expect_equal(n_drop, n_keep - 1L)
 })
+
+test_that("WIS pairs the intervals with pred_median_obs (hand-computed), falling back to pred_median", {
+  # Release red team TA-04/OBS-4: the consumers of pred_median_obs were untested.
+  # WIS = (0.5|y - m| + 0.25 IS_50 + 0.025 IS_95) / 2.5 (Bracher et al. 2021).
+  # Rows with m = pred_median_obs:
+  #   y=10, m=6:     (2      + 0.25*7          + 0.025*18) / 2.5 = 1.68
+  #   y=20, m=15:    (2.5    + 0.25*12         + 0.025*35) / 2.5 = 2.55
+  #   y=0,  m=0:     (0      + 0.25*2          + 0.025*6)  / 2.5 = 0.26
+  #   y=50, m=31.95: (9.025  + 0.25*(20 + 4*5) + 0.025*70) / 2.5 = 8.31   -> mean 3.2
+  # and with m = pred_median (9, 18, 2, 39.95): 1.08, 1.95, 0.66, 6.71   -> mean 2.6
+  df <- data.frame(date = as.Date("2025-07-01") + 7 * (0:3),
+                   observed        = c(10, 20, 0, 50),
+                   pred_central    = c(12, 22, 3, 44),
+                   pred_median     = c(9, 18, 2, 39.95),
+                   pred_median_obs = c(6, 15, 0, 31.95),
+                   pi50_lo = c(5, 12, 0, 25), pi50_hi = c(12, 24, 2, 45),
+                   pi95_lo = c(2, 5, 0, 10),  pi95_hi = c(20, 40, 6, 80))
+  w <- with(df, MOSAIC:::.rcv_wis(observed, pred_median_obs, pi50_lo, pi50_hi, pi95_lo, pi95_hi))
+  expect_equal(w, c(1.68, 2.55, 0.26, 8.31), tolerance = 1e-12)
+  expect_equal(MOSAIC:::.rcv_window_metrics(df)$wis, 3.2)
+  expect_equal(MOSAIC:::.rcv_window_metrics(df)$mae, 3.25)          # point metrics stay on pred_central
+  no_obs <- df; no_obs$pred_median_obs <- NULL
+  expect_equal(MOSAIC:::.rcv_window_metrics(no_obs)$wis, 2.6)
+
+  # Skill against a persistence baseline whose in-sample residuals are all zero:
+  # its intervals collapse onto its point mu = 10, so its WIS is |y - 10|, mean 15.
+  is_df <- data.frame(date = as.Date("2025-05-01") + 7 * (0:5), observed = 10)
+  sk <- MOSAIC:::.rcv_skill(df, is_df, "persistence")
+  expect_equal(sk$wis_skill_persistence, round(1 - 3.2 / 15, 3))    # 0.787
+  expect_equal(sk$mae_skill_persistence, round(1 - 3.25 / 15, 3))   # 0.783
+  expect_equal(MOSAIC:::.rcv_skill(no_obs, is_df, "persistence")$wis_skill_persistence,
+               round(1 - 2.6 / 15, 3))                              # 0.827
+})

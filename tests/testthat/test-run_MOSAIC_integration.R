@@ -43,6 +43,7 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   config$decay_days_spread <- NULL
   config$reported_cases_weight  <- NULL
   config$reported_deaths_weight <- NULL
+  config$reported_tier          <- NULL
   config$output_file_path  <- NULL
 
   priors <- MOSAIC::priors_default
@@ -234,13 +235,14 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   # (7) Ensemble-only fit metrics (v0.39 best-model removal) + central_method
   # provenance (v0.38). The single-model best fields must be GONE; the canonical
   # ensemble fields, the central_method provenance, and the dual cross-walk
-  # fields must all be present (and default to the package "mean").
+  # fields must all be present (and carry the package default: the median for
+  # cases and the mean for deaths since v0.101.0; both mean in v0.98.0-v0.100.x).
   expect_false(any(c("r2_cases", "r2_deaths", "bias_ratio_cases", "bias_ratio_deaths")
                    %in% names(summ)))
   expect_true(all(c("r2_cases_ensemble", "central_method_cases", "central_method_deaths",
                     "r2_cases_ensemble_mean", "r2_cases_ensemble_median")
                   %in% names(summ)))
-  expect_equal(summ$central_method_cases,  "mean")     # the default from v0.98.0
+  expect_equal(summ$central_method_cases,  "median")
   expect_equal(summ$central_method_deaths, "mean")
 
   # (8) Integrated deaths likelihood (v0.96.0): the posterior reported CFR by
@@ -285,4 +287,26 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   expect_true(all(is.finite(shift[has_fc])))
   expect_true(any(abs(shift[has_fc]) > 1e-6))
   expect_true(all(shift[!has_fc] == 0))
+
+  # (11) Observation-level predictive (v0.101.0; release red team TA-02, OBS-1):
+  # the candidate and medoid ensembles drew observation noise; the trajectory
+  # central line is the engine-level cases median of the final ensemble; the
+  # prediction CSV's predicted_median is that ensemble's predictive median and
+  # predicted_central its engine median.
+  cal  <- file.path(dir_output, "2_calibration")
+  cand <- readRDS(file.path(cal, "ensemble_candidate.rds"))
+  expect_true(isTRUE(cand$observation_model$cases))
+  expect_true(isTRUE(med_ens$observation_model$cases))
+  eo <- readRDS(file.path(cal, "ensemble_optimized.rds"))
+  tr <- readRDS(file.path(cal, "trajectories_ensemble.rds"))
+  expect_equal(as.numeric(tr$summary$reported_cases$median), as.numeric(eo$cases_median),
+               tolerance = 1e-10)
+  loc1 <- config$location_name[1]
+  pc <- utils::read.csv(file.path(dir_output, "3_results", "predictions",
+                                  sprintf("predictions_ensemble_%s.csv", loc1)), stringsAsFactors = FALSE)
+  pc <- pc[pc$metric == "Suspected Cases", ]
+  ok <- is.finite(pc$predicted_median)
+  expect_gt(sum(ok), 0L)
+  expect_equal(pc$predicted_median[ok], as.numeric(eo$predictive_median$cases[1, ok]), tolerance = 1e-8)
+  expect_equal(pc$predicted_central[ok], as.numeric(eo$cases_median[1, ok]), tolerance = 1e-8)
 })

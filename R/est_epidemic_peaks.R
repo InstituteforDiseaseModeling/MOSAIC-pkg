@@ -4,11 +4,16 @@
 #' time series data for all countries with available data. It detects peak timing,
 #' magnitude, and duration of epidemic periods.
 #'
-#' Peaks are detected on observed weeks only: days whose
-#' \code{disaggregation_method} is set and is not \code{observed} or
-#' \code{documented_zero} (AI \code{fourier_*} reconstructions,
-#' \code{assumed_zero}) are treated as missing, and a detected peak whose
-#' \code{[peak_start, peak_stop]} window is at least half imputed days is dropped.
+#' Peaks are detected on observed weeks only: imputed days -- those whose
+#' \code{disaggregation_method} is a modelled method such as an AI
+#' \code{fourier_*} reconstruction or \code{assumed_zero} -- are treated as
+#' missing, and a detected peak whose \code{[peak_start, peak_stop]} window is at
+#' least half imputed days is dropped. A WHO multi-week report spread over the
+#' weeks it covers (\code{who_catchup_*}, see \code{\link{process_WHO_weekly_data}})
+#' counts as observed: its total is a reported count over a known window, whereas
+#' blanking it would carve a false trough into the outbreak it belongs to. An even
+#' spread creates no local maximum of its own; a shaped spread follows another
+#' source's weekly counts or a documented epidemic curve, so its maxima are real.
 #' A detected peak day is the centre of any flat stretch of the smoothed curve and
 #' must itself be observed with cases > 0. The hand-curated peaks the function
 #' appends (documented outbreaks) are exempt from the imputed-window filter.
@@ -46,7 +51,8 @@ est_epidemic_peaks <- function(PATHS) {
      # Detect peaks on observed weeks only. Imputed weeks (AI fourier_*
      # reconstructions, assumed_zero) are blanked like missing weeks: a Fourier
      # series of an annual total has a peak every year by construction, so peaks
-     # found on it describe the reconstruction, not an outbreak.
+     # found on it describe the reconstruction, not an outbreak. A WHO multi-week
+     # report spread over its window (who_catchup_*) is a reported total and is kept.
      imputed_day <- if ("disaggregation_method" %in% names(cholera_data))
           .epidemic_peaks_imputed_day(cholera_data$disaggregation_method)
      else rep(FALSE, nrow(cholera_data))
@@ -799,6 +805,18 @@ est_epidemic_peaks <- function(PATHS) {
                     out <- rbind(out, new_peak)
                     message("Added CIV January 2015 peak (corrected timing, 5-day interval, 7 cases)")
                }
+               # CIV 2025 outbreak (May-August; 503 cases in WHO's 2025 total, 491 by
+               # 3 August per IFRC). Spreading the week-33 catch-up over weeks 30-33
+               # (surveillance curation CIV-2025-W33) gives its smoothed curve two
+               # humps two weeks apart (12.0 and 11.8/day) whose dip between them
+               # fails the prominence test. Peak day = the maximum of the 28-day
+               # smoothed observed series (2025-07-07, 20 cases that day).
+               if (length(which(out$iso_code == "CIV" & out$peak_date >= as.Date("2025-05-01") & out$peak_date <= as.Date("2025-09-30"))) == 0) {
+                    interval <- calculate_peak_interval(as.Date("2025-07-07"), 20)
+                    new_peak <- data.frame(iso_code = "CIV", peak_start = interval$start, peak_date = as.Date("2025-07-07"), peak_stop = interval$stop, reported_cases = 20)
+                    out <- rbind(out, new_peak)
+                    message("Added CIV July 2025 peak (documented outbreak, May-August 2025)")
+               }
           }
 
           # CAF (Central African Republic) additional peaks
@@ -925,6 +943,20 @@ est_epidemic_peaks <- function(PATHS) {
                     new_peak <- data.frame(iso_code = "GHA", peak_start = as.Date("2016-11-01"), peak_date = as.Date("2016-11-12"), peak_stop = as.Date("2016-12-01"), reported_cases = 22)
                     out <- rbind(out, new_peak)
                     message("Added GHA November 2016 peak (small outbreak with 22 cases)")
+               }
+               # GHA 2024-25 outbreak. Ghana Health Service: it began on 4 October
+               # 2024 after a funeral in Ada East (93 suspected cases and 1 death by
+               # 11 October), and reached 4,155 cases by 26 December 2024. With the
+               # WHO week-45 catch-up report spread over weeks 42-45 its smoothed
+               # curve is a run of humps (max 75/day) none of which stands the
+               # required 30/day (8% of GHA's 2014 maximum) above the dips beside
+               # it, so the detector misses it. Peak day = the maximum of the
+               # 28-day smoothed observed series (2024-12-08, 60 cases that day);
+               # the +/-22-day interval reflects a three-month outbreak.
+               if (length(which(out$iso_code == "GHA" & out$peak_date >= as.Date("2024-10-01") & out$peak_date <= as.Date("2025-03-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "GHA", peak_start = as.Date("2024-11-16"), peak_date = as.Date("2024-12-08"), peak_stop = as.Date("2024-12-31"), reported_cases = 60)
+                    out <- rbind(out, new_peak)
+                    message("Added GHA December 2024 peak (documented outbreak from 4 October 2024)")
                }
           }
 
@@ -1332,18 +1364,6 @@ est_epidemic_peaks <- function(PATHS) {
                message(paste("Extended KEN March 2023 interval to the right (", interval_days, "days total)"))
           }
 
-          # GHA November 2024: Widen the interval (currently 21 days, make it wider)
-          gha_nov_2024_idx <- which(out$iso_code == "GHA" &
-                                   out$peak_date == as.Date("2024-11-18"))
-          if (length(gha_nov_2024_idx) > 0) {
-               # Expand to ~45 days total (22 days on each side)
-               # 74 cases warrants a wider interval than the current 21 days
-               out$peak_start[gha_nov_2024_idx] <- as.Date("2024-11-18") - 22
-               out$peak_stop[gha_nov_2024_idx] <- as.Date("2024-11-18") + 23
-               interval_days <- as.numeric(out$peak_stop[gha_nov_2024_idx] - out$peak_start[gha_nov_2024_idx])
-               message(paste("Widened GHA November 2024 interval (", interval_days, "days total)"))
-          }
-
           # SDN February 2025: Reduce the interval width slightly (currently 30 days)
           sdn_feb_2025_idx <- which(out$iso_code == "SDN" &
                                    out$peak_date == as.Date("2025-02-16"))
@@ -1610,14 +1630,15 @@ est_epidemic_peaks <- function(PATHS) {
 }
 
 
-# Days whose surveillance week was not observed: disaggregation_method set and
-# not `observed` / `documented_zero` (AI `fourier_*` reconstructions,
-# `assumed_zero`). Direct WHO/JHU/SUPP rows carry NA and count as observed.
+# Days whose surveillance week is imputed: the imputed trust tier of
+# process_cholera_surveillance_data() (AI `fourier_*` reconstructions,
+# `assumed_zero`, any other modelled method). Direct WHO/JHU/SUPP rows (method NA),
+# AI `observed` / `documented_zero` rows, and WHO multi-week reports spread over
+# their window (`who_catchup_*`, whose total is reported) count as observed.
 # est_epidemic_peaks() detects peaks on observed weeks only, and
 # plot_epidemic_peaks() draws the same series.
 .epidemic_peaks_imputed_day <- function(disaggregation_method) {
-     !is.na(disaggregation_method) &
-          !(disaggregation_method %in% c("observed", "documented_zero"))
+     .surveillance_tier(disaggregation_method) == 3L
 }
 
 # A detected peak is dropped when at least this share of its [peak_start,

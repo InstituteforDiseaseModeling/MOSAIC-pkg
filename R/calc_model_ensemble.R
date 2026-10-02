@@ -19,14 +19,18 @@
 # gathered results list which holds the same payload a second time as per-result
 # matrices (cases + deaths) before the arrays are filled -- so the concurrent
 # peak is ~2x the dense-array footprint. We use a factor of 2 for the list term
-# (conservative; the arrays and list co-exist during the fill loop).
+# (conservative; the arrays and list co-exist during the fill loop). With the
+# observation-level predictive (v0.101.0) the observation arrays are two more
+# dense arrays, and the expected reported deaths the deaths draw needs add one
+# matrix per gathered record.
 .MOSAIC_ENSEMBLE_RAM_FRACTION <- 0.80
 .MOSAIC_ENSEMBLE_GATHERED_LIST_FACTOR <- 2
 
 # Comprehensive default set of internal engine `model$results` channels captured
 # for the trajectory figures (the "related quantities" beyond reported cases/
 # deaths). reported_cases/reported_deaths are NOT here -- they are sourced from
-# the ensemble cases_array/deaths_array (no re-capture). Each is harvested
+# the ensemble's engine arrays (cases_engine_array/deaths_engine_array; no
+# re-capture). Each is harvested
 # defensively per worker (tryCatch -> omit if the engine build lacks it), so an
 # absent channel degrades gracefully. RAM/payload is LINEAR in this set's length
 # -- it is the documented `trajectory_channels` lever (PLAN sec 14.G/14.H).
@@ -44,19 +48,23 @@
 
 #' Drop the heavy 4-D arrays from a mosaic_ensemble (for lightweight persistence)
 #'
-#' Returns a copy of a \code{mosaic_ensemble} object with the dense
-#' \code{cases_array} and \code{deaths_array} 4-D arrays set to \code{NULL},
-#' preserving the S3 class and every light field (central tendencies, envelopes,
-#' weights, seeds, obs, metadata). Idempotent: safe to call when the arrays are
-#' already \code{NULL}. Used at \code{run_MOSAIC()} save time so persisted
-#' ensemble RDS files are small; the in-memory object is never mutated.
+#' Returns a copy of a \code{mosaic_ensemble} object with the dense 4-D arrays
+#' -- the observation-level \code{cases_array}/\code{deaths_array} and the
+#' engine-level \code{cases_engine_array}/\code{deaths_engine_array} -- set to
+#' \code{NULL}, preserving the S3 class and every light field (central
+#' tendencies, envelopes, weights, seeds, obs, metadata). Idempotent: safe to
+#' call when the arrays are already \code{NULL}. Used at \code{run_MOSAIC()} save
+#' time so persisted ensemble RDS files are small; the in-memory object is never
+#' mutated.
 #'
 #' @param ens A \code{mosaic_ensemble} object.
-#' @return The same object with \code{cases_array}/\code{deaths_array} nulled.
+#' @return The same object with the four arrays nulled.
 #' @keywords internal
 .mosaic_ensemble_drop_arrays <- function(ens) {
-  ens$cases_array  <- NULL
-  ens$deaths_array <- NULL
+  ens$cases_array         <- NULL
+  ens$deaths_array        <- NULL
+  ens$cases_engine_array  <- NULL
+  ens$deaths_engine_array <- NULL
   ens
 }
 
@@ -64,14 +72,19 @@
                                                n_param_sets, n_stoch,
                                                n_capture_channels = 0L,
                                                capture_in_gather = FALSE,
-                                               broadcast_gb = 0) {
+                                               broadcast_gb = 0,
+                                               n_obs_arrays = 0L,
+                                               n_record_extra = 0L) {
   # One dense double array = n_loc * n_time * n_param * n_stoch * 8 bytes.
   one_array_gb <- (as.numeric(n_locations) * as.numeric(n_time_points) *
                      as.numeric(n_param_sets) * as.numeric(n_stoch) * 8) / 2^30
-  # Two dense arrays (cases + deaths) + the gathered results list (which holds an
-  # equivalent cases+deaths payload concurrently during the fill loop).
-  dense_gb <- 2 * one_array_gb
-  list_gb  <- .MOSAIC_ENSEMBLE_GATHERED_LIST_FACTOR * one_array_gb
+  # Two dense engine arrays (cases + deaths), plus `n_obs_arrays` observation-
+  # level arrays, + the gathered results list (which holds an equivalent
+  # cases+deaths payload concurrently during the fill loop, plus `n_record_extra`
+  # further matrices per record -- the expected reported deaths).
+  dense_gb <- (2 + as.numeric(n_obs_arrays)) * one_array_gb
+  list_gb  <- (.MOSAIC_ENSEMBLE_GATHERED_LIST_FACTOR + as.numeric(n_record_extra)) *
+                one_array_gb
   # Trajectory capture is STREAM-TO-DISK (PLAN 14.G): on the LOCAL PSOCK/sequential
   # path channels are spilled to a per-sim scratch file at sim time and NEVER
   # accumulated on the gathered list, so peak capture RAM is ONE transient
@@ -128,12 +141,16 @@
                                        n_stoch, total_ram_gb = NULL,
                                        n_capture_channels = 0L,
                                        capture_in_gather = FALSE,
-                                       broadcast_gb = 0) {
+                                       broadcast_gb = 0,
+                                       n_obs_arrays = 0L,
+                                       n_record_extra = 0L) {
   proj_gb <- .mosaic_ensemble_ram_projection_gb(n_locations, n_time_points,
                                                 n_param_sets, n_stoch,
                                                 n_capture_channels,
                                                 capture_in_gather,
-                                                broadcast_gb)
+                                                broadcast_gb,
+                                                n_obs_arrays,
+                                                n_record_extra)
   if (is.null(total_ram_gb)) total_ram_gb <- .psi_total_system_ram_gb()
   if (is.na(total_ram_gb)) return(invisible(proj_gb))  # un-probed platform: skip
   if (proj_gb > .MOSAIC_ENSEMBLE_RAM_FRACTION * total_ram_gb) {
@@ -144,14 +161,14 @@
       "PSOCK worker, which lands on THIS host because the workers are local processes." else ""
     warning(sprintf(paste0(
       "calc_model_ensemble: the dense prediction arrays + gathered results list ",
-      "project to ~%.1f GB on this orchestrator node (2 dense [%d x %d x %d x %d] ",
+      "project to ~%.1f GB on this orchestrator node (%d dense [%d x %d x %d x %d] ",
       "double arrays + the concurrent gathered list), but the system has ~%.0f GB ",
       "RAM -- this risks an out-of-memory failure.%s%s Reduce max_best_subset (fewer ",
       "parameter sets) and/or n_iter_ensemble (fewer stochastic reruns per set), or ",
       "run on a larger-memory host. This is the dominant memory cliff at long ",
       "(e.g. 2015) calibration windows."),
-      proj_gb, n_locations, n_time_points, n_param_sets, n_stoch, total_ram_gb,
-      bcast_txt, bcast_txt2),
+      proj_gb, 2L + as.integer(n_obs_arrays), n_locations, n_time_points,
+      n_param_sets, n_stoch, total_ram_gb, bcast_txt, bcast_txt2),
       immediate. = TRUE, call. = FALSE)
   }
   invisible(proj_gb)
@@ -377,6 +394,76 @@
   invisible(seed)
 }
 
+#' Weighted per-cell summaries of one channel of a mosaic_ensemble
+#'
+#' The central lines -- weighted mean and weighted median -- are computed from
+#' the ENGINE draws: the member trajectories before observation noise. The
+#' observation noise is mean-preserving given each member trajectory, so the
+#' engine mean is the exact (Rao-Blackwellised) estimate of the observation-level
+#' predictive mean, without the noise's Monte Carlo error; and the median is the
+#' central trajectory, not a quantile of the observation noise (a median of the
+#' observation predictive collapses toward zero wherever the weekly dispersion
+#' is small). The interval envelope and the predictive median -- the quantiles
+#' a proper interval score uses together -- come from the OBSERVATION-level draws
+#' when \code{obs_array} is supplied, else from the engine draws.
+#'
+#' Each parameter set's weight is shared equally by its stochastic runs
+#' (param-fastest, matching \code{as.vector(array[i, j, , ])}); failed runs (NA)
+#' are dropped and the surviving weights renormalised. With
+#' \code{obs_array = NULL} this is the pre-v0.101.0 computation, bit for bit.
+#'
+#' @param engine_array \code{[n_loc x n_time x n_param x n_stoch]} engine draws.
+#' @param parameter_weights Normalised weight per parameter set.
+#' @param envelope_quantiles Ascending quantiles forming lower/upper pairs.
+#' @param obs_array Observation-level draws of the same shape, or \code{NULL}.
+#' @return \code{list(mean, median, predictive_median, ci_bounds)}.
+#' @noRd
+.mosaic_ensemble_summaries <- function(engine_array, parameter_weights,
+                                       envelope_quantiles, obs_array = NULL) {
+  dims <- dim(engine_array)
+  n_locs <- dims[1L]; n_times <- dims[2L]; n_stoch <- dims[4L]
+  # `times` (NOT `each`): as.vector(array[i, j, , ]) flattens the [param, stoch]
+  # slice param-fastest, so the weights must repeat param-fastest to pair every
+  # (param, stoch) prediction with its own parameter's weight.
+  sim_weights <- rep(parameter_weights, times = n_stoch) / n_stoch
+  n_ci_pairs  <- length(envelope_quantiles) / 2L
+  stats_mean   <- matrix(NA_real_, nrow = n_locs, ncol = n_times)
+  stats_median <- matrix(NA_real_, nrow = n_locs, ncol = n_times)
+  pred_median  <- if (is.null(obs_array)) NULL else matrix(NA_real_, nrow = n_locs, ncol = n_times)
+  ci_bounds <- lapply(seq_len(n_ci_pairs), function(ci_idx) {
+    list(lower = matrix(NA_real_, nrow = n_locs, ncol = n_times),
+         upper = matrix(NA_real_, nrow = n_locs, ncol = n_times))
+  })
+
+  for (i in seq_len(n_locs)) {
+    for (j in seq_len(n_times)) {
+      values <- as.vector(engine_array[i, j, , ])
+      valid <- is.finite(values) & is.finite(sim_weights) & sim_weights > 0
+      w_sum <- if (any(valid)) sum(sim_weights[valid]) else 0
+      stats_mean[i, j] <- if (w_sum > 0) sum(values[valid] * sim_weights[valid]) / w_sum else NA_real_
+      if (is.null(obs_array)) {
+        # One weighted_quantiles call for median + envelope (single sort).
+        qv <- weighted_quantiles(values, sim_weights, c(0.5, envelope_quantiles))
+        stats_median[i, j] <- qv[1]
+      } else {
+        stats_median[i, j] <- weighted_quantiles(values, sim_weights, 0.5)
+        qv <- weighted_quantiles(as.vector(obs_array[i, j, , ]), sim_weights,
+                                 c(0.5, envelope_quantiles))
+        pred_median[i, j] <- qv[1]
+      }
+      all_q <- qv[-1]
+      for (ci_idx in seq_len(n_ci_pairs)) {
+        ci_bounds[[ci_idx]]$lower[i, j] <- all_q[ci_idx]
+        ci_bounds[[ci_idx]]$upper[i, j] <- all_q[length(envelope_quantiles) - ci_idx + 1L]
+      }
+    }
+  }
+
+  list(mean = stats_mean, median = stats_median,
+       predictive_median = if (is.null(obs_array)) stats_median else pred_median,
+       ci_bounds = ci_bounds)
+}
+
 #' Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 #'
 #' @description
@@ -384,6 +471,25 @@
 #' per set) and aggregates results using importance weights. Returns a
 #' \code{mosaic_ensemble} object containing weighted mean, median, and quantile
 #' envelopes for cases and deaths.
+#'
+#' With an \code{observation_model} (as \code{run_MOSAIC()} supplies), every
+#' member trajectory also receives an observation-level draw consistent with
+#' the calibration likelihood, so the interval envelope is a posterior
+#' predictive interval for the OBSERVED counts rather than for the engine's
+#' trajectories alone. Cases: each weekly total (the blocks the dispersion was
+#' estimated on) is drawn from a negative binomial around the member's weekly
+#' total with the run's per-location weekly size \eqn{k}, then apportioned to
+#' the week's days in proportion to the member's daily counts (integer counts,
+#' every day within one of its exact share and equal to it in expectation,
+#' weekly totals exact). Deaths (when \code{deaths_integration} is supplied):
+#' each weekly total gets the integrated deaths likelihood's quasi-Poisson
+#' variance \eqn{\phi_j \mu} around the member's expected reported deaths,
+#' coupled to the member's post-hoc deaths so that \eqn{\phi_j = 1} leaves them
+#' unchanged. The draws are seeded from each member's simulation seed. The
+#' central lines (\code{*_mean}, \code{*_median}) stay ENGINE-level: the noise is
+#' mean-preserving, so the engine mean is the exact predictive mean, and the
+#' median is the central trajectory rather than a quantile of the noise. See
+#' \code{.mosaic_ensemble_summaries()}.
 #'
 #' This is the computation half of the ensemble workflow. Use
 #' \code{\link{plot_model_ensemble}} to render plots from the returned object.
@@ -433,11 +539,13 @@
 #'   member and attach a compact \code{$trajectories} (\code{mosaic_trajectories})
 #'   object -- a per-channel central line (field \code{$median}, kept for schema
 #'   stability) + a uniform-thinned set of actual member trajectories + derived
-#'   series. The central line is the weighted MEAN for \code{reported_cases},
-#'   \code{reported_deaths} and \code{disease_deaths} (the default
-#'   \code{central_method} of the trajectory reducer, matching the prediction
-#'   plots' \code{predicted_central}), and the weighted median for every other
-#'   captured channel; \code{I_total} is the sum of the Isym and Iasym medians,
+#'   series. \code{reported_cases}/\code{reported_deaths} are the ENGINE-level
+#'   member trajectories (\code{cases_engine_array}/\code{deaths_engine_array}).
+#'   Their central line follows the trajectory reducer's default
+#'   \code{central_method} -- the weighted median for \code{reported_cases},
+#'   the weighted mean for \code{reported_deaths} and \code{disease_deaths} --
+#'   matching the prediction plots' \code{predicted_central}; every other
+#'   captured channel uses the weighted median. \code{I_total} is the sum of the Isym and Iasym medians,
 #'   \code{mass_balance} a ratio of compartment weighted means, \code{CFR} a
 #'   ratio of 28-day rolling weighted-mean deaths and cases, and
 #'   \code{epidemic_frac} the weighted mean of the reconstructed epidemic flag.
@@ -471,22 +579,67 @@
 #'   that is the PRIOR reported CFR, not the calibrated one. To reproduce a
 #'   run's calibrated deaths post hoc, pass
 #'   \code{readRDS("<dir_output>/2_calibration/deaths_integration.rds")}.
+#' @param observation_model Optional observation model for the posterior
+#'   predictive: a list with \code{k_cases} (weekly negative binomial size per
+#'   location, or one for all; \code{Inf} = Poisson) and optionally
+#'   \code{week_offset} (0-6 days after Monday on which each location's
+#'   reporting weeks start; default 0), or the table of
+#'   \code{<dir_output>/2_calibration/diagnostics/nb_dispersion.csv} (its cases
+#'   rows, matched by location). \code{run_MOSAIC()} supplies the dispersion its
+#'   likelihood scored with. The cases draw is this weekly negative binomial
+#'   under either cases scoring rule. Under the default
+#'   \code{control$likelihood$cases_scoring = "daily"}, whose per-day cells at
+#'   the same \eqn{k} imply a weekly variance of about \eqn{C + C^2/(7k)} for a
+#'   weekly total \eqn{C} (the predictive uses \eqn{C + C^2/k}), the intervals
+#'   are therefore wider than the likelihood implies; under \code{"weekly"} they
+#'   match it. The deaths dispersion is read from
+#'   \code{deaths_integration}. When \code{NULL} (default) no observation noise
+#'   is drawn and \code{cases_array}/\code{deaths_array} are the engine draws.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return S3 object of class \code{"mosaic_ensemble"} containing:
 #' \describe{
-#'   \item{cases_mean}{Matrix (n_locations x n_time_points) of weighted mean cases.}
-#'   \item{cases_median}{Matrix of weighted median cases.}
-#'   \item{deaths_mean}{Matrix of weighted mean deaths.}
-#'   \item{deaths_median}{Matrix of weighted median deaths.}
-#'   \item{ci_bounds}{List of CI pairs, each with \code{$lower} and \code{$upper} matrices.}
+#'   \item{cases_mean}{Matrix (n_locations x n_time_points) of weighted mean
+#'     cases, from the engine draws (the exact predictive mean).}
+#'   \item{cases_median}{Matrix of weighted median cases: the median engine
+#'     trajectory.}
+#'   \item{deaths_mean}{Matrix of weighted mean deaths (engine draws).}
+#'   \item{deaths_median}{Matrix of weighted median deaths (engine draws).}
+#'   \item{ci_bounds}{List with \code{$cases} and \code{$deaths}, each a list of
+#'     interval pairs with \code{$lower} and \code{$upper} matrices: quantiles of
+#'     the observation-level draws (of the engine draws when no
+#'     \code{observation_model} is given).}
+#'   \item{predictive_median}{List with \code{$cases} and \code{$deaths}: the
+#'     0.5 quantile of the same draws as \code{ci_bounds}, the median a proper
+#'     interval score (WIS) pairs with those intervals, and the
+#'     \code{predicted_median} of the prediction CSVs \code{run_MOSAIC()}
+#'     writes. Equal to \code{*_median} when no observation noise was drawn.}
 #'   \item{obs_cases}{Observed cases matrix from config.}
 #'   \item{obs_deaths}{Observed deaths matrix from config.}
-#'   \item{cases_array}{4-D array (n_locations x n_time_points x n_param_sets x n_stoch).}
-#'   \item{deaths_array}{4-D array matching cases_array dimensions.}
+#'   \item{cases_array}{4-D array (n_locations x n_time_points x n_param_sets x
+#'     n_stoch) of OBSERVATION-level draws (the engine draws when no
+#'     \code{observation_model} is given).}
+#'   \item{deaths_array}{4-D array of OBSERVATION-level deaths when the deaths
+#'     received quasi-Poisson overdispersion (an \code{observation_model} and a
+#'     \code{deaths_integration} with some \eqn{\phi_j > 1}); otherwise the
+#'     engine deaths, identical to \code{deaths_engine_array} (no
+#'     \code{deaths_integration}, every \eqn{\phi_j \le 1}, or no
+#'     \code{observation_model}).}
+#'   \item{cases_engine_array}{4-D array of the ENGINE-level reported cases (the
+#'     member trajectories before observation noise), same dimensions. The
+#'     medoid, R_eff, trajectory and implied-CFR consumers read these.}
+#'   \item{deaths_engine_array}{4-D array of engine-level reported deaths (after
+#'     the post-hoc CFR redraw when \code{deaths_integration} is supplied).}
+#'   \item{observation_model}{List recording the observation noise applied:
+#'     \code{cases} (logical, whether cases received NB noise), \code{deaths}
+#'     (logical, whether deaths received quasi-Poisson overdispersion: only
+#'     where some \code{phi_deaths > 1}; at \eqn{\phi = 1} the engine deaths,
+#'     binomial draws around the expected deaths, already are the
+#'     observation-level deaths), \code{k_cases}, \code{week_offset} and
+#'     \code{phi_deaths} (per location, \code{NULL} when not applied).}
 #'   \item{parameter_weights}{Normalized weight vector.}
 #'   \item{seeds}{Integer vector of per-member simulation seeds, aligned with the
-#'     parameter dimension of \code{cases_array} (member \code{i} <-> \code{seeds[i]}). Bound to
+#'     parameter dimension of the arrays (member \code{i} <-> \code{seeds[i]}). Bound to
 #'     the parameter set that produced each member so consumers (e.g. medoid
 #'     selection) need not rely on positional alignment with an external vector.}
 #'   \item{n_param_sets}{Number of parameter sets.}
@@ -556,6 +709,7 @@ calc_model_ensemble <- function(config,
                                 trajectory_scratch_dir = NULL,
                                 reduce_trajectories = TRUE,
                                 deaths_integration = NULL,
+                                observation_model = NULL,
                                 verbose = TRUE) {
 
   # ===========================================================================
@@ -725,6 +879,32 @@ calc_model_ensemble <- function(config,
   }
 
   # ===========================================================================
+  # Observation model (posterior predictive at the observation level)
+  # ===========================================================================
+  # Cases: weekly NB(k_j) around each member's weekly total. Deaths: the
+  # integrated deaths likelihood's quasi-Poisson dispersion phi_j, which needs
+  # each member's expected reported deaths -- requested from the task only when
+  # some phi_j > 1 (at phi_j = 1 the post-hoc deaths already carry the Poisson
+  # part and are kept as they are). See R/calc_model_ensemble_obs.R.
+  obs_spec   <- .mosaic_normalize_observation_model(observation_model, location_names)
+  obs_cases_on <- !is.null(obs_spec)
+  phi_deaths <- NULL
+  if (obs_cases_on && !is.null(deaths_integration)) {
+    phi_deaths <- as.numeric(deaths_integration$dispersion)
+    if (length(phi_deaths) != n_locations || any(!is.finite(phi_deaths)))
+      stop("deaths_integration$dispersion must hold one finite value per location.", call. = FALSE)
+  }
+  obs_deaths_on <- !is.null(phi_deaths) && any(phi_deaths > 1)
+  obs_blocks <- if (obs_cases_on)
+    .mosaic_observation_blocks(n_time_points, date_start, obs_spec$week_offset) else NULL
+  if (verbose && obs_cases_on)
+    message(sprintf("  Observation-level predictive: cases weekly NB k = %s%s",
+                    paste(signif(obs_spec$k_cases, 3), collapse = ", "),
+                    if (!is.null(phi_deaths))
+                      sprintf(" | deaths quasi-Poisson phi = %s",
+                              paste(signif(phi_deaths, 3), collapse = ", ")) else ""))
+
+  # ===========================================================================
   # OOM guard: project the dense-array + gathered-list footprint and warn loudly
   # (warn-only, no behavior change) before the large allocation below.
   # ===========================================================================
@@ -745,14 +925,21 @@ calc_model_ensemble <- function(config,
                              # is ever held in a gather step.
                              capture_in_gather = FALSE,
                              broadcast_gb = .mosaic_ensemble_broadcast_gb(
-                               param_configs, .ram_n_workers))
+                               param_configs, .ram_n_workers),
+                             n_obs_arrays   = as.integer(obs_cases_on) + as.integer(obs_deaths_on),
+                             n_record_extra = as.integer(obs_deaths_on))
 
   # ===========================================================================
   # Run simulations (parallel or sequential)
   # ===========================================================================
 
-  cases_array  <- array(NA_real_, dim = c(n_locations, n_time_points, n_param_sets, n_simulations_per_config))
-  deaths_array <- array(NA_real_, dim = c(n_locations, n_time_points, n_param_sets, n_simulations_per_config))
+  # Engine-level draws (the member trajectories), plus observation-level draws
+  # for each channel that receives observation noise.
+  .ens_dim <- c(n_locations, n_time_points, n_param_sets, n_simulations_per_config)
+  cases_engine_array  <- array(NA_real_, dim = .ens_dim)
+  deaths_engine_array <- array(NA_real_, dim = .ens_dim)
+  cases_obs_array  <- if (obs_cases_on)  array(NA_real_, dim = .ens_dim) else NULL
+  deaths_obs_array <- if (obs_deaths_on) array(NA_real_, dim = .ens_dim) else NULL
 
   # ---------------------------------------------------------------------------
   # Trajectory capture is STREAM-TO-DISK (capture-don't-replay, PLAN 14.G/14.H):
@@ -763,7 +950,7 @@ calc_model_ensemble <- function(config,
   # (.mosaic_build_trajectories) reads the scratch back channel-by-channel,
   # bounding peak RAM to ONE dense array regardless of n_param (scales to 40-loc
   # on local + VM). reported_cases/reported_deaths are NOT captured -- they are
-  # taken from cases_array/deaths_array (exact, no re-sim).
+  # taken from the engine arrays (exact, no re-sim).
   .capture <- isTRUE(capture_trajectories)
   .scratch_owned <- FALSE
   traj_scratch <- NULL
@@ -787,6 +974,7 @@ calc_model_ensemble <- function(config,
   .traj_channels <- as.character(trajectory_channels)
   .traj_scratch  <- traj_scratch   # NULL unless capturing (set above)
   .deaths_int    <- deaths_integration
+  .ret_expected  <- obs_deaths_on  # carry expected deaths only when the deaths draw needs them
 
   # The per-task simulation worker is the package-level
   # .mosaic_ensemble_sim_task() (R/calc_model_ensemble_task.R). PSOCK workers
@@ -844,7 +1032,7 @@ calc_model_ensemble <- function(config,
     .ens_sim_task <- .mosaic_ensemble_sim_task
     parallel::clusterExport(cl, c("param_configs", ".ens_sim_task",
                                    ".capture_traj", ".traj_channels",
-                                   ".traj_scratch", ".deaths_int"),
+                                   ".traj_scratch", ".deaths_int", ".ret_expected"),
                             envir = environment())
 
     if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
@@ -857,7 +1045,8 @@ calc_model_ensemble <- function(config,
     .ens_idle_timeout <- as.numeric(
       getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
     .ens_task_fun <- function(row) .ens_sim_task(
-      row, param_configs, .capture_traj, .traj_channels, .traj_scratch, .deaths_int)
+      row, param_configs, .capture_traj, .traj_channels, .traj_scratch, .deaths_int,
+      return_expected_deaths = .ret_expected)
     environment(.ens_task_fun) <- .GlobalEnv  # resolve names worker-side
     results_list <- .mosaic_cluster_lapply_robust(
       cl = cl,
@@ -880,7 +1069,8 @@ calc_model_ensemble <- function(config,
       split(task_list, seq_len(nrow(task_list))),
       function(row) .mosaic_ensemble_sim_task(row, param_configs,
                                               .capture_traj, .traj_channels,
-                                              .traj_scratch, .deaths_int)
+                                              .traj_scratch, .deaths_int,
+                                              return_expected_deaths = .ret_expected)
     )
   }
 
@@ -889,26 +1079,53 @@ calc_model_ensemble <- function(config,
   # must be told (with the first error text) rather than silently losing slices.
   .mosaic_warn_dispatch_failures(results_list, "calc_model_ensemble")
 
-  # Fill arrays from results
+  # Fill arrays from results. The observation-level draw of each member is
+  # seeded from that member's simulation seed (param_idx * 1000 + stoch_idx, as
+  # .mosaic_ensemble_sim_task() seeds the engine), hashed onto its own stream,
+  # so it is reproducible whatever order the members are gathered in.
+  .as_loc_mat <- function(x) if (is.null(x) || is.matrix(x)) x else matrix(x, nrow = 1L)
+  n_no_expected <- 0L
+  n_with_expected <- 0L
   for (result in results_list) {
     if (isTRUE(result$success)) {
       p <- result$param_idx
       s <- result$stoch_idx
       if (is.matrix(result$reported_cases)) {
-        cases_array[, , p, s]  <- result$reported_cases
-        deaths_array[, , p, s] <- result$reported_deaths
+        cases_engine_array[, , p, s]  <- result$reported_cases
+        deaths_engine_array[, , p, s] <- result$reported_deaths
       } else {
-        cases_array[1L, , p, s]  <- result$reported_cases
-        deaths_array[1L, , p, s] <- result$reported_deaths
+        cases_engine_array[1L, , p, s]  <- result$reported_cases
+        deaths_engine_array[1L, , p, s] <- result$reported_deaths
+      }
+      if (obs_cases_on) {
+        exp_d <- if (obs_deaths_on) .as_loc_mat(result$expected_deaths) else NULL
+        if (obs_deaths_on) {
+          if (is.null(exp_d)) n_no_expected <- n_no_expected + 1L
+          else n_with_expected <- n_with_expected + 1L
+        }
+        ob <- .mosaic_observation_draw(
+          cases           = matrix(as.numeric(cases_engine_array[, , p, s]),  n_locations, n_time_points),
+          deaths          = matrix(as.numeric(deaths_engine_array[, , p, s]), n_locations, n_time_points),
+          expected_deaths = exp_d,
+          blocks          = obs_blocks,
+          k_cases         = obs_spec$k_cases,
+          phi_deaths      = phi_deaths,
+          seed            = .mosaic_derive_seed((p * 1000L) + s, "observation"))
+        cases_obs_array[, , p, s] <- ob$cases
+        if (obs_deaths_on) deaths_obs_array[, , p, s] <- ob$deaths
       }
     }
   }
+  if (n_no_expected > 0L)
+    warning(sprintf(paste0("calc_model_ensemble: %d member(s) carried no expected reported deaths, ",
+                           "so their observation-level deaths are their engine deaths (no ",
+                           "quasi-Poisson overdispersion)."), n_no_expected), call. = FALSE)
 
   # ===========================================================================
   # Count successful simulations
   # ===========================================================================
 
-  n_successful <- sum(!is.na(cases_array[1L, 1L, , ]))
+  n_successful <- sum(!is.na(cases_engine_array[1L, 1L, , ]))
   if (n_successful == 0L) stop("All ensemble simulations failed")
 
   if (verbose) {
@@ -1009,8 +1226,8 @@ calc_model_ensemble <- function(config,
           scratch_dir       = traj_scratch,
           subset_orig_pidx  = seq_len(n_param_sets),
           subset_weights    = parameter_weights,
-          cases_array       = cases_array,
-          deaths_array      = deaths_array,
+          cases_array       = cases_engine_array,
+          deaths_array      = deaths_engine_array,
           n_stoch           = n_simulations_per_config,
           n_locations       = n_locations,
           n_time_points     = n_time_points,
@@ -1047,56 +1264,13 @@ calc_model_ensemble <- function(config,
   # Weighted statistics aggregation
   # ===========================================================================
 
-  calculate_overall_stats <- function(data_array) {
-    dims <- dim(data_array)
-    n_locs <- dims[1L]; n_times <- dims[2L]
-    n_params <- dims[3L]; n_stoch <- dims[4L]
-
-    # Each param set's weight is divided equally among its stochastic runs.
-    # `times` (NOT `each`): as.vector(data_array[i, j, , ]) flattens the
-    # [param, stoch] slice param-fastest, so the weight vector must repeat
-    # param-fastest to pair every (param, stoch) prediction with its own
-    # parameter's weight. Using `each` mis-pairs them when n_stoch > 1.
-    sim_weights <- rep(parameter_weights, times = n_stoch) / n_stoch
-
-    n_ci_pairs   <- length(envelope_quantiles) / 2L
-    stats_mean   <- matrix(NA_real_, nrow = n_locs, ncol = n_times)
-    stats_median <- matrix(NA_real_, nrow = n_locs, ncol = n_times)
-
-    ci_bounds <- lapply(seq_len(n_ci_pairs), function(ci_idx) {
-      list(lower = matrix(NA_real_, nrow = n_locs, ncol = n_times),
-           upper = matrix(NA_real_, nrow = n_locs, ncol = n_times))
-    })
-
-    for (i in seq_len(n_locs)) {
-      for (j in seq_len(n_times)) {
-        values <- as.vector(data_array[i, j, , ])
-        # Failed sims show up as NA. Drop them from the mean and
-        # renormalize the surviving weights so a 10% failure rate
-        # doesn't bias the ensemble mean toward zero. (The median
-        # path already filters and renormalizes inside
-        # weighted_quantiles, so the two stats stay consistent.)
-        valid <- is.finite(values) & is.finite(sim_weights) & sim_weights > 0
-        w_sum <- if (any(valid)) sum(sim_weights[valid]) else 0
-        stats_mean[i, j]   <- if (w_sum > 0) sum(values[valid] * sim_weights[valid]) / w_sum else NA_real_
-        # One weighted_quantiles call for median + envelope (single sort, not two)
-        qv <- weighted_quantiles(values, sim_weights, c(0.5, envelope_quantiles))
-        stats_median[i, j] <- qv[1]
-        all_q <- qv[-1]
-        for (ci_idx in seq_len(n_ci_pairs)) {
-          lower_idx <- ci_idx
-          upper_idx <- length(envelope_quantiles) - ci_idx + 1L
-          ci_bounds[[ci_idx]]$lower[i, j] <- all_q[lower_idx]
-          ci_bounds[[ci_idx]]$upper[i, j] <- all_q[upper_idx]
-        }
-      }
-    }
-
-    list(mean = stats_mean, median = stats_median, ci_bounds = ci_bounds)
-  }
-
-  cases_stats  <- calculate_overall_stats(cases_array)
-  deaths_stats <- calculate_overall_stats(deaths_array)
+  # Central lines from the engine draws; predictive median and interval
+  # envelope from the observation-level draws of each channel that received
+  # observation noise (see .mosaic_ensemble_summaries()).
+  cases_stats  <- .mosaic_ensemble_summaries(cases_engine_array, parameter_weights,
+                                             envelope_quantiles, obs_array = cases_obs_array)
+  deaths_stats <- .mosaic_ensemble_summaries(deaths_engine_array, parameter_weights,
+                                             envelope_quantiles, obs_array = deaths_obs_array)
 
   # Posterior reported CFR by location and year -- each member's mean daily CFR
   # over the year, from the post-hoc death redraw (member weights shared equally
@@ -1189,8 +1363,10 @@ calc_model_ensemble <- function(config,
                                        deaths = deaths_stats$ci_bounds),
       obs_cases                 = obs_cases,
       obs_deaths                = obs_deaths,
-      cases_array               = cases_array,
-      deaths_array              = deaths_array,
+      # Observation-level draws; the engine arrays themselves (no copy) for a
+      # channel that received no observation noise.
+      cases_array               = if (obs_cases_on)  cases_obs_array  else cases_engine_array,
+      deaths_array              = if (obs_deaths_on) deaths_obs_array else deaths_engine_array,
       parameter_weights         = parameter_weights,
       seeds                     = member_seeds,
       n_param_sets              = n_param_sets,
@@ -1214,6 +1390,17 @@ calc_model_ensemble <- function(config,
         deaths_final     = isTRUE(mask_final_deaths_step),
         score_idx_cases  = score_idx_cases,
         score_idx_deaths = score_idx_deaths
+      ),
+      predictive_median         = list(cases  = cases_stats$predictive_median,
+                                       deaths = deaths_stats$predictive_median),
+      cases_engine_array        = cases_engine_array,
+      deaths_engine_array       = deaths_engine_array,
+      observation_model         = list(
+        cases       = obs_cases_on,
+        deaths      = obs_deaths_on && n_with_expected > 0L,
+        k_cases     = if (obs_cases_on) obs_spec$k_cases else NULL,
+        week_offset = if (obs_cases_on) obs_spec$week_offset else NULL,
+        phi_deaths  = phi_deaths
       )
     ),
     class = "mosaic_ensemble"
@@ -1237,10 +1424,13 @@ calc_model_ensemble <- function(config,
 #' regardless of n_param (scales to 40-loc on local + VM). No re-simulation.
 #'
 #' \code{reported_cases}/\code{reported_deaths} are taken from the supplied
-#' \code{cases_array}/\code{deaths_array} (already in display order) -- exact
-#' match to the prediction plots, no re-capture (PLAN sec 5.5), reduced with
-#' \code{central_method} per channel (\code{disease_deaths} follows the deaths
-#' method); other channels use the weighted median. Derived series:
+#' \code{cases_array}/\code{deaths_array} (already in display order), which must
+#' be the ENGINE-level arrays (\code{cases_engine_array}/\code{deaths_engine_array})
+#' -- the member trajectories, not their observation-level draws. Their central
+#' line, reduced with \code{central_method} per channel (\code{disease_deaths}
+#' follows the deaths method), is then an exact match to the prediction plots'
+#' central line, no re-capture (PLAN sec 5.5); other channels use the weighted
+#' median. Derived series:
 #' \code{I_total} is the sum of the Isym/Iasym medians, \code{mass_balance} a
 #' ratio of compartment weighted means, \code{CFR} a ratio of rolling weighted
 #' means; \code{epidemic_frac} is the streaming weighted-MEAN of the
@@ -1256,7 +1446,7 @@ calc_model_ensemble <- function(config,
                                        location_names, date_start, date_stop,
                                        n_successful, obs_cases, obs_deaths,
                                        trajectory_channels,
-                                       central_method = c(cases = "mean",
+                                       central_method = c(cases = "median",
                                                           deaths = "mean"),
                                        n_lines = 150L,
                                        line_stride = 7L, verbose = TRUE) {
@@ -1424,8 +1614,9 @@ calc_model_ensemble <- function(config,
     list(median = cen, thin = ts)
   }
 
-  # reported_* from the prediction arrays (exact match to the prediction plots;
-  # no re-capture, no re-sim). cases_array/deaths_array are in display order. The
+  # reported_* from the engine prediction arrays (exact match to the prediction
+  # plots' central line; no re-capture, no re-sim). cases_array/deaths_array are
+  # the ENGINE arrays, in display order. The
   # central line follows central_method PER CHANNEL so it is BIT-IDENTICAL to the
   # prediction plots' predicted_central under both "median" and "mean" modes.
   rc <- reduce_arr(cases_array,  central_method[["cases"]])

@@ -109,9 +109,11 @@ test_that("AI rows receive targets but never move the anchors", {
 })
 
 test_that("compile_suitability_data routes the targets through the tested helpers", {
-     src <- paste(deparse(MOSAIC::compile_suitability_data), collapse = "\n")
-     expect_true(grepl(".csd_anchor_rows(d, is_ai, target_anchor_stop)", src, fixed = TRUE))
-     expect_true(grepl(".csd_response_targets(d, is_anchor", src, fixed = TRUE))
+     src <- gsub("\\s+", " ", paste(deparse(MOSAIC::compile_suitability_data), collapse = " "))
+     expect_true(grepl("is_untrusted <- .csd_untrusted_rows(d)", src, fixed = TRUE))
+     expect_true(grepl(".csd_anchor_rows(d, is_untrusted, target_anchor_stop)", src, fixed = TRUE))
+     expect_true(grepl("pop_rows <- !is_ai & .csd_anchor_window(d, target_anchor_stop)", src, fixed = TRUE))
+     expect_true(grepl(".csd_response_targets(d, is_anchor, iso_codes_mosaic, pop_rows = pop_rows)", src, fixed = TRUE))
 })
 
 test_that("compile_suitability_data exposes target_anchor_stop", {

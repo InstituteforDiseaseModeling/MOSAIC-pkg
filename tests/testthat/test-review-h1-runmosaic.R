@@ -35,8 +35,12 @@ test_that("control.json keeps the channel names of a per-channel central_method"
   expect_identical(cm, c(cases = "mean", deaths = "median"))
 
   # A scalar becomes an explicit per-channel pair.
-  one <- MOSAIC:::.mosaic_control_for_json(mosaic_control_defaults())
+  one <- MOSAIC:::.mosaic_control_for_json(mosaic_control_defaults(predictions = list(
+    central_method = "mean")))
   expect_identical(one$predictions$central_method, list(cases = "mean", deaths = "mean"))
+  # The package default is itself per channel (v0.101.0) and keeps its names.
+  def <- MOSAIC:::.mosaic_control_for_json(mosaic_control_defaults())
+  expect_identical(def$predictions$central_method, list(cases = "median", deaths = "mean"))
   # An unresolvable value is persisted as supplied (the ensemble step reports it).
   bad <- list(predictions = list(central_method = "trimmed"))
   expect_identical(MOSAIC:::.mosaic_control_for_json(bad), bad)

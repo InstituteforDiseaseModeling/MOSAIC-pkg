@@ -50,10 +50,12 @@ the best subset). It is the trajectory analogue of
 
 \strong{Central line:} for \code{reported_cases} / \code{reported_deaths} the
 bold line is the ensemble \emph{central} series following
-\code{control$predictions$central_method} (weighted mean by default, or weighted
-median, per channel) and is \strong{bit-identical} to the cases/deaths
-\emph{prediction} plots -- it is reduced from the same captured draws over the
-same final displayed member set and weights (no re-simulation). True deaths
+\code{control$predictions$central_method} (by default the weighted median for
+cases and the weighted mean for deaths) and is \strong{bit-identical} to the
+cases/deaths \emph{prediction} plots' central line -- it is reduced from the
+same engine-level member trajectories over the same final displayed member
+set and weights (no re-simulation). The thinned lines are engine-level member
+trajectories, not observation-level draws. True deaths
 (\code{disease_deaths}) follow the deaths channel's method so the two deaths
 panels are comparable. All other channels (compartments, FOI, incidence,
 derived) have no prediction-plot counterpart and use the weighted

@@ -72,7 +72,8 @@ test_that("plotting functions have no dangling variable references", {
     "plot_model_posteriors_detail",
     "plot_model_distributions",
     "plot_model_trajectories",
-    "render_MOSAIC_figures"
+    "render_MOSAIC_figures",
+    ".mosaic_render_figures"
   )
 
   allow <- declared_globals()

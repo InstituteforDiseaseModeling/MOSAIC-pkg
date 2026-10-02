@@ -118,8 +118,9 @@ test_that("deviation-#1: reported_* trajectory central honors the supplied weigh
   # The reducer must reduce over WHATEVER member set + weights it is handed, so
   # run_MOSAIC's optimized-subset capture yields trajectory centrals equal to the
   # optimized prediction-ensemble centrals. NON-UNIFORM weights: the reported_cases
-  # trajectory central (the weighted mean, the default central_method) must equal
-  # the ensemble cases_mean to machine precision.
+  # trajectory central (the weighted median, the default cases central_method since
+  # v0.101.0) must equal the ensemble cases_median, and reported_deaths (the
+  # weighted mean) the deaths_mean, to machine precision.
   cfg <- .make_cfg(20L, 1L)
   local_mocked_ensemble_sims(.make_precomputed(3L, 2L, 20L, 1L, TRUE))
   ens <- calc_model_ensemble(
@@ -131,7 +132,9 @@ test_that("deviation-#1: reported_* trajectory central honors the supplied weigh
     verbose                  = FALSE
   )
   rc <- ens$trajectories$summary$reported_cases$median
-  expect_equal(as.numeric(rc), as.numeric(ens$cases_mean), tolerance = 1e-8)
+  expect_equal(as.numeric(rc), as.numeric(ens$cases_median), tolerance = 1e-8)
+  rd <- ens$trajectories$summary$reported_deaths$median
+  expect_equal(as.numeric(rd), as.numeric(ens$deaths_mean), tolerance = 1e-8)
 })
 
 test_that(".rec_mat trims tick+1 flow channels instead of dropping them (DM Finding 2)", {
@@ -321,8 +324,8 @@ test_that("deferred reduce returns a scratch handle; optimized-subset reduce is 
   tr <- MOSAIC:::.mosaic_build_trajectories(
     scratch_dir = ens$trajectory_scratch$dir, subset_orig_pidx = sub_pidx,
     subset_weights = sub_w,
-    cases_array  = ens$cases_array[, , sub_pidx, , drop = FALSE],
-    deaths_array = ens$deaths_array[, , sub_pidx, , drop = FALSE],
+    cases_array  = MOSAIC:::.mosaic_engine_array(ens, "cases")[, , sub_pidx, , drop = FALSE],
+    deaths_array = MOSAIC:::.mosaic_engine_array(ens, "deaths")[, , sub_pidx, , drop = FALSE],
     n_stoch = 2L, n_locations = 1L, n_time_points = 20L, location_names = "AAA",
     date_start = ens$date_start, date_stop = ens$date_stop, n_successful = 4L,
     obs_cases = ens$obs_cases, obs_deaths = ens$obs_deaths,
@@ -330,12 +333,12 @@ test_that("deferred reduce returns a scratch handle; optimized-subset reduce is 
     n_lines = 50L, verbose = FALSE)
   expect_s3_class(tr, "mosaic_trajectories")
 
-  # reported_cases trajectory central == weighted mean over the SUBSET (exact;
-  # the default central_method).
+  # reported_cases trajectory central == weighted median over the SUBSET (exact;
+  # the default cases central_method since v0.101.0).
   sw  <- rep(sub_w, times = 2L) / 2L
-  cs  <- ens$cases_array[, , sub_pidx, , drop = FALSE]
+  cs  <- MOSAIC:::.mosaic_engine_array(ens, "cases")[, , sub_pidx, , drop = FALSE]
   ref <- vapply(seq_len(20L), function(t)
-    stats::weighted.mean(as.vector(cs[1, t, , ]), sw), numeric(1))
+    weighted_quantiles(as.vector(cs[1, t, , ]), sw, 0.5), numeric(1))
   expect_equal(as.numeric(tr$summary$reported_cases$median), as.numeric(ref),
                tolerance = 1e-8)
   # a compartment channel was read back from scratch (not empty).

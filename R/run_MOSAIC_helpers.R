@@ -230,27 +230,30 @@
 #' Resolve a central_method specification into a per-channel character vector
 #'
 #' \code{central_method} selects which weighted ensemble summary
-#' (\code{"mean"} or \code{"median"}) is treated as the canonical central
-#' trajectory for predictions, plots, ensemble R^2/bias metrics, the medoid
-#' target, and the subset-selection objective. The weighted MEAN is the
-#' unbiased estimator of expected counts (\eqn{E[\sum]=\sum E}) and never
-#' collapses to zero on sparse deaths, so it is the package default (v0.38.0 to
-#' v0.46.0 and again from v0.98.0); \code{"median"}, the default from v0.46.1 to
-#' v0.97.x, reproduces runs made then.
+#' (\code{"mean"} or \code{"median"}) of the engine-level member trajectories
+#' is treated as the canonical central trajectory for predictions, plots,
+#' ensemble R^2/bias metrics, the medoid target, and the subset-selection
+#' objective. The package default (v0.101.0) is the weighted MEDIAN for cases --
+#' the typical trajectory, robust to a few explosive members -- and the weighted
+#' MEAN for deaths, the expected count, which never collapses to zero on sparse
+#' deaths (the weighted median does). Both were the mean from v0.98.0 to
+#' v0.100.x and from v0.38.0 to v0.46.0, and both the median from v0.46.1 to
+#' v0.97.x; a scalar reproduces runs made then.
 #'
 #' Accepts a scalar (applies to both channels) or a named vector to set cases
 #' and deaths independently, e.g. \code{c(cases = "median", deaths = "mean")}.
 #'
 #' @param x \code{NULL}, a scalar \code{"mean"}/\code{"median"}, or a named
 #'   vector with \code{"cases"} and/or \code{"deaths"}. \code{NULL} or an
-#'   unset channel falls back to \code{"mean"}.
+#'   unset channel falls back to the package default for that channel
+#'   (\code{"median"} for cases, \code{"mean"} for deaths).
 #' @return Named character vector \code{c(cases = ., deaths = .)}, each
 #'   \code{"mean"} or \code{"median"}.
 #' @noRd
 .mosaic_resolve_central_method <- function(x = NULL) {
   valid <- c("mean", "median")
   ch    <- c("cases", "deaths")
-  out   <- stats::setNames(rep("mean", 2L), ch)
+  out   <- stats::setNames(c("median", "mean"), ch)
 
   if (is.null(x) || length(x) == 0L) {
     return(out)
@@ -289,7 +292,8 @@
 #' per-channel \code{central_method = c(cases = , deaths = )} would reach
 #' control.json without its channel labels. The resolved value is persisted as a
 #' named list, which serialises as \code{{"cases": ..., "deaths": ...}}. A value
-#' that does not resolve is left as supplied; the ensemble step reports it.
+#' that does not resolve is left as supplied; \code{run_MOSAIC()} never writes
+#' one, because \code{.mosaic_validate_and_merge_control()} rejects it first.
 #' @param control Validated control list.
 #' @return \code{control} with \code{predictions$central_method} as a named list.
 #' @noRd
@@ -388,14 +392,17 @@
 #'
 #' The medoid is the member whose predicted cases are closest to the ensemble
 #' central series. Each member is summarised by the median over its stochastic
-#' runs; the distance is the mean absolute difference of \code{log(x + eps)}
+#' runs of its ENGINE-level trajectories (\code{.mosaic_engine_array()}; an
+#' observation-level draw is noise around a member, not the member); the
+#' distance is the mean absolute difference of \code{log(x + eps)}
 #' over every location and every SCORED time step (the central series is
 #' passed through \code{.mosaic_mask_central_for_scoring()} first, so the
 #' burn-in head and engine artifacts do not count). Every location therefore
 #' carries equal weight, and a single-location run reduces to the per-location
 #' log-MAE.
 #'
-#' @param cases_array Numeric array \code{[n_loc, n_time, n_param, n_stoch]}.
+#' @param cases_array Numeric array \code{[n_loc, n_time, n_param, n_stoch]} of
+#'   engine-level reported cases.
 #' @param central Numeric matrix \code{[n_loc, n_time]}, the central cases series.
 #' @param mask_spec Artifact-mask list (\code{ens$artifact_mask}).
 #' @param eps Offset added before the log.
@@ -663,6 +670,23 @@
          ") must be less than calibration$max_simulations_total (",
          def$calibration$max_simulations_total, ")", call. = FALSE)
   }
+
+  # The cases scoring rule must be valid before any worker starts: a bad value
+  # would otherwise fail inside every likelihood call and surface only as an
+  # all-NA calibration.
+  cs <- def$likelihood$cases_scoring
+  if (!is.null(cs) && !(is.character(cs) && length(cs) == 1L && cs %in% c("daily", "weekly"))) {
+    stop("likelihood$cases_scoring must be \"daily\" (default) or \"weekly\", got: ",
+         paste(format(cs), collapse = ", "), call. = FALSE)
+  }
+  # The central method is first resolved after calibration, once the shards are
+  # consolidated, where a bad value would end the run with no ensemble and a
+  # directory that cannot be resumed. Check it here instead.
+  tryCatch(.mosaic_resolve_central_method(def$predictions$central_method),
+           error = function(e) stop(
+             "control$predictions$central_method is invalid (", conditionMessage(e),
+             "). Use \"mean\", \"median\" or a vector named by channel, e.g. ",
+             "c(cases = \"median\", deaths = \"mean\") (the default).", call. = FALSE))
 
   # LOGICAL CONSISTENCY
   if (def$calibration$min_batches_adaptive > def$calibration$max_batches_adaptive) {
@@ -1462,7 +1486,18 @@
 #'   per-location offset width now averages over the years each location
 #'   observes (not the pooled years), the n_iterations collapse keeps -Inf
 #'   replicates, and the cumulative shape term sums over scored cells only.
-.mosaic_likelihood_impl_version <- function() "R/v0.100.0+review_likelihood"
+#'   v0.101.0 adds the weekly cases rule (\code{cases_scoring = "weekly"}; the
+#'   default stays the daily cells, which the control comparison on resume
+#'   pins) and changes the cases dispersion: estimated from observed weeks only
+#'   (config \code{reported_tier}), and a location whose fit collapses, is
+#'   clamped at the lower bound or has too few observed weeks takes the
+#'   cross-country panel trend. The integrated deaths score's dispersion phi is
+#'   likewise estimated from observed weeks only when the config carries
+#'   \code{reported_tier} (every scored week when they are too few). Its
+#'   development builds stamped "R/v0.101.0+weekly_cases", whose clamped fits
+#'   kept the 0.1 bound: the resolved k is not part of control.json, so only
+#'   this tag keeps their shards apart.
+.mosaic_likelihood_impl_version <- function() "R/v0.101.0+clamped_k_trend"
 
 #' R Engine Semantics Version
 #'

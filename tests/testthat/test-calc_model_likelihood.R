@@ -332,10 +332,12 @@ testthat::test_that("config$date_start drives per-location NB dispersion estimat
           obs_deaths = obs_deaths, est_deaths = est_deaths, config = cfg))
      k_c <- MOSAIC::est_nb_dispersion(obs_cases, date_start = cfg$date_start)$k
      k_d <- MOSAIC::est_nb_dispersion(obs_deaths, date_start = cfg$date_start)$k
+     # The same dated config: under cases_scoring = "weekly" the date forms the
+     # reporting weeks, so the comparison holds under either cases rule.
      ll_k <- MOSAIC::calc_model_likelihood(
           obs_cases = obs_cases, est_cases = est_cases,
           obs_deaths = obs_deaths, est_deaths = est_deaths,
-          nb_k_cases = k_c, nb_k_deaths = k_d)
+          nb_k_cases = k_c, nb_k_deaths = k_d, config = cfg)
      expect_true(is.finite(ll_est))
      expect_equal(ll_est, ll_k)
 })

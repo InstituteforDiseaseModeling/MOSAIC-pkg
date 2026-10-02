@@ -27,11 +27,15 @@ NULL (default) uses the set recorded in the run manifest.}
 
 \item{n_reps_best_medoid}{Integer or NULL (default); number of stochastic
 replicates to draw for the single-config \code{best}/\code{medoid}
-models. NULL reuses the value stored in the run manifest.}
+models, with each cutoff run's observation model and deaths integration
+(see \code{\link{run_rolling_cv}}). NULL reuses the value stored in the
+run manifest.}
 
 \item{central_method}{Central tendency for \code{pred_central}: \code{NULL}
-(default) reuses the value recorded in the run manifest (or \code{"mean"}
-for older manifests); otherwise a scalar or per-channel
+(default) reuses the value recorded in the run manifest; a manifest without
+the field was written by \code{run_rolling_cv()} before \code{central_method}
+existed (v0.32.40-v0.37.x), when predictions were the ensemble median, so it
+recompiles on \code{"median"}. Otherwise a scalar or per-channel
 \code{c(cases=, deaths=)} override.}
 
 \item{write}{Logical; write \code{predictions.parquet} (default TRUE).}

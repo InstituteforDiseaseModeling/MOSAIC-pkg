@@ -43,8 +43,11 @@ scatter plots, Q-Q plots, residuals vs observed, and temporal residual patterns.
 Creates a 6-page multi-page PDF per output file:
 \enumerate{
 \item Density overlays of observed vs predicted central (the run's
-\code{central_method}, mean by default) distributions
-\item Credible interval coverage analysis (50\% and 95\% CIs vs nominal)
+\code{central_method}: median for cases and mean for deaths by default)
+distributions
+\item Interval coverage analysis (50\% and 95\% intervals vs nominal; the
+CSV intervals are observation-level predictive intervals for runs made
+with v0.101.0 or later)
 \item Observed vs predicted calibration scatter plots
 \item Quantile-quantile plots
 \item Residuals vs observed

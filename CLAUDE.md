@@ -143,9 +143,9 @@ The `run_MOSAIC()` workflow is the **centerpiece** of the package — it orchest
 
 **Post-calibration:**
 - Medoid model identified, config saved to `2_calibration/best_model/config_medoid.json` (no `config_best.json` is produced)
-- `calc_model_ensemble()` computes posterior-weighted predictions (weighted median/mean across parameter sets × stochastic reruns)
-- R² and bias ratio computed from the weighted mean (`control$predictions$central_method`; median before v0.98.0) vs observed data
-- `plot_model_ensemble()` generates prediction plots (only when `plots=TRUE`)
+- `calc_model_ensemble()` computes posterior-weighted predictions (weighted median/mean across parameter sets × stochastic reruns). Since v0.101.0, when it is given an `observation_model` (every `run_MOSAIC()` ensemble), its intervals (`ci_bounds`, `predictive_median`, `cases_array`/`deaths_array`) are observation-level posterior predictive draws (weekly NB at the scored cases k under either cases rule, so under the default daily cells they are wider than the per-day likelihood implies; deaths at the integrated likelihood's phi); a direct call without one stays engine-level. The central lines and every member-trajectory consumer stay engine-level (`cases_engine_array`/`deaths_engine_array`, read via `.mosaic_engine_array()`)
+- R² and bias ratio computed from the per-channel central line (`control$predictions$central_method`, default since v0.101.0 cases = weighted median, deaths = weighted mean; both mean v0.98.0-v0.100.x and v0.38.0-v0.46.0, both median v0.46.1-v0.97.x and before v0.38.0) vs observed data, on the scored window
+- `plot_model_ensemble()` generates prediction plots (only when `plots=TRUE`): engine-level central line, observation-level ribbons, burn-in drawn and shaded with a "scored from" marker (`show_burn_in`); the prediction CSVs keep the unscored head `NA`
 
 **Output structure:**
 ```
@@ -167,7 +167,7 @@ Sys.setenv(OMP_NUM_THREADS="1", MKL_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
 
 `calc_model_likelihood()` computes a multi-component log-likelihood:
 
-**Core:** cases — Negative Binomial on daily cells (per-location weekly dispersion from `est_nb_dispersion()`, eps-floored mean). Deaths (v0.96.0+) — the reported CFR `mu_jt` is integrated out per simulated path (`calc_log_likelihood_deaths_integrated()`): weekly quasi-Poisson with a per-location dispersion and a small background, Laplace over a location offset + smooth year deviations. Ensemble deaths are redrawn from that CFR posterior (`cfr_posterior.csv`).
+**Core:** cases — Negative Binomial at the per-location weekly k (eps-floored mean). The default, `control$likelihood$cases_scoring = "daily"`, scores one cell per day (the v0.100.1 cell rule); the v0.101.0 likelihood gate kept it after the weekly rule did worse on both pre-registered cases criteria (KEN/ZMB/CMR/GHA: cases rWIS weekly/daily 1.068, median |log cases bias| 0.254 vs 0.187). `"weekly"` (v0.101.0+, available and tested) sums observed and simulated daily cases over Monday-Sunday reporting weeks (`.mosaic_week_blocks()`; partial edge weeks dropped) and scores each week as one cell. k comes from `est_nb_dispersion()` on the scored window, from observed weeks only when the config carries `reported_tier` (1 observed, 2 reconstructed, 3 imputed); a location whose fit collapses, is clamped at the 0.1 lower bound (censoring, not a measurement: UGA on config_default v6.1) or has too few observed weeks takes the cross-country panel trend `.NB_DISP_PANEL_TREND` (re-derived at every `config_default` rebuild). Neither rule reproduces v0.100.1 runs (the dispersion changed). Deaths (v0.96.0+) — the reported CFR `mu_jt` is integrated out per simulated path (`calc_log_likelihood_deaths_integrated()`): weekly quasi-Poisson with a per-location dispersion phi (estimated from deaths against observed cases; observed weeks only under `reported_tier`, every scored week where those are too few) and a small background, Laplace over a location offset + smooth year deviations. Ensemble deaths are redrawn from that CFR posterior (`cfr_posterior.csv`); the observation-level deaths draws use the same phi.
 
 **Shape terms (each scaled by N_obs / its own point count, weight > 0 enables):**
 - Peak timing (Normal LL on time differences)
@@ -177,7 +177,7 @@ Sys.setenv(OMP_NUM_THREADS="1", MKL_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
 
 **Assembly (per location j, then weighted by `weights_location`):** `LL_j = w_c*NB_cases + w_d*deaths_core + (N_obs/N_peaks_j)*[w_pt*peak_time + w_pm*peak_mag] + (N_obs/N_cum)*w_cum*cumulative + (N_obs/N_quantiles)*w_wis*WIS`, where N_obs counts time steps with any finite observation and every shape term is split `w_c*cases + w_d*deaths` (the level-dependent deaths shape terms are dropped when the CFR is integrated out; deaths peak timing stays)
 
-All shape term weights default to 0 (OFF). A non-finite per-location LL becomes -Inf; a location (or input) with no scorable data returns NA_real_, not a constant score.
+All shape term weights default to 0 (OFF). The shape terms read the daily series under both cases rules (N_obs counts daily steps). Under the default daily cells the cases score keeps its v0.100.1 per-day spread across draws (it moves only where k changed), so the shape-term and channel balance are those of v0.100.1. Under `"weekly"` a given shape weight weighs several times more against the cases core (a median ~4.8x on real draws), and at the default outcome weights the deaths core likewise weighs several times more against cases in draw ranking: on real engine draws the weekly cases score's spread across draws is a median 4.8x smaller (1.8-6.5; 4.1x among the top 1,000), not at all in the Poisson limit, and the reverse where the panel trend raised k (CMR and UGA in those v0.100.1 rehearsal pools). A non-finite per-location LL becomes -Inf, and so does a non-finite simulated count on a scored week under `"weekly"` (the daily rule leaves a day with a missing simulated count out); a location (or input) with no scorable data returns NA_real_, not a constant score (a weekly core needs three scored weeks).
 
 ## Python Integration
 

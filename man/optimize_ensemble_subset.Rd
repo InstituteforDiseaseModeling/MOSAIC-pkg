@@ -55,7 +55,8 @@ setting (its point forecast remains the weighted median). The default
 \code{"median"} here is deliberate -- it preserves historical direct-call
 selection and the Tier-2 bit-for-bit parity guarantee; \code{run_MOSAIC()}
 passes the resolved \code{control$predictions$central_method} (package
-default \code{"mean"} as of v0.98.0) explicitly.}
+default since v0.101.0: \code{"median"} for cases, \code{"mean"} for
+deaths) explicitly.}
 
 \item{stride}{Integer >= 1. \code{1L} (default) evaluates every N in
 \code{min_n:max_n} (exhaustive, bit-identical parity path). \code{> 1L}
@@ -91,8 +92,9 @@ N, not every N in \code{min_n:max_n}.}
 likelihood-sorted order, aligned with \code{optimal_weights} (when
 \code{seeds} supplied), else \code{NULL}.}
 \item{ensemble_optimized}{Complete \code{mosaic_ensemble} object at optimal
-N. Its \code{$seeds} field is the per-member seed aligned with its
-\code{cases_array} (member-to-seed aligned) when \code{ensemble$seeds} was
+N, carrying the selected members' observation-level and engine-level
+arrays. Its \code{$seeds} field is the per-member seed aligned with its
+arrays (member-to-seed aligned) when \code{ensemble$seeds} was
 present, else it falls back to \code{optimal_seeds}.}
 \item{stability_flag}{TRUE if score profile was flat.}
 \item{diagnostics_n}{Original diagnostics-selected N.}
@@ -112,6 +114,16 @@ For each candidate size N (from \code{min_n} to the full ensemble), the
 function re-computes the best-subset weights within the top-N subset,
 re-computes weighted median predictions from the 4D arrays, and scores with
 the selected objective function.
+
+Selection scores the ENGINE-level member trajectories
+(\code{ensemble$cases_engine_array}/\code{deaths_engine_array}; the
+\code{cases_array}/\code{deaths_array} of an ensemble saved before v0.101.0,
+which were engine-level), the series the ensemble's central lines are built
+from. The optimized ensemble is then rebuilt exactly as
+\code{\link{calc_model_ensemble}} builds one: central lines from the engine
+draws and the interval envelope and \code{predictive_median} from the
+observation-level draws of the selected members, when the ensemble carries
+them. The \code{"wis"} objective therefore scores the engine-level spread.
 
 The per-N weights use the same scheme as the \code{weight_best} posterior
 that \code{run_MOSAIC()} builds the candidate ensemble from (by default

@@ -128,7 +128,8 @@ SPEC <- list(
      # --- models + central tendency -------------------------------------------
      models         = c("ensemble", "ensemble_opt", "medoid"),
      # "median" reproduces the original (pre-v0.98.0) experiment; the package
-     # default is now "mean" (run_rolling_cv(), control$predictions).
+     # default is c(cases = "median", deaths = "mean") since v0.101.0, both "mean"
+     # in v0.98.0-v0.100.x (run_rolling_cv(), control$predictions).
      central_method = "median",
 
      # --- output --------------------------------------------------------------

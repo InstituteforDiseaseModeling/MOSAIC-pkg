@@ -27,6 +27,7 @@ calc_model_ensemble(
   trajectory_scratch_dir = NULL,
   reduce_trajectories = TRUE,
   deaths_integration = NULL,
+  observation_model = NULL,
   verbose = TRUE
 )
 }
@@ -91,11 +92,13 @@ comprehensive internal-state channels (\code{trajectory_channels}) from each
 member and attach a compact \code{$trajectories} (\code{mosaic_trajectories})
 object -- a per-channel central line (field \code{$median}, kept for schema
 stability) + a uniform-thinned set of actual member trajectories + derived
-series. The central line is the weighted MEAN for \code{reported_cases},
-\code{reported_deaths} and \code{disease_deaths} (the default
-\code{central_method} of the trajectory reducer, matching the prediction
-plots' \code{predicted_central}), and the weighted median for every other
-captured channel; \code{I_total} is the sum of the Isym and Iasym medians,
+series. \code{reported_cases}/\code{reported_deaths} are the ENGINE-level
+member trajectories (\code{cases_engine_array}/\code{deaths_engine_array}).
+Their central line follows the trajectory reducer's default
+\code{central_method} -- the weighted median for \code{reported_cases},
+the weighted mean for \code{reported_deaths} and \code{disease_deaths} --
+matching the prediction plots' \code{predicted_central}; every other
+captured channel uses the weighted median. \code{I_total} is the sum of the Isym and Iasym medians,
 \code{mass_balance} a ratio of compartment weighted means, \code{CFR} a
 ratio of 28-day rolling weighted-mean deaths and cases, and
 \code{epidemic_frac} the weighted mean of the reconstructed epidemic flag.
@@ -135,23 +138,69 @@ that is the PRIOR reported CFR, not the calibrated one. To reproduce a
 run's calibrated deaths post hoc, pass
 \code{readRDS("<dir_output>/2_calibration/deaths_integration.rds")}.}
 
+\item{observation_model}{Optional observation model for the posterior
+predictive: a list with \code{k_cases} (weekly negative binomial size per
+location, or one for all; \code{Inf} = Poisson) and optionally
+\code{week_offset} (0-6 days after Monday on which each location's
+reporting weeks start; default 0), or the table of
+\code{<dir_output>/2_calibration/diagnostics/nb_dispersion.csv} (its cases
+rows, matched by location). \code{run_MOSAIC()} supplies the dispersion its
+likelihood scored with. The cases draw is this weekly negative binomial
+under either cases scoring rule. Under the default
+\code{control$likelihood$cases_scoring = "daily"}, whose per-day cells at
+the same \eqn{k} imply a weekly variance of about \eqn{C + C^2/(7k)} for a
+weekly total \eqn{C} (the predictive uses \eqn{C + C^2/k}), the intervals
+are therefore wider than the likelihood implies; under \code{"weekly"} they
+match it. The deaths dispersion is read from
+\code{deaths_integration}. When \code{NULL} (default) no observation noise
+is drawn and \code{cases_array}/\code{deaths_array} are the engine draws.}
+
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }
 \value{
 S3 object of class \code{"mosaic_ensemble"} containing:
 \describe{
-\item{cases_mean}{Matrix (n_locations x n_time_points) of weighted mean cases.}
-\item{cases_median}{Matrix of weighted median cases.}
-\item{deaths_mean}{Matrix of weighted mean deaths.}
-\item{deaths_median}{Matrix of weighted median deaths.}
-\item{ci_bounds}{List of CI pairs, each with \code{$lower} and \code{$upper} matrices.}
+\item{cases_mean}{Matrix (n_locations x n_time_points) of weighted mean
+cases, from the engine draws (the exact predictive mean).}
+\item{cases_median}{Matrix of weighted median cases: the median engine
+trajectory.}
+\item{deaths_mean}{Matrix of weighted mean deaths (engine draws).}
+\item{deaths_median}{Matrix of weighted median deaths (engine draws).}
+\item{ci_bounds}{List with \code{$cases} and \code{$deaths}, each a list of
+interval pairs with \code{$lower} and \code{$upper} matrices: quantiles of
+the observation-level draws (of the engine draws when no
+\code{observation_model} is given).}
+\item{predictive_median}{List with \code{$cases} and \code{$deaths}: the
+0.5 quantile of the same draws as \code{ci_bounds}, the median a proper
+interval score (WIS) pairs with those intervals, and the
+\code{predicted_median} of the prediction CSVs \code{run_MOSAIC()}
+writes. Equal to \code{*_median} when no observation noise was drawn.}
 \item{obs_cases}{Observed cases matrix from config.}
 \item{obs_deaths}{Observed deaths matrix from config.}
-\item{cases_array}{4-D array (n_locations x n_time_points x n_param_sets x n_stoch).}
-\item{deaths_array}{4-D array matching cases_array dimensions.}
+\item{cases_array}{4-D array (n_locations x n_time_points x n_param_sets x
+n_stoch) of OBSERVATION-level draws (the engine draws when no
+\code{observation_model} is given).}
+\item{deaths_array}{4-D array of OBSERVATION-level deaths when the deaths
+received quasi-Poisson overdispersion (an \code{observation_model} and a
+\code{deaths_integration} with some \eqn{\phi_j > 1}); otherwise the
+engine deaths, identical to \code{deaths_engine_array} (no
+\code{deaths_integration}, every \eqn{\phi_j \le 1}, or no
+\code{observation_model}).}
+\item{cases_engine_array}{4-D array of the ENGINE-level reported cases (the
+member trajectories before observation noise), same dimensions. The
+medoid, R_eff, trajectory and implied-CFR consumers read these.}
+\item{deaths_engine_array}{4-D array of engine-level reported deaths (after
+the post-hoc CFR redraw when \code{deaths_integration} is supplied).}
+\item{observation_model}{List recording the observation noise applied:
+\code{cases} (logical, whether cases received NB noise), \code{deaths}
+(logical, whether deaths received quasi-Poisson overdispersion: only
+where some \code{phi_deaths > 1}; at \eqn{\phi = 1} the engine deaths,
+binomial draws around the expected deaths, already are the
+observation-level deaths), \code{k_cases}, \code{week_offset} and
+\code{phi_deaths} (per location, \code{NULL} when not applied).}
 \item{parameter_weights}{Normalized weight vector.}
 \item{seeds}{Integer vector of per-member simulation seeds, aligned with the
-parameter dimension of \code{cases_array} (member \code{i} <-> \code{seeds[i]}). Bound to
+parameter dimension of the arrays (member \code{i} <-> \code{seeds[i]}). Bound to
 the parameter set that produced each member so consumers (e.g. medoid
 selection) need not rely on positional alignment with an external vector.}
 \item{n_param_sets}{Number of parameter sets.}
@@ -201,6 +250,25 @@ Runs simulations for multiple parameter sets (with stochastic reruns
 per set) and aggregates results using importance weights. Returns a
 \code{mosaic_ensemble} object containing weighted mean, median, and quantile
 envelopes for cases and deaths.
+
+With an \code{observation_model} (as \code{run_MOSAIC()} supplies), every
+member trajectory also receives an observation-level draw consistent with
+the calibration likelihood, so the interval envelope is a posterior
+predictive interval for the OBSERVED counts rather than for the engine's
+trajectories alone. Cases: each weekly total (the blocks the dispersion was
+estimated on) is drawn from a negative binomial around the member's weekly
+total with the run's per-location weekly size \eqn{k}, then apportioned to
+the week's days in proportion to the member's daily counts (integer counts,
+every day within one of its exact share and equal to it in expectation,
+weekly totals exact). Deaths (when \code{deaths_integration} is supplied):
+each weekly total gets the integrated deaths likelihood's quasi-Poisson
+variance \eqn{\phi_j \mu} around the member's expected reported deaths,
+coupled to the member's post-hoc deaths so that \eqn{\phi_j = 1} leaves them
+unchanged. The draws are seeded from each member's simulation seed. The
+central lines (\code{*_mean}, \code{*_median}) stay ENGINE-level: the noise is
+mean-preserving, so the engine mean is the exact predictive mean, and the
+median is the central trajectory rather than a quantile of the noise. See
+\code{.mosaic_ensemble_summaries()}.
 
 This is the computation half of the ensemble workflow. Use
 \code{\link{plot_model_ensemble}} to render plots from the returned object.

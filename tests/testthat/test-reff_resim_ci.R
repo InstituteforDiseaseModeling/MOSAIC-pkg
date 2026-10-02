@@ -303,8 +303,9 @@ test_that(".mosaic_reff_resim_ci reduces real engine members into three estimand
     .mosaic_clamp_transmission_params = function(cfg) cfg,
     .package = "MOSAIC")
 
-  # Default cases_central_method is "mean" and the ensemble carries cases_mean
-  # (as calc_model_ensemble() output does), so the medoid target needs no fallback.
+  # Default cases_central_method is "median" (v0.101.0) and the ensemble carries
+  # cases_median (as calc_model_ensemble() output does), so the medoid target
+  # needs no fallback.
   expect_no_warning(
     res <- MOSAIC:::.mosaic_reff_resim_ci(ens, base_config = base, priors = NULL,
                                           sampling_args = NULL, PATHS = NULL,

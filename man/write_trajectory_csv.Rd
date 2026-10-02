@@ -86,9 +86,10 @@ The summary carries one central line per channel and no credible intervals.
 The central line is not the same statistic for every column:
 \itemize{
 \item \code{reported_cases} and \code{reported_deaths} follow the run's
-per-channel \code{central_method} (default weighted \strong{mean}), matching
-\code{predicted_central} in the prediction CSVs; \code{disease_deaths}
-follows the deaths \code{central_method}.
+per-channel \code{central_method} (default weighted \strong{median} for
+cases, weighted \strong{mean} for deaths) over the engine-level member
+trajectories, matching \code{predicted_central} in the prediction CSVs;
+\code{disease_deaths} follows the deaths \code{central_method}.
 \item \code{mass_balance} is a ratio of the compartments' weighted means,
 \code{CFR} a ratio of 28-day rolling sums of the weighted-mean reported
 deaths and cases, and \code{epidemic_frac} the weighted mean of the

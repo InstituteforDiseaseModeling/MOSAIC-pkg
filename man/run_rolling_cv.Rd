@@ -18,7 +18,7 @@ run_rolling_cv(
   optimize_subset = TRUE,
   models = c("ensemble", "ensemble_opt", "medoid"),
   n_reps_best_medoid = 50L,
-  central_method = "mean",
+  central_method = c(cases = "median", deaths = "mean"),
   est_suitability_spec = list(),
   psi_cache = NULL,
   dir_output,
@@ -82,16 +82,21 @@ as a value of the \code{model} column.}
 
 \item{n_reps_best_medoid}{Integer (default 50); number of stochastic
 reruns used to build the predictive median + intervals for the \code{best}
-and \code{medoid} configs. These reruns execute locally in the calling R
-process, so cost scales with this value times the number of
-cutoffs and locations.}
+and \code{medoid} configs. They run through \code{calc_model_ensemble()}
+with the cutoff run's observation model (the weekly cases dispersion its
+candidate ensemble recorded) and deaths integration
+(\code{2_calibration/deaths_integration.rds}), seeded 1001, 1002, ... as
+\code{run_MOSAIC()} seeds its medoid ensemble. These reruns execute locally
+in the calling R process, so cost scales with this value times the number
+of cutoffs and locations.}
 
 \item{central_method}{Ensemble central tendency used for the compiled
 predictions and the in-sample calibration metrics/medoid: \code{"mean"}
-(default; the expected count, which never collapses to zero on sparse
-deaths) or \code{"median"} (the typical trajectory; the default from
-v0.46.1 to v0.97.x). Scalar or per-channel
-\code{c(cases=, deaths=)}. The
+(the expected count, which never collapses to zero on sparse deaths) or
+\code{"median"} (the typical trajectory). Scalar or per-channel
+\code{c(cases=, deaths=)}; default \code{c(cases = "median", deaths =
+"mean")} (both mean from v0.98.0 to v0.100.x, both median from v0.46.1 to
+v0.97.x). The
 predictions table carries \code{pred_central} (this choice) plus
 \code{pred_mean}/\code{pred_median} for cross-walk; WIS/coverage remain
 quantile-based and are unaffected.}
@@ -204,7 +209,13 @@ The predictions table has one row per (cutoff x location x date x metric) with
 columns: \code{run_id, iso_code, anchor_date, cutoff_date, date, metric,
 segment} (IS/embargo/OOS), \code{weeks_ahead, horizon_bucket, observed,
 observed_source, pred_central} (the scored series), \code{pred_mean,
-pred_median, central_method}, and CI columns (\code{pi*_lo}/\code{pi*_hi}).
+pred_median, central_method}, CI columns (\code{pi*_lo}/\code{pi*_hi}) and
+\code{pred_median_obs}, the median of the same draws as the CI columns (the
+observation-level predictive median since v0.101.0), which WIS pairs with them.
+Every model's rows carry the cutoff run's interval semantics: the
+\code{medoid} (and legacy \code{best}) configs are re-simulated through
+\code{\link{calc_model_ensemble}} with the run's observation model and deaths
+integration, as its own ensembles were built.
 \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
 rows carry the real target for post-hoc scoring.
 }
