@@ -168,6 +168,10 @@ test_that("the resolver reads config$reported_tier and returns the week boundari
      cfg <- MOSAIC::get_location_config(MOSAIC::config_default, iso = c("KEN", "MOZ"))
      ctl <- mosaic_control_defaults()
      sw <- MOSAIC:::.mosaic_resolve_score_window(cfg, ctl)
+     # config_default carries reported_tier (since v6.1), so the shipped config
+     # is scored on observed weeks; the baseline below is the same config without it
+     expect_true(MOSAIC:::.mosaic_resolve_nb_dispersion(cfg, ctl, score_window = sw)$tier_used)
+     cfg$reported_tier <- NULL
      r0 <- MOSAIC:::.mosaic_resolve_nb_dispersion(cfg, ctl, score_window = sw)
      expect_false(r0$tier_used)
      expect_false(r0$cases$tier_used); expect_false(r0$deaths$tier_used)

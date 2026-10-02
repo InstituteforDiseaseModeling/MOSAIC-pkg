@@ -35,10 +35,15 @@ compartments in \code{nu_jt_sources}), environmental suitability (\code{psi_jt},
 uncalibrated: \code{sample_parameters()} applies \verb{psi_star_*} to it), and
 the reported case fatality ratio \code{mu_jt}, the deaths input of the
 mortality model since MOSAIC v0.96.0;
-\item \strong{Observed data} -- \code{reported_cases} and \code{reported_deaths} with their
+\item \strong{Observed data} -- \code{reported_cases} and \code{reported_deaths}; their
 per-observation confidence weights \code{reported_cases_weight} and
-\code{reported_deaths_weight}, and the \code{epidemic_peaks} data frame used by the
-peak shape terms of the likelihood.
+\code{reported_deaths_weight}; \code{reported_tier} (since MOSAIC v0.101.0), the
+surveillance trust tier of each observed day's week (1 observed,
+2 reconstructed: a WHO multi-week report spread over its weeks,
+3 imputed; \code{NA} where neither cases nor deaths are observed), which the
+dispersion estimates read (the cases and deaths dispersions are fitted
+on tier-1 weeks) and the engine ignores; and the \code{epidemic_peaks} data
+frame used by the peak shape terms of the likelihood.
 }
 }
 \usage{

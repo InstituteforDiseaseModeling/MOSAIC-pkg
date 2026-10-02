@@ -35,10 +35,15 @@
 #'     uncalibrated: \code{sample_parameters()} applies `psi_star_*` to it), and
 #'     the reported case fatality ratio `mu_jt`, the deaths input of the
 #'     mortality model since MOSAIC v0.96.0;
-#'   * **Observed data** -- `reported_cases` and `reported_deaths` with their
+#'   * **Observed data** -- `reported_cases` and `reported_deaths`; their
 #'     per-observation confidence weights `reported_cases_weight` and
-#'     `reported_deaths_weight`, and the `epidemic_peaks` data frame used by the
-#'     peak shape terms of the likelihood.
+#'     `reported_deaths_weight`; `reported_tier` (since MOSAIC v0.101.0), the
+#'     surveillance trust tier of each observed day's week (1 observed,
+#'     2 reconstructed: a WHO multi-week report spread over its weeks,
+#'     3 imputed; `NA` where neither cases nor deaths are observed), which the
+#'     dispersion estimates read (the cases and deaths dispersions are fitted
+#'     on tier-1 weeks) and the engine ignores; and the `epidemic_peaks` data
+#'     frame used by the peak shape terms of the likelihood.
 #'
 #' @details
 #' The object is self-contained: it references no external files and runs
