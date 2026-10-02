@@ -35,9 +35,10 @@ the block formula \code{.nb_disp_block()} that the dispersion estimate
 with, so all of them sum the same days. MOSAIC surveillance weeks run Monday
 to Sunday: processed weekly rows are dated by their Monday,
 \code{downscale_weekly_values()} spreads each total over that Monday to
-Sunday, and the daily totals of every complete week of config_default v6.0
-sum exactly to the processed weekly totals it was built from (all 39
-locations with data, 6,488 weeks). Blocks are counted from a fixed Monday
+Sunday, so the daily totals of every complete week sum to the processed
+weekly total the config was built from: exactly where that total is a whole
+count, and within half a case where it is a fractional imputed total (79
+weeks in config_default v6.1). Blocks are counted from a fixed Monday
 (1970-01-05), never from the first day of the grid: config_default starts on
 a Sunday, whose block is a one-day partial week.
 }

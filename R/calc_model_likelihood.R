@@ -63,8 +63,9 @@
 #' weekly time steps, or \code{cases_scoring = "daily"}). Because the weekly
 #' cases core carries about a fifth of the level information of the daily one
 #' (less of a change where \code{k} is large; none in the Poisson limit), a
-#' given shape weight weighs roughly five to seven times more against the cases
-#' core than it did with daily cells.
+#' given shape weight weighs several times more against the cases core than it
+#' did with daily cells (a median 4.8 times, range 1.8 to 6.5, on the v0.100.1
+#' national re-selection pools).
 #'
 #' Non-finite per-location LL values are replaced with \code{-Inf} (zero
 #' importance weight). The NB likelihood naturally produces very negative
