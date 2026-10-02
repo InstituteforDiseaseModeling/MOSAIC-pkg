@@ -739,7 +739,8 @@
     central_method_cases  = if (!is.null(central_method)) central_method[["cases"]]  else NA_character_,
     central_method_deaths = if (!is.null(central_method)) central_method[["deaths"]] else NA_character_,
     # Dual ensemble metrics (BOTH tendencies, central_method-independent) so
-    # median runs stay comparable after the default flipped to mean.
+    # runs made under any default (both median v0.46.1-v0.97.x, both mean
+    # v0.98.0-v0.100.x, cases median / deaths mean since v0.101.0) compare.
     r2_cases_ensemble_mean     = if (!is.na(r2_cases_ensemble_mean))     round(r2_cases_ensemble_mean, 4)     else NA_real_,
     r2_deaths_ensemble_mean    = if (!is.na(r2_deaths_ensemble_mean))    round(r2_deaths_ensemble_mean, 4)    else NA_real_,
     r2_cases_ensemble_median   = if (!is.na(r2_cases_ensemble_median))   round(r2_cases_ensemble_median, 4)   else NA_real_,

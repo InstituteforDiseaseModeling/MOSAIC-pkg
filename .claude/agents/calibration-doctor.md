@@ -66,8 +66,9 @@ dev specialist.
   carries no best `r2_cases`/`bias_ratio_cases`; read the `*_ensemble` metrics (+ the dual
   `*_ensemble_mean`/`*_ensemble_median` cross-walk and `central_method_*` provenance). The
   top-likelihood draw is still flagged by `is_best_model` in `samples.parquet` for parameter audits.
-- **R²/bias:** computed from the ensemble **central series** vs observed (`central_method`: mean
-  by default from v0.98.0, median v0.46.1-v0.97.x -- check `summary.json:central_method_*`).
+- **R²/bias:** computed from the ensemble **central series** vs observed (`central_method`: cases
+  median / deaths mean by default since v0.101.0, both mean v0.98.0-v0.100.x, both median
+  v0.46.1-v0.97.x -- check `summary.json:central_method_*`).
   Since v0.96.0 the reported CFR is integrated out per path and ensemble deaths are redrawn from
   its posterior GIVEN THE OBSERVED DEATHS, so in-sample deaths are conditioned quantities: the
   medoid reproduces the observed deaths, while the ensemble runs low (~0.8x in the 8-country

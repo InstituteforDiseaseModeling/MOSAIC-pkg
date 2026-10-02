@@ -62,7 +62,7 @@ Only the first is the backtest; the other two are internals of a single psi fit.
 - `est_suitability_spec` — **modeling** knobs only (architecture, `response_var`, `arch_control`); date keys
   are ignored/harness-owned. Keep `arch_control$parallel_seeds = 1L` (see est-suitability for the RAM math).
 - `control = NULL` → an experiment-grade cheap default (fixed `n_simulations`, plots off).
-- `models = c("ensemble","ensemble_opt","medoid")`, `central_method = "mean"` (package default since v0.98.0), `optimize_subset = TRUE`,
+- `models = c("ensemble","ensemble_opt","medoid")`, `central_method = c(cases = "median", deaths = "mean")` (package default since v0.101.0; both `"mean"` in v0.98.0-v0.100.x), `optimize_subset = TRUE`,
   `n_reps_best_medoid = 50` (medoid reruns — see where-to-run). Everything runs on the local PSOCK
   cluster; the Dask/Coiled `dask_spec` option was removed (it now hard-errors).
 - **Two staleness/leakage subtleties:** (i) if `config$date_stop` runs past the climate/ENSO horizon, the
@@ -104,8 +104,8 @@ cutoff×location×date×metric: `segment`=IS/embargo/OOS, held-out `observed`, `
   (model, metric, horizon) cell; treat the rest as exploratory.
 - Honest framing: ψ is a **weak signal** — better shape/phasing than climatology at 3–5 mo, not
   forecast-grade; wins show in WIS/bias after seed-ensemble pooling (the logit-median ψ `n_seeds` in the fit)
-  + calibration reps, not single-run R². `central_method` `"mean"` (default since v0.98.0) vs `"median"`
-  changes the point forecast — the daily median of sparse deaths is 0 on most days. Validate across ≥3 cutoffs.
+  + calibration reps, not single-run R². `central_method` (default since v0.101.0: cases median, deaths mean; both mean in
+  v0.98.0-v0.100.x) changes the point forecast — the daily median of sparse deaths is 0 on most days. Validate across ≥3 cutoffs.
 
 ## Where to run
 A multi-cutoff coupled CV (each cutoff = one lstm_v2 fit + one full `run_MOSAIC` calibration + ~50 local
