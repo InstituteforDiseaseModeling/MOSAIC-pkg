@@ -145,7 +145,12 @@ location, or one for all; \code{Inf} = Poisson) and optionally
 reporting weeks start; default 0), or the table of
 \code{<dir_output>/2_calibration/diagnostics/nb_dispersion.csv} (its cases
 rows, matched by location). \code{run_MOSAIC()} supplies the dispersion its
-likelihood scored with. The deaths dispersion is read from
+likelihood scored with. The cases draw is this weekly negative binomial
+under either cases scoring rule; under the legacy
+\code{control$likelihood$cases_scoring = "daily"}, whose per-day cells at
+the same \eqn{k} imply a weekly variance of about \eqn{C + C^2/(7k)} for a
+weekly total \eqn{C} (the predictive uses \eqn{C + C^2/k}), the intervals
+are wider than that likelihood implies. The deaths dispersion is read from
 \code{deaths_integration}. When \code{NULL} (default) no observation noise
 is drawn and \code{cases_array}/\code{deaths_array} are the engine draws.}
 
@@ -166,15 +171,20 @@ the observation-level draws (of the engine draws when no
 \code{observation_model} is given).}
 \item{predictive_median}{List with \code{$cases} and \code{$deaths}: the
 0.5 quantile of the same draws as \code{ci_bounds}, the median a proper
-interval score (WIS) pairs with those intervals. Equal to
-\code{*_median} when no observation noise was drawn.}
+interval score (WIS) pairs with those intervals, and the
+\code{predicted_median} of the prediction CSVs \code{run_MOSAIC()}
+writes. Equal to \code{*_median} when no observation noise was drawn.}
 \item{obs_cases}{Observed cases matrix from config.}
 \item{obs_deaths}{Observed deaths matrix from config.}
 \item{cases_array}{4-D array (n_locations x n_time_points x n_param_sets x
 n_stoch) of OBSERVATION-level draws (the engine draws when no
 \code{observation_model} is given).}
-\item{deaths_array}{4-D array of observation-level deaths, matching
-\code{cases_array}.}
+\item{deaths_array}{4-D array of OBSERVATION-level deaths when the deaths
+received quasi-Poisson overdispersion (an \code{observation_model} and a
+\code{deaths_integration} with some \eqn{\phi_j > 1}); otherwise the
+engine deaths, identical to \code{deaths_engine_array} (no
+\code{deaths_integration}, every \eqn{\phi_j \le 1}, or no
+\code{observation_model}).}
 \item{cases_engine_array}{4-D array of the ENGINE-level reported cases (the
 member trajectories before observation noise), same dimensions. The
 medoid, R_eff, trajectory and implied-CFR consumers read these.}

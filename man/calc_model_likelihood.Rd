@@ -92,18 +92,29 @@ terms (peak magnitude, cumulative, WIS) are then dropped, with a warning,
 because \code{est_deaths} is drawn at the prior CFR; deaths peak timing,
 which does not depend on the level, is kept.}
 
-\item{cases_scoring}{\code{"weekly"} (default) scores the cases core on
-reporting-week totals (see Description). \code{"daily"} is the legacy rule
-of MOSAIC v0.100.1 and earlier, one NB cell per time step at the same weekly
-\code{k}, kept only to reproduce earlier runs. \code{NULL} means
-\code{"weekly"}.}
+\item{cases_scoring}{\code{"weekly"} (default) scores the cases core, and
+the negative-binomial deaths core, on reporting-week totals (see
+Description). \code{"daily"} is the per-day cell rule of MOSAIC v0.100.1
+and earlier (one NB cell per time step at the same weekly \code{k}, and the
+cumulative term at size \code{k * n}), applied at the dispersion supplied
+or estimated now. It does not reproduce a v0.100.1 score by itself: when
+\code{nb_k_cases}/\code{nb_k_deaths} are estimated here, a location whose
+fit gives no estimate takes the panel trend (v0.100.1 reported a collapsed
+fit at the 0.1 bound), and a config with \code{reported_tier} restricts the
+estimate to observed weeks. Reproducing a v0.100.1 score needs that run's
+dispersions (\code{nb_k_cases}, \code{nb_k_deaths} from its
+\code{nb_dispersion.csv}) and a config without \code{reported_tier}.
+\code{NULL} means \code{"weekly"}.}
 
 \item{week_offset}{Reporting-week boundary of each location, 0-6 days after
 Monday (length 1 or one per location; \code{NA} = detect), as returned by
 \code{est_nb_dispersion()}. \code{run_MOSAIC()} supplies the boundaries its
 dispersion estimate detected, so both use the same weeks. \code{NULL}
-(default) detects them from \code{obs_cases}. Used by the weekly cases core
-only.}
+(default) detects them from \code{obs_cases} on every call, which costs
+tens of milliseconds per location when \code{nb_k_cases} is supplied: a
+caller that scores many simulations against the same observations should
+pass \code{est_nb_dispersion()$week_offset}, as \code{run_MOSAIC()} does.
+Used by the weekly cores only.}
 
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 
@@ -126,8 +137,12 @@ by \code{N_obs / N_peaks}. Default \code{0} (OFF); set > 0 to enable.}
 }
 \value{
 Scalar total log-likelihood (finite), \code{-Inf} if non-finite,
-or \code{NA_real_} if no location has data to score (fewer than three
-usable observations in both channels, and no integrated deaths score).
+or \code{NA_real_} if no location has data to score. A location has none
+when neither channel can be scored: a weekly core needs three scored weeks
+(weighted: a weight sum of three), a per-time-step core or a shape term
+three usable observations (weighted: a weight sum of three), and with
+\code{ll_deaths_core} the deaths channel counts when it has three usable
+observations or a non-zero score (a score of exactly 0 has no scored week).
 }
 \description{
 Scores model fits against observed data using a Negative Binomial (NB)
@@ -155,33 +170,43 @@ as an exponent on that week's likelihood. The weights are then made
 mass-preserving over the scored weeks, as for the daily cells before. The
 cases floor \code{eps_rel_cases} applies to the weekly prediction relative to
 the mean weekly observation, and a location needs three scored weeks
-(weighted: a weight sum of three) for its cases core to count. Without a
-dated daily grid (no \code{config$date_start}), or when the time steps are
-weeks, each time step is one cell.
+(weighted: a weight sum of three) for its cases core to count. A simulated
+daily count that is not finite on a day of a scored week makes the cases core
+\code{-Inf}: the path failed, and dropping the week would remove its penalty.
+Without a dated daily grid (no \code{config$date_start}), or when the time
+steps are weeks, each time step is one cell. Without \code{ll_deaths_core}
+the negative-binomial deaths core follows the same rule (weekly deaths
+totals on the same reporting weeks, at the weekly \code{nb_k_deaths}).
 
 Optional shape terms are enabled by setting their weight > 0: peak timing
 (Normal), peak magnitude (log-Normal with adaptive sigma), cumulative
 progression (NB at cumulative fractions), and Weighted Interval Score (WIS).
 All weights default to 0 (OFF).
 
-Each shape term helper returns a per-evaluation value, which is scaled up to
-the size of the NB core by \code{N_obs / N_eval}, where \code{N_obs} is the
-number of time steps with a finite observation in either channel and
-\code{N_eval} is the number of evaluations of that term: peaks are scaled by
+Each shape term helper returns a per-evaluation value, which is multiplied
+by \code{N_obs / N_eval}, where \code{N_obs} is the number of daily time
+steps with a finite observation in either channel and \code{N_eval} is the
+number of evaluations of that term: peaks are scaled by
 \code{N_obs / N_peaks}, WIS by \code{N_obs / length(wis_quantiles)} and the
-cumulative term by \code{N_obs / length(cumulative_timepoints)}. Because the
+cumulative term by \code{N_obs / length(cumulative_timepoints)}. This puts
+the peak terms on the per-day scale the NB core had when it scored daily
+cells. Because the
 WIS and cumulative helpers already average over their quantiles and
 timepoints, a given weight on those two terms carries less influence than the
 same weight on the peak terms (with the defaults, 1/5 and 1/4 of \code{N_obs}
 times the per-cell value), and changing the number of quantiles or timepoints
 changes their influence. The shape terms keep their definitions under the
 weekly cases core: they read the daily series, \code{N_obs} still counts
-daily time steps, and the cumulative and WIS terms use the same weekly
-\code{k} on daily cells as before. Because the weekly cases core carries about
-a fifth of the level information of the daily one (less of a change where
-\code{k} is large; none in the Poisson limit), a given shape weight weighs
-roughly five to seven times more against the cases core than it did with
-daily cells.
+daily time steps, and the WIS term uses the same weekly \code{k} on daily
+cells as before. The cumulative term sums the days of each prefix and scores
+the sum as negative binomial with size \code{k * n / 7} under the weekly
+core (\code{n} scored days make \code{n / 7} weekly totals at the weekly
+\code{k}), and \code{k * n} when each time step is a cell (undated input,
+weekly time steps, or \code{cases_scoring = "daily"}). Because the weekly
+cases core carries about a fifth of the level information of the daily one
+(less of a change where \code{k} is large; none in the Poisson limit), a
+given shape weight weighs roughly five to seven times more against the cases
+core than it did with daily cells.
 
 Non-finite per-location LL values are replaced with \code{-Inf} (zero
 importance weight). The NB likelihood naturally produces very negative

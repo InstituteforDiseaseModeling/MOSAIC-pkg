@@ -75,6 +75,10 @@
 #' pred_median, central_method}, CI columns (\code{pi*_lo}/\code{pi*_hi}) and
 #' \code{pred_median_obs}, the median of the same draws as the CI columns (the
 #' observation-level predictive median since v0.101.0), which WIS pairs with them.
+#' Every model's rows carry the cutoff run's interval semantics: the
+#' \code{medoid} (and legacy \code{best}) configs are re-simulated through
+#' \code{\link{calc_model_ensemble}} with the run's observation model and deaths
+#' integration, as its own ensembles were built.
 #' \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
 #' rows carry the real target for post-hoc scoring.
 #'
@@ -122,9 +126,13 @@
 #'   as a value of the \code{model} column.
 #' @param n_reps_best_medoid Integer (default 50); number of stochastic
 #'   reruns used to build the predictive median + intervals for the \code{best}
-#'   and \code{medoid} configs. These reruns execute locally in the calling R
-#'   process, so cost scales with this value times the number of
-#'   cutoffs and locations.
+#'   and \code{medoid} configs. They run through \code{calc_model_ensemble()}
+#'   with the cutoff run's observation model (the weekly cases dispersion its
+#'   candidate ensemble recorded) and deaths integration
+#'   (\code{2_calibration/deaths_integration.rds}), seeded 1001, 1002, ... as
+#'   \code{run_MOSAIC()} seeds its medoid ensemble. These reruns execute locally
+#'   in the calling R process, so cost scales with this value times the number
+#'   of cutoffs and locations.
 #' @param central_method Ensemble central tendency used for the compiled
 #'   predictions and the in-sample calibration metrics/medoid: \code{"mean"}
 #'   (the expected count, which never collapses to zero on sparse deaths) or
@@ -603,12 +611,15 @@ run_rolling_cv <- function(PATHS,
 #'   NULL (default) uses the set recorded in the run manifest.
 #' @param n_reps_best_medoid Integer or NULL (default); number of stochastic
 #'   replicates to draw for the single-config \code{best}/\code{medoid}
-#'   models. NULL reuses the value stored in the run manifest.
+#'   models, with each cutoff run's observation model and deaths integration
+#'   (see \code{\link{run_rolling_cv}}). NULL reuses the value stored in the
+#'   run manifest.
 #' @param central_method Central tendency for \code{pred_central}: \code{NULL}
-#'   (default) reuses the value recorded in the run manifest (or \code{"mean"},
-#'   the default those runs were made under, for manifests that predate the
-#'   field); otherwise a scalar or per-channel \code{c(cases=, deaths=)}
-#'   override.
+#'   (default) reuses the value recorded in the run manifest; a manifest without
+#'   the field was written by \code{run_rolling_cv()} before \code{central_method}
+#'   existed (v0.32.40-v0.37.x), when predictions were the ensemble median, so it
+#'   recompiles on \code{"median"}. Otherwise a scalar or per-channel
+#'   \code{c(cases=, deaths=)} override.
 #' @param write Logical; write \code{predictions.parquet} (default TRUE).
 #' @return The compiled long predictions data frame (invisibly if written).
 #' @export
@@ -632,10 +643,12 @@ compile_rolling_cv_predictions <- function(dir_output,
      if (is.null(n_reps_best_medoid))
           n_reps_best_medoid <- as.integer(man$spec$n_reps_best_medoid %||% 50L)
      # Reuse the run's recorded central tendency unless the caller overrides it.
-     # A manifest without the field was written under the then-default mean
-     # (deliberately not the current package default).
+     # The manifest field arrived with central_method itself (v0.38.0), so a
+     # manifest without it comes from a run that predicted, and was scored on,
+     # the ensemble median -- the fallback render_MOSAIC_figures() uses for a
+     # control.json of the same vintage (not the current package default).
      if (is.null(central_method))
-          central_method <- man$spec$central_method %||% "mean"
+          central_method <- man$spec$central_method %||% "median"
      central_method <- .mosaic_resolve_central_method(central_method)
 
      cfg_dates <- seq.Date(as.Date(base_config$date_start),
@@ -837,8 +850,10 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' Compile every requested model type for one cutoff into one long table
 #'
 #' Reads the candidate ensemble (always), the optimizer-selected ensemble (when
-#' present), and re-simulates the best / medoid configs, emitting one
-#' \code{model}-tagged block per type and row-binding them.
+#' present), and re-simulates the best / medoid configs with the run's own
+#' observation model and deaths integration (\code{.rcv_simulate_config()}), so
+#' every model's rows carry the candidate ensemble's interval semantics,
+#' emitting one \code{model}-tagged block per type and row-binding them.
 #' @keywords internal
 #' @noRd
 .rcv_compile_all_models <- function(run_dir, run_id, cutoff, anchor, embargo_days,
@@ -884,7 +899,7 @@ compile_rolling_cv_predictions <- function(dir_output,
           best_cfg <- file.path(bm, "config_best.json")
           if (file.exists(best_cfg)) {
                parts[[length(parts) + 1L]] <- emit(
-                    .rcv_simulate_config(best_cfg, ens, n_reps), "best")
+                    .rcv_simulate_config(best_cfg, ens, n_reps, run_dir), "best")
           } else {
                warning("models includes 'best' but config_best.json not found in ",
                        bm, " (best model is no longer produced); skipping.",
@@ -895,7 +910,7 @@ compile_rolling_cv_predictions <- function(dir_output,
           medoid_cfg <- file.path(bm, "config_medoid.json")
           if (file.exists(medoid_cfg)) {
                parts[[length(parts) + 1L]] <- emit(
-                    .rcv_simulate_config(medoid_cfg, ens, n_reps), "medoid")
+                    .rcv_simulate_config(medoid_cfg, ens, n_reps, run_dir), "medoid")
           } else {
                warning("config_medoid.json not found in ", bm,
                        " (expected for pre-v0.39 run dirs); skipping medoid.",
@@ -965,13 +980,26 @@ compile_rolling_cv_predictions <- function(dir_output,
 
 #' Re-simulate a single config to a prediction object matching the ensemble shape
 #'
-#' Runs \code{n_reps} stochastic reruns of the saved config and reduces them
-#' to a predictive median + interval bounds on the template ensemble's date grid,
-#' so the result can be emitted by \code{.rolling_cv_compile_run}. Returns NULL if
-#' the config is absent.
+#' Runs \code{n_reps} stochastic reruns of the saved config through
+#' \code{calc_model_ensemble()}, the code path of the run's own ensembles, and
+#' returns them on the template ensemble's date grid and envelope quantiles, so
+#' that \code{.rolling_cv_compile_run} emits rows with the same interval
+#' semantics as the template's (the cutoff run's candidate ensemble):
+#' \itemize{
+#'   \item observation-level intervals and predictive median when the template
+#'     drew observation noise, with the weekly cases dispersion and reporting-week
+#'     offsets it recorded (\code{template$observation_model}, the run's
+#'     \code{nb_dispersion.csv} k), else engine-level as before v0.101.0;
+#'   \item deaths redrawn from the reported-CFR posterior, with the deaths
+#'     dispersion phi, from the run's \code{2_calibration/deaths_integration.rds}
+#'     when the template's deaths were redrawn (it carries a
+#'     \code{cfr_posterior}).
+#' }
+#' The reruns are seeded as \code{run_MOSAIC()} seeds its medoid ensemble
+#' (1001, 1002, ...). Returns NULL if the config is absent.
 #' @keywords internal
 #' @noRd
-.rcv_simulate_config <- function(config_path, template, n_reps) {
+.rcv_simulate_config <- function(config_path, template, n_reps, run_dir) {
      if (!file.exists(config_path)) return(NULL)
      cfg       <- .mosaic_read_json_cached(config_path)
      sim_dates <- seq.Date(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")
@@ -980,48 +1008,49 @@ compile_rolling_cv_predictions <- function(dir_output,
      col_idx   <- match(as.character(as.Date(edates)), as.character(sim_dates))
      if (anyNA(col_idx))
           stop("config window does not cover the ensemble date grid in ", config_path)
-     locs  <- template$location_names
-     nloc  <- length(locs); nt <- length(edates)
-     eq    <- template$envelope_quantiles
-     seeds <- seq_len(max(1L, as.integer(n_reps)))
 
-     cas <- array(NA_real_, c(length(seeds), nloc, nt))
-     dea <- array(NA_real_, c(length(seeds), nloc, nt))
-     for (s in seq_along(seeds)) {
-          r  <- MOSAIC::run_simulation(cfg, seed = seeds[s], quiet = TRUE)
-          rc <- r$results$reported_cases
-          rd <- r$results$reported_deaths
-          if (!is.matrix(rc)) rc <- matrix(rc, nrow = 1L)
-          if (!is.matrix(rd)) rd <- matrix(rd, nrow = 1L)
-          cas[s, , ] <- rc[, col_idx, drop = FALSE]
-          dea[s, , ] <- rd[, col_idx, drop = FALSE]
-     }
-
-     reduce <- function(arr) {
-          med    <- apply(arr, c(2L, 3L), stats::median, na.rm = TRUE)
-          mn     <- apply(arr, c(2L, 3L), mean, na.rm = TRUE)
-          n_pair <- length(eq) / 2L
-          ci <- vector("list", n_pair)
-          for (p in seq_len(n_pair)) {
-               lo_q <- eq[p]; hi_q <- eq[length(eq) - p + 1L]
-               ci[[p]] <- list(
-                    lower = apply(arr, c(2L, 3L), stats::quantile, probs = lo_q, na.rm = TRUE),
-                    upper = apply(arr, c(2L, 3L), stats::quantile, probs = hi_q, na.rm = TRUE))
+     om <- template$observation_model
+     obs_model <- if (isTRUE(om$cases)) list(k_cases = om$k_cases, week_offset = om$week_offset %||% 0L)
+     deaths_int <- NULL
+     if (!is.null(template$cfr_posterior)) {
+          di_path <- file.path(run_dir, "2_calibration", "deaths_integration.rds")
+          if (file.exists(di_path)) {
+               deaths_int <- readRDS(di_path)
+          } else {
+               warning("deaths_integration.rds not found in ", dirname(di_path), ": the ",
+                       basename(config_path), " rows keep the engine's deaths at the config's ",
+                       "reported CFR, while the ensemble rows' deaths were redrawn from its posterior.",
+                       call. = FALSE)
           }
-          list(median = med, mean = mn, ci = ci)
      }
-     qc <- reduce(cas); qd <- reduce(dea)
+     ens <- calc_model_ensemble(config = cfg, configs = list(cfg),
+                                n_simulations_per_config = max(1L, as.integer(n_reps)),
+                                envelope_quantiles = template$envelope_quantiles,
+                                deaths_integration = deaths_int,
+                                observation_model  = obs_model,
+                                verbose = FALSE)
+
+     locs <- template$location_names %||% ens$location_names
+     ri   <- match(locs, ens$location_names)
+     if (anyNA(ri))
+          stop("the locations of ", config_path, " do not match the ensemble's")
+     sub    <- function(m) m[ri, col_idx, drop = FALSE]
+     sub_ci <- function(ci) lapply(ci, function(p) list(lower = sub(p$lower), upper = sub(p$upper)))
      list(
-          n_time_points      = nt,
+          n_time_points      = length(col_idx),
           date_start         = as.character(template$date_start),
           date_stop          = as.character(template$date_stop),
           location_names     = locs,
-          envelope_quantiles = eq,
-          cases_median       = qc$median,
-          cases_mean         = qc$mean,
-          deaths_median      = qd$median,
-          deaths_mean        = qd$mean,
-          ci_bounds          = list(cases = qc$ci, deaths = qd$ci))
+          envelope_quantiles = template$envelope_quantiles,
+          cases_median       = sub(ens$cases_median),
+          cases_mean         = sub(ens$cases_mean),
+          deaths_median      = sub(ens$deaths_median),
+          deaths_mean        = sub(ens$deaths_mean),
+          ci_bounds          = list(cases  = sub_ci(ens$ci_bounds$cases),
+                                    deaths = sub_ci(ens$ci_bounds$deaths)),
+          predictive_median  = list(cases  = sub(ens$predictive_median$cases),
+                                    deaths = sub(ens$predictive_median$deaths)),
+          observation_model  = ens$observation_model)
 }
 
 #' Experiment-grade cheap calibration control

@@ -63,6 +63,26 @@ render_burnin <- function(ens, ...) {
                       verbose = FALSE, ...)
 }
 
+# The default figure, with the burn-in shown and hidden, rendered once per file:
+# every render writes the full PDF set, and several tests only inspect it.
+# `ensemble` is the object that was rendered.
+shared_render <- local({
+  cache <- list()
+  function(show_burn_in = TRUE) {
+    key <- as.character(show_burn_in)
+    if (is.null(cache[[key]])) {
+      ens <- make_burnin_ensemble()
+      out <- withr::local_tempdir(.local_envir = testthat::teardown_env())
+      draw <- function() plot_model_ensemble(ens, output_dir = out, central_method = "mean",
+                                             show_burn_in = show_burn_in, verbose = FALSE)
+      # A hidden head raises ggplot2's removed-rows warnings.
+      res <- if (show_burn_in) draw() else suppressWarnings(draw())
+      cache[[key]] <<- list(result = res, ensemble = ens)
+    }
+    cache[[key]]
+  }
+})
+
 layers_of <- function(p, geom) {
   unname(which(vapply(p$layers, function(l) inherits(l$geom, geom), logical(1))))
 }
@@ -88,8 +108,7 @@ test_that("prediction CSVs keep the unscored head blank and match the pre-change
   ref <- make_burnin_ensemble()
 
   # Plotting (burn-in shown) must not touch the ensemble the CSV is built from.
-  invisible(render_burnin(ens))
-  expect_identical(ens, ref)
+  expect_identical(shared_render()$ensemble, ref)
 
   td <- withr::local_tempdir()
   tbl <- MOSAIC:::.mosaic_assemble_prediction_table(ens, central_method = "mean")
@@ -117,7 +136,7 @@ test_that("show_burn_in draws the central line and ribbons from the first step",
   skip_if_not_installed("ggplot2")
   local_null_device()
   ens <- make_burnin_ensemble()
-  res <- render_burnin(ens)
+  res <- shared_render()$result
 
   for (i in seq_along(ens$location_names)) {
     p <- res$individual[[ens$location_names[i]]]
@@ -145,7 +164,7 @@ test_that("show_burn_in = FALSE blanks the unscored head as before", {
   skip_if_not_installed("ggplot2")
   local_null_device()
   ens <- make_burnin_ensemble()
-  res <- suppressWarnings(render_burnin(ens, show_burn_in = FALSE))
+  res <- shared_render(FALSE)$result
   p <- res$individual$AAA
 
   lc <- panel_series(p, "GeomLine", 1L)
@@ -163,8 +182,7 @@ test_that("show_burn_in = FALSE blanks the unscored head as before", {
 test_that("the unscored span and scored-window marker follow each channel's start", {
   skip_if_not_installed("ggplot2")
   local_null_device()
-  ens <- make_burnin_ensemble()
-  res <- render_burnin(ens)
+  res <- shared_render()$result
   p <- res$individual$AAA
   start_c <- as.numeric(as.Date("2024-01-04"))
   start_d <- as.numeric(as.Date("2024-01-03"))
@@ -235,9 +253,8 @@ test_that("a common scored-window start gets a single label; no head draws no ma
 test_that("caption metrics are unchanged by show_burn_in", {
   skip_if_not_installed("ggplot2")
   local_null_device()
-  ens <- make_burnin_ensemble()
-  shown  <- captions_of(render_burnin(ens))
-  hidden <- captions_of(suppressWarnings(render_burnin(ens, show_burn_in = FALSE)))
+  shown  <- captions_of(shared_render()$result)
+  hidden <- captions_of(shared_render(FALSE)$result)
   expect_identical(shown, golden_captions)
   expect_identical(hidden, golden_captions)
 })
@@ -247,14 +264,27 @@ test_that("a supplied prediction_table is drawn as given, its blank head filled 
   local_null_device()
   ens <- make_burnin_ensemble()
   # A masked table whose central line is the MEDIAN, plotted with
-  # central_method = "mean": the table's own central_method governs the fill.
+  # central_method = "mean": the table's own central_method governs the fill,
+  # and the caption is labelled and scored by it too, with a warning that the
+  # argument was overridden.
   tbl <- MOSAIC:::.mosaic_assemble_prediction_table(ens, central_method = "median")
 
-  p <- render_burnin(ens, prediction_table = tbl)$individual$AAA
+  expect_warning(res <- render_burnin(ens, prediction_table = tbl),
+                 "prediction_table carries central_method cases=median, deaths=median")
+  p <- res$individual$AAA
   expect_equal(panel_series(p, "GeomLine", 1L)$y, ens$cases_median[1, ])
   expect_equal(panel_series(p, "GeomLine", 2L)$y, ens$deaths_median[1, ])
   rc <- panel_series(p, "GeomRibbon", 1L, c("ymin", "ymax"))
   expect_equal(rc$ymin, ens$ci_bounds$cases[[1]]$lower[1, ])
+  out <- withr::local_tempdir()
+  med_captions <- captions_of(plot_model_ensemble(ens, output_dir = out, central_method = "median",
+                                                  verbose = FALSE))
+  expect_match(med_captions[["AAA"]], "Central: cases=median, deaths=median", fixed = TRUE)
+  expect_identical(captions_of(res), med_captions)
+  # With the default argument the table governs silently.
+  expect_no_warning(dflt <- plot_model_ensemble(ens, output_dir = out, prediction_table = tbl,
+                                                verbose = FALSE))
+  expect_identical(captions_of(dflt), med_captions)
 
   # Without the burn-in the supplied table is drawn untouched.
   p0 <- suppressWarnings(render_burnin(ens, prediction_table = tbl,
@@ -309,18 +339,27 @@ test_that("an observation-model ensemble keeps the shaded burn-in, the central l
 
   # The cases median is 0.9 x the mean, so against the golden mean captions the
   # correlation R2 is unchanged and cases Pred and Bias scale by 0.9 (AAA:
-  # 18.6 of 61 observed, 0.305; all: 55.8 of 183); deaths keep the mean.
+  # 18.6 of 61 observed, 0.305; all: 55.8 of 183); deaths keep the mean. The
+  # captions also say that the engine-level line can lie above the
+  # observation-level 50% band (release red team OBS-2).
+  line_note <- paste0("Line: engine-level central trajectory, before observation noise; ",
+                      "it can lie above the 50% band where the reporting dispersion k is small\n")
+  faceted_note <- function(where) paste0(
+    "\nRibbons: 95% and 50% observation-level predictive intervals; line: engine-level ",
+    "central trajectory, before observation noise, which can lie above the 50% band ", where)
   expected <- c(
     AAA = paste0("Ribbons show 95% and 50% observation-level predictive intervals | ",
-                 "Central: cases=median, deaths=mean\n",
+                 "Central: cases=median, deaths=mean\n", line_note,
                  "Cases: Obs = 61, Pred = 19, R² = 0.947, Bias = 0.3 | ",
                  "Deaths: Obs = 6, Pred = 5, R² = 0.757, Bias = 0.88"),
     BBB = paste0("Ribbons show 95% and 50% observation-level predictive intervals | ",
-                 "Central: cases=median, deaths=mean\n",
+                 "Central: cases=median, deaths=mean\n", line_note,
                  "Cases: Obs = 122, Pred = 37, R² = 0.947, Bias = 0.3 | ",
                  "Deaths: Obs = 12, Pred = 10, R² = 0.757, Bias = 0.88"),
-    cases_all  = "Total: Obs = 183, Pred = 56, R² = 0.97, Bias = 0.3 (central: median)",
-    deaths_all = golden_captions[["deaths_all"]])
+    cases_all  = paste0("Total: Obs = 183, Pred = 56, R² = 0.97, Bias = 0.3 (central: median)",
+                        faceted_note("where the reporting dispersion k is small")),
+    deaths_all = paste0(golden_captions[["deaths_all"]],
+                        faceted_note("where deaths are sparse or overdispersed")))
   expect_identical(captions_of(res), expected)
   hidden <- suppressWarnings(plot_model_ensemble(ens, output_dir = out, verbose = FALSE,
                                                  show_burn_in = FALSE))

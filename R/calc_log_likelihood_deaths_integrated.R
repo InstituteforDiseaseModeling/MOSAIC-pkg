@@ -129,11 +129,11 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 # or an imputed one has a synthetic shape, so its scatter around the cases --
 # smaller or larger -- is not the reporting noise phi describes. A location
 # whose observed weeks alone cannot carry the estimate
-# (.d7_dispersion_estimable(): too few deaths, weeks or years) keeps the
-# estimate from every scored week rather than the Poisson limit (too few
-# observed weeks is not evidence of Poisson scatter); one whose scored weeks
-# fall short over every tier takes 1, as before. Only the dispersion is
-# restricted: every scored week is still scored.
+# (.d7_dispersion_estimable(): too few deaths or weeks) keeps the estimate from
+# every scored week rather than the Poisson limit (too few observed weeks is not
+# evidence of Poisson scatter); one whose scored weeks fall short over every
+# tier takes 1, as before. Only the dispersion is restricted: every scored week
+# is still scored.
 # mass_weights, when supplied, rescales each location's week weights so they sum
 # to what those weights alone give on the same weeks: the per-observation
 # confidence weights then change which weeks count most, not the location's
@@ -228,14 +228,18 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 
 # Quasi-Poisson dispersion of weekly observed deaths around a year-specific
 # multiple of the observed cases: how much more than Poisson the deaths scatter
-# once the cases -- the model's exposure -- are known. Clamped at 1 (deaths that
-# track the cases more tightly than Poisson are scored as Poisson), and 1 when the
-# location has too few deaths or weeks to estimate it (.d7_dispersion_estimable).
+# once the cases -- the model's exposure -- are known. Weeks spanning one
+# calendar year have a single year effect, the intercept of D ~ offset(log C)
+# (glm() cannot code a one-level factor, so before v0.101.0 such a location fell
+# through to the Poisson limit). Clamped at 1 (deaths that track the cases more
+# tightly than Poisson are scored as Poisson), and 1 when the location has too
+# few deaths or weeks to estimate it (.d7_dispersion_estimable).
 .d7_dispersion <- function(D, C, yr) {
      if (!.d7_dispersion_estimable(D, C, yr)) return(1)
      ok <- is.finite(D) & is.finite(C) & C > 0
-     g <- tryCatch(suppressWarnings(stats::glm(D[ok] ~ 0 + factor(yr[ok]) + offset(log(C[ok])),
-                                               family = stats::quasipoisson())),
+     d <- D[ok]; lc <- log(C[ok]); y <- yr[ok]
+     f <- if (length(unique(y)) > 1L) d ~ 0 + factor(y) + offset(lc) else d ~ offset(lc)
+     g <- tryCatch(suppressWarnings(stats::glm(f, family = stats::quasipoisson())),
                    error = function(e) NULL)
      if (is.null(g)) return(1)
      phi <- suppressWarnings(summary(g)$dispersion)
@@ -243,15 +247,12 @@ calc_log_likelihood_deaths_integrated <- function(obs_deaths, exposure, base_log
 }
 
 # Whether weekly deaths and cases carry enough evidence for .d7_dispersion(): at
-# least 10 deaths over the weeks with positive cases, at least 3 more such weeks
-# than the years they span (one year effect each), and two or more years. The
-# year effects are fitted as a factor, which glm() cannot code with one level;
-# one-year data have always fallen through to the dispersion of 1, and saying
-# so here keeps the observed-weeks estimate from inheriting that silently.
+# least 10 deaths over the weeks with positive cases, and at least 3 more such
+# weeks than the years they span (one year effect each).
 .d7_dispersion_estimable <- function(D, C, yr) {
      ok <- is.finite(D) & is.finite(C) & C > 0
      n_yr <- length(unique(yr[ok]))
-     sum(D[ok]) >= 10 && sum(ok) >= n_yr + 3L && n_yr >= 2L
+     sum(D[ok]) >= 10 && sum(ok) >= n_yr + 3L
 }
 
 # Half-width, in days, of the blend between consecutive years' CFR deviations.

@@ -52,13 +52,19 @@ Poisson rule above still uses every tier. Default \code{NULL} (all weeks).}
 \code{slope}: a cross-location trend \code{log k = intercept + slope *
 log(mean weekly count)} taken by a location without an estimate of its own
 (see Details). \code{run_MOSAIC()} supplies the cases trend fitted on
-config_default (\code{MOSAIC:::.NB_DISP_PANEL_TREND}). Default \code{NULL}.}
+config_default with \code{burn_in_days = 45}
+(\code{MOSAIC:::.NB_DISP_PANEL_TREND}), whatever the run's burn-in; refitted
+on the window of the control default (30) it is lower (CMR, UGA, ZAF 1.06,
+0.48, 0.75 instead of 1.41, 1.00, 1.21), within the trend's residual SD of
+1.56 on log k. Default \code{NULL}.}
 }
 \value{
 A data.frame with one row per location: \code{location},
 \code{weekly_share} and \code{week_offset} (detected reporting cadence),
-\code{n_weeks} (weeks in the fit), \code{n_weeks_excluded} (scored weeks
-left out of the fit as reconstructed or imputed), \code{mean_weekly} (mean
+\code{n_weeks} (weeks in the fit; every scored week when the location takes
+the Poisson limit for sparse data, where no fit is attempted),
+\code{n_weeks_excluded} (scored weeks left out of the fit as reconstructed
+or imputed; 0 when no fit is attempted), \code{mean_weekly} (mean
 weekly count over all scored weeks), \code{k_raw}, \code{se},
 \code{trend_df}, \code{rung}, \code{identified}, \code{status},
 \code{panel_trend} (\code{TRUE} where \code{k} comes from

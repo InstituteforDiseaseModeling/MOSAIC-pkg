@@ -46,3 +46,37 @@ test_that("summary.json keeps converged logical in fixed mode and adds the new f
   expect_identical(js$convergence_evaluated, FALSE)
   expect_true(isTRUE(js$posthoc_criteria_met))
 })
+
+test_that("summary.json reports the dispersion block per channel, panel-trend count included", {
+  # Release red team TA-05: the v0.101.0 gate reads nb_dispersion from summary.json.
+  dirs <- MOSAIC:::.mosaic_ensure_dir_tree(withr::local_tempdir(), clean_output = FALSE)
+  state <- list(mode = "fixed", converged = FALSE, batch_number = 1L,
+                total_sims_run = 10L, total_sims_successful = 10L)
+  cfg <- list(location_name = c("AAA", "BBB", "CCC"), date_start = "2023-01-01",
+              date_stop = "2023-12-31")
+  tab <- data.frame(channel  = rep(c("cases", "deaths"), each = 3L),
+                    location = rep(c("AAA", "BBB", "CCC"), 2L),
+                    k        = c(0.5, 1.5, Inf, 2, 0.1, 4),
+                    status   = c("ok", "no_estimate_collapsed", "poisson",
+                                 "ok", "clamped_lower_bound", "ok"),
+                    panel_trend = c(FALSE, TRUE, FALSE, FALSE, FALSE, FALSE),
+                    stringsAsFactors = FALSE)
+  write <- function(t) MOSAIC:::.mosaic_write_summary_json(dirs, state, Sys.time(), cfg,
+                                                           nb_dispersion = t,
+                                                           io = mosaic_control_defaults()$io)
+  nb <- write(tab)$nb_dispersion
+  expect_identical(nb$cases, list(median_k = 1, n_estimated = 2L, n_poisson = 1L, n_panel_trend = 1L))
+  expect_identical(nb$deaths, list(median_k = 2, n_estimated = 3L, n_poisson = 0L, n_panel_trend = 0L))
+  expect_identical(nb$bound_binds, 1L)
+  expect_identical(nb$status_counts, list(clamped_lower_bound = 1L, no_estimate_collapsed = 1L,
+                                          ok = 3L, poisson = 1L))
+  js <- jsonlite::read_json(file.path(dirs$results, "summary.json"))
+  expect_identical(js$nb_dispersion$cases$n_panel_trend, 1L)
+  expect_identical(js$nb_dispersion$cases$n_poisson, 1L)
+  expect_identical(js$nb_dispersion$status_counts$ok, 3L)
+  # A table written before panel_trend existed counts no panel-trend locations.
+  legacy <- tab; legacy$panel_trend <- NULL
+  nb0 <- write(legacy)$nb_dispersion
+  expect_identical(nb0$cases, list(median_k = 1, n_estimated = 2L, n_poisson = 1L, n_panel_trend = 0L))
+  expect_identical(nb0$deaths$n_panel_trend, 0L)
+})

@@ -280,6 +280,69 @@ test_that("central lines are engine-level summaries; intervals and predictive me
   expect_lt(sum(ens$predictive_median$cases), 0.6 * sum(ens$cases_median))
 })
 
+test_that("the prediction table's quantiles nest at small k: predicted_median is the predictive median", {
+  # Release red team OBS-1: predicted_median was the engine median while the ci_*
+  # columns were observation-level, so at small k the published median lay above
+  # its own 50% band, failing the frozen v1.0 evaluator's M-OUTPUT check
+  # (l95 <= l50 <= median <= u50 <= u95 on >= 99% of days).
+  P <- 12L; S <- 5L; Tn <- 35L
+  cfg <- .obs_cfg(Tn)
+  w <- rev(seq_len(P)); w <- w / sum(w)
+  recs <- .het_records(P, S, Tn, seed = 13)
+  E <- rep(c(0.5, 1, 2, 3, 2, 1, 0.5), 5)
+  for (i in seq_along(recs)) recs[[i]]$expected_deaths <- matrix(E, 1L)
+  local_mocked_ensemble_sims(recs)
+  ens <- calc_model_ensemble(config = cfg, configs = rep(list(cfg), P), parameter_weights = w,
+                             n_simulations_per_config = S,
+                             deaths_integration = .obs_di(Tn, phi = 3),
+                             observation_model = list(k_cases = 0.14), verbose = FALSE)
+  expect_true(ens$observation_model$cases)
+  expect_true(ens$observation_model$deaths)
+  nested <- function(t) t$ci_1_lower <= t$ci_2_lower & t$ci_2_lower <= t$predicted_median &
+    t$predicted_median <= t$ci_2_upper & t$ci_2_upper <= t$ci_1_upper
+
+  for (cm in list(c(cases = "median", deaths = "mean"), "median")) {
+    tbl <- MOSAIC:::.mosaic_assemble_prediction_table(ens, central_method = cm,
+                                                      n_cases_warmup_mask = 0L)
+    cas <- tbl$metric == "Suspected Cases"
+    expect_true(all(is.finite(as.matrix(tbl[, c("predicted_median", "ci_1_lower", "ci_1_upper",
+                                                 "ci_2_lower", "ci_2_upper")]))))
+    expect_true(all(nested(tbl)))
+    expect_identical(tbl$predicted_median[cas],  as.numeric(ens$predictive_median$cases[1, ]))
+    expect_identical(tbl$predicted_median[!cas], as.numeric(ens$predictive_median$deaths[1, ]))
+    # The central line and the mean stay engine-level.
+    expect_identical(tbl$predicted_central[cas], as.numeric(ens$cases_median[1, ]))
+    expect_identical(tbl$predicted_mean[cas],    as.numeric(ens$cases_mean[1, ]))
+    expect_identical(tbl$predicted_central[!cas],
+                     as.numeric(if (identical(cm, "median")) ens$deaths_median[1, ] else ens$deaths_mean[1, ]))
+  }
+  # The fixture is in the regime that broke: the engine median sits above the
+  # observation-level 50% band on most days, so the old column fails nesting.
+  old <- tbl; old$predicted_median[cas] <- as.numeric(ens$cases_median[1, ])
+  expect_gt(mean(!nested(old)[cas]), 0.5)
+
+  # Without observation noise predicted_median is the engine median, which then
+  # shares its draws with the engine-level intervals.
+  eng <- ens; eng$observation_model$cases <- FALSE; eng$observation_model$deaths <- FALSE
+  te <- MOSAIC:::.mosaic_assemble_prediction_table(eng, central_method = "mean",
+                                                   n_cases_warmup_mask = 0L)
+  expect_identical(te$predicted_median[cas],  as.numeric(ens$cases_median[1, ]))
+  expect_identical(te$predicted_median[!cas], as.numeric(ens$deaths_median[1, ]))
+
+  # The plotted burn-in head of a supplied (masked) median table is filled with
+  # the engine median, not with the predictive median.
+  masked <- MOSAIC:::.mosaic_assemble_prediction_table(ens, central_method = "median",
+                                                       score_idx_cases = 8L, score_idx_deaths = 8L)
+  shown <- MOSAIC:::.mosaic_display_prediction_table(
+    ens, MOSAIC:::.mosaic_resolve_central_method("median"), mask_final_deaths_step = FALSE,
+    head_cases = 7L, head_deaths = 7L, prediction_table = masked)
+  sc <- shown$metric == "Suspected Cases"
+  expect_identical(shown$predicted_central[sc][1:7], as.numeric(ens$cases_median[1, 1:7]))
+  expect_identical(shown$predicted_central[!sc][1:7], as.numeric(ens$deaths_median[1, 1:7]))
+  expect_identical(shown$predicted_median[sc][1:7], as.numeric(ens$predictive_median$cases[1, 1:7]))
+  expect_false(identical(shown$predicted_central[sc][1:7], shown$predicted_median[sc][1:7]))
+})
+
 test_that("the medoid, R_eff medoid and optimizer selection read the engine arrays (unchanged by the noise)", {
   P <- 12L; S <- 5L; Tn <- 35L
   cfg <- .obs_cfg(Tn)
@@ -302,9 +365,23 @@ test_that("the medoid, R_eff medoid and optimizer selection read the engine arra
                                                    ens$cases_median, P, S,
                                                    mask_spec = ens$artifact_mask)
   expect_identical(m1, m0)
-  # run_MOSAIC()'s medoid call site reads the engine array.
+  # run_MOSAIC()'s v0.101.0 wiring (release red team TA-02): the medoid distance,
+  # the trajectory reduction and the implied CFR read the engine arrays; the
+  # candidate and medoid ensembles both get the run's observation model; the
+  # weekly offsets are resolved once with k.
   src <- gsub("[[:space:]]", "", paste(deparse(MOSAIC::run_MOSAIC), collapse = ""))
-  expect_true(grepl(".mosaic_medoid_distances(.mosaic_engine_array(ensemble,\"cases\")", src, fixed = TRUE))
+  pin <- function(pattern, n = 1L)
+    expect_identical(lengths(regmatches(src, gregexpr(pattern, src, fixed = TRUE))), n, info = pattern)
+  pin(".mosaic_medoid_distances(.mosaic_engine_array(ensemble,\"cases\")")
+  expect_match(src, paste0(".mosaic_build_trajectories\\([^)]*cases_array=\\.mosaic_engine_array\\(ensemble,",
+                           "\"cases\"\\),deaths_array=\\.mosaic_engine_array\\(ensemble,\"deaths\"\\)"))
+  pin(paste0(".mosaic_calc_cfr_period_implied(cases_array=.mosaic_engine_array(ensemble,\"cases\"),",
+             "deaths_array=.mosaic_engine_array(ensemble,\"deaths\")"))
+  pin("observation_model=obs_model_run", 2L)
+  pin("reduce_trajectories=FALSE,deaths_integration=control$likelihood$.deaths_integration,observation_model=obs_model_run")
+  pin("capture_trajectories=FALSE,deaths_integration=control$likelihood$.deaths_integration,observation_model=obs_model_run")
+  pin("obs_model_run<-.mosaic_resolve_observation_model(config,control)")
+  pin("control$likelihood$.cases_week_offset_resolved<-.nb_disp$cases$week_offset")
 
   # Optimizer: identical selection; the rebuilt envelope comes from the selected
   # members' observation draws (through the likelihood sort permutation).
@@ -381,6 +458,15 @@ test_that("slimming drops all four arrays; the engine accessor falls back for pr
   expect_identical(MOSAIC:::.mosaic_engine_array(ens, "deaths"), ens$deaths_engine_array)
   legacy <- ens; legacy$cases_engine_array <- NULL
   expect_identical(MOSAIC:::.mosaic_engine_array(legacy, "cases"), legacy$cases_array)
+  # An observation-model ensemble that lost only its engine pair has no engine
+  # array for a channel that was drawn with noise: NULL, so the callers' "no
+  # arrays" errors fire, never its observation draws. A channel drawn without
+  # noise still falls back, its array being the engine draws.
+  part <- ens; part$cases_engine_array <- NULL; part$deaths_engine_array <- NULL
+  part$observation_model <- list(cases = TRUE, deaths = FALSE)
+  expect_null(MOSAIC:::.mosaic_engine_array(part, "cases"))
+  expect_identical(MOSAIC:::.mosaic_engine_array(part, "deaths"), part$deaths_array)
+  expect_error(optimize_ensemble_subset(part, -1, verbose = FALSE), "no prediction arrays")
 })
 
 test_that("the RAM projection counts the observation arrays and the expected-deaths payload", {
@@ -420,9 +506,10 @@ test_that("run_MOSAIC's observation model is the dispersion its likelihood score
                                 .score_window_resolved = list(idx_cases = 1L)))
   om <- MOSAIC:::.mosaic_resolve_observation_model(cfg, ctl)
   expect_identical(om, list(k_cases = c(0.7, 3), week_offset = c(0L, 0L)))
-  # A user-supplied k carries no offset: it is detected from the observed cases,
-  # as est_nb_dispersion() detects it. This series' constant weekly blocks start
-  # on the window's first day, Sunday 2023-01-01, i.e. 6 days after Monday.
+  # A table without the offsets (run_MOSAIC's own tables always carry them) has
+  # them detected from the observed cases, as est_nb_dispersion() detects them.
+  # This series' constant weekly blocks start on the window's first day, Sunday
+  # 2023-01-01, i.e. 6 days after Monday.
   tab$week_offset <- NA_integer_
   om2 <- MOSAIC:::.mosaic_resolve_observation_model(cfg, list(likelihood = list(
     .nb_k_cases_resolved = c(0.7, 3), .nb_dispersion_table = tab)))

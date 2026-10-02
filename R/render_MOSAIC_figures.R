@@ -253,6 +253,31 @@ render_MOSAIC_figures <- function(dir_output,
                                   verbose = TRUE,
                                   cl      = NULL,
                                   n_cores = 1L) {
+  .mosaic_render_figures(dir_output, which = which, plots = plots,
+                         verbose = verbose, cl = cl, n_cores = n_cores)
+}
+
+#' Render a run directory's figures, optionally with a known central method
+#'
+#' The body of \code{render_MOSAIC_figures()}. \code{run_MOSAIC()} calls it
+#' with the \code{central_method} it resolved, so the in-run render draws and
+#' captions the run's own central line without re-deriving it from files on
+#' disk; with \code{central_method = NULL} (every post-hoc render) the method
+#' is read from the run directory by \code{.mosaic_run_central_method()}.
+#'
+#' @param dir_output,which,plots,verbose,cl,n_cores See
+#'   \code{render_MOSAIC_figures()}.
+#' @param central_method \code{NULL}, or a central method (scalar or per
+#'   channel) to use instead of the run directory's.
+#' @return As \code{render_MOSAIC_figures()}.
+#' @noRd
+.mosaic_render_figures <- function(dir_output,
+                                   which   = NULL,
+                                   plots   = TRUE,
+                                   verbose = TRUE,
+                                   cl      = NULL,
+                                   n_cores = 1L,
+                                   central_method = NULL) {
 
   if (!isTRUE(plots)) {
     if (verbose) message("render_MOSAIC_figures: plots = FALSE; nothing to render.")
@@ -401,8 +426,12 @@ render_MOSAIC_figures <- function(dir_output,
 
   subset_col <- .resolve_subset_col()
   weight_col <- if (identical(subset_col, "is_best_subset_opt")) "weight_best_opt" else "weight_best"
-  # A control.json this renderer cannot interpret must not abort every group.
-  central_method <- tryCatch(.resolve_central(), error = function(e) {
+  # run_MOSAIC() passes the method it resolved; a post-hoc render reads the run
+  # directory's. A control.json this renderer cannot interpret must not abort
+  # every group.
+  central_method <- if (!is.null(central_method)) {
+    .mosaic_resolve_central_method(central_method)
+  } else tryCatch(.resolve_central(), error = function(e) {
     warning("central_method in control.json could not be resolved (",
             conditionMessage(e), "); assuming the median, the pre-v0.38.0 ",
             "behaviour (the current package default is the median for cases and ",
@@ -982,11 +1011,13 @@ render_MOSAIC_figures <- function(dir_output,
   bm[, "iso3"]
 }
 
-# The ensemble central tendency a finished run used, per channel. Sources, most
-# authoritative first:
+# The ensemble central tendency a finished run used, per channel (the in-run
+# render does not call this: run_MOSAIC() passes the method it resolved to
+# .mosaic_render_figures()). Sources, most authoritative first:
 #   1. 3_results/summary.json central_method_cases/_deaths -- the values
 #      run_MOSAIC() resolved, written after the in-run render (so available to
-#      post-hoc renders only);
+#      post-hoc renders only; an earlier run's copy is removed with the other
+#      post-calibration artifacts, .mosaic_clear_posterior_artifacts());
 #   2. 2_calibration/subset_opt.rds $central_method -- also resolved, present
 #      when best-subset optimization ran;
 #   3. 1_inputs/control.json predictions$central_method -- the RAW user control,

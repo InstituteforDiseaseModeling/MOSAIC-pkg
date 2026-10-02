@@ -23,7 +23,7 @@ plot_seasonal_clustering(
 
 \item{use_cases}{A logical value. If \code{TRUE}, clustering is based on Fourier series fitted to cholera cases. If \code{FALSE}, clustering is based on precipitation.}
 
-\item{set_inferred_to_na}{A logical value. If \code{TRUE}, inferred countries are set to \code{NA} in the clustering. Default is \code{TRUE} when using precipitation, \code{FALSE} when using cases.}
+\item{set_inferred_to_na}{A logical value. If \code{TRUE}, inferred countries are set to \code{NA} in the clustering. Applies only with \code{use_cases = TRUE} (default \code{TRUE}); with precipitation it is ignored and treated as \code{FALSE}.}
 
 \item{clustering_method}{A character string specifying the clustering method. One of \code{"ward.D2"} (hierarchical, the default), \code{"kmeans"}, \code{"dbscan"}, or \code{"knn"}.}
 

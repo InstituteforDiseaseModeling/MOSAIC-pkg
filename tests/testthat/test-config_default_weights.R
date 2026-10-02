@@ -67,3 +67,41 @@ test_that("get_location_config keeps weight rows aligned with reported_cases on 
   expect_equal(nrow(one$reported_deaths_weight), nrow(one$reported_deaths))
   expect_identical(dim(one$reported_cases_weight), dim(one$reported_cases))
 })
+
+# reported_tier (v0.101.0; release red team CD-4) has the same role and build path
+# as the weight matrices, so it gets the same contract: an integer matrix
+# aligned with reported_cases (rows in location_name order), present exactly
+# where a case or death count is (data-raw/make_config_default.R), coded 1
+# observed / 2 reconstructed / 3 imputed. An NA on an observed cell would drop
+# the week from the dispersion fit while the likelihood still scores it.
+check_reported_tier <- function(cfg) {
+  tier <- cfg$reported_tier
+  expect_true(is.matrix(tier) && is.integer(tier))
+  expect_identical(dim(tier), dim(cfg$reported_cases))
+  present <- !is.na(cfg$reported_cases) | !is.na(cfg$reported_deaths)
+  expect_identical(unname(!is.na(tier)), unname(present))
+  expect_true(all(tier[!is.na(tier)] %in% 1:3))
+}
+
+check_reported_tier_json <- function(cfg, js) {
+  expect_true(is.matrix(js$reported_tier))
+  expect_identical(dim(js$reported_tier), dim(cfg$reported_tier))
+  # Positional values match (dimnames are dropped on the round trip by design).
+  expect_equal(unname(js$reported_tier), unname(cfg$reported_tier))
+}
+
+test_that("reported_tier is an aligned integer matrix, coded 1-3, present exactly where a count is", {
+  cfg <- MOSAIC::config_default
+  skip_if(is.null(cfg$reported_tier), "config_default carries no reported_tier")
+  check_reported_tier(cfg)
+  one <- MOSAIC::get_location_config(iso = cfg$location_name[1], config = cfg)
+  expect_identical(as.integer(one$reported_tier), as.integer(cfg$reported_tier[1, ]))
+})
+
+test_that("reported_tier survives the JSON round trip", {
+  cfg <- MOSAIC::config_default
+  skip_if(is.null(cfg$reported_tier), "config_default carries no reported_tier")
+  fp <- system.file("extdata", "config_default.json", package = "MOSAIC")
+  skip_if(fp == "", "config_default.json not installed")
+  check_reported_tier_json(cfg, MOSAIC::read_json_to_list(fp))
+})
