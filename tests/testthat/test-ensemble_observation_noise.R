@@ -365,9 +365,23 @@ test_that("the medoid, R_eff medoid and optimizer selection read the engine arra
                                                    ens$cases_median, P, S,
                                                    mask_spec = ens$artifact_mask)
   expect_identical(m1, m0)
-  # run_MOSAIC()'s medoid call site reads the engine array.
+  # run_MOSAIC()'s v0.101.0 wiring (release red team TA-02): the medoid distance,
+  # the trajectory reduction and the implied CFR read the engine arrays; the
+  # candidate and medoid ensembles both get the run's observation model; the
+  # weekly offsets are resolved once with k.
   src <- gsub("[[:space:]]", "", paste(deparse(MOSAIC::run_MOSAIC), collapse = ""))
-  expect_true(grepl(".mosaic_medoid_distances(.mosaic_engine_array(ensemble,\"cases\")", src, fixed = TRUE))
+  pin <- function(pattern, n = 1L)
+    expect_identical(lengths(regmatches(src, gregexpr(pattern, src, fixed = TRUE))), n, info = pattern)
+  pin(".mosaic_medoid_distances(.mosaic_engine_array(ensemble,\"cases\")")
+  expect_match(src, paste0(".mosaic_build_trajectories\\([^)]*cases_array=\\.mosaic_engine_array\\(ensemble,",
+                           "\"cases\"\\),deaths_array=\\.mosaic_engine_array\\(ensemble,\"deaths\"\\)"))
+  pin(paste0(".mosaic_calc_cfr_period_implied(cases_array=.mosaic_engine_array(ensemble,\"cases\"),",
+             "deaths_array=.mosaic_engine_array(ensemble,\"deaths\")"))
+  pin("observation_model=obs_model_run", 2L)
+  pin("reduce_trajectories=FALSE,deaths_integration=control$likelihood$.deaths_integration,observation_model=obs_model_run")
+  pin("capture_trajectories=FALSE,deaths_integration=control$likelihood$.deaths_integration,observation_model=obs_model_run")
+  pin("obs_model_run<-.mosaic_resolve_observation_model(config,control)")
+  pin("control$likelihood$.cases_week_offset_resolved<-.nb_disp$cases$week_offset")
 
   # Optimizer: identical selection; the rebuilt envelope comes from the selected
   # members' observation draws (through the likelihood sort permutation).

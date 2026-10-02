@@ -287,4 +287,26 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed simulation eng
   expect_true(all(is.finite(shift[has_fc])))
   expect_true(any(abs(shift[has_fc]) > 1e-6))
   expect_true(all(shift[!has_fc] == 0))
+
+  # (11) Observation-level predictive (v0.101.0; release red team TA-02, OBS-1):
+  # the candidate and medoid ensembles drew observation noise; the trajectory
+  # central line is the engine-level cases median of the final ensemble; the
+  # prediction CSV's predicted_median is that ensemble's predictive median and
+  # predicted_central its engine median.
+  cal  <- file.path(dir_output, "2_calibration")
+  cand <- readRDS(file.path(cal, "ensemble_candidate.rds"))
+  expect_true(isTRUE(cand$observation_model$cases))
+  expect_true(isTRUE(med_ens$observation_model$cases))
+  eo <- readRDS(file.path(cal, "ensemble_optimized.rds"))
+  tr <- readRDS(file.path(cal, "trajectories_ensemble.rds"))
+  expect_equal(as.numeric(tr$summary$reported_cases$median), as.numeric(eo$cases_median),
+               tolerance = 1e-10)
+  loc1 <- config$location_name[1]
+  pc <- utils::read.csv(file.path(dir_output, "3_results", "predictions",
+                                  sprintf("predictions_ensemble_%s.csv", loc1)), stringsAsFactors = FALSE)
+  pc <- pc[pc$metric == "Suspected Cases", ]
+  ok <- is.finite(pc$predicted_median)
+  expect_gt(sum(ok), 0L)
+  expect_equal(pc$predicted_median[ok], as.numeric(eo$predictive_median$cases[1, ok]), tolerance = 1e-8)
+  expect_equal(pc$predicted_central[ok], as.numeric(eo$cases_median[1, ok]), tolerance = 1e-8)
 })
