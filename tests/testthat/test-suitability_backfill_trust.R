@@ -135,3 +135,27 @@ test_that("compile_suitability_data does not backfill by default and keeps the f
      src <- paste(deparse(MOSAIC::compile_suitability_data), collapse = "\n")
      expect_true(grepl("d$cases_interpolated <- FALSE", src, fixed = TRUE))
 })
+
+test_that("a deaths-only week is not filled even when its row carries no source", {
+     # a death count without a source label still marks a reported week
+     d0 <- data.frame(iso_code = "MWI", date = seq(as.Date("2024-01-04"), by = "week", length.out = 4L),
+                      cases = c(10, NA, NA, 20), deaths = c(0, 2, NA, 1),
+                      source = c("WHO", NA, NA, "WHO"), confidence_weight = c(1, NA, NA, 1),
+                      disaggregation_method = NA_character_, total_population = 1e7,
+                      stringsAsFactors = FALSE)
+     d <- MOSAIC:::.csd_label_backfill(backfill_weekly_case_gaps(d0, max_interp_weeks = 2L, verbose = FALSE))
+     expect_true(is.na(d$cases[2]) && !d$cases_interpolated[2])
+     expect_equal(d$deaths[2], 2)
+     expect_true(d$cases_interpolated[3] && d$disaggregation_method[3] == "backfill_interpolated")
+})
+
+test_that("no production caller of compile_suitability_data() turns the backfill on", {
+     # the callers are update_mosaic_data()'s step registry and the leak-free
+     # per-cutoff panel builder; neither may pass backfill_case_gaps (default FALSE)
+     ns  <- asNamespace("MOSAIC")
+     fns <- Filter(function(n) is.function(get(n, envir = ns)), ls(ns, all.names = TRUE))
+     src <- vapply(fns, function(n) paste(deparse(get(n, envir = ns)), collapse = " "), "")
+     callers <- fns[grepl("compile_suitability_data(", src, fixed = TRUE) & fns != "compile_suitability_data"]
+     expect_true(all(c(".mosaic_data_steps", ".rcv_build_leakfree_panel_v74") %in% callers))
+     for (n in callers) expect_false(grepl("backfill_case_gaps", src[[n]], fixed = TRUE), info = n)
+})

@@ -172,11 +172,16 @@
      cum <- function(t) stats::approx(x, y, xout = as.numeric(t), rule = 2, ties = "ordered")$y
      w <- cum(week_start + 6L) - cum(week_start - 1L)
      total <- y[length(y)]
+     what <- if (value == "cumulative_deaths") "death" else "case"
+     # The reader rejects a decreasing curve; anchors handed in directly are
+     # checked here too, since a negative week would be spread as negative counts.
+     if (any(w < 0))
+          stop(sprintf("Curated WHO window %s: its %s curve decreases (a week with a negative increment)",
+                       id, what), call. = FALSE)
      if (abs(sum(w[active]) - total) > 1e-8 * total || any(w[!active] > 0))
           stop(sprintf(paste0("Curated WHO window %s: its %s curve puts counts outside the window's weeks ",
                               "(%s to %s); the anchors must lie within them"),
-                       id, if (value == "cumulative_deaths") "death" else "case",
-                       format(min(week_start[active])), format(max(week_start[active]) + 6L)),
+                       id, what, format(min(week_start[active])), format(max(week_start[active]) + 6L)),
                call. = FALSE)
      w
 }

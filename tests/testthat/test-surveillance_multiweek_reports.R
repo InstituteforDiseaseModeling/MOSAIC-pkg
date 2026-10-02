@@ -291,6 +291,12 @@ test_that("cumulative anchors give each WHO week the curve's increment, interpol
      expect_equal(MOSAIC:::.curated_shape_weights(ad, wk, rep(TRUE, 4), "T"), c(5, 5, 30, 0))
      expect_equal(MOSAIC:::.curated_shape_weights(ad, wk, rep(TRUE, 4), "T", "cumulative_deaths"),
                   c(2 + 4 / 18, 7 / 18, 7 / 18, 0))
+     # a decreasing curve handed in directly (bypassing the reader) is refused, not spread negative
+     dec <- data.frame(date = as.Date(c("2024-01-07", "2024-01-14", "2024-01-21", "2024-01-28")),
+                       cumulative_cases = c(0, 10, 5, 40), cumulative_deaths = c(0, 3, 2, 4))
+     expect_error(MOSAIC:::.curated_shape_weights(dec, wk, rep(TRUE, 4), "T"), "case curve decreases")
+     expect_error(MOSAIC:::.curated_shape_weights(dec, wk, rep(TRUE, 4), "T", "cumulative_deaths"),
+                  "death curve decreases")
      # the curve must lie within the weeks that may carry cases
      expect_error(MOSAIC:::.curated_shape_weights(a, wk[1:2], c(TRUE, TRUE), "T"), "outside the window")
      expect_error(MOSAIC:::.curated_shape_weights(a, wk, c(TRUE, TRUE, FALSE, FALSE), "T"), "outside the window")
@@ -337,7 +343,7 @@ test_that("a curve whose total is far from the report is refused (an anchor typo
      # 90 reported: a case curve from 45 (half) to 91.8 (2% above) is rescaled
      expect_equal(sum(.shaped_window(c(0, 5, 15, 30, 40, 45))$cases), 90)
      expect_equal(sum(.shaped_window(c(0, 10, 30, 60, 80, 91))$cases), 90)
-     expect_error(.shaped_window(c(0, 10, 30, 60, 80, 44)), "case curve counts 44 against a report of 90")
+     expect_error(.shaped_window(c(0, 5, 15, 30, 40, 44)), "case curve counts 44 against a report of 90")
      expect_error(.shaped_window(c(0, 10, 30, 60, 80, 900)), "between 0.5 and 1.02 times the report")
      expect_error(.shaped_window(c(0, 10, 30, 60, 80, 90), c(0, 1, 2, 3, 4, 7)), "death curve counts 7")
      expect_error(.shaped_window(c(0, 10, 30, 60, 80, 90), c(0, 1, 1, 1, 2, 2)), "death curve counts 2")
@@ -369,6 +375,11 @@ test_that("the curation shape table is validated against the curation table", {
      expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "case count must end above 0")
      bad <- raw; bad$cumulative_deaths[!is.na(bad$cumulative_deaths)] <- "0"
      expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "death count must end above 0")
+     dd <- which(!is.na(raw$cumulative_deaths))
+     bad <- raw; bad$cumulative_deaths[dd[1]] <- "1"
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "death count must start at 0")
+     bad <- raw; bad$cumulative_deaths[raw$date == "2023-05-28"] <- "12"        # below 27 May's 24
+     expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "death count must never decrease")
      bad <- raw; bad$cumulative_cases[cc[length(cc)]] <- "Inf"
      expect_error(MOSAIC:::.surveillance_curation_shapes(cur, put(bad)), "non-finite count")
      bad <- raw; bad$cumulative_cases[cc[2]] <- "12x"
