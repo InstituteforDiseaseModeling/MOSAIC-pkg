@@ -3316,14 +3316,17 @@ run_MOSAIC <- function(config,
     # and tears down its own. So render builds one, sized from the run's own
     # n_cores and capped internally by how many workers the memory-heavy figure
     # families can actually use. Nothing else holds sockets here, so R's
-    # 128-connection ceiling is not in play.
+    # 128-connection ceiling is not in play. The central method this run
+    # resolved is passed in, so the figures cannot take it from a file on disk
+    # (summary.json is written only after this render).
     tryCatch(
-      render_MOSAIC_figures(
-        dir_output = dir_output,
-        plots      = TRUE,
-        verbose    = control$logging$verbose,
-        n_cores    = if (isTRUE(control$parallel$enable))
-                       control$parallel$n_cores else 1L
+      .mosaic_render_figures(
+        dir_output     = dir_output,
+        plots          = TRUE,
+        verbose        = control$logging$verbose,
+        n_cores        = if (isTRUE(control$parallel$enable))
+                           control$parallel$n_cores else 1L,
+        central_method = central_method
       ),
       error = function(e) log_warn("render_MOSAIC_figures failed: %s", e$message)
     )

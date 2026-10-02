@@ -43,7 +43,8 @@ test_that("per-location prediction CSVs and 3_results tables from an earlier run
                                              "parameter_sensitivity.csv")),
               file.path(dirs$res_posterior, c("cfr_posterior.csv",
                                               "reproductive_numbers.csv",
-                                              "reproductive_numbers.rds")))
+                                              "reproductive_numbers.rds")),
+              file.path(dirs$results, "summary.json"))
   keep <- c(file.path(dirs$res_posterior, "parameter_estimates.csv"),
             file.path(dirs$res_predictions, "notes.csv"))
   for (f in c(preds, tables, keep)) writeLines("old", f)
@@ -51,6 +52,53 @@ test_that("per-location prediction CSVs and 3_results tables from an earlier run
   expect_setequal(removed, c(preds, tables))
   expect_true(all(file.exists(keep)))
   expect_length(list.files(dirs$res_predictions, pattern = "^(predictions|trajectories)_"), 0L)
+})
+
+test_that("an earlier run's summary.json does not set this run's central line", {
+  # Release red team CM-01: the renderer reads summary.json's central_method
+  # first, and run_MOSAIC() writes summary.json only after the in-run render, so
+  # a re-run into a finished directory drew the earlier run's central line.
+  dirs <- .stale_dirs()
+  jsonlite::write_json(list(central_method_cases = "mean", central_method_deaths = "mean"),
+                       file.path(dirs$results, "summary.json"), auto_unbox = TRUE)
+  ctl <- MOSAIC:::.mosaic_validate_and_merge_control(list())
+  jsonlite::write_json(list(control = MOSAIC:::.mosaic_control_for_json(ctl)),
+                       file.path(dirs$inputs, "control.json"), auto_unbox = TRUE)
+  run_cm <- function() MOSAIC:::.mosaic_run_central_method(
+    dirs$inputs, results_dir = dirs$results, calibration_dir = dirs$calibration)
+  expect_equal(run_cm(), c(cases = "mean", deaths = "mean"))       # the stale file wins
+  MOSAIC:::.mosaic_clear_posterior_artifacts(dirs)
+  expect_false(file.exists(file.path(dirs$results, "summary.json")))
+  expect_equal(run_cm(), c(cases = "median", deaths = "mean"))     # this run's control
+})
+
+test_that("the in-run render draws the central method run_MOSAIC passes, whatever is on disk", {
+  root <- withr::local_tempdir()
+  dirs <- MOSAIC:::.mosaic_ensure_dir_tree(root, clean_output = FALSE)
+  ens  <- MOSAIC:::.mosaic_stamp_artifact(structure(list(), class = "mosaic_ensemble"))
+  saveRDS(ens, file.path(dirs$calibration, "ensemble_candidate.rds"))
+  saveRDS(ens, file.path(dirs$calibration, "medoid_ensemble.rds"))
+  jsonlite::write_json(list(central_method_cases = "mean", central_method_deaths = "mean"),
+                       file.path(dirs$results, "summary.json"), auto_unbox = TRUE)
+  seen <- list()
+  testthat::local_mocked_bindings(
+    plot_model_ensemble = function(...) {
+      seen[[length(seen) + 1L]] <<- list(...)$central_method
+      invisible(NULL)
+    })
+  MOSAIC:::.mosaic_render_figures(root, which = "predictions", verbose = FALSE,
+                                  central_method = c(cases = "median", deaths = "mean"))
+  expect_length(seen, 2L)
+  for (cm in seen) expect_identical(cm, c(cases = "median", deaths = "mean"))
+  # A post-hoc render (no method passed) reads the run directory.
+  seen <- list()
+  render_MOSAIC_figures(root, which = "predictions", verbose = FALSE)
+  for (cm in seen) expect_identical(cm, c(cases = "mean", deaths = "mean"))
+  # run_MOSAIC's in-run render passes its resolved method.
+  src <- gsub("[[:space:]]", "", paste(deparse(MOSAIC::run_MOSAIC), collapse = ""))
+  expect_true(grepl(".mosaic_render_figures(dir_output=dir_output,", src, fixed = TRUE))
+  expect_true(grepl("central_method=central_method),error=function(e)log_warn(\"render_MOSAIC_figuresfailed", src,
+                    fixed = TRUE))
 })
 
 test_that("run_MOSAIC's ensemble_optimized.rds fallback is not keyed on file.exists()", {

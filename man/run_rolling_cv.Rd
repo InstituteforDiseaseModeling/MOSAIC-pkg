@@ -82,9 +82,13 @@ as a value of the \code{model} column.}
 
 \item{n_reps_best_medoid}{Integer (default 50); number of stochastic
 reruns used to build the predictive median + intervals for the \code{best}
-and \code{medoid} configs. These reruns execute locally in the calling R
-process, so cost scales with this value times the number of
-cutoffs and locations.}
+and \code{medoid} configs. They run through \code{calc_model_ensemble()}
+with the cutoff run's observation model (the weekly cases dispersion its
+candidate ensemble recorded) and deaths integration
+(\code{2_calibration/deaths_integration.rds}), seeded 1001, 1002, ... as
+\code{run_MOSAIC()} seeds its medoid ensemble. These reruns execute locally
+in the calling R process, so cost scales with this value times the number
+of cutoffs and locations.}
 
 \item{central_method}{Ensemble central tendency used for the compiled
 predictions and the in-sample calibration metrics/medoid: \code{"mean"}
@@ -208,6 +212,10 @@ observed_source, pred_central} (the scored series), \code{pred_mean,
 pred_median, central_method}, CI columns (\code{pi*_lo}/\code{pi*_hi}) and
 \code{pred_median_obs}, the median of the same draws as the CI columns (the
 observation-level predictive median since v0.101.0), which WIS pairs with them.
+Every model's rows carry the cutoff run's interval semantics: the
+\code{medoid} (and legacy \code{best}) configs are re-simulated through
+\code{\link{calc_model_ensemble}} with the run's observation model and deaths
+integration, as its own ensembles were built.
 \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
 rows carry the real target for post-hoc scoring.
 }

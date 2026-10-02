@@ -238,7 +238,10 @@
 #' current run's samples, but several writers are conditional (optimizer on,
 #' medoid found, arrays present). Deleting them before they are rebuilt means a
 #' skipped or failed block leaves no file rather than a stale one from a
-#' previous run into the same \code{dir_output}.
+#' previous run into the same \code{dir_output}. \code{3_results/summary.json}
+#' goes too: it marks a completed run, it is written only after the in-run
+#' render, and the renderer reads its \code{central_method_*} first, so an
+#' earlier run's copy would set this run's figures' central line.
 #'
 #' @param dirs The directory list from \code{.mosaic_ensure_dir_tree()}.
 #' @param log_msg Logging callback.
@@ -276,6 +279,8 @@
     paths <- c(paths, file.path(dirs$res_posterior,
                                 c("cfr_posterior.csv", "reproductive_numbers.csv",
                                   "reproductive_numbers.rds")))
+  if (!is.null(dirs$results))
+    paths <- c(paths, file.path(dirs$results, "summary.json"))
   stale <- paths[file.exists(paths)]
   if (length(stale)) {
     unlink(stale)
@@ -734,7 +739,8 @@
     central_method_cases  = if (!is.null(central_method)) central_method[["cases"]]  else NA_character_,
     central_method_deaths = if (!is.null(central_method)) central_method[["deaths"]] else NA_character_,
     # Dual ensemble metrics (BOTH tendencies, central_method-independent) so
-    # median runs stay comparable after the default flipped to mean.
+    # runs made under any default (both median v0.46.1-v0.97.x, both mean
+    # v0.98.0-v0.100.x, cases median / deaths mean since v0.101.0) compare.
     r2_cases_ensemble_mean     = if (!is.na(r2_cases_ensemble_mean))     round(r2_cases_ensemble_mean, 4)     else NA_real_,
     r2_deaths_ensemble_mean    = if (!is.na(r2_deaths_ensemble_mean))    round(r2_deaths_ensemble_mean, 4)    else NA_real_,
     r2_cases_ensemble_median   = if (!is.na(r2_cases_ensemble_median))   round(r2_cases_ensemble_median, 4)   else NA_real_,

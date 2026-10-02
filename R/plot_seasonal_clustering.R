@@ -10,7 +10,7 @@
 #'   \item \strong{DOCS_FIGURES}: Path to save the output plot.
 #' }
 #' @param use_cases A logical value. If `TRUE`, clustering is based on Fourier series fitted to cholera cases. If `FALSE`, clustering is based on precipitation.
-#' @param set_inferred_to_na A logical value. If `TRUE`, inferred countries are set to `NA` in the clustering. Default is `TRUE` when using precipitation, `FALSE` when using cases.
+#' @param set_inferred_to_na A logical value. If `TRUE`, inferred countries are set to `NA` in the clustering. Applies only with `use_cases = TRUE` (default `TRUE`); with precipitation it is ignored and treated as `FALSE`.
 #' @param clustering_method A character string specifying the clustering method. One of `"ward.D2"` (hierarchical, the default), `"kmeans"`, `"dbscan"`, or `"knn"`.
 #' @param k An integer specifying the number of clusters for k-means and hierarchical clustering. Default is 4.
 #'

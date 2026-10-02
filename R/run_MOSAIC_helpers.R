@@ -292,7 +292,8 @@
 #' per-channel \code{central_method = c(cases = , deaths = )} would reach
 #' control.json without its channel labels. The resolved value is persisted as a
 #' named list, which serialises as \code{{"cases": ..., "deaths": ...}}. A value
-#' that does not resolve is left as supplied; the ensemble step reports it.
+#' that does not resolve is left as supplied; \code{run_MOSAIC()} never writes
+#' one, because \code{.mosaic_validate_and_merge_control()} rejects it first.
 #' @param control Validated control list.
 #' @return \code{control} with \code{predictions$central_method} as a named list.
 #' @noRd
@@ -678,6 +679,14 @@
     stop("likelihood$cases_scoring must be \"weekly\" (default) or \"daily\" (legacy), got: ",
          paste(format(cs), collapse = ", "), call. = FALSE)
   }
+  # The central method is first resolved after calibration, once the shards are
+  # consolidated, where a bad value would end the run with no ensemble and a
+  # directory that cannot be resumed. Check it here instead.
+  tryCatch(.mosaic_resolve_central_method(def$predictions$central_method),
+           error = function(e) stop(
+             "control$predictions$central_method is invalid (", conditionMessage(e),
+             "). Use \"mean\", \"median\" or a vector named by channel, e.g. ",
+             "c(cases = \"median\", deaths = \"mean\") (the default).", call. = FALSE))
 
   # LOGICAL CONSISTENCY
   if (def$calibration$min_batches_adaptive > def$calibration$max_batches_adaptive) {
