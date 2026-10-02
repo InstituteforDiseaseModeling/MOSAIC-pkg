@@ -61,9 +61,12 @@ NULL (invisibly). Creates PDF files as side effects.
 Creates a 6-page multi-page PDF per output file:
 
 1.  Density overlays of observed vs predicted central (the run's
-    `central_method`, mean by default) distributions
+    `central_method`: median for cases and mean for deaths by default)
+    distributions
 
-2.  Credible interval coverage analysis (50% and 95% CIs vs nominal)
+2.  Interval coverage analysis (50% and 95% intervals vs nominal; the
+    CSV intervals are observation-level predictive intervals for runs
+    made with v0.101.0 or later)
 
 3.  Observed vs predicted calibration scatter plots
 

@@ -25,7 +25,7 @@ overlaid only on the reported_cases/reported_deaths panels.'><meta property="og:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -121,10 +121,12 @@ the best subset). It is the trajectory analogue of
 <code><a href="plot_model_ensemble.html">plot_model_ensemble</a></code>.</p>
 <p><strong>Central line:</strong> for <code>reported_cases</code> / <code>reported_deaths</code> the
 bold line is the ensemble <em>central</em> series following
-<code>control$predictions$central_method</code> (weighted mean by default, or weighted
-median, per channel) and is <strong>bit-identical</strong> to the cases/deaths
-<em>prediction</em> plots – it is reduced from the same captured draws over the
-same final displayed member set and weights (no re-simulation). True deaths
+<code>control$predictions$central_method</code> (by default the weighted median for
+cases and the weighted mean for deaths) and is <strong>bit-identical</strong> to the
+cases/deaths <em>prediction</em> plots' central line – it is reduced from the
+same engine-level member trajectories over the same final displayed member
+set and weights (no re-simulation). The thinned lines are engine-level member
+trajectories, not observation-level draws. True deaths
 (<code>disease_deaths</code>) follow the deaths channel's method so the two deaths
 panels are comparable. All other channels (compartments, FOI, incidence,
 derived) have no prediction-plot counterpart and use the weighted

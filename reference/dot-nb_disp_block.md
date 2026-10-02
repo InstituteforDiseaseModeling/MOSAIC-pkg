@@ -1,6 +1,8 @@
 # Weekly block index
 
-Weekly block index
+The block formula behind every weekly aggregation in MOSAIC (see
+`.mosaic_week_blocks`): week number relative to a fixed Monday, shifted
+by `offset`.
 
 ## Usage
 

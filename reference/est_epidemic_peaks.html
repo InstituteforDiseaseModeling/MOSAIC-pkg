@@ -11,7 +11,7 @@ magnitude, and duration of epidemic periods."><meta property="og:image" content=
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -68,11 +68,16 @@ magnitude, and duration of epidemic periods.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Peaks are detected on observed weeks only: days whose
-<code>disaggregation_method</code> is set and is not <code>observed</code> or
-<code>documented_zero</code> (AI <code>fourier_*</code> reconstructions,
-<code>assumed_zero</code>) are treated as missing, and a detected peak whose
-<code>[peak_start, peak_stop]</code> window is at least half imputed days is dropped.
+    <p>Peaks are detected on observed weeks only: imputed days – those whose
+<code>disaggregation_method</code> is a modelled method such as an AI
+<code>fourier_*</code> reconstruction or <code>assumed_zero</code> – are treated as
+missing, and a detected peak whose <code>[peak_start, peak_stop]</code> window is at
+least half imputed days is dropped. A WHO multi-week report spread over the
+weeks it covers (<code>who_catchup_*</code>, see <code><a href="process_WHO_weekly_data.html">process_WHO_weekly_data</a></code>)
+counts as observed: its total is a reported count over a known window, whereas
+blanking it would carve a false trough into the outbreak it belongs to. An even
+spread creates no local maximum of its own; a shaped spread follows another
+source's weekly counts or a documented epidemic curve, so its maxima are real.
 A detected peak day is the centre of any flat stretch of the smoothed curve and
 must itself be observed with cases &gt; 0. The hand-curated peaks the function
 appends (documented outbreaks) are exempt from the imputed-window filter.</p>

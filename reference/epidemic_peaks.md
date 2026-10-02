@@ -87,8 +87,9 @@ Country-specific adjustments are applied for:
 - Ethiopia (ETH): Lower threshold (3%) for multiple outbreaks
 
 Detected peaks sit on observed weeks: imputed (AI Fourier, assumed-zero)
-weeks are treated as missing, a peak day must be observed with cases \>
-0, and a detected peak whose window is at least half imputed days is
+weeks are treated as missing (a WHO multi-week report spread over its
+window counts as observed), a peak day must be observed with cases \> 0,
+and a detected peak whose window is at least half imputed days is
 dropped. The manual corrections below are documented outbreaks and are
 exempt from that window filter.
 
@@ -148,10 +149,10 @@ unique(epidemic_peaks$iso_code)
 recent_peaks <- epidemic_peaks[epidemic_peaks$peak_date >= as.Date("2024-01-01"), ]
 table(recent_peaks$iso_code)
 #> 
-#> AGO BDI CAF COD COG COM ETH GHA KEN MOZ NER NGA RWA SDN SOM SSD TCD TGO TZA UGA 
-#>   3   4   1   3   1   1   3   1   3   3   1   3   1   4   2   3   1   1   3   3 
-#> ZMB ZWE 
-#>   2   2 
+#> AGO BDI CAF CIV COD COG COM ETH GHA KEN MOZ NER NGA RWA SDN SOM SSD TCD TGO TZA 
+#>   3   4   1   1   3   1   1   3   1   3   3   1   3   1   4   2   3   2   1   3 
+#> UGA ZMB ZWE 
+#>   3   2   2 
 
 # Peak duration calculation
 epidemic_peaks$duration <- as.numeric(
@@ -159,5 +160,5 @@ epidemic_peaks$duration <- as.numeric(
 )
 summary(epidemic_peaks$duration)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>    2.00   16.00   28.00   32.36   50.00  117.00 
+#>    2.00   16.00   28.00   32.13   50.00  117.00 
 ```

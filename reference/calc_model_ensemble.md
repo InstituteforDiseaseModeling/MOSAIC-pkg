@@ -5,6 +5,27 @@ set) and aggregates results using importance weights. Returns a
 `mosaic_ensemble` object containing weighted mean, median, and quantile
 envelopes for cases and deaths.
 
+With an `observation_model` (as
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+supplies), every member trajectory also receives an observation-level
+draw consistent with the calibration likelihood, so the interval
+envelope is a posterior predictive interval for the OBSERVED counts
+rather than for the engine's trajectories alone. Cases: each weekly
+total (the blocks the dispersion was estimated on) is drawn from a
+negative binomial around the member's weekly total with the run's
+per-location weekly size \\k\\, then apportioned to the week's days in
+proportion to the member's daily counts (integer counts, every day
+within one of its exact share and equal to it in expectation, weekly
+totals exact). Deaths (when `deaths_integration` is supplied): each
+weekly total gets the integrated deaths likelihood's quasi-Poisson
+variance \\\phi_j \mu\\ around the member's expected reported deaths,
+coupled to the member's post-hoc deaths so that \\\phi_j = 1\\ leaves
+them unchanged. The draws are seeded from each member's simulation seed.
+The central lines (`*_mean`, `*_median`) stay ENGINE-level: the noise is
+mean-preserving, so the engine mean is the exact predictive mean, and
+the median is the central trajectory rather than a quantile of the
+noise. See `.mosaic_ensemble_summaries()`.
+
 This is the computation half of the ensemble workflow. Use
 [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
 to render plots from the returned object.
@@ -35,6 +56,7 @@ calc_model_ensemble(
   trajectory_scratch_dir = NULL,
   reduce_trajectories = TRUE,
   deaths_integration = NULL,
+  observation_model = NULL,
   verbose = TRUE
 )
 ```
@@ -136,15 +158,17 @@ calc_model_ensemble(
   channels (`trajectory_channels`) from each member and attach a compact
   `$trajectories` (`mosaic_trajectories`) object – a per-channel central
   line (field `$median`, kept for schema stability) + a uniform-thinned
-  set of actual member trajectories + derived series. The central line
-  is the weighted MEAN for `reported_cases`, `reported_deaths` and
-  `disease_deaths` (the default `central_method` of the trajectory
-  reducer, matching the prediction plots' `predicted_central`), and the
-  weighted median for every other captured channel; `I_total` is the sum
-  of the Isym and Iasym medians, `mass_balance` a ratio of compartment
-  weighted means, `CFR` a ratio of 28-day rolling weighted-mean deaths
-  and cases, and `epidemic_frac` the weighted mean of the reconstructed
-  epidemic flag. Default `FALSE`
+  set of actual member trajectories + derived series.
+  `reported_cases`/`reported_deaths` are the ENGINE-level member
+  trajectories (`cases_engine_array`/`deaths_engine_array`). Their
+  central line follows the trajectory reducer's default `central_method`
+  – the weighted median for `reported_cases`, the weighted mean for
+  `reported_deaths` and `disease_deaths` – matching the prediction
+  plots' `predicted_central`; every other captured channel uses the
+  weighted median. `I_total` is the sum of the Isym and Iasym medians,
+  `mass_balance` a ratio of compartment weighted means, `CFR` a ratio of
+  28-day rolling weighted-mean deaths and cases, and `epidemic_frac` the
+  weighted mean of the reconstructed epidemic flag. Default `FALSE`
   ([`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   enables it for the posterior ensemble; never for the medoid).
   RAM/payload is linear in `length(trajectory_channels)`.
@@ -193,6 +217,25 @@ calc_model_ensemble(
   calibrated deaths post hoc, pass
   `readRDS("<dir_output>/2_calibration/deaths_integration.rds")`.
 
+- observation_model:
+
+  Optional observation model for the posterior predictive: a list with
+  `k_cases` (weekly negative binomial size per location, or one for all;
+  `Inf` = Poisson) and optionally `week_offset` (0-6 days after Monday
+  on which each location's reporting weeks start; default 0), or the
+  table of `<dir_output>/2_calibration/diagnostics/nb_dispersion.csv`
+  (its cases rows, matched by location).
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  supplies the dispersion its likelihood scored with. The cases draw is
+  this weekly negative binomial under either cases scoring rule. Under
+  the default `control$likelihood$cases_scoring = "daily"`, whose
+  per-day cells at the same \\k\\ imply a weekly variance of about \\C +
+  C^2/(7k)\\ for a weekly total \\C\\ (the predictive uses \\C +
+  C^2/k\\), the intervals are therefore wider than the likelihood
+  implies; under `"weekly"` they match it. The deaths dispersion is read
+  from `deaths_integration`. When `NULL` (default) no observation noise
+  is drawn and `cases_array`/`deaths_array` are the engine draws.
+
 - verbose:
 
   Logical. Print progress messages. Default `TRUE`.
@@ -203,23 +246,34 @@ S3 object of class `"mosaic_ensemble"` containing:
 
 - cases_mean:
 
-  Matrix (n_locations x n_time_points) of weighted mean cases.
+  Matrix (n_locations x n_time_points) of weighted mean cases, from the
+  engine draws (the exact predictive mean).
 
 - cases_median:
 
-  Matrix of weighted median cases.
+  Matrix of weighted median cases: the median engine trajectory.
 
 - deaths_mean:
 
-  Matrix of weighted mean deaths.
+  Matrix of weighted mean deaths (engine draws).
 
 - deaths_median:
 
-  Matrix of weighted median deaths.
+  Matrix of weighted median deaths (engine draws).
 
 - ci_bounds:
 
-  List of CI pairs, each with `$lower` and `$upper` matrices.
+  List with `$cases` and `$deaths`, each a list of interval pairs with
+  `$lower` and `$upper` matrices: quantiles of the observation-level
+  draws (of the engine draws when no `observation_model` is given).
+
+- predictive_median:
+
+  List with `$cases` and `$deaths`: the 0.5 quantile of the same draws
+  as `ci_bounds`, the median a proper interval score (WIS) pairs with
+  those intervals, and the `predicted_median` of the prediction CSVs
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  writes. Equal to `*_median` when no observation noise was drawn.
 
 - obs_cases:
 
@@ -231,11 +285,38 @@ S3 object of class `"mosaic_ensemble"` containing:
 
 - cases_array:
 
-  4-D array (n_locations x n_time_points x n_param_sets x n_stoch).
+  4-D array (n_locations x n_time_points x n_param_sets x n_stoch) of
+  OBSERVATION-level draws (the engine draws when no `observation_model`
+  is given).
 
 - deaths_array:
 
-  4-D array matching cases_array dimensions.
+  4-D array of OBSERVATION-level deaths when the deaths received
+  quasi-Poisson overdispersion (an `observation_model` and a
+  `deaths_integration` with some \\\phi_j \> 1\\); otherwise the engine
+  deaths, identical to `deaths_engine_array` (no `deaths_integration`,
+  every \\\phi_j \le 1\\, or no `observation_model`).
+
+- cases_engine_array:
+
+  4-D array of the ENGINE-level reported cases (the member trajectories
+  before observation noise), same dimensions. The medoid, R_eff,
+  trajectory and implied-CFR consumers read these.
+
+- deaths_engine_array:
+
+  4-D array of engine-level reported deaths (after the post-hoc CFR
+  redraw when `deaths_integration` is supplied).
+
+- observation_model:
+
+  List recording the observation noise applied: `cases` (logical,
+  whether cases received NB noise), `deaths` (logical, whether deaths
+  received quasi-Poisson overdispersion: only where some
+  `phi_deaths > 1`; at \\\phi = 1\\ the engine deaths, binomial draws
+  around the expected deaths, already are the observation-level deaths),
+  `k_cases`, `week_offset` and `phi_deaths` (per location, `NULL` when
+  not applied).
 
 - parameter_weights:
 
@@ -244,9 +325,9 @@ S3 object of class `"mosaic_ensemble"` containing:
 - seeds:
 
   Integer vector of per-member simulation seeds, aligned with the
-  parameter dimension of `cases_array` (member `i` \<-\> `seeds[i]`).
-  Bound to the parameter set that produced each member so consumers
-  (e.g. medoid selection) need not rely on positional alignment with an
+  parameter dimension of the arrays (member `i` \<-\> `seeds[i]`). Bound
+  to the parameter set that produced each member so consumers (e.g.
+  medoid selection) need not rely on positional alignment with an
   external vector.
 
 - n_param_sets:

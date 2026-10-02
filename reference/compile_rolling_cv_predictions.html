@@ -11,7 +11,7 @@ cutoff or to add quantile columns), without recalibrating."><meta property="og:i
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,13 +85,17 @@ NULL (default) uses the set recorded in the run manifest.</p></dd>
 <dt id="arg-n-reps-best-medoid">n_reps_best_medoid<a class="anchor" aria-label="anchor" href="#arg-n-reps-best-medoid"></a></dt>
 <dd><p>Integer or NULL (default); number of stochastic
 replicates to draw for the single-config <code>best</code>/<code>medoid</code>
-models. NULL reuses the value stored in the run manifest.</p></dd>
+models, with each cutoff run's observation model and deaths integration
+(see <code><a href="run_rolling_cv.html">run_rolling_cv</a></code>). NULL reuses the value stored in the
+run manifest.</p></dd>
 
 
 <dt id="arg-central-method">central_method<a class="anchor" aria-label="anchor" href="#arg-central-method"></a></dt>
 <dd><p>Central tendency for <code>pred_central</code>: <code>NULL</code>
-(default) reuses the value recorded in the run manifest (or <code>"mean"</code>
-for older manifests); otherwise a scalar or per-channel
+(default) reuses the value recorded in the run manifest; a manifest without
+the field was written by <code><a href="run_rolling_cv.html">run_rolling_cv()</a></code> before <code>central_method</code>
+existed (v0.32.40-v0.37.x), when predictions were the ensemble median, so it
+recompiles on <code>"median"</code>. Otherwise a scalar or per-channel
 <code>c(cases=, deaths=)</code> override.</p></dd>
 
 

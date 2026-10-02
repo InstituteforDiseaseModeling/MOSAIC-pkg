@@ -28,8 +28,25 @@ plot_CFR_by_country(PATHS)
 
 ## Value
 
-A list containing the two ggplot objects: one for CFR and total cases,
-and one for Beta distributions.
+Invisibly, a list of the two ggplot objects: `cfr_and_cases` (CFR and
+total cases) and `beta_distributions` (Beta densities; `NULL` when no
+density could be drawn). Each figure drawn is also saved to
+`PATHS$DOCS_FIGURES`.
+
+## Details
+
+The Beta densities (AFRO Region and the countries with the lowest and
+highest CFR) are evaluated on an adaptive grid: a uniform grid of 1,000
+points over the plotted range plus 500 points across each density's
+central 99.98% interval, so a very narrow density is resolved (the AFRO
+Region Beta, built from more than a million cases, has an SD of about
+1e-4, ten times narrower than the spacing of a uniform 1,000-point grid
+from 0 to 1). The x axis runs from 0 to 1.1 times the largest 99.99%
+quantile of the plotted densities, and the y axis is on a square-root
+scale so the tall AFRO density and the much wider country densities are
+visible together. A density with `shape1 < 1` (a country with no
+recorded deaths) is unbounded at 0 and is drawn from the first grid
+point above 0.
 
 ## Examples
 

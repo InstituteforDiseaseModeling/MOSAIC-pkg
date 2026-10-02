@@ -2,9 +2,25 @@
 
 Renders time-series plots from a `mosaic_ensemble` object produced by
 [`calc_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md).
-Shows the central prediction line (the weighted mean by default;
-`central_method`) with interval ribbons and observed data points.
-Optionally saves per-location prediction CSVs for downstream use.
+Shows the central prediction line (by default the weighted median for
+cases and the weighted mean for deaths; `central_method`) with interval
+ribbons and observed data points. The line is the model's central
+trajectory: the weighted median (or mean) of the engine-level member
+trajectories, before observation noise. The ribbons are the ensemble's
+`ci_bounds`, observation-level posterior predictive intervals when the
+ensemble was built with an observation model; the caption then says so,
+and notes that the line can lie above the 50% band where the reporting
+dispersion is small (a small weekly negative binomial size \\k\\ skews
+the observation-level predictive toward zero, so its upper 50% bound can
+fall below the engine-level median). By default the predictions are
+drawn from the first time step, and the steps before the scoring window
+(burn-in and cases warm-up) are shaded grey, with a dashed line at the
+scoring-window start labelled with its date (e.g. "scored from
+2023-02-15"; `show_burn_in`). That is where the caption metrics (R2,
+bias and totals) and the calibration's scoring window start; under
+`cases_scoring = "weekly"` the cases likelihood scores the complete
+reporting weeks inside that window, so its first scored week can begin
+up to six days after the marker.
 
 ## Usage
 
@@ -16,12 +32,13 @@ plot_model_ensemble(
   file_prefix = "ensemble",
   title_label = "Posterior Ensemble",
   save_predictions = FALSE,
-  central_method = "mean",
+  central_method = c(cases = "median", deaths = "mean"),
   mask_final_deaths_step = FALSE,
   n_cases_warmup_mask = 2L,
   score_idx_cases = NULL,
   score_idx_deaths = NULL,
   prediction_table = NULL,
+  show_burn_in = TRUE,
   verbose = TRUE
 )
 ```
@@ -69,10 +86,11 @@ plot_model_ensemble(
 
 - central_method:
 
-  Central tendency for the plotted/scored line: `"mean"` (default; the
-  expected count, which never collapses to zero on sparse deaths) or
-  `"median"` (the typical trajectory; the default from v0.46.1 to
-  v0.97.x). Scalar or per-channel `c(cases=, deaths=)`.
+  Central tendency for the plotted/scored line: `"mean"` (the expected
+  count, which never collapses to zero on sparse deaths) or `"median"`
+  (the typical trajectory). Scalar or per-channel `c(cases=, deaths=)`;
+  default `c(cases = "median", deaths = "mean")` (both mean from v0.98.0
+  to v0.100.x, both median from v0.46.1 to v0.97.x).
 
 - mask_final_deaths_step:
 
@@ -90,34 +108,55 @@ plot_model_ensemble(
 - n_cases_warmup_mask:
 
   Integer. Number of LEADING timesteps of every Suspected Cases
-  prediction to blank (set to `NA`) in the exported CSV and the rendered
-  lines. Default `2L`. This masks the initial-condition warm-up
-  transient (seeded E/I progressing into new_symptomatic before the SEIR
-  dynamics settle), which is visually dominant for low-count countries.
-  DISPLAY ONLY (raw arrays untouched). The legitimate leading
-  reporting-lag zeros in Deaths (from `delta_reporting_cases`, the lag
-  deaths share with cases) are REAL and are NOT masked by this argument.
-  Set to `0L` to disable.
+  prediction excluded from the caption metrics. Default `2L`. This
+  covers the initial-condition warm-up transient (seeded E/I progressing
+  into new_symptomatic before the SEIR dynamics settle). With
+  `show_burn_in = TRUE` these steps are drawn inside the grey unscored
+  span; with `FALSE` they are blanked, as in the exported CSV. The raw
+  arrays are untouched. The legitimate leading reporting-lag zeros in
+  Deaths (from `delta_reporting_cases`, the lag deaths share with cases)
+  are REAL and are NOT masked by this argument. Set to `0L` to disable.
 
 - score_idx_cases, score_idx_deaths:
 
   Integer (1-based). Per-channel scored time-window START index (burn-in
-  / deaths-era start). Leading timesteps strictly BEFORE the index are
-  blanked (set to `NA`) in the exported CSV and the rendered lines so
-  the plot shows only the scored window. Default `1L` (no blanking).
-  When `NULL` (the typical caller pattern) the value is read from
-  `ensemble$artifact_mask$score_idx_*` so plots automatically track the
-  scored window the ensemble was built with. DISPLAY ONLY (raw arrays
-  untouched).
+  / deaths-era start). Timesteps strictly BEFORE the index are excluded
+  from the caption metrics and, like the cases warm-up, shaded
+  (`show_burn_in = TRUE`) or blanked (`show_burn_in = FALSE`). When
+  `NULL` (default, the typical caller pattern) the value is read from
+  `ensemble$artifact_mask$score_idx_*` so plots track the scored window
+  the ensemble was built with; `1` means no burn-in. The raw arrays are
+  untouched.
 
 - prediction_table:
 
   Optional precomputed prediction table (a data.frame from
-  `.mosaic_assemble_prediction_table()`). When supplied, the plotter
-  uses it directly instead of re-assembling from `ensemble`,
-  guaranteeing the rendered lines match an already-written CSV (the
-  renderer path). When `NULL` (default) the table is assembled
-  internally with the masking arguments above.
+  `.mosaic_assemble_prediction_table()`). When supplied, its lines are
+  drawn as given, so they match an already-written CSV; with
+  `show_burn_in = TRUE` its blank unscored head is filled from
+  `ensemble`'s own central and interval series (if `ensemble` cannot
+  supply them, a warning is given and the head is left blank). The
+  table's `central_method` column, when present, names the line drawn,
+  so the caption's central label and its R2, bias and totals follow it
+  per channel; an explicitly supplied `central_method` that disagrees
+  with it draws a warning. When `NULL` (default) the table is assembled
+  from `ensemble`.
+
+- show_burn_in:
+
+  Logical. If `TRUE` (default), draw the predicted central line and
+  interval ribbons from the first time step, shade the steps before each
+  channel's scoring window (burn-in and cases warm-up) in light grey,
+  and mark the scoring-window start with a dashed line labelled with its
+  date, e.g. "scored from 2023-02-15" (one label per channel when the
+  starts differ). The marker is where the caption metrics and the
+  calibration's scoring window start; under `cases_scoring = "weekly"`
+  the cases likelihood scores the complete reporting weeks inside the
+  window, so its first scored week can begin up to six days later. If
+  `FALSE`, blank the predictions before the scoring window, as in the
+  exported CSV. Display only: the caption metrics are computed on the
+  scoring window either way, and `mask_final_deaths_step` applies either
+  way.
 
 - verbose:
 

@@ -1,10 +1,13 @@
-# Plot Vaccine Effectiveness Decay and Prior Distributions
+# Plot Vaccine Effectiveness Decay and the Distributions Fitted to It
 
 This function generates comprehensive plots showing vaccine
-effectiveness decay over time and prior distributions for both one-dose
-and two-dose OCV regimens. It creates three sets of figures: one for
-one-dose OCV, one for two-dose OCV, and a combined figure showing both
-regimens.
+effectiveness decay over time and the distributions of initial
+effectiveness and waning rate fitted to the Xu et al. (2024)
+effectiveness estimates by
+[`est_vaccine_effectiveness`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md),
+for both one-dose and two-dose OCV regimens. These are data fits, not
+the model priors. It creates three sets of figures: one for one-dose
+OCV, one for two-dose OCV, and a combined figure showing both regimens.
 
 ## Usage
 
@@ -27,15 +30,35 @@ plot_vaccine_effectiveness(PATHS)
   - **DOCS_FIGURES**: Path to the directory where the figures will be
     saved
 
+## Value
+
+Invisibly, a list with the three combined figures (`one_dose`,
+`two_dose`, `all`) and the six panels (`panels`, named `A` to `F`).
+
 ## Details
 
 The function creates the following plots:
 
-- **One-dose OCV (A-C)**: Decay curve, phi_1 prior distribution, omega_1
-  prior distribution (blue theme)
+- **One-dose OCV (A-C)**: Decay curve, fitted phi_1 distribution, fitted
+  omega_1 distribution (blue theme)
 
-- **Two-dose OCV (D-F)**: Decay curve, phi_2 prior distribution, omega_2
-  prior distribution (green theme)
+- **Two-dose OCV (D-F)**: Decay curve, fitted phi_2 distribution, fitted
+  omega_2 distribution (green theme)
+
+Every panel is read from the
+[`est_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md)
+outputs in `PATHS$MODEL_INPUT`: the decay fit and its 95% band
+(`pred_vaccine_effectiveness.csv`), the Xu et al. (2024) estimates
+(`data_vaccine_effectiveness.csv`), and the Beta and Gamma distributions
+with the mode and 95% interval (`param_vaccine_effectiveness.csv`) drawn
+in panels B, C, E and F, each of which is subtitled as a data fit. They
+are not the phi and omega priors in
+[`priors_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/priors_default.md):
+the priors builder (`data-raw/make_priors_default.R`) moves each fitted
+95% bound outward (by 5% of the bound for phi, by 5% of the interval
+width for omega) and refits, so the shipped omega_1 and omega_2 priors
+are about 10-20% wider (SD) than these curves and the phi_1 and phi_2
+priors about 2.3 and 4.9 times wider.
 
 Three PDF files are saved:
 

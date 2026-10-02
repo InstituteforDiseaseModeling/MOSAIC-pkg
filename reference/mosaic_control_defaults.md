@@ -106,7 +106,29 @@ mosaic_control_defaults(
 
   - `weight_deaths`: Weight for deaths vs cases (default: 1.0)
 
-  - `weight_wis`: WIS regularizer weight (default: 0, try 0.10)
+  - `weight_wis`: WIS regularizer weight (default: 0, off). The 0.10
+    suggested before v0.101.0 was tuned against the daily cases core,
+    the default; against the weekly core (`cases_scoring = "weekly"`) a
+    given weight weighs several times more (a median 4.8 times, range
+    1.8 to 6.5, on the v0.100.1 national re-selection pools; more where
+    the cases dispersion is small), so about 0.02 keeps that balance
+    there. Not re-tuned since; check the fit before relying on it
+
+  - `cases_scoring`: `"daily"` (default; one NB cell per day at the
+    weekly k, the cell rule of v0.100.1 and earlier) or `"weekly"`
+    (cases scored as NB on reporting-week totals). The daily rule is the
+    default because the weekly rule fitted the cases worse in the
+    v0.101.0 likelihood gate. Either rule runs at the dispersion this
+    version estimates, so the default does not reproduce a v0.100.1 run:
+    a cases fit with no estimate of its own, or clamped at the lower
+    bound, now takes the panel trend, a config with `reported_tier`
+    restricts the cases k and the deaths dispersion to observed weeks,
+    the ensemble intervals are observation-level (weekly NB at the
+    scored k under either rule) and the cases central line is the
+    median. Matching a v0.100.1 likelihood also needs that run's
+    `nb_k_cases` (its `nb_dispersion.csv`) and a config without
+    `reported_tier`; resume refuses to pool with v0.100.1 simulations
+    either way
 
   - ... (see `mosaic_control_defaults()` for complete list)
 
@@ -190,13 +212,17 @@ mosaic_control_defaults(
     function's own `stride` default remains `1L` to preserve
     bit-identicality.)
 
-  - `central_method`: Ensemble central tendency, `"mean"` (default; the
-    expected count, which never collapses to zero on sparse deaths) or
-    `"median"` (the typical trajectory, robust to a few explosive
-    members; the default from v0.46.1 to v0.97.x). Scalar or per-channel
-    `c(cases=, deaths=)`. Governs the prediction trajectory + plots, the
-    canonical `*_ensemble` R^2/bias metrics, the medoid target, and the
-    subset-selection objective consistently.
+  - `central_method`: Ensemble central tendency, `"mean"` (the expected
+    count, which never collapses to zero on sparse deaths) or `"median"`
+    (the typical trajectory, robust to a few explosive members). Scalar
+    or per-channel `c(cases=, deaths=)`; default
+    `c(cases = "median", deaths = "mean")` since v0.101.0 (both mean
+    from v0.98.0 to v0.100.x, both median from v0.46.1 to v0.97.x).
+    Either way the line is a summary of the engine-level member
+    trajectories; the intervals are observation-level. Governs the
+    prediction trajectory + plots, the canonical `*_ensemble` R^2/bias
+    metrics, the medoid target, and the subset-selection objective
+    consistently.
 
   The number of parameter sets in the ensemble is determined by the best
   subset (all sims with non-zero importance weights).
@@ -233,18 +259,19 @@ mosaic_control_defaults(
 
   - `compression_level`: Compression level (default: 3L)
 
-  - `persist_ensemble_arrays`: Retain the dense 4-D
-    `cases_array`/`deaths_array` in the persisted ensemble RDS files
-    (`ensemble_candidate.rds`, `ensemble_optimized.rds`,
-    `subset_opt.rds`, `medoid_ensemble.rds`). Default `FALSE` strips the
-    arrays at save time so the on-disk artifacts are small (~tens of
-    KB); every light field (central tendencies, envelopes, weights,
-    seeds, obs, metadata) is preserved and all standard consumers
-    (plotting, OCV, rolling CV) work unchanged. Set `TRUE` for a
-    re-analysable raw archive (e.g. re-running subset optimization or
-    the R_eff posterior-resimulation CI path from the saved file). The
-    in-memory object used during the run is never affected (default:
-    `FALSE`).
+  - `persist_ensemble_arrays`: Retain the dense 4-D arrays – the
+    observation-level `cases_array`/`deaths_array` and the engine-level
+    `cases_engine_array`/`deaths_engine_array` – in the persisted
+    ensemble RDS files (`ensemble_candidate.rds`,
+    `ensemble_optimized.rds`, `subset_opt.rds`, `medoid_ensemble.rds`).
+    Default `FALSE` strips the arrays at save time so the on-disk
+    artifacts are small (~tens of KB); every light field (central
+    tendencies, envelopes, weights, seeds, obs, metadata) is preserved
+    and all standard consumers (plotting, OCV, rolling CV) work
+    unchanged. Set `TRUE` for a re-analysable raw archive (e.g.
+    re-running subset optimization or the R_eff posterior-resimulation
+    CI path from the saved file). The in-memory object used during the
+    run is never affected (default: `FALSE`).
 
 - paths:
 
@@ -312,7 +339,7 @@ ctrl <- mosaic_control_defaults(
 # Enable WIS regularizer and peak timing
 ctrl <- mosaic_control_defaults(
   likelihood = list(
-    weight_wis = 0.10,
+    weight_wis = 0.02,
     weight_peak_timing = 0.25
   )
 )
@@ -326,7 +353,7 @@ ctrl <- mosaic_control_defaults(
 ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
   sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
-  likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
+  likelihood = list(weight_wis = 0.02, weight_cases = 1.0),        # How to score
   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
   io = mosaic_io_presets("default"),                               # Output format

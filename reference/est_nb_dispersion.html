@@ -15,7 +15,7 @@ harmonics and the dispersion estimated by maximum likelihood
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,7 +65,9 @@ harmonics and the dispersion estimated by maximum likelihood
 <span>  shrink <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  trend_df_per_year <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  n_harmonics <span class="op">=</span> <span class="fl">2L</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  obs_tier <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  panel_trend <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -110,20 +112,89 @@ model. Default <code>2</code>.</p></dd>
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Logical; report a summary of the fit. Default <code>FALSE</code>.</p></dd>
 
+
+<dt id="arg-obs-tier">obs_tier<a class="anchor" aria-label="anchor" href="#arg-obs-tier"></a></dt>
+<dd><p>Optional integer matrix of surveillance trust tiers with the
+same dimensions as <code>obs</code> (<code>config$reported_tier</code>: 1 observed, 2
+reconstructed, 3 imputed). When supplied, only weeks whose seven days are
+all tier 1 enter the fit: a reconstructed week (a WHO multi-week report
+spread evenly) or an imputed one (a Fourier curve through an annual total)
+has a synthetic shape that reads as low noise and inflates <code>k</code>. The
+Poisson rule above still uses every tier. Default <code>NULL</code> (all weeks).</p></dd>
+
+
+<dt id="arg-panel-trend">panel_trend<a class="anchor" aria-label="anchor" href="#arg-panel-trend"></a></dt>
+<dd><p>Optional list with numeric <code>intercept</code> and
+<code>slope</code>: a cross-location trend <code>log k = intercept + slope *
+log(mean weekly count)</code> taken by a location without a usable estimate of
+its own (no estimate, or a fit clamped at the lower bound; see Details).
+<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> supplies the cases trend fitted on config_default with
+<code>burn_in_days = 45</code> (<code>MOSAIC:::.NB_DISP_PANEL_TREND</code>), whatever
+the run's burn-in; refitted on the window of the control default (30) it
+barely moves (BFA, CIV, CMR, ZAF, UGA 0.88, 0.97, 1.63, 1.09, 0.95 instead
+of 0.89, 0.98, 1.65, 1.10, 0.96), far inside the trend's residual SD of
+1.19 on log k. Default <code>NULL</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data.frame with one row per location: <code>location</code>,
-<code>n_weeks</code>, <code>mean_weekly</code>, <code>weekly_share</code> and
-<code>week_offset</code> (detected reporting cadence),
-<code>k_raw</code>, <code>se</code>, <code>trend_df</code>, <code>rung</code>, <code>identified</code>,
-<code>status</code>, and <code>k</code> (the shrunk value actually used).</p>
+<code>weekly_share</code> and <code>week_offset</code> (detected reporting cadence),
+<code>n_weeks</code> (weeks in the fit; every scored week when the location takes
+the Poisson limit for sparse data, where no fit is attempted),
+<code>n_weeks_excluded</code> (scored weeks left out of the fit as reconstructed
+or imputed; 0 when no fit is attempted), <code>mean_weekly</code> (mean
+weekly count over all scored weeks), <code>k_raw</code>, <code>se</code>,
+<code>trend_df</code>, <code>rung</code>, <code>identified</code>, <code>status</code>,
+<code>panel_trend</code> (<code>TRUE</code> where <code>k</code> comes from
+<code>panel_trend</code>), and <code>k</code> (the value actually used).
+<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> writes this table, for both channels, to
+<code>2_calibration/diagnostics/nb_dispersion.csv</code>. Where
+<code><a href="https://rdrr.io/pkg/MASS/man/glm.nb.html" class="external-link">MASS::glm.nb</a></code> fails on a rung whose Poisson mean converges,
+<code>theta</code> is estimated by <code><a href="https://rdrr.io/pkg/MASS/man/theta.md.html" class="external-link">MASS::theta.ml</a></code> at that Poisson mean.
+<code>status</code> records this fallback only as <code>ok_theta_ml_at_full_df</code>,
+which ranks below <code>clamped_lower_bound</code> and
+<code>ok_not_identified</code>: a clamped or unidentified row does not show
+whether its <code>theta</code> came from the fallback (<code>rung</code> and
+<code>trend_df</code> give the mean model it was estimated at).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The returned <code>k</code> is on R's <code>dnbinom(mu=, size=)</code> scale and is used
-directly by <code><a href="calc_model_likelihood.html">calc_model_likelihood</a></code>. <code>k = Inf</code> denotes the
+directly by <code><a href="calc_model_likelihood.html">calc_model_likelihood</a></code>: its default per-day cell rule
+applies it to every day, and <code>cases_scoring = "weekly"</code> scores the cases
+on the same weekly totals it was estimated on. <code>k = Inf</code> denotes the
 Poisson limit and is a valid, intended result.</p>
+<p>A location with fewer than 20 weeks, 15 cases or 5 non-zero weeks over all
+its scored weeks takes the Poisson limit. Otherwise its own fit can still fail
+to give an estimate (status <code>no_estimate_*</code>): every rung of the mean
+model fails, the standard error of <code>theta</code> is not finite, or the fit
+collapsed (<code>theta</code> ran to the zero boundary, so its SE is below 1e-4 of
+the dispersion it would report; on config_default this is how bursty series
+with reporting dumps defeat the smooth mean), or, with <code>obs_tier</code>, the
+observed weeks alone fall short of the minimum. Such
+a location takes <code>panel_trend</code> when it is supplied, evaluated at its
+mean weekly count; without it, it borrows the run's own mean-dispersion trend
+(five or more estimated locations), the median of the estimated locations,
+or, alone, the Poisson limit.</p>
+<p>With <code>panel_trend</code>, a fit clamped at the lower bound of 0.1 (status
+<code>clamped_lower_bound</code>) takes the trend too, at every scale. The clamp is
+censoring, not a measurement. Where a series' few non-zero observed weeks are
+mostly the edges of short outbreaks whose middle weeks are reconstructed and
+left out of the fit (UGA on config_default v6.1: 10 non-zero of 84 observed
+weeks), the smooth mean cannot follow the outbreaks, their variance stays in
+the residual, and the fit returns the bound whatever the true <code>k</code>: on
+synthetic series of that shape it did so for a Poisson, a <code>k = 1</code> and a
+<code>k = 5</code> reporting process alike. At <code>k = 0.1</code> the cases score is
+several times less sensitive to the level (on UGA's two observed years a
+twofold level error costs 3.1 nats under the daily cases rule and 0.5 under
+the weekly one, against 22 and 4.6 at the trend's 0.96), and the weekly
+observation-level predictive puts at least half its mass on 0 for any weekly
+mean up to 102. The row keeps
+<code>status = "clamped_lower_bound"</code> and <code>k_raw</code> (the fit) with
+<code>panel_trend = TRUE</code> (the <code>k</code> used). Without <code>panel_trend</code> a
+clamped fit keeps the bound, shrunk toward the run's own trend when five or
+more locations have an estimate.</p>
     </div>
 
     <div class="section level2">

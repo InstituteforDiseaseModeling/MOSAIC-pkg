@@ -26,11 +26,16 @@ plot_seasonal_clustering(
   [`get_paths()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md)
   function and should include:
 
+  - **MODEL_INPUT**: Path to the `pred_seasonal_dynamics_day.csv` and
+    `data_seasonal_precipitation.csv` files written by
+    [`est_seasonal_dynamics`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md).
+
+  - **DOCS_TABLES**: Path to the legacy weekly table
+    `pred_seasonal_dynamics.csv`, read only when the daily fits are
+    absent.
+
   - **DATA_SHAPEFILES**: Path to the directory containing shapefiles for
     African countries.
-
-  - **DOCS_TABLES**: Path to load the processed precipitation, fitted
-    values, and clustering results.
 
   - **DOCS_FIGURES**: Path to save the output plot.
 
@@ -43,8 +48,8 @@ plot_seasonal_clustering(
 - set_inferred_to_na:
 
   A logical value. If `TRUE`, inferred countries are set to `NA` in the
-  clustering. Default is `TRUE` when using precipitation, `FALSE` when
-  using cases.
+  clustering. Applies only with `use_cases = TRUE` (default `TRUE`);
+  with precipitation it is ignored and treated as `FALSE`.
 
 - clustering_method:
 
@@ -59,5 +64,26 @@ plot_seasonal_clustering(
 
 ## Value
 
-The function generates and saves a PNG file showing the clustering of
-countries based on seasonal dynamics.
+Invisibly, a list with the combined plot (`plot`), the cluster of each
+clustered country named by ISO code (`clusters`) and the seasonal-fits
+file read (`source`). The plot is also saved as a PNG file in
+`PATHS$DOCS_FIGURES`.
+
+## Details
+
+The input is the daily Fourier fits that
+[`est_seasonal_dynamics`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
+writes to `MODEL_INPUT/pred_seasonal_dynamics_day.csv`, averaged to
+weeks (week *w* is the mean of days 7(*w* - 1) + 1 to 7*w*); countries
+are clustered on, and panel B draws, those weekly means.
+[`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
+clusters the daily fits themselves; for these two-harmonic curves a
+7-day mean scales each harmonic by a near-constant factor (0.9994 and
+0.9976), so `clustering_method = "ward.D2"` with the estimator's `k` (4
+in the standard workflow) maps the clusters it used for its neighbour
+inference. When the daily fits are absent, the weekly table that earlier
+versions wrote to `DOCS_TABLES/pred_seasonal_dynamics.csv` is used
+instead. The years in the panel title are the calendar years of the fit
+window, read from the `data_seasonal_precipitation.csv` written next to
+the daily fits; the legacy table does not record its window, so its
+title carries no years.

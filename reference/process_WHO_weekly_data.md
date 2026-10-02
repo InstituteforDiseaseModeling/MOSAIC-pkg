@@ -65,13 +65,131 @@ This function performs the following tasks:
 
 - Drops countries with ten or fewer observations.
 
+- Spreads multi-week (catch-up and year-to-date) reports over the weeks
+  they cover (see below).
+
+**Multi-week reports.** The dashboard enters a 0 both for a week with no
+cases and for a week with no report, and a country that reports late or
+in batches has its backlog entered in the week the report arrived. The
+first report of a country added to the dashboard part-way through a year
+can be its year-to-date total: South Africa's first 2023 row (week 35:
+1,390 cases, 47 deaths) is its whole Feb-Jul 2023 outbreak (1,380 cases
+and 47 deaths in the WHO AFRO after-action review), followed by zeros.
+Left in place, such a report is a one-week spike that no transmission
+model can reproduce. A report in week \\t\\ is read as covering more
+than one week when all of these hold:
+
+1.  it has at least 20 cases;
+
+2.  week \\t-1\\, in the same WHO epi year, is silent: a reported zero
+    (cases 0, deaths 0 or missing) or unreported (no row, or cases
+    missing with deaths 0 or missing);
+
+3.  it is followed by a fall that an epidemic curve cannot produce: the
+    report is at least twice the largest of the next four reported
+    weeks, or the next two reported weeks both have 0 cases (a batch
+    report between silent weeks; a single following zero is not enough,
+    because during an active outbreak it is usually a missed week of a
+    continuing series);
+
+4.  when the fall is only of the first kind (the next two reported weeks
+    are not both zero), at most four reported zeros precede the report –
+    the four weeks the fall is tested over – unless at least two of the
+    next four reported weeks are zero. More than a month of reported
+    zeros before a large report is as consistent with true zeros as with
+    missing reports, and an explosive outbreak onset can halve within a
+    week (a point-source outbreak: 120, 50, 30, 20 after twelve reported
+    zeros is an onset, not a catch-up). A series that keeps alternating
+    between reports and zeros after the report is reporting in batches
+    (Nigeria 2023 weeks 35-43, Tanzania 2023 weeks 19-28), so there the
+    window still reaches back to the previous non-zero report.
+
+The report then covers week \\t\\ and the silent weeks immediately
+before it, back to the previous non-zero report, never before week 1 of
+its epi year (the dashboard's year-to-date counts restart each epi
+year). Unreported weeks (no row) are included only when the report is
+retrospective – the next four reported weeks are all zero, i.e. the
+outbreak was over by the time it was reported; otherwise the window
+stops at the first unreported week, so the first report of a country
+joining the dashboard during an active outbreak (Uganda, 2023 week 30)
+is taken at face value. The report's cases and deaths are spread evenly
+over its window: the dashboard gives no timing within it, and an even
+split is the allocation that asserts none
+(`process_cholera_surveillance_data` reshapes a window when another
+source observes every week of it). The split is in whole counts – each
+week gets the floor or ceiling of the even share, by cumulative rounding
+half up, and the weeks sum to the report exactly – so the integer daily
+downscaling neither inflates nor loses part of the report. Weeks the
+window adds that had no row are created. Each window row carries
+`disaggregation_method = "who_catchup_uniform"` and a
+`confidence_weight` that falls with the window length (0.9 up to 4
+weeks, 0.8 up to 13, 0.7 up to 26, else 0.5 – the ladder the AI pipeline
+applies to its own disaggregated totals), so the calibration scores it
+below a direct weekly count. The as-published values stay in
+`cases_reported` and `deaths_reported`; `catchup_start`,
+`catchup_weeks`, `catchup_cases` and `catchup_deaths` record each
+window. Rows outside a window have `cases == cases_reported` and missing
+window fields. Weekly sums over each country-year are unchanged.
+
+**Curated windows.** Where a documented source dates the outbreak a
+report covers, the package's surveillance curation table
+(`inst/extdata/surveillance_curation.csv`, action `who_window`; see
+[`process_cholera_surveillance_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_cholera_surveillance_data.md))
+replaces the rule for that report: the window starts at the WHO week
+containing the documented start date (South Africa 2023: 1 February, the
+start of the outbreak period in the Department of Health's statement of
+5 July 2023; Namibia 2025: the first case on Sunday 2 March, i.e. week
+9), and when a documented end date precedes the report, the cases are
+spread over the weeks up to that end and the weeks after it, to the
+report, carry 0 (South Africa: 31 July, the date of WHO AFRO's
+after-action review count, the report arriving in week 35). A curated
+window can also spread a report the rule does not test (Cote d'Ivoire
+2025 week 33, the last week of its series). Its rows carry
+`disaggregation_method = "who_catchup_curated"`, the table row's id in
+`catchup_curation_id`, and the confidence weight of the weeks that carry
+cases. A curated window must lie within the report's epi year and cover
+only silent weeks before the report; a curated report that is no longer
+in the data (zero or missing) is skipped with a warning.
+
+**Shaped curated windows.** When documented dates time the outbreak
+within its window, the curation row has `shape = "cumulative"` and the
+timing is given as cumulative-count anchors in
+`inst/extdata/surveillance_curation_shapes.csv`: a case curve
+(`cumulative_cases`) and optionally a deaths curve (`cumulative_deaths`;
+without one, deaths follow the case curve). Daily or weekly counts are
+written as anchors at the end of each day or week, and coarser totals
+(monthly, or dated cumulative reports) as anchors that are interpolated
+linearly. Each week of the window then gets the curve's increment over
+its Monday-to-Sunday span, and the report's cases and deaths are spread
+in proportion, in whole counts that sum to the report. The curve is
+rescaled to the report, but its total must lie between half the report
+and 2% above it (a larger gap is an error in the anchors), and it must
+lie within the window. The anchors are dated like the rest of the WHO
+weekly rows, by report week. South Africa 2023 follows WHO's epidemic
+curve of the outbreak (external situation report \#5, Figure 5) with its
+symptom onset dates moved 2 days later, the onset-to-notification lag at
+which the cumulative curve best matches the notification-date curve of
+situation report \#4 (Figure 2): a few imported and sporadic cases from
+February to April, the Hammanskraal surge from early May peaking in the
+week of 22-28 May (432 of the 1,390 cases), few cases after June, and
+the imported case of 14 July (onset), placed on 16 July. Its deaths
+follow their own curve, the cumulative counts the Department of Health,
+the Gauteng Department of Health and WHO reported (1 death by 23
+February, 11 by 21 May, 25 by 28 May, 31 by 6 June, 38 by 15 June, 47 by
+4 July). These rows carry
+`disaggregation_method = "who_catchup_curated_shaped"` and confidence
+0.9, the weight of a window shaped by another source's weekly counts.
+
 **Week convention.** The `year`/`week` columns are WHO's own
-`epiyr`/`epiwk` labels, which are NOT ISO-8601 weeks. WHO numbers weeks
-on the MMWR (US CDC) calendar – Sunday-start weeks, week 1 being the
-week that contains 4 January – and stamps each week with the following
-Monday (`date_wk` in the WHO AWD feature service). This coincides with
-ISO-8601 except in years whose 4 January falls on a Sunday: e.g. WHO has
-a genuine 2025-W53 starting Monday 2025-12-29 (ISO 2025 has only 52
+`epiyr`/`epiwk` labels, which are NOT ISO-8601 weeks. A WHO epi week
+runs Monday to Sunday and is stamped with its Monday (`date_wk` in the
+WHO AWD feature service; the dashboard's note: "The date corresponds to
+the first day of the epi-week (from Monday to Sunday)"). Weeks are
+numbered as the MMWR (US CDC) calendar shifted by one day: week 1 begins
+on the Monday after the Sunday that starts MMWR week 1 (the
+Sunday-Saturday week containing 4 January). This coincides with ISO-8601
+except in years whose 4 January falls on a Sunday: e.g. WHO has a
+genuine 2025-W53 starting Monday 2025-12-29 (ISO 2025 has only 52
 weeks), and WHO 2026-W01 starts 2026-01-05 (ISO 2026-W01 starts
 2025-12-29). Each row is therefore dated from WHO's calendar, never
 merged into a neighbouring week. Downstream consumers key on

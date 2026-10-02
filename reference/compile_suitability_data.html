@@ -13,7 +13,7 @@ rolling windows, anomalies, and climate / WASH interaction terms."><meta propert
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,7 +66,7 @@ rolling windows, anomalies, and climate / WASH interaction terms.</p>
 <span>  include_flood_prob <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  gam_train_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  target_anchor_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  backfill_case_gaps <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  backfill_case_gaps <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  backfill_max_weeks <span class="op">=</span> <span class="fl">2L</span>,</span>
 <span>  backfill_method <span class="op">=</span> <span class="st">"linear"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -165,9 +165,11 @@ full-data fit (back-compatible).</p></dd>
 ANCHORS for the response variables – <code>ti_p99</code>
 (<code>transmission_intensity</code>), the global count/rate p99s (targets A, C)
 and the per-country <code>cp99c</code>/<code>cp99r</code> and median population
-(targets B, D). When non-<code>NULL</code>, anchors use only trusted rows with
+(targets B, D). When non-<code>NULL</code>, the p99 anchors use only trusted
+rows (not AI, not imputed) with <code>date &lt;= target_anchor_stop</code>, and the
+median population behind the 5-cases/week floor uses the non-AI rows with
 <code>date &lt;= target_anchor_stop</code>, while every row in the panel still
-RECEIVES a target scored on that anchor.</p>
+RECEIVES a target scored on those anchors.</p>
 <p>This is the target-side sibling of <code>gam_train_stop</code> and closes the
 remaining leak in a per-cutoff panel: because such a panel keeps
 <code>date_stop = NULL</code> (it must span rows past the cutoff so the model can
@@ -197,11 +199,26 @@ leak-free on the target and hazard side only.</p></dd>
 
 
 <dt id="arg-backfill-case-gaps">backfill_case_gaps<a class="anchor" aria-label="anchor" href="#arg-backfill-case-gaps"></a></dt>
-<dd><p>Logical (default <code>TRUE</code>). Linearly interpolate
-short interior gaps in the weekly case series (e.g. holiday non-reporting)
-before the suitability target is built, via
-<code><a href="backfill_weekly_case_gaps.html">backfill_weekly_case_gaps</a></code>, so missing weeks inside an active
-outbreak are not stamped as false zeros by the downstream NA-&gt;0 sanitiser.</p></dd>
+<dd><p>Logical (default <code>FALSE</code>). When <code>TRUE</code>,
+linearly interpolate short interior gaps in the weekly case series (e.g.
+holiday non-reporting) before the suitability target is built, via
+<code><a href="backfill_weekly_case_gaps.html">backfill_weekly_case_gaps</a></code>. Off by default since v0.101.0: the
+lstm_v2 suitability model already leaves unobserved (NA-case) weeks out of
+its training targets, so a filled week only adds an interpolated target; and
+the fill cannot tell a week no source reported from one the surveillance
+reconciliation deliberately emptied (in the v0.101.0 panel, 15 of the 26
+filled weeks were imputed weeks that the WHO annual account or the
+half-case residue rule had removed). The frozen legacy suitability path
+still turns unobserved weeks into zeros (<code><a href="est_suitability.html">est_suitability()</a></code> with the
+v0.33 architecture), the false zeros this fill was written to prevent; set
+<code>TRUE</code> to rebuild a panel for it. A filled week is imputed, not
+observed: it is flagged in <code>cases_interpolated</code> (all <code>FALSE</code>
+when the fill is off), labelled
+<code>disaggregation_method = "backfill_interpolated"</code> with <code>source</code>
+and <code>deaths</code> left missing, carries a <code>confidence_weight</code> of at
+most 0.5 (never above the weaker of the two reported weeks it is
+interpolated from), and never defines a target anchor. A week some source
+reported, a deaths-only week, is not a gap and is not filled.</p></dd>
 
 
 <dt id="arg-backfill-max-weeks">backfill_max_weeks<a class="anchor" aria-label="anchor" href="#arg-backfill-max-weeks"></a></dt>

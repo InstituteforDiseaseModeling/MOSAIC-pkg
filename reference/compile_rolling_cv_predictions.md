@@ -45,14 +45,20 @@ compile_rolling_cv_predictions(
 - n_reps_best_medoid:
 
   Integer or NULL (default); number of stochastic replicates to draw for
-  the single-config `best`/`medoid` models. NULL reuses the value stored
-  in the run manifest.
+  the single-config `best`/`medoid` models, with each cutoff run's
+  observation model and deaths integration (see
+  [`run_rolling_cv`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)).
+  NULL reuses the value stored in the run manifest.
 
 - central_method:
 
   Central tendency for `pred_central`: `NULL` (default) reuses the value
-  recorded in the run manifest (or `"mean"` for older manifests);
-  otherwise a scalar or per-channel `c(cases=, deaths=)` override.
+  recorded in the run manifest; a manifest without the field was written
+  by
+  [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  before `central_method` existed (v0.32.40-v0.37.x), when predictions
+  were the ensemble median, so it recompiles on `"median"`. Otherwise a
+  scalar or per-channel `c(cases=, deaths=)` override.
 
 - write:
 

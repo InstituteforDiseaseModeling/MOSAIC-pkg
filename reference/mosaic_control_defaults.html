@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -124,7 +124,27 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <dt id="arg-likelihood">likelihood<a class="anchor" aria-label="anchor" href="#arg-likelihood"></a></dt>
 <dd><p>List of likelihood calculation settings (how to score model fit). Default is:</p><ul><li><p><code>weight_cases</code>: Weight for cases vs deaths (default: 1.0)</p></li>
 <li><p><code>weight_deaths</code>: Weight for deaths vs cases (default: 1.0)</p></li>
-<li><p><code>weight_wis</code>: WIS regularizer weight (default: 0, try 0.10)</p></li>
+<li><p><code>weight_wis</code>: WIS regularizer weight (default: 0, off). The 0.10
+suggested before v0.101.0 was tuned against the daily cases core, the
+default; against the weekly core (<code>cases_scoring = "weekly"</code>) a given
+weight weighs several times more (a median 4.8 times, range 1.8 to 6.5, on
+the v0.100.1 national re-selection pools; more where the cases dispersion
+is small), so about 0.02 keeps that balance there. Not re-tuned since;
+check the fit before relying on it</p></li>
+<li><p><code>cases_scoring</code>: <code>"daily"</code> (default; one NB cell per day at
+the weekly k, the cell rule of v0.100.1 and earlier) or <code>"weekly"</code>
+(cases scored as NB on reporting-week totals). The daily rule is the
+default because the weekly rule fitted the cases worse in the v0.101.0
+likelihood gate. Either rule runs at the dispersion this version
+estimates, so the default does not reproduce a v0.100.1 run: a cases fit
+with no estimate of its own, or clamped at the lower bound, now takes the
+panel trend, a config with <code>reported_tier</code> restricts the cases k and
+the deaths dispersion to observed weeks, the ensemble intervals are
+observation-level (weekly NB at the scored k under either rule) and the
+cases central line is the median. Matching a v0.100.1 likelihood also
+needs that run's <code>nb_k_cases</code> (its <code>nb_dispersion.csv</code>) and a
+config without <code>reported_tier</code>; resume refuses to pool with v0.100.1
+simulations either way</p></li>
 <li><p>... (see <code>mosaic_control_defaults()</code> for complete list)</p></li>
 </ul></dd>
 
@@ -181,10 +201,13 @@ the exhaustive search. Note it may select a slightly different
 diagnostics table. (The <code><a href="optimize_ensemble_subset.html">optimize_ensemble_subset</a></code> function's
 own <code>stride</code> default remains <code>1L</code> to preserve bit-identicality.)</p></li>
 <li><p><code>central_method</code>: Ensemble central tendency, <code>"mean"</code>
-(default; the expected count, which never collapses to zero on sparse
-deaths) or <code>"median"</code> (the typical trajectory, robust to a few
-explosive members; the default from v0.46.1 to v0.97.x). Scalar or
-per-channel <code>c(cases=, deaths=)</code>. Governs the prediction
+(the expected count, which never collapses to zero on sparse deaths) or
+<code>"median"</code> (the typical trajectory, robust to a few explosive
+members). Scalar or per-channel <code>c(cases=, deaths=)</code>; default
+<code>c(cases = "median", deaths = "mean")</code> since v0.101.0 (both mean
+from v0.98.0 to v0.100.x, both median from v0.46.1 to v0.97.x). Either
+way the line is a summary of the engine-level member trajectories; the
+intervals are observation-level. Governs the prediction
 trajectory + plots, the canonical <code>*_ensemble</code> R^2/bias metrics,
 the medoid target, and the subset-selection objective consistently.</p></li>
 </ul><p>The number of parameter sets in the ensemble is determined by the best subset
@@ -210,8 +233,10 @@ the medoid target, and the subset-selection objective consistently.</p></li>
 <dd><p>List of I/O settings (output format). Default is:</p><ul><li><p><code>format</code>: Output format; only "parquet" is supported ("csv" is coerced to "parquet" with a warning)</p></li>
 <li><p><code>compression</code>: Compression algorithm (default: "zstd")</p></li>
 <li><p><code>compression_level</code>: Compression level (default: 3L)</p></li>
-<li><p><code>persist_ensemble_arrays</code>: Retain the dense 4-D
-<code>cases_array</code>/<code>deaths_array</code> in the persisted ensemble RDS
+<li><p><code>persist_ensemble_arrays</code>: Retain the dense 4-D arrays –
+the observation-level <code>cases_array</code>/<code>deaths_array</code> and the
+engine-level <code>cases_engine_array</code>/<code>deaths_engine_array</code> –
+in the persisted ensemble RDS
 files (<code>ensemble_candidate.rds</code>, <code>ensemble_optimized.rds</code>,
 <code>subset_opt.rds</code>, <code>medoid_ensemble.rds</code>). Default <code>FALSE</code>
 strips the arrays at save time so the on-disk artifacts are small
@@ -287,7 +312,7 @@ in-memory object used during the run is never affected (default:
 <span class="r-in"><span><span class="co"># Enable WIS regularizer and peak timing</span></span></span>
 <span class="r-in"><span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu">mosaic_control_defaults</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  likelihood <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    weight_wis <span class="op">=</span> <span class="fl">0.10</span>,</span></span>
+<span class="r-in"><span>    weight_wis <span class="op">=</span> <span class="fl">0.02</span>,</span></span>
 <span class="r-in"><span>    weight_peak_timing <span class="op">=</span> <span class="fl">0.25</span></span></span>
 <span class="r-in"><span>  <span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
@@ -301,7 +326,7 @@ in-memory object used during the run is never affected (default:
 <span class="r-in"><span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu">mosaic_control_defaults</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  calibration <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>n_simulations <span class="op">=</span> <span class="cn">NULL</span>, n_iterations <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,      <span class="co"># How to run</span></span></span>
 <span class="r-in"><span>  sampling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>sample_tau_i <span class="op">=</span> <span class="cn">TRUE</span>, sample_beta_j0_tot <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,  <span class="co"># What to sample</span></span></span>
-<span class="r-in"><span>  likelihood <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>weight_wis <span class="op">=</span> <span class="fl">0.10</span>, weight_cases <span class="op">=</span> <span class="fl">1.0</span><span class="op">)</span>,        <span class="co"># How to score</span></span></span>
+<span class="r-in"><span>  likelihood <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>weight_wis <span class="op">=</span> <span class="fl">0.02</span>, weight_cases <span class="op">=</span> <span class="fl">1.0</span><span class="op">)</span>,        <span class="co"># How to score</span></span></span>
 <span class="r-in"><span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>ESS_param <span class="op">=</span> <span class="fl">100</span>, ESS_param_prop <span class="op">=</span> <span class="fl">0.95</span><span class="op">)</span>,          <span class="co"># When to stop</span></span></span>
 <span class="r-in"><span>  parallel <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>enable <span class="op">=</span> <span class="cn">TRUE</span>, n_cores <span class="op">=</span> <span class="fl">16</span><span class="op">)</span>,                    <span class="co"># Infrastructure</span></span></span>
 <span class="r-in"><span>  io <span class="op">=</span> <span class="fu"><a href="mosaic_io_presets.html">mosaic_io_presets</a></span><span class="op">(</span><span class="st">"default"</span><span class="op">)</span>,                               <span class="co"># Output format</span></span></span>

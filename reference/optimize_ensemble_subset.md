@@ -10,6 +10,17 @@ function re-computes the best-subset weights within the top-N subset,
 re-computes weighted median predictions from the 4D arrays, and scores
 with the selected objective function.
 
+Selection scores the ENGINE-level member trajectories
+(`ensemble$cases_engine_array`/`deaths_engine_array`; the
+`cases_array`/`deaths_array` of an ensemble saved before v0.101.0, which
+were engine-level), the series the ensemble's central lines are built
+from. The optimized ensemble is then rebuilt exactly as
+[`calc_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+builds one: central lines from the engine draws and the interval
+envelope and `predictive_median` from the observation-level draws of the
+selected members, when the ensemble carries them. The `"wis"` objective
+therefore scores the engine-level spread.
+
 The per-N weights use the same scheme as the `weight_best` posterior
 that
 [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
@@ -89,7 +100,8 @@ optimize_ensemble_subset(
   Tier-2 bit-for-bit parity guarantee;
   [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   passes the resolved `control$predictions$central_method` (package
-  default `"mean"` as of v0.98.0) explicitly.
+  default since v0.101.0: `"median"` for cases, `"mean"` for deaths)
+  explicitly.
 
 - stride:
 
@@ -159,8 +171,9 @@ An S3 object of class `mosaic_subset_optimization` containing:
 
 - ensemble_optimized:
 
-  Complete `mosaic_ensemble` object at optimal N. Its `$seeds` field is
-  the per-member seed aligned with its `cases_array` (member-to-seed
+  Complete `mosaic_ensemble` object at optimal N, carrying the selected
+  members' observation-level and engine-level arrays. Its `$seeds` field
+  is the per-member seed aligned with its arrays (member-to-seed
   aligned) when `ensemble$seeds` was present, else it falls back to
   `optimal_seeds`.
 

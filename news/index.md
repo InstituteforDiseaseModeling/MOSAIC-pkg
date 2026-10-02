@@ -1,5 +1,530 @@
 # Changelog
 
+## MOSAIC 0.101.0
+
+Surveillance artifact fixes, cases dispersions estimated from observed
+weeks (when the config carries `reported_tier`) with a cross-country
+trend for locations without a usable estimate of their own, an optional
+weekly cases scoring rule (the default stays one cell per day),
+observation-level predictive intervals, the default data objects rebuilt
+on the corrected surveillance (`priors_default` v17.1, `config_default`
+v6.1 with `reported_tier`, psi C3), and the figure and documentation
+fixes prepared for 1.0.0. **Calibration results change**: the resume
+guard refuses to pool simulations scored by earlier versions (likelihood
+tag `R/v0.101.0+clamped_k_trend`).
+
+### Default data objects
+
+- `priors_default` v17.1 and `config_default` v6.1 are rebuilt on the
+  corrected surveillance, the re-estimated seasonal dynamics and a new
+  production psi; each was built twice, byte-identical, and the window
+  stays 2023-01-01 to 2027-04-29. Data provenance: `priors_default`
+  v17.1 and the panel psi C3 was trained on were built on MOSAIC-data
+  04a6d0f, and `config_default` v6.1 on 922ef89, which differs from
+  04a6d0f only in two ZAF 2023 deaths cells (weeks 21 and 23); the
+  priors rebuilt on 922ef89 are byte-identical, and the panel compiled
+  on 922ef89 differs from C3’s only in those two deaths cells, which psi
+  never reads. Other inputs: ees-cholera-mapping 780eb54,
+  open-meteo-pipeline fddf00f, enso-data 3729c87.
+- `psi_jt` is the production refit C3:
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  lstm_v2 (feature set v7.3, target D), 10 seeds 11-110, fit 2015-01-01
+  to 2026-09-17 on the corrected surveillance with backfill off. A
+  disjoint 10-seed replicate (seeds 121-220) agrees over 2023+ at a
+  median per-country r of 0.972 and a median per-country mean
+  \|difference\| of 0.024 (0.025 pooled over countries). Against the
+  v0.100.1 psi over the window, the median per-location r is 0.92 and
+  the median per-location mean \|difference\| 0.042 (0.050 pooled); the
+  mean level moves most in CIV (x0.04), ZAF (x0.50), GHA (x1.71), TGO
+  (x2.42) and SWZ (x3.17).
+- C3’s ENSO input is the Nino 4 NMME gap-fill variant of the canonical
+  enso-data 3729c87 compile. NOAA PSL Nino 4 ends in August 2026, so the
+  compile anchored 1 September on BOM’s relative Nino 4 index, which
+  sits about one degree below NOAA; that anchor (0.49, between 1.29 for
+  August and 2.13 for October) put a spurious dip into
+  August-September 2026. The variant takes the anchor from the compile’s
+  next source, the NOAA-baselined NMME ensemble mean (1.88). This
+  changes 10 weekly ENSO4 values and is closer to NOAA CPC’s weekly
+  observations (mean absolute error 0.28-0.34, against 0.41-0.47). The
+  provenance bundle (the variant ENSO file, derivation scripts, md5s,
+  panel compile and fit commands, repository revisions) is in
+  MOSAIC-data `processed/psi_provenance/v0.101.0_C3/` (b5feb59).
+- The quiet-start seeding prior covers 16 countries instead of 11: SSD,
+  TZA, UGA, ZAF and ZWE join, because the cases in their 28-day window
+  around 1 January 2023 were AI Fourier reconstructions, which the
+  reconciliation removed (none had an observed case in the window). The
+  seeded countries start with about 25 (SWZ) to 1,332 (TZA) expected
+  people in E + I; for the five, expected initial E + I moves SSD 45 -\>
+  230, TZA 231 -\> 1,332, UGA 4 -\> 973, ZAF 93 -\> 1,264 and ZWE 551
+  -\> 327. Window-based priors follow their window’s cases in AGO, BDI,
+  BEN, COD, ETH, KEN, MWI and ZMB, from x0.06 (ZMB, whose AI rows were
+  removed) to x1.34 (KEN, where a WHO report is now spread into the
+  window), prop_R and prop_S move by at most 0.51% (ZAF’s prop_R), and
+  the config’s initial R, S, V1 and V2 counts move by at most 0.42%
+  through those priors and the row normalisation (V1 and V2, whose
+  priors are unchanged, by up to 0.41% in 9 locations). In 300
+  [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
+  draws every seeded country starts with E + I \>= 1 in every draw
+  except SWZ (298); the lowest window-based country is AGO (295).
+- `epidemic_threshold` moves in 18 countries with the outbreak weeks of
+  the corrected surveillance. ZAF leaves the Zheng fallback: the shaped
+  2023 window gives it 26 outbreak weeks (7 before; 10 are needed), so
+  its threshold falls x0.009, from 1.18e-5 to 1.07e-7 Isym/N, at its own
+  median weekly incidence (0.006 per 100,000). The threshold only
+  switches the case-reporting PPV from chi_endemic to chi_epidemic. The
+  other 17 move x0.61 (GHA) to x1.28 (RWA).
+- The seasonal priors and config coefficients follow the re-estimated
+  seasonal dynamics in 16 countries (see Surveillance); the share of
+  seasonal prior draws whose envelope dips below zero is 32% (33% in
+  v0.100.1). Where the SDs tighten (ZAF 0.30 -\> 0.14, CIV 0.22 -\>
+  0.14), the cause is a much smaller standard error from the re-fitted
+  case regression, not the envelope scaling that
+  `priors_default$metadata$description` credits (to be corrected at the
+  next rebuild): ZAF’s envelope scale rose (0.41 -\> 0.46) while its
+  fit’s standard error before scaling fell 2.5x (0.52 -\> 0.21), because
+  the one 2023 report that holds 99% of the cases in its fit window is
+  now spread along the outbreak’s curve (20 weeks with cases) instead of
+  booked in a single week (CIV’s fell x0.70, NAM’s x0.28-0.39).
+- `config_default` carries `reported_tier` (33,209 observed, 1,365
+  reconstructed and 638 imputed location-days; NA where unobserved), so
+  the cases dispersion of a run on the default config is now estimated
+  from observed weeks, and the deaths dispersion too where they are
+  enough (see Likelihood). Its `metadata$description` says both
+  dispersions “use tier-1 weeks only”; the deaths dispersion falls back
+  to every scored week where the observed weeks are too few (for the
+  integrated deaths likelihood at `burn_in_days = 45`: BEN, BFA, CIV,
+  LBR, NAM and ZAF), and the description will be corrected at the next
+  rebuild. `reported_cases`/`reported_deaths` follow the corrected
+  surveillance: observed case cells 36,984 -\> 35,212 (490 NA -\> value,
+  2,262 value -\> NA) and 1,627 values change; window cases 845,234 -\>
+  832,887 (ZAF 3,086 -\> 1,404, CIV 1,016 -\> 505, SSD -13%); observed
+  data now run to 2026-09-20 (2026-08-23).
+  `config_default$epidemic_peaks` 62 -\> 64 rows (161 peaks).
+- The panel trend of the cases dispersion (`.NB_DISP_PANEL_TREND`) is
+  refitted on `config_default` v6.1, on observed weeks at
+  `burn_in_days = 45`: intercept -0.195 -\> -0.355, slope 0.143 -\>
+  0.220, residual SD 1.56 -\> 1.19 on log k, 23 -\> 22 locations. BFA
+  (0.89), CIV (0.98) and ZAF (1.10), with too few observed weeks, CMR
+  (1.65), whose fit collapses, and UGA (0.96), whose fit sits at the
+  lower bound of 0.1 (see Likelihood), take it; on v6.0 it was CMR, UGA
+  and ZAF (1.41, 1.00, 1.20). Refitted at the control default
+  burn-in (30) it moves k by at most 0.014 on log k.
+- Unchanged: N, birth and death rates, `nu_1_jt`/`nu_2_jt`, `mu_jt` (the
+  CFR GAM input is identical), beta_j0, psi_star, tau_i, mobility,
+  theta_j, every other point parameter apart from the initial conditions
+  above, and every global prior. The toy endemic and epidemic configs,
+  `estimated_parameters` (v1.3.0) and the suitability region maps are
+  unchanged.
+
+### Surveillance
+
+- [`process_WHO_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_weekly_data.md)
+  spreads WHO multi-week reports. The dashboard enters 0 for “no report”
+  as well as “no cases” and books late or batched reports in the week
+  they arrive, so a report of at least 20 cases after a silent week of
+  the same epi year, followed by a fall (at least twice each of the next
+  four reported weeks, or the next two reported weeks zero), is spread
+  over the silent weeks back to the previous non-zero report, never
+  before week 1. A report that passes only the first test covers at most
+  four reported zeros, unless at least two of the next four reported
+  weeks are zero (batch reporting), so an explosive onset after a long
+  silence is not spread. Counts stay whole by cumulative rounding,
+  halves rounded up so that every week gets the floor or ceiling of its
+  share for any weights, and every country-year total is unchanged. New
+  columns record the as-published counts and the window
+  (`cases_reported`, `deaths_reported`, `catchup_*`), a
+  `confidence_weight` by window length and
+  `disaggregation_method = "who_catchup_uniform"`.
+- Documented windows come from a curated table,
+  `inst/extdata/surveillance_curation.csv` (`who_catchup_curated`): NAM
+  2025 (from the week of the first case, week 9), CIV 2025 (weeks
+  30-33), NGA 2023 (weeks 46-52) and ZAF 2023 (the 1,390 cases and 47
+  deaths WHO booked in week 35, over 1 February - 31 July: the outbreak
+  period of the Department of Health’s statement of 5 July 2023 and the
+  date of WHO AFRO’s after-action review count).
+- A curated window can follow documented curves: a new `shape` column,
+  with cumulative-count anchors in
+  `inst/extdata/surveillance_curation_shapes.csv` (a case curve and an
+  optional deaths curve; without one, deaths follow the case curve).
+  Each Monday-Sunday week gets the curve’s increment, linear between
+  anchors; the curve is rescaled to the report but must count between
+  0.5 and 1.02 times it. ZAF 2023 follows WHO’s epidemic curve of the
+  outbreak (external situation report
+  [\#5](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/5),
+  Figure 5, digitized) moved from symptom onset to report dates, 2 days
+  later (the onset-to-notification lag of situation report
+  [\#4](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/4)’s
+  notification-date curve), so it is dated like the other WHO rows for
+  the model’s single reporting delay; the imported case of 14 July is
+  placed by the same rule. Its weeks of 15, 22 and 29 May carry 220, 432
+  and 249 cases. Its deaths follow their own curve, the national counts
+  reported by date (the first in February; 10 and 14 in the weeks of 15
+  and 22 May; 47 by 4 July). These rows are `who_catchup_curated_shaped`
+  (reconstructed, confidence 0.9), and the combiner does not reshape the
+  window from another source;
+  `data-raw/make_surveillance_curation_shapes.R` rebuilds the anchors
+  from the WHO report.
+- WHO epi weeks run Monday to Sunday and are stamped with their Monday,
+  as the WHO dashboard states; the code and documentation assumed Sunday
+  to Saturday. A curated date now falls in the WHO week whose Monday is
+  on or before it, so NAM 2025’s first case (Sunday 2 March) is in week
+  9 and its 22 cases cover weeks 9-12 (6/5/6/5) instead of weeks 10-12;
+  no other window moves. Rounding the spread halves up moves one count
+  between weeks in 16 cases or deaths series of 10 windows (BDI, CIV,
+  GHA, KEN, NGA, TZA, ZMB), totals unchanged.
+- [`process_cholera_surveillance_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_cholera_surveillance_data.md)
+  ranks sources observed \> reconstructed (`who_catchup_*`) \> imputed
+  and removes cross-source double counting. A WHO window is kept whole:
+  non-WHO rows repeating the dashboard value are dropped, a source with
+  a positive count in every week of the window shapes the WHO total
+  (`who_catchup_shaped`; a curated shaped window keeps its curve), and
+  other rows in the window are absorbed. AI weeks that are aggregates
+  are dropped: an observed week of at least 20 cases at five times every
+  direct-source week within four weeks (NGA 2023 week 21, the
+  year-to-date total), or within 15% of a WHO weekly cumulative of its
+  year (COG 2023 week 29). Imputed rows only fill the gap between the
+  observed weeks and the WHO account of the year (the AFRO annual total,
+  else the WHO weekly year-to-date total), in every year; 349
+  country-years change and pre-2023 imputed cases fall from 3.77M to
+  3.32M. Rows rescaled below half a case are emptied. Documented
+  absences remove imputed rows (SSD 2023-05-17 to 2024-09-27, AGO 2023)
+  and BFA 2025 is flagged. Every changed week is listed in
+  `cholera_surveillance_weekly_adjustments.csv`.
+- [`update_mosaic_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_mosaic_data.md):
+  a failed WHO annual step now blocks the surveillance combiner that
+  depends on it, and skipping that step warns.
+- [`est_epidemic_peaks()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_epidemic_peaks.md)
+  counts spread WHO windows as observed (blanking them carved troughs
+  into outbreaks). `epidemic_peaks` and `param_epidemic_peaks.csv` are
+  rebuilt from the regenerated surveillance, 159 -\> 161 rows: the ZAF
+  2023-08-31 dump artifact and the GHA 2024-11-18 peak that rode on a
+  dump are gone, the documented GHA 2024 (peak 2024-12-08) and CIV 2025
+  (2025-07-07) outbreaks are added by hand because the spread reports
+  leave their smoothed curves below the detector’s prominence threshold,
+  TCD 2026-08-23 is new, the shaped ZAF 2023 window gives the
+  Hammanskraal outbreak a peak (2023-05-15 to 06-12, peak 05-29), and
+  the COD 2026 peak moves from 08-02 to 08-30 with the revised WHO
+  weeks.
+- [`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
+  no longer backfills short case gaps by default
+  (`backfill_case_gaps = FALSE`): the lstm_v2 suitability model already
+  leaves unobserved weeks out of its training targets, so a filled week
+  only added an interpolated target, and 15 of the 26 weeks filled in
+  the v0.101.0 panel were imputed weeks the reconciliation had emptied.
+  Turning it off leaves those 26 rows without a target, 17 of them
+  inside the 2015+ suitability fit window. With the fill on (it serves
+  the frozen legacy suitability path, which reads unobserved weeks as
+  zeros), a filled week is labelled `backfill_interpolated` (imputed),
+  carries a confidence weight of at most 0.5 and never sets a target
+  anchor (two filled 2009 weeks had set Botswana’s), and a deaths-only
+  week is not filled.
+- The seasonal dynamics (`param_seasonal_dynamics.csv`,
+  `pred_seasonal_dynamics_day.csv`) are re-estimated on the corrected
+  surveillance (MOSAIC-data 922ef89, the same fit as on 04a6d0f) and
+  ERA5 to 2026-09-21, with unchanged arguments. Against v0.100.1 the
+  cases-response coefficients move in 16 countries, by more than 0.03
+  only in ZAF (max 1.41: its transmission envelope 1 + f peaked on 31
+  August at 2.59, the week-35 dump of 1,390 cases, and now peaks on 28
+  May at 2.51, the Hammanskraal outbreak), NAM (0.13) and CIV (0.11),
+  where the curated windows landed. The precipitation-response
+  coefficients and the neighbour assignments are unchanged, and the
+  envelope stays at or above 0.1 in every country.
+
+### Likelihood
+
+- [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
+  gains `cases_scoring` and `week_offset`, and
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  reads `control$likelihood$cases_scoring`. The default, `"daily"`, is
+  the cell rule of 0.100.1: one negative binomial cell per day at the
+  weekly k. The added `"weekly"` rule scores reporting-week totals
+  instead: the observed and simulated daily cases are summed over the
+  reporting weeks the dispersion is estimated on and each week is one
+  negative binomial cell at the weekly k. The surveillance is weekly
+  totals spread over days, so the daily rule counts a week’s level
+  information 7(k + M)/(7k + M) times (median 5.4 over the v0.100.1
+  national runs) and ranks draws by within-week noise, which the weekly
+  rule removes. The pre-registered likelihood gate (KEN, ZMB, CMR and
+  GHA, 30,000 simulations each under both rules with the same data,
+  dispersions, intervals and seeds) kept `"daily"` as the default,
+  because `"weekly"` was worse on both counts of its direct test of the
+  rule: geometric-mean cases rWIS(weekly/daily) 1.068, and median \|log
+  cases bias\| 0.254 against 0.187. `"weekly"` stays available and
+  tested while that result is investigated. `"daily"` runs at this
+  version’s dispersion, so it does not reproduce a 0.100.1 run:
+  collapsed and clamped fits take the panel trend, `reported_tier`
+  restricts k and (where they are enough) the deaths phi to observed
+  weeks, and the intervals and the cases central line changed (below).
+  Matching a 0.100.1 likelihood also needs that run’s `nb_k_cases` and a
+  config without `reported_tier`. Without `ll_deaths_core` the negative
+  binomial deaths core follows `cases_scoring` too (weekly deaths totals
+  on the same weeks under `"weekly"`).
+- Under `"weekly"`, a week is scored only when its seven days are in the
+  scored window with a finite observation and weight; its weight is the
+  mean of its days’ weights, made mass-preserving over the scored weeks.
+  A simulated count that is not finite on a day of a scored week makes
+  the cases score -Inf (a failed path; dropping the week gave it the
+  best score); the daily rule keeps its earlier treatment, leaving a day
+  with a missing simulated count out. A location short of three scored
+  weeks (weighted: a weight sum of three), with no cases shape term on
+  and no deaths to score, is NA like a location without data, not a
+  constant 0, and
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)’s
+  pre-flight check then counts complete weeks too. The shape terms keep
+  their daily definitions, so under `"weekly"` a given shape weight
+  weighs several times more against the cases core (measured below), and
+  the cumulative term (off by default) scores its sums at size
+  `k * n / 7`, `n` days being `n / 7` weekly totals. For the same
+  reason, under `"weekly"` the deaths, already scored weekly, carry
+  several times more weight against the cases in draw ranking at the
+  default outcome weights: on the v0.100.1 national re-selection pools
+  (real engine draws, production seeds), the spread of the cases score
+  across draws shrinks by a median 4.8 (range 1.8-6.5) over all draws
+  and 4.1 (2.9-6.1) among the top 1,000 for the 11 countries whose k is
+  unchanged. There is no change in the Poisson limit (LBR), and the
+  shift runs the other way where the panel trend raised k (CMR and UGA
+  in those pools). Under the default daily rule the cases score keeps
+  the per-day spread of 0.100.1, changing only where the dispersion
+  changed, so this shift toward deaths does not apply at the default.
+- The cases dispersion is estimated from observed weeks only when the
+  config carries `reported_tier` (a new location x day matrix: 1
+  observed, 2 reconstructed, 3 imputed, built by `make_config_default.R`
+  and subset by
+  [`get_location_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_config.md)):
+  [`est_nb_dispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md)
+  gains `obs_tier`, and reconstructed or imputed weeks, whose synthetic
+  shape reads as low noise, leave the fit. A location without a usable
+  estimate of its own (a fit run to the zero boundary, now detected; a
+  non-finite SE; failed mean models; a fit clamped at the lower bound of
+  0.1; or too few observed weeks in a series that has enough overall)
+  takes a cross-country trend of log k on log mean weekly cases, at
+  every scale (`est_nb_dispersion(panel_trend = )`;
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  supplies the trend fitted on `config_default` at `burn_in_days = 45`,
+  whatever the run’s burn-in, and a drift test re-derives it at each
+  rebuild; the shipped trend, the locations of `config_default` v6.1
+  that take it and the effect of refitting it at the control default of
+  30 are under Default data objects). A collapsed fit was previously
+  reported at the 0.1 bound. A clamped fit is censoring, not a
+  measurement: most of UGA’s 10 non-zero observed weeks are the edges of
+  short outbreaks whose middle weeks are reconstructed and left out, and
+  on synthetic series of that shape the fit returned the bound in 22-29
+  of 40 whether the true reporting process was Poisson, k = 1 or k = 5
+  (median 0.100 each time). At k = 0.1 a twofold level error cost UGA’s
+  cases score 3.1 nats over its two observed years under `"daily"` and
+  0.5 under `"weekly"` (22 and 4.6 at the trend’s 0.96), and the
+  observation-level predictive median of a weekly total was 0 for any
+  weekly mean up to 102. The row keeps `status = "clamped_lower_bound"`
+  with `panel_trend = TRUE`. On `config_default` v6.1 only UGA moves,
+  from 0.100 (national and eastern runs), 0.105 (central) and 0.108
+  (continental) to 0.96 in all four; every other location’s k, in every
+  suite scope, and the deaths dispersions are unchanged. The trend fit
+  already left clamped fits out, so the shipped trend is unchanged, and
+  with shrinkage on a routed location is a trend taker rather than a
+  shrunk estimate (it no longer enters shrinkage with a delta-method
+  variance computed from the bound). The deaths NB dispersion (a
+  diagnostic in
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md))
+  takes no trend: a deaths location whose observed weeks are too few
+  keeps its every-week estimate rather than the Poisson limit.
+  `nb_dispersion.csv` gains `n_weeks_excluded` (0 where no fit is
+  attempted) and `panel_trend`, `summary.json` gains `n_panel_trend`,
+  and the resolver reports `tier_used` per channel (`FALSE` for a
+  user-supplied k).
+- The integrated deaths likelihood estimates its quasi-Poisson
+  dispersion phi from the observed weeks as well, when the config
+  carries `reported_tier`. A location whose observed weeks alone are too
+  few keeps the every-week estimate rather than the Poisson limit. Every
+  scored week is still scored, and the observation-level deaths draws
+  use the same phi. A location whose scored weeks span one calendar year
+  is now estimated with a single year effect (`D ~ offset(log C)`)
+  instead of falling to phi = 1, which glm’s one-level year factor
+  forced; on `config_default` v6.1 this moves CAF from 1 to 1.65 and NER
+  from 1 to 2.97 (at `burn_in_days` 45 and 30), and no other location. A
+  config without it (a user config, or `config_default` before v6.1)
+  estimates both dispersions from every week, and the run log says so
+  (“dispersion from every week (config carries no reported_tier)”).
+
+### Ensemble and predictions
+
+- `calc_model_ensemble(observation_model = )` draws observation-level
+  posterior predictive intervals. Each member’s weekly cases are drawn
+  from a negative binomial with the weekly k the likelihood scored with
+  and apportioned to days in proportion to the member’s daily cases;
+  deaths get the integrated deaths likelihood’s quasi-Poisson variance
+  around the member’s expected deaths.
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  supplies its dispersions. On the v0.100.1 national rehearsal the
+  median weekly 95% coverage rises from 0.865 to 0.992 and 50% coverage
+  from 0.365 to 0.698.
+- `ci_bounds`, the new `predictive_median`, `cases_array` and
+  `deaths_array` are observation-level; the member trajectories are kept
+  as `cases_engine_array` and `deaths_engine_array`, which the medoid,
+  trajectories, implied CFR, subset optimization and R_eff use. The
+  central lines stay engine-level: the noise is mean-preserving, and a
+  median of observation-level draws collapses where k is small. Without
+  `observation_model` the ensemble is engine-level as before. The cases
+  draw is the weekly negative binomial at the scored k under either
+  cases rule, so under the default `cases_scoring = "daily"` a run’s
+  intervals are wider than its per-day likelihood implies (weekly
+  variance about C + C^2/k against C + C^2/(7k)); under `"weekly"` they
+  match it. Either way they are not the engine-level intervals of
+  earlier runs.
+- In the prediction CSVs, `predicted_median` is the median of the same
+  draws as the `ci_*` columns: the observation-level `predictive_median`
+  for a channel that received observation noise, else the engine median
+  as before. Every row’s quantiles therefore nest
+  (`ci_1_lower <= ci_2_lower <= predicted_median <= ci_2_upper <= ci_1_upper`)
+  and a WIS computed from the CSV pairs a median with intervals from one
+  set of draws. `predicted_central` (the line drawn and scored) and
+  `predicted_mean` stay engine-level. Where k is small the predictive
+  median is the typical observed count and falls far below the central
+  line.
+- The default central line is the weighted median for cases and the
+  weighted mean for deaths (`control$predictions$central_method`; both
+  mean in 0.98.0-0.100.x). The `central_method` argument defaults of
+  [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  and
+  [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
+  change the same way (both were `"mean"`), so a
+  [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  call that leaves it unset now scores cases on the median.
+  [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  predictions gain `pred_median_obs`, which its WIS pairs with the
+  observation-level intervals. Its medoid (and legacy best) rows are
+  re-simulated through
+  [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+  with the cutoff run’s observation model (the weekly k its candidate
+  ensemble recorded) and deaths integration (`deaths_integration.rds`),
+  so every model’s rows in one compile carry observation-level intervals
+  and CFR-redrawn deaths; they were plain engine reruns, with
+  engine-level intervals and deaths at the config’s CFR. The reruns are
+  seeded as the run’s medoid ensemble is (1001, 1002, …), so recompiled
+  medoid rows change.
+
+### Prediction figures
+
+- [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
+  draws the predicted central line and intervals from the first time
+  step. It blanked every step before the scored window (the burn-in and
+  the two-step cases warm-up), so with the production
+  `burn_in_days = 45` the ensemble and medoid figures started on
+  2023-02-15 although the ensemble holds predictions from 2023-01-01.
+  The unscored steps are now shaded light grey, with a dashed line at
+  the start of the scoring window labelled with its date (“scored from
+  2023-02-15”; one label per channel when cases and deaths start on
+  different steps). The marker is where the caption R2, bias and totals
+  and the calibration’s scoring window begin; under
+  `cases_scoring = "weekly"` the cases likelihood scores the complete
+  reporting weeks inside that window, so its first scored week can start
+  up to six days later. New argument `show_burn_in` (default `TRUE`;
+  `FALSE` draws the previous figure);
+  [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
+  passes `TRUE`. Display only: the caption R2, bias and totals are
+  computed on the scoring window as before, and the exported
+  `predictions_*.csv` files keep their unscored rows `NA`. A supplied
+  `prediction_table` is drawn as given, with its blank unscored rows
+  filled from the ensemble; its `central_method` column now also sets
+  the caption’s central label and the series its R2, bias and totals are
+  computed on (an explicit `central_method` argument that disagrees
+  draws a warning), since the line drawn is the table’s.
+- For an ensemble built with an observation model (a
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  ensemble since this release) the ribbons are its observation-level
+  predictive intervals, in the burn-in head too, and the caption says
+  “observation-level predictive intervals”. The line stays the
+  engine-level central trajectory (for cases by default the weighted
+  median of the member trajectories, before observation noise), so where
+  the reporting dispersion k is small it can lie above the
+  observation-level 50% band; the captions say this too.
+
+### Documentation figures
+
+- [`plot_seasonal_transmission()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_transmission.md)
+  and
+  [`plot_seasonal_transmission_example()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_transmission_example.md)
+  take the years in their legend labels from the dates of the points
+  drawn, i.e. the
+  [`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
+  fit window (“Precipitation (2010-2025)”; the Mozambique example’s
+  cases read 2017-2025), instead of the hardcoded “1994-2024” and
+  “2023-2024”.
+- [`plot_seasonal_clustering()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_clustering.md)
+  reads the daily fits
+  [`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
+  writes (`MODEL_INPUT/pred_seasonal_dynamics_day.csv`) and clusters and
+  draws their weekly means (the scale its clustering options, including
+  dbscan’s fixed `eps`, were set for). On the shipped fits,
+  `clustering_method = "ward.D2"` with `k = 4` reproduces, for all 40
+  countries, the four clusters the estimator computes from the daily
+  fits for its neighbour inference. The title’s years come from the fit
+  window instead of a hardcoded “2014-2024”. The weekly
+  `DOCS_TABLES/pred_seasonal_dynamics.csv` it required is no longer
+  written by anything; it is still read when the daily fits are absent
+  (clustered the same way, ward.D2 with k = 4, its 2024-11 copy puts 5
+  of the 40 countries in a different cluster from the daily fits under
+  the best one-to-one matching of cluster labels). It returns the plot,
+  each country’s cluster and the file read, invisibly. Its
+  `set_inferred_to_na` documentation is corrected: the argument applies
+  to the cases clustering only (default `TRUE`) and is ignored for
+  precipitation.
+- [`plot_CFR_by_country()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_CFR_by_country.md)
+  evaluates the Beta densities on an adaptive grid, so the AFRO Region
+  density (SD about 1e-4) is drawn instead of falling between grid
+  points; the x axis spans the plotted densities and the y axis is on a
+  square-root scale. It returns its two plots invisibly, as documented.
+- [`plot_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccine_effectiveness.md)
+  subtitles panels B, C, E and F as data fits, and its documentation
+  states that they are the
+  [`est_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md)
+  fits, not the phi/omega priors (whose SDs are 2.3 and 4.9 times larger
+  for phi_1 and phi_2, 1.1 and 1.2 times for omega_1 and omega_2).
+  Nothing it computes changes; it returns the figures and panels
+  invisibly.
+
+### Fixes
+
+- A re-run into a directory that holds a finished run no longer draws
+  the earlier run’s central line. The renderer reads
+  `3_results/summary.json`’s `central_method_*` first, and
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  writes that file only after the in-run render, so the ensemble and
+  medoid figures took the earlier run’s central method (every default
+  re-run of a 0.98.0-0.100.x directory under the new default).
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  now removes the earlier `summary.json` with the other post-calibration
+  artifacts and passes the central method it resolved to the in-run
+  render.
+- An invalid `control$predictions$central_method` (an unnamed
+  `c("median", "mean")`, a misspelling, an unknown channel) is rejected
+  when the control is validated. It was first resolved after calibration
+  and shard consolidation, which ended the run with no ensemble in a
+  directory that cannot be resumed.
+- [`compile_rolling_cv_predictions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_rolling_cv_predictions.md)
+  recompiles a manifest without `central_method` (written by
+  [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  v0.32.40-v0.37.x, before the setting existed) on the ensemble median
+  those runs predicted; it fell back to the mean.
+- `man/process_WHO_weekly_data.Rd` is regenerated from its source, and a
+  hand-escaped percent sign that printed “15" in
+  [`process_cholera_surveillance_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_cholera_surveillance_data.md)’s
+  manual is fixed.
+- `test-get_ggplot_legend.R` and `test-plot_model_likelihood.R` no
+  longer leave `Rplots.pdf` in the test directory.
+
+### Changelog corrections
+
+- The 0.100.1 entry is corrected in place.
+  [`fit_beta_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_beta_from_ci.md)
+  keeps the requested mode but does not hit both requested 95% bounds
+  (p_beta 0.144-0.596 for 0.10-0.50; the realized intervals are listed).
+  The initial-infection probabilities are the measured 300-draw values
+  (lowest UGA, 294 of 300), the seeding prior implies about 25-680
+  expected people in E + I (not ~50-700), seeded single-location runs
+  report a case within 60 days in 87-100% of 100 draws (not 90-100%;
+  0-4% before the seeding prior), and the ~90% ignition failure it
+  describes was in a first v17.0 build, not in the shipped v16.1 priors.
+
 ## MOSAIC 0.100.1
 
 Data-object rebuild on the v0.100.0 estimators and the corrected,
@@ -19,39 +544,61 @@ change.**
   `param_sigma_prop_symptomatic.csv`; the config sigma is the prior mean
   (0.345).
 - chi priors refit at the published 2.5% quantile (means unchanged).
-- alpha_2, phi_1, phi_2, p_beta and theta_j keep their centres and
-  requested CIs, now hit exactly by the corrected
-  [`fit_beta_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_beta_from_ci.md)
-  (e.g. p_beta Beta(7.03, 13.24) -\> Beta(5.48, 10.10)); theta_j ERI
-  0.708 -\> 0.720. tau_i, the mobility Gammas, kappa, zeta_1/zeta_2,
-  beta_j0_tot and the mu_jt block are unchanged in value.
+- alpha_2, phi_1, phi_2, p_beta and theta_j are refit by the corrected
+  [`fit_beta_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_beta_from_ci.md),
+  which keeps each requested centre (the mode) exactly and chooses the
+  one free concentration that best matches the requested 95% interval on
+  the logit scale (e.g. p_beta Beta(7.03, 13.24) -\> Beta(5.48, 10.10));
+  theta_j ERI 0.708 -\> 0.720. One concentration cannot in general hit
+  both bounds, so the realized intervals are: alpha_2 exactly 0.25-0.75;
+  phi_1 0.700-0.855 for the requested 0.715-0.864; phi_2 0.732-0.834 for
+  0.738-0.838; theta_j within 0.026 of each requested bound (largest
+  ZAF); p_beta 0.144-0.596 for the requested 0.10-0.50. tau_i, the
+  mobility Gammas, kappa, zeta_1/zeta_2, beta_j0_tot and the mu_jt block
+  are unchanged in value.
 - Initial conditions are estimated at `date_start` (2023-01-01). The
-  builder used to seed them at the month with the most active-case
-  countries within a year of the start (2023-02-01), so countries with
-  an outbreak under way on 1 January but none reported just before 1
-  February (TZA, AGO, BEN, UGA) got the near-zero E/I template and
-  failed to ignite in ~90% of draws. prop_E/I are back-calculated from a
-  28-day surveillance window straddling `date_start`
-  (`est_initial_E_I(lookahead_days = )`, new), A quiet-start country
-  gets a weak seeding prior, Beta(1, 1e5) for E and for I
-  (`est_initial_E_I(quiet_start = "seed")`, new; mean 1e-5, the v16.1
-  scale, so ~50-700 people in E + I), standing in for undetected
-  circulation or importation that the model has no mechanism for. A
-  country is a quiet start when it reports at least one case after the
-  window, up to `date_stop`, and either (a) reports no cases in the
-  window or (b) its window-based E/I priors imply fewer than one
-  expected initial infection, N x (E\[prop_E\] + E\[prop_I\]) \< 1. That
-  seeds BFA CAF CIV GHA NAM NER RWA SWZ TCD TGO under (a) and COG (one
-  case in the window) under (b), listed in
+  v0.100.0 builder estimated them at the month with the most active-case
+  countries within a year of the start (2023-02-01, the month v16.1 also
+  used), so on its first v17.0 build the countries with an outbreak
+  under way on 1 January but none reported just before 1 February (TZA,
+  AGO, BEN, UGA) got the near-zero E/I template and started with E + I
+  \>= 1 person in only 7-10% of draws (the shipped v16.1 priors, from
+  the earlier estimator, started all four in every draw). prop_E/I are
+  back-calculated from a 28-day surveillance window straddling
+  `date_start` (`est_initial_E_I(lookahead_days = )`, new). A
+  quiet-start country gets a weak seeding prior, Beta(1, 1e5) for E and
+  for I (`est_initial_E_I(quiet_start = "seed")`, new; mean 1e-5, the
+  v16.1 scale, so about 25 (SWZ) to 680 (GHA) expected people in E + I),
+  standing in for undetected circulation or importation that the model
+  has no mechanism for. A country is a quiet start when it reports at
+  least one case after the window, up to `date_stop`, and either (a)
+  reports no cases in the window or (b) its window-based E/I priors
+  imply fewer than one expected initial infection, N x (E\[prop_E\] +
+  E\[prop_I\]) \< 1. That seeds BFA CAF CIV GHA NAM NER RWA SWZ TCD TGO
+  under (a) and COG (one case in the window) under (b), listed in
   `priors_default$metadata$quiet_start_seeded`. Window-based priors
   implying at least one expected infection (AGO, BEN, UGA, …) are kept,
   and the 11 countries with no cases anywhere up to `date_stop` keep the
-  near-zero template. Every other country starts with E + I \>= 1 in \>=
-  98% of draws (lowest UGA and AGO, ~4-6 expected initial infections);
-  single-location runs of the seeded countries produce cases in the
-  first 60 days in 90-100% of 100 draws (1-4% before). prop_R priors are
-  about 25x lower (the model’s own reporting chain and a mean-keeping
-  refit); V1/V2 are effective immunisations weighted by phi.
+  near-zero template. In 300
+  [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
+  draws (seeds 1-300; the integer `E_j_initial + I_j_initial` passed to
+  the engine; the 40-location `config_default`), every seeded country
+  starts with E + I \>= 1 in all 300 draws except SWZ (299), and every
+  country with window-based priors in all 300 except AGO (299) and UGA
+  (294, i.e. 98.0%, Wilson 95% CI 95.7-99.1%), the two lowest at about 6
+  and 4 expected initial infections; built per country with
+  [`get_location_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_config.md)/[`get_location_priors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_priors.md),
+  the seeded countries start in 300 of 300 draws, AGO in 298 and UGA
+  in 296. Single-location runs of the seeded countries
+  ([`get_location_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_config.md),
+  [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
+  and
+  [`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md)
+  with seeds 1-100) report at least one case in the first 60 days in
+  87-100% of draws (lowest SWZ 87%, CAF 90%), against 0-4% with the
+  v17.0 build that preceded the seeding prior. prop_R priors are about
+  25x lower (the model’s own reporting chain and a mean-keeping refit);
+  V1/V2 are effective immunisations weighted by phi.
 - Seasonal priors and the config give a positive transmission envelope
   at the prior means (29 of 40 countries were negative at the v16.1
   means). Independent draws from the seasonal priors still dip below

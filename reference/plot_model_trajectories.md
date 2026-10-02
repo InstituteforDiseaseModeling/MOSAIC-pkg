@@ -64,14 +64,16 @@ already reduced over the best subset). It is the trajectory analogue of
 
 **Central line:** for `reported_cases` / `reported_deaths` the bold line
 is the ensemble *central* series following
-`control$predictions$central_method` (weighted mean by default, or
-weighted median, per channel) and is **bit-identical** to the
-cases/deaths *prediction* plots – it is reduced from the same captured
-draws over the same final displayed member set and weights (no
-re-simulation). True deaths (`disease_deaths`) follow the deaths
-channel's method so the two deaths panels are comparable. All other
-channels (compartments, FOI, incidence, derived) have no prediction-plot
-counterpart and use the weighted *median*.
+`control$predictions$central_method` (by default the weighted median for
+cases and the weighted mean for deaths) and is **bit-identical** to the
+cases/deaths *prediction* plots' central line – it is reduced from the
+same engine-level member trajectories over the same final displayed
+member set and weights (no re-simulation). The thinned lines are
+engine-level member trajectories, not observation-level draws. True
+deaths (`disease_deaths`) follow the deaths channel's method so the two
+deaths panels are comparable. All other channels (compartments, FOI,
+incidence, derived) have no prediction-plot counterpart and use the
+weighted *median*.
 
 **Weighting note:** the central series and lines are reduced over the
 *final displayed* member set and weights: the *candidate* best subset

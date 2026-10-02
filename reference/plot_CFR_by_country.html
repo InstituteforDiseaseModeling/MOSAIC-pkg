@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,24 @@
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list containing the two ggplot objects: one for CFR and total cases, and one for Beta distributions.</p>
+    <p>Invisibly, a list of the two ggplot objects: <code>cfr_and_cases</code>
+(CFR and total cases) and <code>beta_distributions</code> (Beta densities;
+<code>NULL</code> when no density could be drawn). Each figure drawn is also
+saved to <code>PATHS$DOCS_FIGURES</code>.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>The Beta densities (AFRO Region and the countries with the lowest and
+highest CFR) are evaluated on an adaptive grid: a uniform grid of 1,000 points
+over the plotted range plus 500 points across each density's central
+99.98% interval, so a very narrow density is resolved (the AFRO Region Beta,
+built from more than a million cases, has an SD of about 1e-4, ten times
+narrower than the spacing of a uniform 1,000-point grid from 0 to 1). The x axis
+runs from 0 to 1.1 times the largest 99.99% quantile of the plotted densities,
+and the y axis is on a square-root scale so the tall AFRO density and the much
+wider country densities are visible together. A density with
+<code>shape1 &lt; 1</code> (a country with no recorded deaths) is unbounded at 0 and is
+drawn from the first grid point above 0.</p>
     </div>
 
     <div class="section level2">

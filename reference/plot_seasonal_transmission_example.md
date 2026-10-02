@@ -22,8 +22,9 @@ plot_seasonal_transmission_example(PATHS, country_iso_code, n_points = 30)
   - **DATA_SHAPEFILES**: Path to the directory containing shapefiles for
     African countries.
 
-  - **DOCS_TABLES**: Path to load the processed precipitation and fitted
-    values data.
+  - **MODEL_INPUT**: Path to the `data_seasonal_precipitation.csv` and
+    `pred_seasonal_dynamics_day.csv` files written by
+    [`est_seasonal_dynamics`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md).
 
   - **DOCS_FIGURES**: Path to save the output plot.
 
@@ -40,3 +41,12 @@ plot_seasonal_transmission_example(PATHS, country_iso_code, n_points = 30)
 
 The function generates and saves a PNG file showing the grid points on
 the country map and the seasonal transmission dynamics.
+
+## Details
+
+The years in the legend labels of the precipitation and case points are
+the calendar years spanned by that country's points, read from the dates
+in `data_seasonal_precipitation.csv` (the window
+[`est_seasonal_dynamics`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
+was fit to). A country without case data in that window has no case
+points and its label carries no years.

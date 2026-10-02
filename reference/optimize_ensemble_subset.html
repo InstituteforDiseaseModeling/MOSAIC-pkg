@@ -7,6 +7,15 @@ For each candidate size N (from min_n to the full ensemble), the
 function re-computes the best-subset weights within the top-N subset,
 re-computes weighted median predictions from the 4D arrays, and scores with
 the selected objective function.
+Selection scores the ENGINE-level member trajectories
+(ensemble$cases_engine_array/deaths_engine_array; the
+cases_array/deaths_array of an ensemble saved before v0.101.0,
+which were engine-level), the series the ensemble's central lines are built
+from. The optimized ensemble is then rebuilt exactly as
+calc_model_ensemble builds one: central lines from the engine
+draws and the interval envelope and predictive_median from the
+observation-level draws of the selected members, when the ensemble carries
+them. The &quot;wis&quot; objective therefore scores the engine-level spread.
 The per-N weights use the same scheme as the weight_best posterior
 that run_MOSAIC() builds the candidate ensemble from (by default
 \(w \propto \exp(-0.5 \min(\Delta, 4))\) with
@@ -22,6 +31,15 @@ For each candidate size N (from min_n to the full ensemble), the
 function re-computes the best-subset weights within the top-N subset,
 re-computes weighted median predictions from the 4D arrays, and scores with
 the selected objective function.
+Selection scores the ENGINE-level member trajectories
+(ensemble$cases_engine_array/deaths_engine_array; the
+cases_array/deaths_array of an ensemble saved before v0.101.0,
+which were engine-level), the series the ensemble's central lines are built
+from. The optimized ensemble is then rebuilt exactly as
+calc_model_ensemble builds one: central lines from the engine
+draws and the interval envelope and predictive_median from the
+observation-level draws of the selected members, when the ensemble carries
+them. The &quot;wis&quot; objective therefore scores the engine-level spread.
 The per-N weights use the same scheme as the weight_best posterior
 that run_MOSAIC() builds the candidate ensemble from (by default
 \(w \propto \exp(-0.5 \min(\Delta, 4))\) with
@@ -37,7 +55,7 @@ weighting scheme."><meta property="og:image" content="https://institutefordiseas
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -78,6 +96,15 @@ original ensemble untouched.</p>
 function re-computes the best-subset weights within the top-N subset,
 re-computes weighted median predictions from the 4D arrays, and scores with
 the selected objective function.</p>
+<p>Selection scores the ENGINE-level member trajectories
+(<code>ensemble$cases_engine_array</code>/<code>deaths_engine_array</code>; the
+<code>cases_array</code>/<code>deaths_array</code> of an ensemble saved before v0.101.0,
+which were engine-level), the series the ensemble's central lines are built
+from. The optimized ensemble is then rebuilt exactly as
+<code><a href="calc_model_ensemble.html">calc_model_ensemble</a></code> builds one: central lines from the engine
+draws and the interval envelope and <code>predictive_median</code> from the
+observation-level draws of the selected members, when the ensemble carries
+them. The <code>"wis"</code> objective therefore scores the engine-level spread.</p>
 <p>The per-N weights use the same scheme as the <code>weight_best</code> posterior
 that <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> builds the candidate ensemble from (by default
 \(w \propto \exp(-0.5 \min(\Delta, 4))\) with
@@ -156,7 +183,8 @@ setting (its point forecast remains the weighted median). The default
 <code>"median"</code> here is deliberate – it preserves historical direct-call
 selection and the Tier-2 bit-for-bit parity guarantee; <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code>
 passes the resolved <code>control$predictions$central_method</code> (package
-default <code>"mean"</code> as of v0.98.0) explicitly.</p></dd>
+default since v0.101.0: <code>"median"</code> for cases, <code>"mean"</code> for
+deaths) explicitly.</p></dd>
 
 
 <dt id="arg-stride">stride<a class="anchor" aria-label="anchor" href="#arg-stride"></a></dt>
@@ -215,8 +243,9 @@ likelihood-sorted order, aligned with <code>optimal_weights</code> (when
 
 <dt>ensemble_optimized</dt>
 <dd><p>Complete <code>mosaic_ensemble</code> object at optimal
-N. Its <code>$seeds</code> field is the per-member seed aligned with its
-<code>cases_array</code> (member-to-seed aligned) when <code>ensemble$seeds</code> was
+N, carrying the selected members' observation-level and engine-level
+arrays. Its <code>$seeds</code> field is the per-member seed aligned with its
+arrays (member-to-seed aligned) when <code>ensemble$seeds</code> was
 present, else it falls back to <code>optimal_seeds</code>.</p></dd>
 
 <dt>stability_flag</dt>

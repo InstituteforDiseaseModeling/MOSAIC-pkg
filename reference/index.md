@@ -422,7 +422,7 @@ Plotting functions
 - [`plot_vaccination_maps()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccination_maps.md)
   : Plot Vaccination Maps
 - [`plot_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccine_effectiveness.md)
-  : Plot Vaccine Effectiveness Decay and Prior Distributions
+  : Plot Vaccine Effectiveness Decay and the Distributions Fitted to It
 - [`plot_vibrio_decay_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vibrio_decay_rate.md)
   : Plot Vibrio Decay Rate as a Function of Environmental Suitability
 
@@ -1351,7 +1351,7 @@ Other exported functions and internal helpers
   : Plot Vaccination Maps
 
 - [`plot_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccine_effectiveness.md)
-  : Plot Vaccine Effectiveness Decay and Prior Distributions
+  : Plot Vaccine Effectiveness Decay and the Distributions Fitted to It
 
 - [`plot_vibrio_decay_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vibrio_decay_rate.md)
   : Plot Vibrio Decay Rate as a Function of Environmental Suitability

@@ -38,6 +38,10 @@ process_cholera_surveillance_data(PATHS, include_ai = FALSE)
   - **DATA_CHOLERA_DAILY**: Directory where the combined daily output
     will be saved.
 
+  - **DATA_WHO_ANNUAL** (optional): Directory containing
+    `who_afro_annual.csv`, the WHO annual totals that imputed rows are
+    reconciled against (see Details).
+
 - include_ai:
 
   Logical (default `FALSE`). When `TRUE`, reads the AI-mined processed
@@ -68,10 +72,16 @@ Invisibly returns `NULL`. Side effects:
   any column missing from a given source (so source-specific columns are
   never silently dropped).
 
-- Deduplicates by `iso_code` and `date_start` (the actual week Monday,
-  robust to year-boundary week-1 collisions): observed beats imputed,
-  then the fixed priority WHO \> JHU \> AI \> SUPP (see Details), and
-  adds `source_deaths`.
+- Applies the cross-source rules (AI aggregates, WHO multi-week windows)
+  and deduplicates by `iso_code` and `date_start` (the actual week
+  Monday, robust to year-boundary week-1 collisions): observed beats
+  reconstructed beats imputed, then the fixed priority WHO \> JHU \> AI
+  \> SUPP (see Details), and adds `source_deaths`; then applies the
+  curated corrections and limits imputed rows to the gap left by the WHO
+  account.
+
+- Saves the adjustment log to
+  `PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_adjustments.csv`.
 
 - Creates truly square data structure with all country-week combinations
   from min to max date (missing data = NA).
@@ -101,13 +111,83 @@ Invisibly returns `NULL`. Side effects:
 ## Details
 
 Duplicate country-week entries across sources are resolved by selecting
-one whole row per week: a row carrying a count beats an empty one; an
-observed row (WHO/JHU/SUPP, or AI `observed`/`documented_zero`) beats an
-imputed one (AI `fourier_*` or any other modelled method), whatever the
-sources; a row with a case count beats a deaths-only row; and the fixed
+one whole row per week: a row carrying a count beats an empty one; then
+the trust tier decides, whatever the sources – an observed row
+(WHO/JHU/SUPP, or AI `observed`/`documented_zero`) beats a reconstructed
+one (a WHO multi-week report spread over the weeks it covers,
+`who_catchup_*`, see
+[`process_WHO_weekly_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_weekly_data.md)),
+which beats an imputed one (AI `fourier_*` or any other modelled
+method); a row with a case count beats a deaths-only row; and the fixed
 priority **WHO \> JHU \> AI \> SUPP** decides the rest. When the
 selected row has no death count, the deaths of the highest-priority
 other observed row reporting the same case count that week are used (the
 same report, compared after half-up rounding) and the week keeps the
 lower of the two rows' `confidence_weight`; `source_deaths` names the
 source of each death count.
+
+Four cross-source rules keep one outbreak from being counted twice:
+
+1.  **AI aggregates.** An AI `observed` week of at least 20 cases, in a
+    week no direct source (WHO/JHU/SUPP) reports a case count for, is an
+    aggregate mislabelled as one week, and is dropped, when it is at
+    least five times every direct-source count in the four weeks either
+    side (two or more of them) – Nigeria 2023 week 21 carries 1,851
+    cases, the year-to-date total of the WHO weeks before it – or when
+    it is within 15% of a WHO weekly cumulative of its year (the
+    year-to-date total before it, or the year's total) with a WHO week
+    reporting cases within four weeks of it: Congo 2023 week 29 carries
+    63 cases, the running total of the outbreak whose 69 cases the WHO
+    dashboard reports in weeks 30 and 34.
+
+2.  **WHO multi-week windows.** Inside the window of a WHO multi-week
+    report the report accounts for every week. A non-WHO observed row
+    that repeats the dashboard's positive as-published value for its
+    week, or the report total, is a copy of the dashboard and is
+    dropped. When another source reports a positive count for every week
+    of the window, the WHO total is redistributed in proportion to those
+    counts (`who_catchup_shaped`, confidence 0.9); otherwise the even
+    spread stands. A window shaped by a curated epidemic curve
+    (`who_catchup_curated_shaped`) keeps its curve. All non-WHO rows in
+    the window are then dropped, so a window never mixes the WHO total
+    with another source's partial weeks.
+
+3.  **Curated corrections.** The surveillance curation table
+    (`inst/extdata/surveillance_curation.csv`) lists corrections the
+    rules cannot derive, each with its evidence and source: WHO windows
+    dated by an outbreak report, and timed by its documented epidemic
+    curve where there is one (South Africa 2023; anchors in
+    `inst/extdata/surveillance_curation_shapes.csv`), applied by
+    [`process_WHO_weekly_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_weekly_data.md);
+    documented absences of cholera, whose imputed weeks are emptied
+    (`drop_imputed`: Angola 2023, South Sudan May 2023 - September
+    2024); and contested imputed years that are kept but listed
+    (`flag_imputed`: Burkina Faso 2025).
+
+4.  **Imputed rows against the WHO account.** AI `fourier_*` rows spread
+    an annual (or other multi-week) total over every week of its span,
+    and the observed weeks that later overwrite part of that span are
+    not netted out, so the surviving imputed rows can duplicate cases
+    those weeks already report (Ghana 2024: 937 imputed cases in
+    April-August beside the 4,618 WHO-reported cases of an outbreak that
+    began on 4 October), or spread a total the WHO account contradicts.
+    Per country and ISO year with a WHO account \\A\\, with observed
+    plus reconstructed cases \\O\\ and imputed cases \\I\\, the imputed
+    rows may only fill the gap to the account: they keep \\\min(I,
+    \max(0, A - O))\\ cases, cases and deaths scaled by the same factor.
+    Rows are emptied (NA) when less than one case is left in all, and
+    individually when rescaled below half a case (the integer daily
+    downscale would make them zero-case weeks that keep their weight:
+    Cote d'Ivoire 2025 had 8 cases left over 40 weeks). The account is
+    the WHO annual total (`DATA_WHO_ANNUAL/who_afro_annual.csv`) or, for
+    a country-year without an AFRO annual row, the positive year-to-date
+    total of its WHO weekly rows (Somalia 2026: the AI spread the WHO
+    epidemiological update's 233 cases, which the three WHO weekly rows
+    already report). Skipped, with a message, when
+    `PATHS$DATA_WHO_ANNUAL` is not set.
+
+Every week these rules (or the WHO spreading) change is listed, with its
+before and after values and the evidence, in
+`DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_adjustments.csv`,
+including imputed rows a WHO window supersedes and the flagged weeks of
+`flag_imputed` (listed unchanged).

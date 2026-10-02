@@ -94,9 +94,10 @@ The summary carries one central line per channel and no credible
 intervals. The central line is not the same statistic for every column:
 
 - `reported_cases` and `reported_deaths` follow the run's per-channel
-  `central_method` (default weighted **mean**), matching
-  `predicted_central` in the prediction CSVs; `disease_deaths` follows
-  the deaths `central_method`.
+  `central_method` (default weighted **median** for cases, weighted
+  **mean** for deaths) over the engine-level member trajectories,
+  matching `predicted_central` in the prediction CSVs; `disease_deaths`
+  follows the deaths `central_method`.
 
 - `mass_balance` is a ratio of the compartments' weighted means, `CFR` a
   ratio of 28-day rolling sums of the weighted-mean reported deaths and

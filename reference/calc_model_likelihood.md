@@ -25,6 +25,8 @@ calc_model_likelihood(
   eps_rel_cases = 0.02,
   eps_rel_deaths = 0.25,
   ll_deaths_core = NULL,
+  cases_scoring = c("daily", "weekly"),
+  week_offset = NULL,
   verbose = FALSE,
   weight_peak_timing = 0,
   weight_peak_magnitude = 0,
@@ -122,6 +124,37 @@ calc_model_likelihood(
   `est_deaths` is drawn at the prior CFR; deaths peak timing, which does
   not depend on the level, is kept.
 
+- cases_scoring:
+
+  `"daily"` (default) scores the cases core, and the negative-binomial
+  deaths core, one cell per time step at the weekly `k` (the cumulative
+  term at size `k * n`): the cell rule of MOSAIC v0.100.1 and earlier.
+  `"weekly"` scores them on reporting-week totals (see Description). The
+  daily rule is applied at the dispersion supplied or estimated now, so
+  it does not reproduce a v0.100.1 score by itself: when
+  `nb_k_cases`/`nb_k_deaths` are estimated here, a cases location whose
+  fit gives no estimate, or is clamped at the lower bound, takes the
+  panel trend (v0.100.1 kept such fits at the 0.1 bound), and a config
+  with `reported_tier` restricts the estimate to observed weeks.
+  Reproducing a v0.100.1 score needs that run's dispersions
+  (`nb_k_cases`, `nb_k_deaths` from its `nb_dispersion.csv`) and a
+  config without `reported_tier`. `NULL` means `"daily"`.
+
+- week_offset:
+
+  Reporting-week boundary of each location, 0-6 days after Monday
+  (length 1 or one per location; `NA` = detect), as returned by
+  [`est_nb_dispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md).
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  supplies the boundaries its dispersion estimate detected, so both use
+  the same weeks. `NULL` (default) detects them from `obs_cases` on
+  every call, which costs tens of milliseconds per location when
+  `nb_k_cases` is supplied: a caller that scores many simulations
+  against the same observations should pass
+  `est_nb_dispersion()$week_offset`, as
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  does. Used by the weekly cores only.
+
 - verbose:
 
   If `TRUE`, prints component summaries per location.
@@ -160,27 +193,87 @@ calc_model_likelihood(
 ## Value
 
 Scalar total log-likelihood (finite), `-Inf` if non-finite, or
-`NA_real_` if no location has data to score (fewer than three usable
-observations in both channels, and no integrated deaths score).
+`NA_real_` if no location has data to score. A location has none when
+neither channel can be scored: a weekly core needs three scored weeks
+(weighted: a weight sum of three), a per-time-step core or a shape term
+three usable observations (weighted: a weight sum of three), and with
+`ll_deaths_core` the deaths channel counts when it has three usable
+observations or a non-zero score (a score of exactly 0 has no scored
+week).
 
 ## Details
+
+By default (`cases_scoring = "daily"`) the cases are scored one NB cell
+per time step at the weekly `k`, the rule of v0.100.1 and earlier.
+`cases_scoring = "weekly"` scores them on weekly totals instead. The
+surveillance series are weekly totals spread over the days of each
+reporting week, and the dispersion is estimated on weekly totals, so the
+weekly rule sums the observed and simulated daily cases over the
+reporting weeks
+[`est_nb_dispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md)
+uses (the same block boundaries, from `week_offset`) and scores each
+week as one NB cell at the weekly `k`. Scoring every day of a spread
+week at the weekly `k`, as the daily rule does, counts its level
+information about `7 (k + M) / (7 k + M)` times (`M` the weekly mean; a
+median 5.4 over the v0.100.1 national runs, exactly 1 in the Poisson
+limit) and ranks draws largely by their within-week noise against a flat
+spread. The daily rule is the default all the same: in the v0.101.0
+likelihood gate (four countries calibrated under each rule with the same
+data, dispersions, intervals and seeds) the weekly rule fitted the cases
+worse (see NEWS).
+
+Under the weekly rule a week is scored only when all seven of its days
+lie in the scored window and carry a finite observation, a finite
+confidence weight and a positive time weight; a week cut by the start or
+end of the window is not a weekly total and is dropped, as in the
+dispersion estimate. Each week's weight is the mean of its days'
+weights: a confidence weight belongs to the reporting week and is the
+same on its seven days, so the week keeps the weight its days had and
+the weight keeps its role as an exponent on that week's likelihood. The
+weights are then made mass-preserving over the scored weeks, as for the
+daily cells. The cases floor `eps_rel_cases` applies to the weekly
+prediction relative to the mean weekly observation, and a location needs
+three scored weeks (weighted: a weight sum of three) for its cases core
+to count. A simulated daily count that is not finite on a day of a
+scored week makes the weekly cases core `-Inf`: the path failed, and
+dropping the week would remove its penalty. (The daily rule keeps its
+earlier treatment: a day whose simulated count is missing is left out of
+the score, and a path with no usable day scores `-Inf`.) Without a dated
+daily grid (no `config$date_start`), or when the time steps are weeks,
+the weekly rule scores each time step as one cell. Without
+`ll_deaths_core` the negative-binomial deaths core follows the cases
+rule (under the weekly rule, weekly deaths totals on the same reporting
+weeks at the weekly `nb_k_deaths`).
 
 Optional shape terms are enabled by setting their weight \> 0: peak
 timing (Normal), peak magnitude (log-Normal with adaptive sigma),
 cumulative progression (NB at cumulative fractions), and Weighted
 Interval Score (WIS). All weights default to 0 (OFF).
 
-Each shape term helper returns a per-evaluation value, which is scaled
-up to the size of the NB core by `N_obs / N_eval`, where `N_obs` is the
-number of time steps with a finite observation in either channel and
-`N_eval` is the number of evaluations of that term: peaks are scaled by
+Each shape term helper returns a per-evaluation value, which is
+multiplied by `N_obs / N_eval`, where `N_obs` is the number of daily
+time steps with a finite observation in either channel and `N_eval` is
+the number of evaluations of that term: peaks are scaled by
 `N_obs / N_peaks`, WIS by `N_obs / length(wis_quantiles)` and the
-cumulative term by `N_obs / length(cumulative_timepoints)`. Because the
-WIS and cumulative helpers already average over their quantiles and
-timepoints, a given weight on those two terms carries less influence
-than the same weight on the peak terms (with the defaults, 1/5 and 1/4
-of `N_obs` times the per-cell value), and changing the number of
-quantiles or timepoints changes their influence.
+cumulative term by `N_obs / length(cumulative_timepoints)`. This puts
+the peak terms on the per-day scale the NB core had when it scored daily
+cells. Because the WIS and cumulative helpers already average over their
+quantiles and timepoints, a given weight on those two terms carries less
+influence than the same weight on the peak terms (with the defaults, 1/5
+and 1/4 of `N_obs` times the per-cell value), and changing the number of
+quantiles or timepoints changes their influence. The shape terms have
+the same definitions under both cases rules: they read the daily series,
+`N_obs` counts daily time steps, and the WIS term uses the weekly `k` on
+daily cells. The cumulative term sums the days of each prefix and scores
+the sum as negative binomial with size `k * n` when each time step is a
+cell (the default daily rule, undated input or weekly time steps) and
+`k * n / 7` under `cases_scoring = "weekly"` (`n` scored days make
+`n / 7` weekly totals at the weekly `k`). Because the weekly cases core
+carries about a fifth of the level information of the daily one (less of
+a change where `k` is large; none in the Poisson limit), a given shape
+weight weighs several times more against the cases core under the weekly
+rule than under the default (a median 4.8 times, range 1.8 to 6.5, on
+the v0.100.1 national re-selection pools).
 
 Non-finite per-location LL values are replaced with `-Inf` (zero
 importance weight). The NB likelihood naturally produces very negative

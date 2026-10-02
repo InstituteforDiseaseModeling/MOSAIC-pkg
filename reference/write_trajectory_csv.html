@@ -13,7 +13,7 @@ trajectories_&amp;lt;LOC&amp;gt;.csv."><meta property="og:image" content="https:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -145,9 +145,10 @@ deaths, i.e. reported deaths / <code>rho_deaths</code>, and rest on the pinned
 
 <p>The summary carries one central line per channel and no credible intervals.
 The central line is not the same statistic for every column:</p><ul><li><p><code>reported_cases</code> and <code>reported_deaths</code> follow the run's
-per-channel <code>central_method</code> (default weighted <strong>mean</strong>), matching
-<code>predicted_central</code> in the prediction CSVs; <code>disease_deaths</code>
-follows the deaths <code>central_method</code>.</p></li>
+per-channel <code>central_method</code> (default weighted <strong>median</strong> for
+cases, weighted <strong>mean</strong> for deaths) over the engine-level member
+trajectories, matching <code>predicted_central</code> in the prediction CSVs;
+<code>disease_deaths</code> follows the deaths <code>central_method</code>.</p></li>
 <li><p><code>mass_balance</code> is a ratio of the compartments' weighted means,
 <code>CFR</code> a ratio of 28-day rolling sums of the weighted-mean reported
 deaths and cases, and <code>epidemic_frac</code> the weighted mean of the

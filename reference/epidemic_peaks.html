@@ -11,7 +11,7 @@ smoothing and prominence-based peak detection algorithms."><meta property="og:im
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.100.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -107,8 +107,9 @@ for most countries; country-specific overrides below)</p></li>
 <li><p>Cameroon (CMR): Adjusted threshold (4%) for plateau-shaped peaks</p></li>
 <li><p>Ethiopia (ETH): Lower threshold (3%) for multiple outbreaks</p></li>
 </ul><p>Detected peaks sit on observed weeks: imputed (AI Fourier, assumed-zero) weeks
-are treated as missing, a peak day must be observed with cases &gt; 0, and a
-detected peak whose window is at least half imputed days is dropped. The
+are treated as missing (a WHO multi-week report spread over its window counts as
+observed), a peak day must be observed with cases &gt; 0, and a detected peak whose
+window is at least half imputed days is dropped. The
 manual corrections below are documented outbreaks and are exempt from that
 window filter.</p>
 <p>Manual corrections have been applied for known issues including:</p><ul><li><p>Ethiopia 2024: February peak corrected to March (sustained outbreak)</p></li>
@@ -155,10 +156,10 @@ window filter.</p>
 <span class="r-in"><span><span class="va">recent_peaks</span> <span class="op">&lt;-</span> <span class="va">epidemic_peaks</span><span class="op">[</span><span class="va">epidemic_peaks</span><span class="op">$</span><span class="va">peak_date</span> <span class="op">&gt;=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="st">"2024-01-01"</span><span class="op">)</span>, <span class="op">]</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">recent_peaks</span><span class="op">$</span><span class="va">iso_code</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> AGO BDI CAF COD COG COM ETH GHA KEN MOZ NER NGA RWA SDN SOM SSD TCD TGO TZA UGA </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   3   4   1   3   1   1   3   1   3   3   1   3   1   4   2   3   1   1   3   3 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> ZMB ZWE </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   2   2 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> AGO BDI CAF CIV COD COG COM ETH GHA KEN MOZ NER NGA RWA SDN SOM SSD TCD TGO TZA </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   3   4   1   1   3   1   1   3   1   3   3   1   3   1   4   2   3   2   1   3 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> UGA ZMB ZWE </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   3   2   2 </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Peak duration calculation</span></span></span>
 <span class="r-in"><span><span class="va">epidemic_peaks</span><span class="op">$</span><span class="va">duration</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span></span></span>
@@ -166,7 +167,7 @@ window filter.</p>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">epidemic_peaks</span><span class="op">$</span><span class="va">duration</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    2.00   16.00   28.00   32.36   50.00  117.00 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    2.00   16.00   28.00   32.13   50.00  117.00 </span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

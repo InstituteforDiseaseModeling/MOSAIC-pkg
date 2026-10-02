@@ -21,7 +21,7 @@ compile_suitability_data(
   include_flood_prob = TRUE,
   gam_train_stop = NULL,
   target_anchor_stop = NULL,
-  backfill_case_gaps = TRUE,
+  backfill_case_gaps = FALSE,
   backfill_max_weeks = 2L,
   backfill_method = "linear"
 )
@@ -133,9 +133,11 @@ compile_suitability_data(
   used to compute the normalising ANCHORS for the response variables –
   `ti_p99` (`transmission_intensity`), the global count/rate p99s
   (targets A, C) and the per-country `cp99c`/`cp99r` and median
-  population (targets B, D). When non-`NULL`, anchors use only trusted
-  rows with `date <= target_anchor_stop`, while every row in the panel
-  still RECEIVES a target scored on that anchor.
+  population (targets B, D). When non-`NULL`, the p99 anchors use only
+  trusted rows (not AI, not imputed) with `date <= target_anchor_stop`,
+  and the median population behind the 5-cases/week floor uses the
+  non-AI rows with `date <= target_anchor_stop`, while every row in the
+  panel still RECEIVES a target scored on those anchors.
 
   This is the target-side sibling of `gam_train_stop` and closes the
   remaining leak in a per-cutoff panel: because such a panel keeps
@@ -170,12 +172,28 @@ compile_suitability_data(
 
 - backfill_case_gaps:
 
-  Logical (default `TRUE`). Linearly interpolate short interior gaps in
-  the weekly case series (e.g. holiday non-reporting) before the
-  suitability target is built, via
-  [`backfill_weekly_case_gaps`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/backfill_weekly_case_gaps.md),
-  so missing weeks inside an active outbreak are not stamped as false
-  zeros by the downstream NA-\>0 sanitiser.
+  Logical (default `FALSE`). When `TRUE`, linearly interpolate short
+  interior gaps in the weekly case series (e.g. holiday non-reporting)
+  before the suitability target is built, via
+  [`backfill_weekly_case_gaps`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/backfill_weekly_case_gaps.md).
+  Off by default since v0.101.0: the lstm_v2 suitability model already
+  leaves unobserved (NA-case) weeks out of its training targets, so a
+  filled week only adds an interpolated target; and the fill cannot tell
+  a week no source reported from one the surveillance reconciliation
+  deliberately emptied (in the v0.101.0 panel, 15 of the 26 filled weeks
+  were imputed weeks that the WHO annual account or the half-case
+  residue rule had removed). The frozen legacy suitability path still
+  turns unobserved weeks into zeros
+  ([`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  with the v0.33 architecture), the false zeros this fill was written to
+  prevent; set `TRUE` to rebuild a panel for it. A filled week is
+  imputed, not observed: it is flagged in `cases_interpolated` (all
+  `FALSE` when the fill is off), labelled
+  `disaggregation_method = "backfill_interpolated"` with `source` and
+  `deaths` left missing, carries a `confidence_weight` of at most 0.5
+  (never above the weaker of the two reported weeks it is interpolated
+  from), and never defines a target anchor. A week some source reported,
+  a deaths-only week, is not a gap and is not filled.
 
 - backfill_max_weeks:
 

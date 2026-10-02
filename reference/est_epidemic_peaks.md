@@ -23,14 +23,21 @@ A data frame containing epidemic peak parameters
 
 ## Details
 
-Peaks are detected on observed weeks only: days whose
-`disaggregation_method` is set and is not `observed` or
-`documented_zero` (AI `fourier_*` reconstructions, `assumed_zero`) are
-treated as missing, and a detected peak whose `[peak_start, peak_stop]`
-window is at least half imputed days is dropped. A detected peak day is
-the centre of any flat stretch of the smoothed curve and must itself be
-observed with cases \> 0. The hand-curated peaks the function appends
-(documented outbreaks) are exempt from the imputed-window filter.
+Peaks are detected on observed weeks only: imputed days – those whose
+`disaggregation_method` is a modelled method such as an AI `fourier_*`
+reconstruction or `assumed_zero` – are treated as missing, and a
+detected peak whose `[peak_start, peak_stop]` window is at least half
+imputed days is dropped. A WHO multi-week report spread over the weeks
+it covers (`who_catchup_*`, see
+[`process_WHO_weekly_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_weekly_data.md))
+counts as observed: its total is a reported count over a known window,
+whereas blanking it would carve a false trough into the outbreak it
+belongs to. An even spread creates no local maximum of its own; a shaped
+spread follows another source's weekly counts or a documented epidemic
+curve, so its maxima are real. A detected peak day is the centre of any
+flat stretch of the smoothed curve and must itself be observed with
+cases \> 0. The hand-curated peaks the function appends (documented
+outbreaks) are exempt from the imputed-window filter.
 
 ## Examples
 
