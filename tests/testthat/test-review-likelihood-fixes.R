@@ -199,11 +199,45 @@ test_that("the cumulative sums exclude cells with zero confidence weight (likeli
 test_that(".mosaic_unscorable_locations flags locations with no scored-window observation", {
   oc <- rbind(c(NA, 5, NA, NA), c(NA, NA, NA, NA), c(NA, NA, NA, NA))
   od <- rbind(c(NA, NA, NA, NA), c(NA, NA, NA, 1), c(NA, 2, NA, NA))
-  expect_identical(MOSAIC:::.mosaic_unscorable_locations(oc, od), c(FALSE, FALSE, FALSE))
+  # The per-day rule (weekly_cases = FALSE): any finite observation counts.
+  u <- function(...) MOSAIC:::.mosaic_unscorable_locations(oc, od, ..., weekly_cases = FALSE)
+  expect_identical(u(), c(FALSE, FALSE, FALSE))
   # From step 3 on, location 1's case and location 3's death are both unscored.
-  expect_identical(MOSAIC:::.mosaic_unscorable_locations(oc, od, 3L, 3L), c(TRUE, FALSE, TRUE))
+  expect_identical(u(3L, 3L), c(TRUE, FALSE, TRUE))
   # Cases start at min(idx_cases, idx_deaths), the worker's shared slice start.
-  expect_identical(MOSAIC:::.mosaic_unscorable_locations(oc, od, 3L, 2L), c(FALSE, FALSE, FALSE))
+  expect_identical(u(3L, 2L), c(FALSE, FALSE, FALSE))
+  # The weekly default: one observed day of cases is not three complete weeks.
+  expect_identical(MOSAIC:::.mosaic_unscorable_locations(oc, od), c(TRUE, FALSE, FALSE))
+})
+
+test_that(".mosaic_unscorable_locations applies the weekly core's complete-week rule (LIK-2)", {
+  # A cases-only location short of three complete weeks scores NA in
+  # calc_model_likelihood() under the weekly core, so the pre-flight check must
+  # see it as unscorable too, or a run of such locations would start on a flat
+  # likelihood. The dates are not known there: the bound takes the best of the
+  # seven week alignments, so it never flags a location the likelihood scores.
+  d0 <- as.Date("2024-01-01")                     # a Monday
+  na28 <- rep(NA_real_, 28)
+  two   <- c(rep(5, 14), rep(NA, 14))            # two complete Monday-Sunday weeks
+  three <- c(rep(5, 21), rep(NA, 7))
+  f <- function(x, d = na28, ...) MOSAIC:::.mosaic_unscorable_locations(matrix(x, 1L), matrix(d, 1L), ...)
+  lik <- function(x) MOSAIC::calc_model_likelihood(matrix(x, 1L), matrix(6, 1L, 28L), matrix(na28, 1L),
+                                                   matrix(na28, 1L), config = list(date_start = d0,
+                                                   date_stop = d0 + 27L), nb_k_cases = 2, nb_k_deaths = Inf)
+  expect_true(f(two));    expect_identical(lik(two), NA_real_)
+  expect_false(f(three)); expect_true(is.finite(lik(three)))
+  expect_false(f(two, d = c(rep(NA, 27), 1)))      # a death keeps it scorable
+  expect_false(f(two, weekly_cases = FALSE))        # the per-day rule
+  # cases before idx_cases are masked by the worker: 20 days left
+  expect_true(f(c(rep(NA, 7), rep(5, 21)), idx_cases = 9L))
+  # a run cut by the window start: 21 finite days hold three 7-day blocks at
+  # one alignment, so the conservative bound passes them
+  expect_false(f(c(rep(NA, 2), rep(5, 21), rep(NA, 5))))
+  expect_identical(MOSAIC:::.max_complete_weeks(rbind(rep(TRUE, 6), rep(TRUE, 6))), c(0L, 0L))
+  # runs of 14 and 13 days: at most 2 + 1 blocks, reached at one alignment
+  expect_identical(MOSAIC:::.max_complete_weeks(rbind(c(rep(TRUE, 14), FALSE, rep(TRUE, 13)),
+                                                      rep(TRUE, 28), c(rep(TRUE, 13), FALSE, rep(TRUE, 14)))),
+                   c(3L, 4L, 2L + 1L))
 })
 
 test_that("run_MOSAIC stops up front when no location has a scorable observation", {

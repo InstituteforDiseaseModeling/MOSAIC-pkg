@@ -9,23 +9,32 @@
 #       panel trend, at every scale. No global floor raise, no per-country values.
 # =============================================================================
 
+# config_default rows on the scored window from day `from` (burn_in_days = 45),
+# with the trust tiers when the config carries them.
 .cd_rows <- function(iso, from = 46L) {
      cd <- MOSAIC::config_default
      i <- match(iso, cd$location_name)
      keep <- from:ncol(cd$reported_cases)
      list(obs = cd$reported_cases[i, keep, drop = FALSE],
           w = cd$reported_cases_weight[i, keep, drop = FALSE],
+          tier = if (is.null(cd$reported_tier)) NULL else cd$reported_tier[i, keep, drop = FALSE],
           date_start = as.Date(cd$date_start) + from - 1L, iso = iso)
 }
 .trend_k <- function(m) {
      tr <- MOSAIC:::.NB_DISP_PANEL_TREND
-     exp(tr$intercept + tr$slope * log(m))
+     pmin(pmax(exp(tr$intercept + tr$slope * log(m)), 0.1), 1e5)
 }
+# The table the shipped trend is fitted from: per-location fits on the scored
+# window, no panel trend, no shrinkage (observed weeks only under reported_tier).
+.panel_table <- function() MOSAIC:::.nb_disp_panel_trend_fit(MOSAIC::config_default, burn_in_days = 45L)$table
+.no_own <- function(tab) grepl("^no_estimate", tab$status) & is.finite(tab$mean_weekly) & tab$mean_weekly > 0
 
 test_that("the shipped panel trend is the one config_default implies (drift guard)", {
      # A rebuild of config_default's surveillance must re-derive the constants:
-     # MOSAIC:::.nb_disp_panel_trend_fit(MOSAIC::config_default) and paste the
-     # intercept/slope/sigma/n into .NB_DISP_PANEL_TREND (R/est_nb_dispersion.R).
+     # MOSAIC:::.nb_disp_panel_trend_fit(MOSAIC::config_default, 45L) and paste the
+     # intercept/slope/sigma/n into .NB_DISP_PANEL_TREND (R/est_nb_dispersion.R,
+     # whose rebuild recipe names the two tests below as well). This test fails
+     # by design until then.
      fit <- MOSAIC:::.nb_disp_panel_trend_fit(MOSAIC::config_default, burn_in_days = 45L)
      tr <- MOSAIC:::.NB_DISP_PANEL_TREND
      expect_equal(fit$intercept, tr$intercept, tolerance = 1e-6)
@@ -34,53 +43,59 @@ test_that("the shipped panel trend is the one config_default implies (drift guar
      expect_identical(as.integer(fit$n), tr$n)
 })
 
-test_that("collapsed fits take the panel trend: CMR 1.41, UGA 1.00, ZAF 1.20", {
-     cd <- MOSAIC::config_default
-     keep <- 46:ncol(cd$reported_cases)
-     tab <- MOSAIC::est_nb_dispersion(cd$reported_cases[, keep], cd$reported_cases_weight[, keep],
-                                      date_start = as.Date(cd$date_start) + 45L,
-                                      location_name = cd$location_name,
-                                      panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)
-     three <- c("CMR", "UGA", "ZAF")
-     r <- tab[match(three, tab$location), ]
-     expect_identical(r$status, rep("no_estimate_se_degenerate", 3))
-     expect_true(all(r$panel_trend))
-     expect_true(all(is.na(r$k_raw)))
-     expect_equal(r$k, .trend_k(r$mean_weekly), tolerance = 1e-12)
-     expect_equal(r$k, c(1.413199, 0.997813, 1.201759), tolerance = 1e-5)
-     # nothing else collapses, and identified fits sit far above the rule's threshold
-     expect_identical(sort(tab$location[tab$panel_trend]), three)
+test_that("locations without an estimate of their own take the panel trend", {
+     # The locations and their k come from config_default's own panel table, so a
+     # rebuild of its surveillance changes which locations, not the rule. (On
+     # config_default v6.0: CMR, UGA and ZAF, fits collapsed to the zero
+     # boundary, at k 1.41, 1.00 and 1.20.)
+     t0 <- .panel_table()
+     no_own <- .no_own(t0)
+     skip_if_not(any(no_own), "every config_default location has a dispersion estimate of its own")
+     x <- .cd_rows(MOSAIC::config_default$location_name)
+     tab <- MOSAIC::est_nb_dispersion(x$obs, x$w, date_start = x$date_start, location_name = x$iso,
+                                      obs_tier = x$tier, panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)
+     # the fits are per location, so the statuses are the panel table's
+     expect_identical(tab$status, t0$status)
+     expect_identical(tab$panel_trend, no_own)
+     expect_true(all(is.na(tab$k_raw[no_own])))
+     expect_equal(tab$k[no_own], .trend_k(tab$mean_weekly[no_own]), tolerance = 1e-12)
+     # identified fits sit far above the collapse rule's threshold
      ok <- is.finite(tab$k_raw) & is.finite(tab$se)
      expect_true(all(tab$se[ok] / pmax(tab$k_raw[ok], 0.1) > 0.05))
 })
 
 test_that("the panel trend gives the same k at every scale", {
-     for (iso in c("CMR", "UGA", "ZAF")) {
+     t0 <- .panel_table()
+     no_own <- which(.no_own(t0))
+     skip_if_not(length(no_own) > 0L, "every config_default location has a dispersion estimate of its own")
+     for (i in no_own) {
+          iso <- t0$location[i]
           x <- .cd_rows(iso)
           alone <- MOSAIC::est_nb_dispersion(x$obs, x$w, date_start = x$date_start, location_name = iso,
-                                             panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)
-          expect_identical(alone$status, "no_estimate_se_degenerate", label = iso)
+                                             obs_tier = x$tier, panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)
+          expect_identical(alone$status, t0$status[i], label = iso)
           expect_true(alone$panel_trend)
-          expect_equal(alone$k, .trend_k(alone$mean_weekly), tolerance = 1e-12)
+          expect_equal(alone$k, .trend_k(t0$mean_weekly[i]), tolerance = 1e-12)
           noshrink <- MOSAIC::est_nb_dispersion(x$obs, x$w, date_start = x$date_start, shrink = FALSE,
-                                                panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)
+                                                obs_tier = x$tier, panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)
           expect_identical(noshrink$k, alone$k)
-          # without a panel trend a lone collapsed location has nothing to borrow
-          bare <- MOSAIC::est_nb_dispersion(x$obs, x$w, date_start = x$date_start)
+          # without a panel trend a lone location with no estimate has nothing to borrow
+          bare <- MOSAIC::est_nb_dispersion(x$obs, x$w, date_start = x$date_start, obs_tier = x$tier)
           expect_false(bare$panel_trend)
           expect_true(is.infinite(bare$k))
      }
-     # national, regional and full-panel resolutions agree for CMR
+     # national, regional and full-panel resolutions agree for the first of them
+     iso <- t0$location[no_own[1]]
      ctl <- mosaic_control_defaults(); ctl$likelihood$burn_in_days <- 45L
      k_of <- function(isos) {
           cfg <- MOSAIC::get_location_config(MOSAIC::config_default, iso = isos)
           sw <- MOSAIC:::.mosaic_resolve_score_window(cfg, ctl)
           r <- MOSAIC:::.mosaic_resolve_nb_dispersion(cfg, ctl, score_window = sw)
-          r$cases$k[match("CMR", cfg$location_name)]
+          r$cases$k[match(iso, cfg$location_name)]
      }
-     k1 <- k_of("CMR")
-     expect_equal(k1, 1.413199, tolerance = 1e-5)
-     expect_identical(k_of(c("CMR", "KEN", "MOZ")), k1)
+     k1 <- k_of(iso)
+     expect_equal(k1, .trend_k(t0$mean_weekly[no_own[1]]), tolerance = 1e-12)
+     expect_identical(k_of(c(iso, setdiff(c("KEN", "MOZ", "ETH"), iso)[1:2])), k1)
      expect_identical(k_of(MOSAIC::config_default$location_name), k1)
 })
 
@@ -155,6 +170,7 @@ test_that("the resolver reads config$reported_tier and returns the week boundari
      sw <- MOSAIC:::.mosaic_resolve_score_window(cfg, ctl)
      r0 <- MOSAIC:::.mosaic_resolve_nb_dispersion(cfg, ctl, score_window = sw)
      expect_false(r0$tier_used)
+     expect_false(r0$cases$tier_used); expect_false(r0$deaths$tier_used)
      expect_identical(r0$cases$week_offset, c(0L, 0L))
      expect_true(all(r0$table$n_weeks_excluded == 0L))
      # mark KEN's first 40 scored weeks as reconstructed
@@ -164,6 +180,7 @@ test_that("the resolver reads config$reported_tier and returns the week boundari
      cfg_t <- cfg; cfg_t$reported_tier <- tier
      r1 <- MOSAIC:::.mosaic_resolve_nb_dispersion(cfg_t, ctl, score_window = sw)
      expect_true(r1$tier_used)
+     expect_true(r1$cases$tier_used); expect_true(r1$deaths$tier_used)
      ken <- r1$table[r1$table$channel == "cases" & r1$table$location == "KEN", ]
      expect_gt(ken$n_weeks_excluded, 30L)
      expect_false(isTRUE(all.equal(ken$k_raw, r0$table$k_raw[r0$table$channel == "cases" &
@@ -183,6 +200,123 @@ test_that("the resolver reads config$reported_tier and returns the week boundari
      ro <- suppressMessages(MOSAIC:::.mosaic_resolve_nb_dispersion(cfg, ctl_o, score_window = sw))
      expect_identical(ro$cases$week_offset, c(0L, 0L))
      expect_identical(names(ro$table), names(r0$table))
+     # ... and does not claim observed weeks for the channel it replaces (CD-6):
+     # tier_used is per channel, and the top-level flag is the cases channel's,
+     # which the run log reports for the cases likelihood
+     ro_t <- suppressMessages(MOSAIC:::.mosaic_resolve_nb_dispersion(cfg_t, ctl_o, score_window = sw))
+     expect_false(ro_t$cases$tier_used)
+     expect_false(ro_t$tier_used)
+     expect_true(ro_t$deaths$tier_used)
+})
+
+test_that("a location sparse over every tier reports no excluded weeks (CD-6)", {
+     # The Poisson limit for sparse data is not a fit, so no week was left out of one.
+     n_weeks <- 30L
+     mondays <- as.Date("2023-01-02") + 7L * (seq_len(n_weeks) - 1L)
+     Y <- rep(0, n_weeks); Y[c(3, 17)] <- 2
+     daily <- MOSAIC::downscale_weekly_values(mondays, Y)$value
+     tier <- rep(1L, length(daily)); tier[1:70] <- 2L           # ten reconstructed weeks
+     r <- MOSAIC::est_nb_dispersion(matrix(daily, 1L), date_start = mondays[1], obs_tier = matrix(tier, 1L))
+     expect_identical(r$status, "poisson_insufficient_data")
+     expect_true(is.infinite(r$k))
+     expect_identical(r$n_weeks, 30L)
+     expect_identical(r$n_weeks_excluded, 0L)
+     # an estimated location still reports its exclusions
+     s <- .mk_series()
+     tier_s <- rep(1L, length(s$daily)); tier_s[1:70] <- 2L
+     rs <- MOSAIC::est_nb_dispersion(matrix(s$daily, 1L), date_start = s$mondays[1],
+                                     obs_tier = matrix(tier_s, 1L), shrink = FALSE)
+     expect_identical(rs$n_weeks_excluded, 10L)
+     expect_identical(rs$n_weeks + rs$n_weeks_excluded, length(s$Y))
+})
+
+test_that("deaths with too few observed weeks keep the every-week estimate, not Poisson (LIK-4)", {
+     # Deaths have no panel trend. Under obs_tier a location whose observed weeks
+     # are too few has no estimate of its own, which alone (or with fewer than
+     # five estimated locations) fell to the Poisson limit -- the tightest kernel,
+     # and not what the observations show. The integrated deaths likelihood keeps
+     # the every-week estimate of its phi in that case; so does the deaths k.
+     s <- .mk_series(n_weeks = 150L, k = 0.6, seed = 5)
+     tier <- rep(2L, length(s$daily)); tier[1:70] <- 1L          # ten observed weeks only
+     d0 <- s$mondays[1]
+     o <- matrix(s$daily, 1L)
+     with_tier <- MOSAIC::est_nb_dispersion(o, date_start = d0, obs_tier = matrix(tier, 1L))
+     expect_identical(with_tier$status, "no_estimate_observed_insufficient")
+     expect_true(is.infinite(with_tier$k))
+     every <- MOSAIC::est_nb_dispersion(o, date_start = d0)
+     expect_true(is.finite(every$k))
+     dk <- MOSAIC:::.nb_disp_deaths(o, date_start = d0, obs_tier = matrix(tier, 1L))
+     expect_identical(dk$k, every$k)
+     expect_identical(dk$status, every$status)
+     expect_identical(dk$n_weeks_excluded, 0L)
+     # in a panel with active shrinkage only that location changes, to the value it
+     # has alone; the others (one with a reconstructed window) keep their rows,
+     # shrunk toward a trend fitted on observed-weeks estimates only
+     ss <- lapply(11:15, function(sd) .mk_series(n_weeks = 150L, k = 1.5, seed = sd)$daily)
+     o6 <- rbind(o, do.call(rbind, ss))
+     t6 <- rbind(tier, matrix(1L, 5L, length(tier))); t6[2, 1:140] <- 2L
+     plain <- MOSAIC::est_nb_dispersion(o6, date_start = d0, obs_tier = t6)
+     expect_gte(attr(plain, "shrinkage")$n_fit, 5L)
+     panel <- MOSAIC:::.nb_disp_deaths(o6, date_start = d0, obs_tier = t6)
+     expect_identical(panel[-1, ], plain[-1, ])
+     expect_identical(panel$k[1], every$k)
+     expect_identical(panel$n_weeks_excluded, c(0L, 20L, 0L, 0L, 0L, 0L))
+     # the run's resolver and a standalone likelihood both use it
+     cfg <- list(location_name = "AAA", date_start = d0, date_stop = d0 + length(s$daily) - 1L,
+                 reported_cases = o, reported_deaths = o, reported_tier = matrix(tier, 1L))
+     ctl <- list(likelihood = list(nb_dispersion_shrink = TRUE))
+     r <- MOSAIC:::.mosaic_resolve_nb_dispersion(cfg, ctl)
+     expect_identical(r$deaths$k, every$k)
+     expect_identical(r$cases$k, .trend_k(every$mean_weekly))      # cases: the panel trend
+     est <- o * 1.2 + 0.1
+     ll <- function(k_d) MOSAIC::calc_model_likelihood(o, est, o, est, config = cfg, nb_k_cases = 1,
+                                                     nb_k_deaths = k_d, week_offset = 0L)
+     expect_identical(ll(NULL), ll(every$k))
+})
+
+test_that("calc_model_likelihood() without nb_k estimates k as run_MOSAIC() resolves it (TA-03)", {
+     # Observed weeks only under config$reported_tier, and the cases panel trend
+     # for a location without an estimate of its own. Location A is an outbreak
+     # known only from reconstructed weeks (no estimate: the panel trend); B has
+     # a reconstructed window that would inflate k if it entered the fit.
+     n_weeks <- 150L
+     mondays <- as.Date("2023-01-02") + 7L * (seq_len(n_weeks) - 1L)
+     YA <- rep(0, n_weeks); YA[c(30, 90)] <- 2; YA[40:68] <- 40
+     sB <- .mk_series(n_weeks = n_weeks, k = 0.6, seed = 3)
+     YB <- sB$Y; win <- 60:84; YB[win] <- round(sum(YB[win]) / length(win))
+     obs <- rbind(MOSAIC::downscale_weekly_values(mondays, YA)$value,
+                  MOSAIC::downscale_weekly_values(mondays, YB)$value)
+     n_d <- ncol(obs)
+     tier <- matrix(1L, 2L, n_d)
+     tier[1, (39 * 7 + 1):(68 * 7)] <- 2L
+     tier[2, rep(win, each = 7) * 7 - 6 + rep(0:6, length(win))] <- 2L
+     cfg <- list(date_start = mondays[1], date_stop = mondays[1] + n_d - 1L, reported_tier = tier)
+     est <- obs * 1.3 + 0.5
+     nad <- matrix(NA_real_, 2L, n_d)
+     ll <- function(cfg, k_c, o = obs, e = est, nd = nad)
+          MOSAIC::calc_model_likelihood(o, e, nd, nd, config = cfg, nb_k_cases = k_c, nb_k_deaths = Inf,
+                                        week_offset = 0L)
+     k_exp <- MOSAIC::est_nb_dispersion(obs, date_start = mondays[1], obs_tier = tier,
+                                        panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)
+     expect_identical(k_exp$panel_trend, c(TRUE, FALSE))
+     expect_equal(k_exp$k[1], .trend_k(mean(YA)), tolerance = 1e-12)
+     k_all <- MOSAIC::est_nb_dispersion(obs, date_start = mondays[1], panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)$k
+     k_bare <- MOSAIC::est_nb_dispersion(obs, date_start = mondays[1], obs_tier = tier)$k
+     expect_gt(k_all[2], k_exp$k[2])            # the flat window reads as low noise
+     expect_false(isTRUE(all.equal(k_bare[1], k_exp$k[1])))
+     auto <- ll(cfg, NULL)
+     expect_identical(auto, ll(cfg, k_exp$k))
+     # (each wiring matters: without the tiers or without the trend the score moves)
+     expect_false(isTRUE(all.equal(auto, ll(cfg, k_all))))
+     expect_false(isTRUE(all.equal(auto, ll(cfg, k_bare))))
+     # observations sliced without slicing the tiers: warn once and use every week
+     rm(list = intersect("lik_reported_tier_dims", ls(MOSAIC:::.mosaic_once)), envir = MOSAIC:::.mosaic_once)
+     keep <- 8:n_d
+     cs <- cfg; cs$date_start <- mondays[1] + 7L
+     expect_warning(sl <- ll(cs, NULL, obs[, keep], est[, keep], nad[, keep]), "does not match the observation")
+     k_sl <- MOSAIC::est_nb_dispersion(obs[, keep], date_start = cs$date_start,
+                                       panel_trend = MOSAIC:::.NB_DISP_PANEL_TREND)$k
+     expect_identical(sl, ll(cs, k_sl, obs[, keep], est[, keep], nad[, keep]))
 })
 
 test_that("the cases scoring knob defaults to weekly and is validated", {
