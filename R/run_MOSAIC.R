@@ -3509,9 +3509,10 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
 #'     \item \code{weight_wis}: WIS regularizer weight (default: 0, off). The 0.10
 #'       suggested before v0.101.0 was tuned against the daily cases core; against
-#'       the weekly core a given weight weighs roughly 5-7 times more (more where
-#'       the cases dispersion is small), so about 0.02 keeps the old balance. Not
-#'       re-tuned since; check the fit before relying on it
+#'       the weekly core a given weight weighs several times more (a median 4.8
+#'       times, range 1.8 to 6.5, on the v0.100.1 national re-selection pools;
+#'       more where the cases dispersion is small), so about 0.02 keeps the old
+#'       balance. Not re-tuned since; check the fit before relying on it
 #'     \item \code{cases_scoring}: \code{"weekly"} (default; cases scored as NB on
 #'       reporting-week totals) or \code{"daily"} (the per-day cells of v0.100.1
 #'       and earlier, at the dispersion this version estimates). \code{"daily"}

@@ -676,6 +676,15 @@
 #'   \code{trend_df}, \code{rung}, \code{identified}, \code{status},
 #'   \code{panel_trend} (\code{TRUE} where \code{k} comes from
 #'   \code{panel_trend}), and \code{k} (the value actually used).
+#'   \code{run_MOSAIC()} writes this table, for both channels, to
+#'   \code{2_calibration/diagnostics/nb_dispersion.csv}. Where
+#'   \code{MASS::glm.nb} fails on a rung whose Poisson mean converges,
+#'   \code{theta} is estimated by \code{MASS::theta.ml} at that Poisson mean.
+#'   \code{status} records this fallback only as \code{ok_theta_ml_at_full_df},
+#'   which ranks below \code{clamped_lower_bound} and
+#'   \code{ok_not_identified}: a clamped or unidentified row does not show
+#'   whether its \code{theta} came from the fallback (\code{rung} and
+#'   \code{trend_df} give the mean model it was estimated at).
 #'
 #' @examples
 #' \dontrun{

@@ -41,9 +41,13 @@ per-observation confidence weights \code{reported_cases_weight} and
 surveillance trust tier of each observed day's week (1 observed,
 2 reconstructed: a WHO multi-week report spread over its weeks,
 3 imputed; \code{NA} where neither cases nor deaths are observed), which the
-dispersion estimates read (the cases and deaths dispersions are fitted
-on tier-1 weeks) and the engine ignores; and the \code{epidemic_peaks} data
-frame used by the peak shape terms of the likelihood.
+dispersion estimates read and the engine ignores; and the
+\code{epidemic_peaks} data frame used by the peak shape terms of the
+likelihood. The cases dispersion is fitted on tier-1 weeks only; the
+deaths dispersion is fitted on tier-1 weeks where they are enough and
+falls back to every scored week, tiers 2 and 3 included, where they are
+too few (for the integrated deaths likelihood on v6.1 at
+\code{burn_in_days = 45}: BEN, BFA, CIV, LBR, NAM and ZAF).
 }
 }
 \usage{
