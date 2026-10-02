@@ -130,7 +130,7 @@
 #' cases after June, and the imported case of 14 July (onset), placed on 16 July.
 #' Its deaths follow their own curve, the cumulative counts the Department of
 #' Health, the Gauteng Department of Health and WHO reported (1 death by 23
-#' February, 11 by 21 May, 24 by 28 May, 31 by 6 June, 38 by 15 June, 47 by 4
+#' February, 11 by 21 May, 25 by 28 May, 31 by 6 June, 38 by 15 June, 47 by 4
 #' July). These rows carry \code{disaggregation_method = "who_catchup_curated_shaped"}
 #' and confidence 0.9, the weight of a window shaped by another source's weekly
 #' counts.

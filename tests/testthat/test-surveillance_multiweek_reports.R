@@ -196,7 +196,7 @@ test_that("the curated ZAF 2023 window follows WHO's epidemic curve, report-date
      expect_equal(win$cases[win$week == 28], 1)                      # the Karachi case, 14 + 2 July
      expect_true(all(win$cases[win$week %in% c(9:11, 16, 29:35)] == 0))
      # deaths follow the report-dated deaths curve, not the case curve
-     expect_equal(win$deaths[win$week %in% c(8, 20:27)], c(1, 10, 13, 5, 6, 5, 3, 3, 1))
+     expect_equal(win$deaths[win$week %in% c(8, 20:27)], c(1, 10, 14, 5, 5, 5, 3, 3, 1))
      expect_true(all(win$deaths[!win$week %in% c(8, 20:27)] == 0))
      expect_false(isTRUE(all.equal(win$deaths, MOSAIC:::.spread_count(47, c(weekly, rep(0, 7))))))
      expect_equal(win$cases_reported[win$week == 35], 1390)

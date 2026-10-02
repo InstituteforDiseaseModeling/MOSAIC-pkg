@@ -28,7 +28,9 @@
 # ZAF-2023-AAR, deaths: the cumulative death counts the authorities reported, by
 # report date (no shift); see `zaf_deaths` below for each source. The Gauteng
 # Department of Health counted Hammanskraal deaths in May; the national count is
-# that plus the Benoni death of February. WHO's 44 deaths as of 9 July (sitrep #5)
+# that plus the Benoni death of February and, from 25 May, the Free State death at
+# Parys hospital (the national toll was 24 on 27 May); the first Mpumalanga death
+# (30 May) falls after the 28 May anchor. WHO's 44 deaths as of 9 July (sitrep #5)
 # trails the Department of Health's 47 as of 4 July and is not used; WHO AFRO's
 # after-action review also gives 47 by 31 July.
 #
@@ -111,9 +113,9 @@ zaf_cases <- data.frame(date = ends, cumulative_cases = cumsum(weekly_all),
 # Report-dated cumulative deaths (national)
 zaf_deaths <- data.frame(
      date = as.Date(c("2023-01-29", "2023-02-22", "2023-02-23", "2023-05-15", "2023-05-21",
-                      "2023-05-22", "2023-05-24", "2023-05-28", "2023-06-06", "2023-06-15",
-                      "2023-06-25", "2023-07-04")),
-     cumulative_deaths = c(0, 0, 1, 1, 11, 16, 21, 24, 31, 38, 43, 47),
+                      "2023-05-22", "2023-05-24", "2023-05-27", "2023-05-28", "2023-06-06",
+                      "2023-06-15", "2023-06-25", "2023-07-04")),
+     cumulative_deaths = c(0, 0, 1, 1, 11, 16, 21, 24, 25, 31, 38, 43, 47),
      source = c("start",
                 "no death before the first",
                 "first death (Benoni, no travel history), announced by the Minister of Health on 23 February (News24, SAnews)",
@@ -121,7 +123,8 @@ zaf_deaths <- data.frame(
                 "Gauteng DoH: 10 Hammanskraal deaths as of 21 May (Inside Metros, 22 May), + Benoni",
                 "Gauteng DoH: 15 Hammanskraal deaths on 22 May (Daily Maverick), + Benoni",
                 "Gauteng DoH: 20 Hammanskraal deaths as of 24 May (SAnews, 25 May), + Benoni",
-                "Gauteng DoH: 23 Hammanskraal deaths, announced 28 May (SAnews, 29 May), + Benoni",
+                "national: 24 deaths, the official toll of 27 May (NDoH, The Citizen 27 May)",
+                "Gauteng DoH: 23 Hammanskraal deaths, announced 28 May (SAnews, 29 May), + Benoni + the Free State death of 25 May at Parys hospital (News24 25 May, OFM 9 June)",
                 "national: 31 deaths, 1 February - 6 June (NDoH, SAnews 8 June)",
                 "national: 38 deaths as of 15 June (WHO situation report #4)",
                 "national: 43 deaths at the 25 June report (NDoH 5 July: 47, with 4 recorded since 25 June)",
