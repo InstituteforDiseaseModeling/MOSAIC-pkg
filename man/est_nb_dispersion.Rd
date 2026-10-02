@@ -54,9 +54,9 @@ log(mean weekly count)} taken by a location without an estimate of its own
 (see Details). \code{run_MOSAIC()} supplies the cases trend fitted on
 config_default with \code{burn_in_days = 45}
 (\code{MOSAIC:::.NB_DISP_PANEL_TREND}), whatever the run's burn-in; refitted
-on the window of the control default (30) it is lower (CMR, UGA, ZAF 1.06,
-0.48, 0.75 instead of 1.41, 1.00, 1.21), within the trend's residual SD of
-1.56 on log k. Default \code{NULL}.}
+on the window of the control default (30) it barely moves (BFA, CIV, CMR,
+ZAF 0.88, 0.97, 1.63, 1.09 instead of 0.89, 0.98, 1.65, 1.10), far inside
+the trend's residual SD of 1.19 on log k. Default \code{NULL}.}
 }
 \value{
 A data.frame with one row per location: \code{location},

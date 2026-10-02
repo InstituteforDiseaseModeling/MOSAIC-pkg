@@ -55,19 +55,22 @@
 # Cross-country trend of the weekly cases dispersion on the series level,
 # log k = intercept + slope * log(mean weekly cases), taken by a location whose
 # own fit gives no usable estimate (see est_nb_dispersion(), argument
-# panel_trend). Fitted by .nb_disp_panel_trend_fit() on config_default v6.0,
-# reported_cases, scored from day 46 (burn_in_days = 45, the v0.100.1 production
-# setting): 23 locations with an estimate of their own, residual SD 1.56 on log
-# k, slope 0.14 +/- 0.17 -- a flat, noisy panel, so the trend is a prior centre
-# of about 1 rather than a precise prediction. On config_default v6.0 it gives
-# CMR 1.41, UGA 1.00 and ZAF 1.20, the three locations whose fits collapse
-# there.
+# panel_trend). Fitted on 2026-10-01 by .nb_disp_panel_trend_fit() on
+# config_default v6.1, reported_cases on observed (tier-1) weeks of
+# reported_tier, scored from day 46 (burn_in_days = 45, the v0.100.1 production
+# setting): 22 locations with an estimate of their own, residual SD 1.19 on log
+# k, slope 0.22 +/- 0.14 -- a flat, noisy panel, so the trend is a prior centre
+# of about 1 rather than a precise prediction. On config_default v6.1 it gives
+# BFA 0.89, CIV 0.98, ZAF 1.10 (too few observed weeks) and CMR 1.65 (its fit
+# collapses), the four locations without an estimate of their own there. (The
+# v6.0 fit, on every week: intercept -0.195, slope 0.143, SD 1.56, n 23; CMR,
+# UGA and ZAF at 1.41, 1.00 and 1.20.)
 #
 # The constants assume burn_in_days = 45; run_MOSAIC() applies them whatever the
 # run's burn-in. Refitted from day 31 (the control default burn_in_days = 30) the
-# trend is intercept -1.17, slope 0.33, residual SD 1.20 on 22 locations, which
-# gives CMR/UGA/ZAF 1.06/0.48/0.75: differences of 0.29-0.73 on log k, inside
-# the trend's own residual SD.
+# trend is intercept -0.37, slope 0.22, residual SD 1.18 on 22 locations, which
+# gives BFA/CIV/CMR/ZAF 0.88/0.97/1.63/1.09: differences of at most 0.014 on
+# log k.
 #
 # Rebuild recipe. The values depend on config_default, and three tests in
 # test-est_nb_dispersion_panel.R read it:
@@ -81,11 +84,11 @@
 #      locations and k from that fit's table (observed weeks only once the
 #      config carries reported_tier) and need no edit, but must pass after the
 #      constants are pasted.
-.NB_DISP_PANEL_TREND <- list(intercept = -0.19489564152192,
-                             slope     = 0.143447689065127,
-                             sigma     = 1.55951185444869,
-                             n         = 23L,
-                             source    = "config_default v6.0, reported_cases, burn_in_days 45")
+.NB_DISP_PANEL_TREND <- list(intercept = -0.355403044494224,
+                             slope     = 0.220326123734482,
+                             sigma     = 1.19345523383214,
+                             n         = 22L,
+                             source    = "config_default v6.1, reported_cases, observed weeks, burn_in_days 45")
 
 # Weekly blocks must never be anchored on the first observation: whenever a
 # series starts off the reporting-week boundary, anchoring there splits every
@@ -656,9 +659,9 @@
 #'   (see Details). \code{run_MOSAIC()} supplies the cases trend fitted on
 #'   config_default with \code{burn_in_days = 45}
 #'   (\code{MOSAIC:::.NB_DISP_PANEL_TREND}), whatever the run's burn-in; refitted
-#'   on the window of the control default (30) it is lower (CMR, UGA, ZAF 1.06,
-#'   0.48, 0.75 instead of 1.41, 1.00, 1.21), within the trend's residual SD of
-#'   1.56 on log k. Default \code{NULL}.
+#'   on the window of the control default (30) it barely moves (BFA, CIV, CMR,
+#'   ZAF 0.88, 0.97, 1.63, 1.09 instead of 0.89, 0.98, 1.65, 1.10), far inside
+#'   the trend's residual SD of 1.19 on log k. Default \code{NULL}.
 #'
 #' @importFrom splines ns
 #'

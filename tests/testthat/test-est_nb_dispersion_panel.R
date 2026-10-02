@@ -46,8 +46,9 @@ test_that("the shipped panel trend is the one config_default implies (drift guar
 test_that("locations without an estimate of their own take the panel trend", {
      # The locations and their k come from config_default's own panel table, so a
      # rebuild of its surveillance changes which locations, not the rule. (On
-     # config_default v6.0: CMR, UGA and ZAF, fits collapsed to the zero
-     # boundary, at k 1.41, 1.00 and 1.20.)
+     # config_default v6.1: BFA, CIV and ZAF, too few observed weeks, and CMR,
+     # fit collapsed to the zero boundary, at k 0.89, 0.98, 1.10 and 1.65; on
+     # v6.0: CMR, UGA and ZAF at 1.41, 1.00 and 1.20.)
      t0 <- .panel_table()
      no_own <- .no_own(t0)
      skip_if_not(any(no_own), "every config_default location has a dispersion estimate of its own")
