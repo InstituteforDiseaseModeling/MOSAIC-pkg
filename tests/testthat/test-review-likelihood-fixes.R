@@ -206,13 +206,16 @@ test_that(".mosaic_unscorable_locations flags locations with no scored-window ob
   expect_identical(u(3L, 3L), c(TRUE, FALSE, TRUE))
   # Cases start at min(idx_cases, idx_deaths), the worker's shared slice start.
   expect_identical(u(3L, 2L), c(FALSE, FALSE, FALSE))
-  # The weekly default: one observed day of cases is not three complete weeks.
-  expect_identical(MOSAIC:::.mosaic_unscorable_locations(oc, od), c(TRUE, FALSE, FALSE))
+  # The weekly rule: one observed day of cases is not three complete weeks.
+  expect_identical(MOSAIC:::.mosaic_unscorable_locations(oc, od, weekly_cases = TRUE), c(TRUE, FALSE, FALSE))
+  # The default is the per-day rule, as for the likelihood (cases_scoring = "daily").
+  expect_identical(MOSAIC:::.mosaic_unscorable_locations(oc, od), u())
 })
 
 test_that(".mosaic_unscorable_locations applies the weekly core's complete-week rule (LIK-2)", {
   # A cases-only location short of three complete weeks scores NA in
-  # calc_model_likelihood() under the weekly core, so the pre-flight check must
+  # calc_model_likelihood() under the weekly core (cases_scoring = "weekly"),
+  # so the pre-flight check must
   # see it as unscorable too, or a run of such locations would start on a flat
   # likelihood. The dates are not known there: the bound takes the best of the
   # seven week alignments, so it never flags a location the likelihood scores.
@@ -220,10 +223,12 @@ test_that(".mosaic_unscorable_locations applies the weekly core's complete-week 
   na28 <- rep(NA_real_, 28)
   two   <- c(rep(5, 14), rep(NA, 14))            # two complete Monday-Sunday weeks
   three <- c(rep(5, 21), rep(NA, 7))
-  f <- function(x, d = na28, ...) MOSAIC:::.mosaic_unscorable_locations(matrix(x, 1L), matrix(d, 1L), ...)
+  f <- function(x, d = na28, weekly_cases = TRUE, ...)
+    MOSAIC:::.mosaic_unscorable_locations(matrix(x, 1L), matrix(d, 1L), ..., weekly_cases = weekly_cases)
   lik <- function(x) MOSAIC::calc_model_likelihood(matrix(x, 1L), matrix(6, 1L, 28L), matrix(na28, 1L),
                                                    matrix(na28, 1L), config = list(date_start = d0,
-                                                   date_stop = d0 + 27L), nb_k_cases = 2, nb_k_deaths = Inf)
+                                                   date_stop = d0 + 27L), nb_k_cases = 2, nb_k_deaths = Inf,
+                                                   cases_scoring = "weekly")
   expect_true(f(two));    expect_identical(lik(two), NA_real_)
   expect_false(f(three)); expect_true(is.finite(lik(three)))
   expect_false(f(two, d = c(rep(NA, 27), 1)))      # a death keeps it scorable
@@ -255,14 +260,17 @@ test_that("run_MOSAIC stops up front when no location has a scorable observation
 
 test_that("the pre-flight cases gate mirrors the likelihood's NA rule", {
   g <- MOSAIC:::.mosaic_weekly_cases_gate
-  expect_true(g(list()))
+  # NULL means the daily default, as it does in calc_model_likelihood()
+  expect_false(g(list()))
   expect_true(g(list(cases_scoring = "weekly", weight_wis = 0, weight_peak_timing = 0)))
   expect_false(g(list(cases_scoring = "daily")))
-  expect_false(g(list(weight_wis = 0.02)))
-  expect_false(g(list(weight_cumulative_total = 0.1)))
-  expect_false(g(list(weight_peak_timing = 0.25)))
-  expect_false(g(list(weight_peak_magnitude = 1)))
-  expect_true(g(mosaic_control_defaults()$likelihood))
+  # a cases shape term keeps the per-day gate under the weekly rule
+  expect_false(g(list(cases_scoring = "weekly", weight_wis = 0.02)))
+  expect_false(g(list(cases_scoring = "weekly", weight_cumulative_total = 0.1)))
+  expect_false(g(list(cases_scoring = "weekly", weight_peak_timing = 0.25)))
+  expect_false(g(list(cases_scoring = "weekly", weight_peak_magnitude = 1)))
+  expect_false(g(mosaic_control_defaults()$likelihood))
+  expect_true(g(utils::modifyList(mosaic_control_defaults()$likelihood, list(cases_scoring = "weekly"))))
 
   # run_MOSAIC passes that gate to the pre-flight, and its dispersion log line
   # names a user-supplied k rather than calling it an every-week estimate

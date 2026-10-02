@@ -332,9 +332,9 @@
 #' The steps before each channel's scoring window (the cases warm-up and the
 #' burn-in) as a rectangle from the panel edge to the scoring-window start,
 #' plus the "scored from YYYY-MM-DD" label for the marker drawn at that start:
-#' where the caption metrics and the calibration's scoring window begin (the
-#' weekly cases likelihood's first complete reporting week can start up to six
-#' days later).
+#' where the caption metrics and the calibration's scoring window begin (under
+#' \code{cases_scoring = "weekly"} the likelihood's first complete reporting
+#' week can start up to six days later).
 #'
 #' @param dates The figure's time axis (Date, or numeric when undated).
 #' @param head_cases,head_deaths Integer; number of leading unscored steps.
@@ -419,9 +419,10 @@
 #' scoring window (burn-in and cases warm-up) are shaded grey, with a dashed
 #' line at the scoring-window start labelled with its date (e.g. "scored from
 #' 2023-02-15"; \code{show_burn_in}). That is where the caption metrics (R2,
-#' bias and totals) and the calibration's scoring window start; the weekly
-#' cases likelihood scores the complete reporting weeks inside that window, so
-#' its first scored week can begin up to six days after the marker.
+#' bias and totals) and the calibration's scoring window start; under
+#' \code{cases_scoring = "weekly"} the cases likelihood scores the complete
+#' reporting weeks inside that window, so its first scored week can begin up
+#' to six days after the marker.
 #'
 #' @param ensemble A \code{mosaic_ensemble} object returned by
 #'   \code{\link{calc_model_ensemble}}.
@@ -491,12 +492,12 @@
 #'   light grey, and mark the scoring-window start with a dashed line labelled
 #'   with its date, e.g. "scored from 2023-02-15" (one label per channel when
 #'   the starts differ). The marker is where the caption metrics and the
-#'   calibration's scoring window start; the weekly cases likelihood scores
-#'   the complete reporting weeks inside the window, so its first scored week
-#'   can begin up to six days later. If \code{FALSE}, blank the predictions
-#'   before the scoring window, as in the exported CSV. Display only: the
-#'   caption metrics are computed on the scoring window either way, and
-#'   \code{mask_final_deaths_step} applies either way.
+#'   calibration's scoring window start; under \code{cases_scoring = "weekly"}
+#'   the cases likelihood scores the complete reporting weeks inside the window,
+#'   so its first scored week can begin up to six days later. If \code{FALSE},
+#'   blank the predictions before the scoring window, as in the exported CSV.
+#'   Display only: the caption metrics are computed on the scoring window either
+#'   way, and \code{mask_final_deaths_step} applies either way.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return Invisibly returns a list with:

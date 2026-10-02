@@ -187,7 +187,7 @@ test_that("a fit clamped at the lower bound takes the panel trend at every scale
      mondays <- as.Date("2023-01-02") + 7L * (seq_len(n_weeks) - 1L)
      set.seed(1)
      YA <- stats::rnbinom(n_weeks, mu = 8, size = 0.05)
-     expect_identical(sum(YA), 961)                     # fixture: mean weekly 961 / 150
+     expect_equal(sum(YA), 961)                         # fixture: mean weekly 961 / 150
      dA <- matrix(MOSAIC::downscale_weekly_values(mondays, YA)$value, 1L)
      tr <- list(intercept = log(0.5), slope = 0.5)
      k_hand <- 0.5 * sqrt(961 / 150)                    # 1.26556...
@@ -421,11 +421,18 @@ test_that("calc_model_likelihood() without nb_k estimates k as run_MOSAIC() reso
      expect_identical(sl, ll(cs, k_sl, obs[, keep], est[, keep], nad[, keep]))
 })
 
-test_that("the cases scoring knob defaults to weekly and is validated", {
-     expect_identical(mosaic_control_defaults()$likelihood$cases_scoring, "weekly")
+test_that("the cases scoring knob defaults to daily and is validated", {
+     # The v0.101.0 likelihood gate blocked the weekly rule as the default (B5:
+     # worse than daily on both pre-registered cases criteria).
+     expect_identical(mosaic_control_defaults()$likelihood$cases_scoring, "daily")
+     # calc_model_likelihood()'s own default agrees with the control default
+     expect_identical(eval(formals(MOSAIC::calc_model_likelihood)$cases_scoring)[1], "daily")
      ctl <- mosaic_control_defaults(); ctl$likelihood$cases_scoring <- "hourly"
      expect_error(MOSAIC:::.mosaic_validate_and_merge_control(ctl), "cases_scoring")
-     ctl$likelihood$cases_scoring <- "daily"
+     ctl$likelihood$cases_scoring <- "weekly"
+     expect_identical(MOSAIC:::.mosaic_validate_and_merge_control(ctl)$likelihood$cases_scoring, "weekly")
+     # an older control without the key takes the default
+     ctl$likelihood$cases_scoring <- NULL
      expect_identical(MOSAIC:::.mosaic_validate_and_merge_control(ctl)$likelihood$cases_scoring, "daily")
 })
 

@@ -48,22 +48,26 @@ mosaic_control_defaults(
 \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
 \item \code{weight_wis}: WIS regularizer weight (default: 0, off). The 0.10
-suggested before v0.101.0 was tuned against the daily cases core; against
-the weekly core a given weight weighs several times more (a median 4.8
-times, range 1.8 to 6.5, on the v0.100.1 national re-selection pools;
-more where the cases dispersion is small), so about 0.02 keeps the old
-balance. Not re-tuned since; check the fit before relying on it
-\item \code{cases_scoring}: \code{"weekly"} (default; cases scored as NB on
-reporting-week totals) or \code{"daily"} (the per-day cells of v0.100.1
-and earlier, at the dispersion this version estimates). \code{"daily"}
-does not reproduce a v0.100.1 run: a cases fit with no estimate of its
-own, or clamped at the lower bound, now takes the panel trend, a config
-with \code{reported_tier} restricts the cases k and the deaths dispersion
-to observed weeks, the ensemble intervals are observation-level and the
-cases central line is the median.
-Matching a v0.100.1 likelihood also needs that run's \code{nb_k_cases}
-(its \code{nb_dispersion.csv}) and a config without \code{reported_tier};
-resume refuses to pool with v0.100.1 simulations either way
+suggested before v0.101.0 was tuned against the daily cases core, the
+default; against the weekly core (\code{cases_scoring = "weekly"}) a given
+weight weighs several times more (a median 4.8 times, range 1.8 to 6.5, on
+the v0.100.1 national re-selection pools; more where the cases dispersion
+is small), so about 0.02 keeps that balance there. Not re-tuned since;
+check the fit before relying on it
+\item \code{cases_scoring}: \code{"daily"} (default; one NB cell per day at
+the weekly k, the cell rule of v0.100.1 and earlier) or \code{"weekly"}
+(cases scored as NB on reporting-week totals). The daily rule is the
+default because the weekly rule fitted the cases worse in the v0.101.0
+likelihood gate. Either rule runs at the dispersion this version
+estimates, so the default does not reproduce a v0.100.1 run: a cases fit
+with no estimate of its own, or clamped at the lower bound, now takes the
+panel trend, a config with \code{reported_tier} restricts the cases k and
+the deaths dispersion to observed weeks, the ensemble intervals are
+observation-level (weekly NB at the scored k under either rule) and the
+cases central line is the median. Matching a v0.100.1 likelihood also
+needs that run's \code{nb_k_cases} (its \code{nb_dispersion.csv}) and a
+config without \code{reported_tier}; resume refuses to pool with v0.100.1
+simulations either way
 \item ... (see \code{mosaic_control_defaults()} for complete list)
 }}
 

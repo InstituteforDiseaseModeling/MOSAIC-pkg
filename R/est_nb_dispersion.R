@@ -148,8 +148,9 @@
 #' Reporting weeks of a daily grid
 #'
 #' The one definition of the reporting weeks of a daily grid, used by the
-#' weekly cases likelihood (\code{calc_model_likelihood()}) and the
-#' observation-level posterior predictive (\code{calc_model_ensemble()}), on
+#' weekly cases likelihood (\code{calc_model_likelihood(cases_scoring =
+#' "weekly")}) and the observation-level posterior predictive
+#' (\code{calc_model_ensemble()}, under either cases scoring rule), on
 #' the block formula \code{.nb_disp_block()} that the dispersion estimate
 #' (\code{est_nb_dispersion()}) and the integrated deaths likelihood aggregate
 #' with, so all of them sum the same days. MOSAIC surveillance weeks run Monday
@@ -618,9 +619,10 @@
 #' (\code{MASS::glm.nb}), following the Farrington/Noufaily convention.
 #'
 #' The returned \code{k} is on R's \code{dnbinom(mu=, size=)} scale and is used
-#' directly by \code{\link{calc_model_likelihood}}, which scores the cases on
-#' the same weekly totals. \code{k = Inf} denotes the Poisson limit and is a
-#' valid, intended result.
+#' directly by \code{\link{calc_model_likelihood}}: its default per-day cell rule
+#' applies it to every day, and \code{cases_scoring = "weekly"} scores the cases
+#' on the same weekly totals it was estimated on. \code{k = Inf} denotes the
+#' Poisson limit and is a valid, intended result.
 #'
 #' A location with fewer than 20 weeks, 15 cases or 5 non-zero weeks over all
 #' its scored weeks takes the Poisson limit. Otherwise its own fit can still fail

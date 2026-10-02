@@ -675,8 +675,8 @@
   # would otherwise fail inside every likelihood call and surface only as an
   # all-NA calibration.
   cs <- def$likelihood$cases_scoring
-  if (!is.null(cs) && !(is.character(cs) && length(cs) == 1L && cs %in% c("weekly", "daily"))) {
-    stop("likelihood$cases_scoring must be \"weekly\" (default) or \"daily\" (legacy), got: ",
+  if (!is.null(cs) && !(is.character(cs) && length(cs) == 1L && cs %in% c("daily", "weekly"))) {
+    stop("likelihood$cases_scoring must be \"daily\" (default) or \"weekly\", got: ",
          paste(format(cs), collapse = ", "), call. = FALSE)
   }
   # The central method is first resolved after calibration, once the shards are
@@ -1486,16 +1486,17 @@
 #'   per-location offset width now averages over the years each location
 #'   observes (not the pooled years), the n_iterations collapse keeps -Inf
 #'   replicates, and the cumulative shape term sums over scored cells only.
-#'   v0.101.0 scores cases on reporting-week totals instead of daily cells, and
-#'   changes the cases dispersion: estimated from observed weeks only (config
-#'   \code{reported_tier}), and a location whose fit collapses, is clamped at
-#'   the lower bound or has too few observed weeks takes the cross-country panel
-#'   trend. The integrated deaths score's dispersion phi is likewise estimated
-#'   from observed weeks only when the config carries \code{reported_tier}
-#'   (every scored week when they are too few). Its development builds stamped
-#'   "R/v0.101.0+weekly_cases", whose clamped fits kept the 0.1 bound: the
-#'   resolved k is not part of control.json, so only this tag keeps their shards
-#'   apart.
+#'   v0.101.0 adds the weekly cases rule (\code{cases_scoring = "weekly"}; the
+#'   default stays the daily cells, which the control comparison on resume
+#'   pins) and changes the cases dispersion: estimated from observed weeks only
+#'   (config \code{reported_tier}), and a location whose fit collapses, is
+#'   clamped at the lower bound or has too few observed weeks takes the
+#'   cross-country panel trend. The integrated deaths score's dispersion phi is
+#'   likewise estimated from observed weeks only when the config carries
+#'   \code{reported_tier} (every scored week when they are too few). Its
+#'   development builds stamped "R/v0.101.0+weekly_cases", whose clamped fits
+#'   kept the 0.1 bound: the resolved k is not part of control.json, so only
+#'   this tag keeps their shards apart.
 .mosaic_likelihood_impl_version <- function() "R/v0.101.0+clamped_k_trend"
 
 #' R Engine Semantics Version

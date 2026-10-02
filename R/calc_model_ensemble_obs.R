@@ -9,10 +9,11 @@
 # surveillance. Intervals built from engine draws alone are therefore too
 # narrow for the observations (on the v0.100.1 national rehearsal, 95% coverage
 # of observed weekly cases had median 0.87, 50% coverage 0.37). The functions
-# here draw, for every member trajectory, an observation consistent with the
-# likelihood's own observation model (under the default weekly cases scoring;
-# the legacy daily rule keeps the same weekly predictive, see
-# .mosaic_resolve_observation_model()):
+# here draw, for every member trajectory, an observation from the weekly
+# observation model the dispersion was estimated for. It is the likelihood's own
+# under cases_scoring = "weekly"; the default daily rule scores per-day cells at
+# the same k and keeps this weekly predictive, which is wider than that
+# likelihood implies (see .mosaic_resolve_observation_model()):
 #
 #   cases   weekly totals ~ NB(mu = the member's weekly total, size = k_j), with
 #           k_j the per-location weekly dispersion the calibration scored with
@@ -23,7 +24,7 @@
 #           quasi-Poisson dispersion of the integrated deaths likelihood
 #           (deaths_integration$dispersion).
 #
-# Weeks are the reporting weeks the weekly cases likelihood scores
+# Weeks are the reporting weeks k is estimated on and the weekly cases rule scores
 # (.mosaic_week_blocks() with the location's reporting-week offset), with the
 # partial weeks at the edges of the window kept (.mosaic_observation_blocks()).
 # The two likelihood floors -- the cases eps floor and the deaths background --
@@ -46,14 +47,14 @@
 #' observed cases over the scored window exactly as \code{est_nb_dispersion()}
 #' detects it.
 #'
-#' The observation model is the same under both cases scoring rules. With the
-#' default \code{cases_scoring = "weekly"} it is the likelihood's own: one
-#' negative binomial at size \eqn{k} per reporting-week total. The legacy
+#' The observation model is the same under both cases scoring rules: one
+#' negative binomial at size \eqn{k} per reporting-week total. With
+#' \code{cases_scoring = "weekly"} it is the likelihood's own. The default
 #' \code{"daily"} rule scores each day as its own negative binomial cell at the
 #' same \eqn{k}, which implies a weekly variance of about \eqn{C + C^2/(7k)}
-#' for a weekly total \eqn{C}; the predictive keeps \eqn{C + C^2/k}, so a daily
-#' run's intervals are wider than its likelihood implies (and are not the
-#' engine-level intervals runs made before v0.101.0 reported).
+#' for a weekly total \eqn{C}; the predictive keeps \eqn{C + C^2/k}, so a
+#' default run's intervals are wider than its likelihood implies (and are not
+#' the engine-level intervals runs made before v0.101.0 reported).
 #'
 #' @param config The calibration config (\code{location_name},
 #'   \code{reported_cases}, \code{date_start}).

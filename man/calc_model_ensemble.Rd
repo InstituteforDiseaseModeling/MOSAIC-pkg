@@ -146,11 +146,12 @@ reporting weeks start; default 0), or the table of
 \code{<dir_output>/2_calibration/diagnostics/nb_dispersion.csv} (its cases
 rows, matched by location). \code{run_MOSAIC()} supplies the dispersion its
 likelihood scored with. The cases draw is this weekly negative binomial
-under either cases scoring rule; under the legacy
+under either cases scoring rule. Under the default
 \code{control$likelihood$cases_scoring = "daily"}, whose per-day cells at
 the same \eqn{k} imply a weekly variance of about \eqn{C + C^2/(7k)} for a
 weekly total \eqn{C} (the predictive uses \eqn{C + C^2/k}), the intervals
-are wider than that likelihood implies. The deaths dispersion is read from
+are therefore wider than the likelihood implies; under \code{"weekly"} they
+match it. The deaths dispersion is read from
 \code{deaths_integration}. When \code{NULL} (default) no observation noise
 is drawn and \code{cases_array}/\code{deaths_array} are the engine draws.}
 

@@ -464,8 +464,9 @@
             eps_rel_cases  = likelihood_settings$eps_rel_cases,
             eps_rel_deaths = likelihood_settings$eps_rel_deaths,
             ll_deaths_core = .ll_d_core,
-            # Cases on reporting-week totals, on the weeks the dispersion was
-            # estimated on (offsets resolved once with k).
+            # Cases cell rule (default "daily"; "weekly" sums reporting-week
+            # totals on the weeks the dispersion was estimated on, offsets
+            # resolved once with k). NULL (an older control) means "daily".
             cases_scoring = likelihood_settings$cases_scoring,
             week_offset   = likelihood_settings$.cases_week_offset_resolved,
             weight_cases = likelihood_settings$weight_cases,
@@ -1163,8 +1164,9 @@ run_MOSAIC <- function(config,
   # scores NA for every draw. When that holds for every location, there is
   # nothing to weight, so stop here instead of running a calibration whose every
   # likelihood is NA. The cases gate mirrors calc_model_likelihood(): the weekly
-  # core needs three complete reporting weeks; per-day cells (cases_scoring =
-  # "daily") or an active shape term keep the any-finite-observation gate.
+  # core (cases_scoring = "weekly") needs three complete reporting weeks; per-day
+  # cells (the default "daily") or an active shape term keep the
+  # any-finite-observation gate.
   .weekly_gate <- .mosaic_weekly_cases_gate(control$likelihood)
   .unscorable <- .mosaic_unscorable_locations(
     config$reported_cases, config$reported_deaths,
@@ -1200,17 +1202,20 @@ run_MOSAIC <- function(config,
   control$likelihood$.nb_k_cases_resolved  <- .nb_disp$cases$k
   control$likelihood$.nb_k_deaths_resolved <- .nb_disp$deaths$k
   control$likelihood$.nb_dispersion_table  <- .nb_disp$table
-  # The weekly cases likelihood sums cases over the reporting weeks the
-  # dispersion was estimated on; resolved here once, with k, for every worker.
+  # The weekly cases rule (cases_scoring = "weekly") sums cases over the
+  # reporting weeks the dispersion was estimated on; resolved here once, with
+  # k, for every worker.
   control$likelihood$.cases_week_offset_resolved <- .nb_disp$cases$week_offset
   log_msg("NB dispersion (weekly, conditional ML): cases median k = %s, deaths median k = %s | Poisson: %d cases, %d deaths of %d locations",
           .nb_disp$cases$summary, .nb_disp$deaths$summary,
           sum(is.infinite(.nb_disp$cases$k)), sum(is.infinite(.nb_disp$deaths$k)),
           length(.nb_disp$cases$k))
+  .cases_scoring <- if (is.null(control$likelihood$cases_scoring)) "daily" else
+    control$likelihood$cases_scoring
   log_msg("Cases likelihood: %s (cases_scoring = '%s'); dispersion from %s",
-          if (identical(control$likelihood$cases_scoring, "daily"))
-            "one NB cell per day at the weekly k (legacy)" else "NB on reporting-week totals at the weekly k",
-          if (is.null(control$likelihood$cases_scoring)) "weekly" else control$likelihood$cases_scoring,
+          if (identical(.cases_scoring, "weekly"))
+            "NB on reporting-week totals at the weekly k" else "one NB cell per day at the weekly k",
+          .cases_scoring,
           if (identical(.nb_disp$cases$summary, "user-supplied")) {
             "the user-supplied nb_k_cases"
           } else if (isTRUE(.nb_disp$tier_used)) {
@@ -3508,22 +3513,26 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 #'     \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
 #'     \item \code{weight_wis}: WIS regularizer weight (default: 0, off). The 0.10
-#'       suggested before v0.101.0 was tuned against the daily cases core; against
-#'       the weekly core a given weight weighs several times more (a median 4.8
-#'       times, range 1.8 to 6.5, on the v0.100.1 national re-selection pools;
-#'       more where the cases dispersion is small), so about 0.02 keeps the old
-#'       balance. Not re-tuned since; check the fit before relying on it
-#'     \item \code{cases_scoring}: \code{"weekly"} (default; cases scored as NB on
-#'       reporting-week totals) or \code{"daily"} (the per-day cells of v0.100.1
-#'       and earlier, at the dispersion this version estimates). \code{"daily"}
-#'       does not reproduce a v0.100.1 run: a cases fit with no estimate of its
-#'       own, or clamped at the lower bound, now takes the panel trend, a config
-#'       with \code{reported_tier} restricts the cases k and the deaths dispersion
-#'       to observed weeks, the ensemble intervals are observation-level and the
-#'       cases central line is the median.
-#'       Matching a v0.100.1 likelihood also needs that run's \code{nb_k_cases}
-#'       (its \code{nb_dispersion.csv}) and a config without \code{reported_tier};
-#'       resume refuses to pool with v0.100.1 simulations either way
+#'       suggested before v0.101.0 was tuned against the daily cases core, the
+#'       default; against the weekly core (\code{cases_scoring = "weekly"}) a given
+#'       weight weighs several times more (a median 4.8 times, range 1.8 to 6.5, on
+#'       the v0.100.1 national re-selection pools; more where the cases dispersion
+#'       is small), so about 0.02 keeps that balance there. Not re-tuned since;
+#'       check the fit before relying on it
+#'     \item \code{cases_scoring}: \code{"daily"} (default; one NB cell per day at
+#'       the weekly k, the cell rule of v0.100.1 and earlier) or \code{"weekly"}
+#'       (cases scored as NB on reporting-week totals). The daily rule is the
+#'       default because the weekly rule fitted the cases worse in the v0.101.0
+#'       likelihood gate. Either rule runs at the dispersion this version
+#'       estimates, so the default does not reproduce a v0.100.1 run: a cases fit
+#'       with no estimate of its own, or clamped at the lower bound, now takes the
+#'       panel trend, a config with \code{reported_tier} restricts the cases k and
+#'       the deaths dispersion to observed weeks, the ensemble intervals are
+#'       observation-level (weekly NB at the scored k under either rule) and the
+#'       cases central line is the median. Matching a v0.100.1 likelihood also
+#'       needs that run's \code{nb_k_cases} (its \code{nb_dispersion.csv}) and a
+#'       config without \code{reported_tier}; resume refuses to pool with v0.100.1
+#'       simulations either way
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list)
 #'   }
 #'
@@ -3767,17 +3776,21 @@ mosaic_control_defaults <- function(calibration = NULL,
     eps_rel_deaths = 0.25,           # Relative floor, standalone NB deaths scoring only (not read by run_MOSAIC)
 
     # === Cases scoring resolution ===
-    # "weekly" (v0.101.0+): NB on reporting-week totals of observed and simulated
-    # cases, on the weeks est_nb_dispersion() estimates k from. The surveillance
-    # is weekly totals spread over days; scoring each day at the weekly k counted
-    # a week's level information ~5x (median over the v0.100.1 national runs) and
-    # ranked draws by within-week noise. "daily" is the per-day cell rule of
-    # v0.100.1 and earlier at the dispersion this version estimates; it does NOT
+    # "daily" (default): one NB cell per day at the weekly k, the cell rule of
+    # v0.100.1 and earlier, at the dispersion this version estimates. It does NOT
     # reproduce a v0.100.1 run (panel-trend k for collapsed and clamped fits,
     # observed-week k and deaths phi under reported_tier, observation-level
     # intervals; matching a v0.100.1 likelihood also needs that run's nb_k_cases
-    # and no reported_tier).
-    cases_scoring = "weekly",
+    # and no reported_tier). "weekly": NB on reporting-week totals of observed and
+    # simulated cases, on the weeks est_nb_dispersion() estimates k from. The
+    # surveillance is weekly totals spread over days, so the daily rule counts a
+    # week's level information ~5x (median over the v0.100.1 national runs); the
+    # weekly rule was the 0.101.0 candidate default, but in the pre-registered
+    # likelihood gate (KEN, ZMB, CMR, GHA; same data, dispersions, intervals and
+    # seeds) it fitted the cases worse than daily on both counts of its direct
+    # test (geometric-mean cases rWIS weekly/daily 1.068, median |log cases bias|
+    # 0.254 vs 0.187), so the default stays daily pending investigation.
+    cases_scoring = "daily",
 
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in weeks)

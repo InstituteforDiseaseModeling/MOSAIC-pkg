@@ -1,11 +1,14 @@
 # =============================================================================
 # test-calc_model_likelihood_weekly.R
 #
-# v0.101.0: the cases NB core scores reporting-week totals of the observed and
-# simulated daily cases, on the weeks est_nb_dispersion() estimates k from.
-# Hand-computed fixtures pin the value; the rest pin the block rule (Monday to
-# Sunday, partial weeks dropped), the weights, the scored window, the legacy
-# daily switch and, qualitatively, the re-selection evidence that motivated it.
+# v0.101.0: cases_scoring = "weekly" scores the cases NB core on reporting-week
+# totals of the observed and simulated daily cases, on the weeks
+# est_nb_dispersion() estimates k from. The default stays the per-day cells
+# ("daily"): the v0.101.0 likelihood gate blocked the weekly rule as the default.
+# These tests therefore request the weekly rule explicitly. Hand-computed
+# fixtures pin the value; the rest pin the block rule (Monday to Sunday, partial
+# weeks dropped), the weights, the scored window, the daily default and,
+# qualitatively, the re-selection evidence that motivated the weekly rule.
 # =============================================================================
 
 # One location on a daily grid that starts on a WEDNESDAY: a 5-day partial week
@@ -22,10 +25,10 @@
           cfg = list(date_start = d0, date_stop = d0 + length(obs) - 1L))
 }
 .one <- function(x) matrix(x, nrow = 1L)
-.ll1 <- function(obs, est, cfg, k = 2, ...) {
+.ll1 <- function(obs, est, cfg, k = 2, cases_scoring = "weekly", ...) {
      MOSAIC::calc_model_likelihood(.one(obs), .one(est), .one(obs * 0), .one(est * 0),
                                    config = cfg, nb_k_cases = k, nb_k_deaths = Inf,
-                                   ll_deaths_core = 0, ...)
+                                   ll_deaths_core = 0, cases_scoring = cases_scoring, ...)
 }
 
 test_that("the weekly cases core equals the hand-computed NB over complete weeks", {
@@ -41,17 +44,23 @@ test_that("the weekly cases core equals the hand-computed NB over complete weeks
      expect_equal(llp, -24.1097126608, tolerance = 1e-9)
 })
 
-test_that("cases_scoring = 'daily' reproduces the legacy per-day score", {
+test_that("the default cases_scoring = 'daily' is the per-day score", {
      fx <- .wk_fixture()
      lld <- .ll1(fx$obs, fx$est, fx$cfg, cases_scoring = "daily")
      eps_d <- max(1e-4, 0.02 * mean(fx$obs))
      expect_equal(lld, sum(stats::dnbinom(fx$obs, mu = pmax(fx$est, eps_d), size = 2, log = TRUE)),
                   tolerance = 1e-12)
      expect_equal(lld, -266.0109806011, tolerance = 1e-9)
+     # it is the default: no argument, or NULL, scores per day
+     dflt <- MOSAIC::calc_model_likelihood(.one(fx$obs), .one(fx$est), .one(fx$obs * 0), .one(fx$est * 0),
+                                           config = fx$cfg, nb_k_cases = 2, nb_k_deaths = Inf,
+                                           ll_deaths_core = 0)
+     expect_identical(dflt, lld)
+     expect_identical(.ll1(fx$obs, fx$est, fx$cfg, cases_scoring = NULL), lld)
+     expect_false(isTRUE(all.equal(lld, .ll1(fx$obs, fx$est, fx$cfg))))   # the weekly rule differs
      # and equals the undated call, which has no reporting weeks to form
      expect_identical(lld, .ll1(fx$obs, fx$est, NULL))
      expect_error(.ll1(fx$obs, fx$est, fx$cfg, cases_scoring = "monthly"), "should be one of")
-     expect_identical(.ll1(fx$obs, fx$est, fx$cfg, cases_scoring = NULL), .ll1(fx$obs, fx$est, fx$cfg))
 })
 
 test_that("confidence weights: the week takes its days' mean weight, mass-preserving", {
@@ -125,7 +134,8 @@ test_that("a non-finite simulated count on a scored week fails the path", {
      # passes an integrated deaths score, which must not rescue it
      expect_identical(MOSAIC::calc_model_likelihood(.one(fx$obs), matrix(NA_integer_, 1L, 40L),
                                                     .one(fx$obs * 0), .one(fx$est * 0), config = fx$cfg,
-                                                    nb_k_cases = 2, nb_k_deaths = Inf, ll_deaths_core = -5),
+                                                    nb_k_cases = 2, nb_k_deaths = Inf, ll_deaths_core = -5,
+                                                    cases_scoring = "weekly"),
                       -Inf)
      for (bad in c(NA, NaN, Inf)) {
           e <- fx$est; e[15] <- bad                # a day of the second complete week
@@ -142,9 +152,11 @@ test_that("a non-finite simulated count on a scored week fails the path", {
      expect_true(is.finite(.ll1(fx$obs, e, fx$cfg, weights_obs_cases = .one(wob))))
      wob[13:19] <- 0.5
      expect_identical(.ll1(fx$obs, e, fx$cfg, weights_obs_cases = .one(wob)), -Inf)
-     # the per-day rule keeps its legacy treatment: a missing day weighs nothing
+     # the default per-day rule keeps its earlier treatment: a missing day weighs
+     # nothing, and only a path with no usable day is -Inf
      e <- fx$est; e[15] <- NA
      expect_true(is.finite(.ll1(fx$obs, e, fx$cfg, cases_scoring = "daily")))
+     expect_identical(.ll1(fx$obs, rep(NA_real_, 40), fx$cfg, cases_scoring = "daily"), -Inf)
 })
 
 test_that("fewer than three scored weeks leave the cases core out", {
@@ -166,8 +178,9 @@ test_that("a location short of three scored weeks and without deaths is NA, not 
      keep <- 1:19                                 # partial week + 2 complete weeks
      cfg <- list(date_start = fx$d0, date_stop = fx$d0 + 18L)
      na <- rep(NA_real_, 19)
-     ll <- function(est, ...) MOSAIC::calc_model_likelihood(.one(fx$obs[keep]), .one(est), .one(na), .one(na),
-                                                          config = cfg, nb_k_cases = 2, nb_k_deaths = Inf, ...)
+     ll <- function(est, cases_scoring = "weekly", ...)
+          MOSAIC::calc_model_likelihood(.one(fx$obs[keep]), .one(est), .one(na), .one(na), config = cfg,
+                                        nb_k_cases = 2, nb_k_deaths = Inf, cases_scoring = cases_scoring, ...)
      expect_identical(ll(fx$est[keep]), NA_real_)
      expect_identical(ll(fx$est[keep] * 50), NA_real_)
      expect_identical(ll(fx$est[keep], ll_deaths_core = 0), NA_real_)   # run_MOSAIC with no deaths
@@ -179,13 +192,14 @@ test_that("a location short of three scored weeks and without deaths is NA, not 
      two <- MOSAIC::calc_model_likelihood(rbind(c(fx$obs[keep], rep(NA, 21)), fx$obs),
                                           rbind(fx$est, fx$est), matrix(NA_real_, 2, 40),
                                           matrix(NA_real_, 2, 40), config = fx$cfg,
-                                          nb_k_cases = 2, nb_k_deaths = Inf)
+                                          nb_k_cases = 2, nb_k_deaths = Inf, cases_scoring = "weekly")
      expect_equal(two, -19.7951764389, tolerance = 1e-9)
      # the weighted gate: five complete weeks at confidence weight 0.5 make 2.5, at 0.7 make 3.5
      na40 <- rep(NA_real_, 40)
      llw <- function(w) MOSAIC::calc_model_likelihood(.one(fx$obs), .one(fx$est), .one(na40), .one(na40),
                                                     config = fx$cfg, nb_k_cases = 2, nb_k_deaths = Inf,
-                                                    weights_obs_cases = .one(rep(w, 40)))
+                                                    weights_obs_cases = .one(rep(w, 40)),
+                                                    cases_scoring = "weekly")
      expect_identical(llw(0.5), NA_real_)
      expect_equal(llw(0.7), -19.7951764389, tolerance = 1e-9)
      # the NB deaths core (no ll_deaths_core) follows the same weekly gate
@@ -201,9 +215,9 @@ test_that("without ll_deaths_core the NB deaths core scores reporting-week total
      # NB cell per day at the weekly k, the over-count the weekly cases core removes.
      fx <- .wk_fixture()
      na <- rep(NA_real_, 40)
-     lld <- function(est_d, ...) MOSAIC::calc_model_likelihood(.one(na), .one(na), .one(fx$obs), .one(est_d),
-                                                             config = fx$cfg, nb_k_cases = Inf,
-                                                             nb_k_deaths = 2, ...)
+     lld <- function(est_d, cases_scoring = "weekly", ...)
+          MOSAIC::calc_model_likelihood(.one(na), .one(na), .one(fx$obs), .one(est_d), config = fx$cfg,
+                                        nb_k_cases = Inf, nb_k_deaths = 2, cases_scoring = cases_scoring, ...)
      eps <- max(1e-4, 0.25 * mean(fx$Y))         # eps_rel_deaths, relative to the mean WEEKLY count
      expect_equal(lld(fx$est), sum(stats::dnbinom(fx$Y, mu = pmax(fx$M, eps), size = 2, log = TRUE)),
                   tolerance = 1e-12)
@@ -221,7 +235,8 @@ test_that("without ll_deaths_core the NB deaths core scores reporting-week total
      d0 <- as.Date("2024-01-04"); Y <- c(14, 28, 7, 21)
      o <- .one(rep(Y / 7, each = 7)); e <- .one(rep(c(10, 30, 5, 25), each = 7) / 7)
      thu <- MOSAIC::calc_model_likelihood(o, e, o, e, config = list(date_start = d0, date_stop = d0 + 27L),
-                                          nb_k_cases = 2, nb_k_deaths = 2, weight_cases = 0)
+                                          nb_k_cases = 2, nb_k_deaths = 2, weight_cases = 0,
+                                          cases_scoring = "weekly")
      expect_equal(thu, sum(stats::dnbinom(Y, mu = c(10, 30, 5, 25), size = 2, log = TRUE)), tolerance = 1e-12)
      # and a failed path fails here too
      e2 <- fx$est; e2[20] <- NA
@@ -233,9 +248,10 @@ test_that("the cumulative term scores weekly-cell sums at size k * n / 7", {
      # has size k * n / 7, not the k * n of n independent NB(k) cells.
      fx <- .wk_fixture()
      na <- rep(NA_real_, 40)
-     ll <- function(w, ...) MOSAIC::calc_model_likelihood(.one(fx$obs), .one(fx$est), .one(na), .one(na),
-                                                        config = fx$cfg, nb_k_cases = 2, nb_k_deaths = Inf,
-                                                        weight_cumulative_total = w, ...)
+     ll <- function(w, cases_scoring = "weekly", ...)
+          MOSAIC::calc_model_likelihood(.one(fx$obs), .one(fx$est), .one(na), .one(na), config = fx$cfg,
+                                        nb_k_cases = 2, nb_k_deaths = Inf, weight_cumulative_total = w,
+                                        cases_scoring = cases_scoring, ...)
      eps <- max(1e-4, 0.02 * mean(fx$obs))
      cum <- function(div) mean(vapply(c(0.25, 0.5, 0.75, 1), function(p) {
           m <- round(40 * p)
@@ -367,6 +383,7 @@ test_that("the scored window and burn-in are respected through the worker", {
      expect_identical(format(as.Date(cfg$date_start) + c(30L, 36L), "%a"), c("Tue", "Mon"))
      sw <- list(idx_cases = 31L, idx_deaths = 31L, n_time = nT)
      ls <- list(weight_cases = 1, weight_deaths = 0, eps_rel_cases = 0.02, eps_rel_deaths = 0.25,
+                cases_scoring = "weekly",
                 .nb_k_cases_resolved = 0.5, .nb_k_deaths_resolved = 1, .score_window_resolved = sw,
                 .cases_week_offset_resolved = 0L, weights_location = 1, weight_peak_timing = 0,
                 weight_peak_magnitude = 0, weight_cumulative_total = 0, weight_wis = 0,
@@ -396,13 +413,17 @@ test_that("the scored window and burn-in are respected through the worker", {
      direct <- MOSAIC::calc_model_likelihood(oc[, keep, drop = FALSE], base[, keep, drop = FALSE],
                                              od[, keep, drop = FALSE], od[, keep, drop = FALSE],
                                              config = cl, nb_k_cases = 0.5, nb_k_deaths = 1,
-                                             weight_deaths = 0, week_offset = 0L)
+                                             weight_deaths = 0, week_offset = 0L, cases_scoring = "weekly")
      expect_equal(ll0, direct, tolerance = 1e-10)
-     # offsets left to detection give the same score; the legacy switch does not
+     # offsets left to detection give the same score; the daily rule does not
      ls_det <- ls; ls_det$.cases_week_offset_resolved <- NULL
      expect_identical(worker_ll(base, ls_det), ll0)
      ls_d <- ls; ls_d$cases_scoring <- "daily"
-     expect_false(isTRUE(all.equal(worker_ll(base, ls_d), ll0)))
+     ll_d <- worker_ll(base, ls_d)
+     expect_false(isTRUE(all.equal(ll_d, ll0)))
+     # settings without the key (an older control) score with the daily default
+     ls_n <- ls; ls_n$cases_scoring <- NULL
+     expect_identical(worker_ll(base, ls_n), ll_d)
 })
 
 test_that("weekly scoring selects the correctly levelled draws that daily scoring misses", {

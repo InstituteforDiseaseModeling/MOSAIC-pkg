@@ -28,8 +28,9 @@ and last day).
 }
 \description{
 The one definition of the reporting weeks of a daily grid, used by the
-weekly cases likelihood (\code{calc_model_likelihood()}) and the
-observation-level posterior predictive (\code{calc_model_ensemble()}), on
+weekly cases likelihood (\code{calc_model_likelihood(cases_scoring =
+"weekly")}) and the observation-level posterior predictive
+(\code{calc_model_ensemble()}, under either cases scoring rule), on
 the block formula \code{.nb_disp_block()} that the dispersion estimate
 (\code{est_nb_dispersion()}) and the integrated deaths likelihood aggregate
 with, so all of them sum the same days. MOSAIC surveillance weeks run Monday

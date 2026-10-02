@@ -89,9 +89,10 @@ harmonics and the dispersion estimated by maximum likelihood
 }
 \details{
 The returned \code{k} is on R's \code{dnbinom(mu=, size=)} scale and is used
-directly by \code{\link{calc_model_likelihood}}, which scores the cases on
-the same weekly totals. \code{k = Inf} denotes the Poisson limit and is a
-valid, intended result.
+directly by \code{\link{calc_model_likelihood}}: its default per-day cell rule
+applies it to every day, and \code{cases_scoring = "weekly"} scores the cases
+on the same weekly totals it was estimated on. \code{k = Inf} denotes the
+Poisson limit and is a valid, intended result.
 
 A location with fewer than 20 weeks, 15 cases or 5 non-zero weeks over all
 its scored weeks takes the Poisson limit. Otherwise its own fit can still fail
