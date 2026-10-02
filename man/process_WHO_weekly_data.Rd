@@ -127,7 +127,7 @@ coarser totals (monthly, or dated cumulative reports) as anchors that are
 interpolated linearly. Each week of the window then gets the curve's
 increment over its Monday-to-Sunday span, and the report's cases and deaths
 are spread in proportion, in whole counts that sum to the report. The curve is
-rescaled to the report, but its total must lie between half the report and 2\\%
+rescaled to the report, but its total must lie between half the report and 2\%
 above it (a larger gap is an error in the anchors), and it must lie within the
 window. The anchors are dated like the rest of the WHO weekly rows, by report
 week. South Africa 2023 follows WHO's epidemic curve of the outbreak
