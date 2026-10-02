@@ -63,6 +63,26 @@ render_burnin <- function(ens, ...) {
                       verbose = FALSE, ...)
 }
 
+# The default figure, with the burn-in shown and hidden, rendered once per file:
+# every render writes the full PDF set, and several tests only inspect it.
+# `ensemble` is the object that was rendered.
+shared_render <- local({
+  cache <- list()
+  function(show_burn_in = TRUE) {
+    key <- as.character(show_burn_in)
+    if (is.null(cache[[key]])) {
+      ens <- make_burnin_ensemble()
+      out <- withr::local_tempdir(.local_envir = testthat::teardown_env())
+      draw <- function() plot_model_ensemble(ens, output_dir = out, central_method = "mean",
+                                             show_burn_in = show_burn_in, verbose = FALSE)
+      # A hidden head raises ggplot2's removed-rows warnings.
+      res <- if (show_burn_in) draw() else suppressWarnings(draw())
+      cache[[key]] <<- list(result = res, ensemble = ens)
+    }
+    cache[[key]]
+  }
+})
+
 layers_of <- function(p, geom) {
   unname(which(vapply(p$layers, function(l) inherits(l$geom, geom), logical(1))))
 }
@@ -88,8 +108,7 @@ test_that("prediction CSVs keep the unscored head blank and match the pre-change
   ref <- make_burnin_ensemble()
 
   # Plotting (burn-in shown) must not touch the ensemble the CSV is built from.
-  invisible(render_burnin(ens))
-  expect_identical(ens, ref)
+  expect_identical(shared_render()$ensemble, ref)
 
   td <- withr::local_tempdir()
   tbl <- MOSAIC:::.mosaic_assemble_prediction_table(ens, central_method = "mean")
@@ -117,7 +136,7 @@ test_that("show_burn_in draws the central line and ribbons from the first step",
   skip_if_not_installed("ggplot2")
   local_null_device()
   ens <- make_burnin_ensemble()
-  res <- render_burnin(ens)
+  res <- shared_render()$result
 
   for (i in seq_along(ens$location_names)) {
     p <- res$individual[[ens$location_names[i]]]
@@ -145,7 +164,7 @@ test_that("show_burn_in = FALSE blanks the unscored head as before", {
   skip_if_not_installed("ggplot2")
   local_null_device()
   ens <- make_burnin_ensemble()
-  res <- suppressWarnings(render_burnin(ens, show_burn_in = FALSE))
+  res <- shared_render(FALSE)$result
   p <- res$individual$AAA
 
   lc <- panel_series(p, "GeomLine", 1L)
@@ -163,8 +182,7 @@ test_that("show_burn_in = FALSE blanks the unscored head as before", {
 test_that("the unscored span and scored-window marker follow each channel's start", {
   skip_if_not_installed("ggplot2")
   local_null_device()
-  ens <- make_burnin_ensemble()
-  res <- render_burnin(ens)
+  res <- shared_render()$result
   p <- res$individual$AAA
   start_c <- as.numeric(as.Date("2024-01-04"))
   start_d <- as.numeric(as.Date("2024-01-03"))
@@ -235,9 +253,8 @@ test_that("a common scored-window start gets a single label; no head draws no ma
 test_that("caption metrics are unchanged by show_burn_in", {
   skip_if_not_installed("ggplot2")
   local_null_device()
-  ens <- make_burnin_ensemble()
-  shown  <- captions_of(render_burnin(ens))
-  hidden <- captions_of(suppressWarnings(render_burnin(ens, show_burn_in = FALSE)))
+  shown  <- captions_of(shared_render()$result)
+  hidden <- captions_of(shared_render(FALSE)$result)
   expect_identical(shown, golden_captions)
   expect_identical(hidden, golden_captions)
 })
