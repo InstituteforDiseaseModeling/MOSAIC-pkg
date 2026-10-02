@@ -605,10 +605,11 @@ run_rolling_cv <- function(PATHS,
 #'   replicates to draw for the single-config \code{best}/\code{medoid}
 #'   models. NULL reuses the value stored in the run manifest.
 #' @param central_method Central tendency for \code{pred_central}: \code{NULL}
-#'   (default) reuses the value recorded in the run manifest (or \code{"mean"},
-#'   the default those runs were made under, for manifests that predate the
-#'   field); otherwise a scalar or per-channel \code{c(cases=, deaths=)}
-#'   override.
+#'   (default) reuses the value recorded in the run manifest; a manifest without
+#'   the field was written by \code{run_rolling_cv()} before \code{central_method}
+#'   existed (v0.32.40-v0.37.x), when predictions were the ensemble median, so it
+#'   recompiles on \code{"median"}. Otherwise a scalar or per-channel
+#'   \code{c(cases=, deaths=)} override.
 #' @param write Logical; write \code{predictions.parquet} (default TRUE).
 #' @return The compiled long predictions data frame (invisibly if written).
 #' @export
@@ -632,10 +633,12 @@ compile_rolling_cv_predictions <- function(dir_output,
      if (is.null(n_reps_best_medoid))
           n_reps_best_medoid <- as.integer(man$spec$n_reps_best_medoid %||% 50L)
      # Reuse the run's recorded central tendency unless the caller overrides it.
-     # A manifest without the field was written under the then-default mean
-     # (deliberately not the current package default).
+     # The manifest field arrived with central_method itself (v0.38.0), so a
+     # manifest without it comes from a run that predicted, and was scored on,
+     # the ensemble median -- the fallback render_MOSAIC_figures() uses for a
+     # control.json of the same vintage (not the current package default).
      if (is.null(central_method))
-          central_method <- man$spec$central_method %||% "mean"
+          central_method <- man$spec$central_method %||% "median"
      central_method <- .mosaic_resolve_central_method(central_method)
 
      cfg_dates <- seq.Date(as.Date(base_config$date_start),

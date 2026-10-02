@@ -32,6 +32,9 @@ Surveillance artifact fixes, cases scored on reporting-week totals with dispersi
 - `plot_vaccine_effectiveness()` subtitles panels B, C, E and F as data fits, and its documentation states that they are the `est_vaccine_effectiveness()` fits, not the phi/omega priors (whose SDs are 2.3 and 4.9 times larger for phi_1 and phi_2, 1.1 and 1.2 times for omega_1 and omega_2). Nothing it computes changes; it returns the figures and panels invisibly.
 
 ## Fixes
+- A re-run into a directory that holds a finished run no longer draws the earlier run's central line. The renderer reads `3_results/summary.json`'s `central_method_*` first, and `run_MOSAIC()` writes that file only after the in-run render, so the ensemble and medoid figures took the earlier run's central method (every default re-run of a 0.98.0-0.100.x directory under the new default). `run_MOSAIC()` now removes the earlier `summary.json` with the other post-calibration artifacts and passes the central method it resolved to the in-run render.
+- An invalid `control$predictions$central_method` (an unnamed `c("median", "mean")`, a misspelling, an unknown channel) is rejected when the control is validated. It was first resolved after calibration and shard consolidation, which ended the run with no ensemble in a directory that cannot be resumed.
+- `compile_rolling_cv_predictions()` recompiles a manifest without `central_method` (written by `run_rolling_cv()` v0.32.40-v0.37.x, before the setting existed) on the ensemble median those runs predicted; it fell back to the mean.
 - `man/process_WHO_weekly_data.Rd` is regenerated from its source, and a hand-escaped percent sign that printed "15\" in `process_cholera_surveillance_data()`'s manual is fixed.
 - `test-get_ggplot_legend.R` and `test-plot_model_likelihood.R` no longer leave `Rplots.pdf` in the test directory.
 
