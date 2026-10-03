@@ -1434,12 +1434,17 @@ initial_conditions_E_I <- est_initial_E_I(
      # 3-day lookback missed outbreaks under way on day 1 (see the ic_t0 note).
      lookback_days = 14,
      lookahead_days = 14,
-     # Quiet-start seeding floor: a location that reports cases later in the
-     # config window (after this window, up to date_stop) but either none in
-     # this window or too few for one expected initial infection
-     # (N * (E[prop_E] + E[prop_I]) < 1 under the window's Beta) gets
-     # Beta(1, 1e5) for E and for I instead of its window-based
-     # prior (the near-zero Beta(0.01, 99999.99) when the window is empty).
+     # Quiet-start seeding floor: a location that reports observed or
+     # reconstructed (tier 1-2) cases later in the config window (after this
+     # window, up to date_stop) but either none in this window or too few for
+     # one expected initial infection (N * (E[prop_E] + E[prop_I]) < 1 under
+     # the window's Beta) gets Beta(1, 1e5) for E and for I instead of its
+     # window-based prior (the near-zero Beta(0.01, 99999.99) when the window
+     # is empty). Imputed (tier-3, AI Fourier) rows are not reports: they are
+     # set aside wherever the window holds a tier 1-2 count, and a window
+     # without one reads its country-level reconstructions, never regional
+     # ones (metadata$imputed_window_fallback; ETH at 2018-01-01, whose
+     # December 2017 reconstruction ran ~300 cases/week after an observed 61).
      # Absent an importation mechanism this stands in for undetected
      # circulation or re-introduction, so a single-location fit can reach the
      # later outbreak (GHA 2024, NER 2024, TCD 2025, ...). Mean 1e-5 per
@@ -1460,12 +1465,15 @@ initial_conditions_E_I <- est_initial_E_I(
 
      n_updated_E_I <- 0
      priors_default$metadata$quiet_start_seeded <- initial_conditions_E_I$metadata$quiet_start_seeded
+     priors_default$metadata$imputed_window_fallback <- initial_conditions_E_I$metadata$imputed_window_fallback
      priors_default$metadata$description <- sub(
           "{quiet_start_seeded}",
           paste(initial_conditions_E_I$metadata$quiet_start_seeded, collapse = " "),
           priors_default$metadata$description, fixed = TRUE)
      message("Quiet-start seeding prior for: ",
              paste(initial_conditions_E_I$metadata$quiet_start_seeded, collapse = ", "))
+     message("E/I window read from country-level imputed rows (no tier 1-2 count) for: ",
+             paste(initial_conditions_E_I$metadata$imputed_window_fallback, collapse = ", "))
 
      # Update prop_E_initial for each location
      for (loc in names(initial_conditions_E_I$parameters_location$prop_E_initial$parameters$location)) {

@@ -93,24 +93,23 @@ test_that("est_initial_E_I_location handles zero cases", {
 })
 
 test_that("est_initial_E_I_location mathematical consistency", {
-  # Test that E is typically smaller than I in endemic settings
-  cases <- c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)  # Steady cases
-  dates <- as.Date("2024-01-01") + 0:9
-  population <- 100000
+  # Under constant incidence E and I are the steady-state stocks of the
+  # engine's daily chain: E = lambda / (1 - exp(-iota)) and
+  # I = lambda * sum_{a >= 1} survival(a), lambda = cases * chi / (rho * sigma).
+  # Days without a row are unobserved, not zero, so ten observed days of the
+  # default 60-day window give the same stocks as the full window.
   t0 <- as.Date("2024-01-15")
-  
-  result <- est_initial_E_I_location(
-    cases = cases, dates = dates, population = population, t0 = t0,
-    sigma = 0.2, rho = 0.1, chi = 0.7, tau_r = 4,
-    iota = 0.714,  # Fast incubation
-    gamma_1 = 0.2,  # Slow recovery
-    gamma_2 = 0.67
-  )
-  
-  # In steady state with fast incubation, I should be > E
-  expect_true(result$I >= result$E)
-  expect_true(result$E >= 0)
-  expect_true(result$I >= 0)
+  p <- list(population = 100000, sigma = 0.2, rho = 0.1, chi = 0.7, tau_r = 4,
+            iota = 0.714, gamma_1 = 0.2, gamma_2 = 0.67)
+  run <- function(cases, dates) {
+    do.call(est_initial_E_I_location, c(list(cases = cases, dates = dates, t0 = t0), p))
+  }
+  lambda <- p$chi / (p$rho * p$sigma)
+  survival_sum <- p$sigma * exp(-p$gamma_1) / -expm1(-p$gamma_1) +
+    (1 - p$sigma) * exp(-p$gamma_2) / -expm1(-p$gamma_2)
+  expected <- list(E = round(lambda / -expm1(-p$iota)), I = round(lambda * survival_sum))
+  expect_equal(run(rep(1, 60), seq(t0 - 60, t0 - 1, by = "day")), expected)
+  expect_equal(run(rep(1, 10), as.Date("2024-01-01") + 0:9), expected)
 })
 
 test_that("est_initial_E_I main function parameter validation", {
