@@ -60,8 +60,9 @@
 #' [`config_simulation_endemic`] are also available.
 #'
 #' **Vaccination doses**: `nu_1_jt + nu_2_jt` is the OCV doses shipped to each
-#' location, spread over days at 20,000 doses a day by [est_vaccination_rate()]
-#' from the GTFCC/WHO campaign file. Since `config_default` v7.0 (MOSAIC
+#' location, administered at up to 20,000 doses a day by
+#' [est_vaccination_rate()] from the GTFCC/WHO campaign file, each GTFCC
+#' delivery from its own delivery date. Since `config_default` v7.0 (MOSAIC
 #' v0.103.0) each request's doses are split by its GTFCC rounds: shipped doses
 #' are divided across the rounds in proportion to the doses administered in
 #' each, the first round goes to `nu_1_jt` and the second to `nu_2_jt`, in that
@@ -71,8 +72,11 @@
 #' `phi_2` of its second doses from `V1` to `V2`, capped at the `V1` stock, so a
 #' two-dose campaign immunises its first-round recipients once. Second rounds
 #' are pre-2023 campaigns (the ICG suspended two-dose outbreak response in
-#' October 2022), so over a 2023+ window `nu_2_jt` is zero; up to v6.2 every
-#' dose was a first dose and `nu_2_jt` was zero everywhere.
+#' October 2022), so over a 2023+ window `nu_2_jt` is zero. Up to v6.2 every
+#' dose was a first dose, `nu_2_jt` was zero everywhere, and every delivery of
+#' a request started at its first delivery date (this moved later deliveries
+#' of 22 pre-2023 requests up to 2.5 years early and did not change the 2023+
+#' series).
 #'
 #' **Note on Initial Condition Formats**: This configuration includes both count
 #' (`*_j_initial`) and proportion (`prop_*_initial`) representations of initial

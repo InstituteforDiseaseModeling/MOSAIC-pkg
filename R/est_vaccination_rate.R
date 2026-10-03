@@ -22,10 +22,19 @@
 #'
 #' @details
 #' \strong{What nu is.} The output \code{nu} is the number of doses
-#' \emph{shipped} per request, spread over days at \code{max_rate_per_day} from
-#' the request's campaign date (its first delivery for GTFCC rows); requests that
-#' overlap in a location add up. Shipped-but-unused doses are counted as
-#' delivered.
+#' \emph{shipped} per request, administered at up to \code{max_rate_per_day}
+#' a day. A GTFCC request releases each delivery on its own date (its
+#' \code{delivery_schedule}): deliveries join a stock, the stock is
+#' administered at \code{max_rate_per_day} a day while it lasts, and a
+#' request whose stock runs out resumes at its next delivery. A request with
+#' one delivery, or whose next delivery arrives before its stock runs out, is
+#' one unbroken run from its first delivery, as are WHO rows, which have no
+#' schedule and start at their campaign date. Requests that overlap in a
+#' location add up. Shipped-but-unused doses are counted as delivered. (Up to
+#' MOSAIC v0.102.0 every delivery of a request was released from its first
+#' delivery date, which moved later deliveries of multi-delivery requests --
+#' typically second rounds and later campaigns of GTFCC preventive programmes
+#' -- up to two and a half years early.)
 #'
 #' \strong{First and second doses.} Each day's doses of a request are split
 #' into first doses (\code{nu_1}) and second doses (\code{nu_2}) by the
@@ -52,9 +61,9 @@
 #' The function performs the following steps:
 #' \enumerate{
 #'   \item **Load Vaccination Data**:
-#'     - Reads processed vaccination data from WHO or GTFCC and filters for relevant columns (\code{iso_code}, \code{campaign_date}, \code{doses_shipped}, \code{round_sequence}).
+#'     - Reads processed vaccination data from WHO or GTFCC and filters for relevant columns (\code{iso_code}, \code{campaign_date}, \code{doses_shipped}, \code{delivery_schedule}, \code{round_sequence}).
 #'   \item **Redistribute Doses**:
-#'     - Redistributes shipped doses day by day based on a maximum daily rate (\code{max_rate_per_day}) and splits each day into first and second doses.
+#'     - Releases each delivery on its date and administers the stock day by day at up to a maximum daily rate (\code{max_rate_per_day}), then splits each day into first and second doses.
 #'     - Sums requests that overlap on the same \code{distribution_date} within \code{iso_code}.
 #'   \item **Validate Redistribution**:
 #'     - Checks that the redistributed doses sum to the total shipped doses and that first plus second doses equal the doses distributed.
@@ -119,11 +128,15 @@ est_vaccination_rate <- function(PATHS,
 
      }
 
-     # Round attribution from process_GTFCC_vaccination_data(); WHO rows carry none
-     if (!"round_sequence" %in% names(vaccination_data)) vaccination_data$round_sequence <- NA_character_
-     vaccination_data <- vaccination_data[, c('iso_code', 'campaign_date', 'doses_shipped', 'round_sequence')]
+     # Delivery schedule and round attribution from process_GTFCC_vaccination_data();
+     # WHO rows carry neither
+     for (nm in c('delivery_schedule', 'round_sequence')) {
+          if (!nm %in% names(vaccination_data)) vaccination_data[[nm]] <- NA_character_
+          vaccination_data[[nm]] <- as.character(vaccination_data[[nm]])
+     }
+     vaccination_data <- vaccination_data[, c('iso_code', 'campaign_date', 'doses_shipped',
+                                              'delivery_schedule', 'round_sequence')]
      vaccination_data$campaign_date <- as.Date(vaccination_data$campaign_date)
-     vaccination_data$round_sequence <- as.character(vaccination_data$round_sequence)
 
      bad <- is.na(vaccination_data$doses_shipped) | vaccination_data$doses_shipped < 0 |
           is.na(vaccination_data$campaign_date)
@@ -133,6 +146,9 @@ est_vaccination_rate <- function(PATHS,
 
 
      message(glue::glue('Redistributing vaccine doses using the maximum daily vaccination rate of {max_rate_per_day} per day'))
+     no_schedule <- is.na(vaccination_data$delivery_schedule) | !nzchar(trimws(vaccination_data$delivery_schedule))
+     message(glue::glue("Releasing each delivery on its own date for the {sum(!no_schedule)} campaigns with a delivery schedule; ",
+                        "the other {sum(no_schedule)} start at their campaign date"))
 
      no_rounds <- is.na(vaccination_data$round_sequence) | !nzchar(trimws(vaccination_data$round_sequence))
      message(glue::glue("Splitting into first and second doses: {sum(!no_rounds)} of {nrow(vaccination_data)} campaigns carry round information; ",
@@ -313,20 +329,72 @@ est_vaccination_rate <- function(PATHS,
 }
 
 
-#' Daily doses of one shipment
+#' Daily doses of one request from its deliveries
 #'
-#' \code{max_rate_per_day} doses a day from the campaign date, the remainder on
-#' the last day.
-#' @param doses Doses shipped (non-negative).
+#' Each delivery joins a stock on its date; the stock is administered at
+#' \code{max_rate_per_day} a day while it lasts, and when it runs out the
+#' series resumes at the next delivery. A single delivery gives
+#' \code{max_rate_per_day} a day from its date and the remainder on the last
+#' day.
+#' @param dates Delivery dates (Date).
+#' @param doses Doses of each delivery (non-negative).
 #' @param max_rate_per_day Maximum doses per day.
-#' @return Numeric vector of doses per day (empty for zero doses).
+#' @return A data frame with \code{date} and \code{doses}, one row per day
+#'   with doses (no rows when there are no doses).
 #' @noRd
-.vacc_drip <- function(doses, max_rate_per_day) {
-     if (doses <= 0) return(numeric(0))
-     n <- ceiling(doses / max_rate_per_day)
-     daily <- rep(max_rate_per_day, n)
-     daily[n] <- doses - max_rate_per_day * (n - 1)
-     daily
+.vacc_release <- function(dates, doses, max_rate_per_day) {
+     o <- order(dates)
+     day_of <- as.numeric(as.Date(dates[o]))
+     doses <- as.numeric(doses[o])
+     # every day gives a full max_rate_per_day or empties the stock, which needs
+     # a fresh delivery to restart, so this bounds the number of days
+     n_max <- sum(ceiling(doses / max_rate_per_day)) + length(doses)
+     out_day <- numeric(n_max)
+     out_doses <- numeric(n_max)
+     m <- 0L
+     k <- 1L
+     stock <- 0
+     day <- if (length(day_of)) day_of[1] else 0
+     repeat {
+          while (k <= length(day_of) && day_of[k] <= day) {
+               stock <- stock + doses[k]
+               k <- k + 1L
+          }
+          if (stock > 0) {
+               given <- min(stock, max_rate_per_day)
+               m <- m + 1L
+               out_day[m] <- day
+               out_doses[m] <- given
+               stock <- stock - given
+               day <- day + 1
+          } else if (k <= length(day_of)) {
+               day <- day_of[k]
+          } else {
+               break
+          }
+     }
+     data.frame(date = as.Date(out_day[seq_len(m)], origin = "1970-01-01"),
+                doses = out_doses[seq_len(m)])
+}
+
+
+#' Parse a delivery_schedule
+#'
+#' @param x One \code{delivery_schedule} string (\code{"<date>:<doses>;..."}).
+#' @return A data frame with \code{date} (Date) and \code{doses}, or
+#'   \code{NULL} when there is no schedule (\code{NA} or empty).
+#' @noRd
+.vacc_parse_delivery_schedule <- function(x) {
+     if (is.na(x) || !nzchar(trimws(x))) return(NULL)
+     parts <- strsplit(strsplit(trimws(x), ";", fixed = TRUE)[[1]], ":", fixed = TRUE)
+     ok <- lengths(parts) == 2L
+     date <- suppressWarnings(as.Date(vapply(parts[ok], function(p) p[1], character(1)), optional = TRUE))
+     doses <- suppressWarnings(as.numeric(vapply(parts[ok], function(p) p[2], character(1))))
+     if (!all(ok) || anyNA(date) || anyNA(doses) || any(doses < 0)) {
+          stop("Malformed delivery_schedule '", x, "': expected '<YYYY-MM-DD>:<doses>' pairs ",
+               "separated by ';' with non-negative doses")
+     }
+     data.frame(date = date, doses = doses)
 }
 
 
@@ -358,7 +426,7 @@ est_vaccination_rate <- function(PATHS,
 #' the block weights, with the boundaries rounded to whole doses, and the
 #' blocks take consecutive stretches of the daily series in order. Each day's
 #' first and second doses sum to its doses exactly.
-#' @param daily Doses per day (see \code{.vacc_drip()}).
+#' @param daily Doses per day (see \code{.vacc_release()}).
 #' @param blocks Dose blocks (see \code{.vacc_parse_round_sequence()}).
 #' @return A \code{length(daily) x 2} matrix: first doses, second doses.
 #' @noRd
@@ -381,7 +449,8 @@ est_vaccination_rate <- function(PATHS,
 #' Redistribute shipped doses over days, split into first and second doses
 #'
 #' @param vaccination_data Data frame with \code{iso_code}, \code{campaign_date}
-#'   (Date), \code{doses_shipped} and \code{round_sequence}.
+#'   (Date), \code{doses_shipped}, \code{delivery_schedule} and
+#'   \code{round_sequence}.
 #' @param max_rate_per_day Maximum doses per day.
 #' @return One row per campaign-day: \code{iso_code}, \code{distribution_date},
 #'   \code{doses_distributed}, \code{doses_distributed_dose1},
@@ -390,12 +459,22 @@ est_vaccination_rate <- function(PATHS,
 #' @noRd
 .vacc_redistribute <- function(vaccination_data, max_rate_per_day) {
      rows <- lapply(seq_len(nrow(vaccination_data)), function(i) {
-          daily <- .vacc_drip(vaccination_data$doses_shipped[i], max_rate_per_day)
-          if (!length(daily)) return(NULL)
+          deliveries <- .vacc_parse_delivery_schedule(vaccination_data$delivery_schedule[i])
+          if (is.null(deliveries)) {
+               deliveries <- data.frame(date = vaccination_data$campaign_date[i],
+                                        doses = vaccination_data$doses_shipped[i])
+          } else if (abs(sum(deliveries$doses) - vaccination_data$doses_shipped[i]) >
+                     1e-6 * max(1, vaccination_data$doses_shipped[i])) {
+               stop("delivery_schedule '", vaccination_data$delivery_schedule[i], "' does not sum to doses_shipped (",
+                    vaccination_data$doses_shipped[i], ")")
+          }
+          released <- .vacc_release(deliveries$date, deliveries$doses, max_rate_per_day)
+          if (!nrow(released)) return(NULL)
+          daily <- released$doses
           blocks <- .vacc_parse_round_sequence(vaccination_data$round_sequence[i])
           split <- if (is.null(blocks)) cbind(daily, 0) else .vacc_split_drip(daily, blocks)
           data.frame(iso_code = vaccination_data$iso_code[i],
-                     distribution_date = vaccination_data$campaign_date[i] + seq_along(daily) - 1L,
+                     distribution_date = released$date,
                      doses_distributed = daily,
                      doses_distributed_dose1 = split[, 1],
                      doses_distributed_dose2 = split[, 2],

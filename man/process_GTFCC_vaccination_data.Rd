@@ -24,12 +24,19 @@ structured dataset matching the WHO vaccination data format for use in the MOSAI
 \details{
 Each output row is one GTFCC request (\code{req_id}, e.g.
 \code{"2019-I05-D01"}): \code{doses_shipped} is the sum of all its Delivery
-events and \code{campaign_date} the first delivery date. Three columns carry
-the request's round structure (MOSAIC v0.103.0), read from its Round events
-(\code{round_id} \code{C<campaign>-R<round>}, \code{doses} = doses
-administered in that round):
+events and \code{campaign_date} the first delivery date. Four columns carry
+the request's delivery and round structure (MOSAIC v0.103.0); the round
+columns are read from its Round events (\code{round_id}
+\code{C<campaign>-R<round>}, \code{doses} = doses administered in that
+round):
 \describe{
 \item{\code{req_id}}{The GTFCC request identifier, for tracing a row back to the raw log.}
+\item{\code{delivery_schedule}}{The request's deliveries as
+\code{<date>:<doses>} pairs separated by \code{;}, in date order, with
+deliveries on the same date summed, e.g.
+\code{"2019-04-24:835200;2019-09-25:835200"}. Their doses sum to
+\code{doses_shipped}; \code{\link{est_vaccination_rate}} releases each
+delivery on its own date.}
 \item{\code{round_sequence}}{The request's doses as an ordered sequence of
 \code{<dose>:<weight>} blocks separated by \code{;}, e.g.
 \code{"1:357200;2:332900;1:562000;2:693900"}. \code{<dose>} is 1 for a
@@ -59,7 +66,7 @@ This function performs the following steps:
 \item \strong{Map to WHO Format}:
 - Aggregates events by request ID to extract doses requested, approved, and shipped.
 - Uses Delivery event dates as campaign dates.
-- Attributes the request's doses to first and second rounds from its Round events.
+- Records each delivery's date and doses, and attributes the request's doses to first and second rounds from its Round events.
 - Converts country names to ISO codes for consistency.
 \item \strong{Infer Missing Campaign Dates}:
 - Computes the delay between decision and campaign dates.

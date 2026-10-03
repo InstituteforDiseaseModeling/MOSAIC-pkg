@@ -41,10 +41,19 @@ This function processes vaccination data from WHO or GTFCC, redistributes doses 
 }
 \details{
 \strong{What nu is.} The output \code{nu} is the number of doses
-\emph{shipped} per request, spread over days at \code{max_rate_per_day} from
-the request's campaign date (its first delivery for GTFCC rows); requests that
-overlap in a location add up. Shipped-but-unused doses are counted as
-delivered.
+\emph{shipped} per request, administered at up to \code{max_rate_per_day}
+a day. A GTFCC request releases each delivery on its own date (its
+\code{delivery_schedule}): deliveries join a stock, the stock is
+administered at \code{max_rate_per_day} a day while it lasts, and a
+request whose stock runs out resumes at its next delivery. A request with
+one delivery, or whose next delivery arrives before its stock runs out, is
+one unbroken run from its first delivery, as are WHO rows, which have no
+schedule and start at their campaign date. Requests that overlap in a
+location add up. Shipped-but-unused doses are counted as delivered. (Up to
+MOSAIC v0.102.0 every delivery of a request was released from its first
+delivery date, which moved later deliveries of multi-delivery requests --
+typically second rounds and later campaigns of GTFCC preventive programmes
+-- up to two and a half years early.)
 
 \strong{First and second doses.} Each day's doses of a request are split
 into first doses (\code{nu_1}) and second doses (\code{nu_2}) by the
@@ -71,9 +80,9 @@ events.
 The function performs the following steps:
 \enumerate{
 \item \strong{Load Vaccination Data}:
-- Reads processed vaccination data from WHO or GTFCC and filters for relevant columns (\code{iso_code}, \code{campaign_date}, \code{doses_shipped}, \code{round_sequence}).
+- Reads processed vaccination data from WHO or GTFCC and filters for relevant columns (\code{iso_code}, \code{campaign_date}, \code{doses_shipped}, \code{delivery_schedule}, \code{round_sequence}).
 \item \strong{Redistribute Doses}:
-- Redistributes shipped doses day by day based on a maximum daily rate (\code{max_rate_per_day}) and splits each day into first and second doses.
+- Releases each delivery on its date and administers the stock day by day at up to a maximum daily rate (\code{max_rate_per_day}), then splits each day into first and second doses.
 - Sums requests that overlap on the same \code{distribution_date} within \code{iso_code}.
 \item \strong{Validate Redistribution}:
 - Checks that the redistributed doses sum to the total shipped doses and that first plus second doses equal the doses distributed.

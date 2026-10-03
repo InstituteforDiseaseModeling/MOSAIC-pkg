@@ -260,9 +260,12 @@ message(sprintf("mu_jt built from WHO-annual GAM estimates: %d locations x %d da
 # Vaccination: first-dose (nu_1_jt) and second-dose (nu_2_jt) rates
 #####
 
-# nu is the doses shipped per request, spread over days at max_rate_per_day by
-# est_vaccination_rate(), which also splits each day into first and second
-# doses from the request's GTFCC Round events (process_GTFCC_vaccination_data():
+# nu is the doses shipped per request, administered at up to max_rate_per_day
+# a day by est_vaccination_rate(), each GTFCC delivery from its own delivery
+# date (up to MOSAIC v0.102.0 every delivery of a request started at its first
+# delivery date, up to ~2.5 years early for multi-delivery requests). It also
+# splits each day into first and second doses from the request's GTFCC Round
+# events (process_GTFCC_vaccination_data():
 # shipped doses divided across the rounds in proportion to the doses
 # administered in each, first round before second round). nu_1 + nu_2 = nu on
 # every location-day; .vacc_nu_jt() refuses files that are out of step. Doses

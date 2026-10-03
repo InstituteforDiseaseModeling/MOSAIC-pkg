@@ -47,11 +47,13 @@
 #'       their summed doses stay within \code{(1 + dose_tolerance)} of the
 #'       request's approved total; further rows are dropped as duplicate listings
 #'       (MWI 20182: two 500,600-dose rows against 500,600 approved)
-#'     - The GTFCC round columns (\code{req_id}, \code{round_sequence},
-#'       \code{round_basis}; see \code{\link{process_GTFCC_vaccination_data}})
-#'       are carried on every GTFCC row, matched or not. WHO-only rows have no
-#'       round information (\code{round_basis = "unknown"}), so
-#'       \code{\link{est_vaccination_rate}} counts their doses as first doses.
+#'     - The GTFCC request columns (\code{req_id}, \code{delivery_schedule},
+#'       \code{round_sequence}, \code{round_basis}; see
+#'       \code{\link{process_GTFCC_vaccination_data}}) are carried on every
+#'       GTFCC row, matched or not. WHO-only rows have no delivery schedule and
+#'       no round information (\code{round_basis = "unknown"}), so
+#'       \code{\link{est_vaccination_rate}} releases their doses from the
+#'       campaign date and counts them as first doses.
 #'   \item **Quality Assurance**:
 #'     - Validates data structure matches downstream requirements
 #'     - Ensures all required columns are present
@@ -89,12 +91,12 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      gtfcc_data$campaign_date <- as.Date(gtfcc_data$campaign_date)
      gtfcc_data$decision_date <- as.Date(gtfcc_data$decision_date)
 
-     # Round attribution (process_GTFCC_vaccination_data()). The WHO ICG table
-     # has none, so WHO rows -- and a GTFCC file written before these columns
-     # existed -- carry an unknown round, which est_vaccination_rate() counts as
-     # first doses.
-     round_cols <- c("req_id", "round_sequence", "round_basis")
-     for (nm in round_cols) {
+     # Delivery schedule and round attribution (process_GTFCC_vaccination_data()).
+     # The WHO ICG table has neither, so WHO rows -- and a GTFCC file written
+     # before these columns existed -- carry no schedule (est_vaccination_rate()
+     # releases them from the campaign date) and an unknown round (first doses).
+     request_cols <- c("req_id", "delivery_schedule", "round_sequence", "round_basis")
+     for (nm in request_cols) {
           fill <- if (nm == "round_basis") "unknown" else NA_character_
           if (!nm %in% names(gtfcc_data)) gtfcc_data[[nm]] <- rep(fill, nrow(gtfcc_data))
           if (!nm %in% names(who_data)) who_data[[nm]] <- rep(fill, nrow(who_data))
@@ -356,10 +358,10 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      # Regenerate ID column
      combined_data$id <- 1:nrow(combined_data)
      
-     # The round columns go after source and match_confidence stays last, so the
-     # columns that predate the round attribution keep their positions
-     combined_data <- combined_data[, c(setdiff(names(combined_data), c(round_cols, "match_confidence")),
-                                        round_cols, "match_confidence")]
+     # The request columns go after source and match_confidence stays last, so
+     # the columns that predate them keep their positions
+     combined_data <- combined_data[, c(setdiff(names(combined_data), c(request_cols, "match_confidence")),
+                                        request_cols, "match_confidence")]
      
      # Summary statistics
      message("\n==========================================")

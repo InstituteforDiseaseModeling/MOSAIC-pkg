@@ -71,8 +71,9 @@ fast tests the smaller toy configs \code{\link{config_simulation_epidemic}} and
 \code{\link{config_simulation_endemic}} are also available.
 
 \strong{Vaccination doses}: \code{nu_1_jt + nu_2_jt} is the OCV doses shipped to each
-location, spread over days at 20,000 doses a day by \code{\link[=est_vaccination_rate]{est_vaccination_rate()}}
-from the GTFCC/WHO campaign file. Since \code{config_default} v7.0 (MOSAIC
+location, administered at up to 20,000 doses a day by
+\code{\link[=est_vaccination_rate]{est_vaccination_rate()}} from the GTFCC/WHO campaign file, each GTFCC
+delivery from its own delivery date. Since \code{config_default} v7.0 (MOSAIC
 v0.103.0) each request's doses are split by its GTFCC rounds: shipped doses
 are divided across the rounds in proportion to the doses administered in
 each, the first round goes to \code{nu_1_jt} and the second to \code{nu_2_jt}, in that
@@ -82,8 +83,11 @@ each day's first doses from the \code{nu_jt_sources} compartments to \code{V1}, 
 \code{phi_2} of its second doses from \code{V1} to \code{V2}, capped at the \code{V1} stock, so a
 two-dose campaign immunises its first-round recipients once. Second rounds
 are pre-2023 campaigns (the ICG suspended two-dose outbreak response in
-October 2022), so over a 2023+ window \code{nu_2_jt} is zero; up to v6.2 every
-dose was a first dose and \code{nu_2_jt} was zero everywhere.
+October 2022), so over a 2023+ window \code{nu_2_jt} is zero. Up to v6.2 every
+dose was a first dose, \code{nu_2_jt} was zero everywhere, and every delivery of
+a request started at its first delivery date (this moved later deliveries
+of 22 pre-2023 requests up to 2.5 years early and did not change the 2023+
+series).
 
 \strong{Note on Initial Condition Formats}: This configuration includes both count
 (\verb{*_j_initial}) and proportion (\verb{prop_*_initial}) representations of initial

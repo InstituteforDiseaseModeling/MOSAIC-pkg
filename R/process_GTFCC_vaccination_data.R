@@ -15,12 +15,19 @@
 #' @details
 #' Each output row is one GTFCC request (\code{req_id}, e.g.
 #' \code{"2019-I05-D01"}): \code{doses_shipped} is the sum of all its Delivery
-#' events and \code{campaign_date} the first delivery date. Three columns carry
-#' the request's round structure (MOSAIC v0.103.0), read from its Round events
-#' (\code{round_id} \code{C<campaign>-R<round>}, \code{doses} = doses
-#' administered in that round):
+#' events and \code{campaign_date} the first delivery date. Four columns carry
+#' the request's delivery and round structure (MOSAIC v0.103.0); the round
+#' columns are read from its Round events (\code{round_id}
+#' \code{C<campaign>-R<round>}, \code{doses} = doses administered in that
+#' round):
 #' \describe{
 #'   \item{\code{req_id}}{The GTFCC request identifier, for tracing a row back to the raw log.}
+#'   \item{\code{delivery_schedule}}{The request's deliveries as
+#'     \code{<date>:<doses>} pairs separated by \code{;}, in date order, with
+#'     deliveries on the same date summed, e.g.
+#'     \code{"2019-04-24:835200;2019-09-25:835200"}. Their doses sum to
+#'     \code{doses_shipped}; \code{\link{est_vaccination_rate}} releases each
+#'     delivery on its own date.}
 #'   \item{\code{round_sequence}}{The request's doses as an ordered sequence of
 #'     \code{<dose>:<weight>} blocks separated by \code{;}, e.g.
 #'     \code{"1:357200;2:332900;1:562000;2:693900"}. \code{<dose>} is 1 for a
@@ -50,7 +57,7 @@
 #'   \item **Map to WHO Format**:
 #'     - Aggregates events by request ID to extract doses requested, approved, and shipped.
 #'     - Uses Delivery event dates as campaign dates.
-#'     - Attributes the request's doses to first and second rounds from its Round events.
+#'     - Records each delivery's date and doses, and attributes the request's doses to first and second rounds from its Round events.
 #'     - Converts country names to ISO codes for consistency.
 #'   \item **Infer Missing Campaign Dates**:
 #'     - Computes the delay between decision and campaign dates.
@@ -152,9 +159,12 @@ process_GTFCC_vaccination_data <- function(PATHS) {
                # Use the first delivery date as campaign date
                campaign_date <- min(delivery_events$event_date, na.rm = TRUE)
                doses_shipped <- sum(delivery_events$doses, na.rm = TRUE)
+               delivery_schedule <- .vacc_delivery_schedule(delivery_events$event_date,
+                                                            delivery_events$doses)
           } else {
                campaign_date <- NA
                doses_shipped <- 0
+               delivery_schedule <- NA_character_
           }
           
           # Set context - GTFCC data doesn't have this field, so we'll use a default
@@ -177,6 +187,7 @@ process_GTFCC_vaccination_data <- function(PATHS) {
                doses_shipped = doses_shipped,
                campaign_date = campaign_date,
                req_id = req_id,
+               delivery_schedule = delivery_schedule,
                round_sequence = rounds$sequence,
                round_basis = rounds$basis,
                stringsAsFactors = FALSE
@@ -267,9 +278,9 @@ process_GTFCC_vaccination_data <- function(PATHS) {
                           format(sum(vaccination_data$doses_shipped[sel]), big.mark = ",")))
      }
 
-     # The round columns go last so the columns that predate them keep their positions
-     round_cols <- c("req_id", "round_sequence", "round_basis")
-     vaccination_data <- vaccination_data[, c(setdiff(names(vaccination_data), round_cols), round_cols)]
+     # The request columns go last so the columns that predate them keep their positions
+     request_cols <- c("req_id", "delivery_schedule", "round_sequence", "round_basis")
+     vaccination_data <- vaccination_data[, c(setdiff(names(vaccination_data), request_cols), request_cols)]
 
      # Save processed vaccination data to CSV
      data_path <- file.path(PATHS$MODEL_INPUT, "data_vaccinations_GTFCC.csv")
@@ -336,4 +347,21 @@ process_GTFCC_vaccination_data <- function(PATHS) {
      list(sequence = paste(paste0(block_dose, ":", format(w, scientific = FALSE, trim = TRUE)),
                            collapse = ";"),
           basis = basis)
+}
+
+#' Delivery schedule of one GTFCC request
+#'
+#' @param date Delivery event dates (Date).
+#' @param doses Delivery event doses.
+#' @return \code{"<date>:<doses>;..."} in date order with same-date deliveries
+#'   summed, or \code{NA} when a delivery lacks a date or a dose count (the
+#'   request is then released from its campaign date as one delivery).
+#' @noRd
+.vacc_delivery_schedule <- function(date, doses) {
+     date <- as.Date(date)
+     doses <- as.numeric(doses)
+     if (!length(date) || anyNA(date) || anyNA(doses)) return(NA_character_)
+     by_date <- tapply(doses, as.character(date), sum)
+     paste(paste0(names(by_date), ":", format(as.numeric(by_date), scientific = FALSE, trim = TRUE)),
+           collapse = ";")
 }

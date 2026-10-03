@@ -1,15 +1,18 @@
 # First- and second-dose OCV rates (MOSAIC v0.103.0): process_GTFCC_vaccination_data()
-# attributes each request's doses to rounds from its GTFCC Round events,
-# est_vaccination_rate() splits the daily series into nu_1 / nu_2, and the
-# config builder reads them back through .vacc_nu_jt().
+# records each request's deliveries and attributes its doses to rounds from its
+# GTFCC Round events, est_vaccination_rate() releases each delivery on its date
+# and splits the daily series into nu_1 / nu_2, and the config builder reads
+# them back through .vacc_nu_jt().
 
-.vsplit_campaigns <- function(iso, dates, doses, round_sequence = NA_character_) {
+.vsplit_campaigns <- function(iso, dates, doses, round_sequence = NA_character_,
+                              delivery_schedule = NA_character_) {
      data.frame(year = as.integer(substr(dates, 1, 4)), country = iso,
                 request_number = seq_along(dates), status = "Approved",
                 context = "Outbreak response", decision_date = dates,
                 doses_requested = doses, doses_approved = doses, doses_shipped = doses,
                 campaign_date = dates, id = seq_along(dates), iso_code = iso, delay = 0,
-                round_sequence = round_sequence, stringsAsFactors = FALSE)
+                delivery_schedule = delivery_schedule, round_sequence = round_sequence,
+                stringsAsFactors = FALSE)
 }
 
 # Run est_vaccination_rate() on a synthetic campaign file and return the
@@ -153,6 +156,55 @@ test_that(".vacc_round_sequence reads the Round events of a request", {
      expect_equal(rs("R01", 100), list(sequence = NA_character_, basis = "unknown"))
 })
 
+test_that(".vacc_release() releases each delivery on its date at the daily rate", {
+     rel <- MOSAIC:::.vacc_release
+     d <- function(x) as.Date(x)
+     # one delivery: the rate a day from its date, the remainder on the last day
+     r <- rel(d("2018-04-12"), 2076100, 20000)
+     expect_equal(nrow(r), 104L)
+     expect_equal(r$doses, c(rep(20000, 103), 16100))
+     expect_equal(r$date, d("2018-04-12") + 0:103)
+     # the stock runs out before the next delivery: resume on its date
+     r <- rel(d(c("2020-01-01", "2020-03-01")), c(50000, 30000), 20000)
+     expect_equal(r$date, d(c("2020-01-01", "2020-01-02", "2020-01-03", "2020-03-01", "2020-03-02")))
+     expect_equal(r$doses, c(20000, 20000, 10000, 20000, 10000))
+     # the next delivery arrives before the stock runs out: one unbroken run,
+     # identical to releasing everything on the first date
+     r2 <- rel(d(c("2020-01-01", "2020-01-03")), c(1e5, 1e5), 20000)
+     expect_equal(r2, rel(d("2020-01-01"), 2e5, 20000))
+     # same-day deliveries are one delivery; input order does not matter
+     expect_equal(rel(d(c("2020-05-01", "2020-05-01")), c(297800, 402600), 20000),
+                  rel(d("2020-05-01"), 700400, 20000))
+     expect_equal(rel(d(c("2020-03-01", "2020-01-01")), c(30000, 50000), 20000),
+                  rel(d(c("2020-01-01", "2020-03-01")), c(50000, 30000), 20000))
+     # no doses, no days
+     expect_equal(nrow(rel(d("2020-01-01"), 0, 20000)), 0L)
+})
+
+test_that("a two-delivery campaign gives its second round on the second delivery", {
+     # deliveries 100,000 on 1 Feb and 100,000 on 1 May; rounds 1:1
+     camp <- .vsplit_campaigns("COD", "2020-02-01", 2e5, "1:786900;2:786900",
+                               "2020-02-01:100000;2020-05-01:100000")
+     s <- .vsplit_series(.vsplit_run(camp), "COD")
+     expect_equal(s$t[s$nu_1 > 0], as.Date("2020-02-01") + 0:4)
+     expect_equal(s$t[s$nu_2 > 0], as.Date("2020-05-01") + 0:4)
+     expect_equal(c(sum(s$nu_1), sum(s$nu_2)), c(1e5, 1e5))
+     expect_equal(s$nu_1 + s$nu_2, s$nu, tolerance = 0)
+     # without a schedule the same request runs from its campaign date
+     camp$delivery_schedule <- NA
+     s <- .vsplit_series(.vsplit_run(camp), "COD")
+     expect_equal(s$t[s$nu > 0], as.Date("2020-02-01") + 0:9)
+})
+
+test_that("a delivery_schedule that disagrees with doses_shipped stops est_vaccination_rate()", {
+     expect_error(.vsplit_run(.vsplit_campaigns("MOZ", "2020-02-01", 1e5, "1:1", "2020-02-01:90000")),
+                  "does not sum to doses_shipped")
+     expect_error(.vsplit_run(.vsplit_campaigns("MOZ", "2020-02-01", 1e5, "1:1", "2020-02-01=100000")),
+                  "Malformed delivery_schedule")
+     expect_error(.vsplit_run(.vsplit_campaigns("MOZ", "2020-02-01", 1e5, "1:1", "2020-02-31:100000")),
+                  "Malformed delivery_schedule")
+})
+
 test_that("a malformed round_sequence stops est_vaccination_rate()", {
      expect_error(.vsplit_run(.vsplit_campaigns("MOZ", "2020-02-01", 1e5, "1:1;3:1")), "Malformed round_sequence")
      expect_error(.vsplit_run(.vsplit_campaigns("MOZ", "2020-02-01", 1e5, "1:0;2:0")), "Malformed round_sequence")
@@ -176,7 +228,8 @@ test_that("process_GTFCC_vaccination_data() writes the round columns from the ra
           ev("Mozambique", "2019-I05-D01", "2019-09-25", "Delivery", doses = 835200, vaccine = "Euvichol+"),
           ev("Mozambique", "2019-I05-D01", "2019-10-30", "Round", "C01-R02", 795800),
           ev("Kenya", "2023-I10-D01", "2023-06-20", "Decision", doses = 1578000, via = "ICG"),
-          ev("Kenya", "2023-I10-D01", "2023-06-29", "Delivery", doses = 1578000, vaccine = "Euvichol+"),
+          ev("Kenya", "2023-I10-D01", "2023-06-29", "Delivery", doses = 1000000, vaccine = "Euvichol+"),
+          ev("Kenya", "2023-I10-D01", "2023-06-29", "Delivery", doses = 578000, vaccine = "Shanchol"),
           ev("Kenya", "2023-I10-D01", "2023-08-03", "Round", "C01-R01", 1500000),
           ev("Cameroon", "2022-I10-D01", "2022-07-07", "Decision", doses = 4300000, via = "ICG"),
           ev("Cameroon", "2022-I10-D01", "2022-07-14", "Delivery", doses = 2100000, vaccine = "Euvichol+"))
@@ -184,10 +237,15 @@ test_that("process_GTFCC_vaccination_data() writes the round columns from the ra
      out_dir <- withr::local_tempdir()
      out <- suppressMessages(process_GTFCC_vaccination_data(list(ROOT = root, MODEL_INPUT = out_dir)))
      written <- utils::read.csv(file.path(out_dir, "data_vaccinations_GTFCC.csv"), stringsAsFactors = FALSE)
-     expect_equal(utils::tail(names(written), 3), c("req_id", "round_sequence", "round_basis"))
-     got <- written[order(written$req_id), c("req_id", "iso_code", "doses_shipped", "round_sequence", "round_basis")]
+     expect_equal(utils::tail(names(written), 4), c("req_id", "delivery_schedule", "round_sequence", "round_basis"))
+     got <- written[order(written$req_id), c("req_id", "iso_code", "doses_shipped", "campaign_date",
+                                             "delivery_schedule", "round_sequence", "round_basis")]
      expect_equal(got$req_id, c("2019-I05-D01", "2022-I10-D01", "2023-I10-D01"))
      expect_equal(got$doses_shipped, c(1670400, 2100000, 1578000))
+     expect_equal(got$campaign_date, c("2019-04-24", "2022-07-14", "2023-06-29"))
+     # same-date deliveries are summed
+     expect_equal(got$delivery_schedule, c("2019-04-24:835200;2019-09-25:835200", "2022-07-14:2100000",
+                                           "2023-06-29:1578000"))
      expect_equal(got$round_sequence, c("1:786900;2:795800", NA, "1:1"))
      expect_equal(got$round_basis, c("rounds", "unknown", "rounds"))
 })
@@ -198,6 +256,7 @@ test_that("combine_vaccination_data() carries the round columns; WHO-only rows a
                                 c("1:786900;2:795800", "2:1"))
      gtfcc$request_number <- c(201905, 201901)
      gtfcc$req_id <- c("2019-I05-D01", "2019-I01-D02")
+     gtfcc$delivery_schedule <- c("2019-04-24:835200;2019-09-25:835200", "2019-07-07:849500")
      gtfcc$round_basis <- "rounds"
      who <- .vsplit_campaigns(c("COD", "MWI"), c("2019-05-28", "2018-04-15"), c(835190, 500600))
      who$round_sequence <- NULL
@@ -206,13 +265,16 @@ test_that("combine_vaccination_data() carries the round columns; WHO-only rows a
      utils::write.csv(who, file.path(tmp, "data_vaccinations_WHO.csv"), row.names = FALSE)
      utils::capture.output(out <- suppressMessages(combine_vaccination_data(list(MODEL_INPUT = tmp))))
      expect_equal(names(out)[ncol(out)], "match_confidence")
-     expect_true(all(c("req_id", "round_sequence", "round_basis") %in% names(out)))
+     expect_equal(names(out)[(ncol(out) - 4):(ncol(out) - 1)],
+                  c("req_id", "delivery_schedule", "round_sequence", "round_basis"))
      cod <- out[out$iso_code == "COD", ]
      expect_equal(nrow(cod), 1L)
      expect_equal(cod$round_sequence, "1:786900;2:795800")
+     expect_equal(cod$delivery_schedule, "2019-04-24:835200;2019-09-25:835200")
      mwi <- out[out$iso_code == "MWI", ]
      expect_equal(mwi$source, "WHO_only")
      expect_true(is.na(mwi$round_sequence))
+     expect_true(is.na(mwi$delivery_schedule))
      expect_equal(mwi$round_basis, "unknown")
      expect_equal(out$round_sequence[out$iso_code == "MOZ"], "2:1")
 })
