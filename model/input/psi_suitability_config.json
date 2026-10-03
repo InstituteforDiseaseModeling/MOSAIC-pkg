@@ -858,5 +858,52 @@
     "host": "dugong",
     "written_at": "2026-10-01 18:10:50.356951",
     "manifest_note": "rw_diagnostics$*$fold_predictions stripped for commit; full manifest kept in full_manifest/"
+  },
+  "bias_correction_reapplied": {
+    "mosaic_version": "0.102.0",
+    "rule": "calibrate_psi_predictions() v0.102.0: a per-country fit whose corrected logit-sd would fall below amp_range[1] (0.5) times the input's is not applied; the country falls back to identity (psi = pred_bias_corrected = pred_smooth), status 'collapsed'. v0.101.0 blended such fits toward identity until they sat on the 0.5x floor.",
+    "method": "Re-applied to the stored C3 artefact without retraining: the LSTM ensemble (pred_raw, pred_smooth, q*) is C3's. Rows of every other country are byte-identical to C3.",
+    "collapsed_isos": [
+      "CIV",
+      "GMB",
+      "TGO",
+      "UGA"
+    ],
+    "c3_floor_maps": [
+      {
+        "iso_code": "CIV",
+        "slope": 0.505,
+        "offset": -2.64
+      },
+      {
+        "iso_code": "GMB",
+        "slope": 0.505,
+        "offset": -2.64
+      },
+      {
+        "iso_code": "TGO",
+        "slope": 0.501085,
+        "offset": 0.624475
+      },
+      {
+        "iso_code": "UGA",
+        "slope": 0.505,
+        "offset": -1.213092
+      }
+    ],
+    "floor_status_evidence": "maps recovered exactly from the C3 day file (max |resid| 2.7e-11); 4 floor and 5 ceiling candidates on the blend grid equal the 9 guarded fits in run_psi.log, and no floor candidate carries a slope or offset clamp value, so each was guarded by the floor blend",
+    "source": {
+      "dir": "/Users/johngiles/MOSAIC/MOSAIC-pkg/claude/v0101_rebuild/psi/C3",
+      "pred_psi_suitability_day_md5": "d0eb1e2da04c24a8b2cbf43d548c0413",
+      "pred_psi_suitability_week_md5": "6a0f85cd17b2d4cecf3bf026b1807b82",
+      "psi_suitability_config_md5": "e098f115724b4c0cd183cd051e0c6083"
+    },
+    "script": "/Users/johngiles/MOSAIC/MOSAIC-pkg/claude/v0102_psi/work/13_reapply_C3.R",
+    "written_at": "2026-10-03 12:22:51 PDT",
+    "code": {
+      "repo": "MOSAIC-pkg",
+      "branch": "fix/v0102-sparse",
+      "commit": "1e4a1f14964d55db45b2d1a60cd39dba015e6c75"
+    }
   }
 }
