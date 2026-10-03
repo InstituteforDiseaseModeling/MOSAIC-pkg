@@ -50,10 +50,11 @@ test_that("the shipped panel trend is the one config_default implies (drift guar
 test_that("locations without an estimate of their own take the panel trend", {
      # The locations and their k come from config_default's own panel table, so a
      # rebuild of its surveillance changes which locations, not the rule. (On
-     # config_default v6.1: BFA, CIV and ZAF, too few observed weeks, CMR, fit
-     # collapsed to the zero boundary, and UGA, fit clamped at the lower bound,
-     # at k 0.89, 0.98, 1.10, 1.65 and 0.96; on v6.0: CMR, UGA and ZAF at 1.41,
-     # 1.00 and 1.20.)
+     # config_default v7.0: BFA and ZAF, too few observed weeks, and NER and ZWE,
+     # fits collapsed to the zero boundary, at k 0.62, 0.94, 1.55 and 2.36; on
+     # v6.1: BFA, CIV and ZAF, too few observed weeks, CMR, fit collapsed, and
+     # UGA, fit clamped at the lower bound, at k 0.89, 0.98, 1.10, 1.65 and 0.96;
+     # on v6.0: CMR, UGA and ZAF at 1.41, 1.00 and 1.20.)
      t0 <- .panel_table()
      no_own <- .no_own(t0)
      skip_if_not(any(no_own), "every config_default location has a dispersion estimate of its own")
@@ -231,7 +232,9 @@ test_that("config_default's clamped cases fits take the shipped panel trend in e
      # UGA on config_default v6.1 (clamped_lower_bound, k_raw 0.1): the trend's
      # 0.96 alone, beside data-rich locations with shrinkage active, and in the
      # full panel, where it previously resolved to 0.100, 0.105 and 0.108. The
-     # locations come from the panel table, so a rebuild changes which, not the rule.
+     # locations come from the panel table, so a rebuild changes which, not the rule:
+     # no v7.0 fit is clamped (UGA has an estimate of its own, 0.12), so this test
+     # skips there and the synthetic clamped-fit test above carries the rule.
      t0 <- .panel_table()
      cl <- which(t0$status %in% "clamped_lower_bound" & is.finite(t0$mean_weekly) & t0$mean_weekly > 0)
      skip_if_not(length(cl) > 0L, "no config_default location has a clamped cases fit")
