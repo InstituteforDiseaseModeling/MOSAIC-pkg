@@ -11,5 +11,10 @@ Rebuild branch rebuild/defaults-v0100 (MOSAIC v0.100.1): an independent temp-dir
 - **`.mosaic_derive_seed` hash has low entropy.** It is sum(k*7919*pos) over the ISO characters, so there are only ~150 possible values for 3-letter codes. 33 unique seeds for the 40 MOSAIC ISOs (ETH/SSD, TCD/UGA, ...): their MC errors are perfectly correlated, though no bias results.
 - **Two-route parity test is fragile.** At config v6.0, p_star varies 0.61-0.76 across seeds against a p_beta q999 of 0.727. The test passes only at its fixed seed, and only because the prior changed (fit_beta_from_ci, v0.100.0).
 
+**Status:** defects 1, 3 and 4 were fixed in v0.100.1 before the suite (2948cf89d: IC estimated at
+date_start, with the quiet-start seeding prior; collision-free location seeds; robust route test). The
+seasonal check stays at the means; the builder reports the share of draws that dip below zero (32% in
+v17.1, NEWS 0.101.0).
+
 **Why:** checking at the prior mean is not the same as checking the draws. The engine's clamps and ignition requirements act on each sampled draw.
 **How to apply:** for any "builder guarantees X" claim, test it on prior draws through sample_parameters. For IC priors, check P(E+I>0) per country against the observed burden.

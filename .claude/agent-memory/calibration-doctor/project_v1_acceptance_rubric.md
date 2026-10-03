@@ -1,13 +1,20 @@
 ---
 name: project-v1-acceptance-rubric
-description: MOSAIC v1.0 go/no-go = pre-registered rubric (frozen 2026-09-30, thresholds sha256 fea5cc66...) + evaluate_suite.R in MOSAIC-pkg/claude/deploy_v0100/acceptance/; how the old models land on it
+description: MOSAIC v1.0 go/no-go = pre-registered rubric (frozen 2026-09-30, thresholds sha256 fea5cc66...) + evaluate_suite.R in MOSAIC-pkg/claude/deploy_v0100/acceptance/; how the old models land on it; amended to 1.0.1 (2026-10-01) for the MOSAIC 0.101.0 suite v2026-10.02 (thresholds unchanged)
 metadata:
   type: project
 ---
 
-The user promotes MOSAIC to v1.0 ONLY if the v0.100.1 production suite (28 national + 4 regional + 1
-continental, window 2023-01-01..2027-04-29, CFR v2.1, mean central line) passes the pre-registered
-rubric. Built and frozen 2026-09-30 before any suite output existed.
+The user promotes MOSAIC to v1.0 ONLY if the production suite (28 national + 4 regional + 1
+continental, window 2023-01-01..2027-04-29, CFR v2.1) passes the pre-registered rubric. Built and
+frozen 2026-09-30 before any suite output existed, for the v0.100.1 suite (mean central line).
+
+**Amended 2026-10-01 (rubric 1.0.1):** the v0.100.1 suite (v2026-10.01) became a rehearsal (NO-GO:
+cases bias 1.416, tier shares 2/15 and 1/10), and the decision moved to the MOSAIC 0.101.0 suite
+(v2026-10.02): the plan expects 0.101.0 / config 6.1 / priors 17.1 and the per-channel central line
+cases median / deaths mean; all 160 thresholds, tiers, windows and the verdict rule are unchanged.
+Bundle `claude/deploy_v0100/acceptance_v1.0.1/` (the 1.0.0 bundle is byte-identical); details in the
+local note v1-rubric-amendment-101.
 
 - Files: `MOSAIC-pkg/claude/deploy_v0100/acceptance/` (gitignored scratch): RUBRIC.md,
   rubric_thresholds.json (sha256 fea5cc66669a202dc4417fa650ad0392077f3b536aece442a0d0eb5bf791568a,

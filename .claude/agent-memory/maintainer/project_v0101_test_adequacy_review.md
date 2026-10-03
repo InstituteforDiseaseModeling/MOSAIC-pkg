@@ -1,0 +1,21 @@
+---
+name: v0101-test-adequacy-review
+description: v0.101.0 RC test-adequacy red-team (2026-10-01) - which new-feature wirings no test pins (mutation results), the rolling-CV medoid interval asymmetry and the weekly NA guard (both fixed before release), config_default-coupled snapshot tests that break at each surveillance rebuild, reusable mutation harness
+metadata:
+  type: project
+---
+
+Red-team of integrate/v0101 @071993706 vs main 41f4dc467 (weekly cases scoring, observed-only/panel-trend k, observation-level predictive, burn-in figures). Roxygen/man in sync (document() into a git-archive copy: zero diffs), codoc/checkDocFiles clean, no new exports, no new deps, no new no-visible-bindings. New tests all pass serially; HOME-less run skips only the KEN-rehearsal and MOSAIC-data tests.
+
+**Mutation results (20 single-site mutants).** Killed: weekly weights, complete-week rule, resolver obs_tier and panel trend, deaths obs_tier, central lines from engine draws, return_expected_deaths (killed ONLY by the real-engine test, because helper-ensemble-mock ignores the flag), observation-model offsets, cases_scoring validation, worker cases_scoring pass-through, deaths n_yr>=2 rule. **Survived:** standalone calc_model_likelihood panel_trend and .lik_obs_tier; rolling-CV pred_median_obs (producer and evaluator); summary.json n_panel_trend (that whole nb_dispersion summary block has no test); run_MOSAIC observation_model to the ensemble call, engine arrays to the trajectory persist and the implied CFR, .cases_week_offset_resolved. Only the medoid site is source-grep pinned (test-ensemble_observation_noise.R). A stub-engine single-location run_MOSAIC probe showed all of these wired correctly at 071993706; the gap is regression protection only.
+
+**Asymmetric-ensemble sibling:** `.rcv_simulate_config()` (R/run_rolling_cv.R) builds the rolling-CV best/medoid predictive by re-simulating with run_simulation() and its own quantiles. It is a parallel ensemble builder, so any change to calc_model_ensemble interval semantics must be mirrored there. At the RC (071993706) it was not: ensemble models got observation-level intervals, medoid engine-level, in the same predictions table. Fixed before release (f54f136c6): medoid/best rows are re-simulated through calc_model_ensemble() with the run's observation model.
+
+**Snapshot tests coupled to config_default:** test-est_nb_dispersion_panel.R hard-codes the v6.0 collapse set {CMR, UGA, ZAF} and k values. On the regenerated surveillance the set became {BFA, CIV, CMR, ZAF} with tiers ({CMR, GHA} without), and the re-derived trend moved (intercept -0.195 to -0.355, sigma 1.56 to 1.19). The code comment recipe and the gate plan mention only the drift test. (Updated at the v6.1 rebuild: the test now pins the v6.1 trend takers BFA/CIV/ZAF/CMR/UGA.)
+
+**Stale guard:** calc_model_likelihood's "nothing to score -> NA" skip keys off the DAILY have_cases gate. Under weekly scoring, an input with >=3 observed days but <3 complete weeks and no deaths returns a constant 0, not NA (reproduced). Fixed before release (1861f0399): such a location is NA.
+
+**Adversarial verification pass (same day):** all ten findings held up on re-reading and re-running. Two corrections to carry forward. (1) The M20 mutant (`.cases_week_offset_resolved` set to NULL) is equivalent by design: the worker test in test-calc_model_likelihood_weekly.R asserts that offset detection gives the identical score, so its survival is a hot-path cost (detection runs on every call), not a correctness gap. (2) Plan B4 reads k and SE from nb_dispersion.csv, not summary.json n_panel_trend. The seed fragility reproduced exactly: seeds 7, 11 and 12 of 12 fail. The scripts are in claude/v0101_release_redteam/verify-tests-health/.
+
+**Why:** these are the shapes of Lessons #7/#10/#13: the wiring is correct today but nothing would catch its removal.
+**How to apply:** reuse claude/v0101_release_redteam/maint-tests/mutate.R. It does load_all, then re-evaluates a fixed-string-mutated R file into both the namespace and package:MOSAIC (bare names in tests resolve through the package env), then runs test_file. The match must be unique: watch indentation substrings (an 8-space pattern also matches inside a 10-space line). See [[reviewer-checklist]] (mutate the wiring) and [[central-method-default-sites]].

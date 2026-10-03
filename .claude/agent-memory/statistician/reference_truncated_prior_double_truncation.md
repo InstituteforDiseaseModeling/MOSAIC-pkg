@@ -17,6 +17,6 @@ realistic case for staged / warm-start pipelines.
 **Why:** staged estimation should be a fixed point when the data are uninformative.
 **How to apply:** any time a bound is carried from prior to posterior, the fit must be in the
 truncated family (solve meanlog/sdlog so the TRUNCATED quantiles match) — check fixed-point with a
-posterior==prior round trip. Dormant until priors_default is rebuilt with `lower` (v16.1 has none).
+posterior==prior round trip. Live since priors_default v17.0 (zeta_ratio lower = 1; v17.1 too).
 
 Status: fixed on integrate/deep-review in 1f73e43dd (.fit_truncated_lognormal_ci; round-trip test in test-zeta-ratio-truncation.R).

@@ -8,8 +8,10 @@ metadata:
 Findings from the v0.93.0 production review (2026-09-29, report at
 claude/review_v093/etl_report.md on the laptop). Re-verify before acting — may since be fixed.
 
-- Only download_EMDAT_data appends a PROVENANCE row; WB, WPP, IDMC, mobility_od and the friction
-  cache log nothing. EMDAT-api, WB and WPP write.csv straight to the final dated name (non-atomic);
+- UPDATE 2026-10-01: WB, WPP, IDMC and mobility_od now DO append PROVENANCE.md (first rows written
+  2026-10-01). WB/WPP/IDMC/mobility do NOT dedupe identical content (each run = new dated copy);
+  only get_WHO_vaccination_data + process_WHO_annual_data skip byte-identical fetches.
+- (2026-09-29, original) Only download_EMDAT_data appended a PROVENANCE row; the friction cache still logs nothing. EMDAT-api, WB and WPP write.csv straight to the final dated name (non-atomic);
   `.mosaic_download` tempfile() lives in tempdir() so cross-FS it falls back to file.copy into dest.
 - IDMC + mobility snapshots are atomic per FILE not per SNAPSHOT; newest-wins resolvers accept a
   partial dated dir, and downloaders never throw, so the driver reports `ok` on total outage.

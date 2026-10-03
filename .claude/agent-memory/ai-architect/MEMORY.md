@@ -5,3 +5,5 @@
 - [Measured numbers need one home](feedback_measured_numbers_need_one_home.md) — a measured GB/runtime/speedup lives in ONE doc, cited elsewhere; replicated copies rot and the newest measurement never propagates; grep the digits, not the topic
 - [Lessons-Learned budget](reference_lessons_list_budget.md) — the list is 56% of pkg CLAUDE.md and item length grows monotonically (31→219→489 w); cap new entries at 30-40 w; which items earn a slot and which 7 merge into 1
 - [Roster README drifts on scope, not counts](reference_roster_readme_drifts_on_scope.md) — counts/membership stay clean; scope wording rots independently of the agent frontmatter, so diff README cells against `description:`, not against its own tables; engine bit-identity contract is unowned
+- [Doc drift hotspots](project_doc_drift_hotspots.md) — root CLAUDE.md, VM skills, diagnose-fit map, control roxygen and NEWS go stale after engine/API releases
+- [Release-stream memory drift](feedback_release_stream_memory_drift.md) — worktree-written notes + RC red-team claims fixed pre-release go stale; consolidate file-by-file, sweep 'still/awaits/HELD' vs NEWS

@@ -19,6 +19,12 @@ Durable review checks for MOSAIC, built from caught regressions.
 - Confirm the regeneration recipe is reproducible from the committed package +
   canonical pipeline (model/LAUNCH.R). If produced by an ad-hoc/compute-VM run with
   overrides, that is a provenance finding -- the artifact is hand-curated, document it.
+- **Builder gains a field before the data is rebuilt** (v0.101.0 `reported_tier`): the
+  release ships the consumer + builder while the shipped object lacks the field, so the
+  feature is inert. Check: NEWS headline qualified; builder `version`/description bumped (a
+  rebuild under the old label is indistinguishable to version-keyed preflights);
+  `R/config_default.R` field list; a `skip_if(is.null(...))` contract test like
+  test-config_default_weights.R (presence-iff-value, domain, JSON round trip).
 
 **Always check for the compute-env parity trap:**
 - `git log origin/main..HEAD` -- unpushed config/data commits mean hedgehog/Coiled
@@ -137,3 +143,46 @@ so the other becomes dead code with its own, possibly contradictory, docs. One-l
 Also after such merges: tests written by one branch can assert the OTHER branch's old
 return shape (est_initial_E_I fit names; resim fixture lacking cases_mean once the default
 flipped to mean) — run the whole suite on the integration branch, not per branch.
+**Changing a helper's input resolution/scale breaks sibling options tuned to the old one.**
+v1.0 prep near-miss (my own): to make plot_seasonal_clustering() match
+est_seasonal_dynamics() "by construction" I fed it the 365-column daily matrix instead of
+52 weekly means. ward.D2/kmeans/knn partitions were unchanged, but the `dbscan` option has a
+fixed `eps = 1` (a weekly-scale distance; daily vectors are ~sqrt(7) further apart), so on the
+real fits every country became noise. Caught only by running ALL methods on real data before
+and after. Rule: when a change alters the dimension or scale of what a multi-method function
+consumes, run every method/option on production data both ways and pin any scale-dependent
+one with a test whose fixture straddles the threshold.
+**NEWS.md `# pkg (development version)` heading:** R's parser
+(`tools:::.build_news_db_from_package_NEWS_md`) silently skips a leading non-version heading
+(no NOTE); pkgdown lists it as "development version". Safe for release branches that must
+not bump DESCRIPTION yet.
+**A "legacy mode" knob documented as reproducing old runs: check every OTHER change in the
+release is gated by it too.** v0.101.0 `cases_scoring = "daily"` still took the new panel-trend
+dispersion (CMR/UGA/ZAF k 0.1 -> 1.0-1.4), so it did not reproduce v0.100.1. Run the resolver
+from `git archive <base>` and the branch on the same config and diff.
+**A new gate nested inside an old one must also feed the "unscorable -> NA" rule.** v0.101.0's
+weekly cases gate (>= 3 complete weeks) sits inside the daily `have_cases` gate, but the NA rule
+tests only `have_cases`; 1-2 complete weeks with no deaths scores a constant 0 per draw
+(single-location run -> uniform posterior instead of all-NA). Probe the gap between the gates. (Found at
+the RC; fixed before release in 1861f0399.)
+**Verify every number a NEWS bullet states, including the ones nobody flagged.** The v0.100.1
+entry had five measured claims; two were flagged, two more were also off (the ~50-700 E+I
+range was ~25-680; "90-100%" 60-day ignition measured 87-100%), and the "~90% failed to
+ignite" referred to an unshipped intermediate build, not the shipped priors. Re-measure from
+the shipped objects (and `git show <sha>:data/*.rda` for "before" claims).
+**A data-object rebuild merged under feature NEWS stales every "on config_default" number.**
+v0.101.0: the red-team branch measured on v6.0, the rebuild produced v6.1, and the Rd/code
+comment got v6.1 values while NEWS L29 (panel-trend refit-at-30: CMR/UGA/ZAF, SD 1.56) and L30
+(CAF phi 1.72; v6.1 gives 1.65) kept v6.0 ones (both corrected before release). Grep NEWS for "on `config_default`" after any
+rebuild merge and re-run each one on the shipped rda. Pre-fix code via assignInNamespace in-session.
+**A measured figure replacing an estimate: sweep digit AND word forms in every doc surface.**
+bdf96a07f swapped "five to seven times" for the measured 4.8x in calc_model_likelihood, NEWS
+and CLAUDE.md, but missed `weight_wis` in `mosaic_control_defaults()`'s `@param likelihood`
+items (R/run_MOSAIC.R). Those control-default items are a recurring missed sibling. Grep
+`"5-7|five to seven|5 to 7"` across R/ man/ vignettes/ inst/ .claude/.
+**Hard-coded paths in rerunnable scripts: check the case against `git ls-files`.** The laptop's
+APFS is case-insensitive, so `MOSAIC-data/processed/enso` worked there although the tracked
+directory is `processed/ENSO`. On dugong/hedgehog (Linux) the same script fails. This hit the
+v0.101.0 psi provenance bundle (fixed in MOSAIC-data 2ee3725).
+**md5-pinned data objects: never fix a description string in place.** Record the correction in
+NEWS and carry it to the next rebuild ([[v0101-pending-rebuild-corrections]]).

@@ -54,7 +54,7 @@ Fix: left-truncate at 1 in `make_priors_default.R`; correct the comment and the 
 **FIX WRITTEN 2026-09-30 (branch fix/handoff-h2-priors, user-approved):** lognormal family gained
 optional `lower`/`upper` in `sample_from_prior()` (inverse CDF; untruncated path still `rlnorm`, same
 RNG stream); builder emits `lower = 1`; bounds carried through `update_priors_from_posteriors()` and
-`inflate_priors()`. Takes effect only at the next priors_default rebuild (v16.1 .rda has no `lower`).
+`inflate_priors()`. Took effect in priors_default v17.0 (2026-09-30 rebuild; v17.1 keeps lower = 1).
 Truncated: median 75 -> 185, 95% [1.4, 5.7e5]. Rationale: Smith 2026 OR<1 is household transmission,
 not per-day shedding.
 

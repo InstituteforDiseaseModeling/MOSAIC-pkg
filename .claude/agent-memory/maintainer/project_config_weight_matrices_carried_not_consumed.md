@@ -1,6 +1,6 @@
 ---
 name: config-weight-matrices-carried-not-consumed
-description: config_default v4.1+ ships reported_cases_weight/reported_deaths_weight matrices that are CARRIED but not consumed by the likelihood; the Dask broadcast keep-list omits them (future wiring landmine)
+description: config_default v4.1+ ships reported_cases_weight/reported_deaths_weight matrices; carried-but-unused when added, now CONSUMED by the likelihood (run_MOSAIC passes them as the observation weights); the Dask keep-list landmine was closed and is moot since the v0.67.0 Dask excision; the config allow-list keeps them out of samples.parquet
 metadata:
   type: project
 ---
@@ -12,7 +12,7 @@ direct WHO/JHU/SUPP = 1.0). They are injected POST `make_simulation_config` in
 because `make_simulation_config()` has explicit named formals and rejects unknown args.
 
 **Why:** multi-source fit target (15->40 data countries) carries trust weights for a future
-per-cell weighted likelihood. Not yet consumed by `calc_model_likelihood` (no per-cell slot).
+per-cell weighted likelihood. Not consumed at v4.1 (no per-cell slot); now consumed (run_MOSAIC.R `.wobs_cases_lik`/`.wobs_deaths_lik`).
 
 **How to apply / verified-safe paths (confirm still true on any re-review):**
 - The two matrices are EXCLUDED from `convert_config_to_matrix.R` / `convert_config_to_dataframe.R`

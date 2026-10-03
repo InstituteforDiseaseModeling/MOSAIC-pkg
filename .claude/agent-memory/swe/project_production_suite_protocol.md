@@ -24,7 +24,18 @@ MOSAIC-results production runs came from dugong scripts, NOT claude/full_metapop
 - J-ratio (laptop, interleaved, n_iter 2): J10/J1 1.16-1.30, J40/J1 1.84-2.21; engine itself flat in J; sampled params 39/213/783.
 - FIXED batch makespan = ceil(tasks/workers) task-lengths; national 30k at shard 100 on 42 workers wastes 11% -> runner sets
   io$shard_batch_size 25 (output byte-identical, verified).
+- Continental smoke (2026-10-01): rubric M-REFF (severity CAVEAT) FAILS because ERI (zero observation weeks) gets no
+  finite R_eff -- expect the same in production; not a runner defect.
+- v0.101 gate = TWO arms (cases_scoring weekly W / daily D) in two suites (resume guard pins control$likelihood), each
+  CORE_BUDGET=84; gate/compare_gate.R reproduces the statistician's rehearsal baselines exactly (KEN bias 1.416 etc.).
 - A FIXED run that dies AFTER consolidating shards cannot be resumed (run_MOSAIC refuses a smaller pool) -> requeue fresh.
-- Runner: `claude/deploy_v0100/` (run_job.R 3 scales, lane.sh core-budget + warm-start-gated scheduler, launch/status/pack/pull).
+- MEASURED (v0.100.1 rehearsal v2026-10.01, 2026-09-30): national job 56 min at 42 workers (sims ~51 min, post ~3, R_eff
+  0.4, figures ~2) -> 0.85 s/run; 28 jobs in 6.6 h on 4 lanes.
+- v0.101.0 contract (rubric 1.0.1): central line is the PACKAGE default (cases median, deaths mean) -- the runner must never
+  pin it (the v0.100 launcher's CENTRAL_METHOD=mean would have failed M-PROVENANCE on every run); arrays: cases_array/
+  deaths_array = observation-level, cases_engine_array/deaths_engine_array = engine (same RDS objects).
+- Runner: `claude/deploy_v0100/` (run_job.R 3 scales + rubric-driven PREFLIGHT/POSTFLIGHT (exit 2/4), lane.sh core-budget +
+  warm-start-gated scheduler, launch.sh freezes a hash-checked rubric copy in _control/, status/pack/pull with evaluator
+  file/provenance/array audit, install_mosaic.sh pinned to the merge SHA, gate/compare_gate.R).
   `setsid` and `pgrep -c` do not exist on macOS; `ls glob | wc` under pipefail kills a `set -e` script when nothing matches.
 See [[reference-dugong-vm]], [[rengine-cost-model]].

@@ -1,6 +1,6 @@
 ---
 name: suitability-panel-hidden-inputs
-description: compile_suitability_data silently depends on pkg-side model/input/param_epidemic_peaks.csv (cases_binary) and on the panel's first row (poverty/spei/anomaly/heatwave fills); explains non-obvious panel diffs
+description: compile_suitability_data silently depends on pkg-side model/input/param_epidemic_peaks.csv (cases_binary) and on the panel's first row (poverty/spei/anomaly/heatwave fills); deaths_per_1000 is the WPP crude death rate, not cholera; explains non-obvious panel diffs
 metadata:
   type: reference
 ---
@@ -17,6 +17,10 @@ Learned diffing the v0.100.0 panel rebuild (2026-09-30) against the 2026-09-21 p
   gets the GLOBAL MEAN (static-var mean fill), not NOCB from its pre-2000 value; the global mean
   itself moves with the row set (49.11 -> 48.96). ERI/SOM have no WB poverty at all.
 - Panel key is (iso_code, date=Thursday); future horizon rows have NA date_start.
+- `deaths_per_1000` is NOT cholera deaths: it is the UN WPP crude death rate (all-cause deaths per
+  1,000 per year, interpolated daily; process_UN_demographics_data.R:78), a demographic covariate
+  next to births_per_1000. A cholera-deaths change moves `deaths` (and `source_deaths` only if the source changes), never
+  this column. The coordinator expected it to move with the ZAF 2023 deaths fix (2026-10-01).
 
 Why: none of these show up as code changes; without this, a panel diff looks unexplained.
 How to apply: when diffing panels, first check the peaks file provenance and the first/last row

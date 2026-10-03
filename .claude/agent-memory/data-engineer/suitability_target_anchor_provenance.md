@@ -1,6 +1,6 @@
 ---
 name: suitability-target-anchor-provenance
-description: target_D_rate_per_country_floored semantics — full-window cp99r anchor (leaks), train-only anchor exists but ONLY for transmission_intensity, LBR saturation, 63% AI/Fourier cells, and the unpinned canonical-panel scoring path
+description: target_D_rate_per_country_floored semantics — full-window cp99r anchor (leaks), trust rule = not AI AND not tier-3 (backfill_interpolated excluded since fix/v0101-trust), pop median on non-AI rows, p99 ~= 3rd-largest week for ~180-obs countries, LBR saturation, unpinned scoring path
 metadata:
   type: reference
 ---
@@ -56,3 +56,22 @@ or sha. So a psi cache or a registry score cannot be traced to a panel build.
 See [[iso_week_labelling_convention]] for the DA-01 fix that regenerated the
 panel's inputs, and [[ai_source_integration_provenance]] for the AI/Fourier
 precedence rules.
+
+**Trust rule since fix/v0101-trust dc1048068 (2026-10-01).** Anchor rows =
+`!.csd_untrusted_rows(d)` = not AI AND not tier 3 (`.surveillance_tier`); WHO catch-up
+(tier 2) rows stay trusted. Weeks filled by `backfill_weekly_case_gaps()` (26 in the
+v0.101 panel, 11 isos) carried source NA and were silently trusted (BWA anchor x6.5 from
+two weeks interpolated between AI weeks) and weighted 1.0 in the LSTM loss
+(`build_suitability_sequences` maps NA cw -> 1). Now labelled `backfill_interpolated`,
+cw = min(0.5, neighbours). The 5-case floor's median population uses a SEPARATE row set
+(`pop_rows` = non-AI rows of the anchor window) so trusted targets are invariant to
+backfilling (GNB floor unchanged). Backfill's original false-zero rationale is obsolete:
+NA targets are masked (`is_train_row` needs `!is.na(intensity)`), so filled weeks only ADD
+interpolated targets. BWA's backfill weeks are 2009 -> inert for the 2015+ fit window.
+Round 2 (802fcb062): backfill_case_gaps now defaults to FALSE (15/26 filled weeks were weeks the
+reconciliation EMPTIED; lstm_v2 masks NA anyway); panel keeps cases_interpolated (all FALSE);
+deaths-only weeks are never filled. pop_rows deliberately NOT changed (would move 11 floors).
+**p99 mechanics:** with ~180 trusted weeks the per-country p99 is ~the 3rd-largest week,
+so reshaping one outbreak (ZAF 2023 flat 52/wk -> peak 394) moves the anchor x4.6
+([[zaf-2023-epicurve-provenance]]); excluding tier-2 rows instead would drop ZAF to the
+floor and move CIV x0.52, UGA x1.07, GHA x1.03, KEN x0.97 (not adopted).

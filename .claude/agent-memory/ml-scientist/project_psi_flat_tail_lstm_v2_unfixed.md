@@ -1,9 +1,15 @@
 ---
 name: psi-flat-tail-lstm-v2-unfixed
-description: drop-tail fix IS now wired into lstm_v2, but the guard fails OPEN and the shipped psi artefact still carries a 98-day carry-forward tail; always check pred_raw for a dead-flat run
+description: RESOLVED - the lstm_v2 drop-tail guard fails loudly since 272ceacbc (v0.90.9) and the shipped psi (C3, 8ad91c7a4) has no carry-forward tail (the 98-day tail was in the v0.77.0 artefact); still check pred_raw for a dead-flat run, excluding 0.01-clamp runs
 metadata:
   type: project
 ---
+
+**RESOLVED (re-checked 2026-10-02 at v0.101.0).** The guard now stops on a NULL, empty or malformed
+`genuine_last` (272ceacbc, v0.90.9, DA-02). The shipped `model/input/pred_psi_suitability_day.csv` is
+psi C3 (8ad91c7a4): no country has a carry-forward tail; the only long constant `pred_raw` tails sit at
+the 0.01 eps clamp (GNB 1,534 d, GMB 267, GIN 253, BFA 218, SEN 204), so exclude clamp runs from the
+rle check. The findings below are the 2026-09-16 record.
 
 **Status update (verified 2026-09-16 at MOSAIC v0.85.0 — supersedes the "legacy-path only" claim).**
 

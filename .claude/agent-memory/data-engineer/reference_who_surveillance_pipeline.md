@@ -36,19 +36,22 @@ WHO cholera surveillance flows through TWO distinct streams; do not conflate the
   WHO > JHU > AI > SUPP, with COMPLETENESS tie-break FIRST (both cases+deaths non-NA win before
   priority). Union-safe column harmonization. Square countries x all-Mondays panel; missing = NA
   never 0. Daily disaggregation via downscale_weekly_values (integer, remainder centered).
-  AI rows NA-blanked before daily downscale (synthetic cases never reach the likelihood).
-  include_ai defaults FALSE; AI confidence_weight NOT yet consumed downstream (loud warnings).
+  (Stale since v0.47.1: AI fourier rows now reach the daily file and the fit target down-weighted
+  by confidence_weight; only assumed_zero is blanked. update_mosaic_data runs include_ai = TRUE.)
   Outputs: processed/cholera/weekly/cholera_surveillance_weekly_combined.csv,
   processed/cholera/daily/cholera_surveillance_daily_combined.csv.
 
-## Model-input wiring (IMPORTANT split)
-- config_default reported_cases/reported_deaths matrices are built in
-  data-raw/make_config_default.R (L402-427) from processed/WHO/daily/cholera_country_daily_processed.csv
-  -- the WHO-ONLY daily file produced by `downscale_weekly_cholera_data()`, NOT the multi-source
-  combined daily file.
-- The multi-source combined daily file feeds est_epidemic_peaks.R (peaks) and est_initial_E_I.R (IC).
-- So: LASER observed-fit matrices = WHO-only daily; peaks + IC = WHO+JHU+SUPP combined daily. Real
-  semantic seam worth flagging if a change intends the merged series to drive fit matrices.
+## Model-input wiring (corrected 2026-10-01)
+- Since config_default v4.1 the fit target (reported_cases/reported_deaths + their
+  `_weight` matrices from confidence_weight) is built in data-raw/make_config_default.R from the
+  MULTI-SOURCE combined daily file (processed/cholera/daily/cholera_surveillance_daily_combined.csv,
+  include_ai = TRUE). The WHO-only daily file (downscale_weekly_cholera_data) is no longer read
+  by the fit target. The combined daily also feeds est_epidemic_peaks and est_initial_E_I; the
+  combined weekly feeds compile_suitability_data, est_seasonal_dynamics, make_priors_default.
+- Combiner tiers (fix/surveillance-artifacts): observed > reconstructed (who_catchup_*) >
+  imputed (fourier_*); every changed week is logged in
+  processed/cholera/weekly/cholera_surveillance_weekly_adjustments.csv. See
+  [[who-multiweek-catchup-reports]] and [[ai-fourier-full-total-double-count]].
 
 ## Orchestration
 - model/LAUNCH.R section 2A (L127-133): process_WHO_annual_data -> process_CFR_data ->

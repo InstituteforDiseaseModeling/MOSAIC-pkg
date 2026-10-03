@@ -1,11 +1,28 @@
 ---
 name: rcmdcheck-baseline-v048
-description: R CMD check baseline for MOSAIC (v0.48.x, v0.55.7, v0.95.0) — expected ERRORs/WARNINGs/NOTEs, plus the vignette-code hazard (check EXECUTES Installation.Rmd install code) — always use --ignore-vignettes
+description: R CMD check baselines for MOSAIC (v0.48 -> v0.100.1). v0.100.1 full check incl. vignettes + serial tests = 1 NOTE; the old vignette-executes-install-code hazard is RESOLVED (re-verify with purl before trusting)
 metadata:
   type: project
 ---
 
-## HAZARD (found 2026-09-28): never run R CMD check without `--ignore-vignettes`
+## CURRENT (measured 2026-10-01 on v0.100.1 / 41f4dc467, and release/v1.0 d7a5f8e77)
+
+Full check is now safe WITH vignettes. Every Installation/Deployment/Running-MOSAIC
+chunk carries chunk-level `eval = FALSE`, which purl comments out; only
+Running-simulations runs code (pure-R run_simulation). Re-verify in 10 s before a
+full check: `knitr::purl(<vignette>)` and grep for uncommented lines.
+
+Recipe (from a `git archive <sha> | tar -x` copy; never build in place):
+`R CMD build --no-manual src` (~47 s, builds vignettes), then
+`TESTTHAT_PARALLEL=FALSE NOT_CRAN=true _R_CHECK_FORCE_SUGGESTS_=false R CMD check --no-manual <tar>`
+(~8.5 min; tests ~320-345 s serial).
+Baseline v0.100.1: **Status: 1 NOTE** (`:::` self-calls only; the old
+`.dp`/`.run_sim_worker*` globals NOTE is gone), examples OK, vignettes OK,
+tests `[FAIL 0 | WARN 125 | SKIP 36 | PASS 12003]`. The 125 WARN are mostly the
+calc_model_likelihood Poisson-limit fallback (test-weights_location_derivation.R).
+
+## HISTORICAL HAZARD (found 2026-09-28, fixed by v0.100.0): R CMD check executed vignette install code
+
 
 `DESCRIPTION` now has `VignetteBuilder: knitr`, and `vignettes/Installation.Rmd` sets
 `eval = FALSE` only via `knitr::opts_chunk$set()` inside its setup chunk. `purl` never

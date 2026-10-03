@@ -19,7 +19,8 @@ Built 2026-09-30 in worktree .claude/worktrees/rebuild (branch rebuild/defaults-
   outbreaks under way. Template only if whole window empty (21/40). P(E+I>=1) >=0.99 wherever cases (COG 1 case
   = 0.14). USER DECISION: quiet-start SEEDING FLOOR (est_initial_E_I quiet_start="seed", Beta(1,1e5) E and I,
   = v16.1 mean 1e-5) for locations with no cases in window but cases later up to date_stop: BFA CAF CIV GHA NAM
-  NER RWA SWZ TCD TGO (metadata$quiet_start_seeded); 11 silent-everywhere keep template. COG (1 case in window)
+  NER RWA SWZ TCD TGO (metadata$quiet_start_seeded; v17.1 adds SSD/TZA/UGA/ZAF/ZWE -> 16, see
+  [[v0101-quiet-start-review]]); 11 silent-everywhere keep template. COG (1 case in window)
   later EXTENDED (coordinator, within user intent): also seed when the window-based prior implies
   N*(E[pE]+E[pI]) < 1 AND later cases -> COG only (exp 0.40 -> 124; 60-day ignition 0.03 -> 0.94). AGO/UGA/BEN
   (exp >= 4) keep data-based priors; their P(E+I>=1) ~0.98. AGO's seed rests on AI-reconstructed ~1 case/week.

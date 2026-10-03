@@ -1,6 +1,6 @@
 ---
 name: tau-i-departure-semantics
-description: tau_i is a per-DAY away-fraction in the laser engine (not weekly, not a trip-incidence); production prior is deflated 1000x so 31/40 countries have mode at zero; the E3 "~1:90 StatsSA" and "~100x overland" multipliers are transcription/unit errors
+description: tau_i is a per-DAY away-fraction in the engine (not weekly, not a trip-incidence); since priors v17.x the production prior is the overland lognormal (the 1000x-deflated air Beta is only a fallback); the E3 "~1:90 StatsSA" and "~100x overland" multipliers are transcription/unit errors
 metadata:
   type: reference
 ---
@@ -28,7 +28,11 @@ DAILY OAG flight data"), so `param_tau_departure.csv` tau is **daily**. `04-mode
 L753 correctly says daily; **L650 and the L724 figure caption say "weekly" and are STALE** —
 they contradict the engine and have caused at least one 7x error downstream (see §3).
 
-## 2. The production tau prior is diffuse and zero-spiked (not tight)
+## 2. HISTORY (true at priors v15.18, SUPERSEDED): the air tau prior was diffuse and zero-spiked
+**Current state (verified 2026-10-02, priors v17.1 / config v6.1):** all 40 `tau_i` priors are
+lognormal from `param_tau_departure_overland.csv` (sdlog 0.587 for 26 E3 countries, 0.868 for 14
+default countries at the 0.0025/wk median); config `tau_i` == prior median exactly. The Beta route
+below only runs if that file is missing. See [[mobility-overland-vs-blend]].
 `data-raw/make_priors_default.R:848` sets `tau_uncertainty_factor <- 0.001`, multiplying the
 fitted Beta concentration by 1e-3. In `priors_default` v15.18 that gives:
 - median CV **1.40** (not the raw file's ~0.04)
@@ -64,6 +68,8 @@ Metema/Humera->SDN are its two biggest corridors), **SSD** (Renk/Joda->SDN), **Z
 `metapop/utils.py::get_pi_from_lat_long` rebuilds pi at runtime from lat/lon great-circle +
 sampled gamma/omega + initial N. Adopting an overland tau without an overland-consistent
 gamma/omega routes amplified departures through the AIR kernel — the metric-mismatch trap.
+**Resolved in production:** the shipped kernel is the blend fit (gamma 1.90), which is 93% overland
+by flow and within dgamma 0.054 of the overland-only fit — not the air kernel (1.36).
 
 See also [[param-identifiability-eth-v0903]] (tau_i is absent from the OAT classification
 because a single-patch ETH run makes it inert).
