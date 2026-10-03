@@ -65,7 +65,7 @@ and persisted as `data/config_default.rda` (its version is in
   likelihood. The cases dispersion is fitted on tier-1 weeks only; the
   deaths dispersion is fitted on tier-1 weeks where they are enough and
   falls back to every scored week, tiers 2 and 3 included, where they
-  are too few (for the integrated deaths likelihood on v6.1 at
+  are too few (for the integrated deaths likelihood on v6.2 at
   `burn_in_days = 45`: BEN, BFA, CIV, LBR, NAM and ZAF).
 
 ## Details

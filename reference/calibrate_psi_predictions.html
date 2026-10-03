@@ -17,7 +17,7 @@ without altering its training, and feeds the canonical psi column."><meta proper
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.101.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -129,10 +129,10 @@ offset is clamped to this range (default <code>c(-4, 4)</code>).</p></dd>
 
 
 <dt id="arg-amp-range">amp_range<a class="anchor" aria-label="anchor" href="#arg-amp-range"></a></dt>
-<dd><p>Length-2 numeric <code>c(lo, hi)</code>; the corrected series'
-logit-scale sd is constrained to within this multiple of the input
-prediction's logit-scale sd (default <code>c(0.5, 2)</code>), shrinking the affine
-toward identity when violated.</p></dd>
+<dd><p>Length-2 numeric <code>c(lo, hi)</code>, as multiples of the input
+prediction's logit-scale sd (default <code>c(0.5, 2)</code>); a fit below
+<code>lo</code> falls back to identity, one above <code>hi</code> is shrunk toward
+identity.</p></dd>
 
 
 <dt id="arg-min-pred-sd">min_pred_sd<a class="anchor" aria-label="anchor" href="#arg-min-pred-sd"></a></dt>
@@ -145,7 +145,12 @@ for a country to be eligible for a fit; below it, identity (default 0.05).</p></
     <p><code>pred_df</code> with an added <code>out_col</code> in \((0,1)\). A
 per-country diagnostic data frame is attached as
 <code>attr(., "calibration_diagnostics")</code> (see
-<code><a href="check_psi_amplitude.html">check_psi_amplitude</a></code>).</p>
+<code><a href="check_psi_amplitude.html">check_psi_amplitude</a></code>). Its <code>status</code> is <code>"fit"</code>,
+<code>"guarded"</code> (slope or offset clamped, or amplitude shrunk from the
+ceiling), <code>"identity"</code> (too few outbreak weeks, degenerate predictor
+or rank-deficient fit), or <code>"collapsed"</code> (identity because the fit fell
+below the amplitude floor; <code>slope</code> and <code>offset</code> then report the
+rejected, clamped fit).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -161,10 +166,12 @@ bounded in \((0,1)\) by construction — so low predictions map near 0
 without the hard-\([0,1]\)-clip truncation that distorted the
 <code>psi_bar</code>-relative deviation feeding the engine.</p></li>
 </ul><p>A country with fewer than <code>min_train</code> outbreak weeks (this includes
-zero-history countries, which have none) or no logit-pred variance falls back
-to the <strong>identity</strong> transform (output = input prediction) with a warning.
-This is the defined behavior for low-incidence / zero-history countries: their
-psi is the uncorrected (region-FiLM-modulated) model output.</p>
+zero-history countries, which have none), no logit-pred variance, or an
+outbreak-week slope that would collapse its amplitude (see <em>Robustness</em>)
+falls back to the <strong>identity</strong> transform (output = input prediction) with
+a warning. This is the defined behavior whenever the correction cannot be
+estimated: the country's psi is the uncorrected (region-FiLM-modulated) model
+output.</p>
     </div>
     <div class="section level2">
     <h2 id="robustness-b-">Robustness (B1)<a class="anchor" aria-label="anchor" href="#robustness-b-"></a></h2>
@@ -183,12 +190,24 @@ the identity transform.</p></li>
 <code>slope_range</code> and the offset to <code>offset_range</code> (logit scale)
 before being applied, so no country's correction can be steeper / more
 offset than is plausible for a scale/level fix.</p></li>
-<li><p><strong>Amplitude clamp.</strong> The corrected series' logit-scale standard
-deviation is constrained to within <code>amp_range</code> times the input
-prediction's logit-scale standard deviation (shrinking the affine toward
-identity if it would over-collapse or over-inflate the amplitude), so a
-country's psi cannot be flattened to a constant or inflated beyond a sane
-range.</p></li>
+<li><p><strong>Amplitude floor: a collapsing fit is not applied.</strong> The
+corrected logit series is affine in the input, so its logit-scale
+standard deviation is the clamped slope times the input's. A slope below
+<code>amp_range[1]</code> would flatten the country's seasonal contrast below
+that fraction of the model's. Such a slope is not an estimate of a scale
+correction: on the outbreak weeks the fitted slope is the correlation
+times the ratio of standard deviations, so it lands near zero (or below)
+when the model does not predict outbreak magnitude there. The country
+then falls back to the <strong>identity</strong> transform with status
+<code>"collapsed"</code> (v0.102.0). Up to v0.101.0 the map was instead blended
+toward identity until it reached the floor. That map was set by the
+guard constants rather than the data, because the slope was clamped
+without re-fitting the intercept. So CIV received slope 0.505 and offset
+-2.64 in every 2026 production refit.</p></li>
+<li><p><strong>Amplitude ceiling.</strong> A corrected logit-scale standard deviation
+above <code>amp_range[2]</code> times the input's is shrunk toward identity
+(blend on a 0.02 grid) until it is within the range, so a country's psi
+cannot be inflated beyond a sane range.</p></li>
 </ul><p>Well-behaved countries (ample outbreak weeks, real logit-pred variance, a
 slope/offset/amplitude inside the guard ranges) are <strong>unaffected</strong> — the
 guard is a no-op for them.</p>

@@ -1,5 +1,59 @@
 # Changelog
 
+## MOSAIC 0.102.0
+
+### Default data objects
+
+- `config_default` v6.2 changes `psi_jt` in four countries only: CIV,
+  GMB, TGO and UGA. Their production psi (C3) sat on the bias
+  correction’s old 0.5x amplitude floor. Under the new collapse rule
+  (see Suitability) they fall back to the identity correction, so their
+  psi is the LSTM’s own smoothed prediction. C3’s stored predictions
+  were re-corrected without retraining; the other 36 countries are
+  byte-identical.
+  - Mean psi over the window: CIV 0.011 -\> 0.029, GMB 0.007 -\> 0.010,
+    TGO 0.256 -\> 0.068, UGA 0.091 -\> 0.123.
+  - TGO sat on the floor in C3 only, of the seven 2026 refits, so its
+    level is borderline.
+  - Every other field is identical to v6.1, and the build is
+    byte-reproducible.
+  - `priors_default` stays at v17.1, because the priors do not read psi.
+    The cases-dispersion panel trend reproduces exactly on v6.2. The toy
+    configs and `estimated_parameters` do not read psi and are
+    unchanged.
+
+### Suitability
+
+- [`calibrate_psi_predictions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calibrate_psi_predictions.md)
+  no longer applies a per-country fit whose slope would shrink psi’s
+  logit-scale amplitude below `amp_range[1]` (0.5) of the model’s. Such
+  a country now falls back to the identity correction, as it already did
+  with too few outbreak weeks or a degenerate predictor. Its diagnostic
+  status is the new `"collapsed"`, and a warning names it.
+  - **Old behaviour.** Up to v0.101.0 such a fit was blended toward
+    identity until it sat on the 0.5x floor. The slope was clamped
+    without re-fitting the intercept, so the map came from the guard
+    constants rather than the data.
+  - **Evidence the old map was not an estimate.** CIV received slope
+    0.505 and offset -2.64 in all seven 2026 production refits. That
+    took the square root of its seasonal odds contrast and put its psi
+    about 4x below the median target of its outbreak weeks.
+  - **When the floor binds.** It binds where the outbreak weeks do not
+    identify a slope. On C3’s stored 2018+ window, the four
+    floor-clamped countries have outbreak-week slope t of -2.1 to 1.6;
+    every fitted country has 3.4 or more.
+  - **Evidence for identity.** Against the training target, in-sample,
+    the LSTM’s own amplitude is close to calibrated: the median
+    all-weeks calibration slope is 1.15 over 29 countries. Out of
+    sample, forward-chained over the rolling-CV fold predictions,
+    identity and the floor map are indistinguishable.
+  - **Unchanged.** Fits that would inflate the amplitude are still
+    shrunk to the 2x ceiling, and every other country’s correction is
+    bit-identical.
+  - **Production psi.** On C3 the rule changes CIV, GMB, TGO and UGA; it
+    is re-applied to C3’s stored predictions without retraining in
+    `claude/v0102_psi/`.
+
 ## MOSAIC 0.101.0
 
 Surveillance artifact fixes, cases dispersions estimated from observed
