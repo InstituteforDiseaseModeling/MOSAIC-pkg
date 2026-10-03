@@ -24,50 +24,65 @@ est_vaccination_rate(
 
 \item{date_stop}{The stop date for the vaccination data range (in "YYYY-MM-DD" format). Defaults to the latest date in the data.}
 
-\item{max_rate_per_day}{The maximum vaccination rate per day used to redistribute doses. Default is 100,000 doses/day.}
+\item{max_rate_per_day}{The maximum vaccination rate per day used to redistribute doses (no default; the data pipeline uses 20,000 doses/day).}
 
 \item{data_source}{The source of the vaccination data. Must be one of \code{"WHO"}, \code{"GTFCC"}, or \code{"BOTH"}. When \code{"BOTH"} is specified, the function uses combined data from both sources with GTFCC prioritized and unique WHO campaigns added.}
 }
 \value{
 This function does not return an R object but saves the following files to the directory specified in \code{PATHS$MODEL_INPUT}:
 \itemize{
-\item A redistributed vaccination data file named \code{"data_vaccinations_<suffix>_redistributed.csv"} where suffix is WHO, GTFCC, or GTFCC_WHO.
-\item A parameter data frame for the vaccination rate (nu) named \code{"param_nu_vaccination_rate_<suffix>.csv"}.
+\item A redistributed vaccination data file named \code{"data_vaccinations_<suffix>_redistributed.csv"} where suffix is WHO, GTFCC, or GTFCC_WHO; its \code{doses_distributed_dose1} and \code{doses_distributed_dose2} columns split \code{doses_distributed} into first and second doses.
+\item A parameter data frame for the vaccination rate (nu, all doses) named \code{"param_nu_vaccination_rate_<suffix>.csv"}.
+\item Parameter data frames for the first-dose (\code{nu_1}) and second-dose (\code{nu_2}) rates named \code{"param_nu_1_vaccination_rate_<suffix>.csv"} and \code{"param_nu_2_vaccination_rate_<suffix>.csv"}; on every location-day \code{nu_1 + nu_2 = nu}.
 }
 }
 \description{
-This function processes vaccination data from WHO or GTFCC, redistributes doses based on a maximum daily rate, and calculates vaccination parameters for use in the MOSAIC cholera model. The processed data includes redistributed daily doses, cumulative doses, and the proportion of the population vaccinated. The results are saved as CSV files for downstream modeling.
+This function processes vaccination data from WHO or GTFCC, redistributes doses based on a maximum daily rate, splits them into first and second doses, and calculates vaccination parameters for use in the MOSAIC cholera model. The processed data includes redistributed daily doses, cumulative doses, and the proportion of the population vaccinated. The results are saved as CSV files for downstream modeling.
 }
 \details{
 \strong{What nu is.} The output \code{nu} is the number of doses
-\emph{shipped} per request, spread over days at \code{max_rate_per_day}. It
-carries no round, regimen or administered-dose information, and
-\code{data-raw/make_config_default.R} routes all of it to first doses
-(\code{nu_1_jt}; \code{nu_2_jt = 0}). For simulation windows from 2023
-onward this is close to right, because the ICG suspended the two-dose regimen
-for outbreak response in October 2022 (global OCV shortage; WHO news release,
-19 October 2022) and reactive
-campaigns have been single-dose since. For earlier windows a two-dose campaign
-is counted as two rounds of first doses, roughly doubling the distinct people
-immunised, and shipped-but-unused doses are counted as delivered.
-Pre-t0 campaigns enter the initial conditions through
-\code{\link{est_initial_V1_V2}}, which does pair rounds.
+\emph{shipped} per request, spread over days at \code{max_rate_per_day} from
+the request's campaign date (its first delivery for GTFCC rows); requests that
+overlap in a location add up. Shipped-but-unused doses are counted as
+delivered.
+
+\strong{First and second doses.} Each day's doses of a request are split
+into first doses (\code{nu_1}) and second doses (\code{nu_2}) by the
+request's \code{round_sequence} (written by
+\code{\link{process_GTFCC_vaccination_data}} from the GTFCC Round events and
+carried through \code{\link{combine_vaccination_data}}): the request's
+shipped doses are divided across its round blocks in proportion to the doses
+administered in each round, and the blocks take consecutive stretches of the
+request's daily series in administration order, so a two-round campaign
+delivers its second doses after its first. Only the labels change -- the
+daily totals are those of \code{nu} -- and the block boundaries are whole
+doses, so with whole-dose shipments both series are whole numbers. A
+request with no round information (no GTFCC Round events, or a WHO-only
+shipment) counts entirely as first doses. In the engine, second doses move
+\code{phi_2} of their recipients from V1 to V2 and are capped at the V1
+stock, first doses move \code{phi_1} of theirs from the eligible
+compartments to V1 (\code{sim_phase_vaccinated()}). Second rounds belong
+mostly to campaigns up to 2022: the ICG suspended the two-dose regimen for
+outbreak response in October 2022 (global OCV shortage; WHO news release,
+19 October 2022). Pre-t0 campaigns enter the initial conditions through
+\code{\link{est_initial_V1_V2}}, which pairs rounds from the same Round
+events.
 
 The function performs the following steps:
 \enumerate{
 \item \strong{Load Vaccination Data}:
-- Reads processed vaccination data from WHO or GTFCC and filters for relevant columns (\code{iso_code}, \code{campaign_date}, \code{doses_shipped}).
+- Reads processed vaccination data from WHO or GTFCC and filters for relevant columns (\code{iso_code}, \code{campaign_date}, \code{doses_shipped}, \code{round_sequence}).
 \item \strong{Redistribute Doses}:
-- Redistributes shipped doses day by day based on a maximum daily rate (\code{max_rate_per_day}).
-- Ensures no duplication of \code{distribution_date} within \code{iso_code}.
+- Redistributes shipped doses day by day based on a maximum daily rate (\code{max_rate_per_day}) and splits each day into first and second doses.
+- Sums requests that overlap on the same \code{distribution_date} within \code{iso_code}.
 \item \strong{Validate Redistribution}:
-- Checks that the redistributed doses sum to the total shipped doses.
+- Checks that the redistributed doses sum to the total shipped doses and that first plus second doses equal the doses distributed.
 \item \strong{Ensure Full Coverage}:
 - Ensures all ISO codes have data across the full date range (\code{date_start} to \code{date_stop}), filling missing dates with zero doses.
 \item \strong{Calculate Population Metrics}:
-- Merges population data for 2023, calculates cumulative doses, and computes the proportion of the population vaccinated.
+- Merges population data for 2023, calculates cumulative doses, and computes the proportion of the population vaccinated (doses over population; this does not feed the \code{nu} parameters).
 \item \strong{Save Outputs}:
-- Saves the redistributed vaccination data and the vaccination rate parameter data frame.
+- Saves the redistributed vaccination data and the \code{nu}, \code{nu_1} and \code{nu_2} parameter data frames.
 }
 }
 \examples{
@@ -77,7 +92,7 @@ PATHS <- list(
   DATA_DEMOGRAPHICS = "path/to/demographics",
   MODEL_INPUT = "path/to/save/processed/data"
 )
-est_vaccination_rate(PATHS, max_rate_per_day = 100000, data_source = "WHO")
+est_vaccination_rate(PATHS, max_rate_per_day = 20000, data_source = "WHO")
 }
 
 }

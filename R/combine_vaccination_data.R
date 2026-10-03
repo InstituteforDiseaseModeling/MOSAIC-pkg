@@ -47,6 +47,11 @@
 #'       their summed doses stay within \code{(1 + dose_tolerance)} of the
 #'       request's approved total; further rows are dropped as duplicate listings
 #'       (MWI 20182: two 500,600-dose rows against 500,600 approved)
+#'     - The GTFCC round columns (\code{req_id}, \code{round_sequence},
+#'       \code{round_basis}; see \code{\link{process_GTFCC_vaccination_data}})
+#'       are carried on every GTFCC row, matched or not. WHO-only rows have no
+#'       round information (\code{round_basis = "unknown"}), so
+#'       \code{\link{est_vaccination_rate}} counts their doses as first doses.
 #'   \item **Quality Assurance**:
 #'     - Validates data structure matches downstream requirements
 #'     - Ensures all required columns are present
@@ -83,7 +88,18 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      who_data$decision_date <- as.Date(who_data$decision_date)
      gtfcc_data$campaign_date <- as.Date(gtfcc_data$campaign_date)
      gtfcc_data$decision_date <- as.Date(gtfcc_data$decision_date)
-     
+
+     # Round attribution (process_GTFCC_vaccination_data()). The WHO ICG table
+     # has none, so WHO rows -- and a GTFCC file written before these columns
+     # existed -- carry an unknown round, which est_vaccination_rate() counts as
+     # first doses.
+     round_cols <- c("req_id", "round_sequence", "round_basis")
+     for (nm in round_cols) {
+          fill <- if (nm == "round_basis") "unknown" else NA_character_
+          if (!nm %in% names(gtfcc_data)) gtfcc_data[[nm]] <- rep(fill, nrow(gtfcc_data))
+          if (!nm %in% names(who_data)) who_data[[nm]] <- rep(fill, nrow(who_data))
+     }
+
      # Add source columns
      who_data$source <- "WHO"
      gtfcc_data$source <- "GTFCC"
@@ -340,9 +356,10 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      # Regenerate ID column
      combined_data$id <- 1:nrow(combined_data)
      
-     # Move match_confidence to the last column (its position before this fix)
-     combined_data <- combined_data[, c(setdiff(names(combined_data), "match_confidence"),
-                                        "match_confidence")]
+     # The round columns go after source and match_confidence stays last, so the
+     # columns that predate the round attribution keep their positions
+     combined_data <- combined_data[, c(setdiff(names(combined_data), c(round_cols, "match_confidence")),
+                                        round_cols, "match_confidence")]
      
      # Summary statistics
      message("\n==========================================")

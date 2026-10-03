@@ -1,3 +1,13 @@
+# MOSAIC 0.103.0
+
+## Vaccination
+- OCV doses are split into first doses (`nu_1_jt`) and second doses (`nu_2_jt`) from the GTFCC campaign rounds, so a two-dose campaign no longer counts both rounds as first doses (about twice the distinct people immunised). Up to `config_default` v6.2 every dose went to `nu_1_jt` and `nu_2_jt` was zero; the limitation was documented in `data-raw/make_config_default.R` and mattered only for windows starting before 2023.
+  - `process_GTFCC_vaccination_data()` adds `req_id`, `round_sequence` and `round_basis` to each request. `round_sequence` lists the request's rounds as `<dose>:<weight>` blocks in campaign order, R01 before R02 within a campaign, weighted by the doses administered in each round; `round_basis` is `"rounds"`, `"rounds_imputed"` (an unreported round count carries the mean reported round of the request, or all rounds weigh equally) or `"unknown"` (no Round events). `combine_vaccination_data()` carries the columns; WHO-only rows are `"unknown"`.
+  - `est_vaccination_rate()` splits each request's daily doses across its round blocks in proportion to their weights, in order and in whole doses, and writes `param_nu_1_vaccination_rate_<suffix>.csv` and `param_nu_2_vaccination_rate_<suffix>.csv` beside the unchanged all-dose `param_nu_vaccination_rate_<suffix>.csv`, plus `doses_distributed_dose1`/`doses_distributed_dose2` in the redistributed data file. Doses with no round information are first doses. On every location-day `nu_1 + nu_2 = nu`.
+  - `data-raw/make_config_default.R` reads the three files through `.vacc_nu_jt()`, which stops if a file is missing, does not cover the window, or `nu_1 + nu_2 != nu`.
+  - On the shipped inputs (ees-cholera-mapping 780eb54), 2018-2022 carries 81.61M doses: 50.19M first and 31.43M second (38.5%). Of those doses, 89.6% have a fully reported round split, 6.4% an imputed share (MWI 2017-G03-D01, ZMB 2017-G07-D01, SSD 2018-I08-D01, ETH 2021-I01-D01) and 4.0% no round information (CMR 2022-I10-D01, MWI 2017-G03-D02 and a WHO-only MWI shipment). No request delivered from 2023 has a second round, so over 2023+ `nu_1` equals the old `nu` on every location-day and `nu_2` is zero: the 2023-window `nu_1_jt` is identical to `config_default` v6.2's.
+  - The regenerated all-dose file is byte-identical to the previous one, and the other columns of the campaign and redistributed files are unchanged.
+
 # MOSAIC 0.102.0
 
 ## Default data objects

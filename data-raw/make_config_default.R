@@ -257,46 +257,41 @@ message(sprintf("mu_jt built from WHO-annual GAM estimates: %d locations x %d da
                 nrow(mu_jt), ncol(mu_jt), 100 * stats::median(mu_jt), 100 * min(mu_jt), 100 * max(mu_jt)))
 
 #####
-# Vaccination rate needs work
-# Must be square by dates and locations
+# Vaccination: first-dose (nu_1_jt) and second-dose (nu_2_jt) rates
 #####
 
-message("Add vaccination rate over time for each location (nu_jt)")
-# Try to load the WHO vaccination rate file (for backward compatibility)
-# or the GTFCC_WHO combined file if available
-if (file.exists(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC_WHO.csv'))) {
-     tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC_WHO.csv'))
-     message("Using combined GTFCC+WHO vaccination data")
-} else if (file.exists(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_WHO.csv'))) {
-     tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_WHO.csv'))
-     message("Using WHO vaccination data")
-} else if (file.exists(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC.csv'))) {
-     tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC.csv'))
-     message("Using GTFCC vaccination data")
-} else {
-     # Fall back to legacy filename if it exists
-     tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate.csv'))
-     warning("Using legacy vaccination rate file without source suffix")
+# nu is the doses shipped per request, spread over days at max_rate_per_day by
+# est_vaccination_rate(), which also splits each day into first and second
+# doses from the request's GTFCC Round events (process_GTFCC_vaccination_data():
+# shipped doses divided across the rounds in proportion to the doses
+# administered in each, first round before second round). nu_1 + nu_2 = nu on
+# every location-day; .vacc_nu_jt() refuses files that are out of step. Doses
+# with no round information (a GTFCC request without Round events, or a
+# WHO-only shipment) count as first doses. In the engine, second doses move
+# phi_2 of their recipients from V1 to V2, capped at the V1 stock, so a
+# two-dose campaign immunises its first-round recipients once and upgrades them
+# to two-dose waning, instead of counting both rounds as new first doses as
+# configs up to v6.2 did (nu_2_jt was 0 everywhere). Second rounds are pre-2023
+# campaigns: the ICG suspended the two-dose regimen for outbreak response in
+# October 2022 (WHO news release, 19 Oct 2022), and in the GTFCC log at
+# ees-cholera-mapping 780eb54 no request delivered from 2023 has a second round,
+# so nu_2_jt is zero over a 2023+ window.
+message("Add first- and second-dose vaccination rates over time for each location (nu_1_jt, nu_2_jt)")
+nu_suffix <- c("GTFCC_WHO", "WHO", "GTFCC")
+nu_suffix <- nu_suffix[file.exists(file.path(PATHS$MODEL_INPUT,
+                                             sprintf("param_nu_vaccination_rate_%s.csv", nu_suffix)))]
+if (!length(nu_suffix)) {
+     stop("No param_nu_vaccination_rate_<GTFCC_WHO|WHO|GTFCC>.csv in ", PATHS$MODEL_INPUT,
+          ". Run est_vaccination_rate() first.")
 }
-tmp$t <- as.Date(tmp$t)
-tmp <- tmp[tmp$j %in% j,]
-tmp <- tmp[tmp$t >= date_start & tmp$t <= date_stop,]
-nu_jt <- reshape2::acast(tmp, j ~ t, value.var = "parameter_value")
-
-# KNOWN LIMITATION: nu_jt is shipped doses (est_vaccination_rate() spreads each
-# request's doses_shipped at max_rate_per_day) with no round or regimen
-# information, so every dose is routed to first doses (nu_1) and nu_2 stays 0:
-# the engine immunises phi_1 * doses of previously unvaccinated people and V2 is
-# never reached after t0. For windows starting 2023 or later this is close to
-# right -- the ICG suspended the two-dose regimen for outbreak response in
-# October 2022 because of the global OCV shortage (WHO news release, 19 Oct
-# 2022), so reactive campaigns are
-# single-dose -- but for back-history windows a two-dose campaign counts both
-# rounds as first doses (about twice the distinct people immunised). Splitting
-# nu into nu_1/nu_2 needs round-level data in the processed vaccination inputs
-# (est_initial_V1_V2() pairs rounds from the raw GTFCC log for the pre-t0 ICs).
-nu_1_jt <- nu_2_jt <- nu_jt
-nu_2_jt[,] <- 0
+nu_suffix <- nu_suffix[1]
+if (nu_suffix != "GTFCC_WHO") warning("Using the ", nu_suffix, " vaccination rate files, not GTFCC_WHO")
+nu_doses <- MOSAIC:::.vacc_nu_jt(PATHS$MODEL_INPUT, nu_suffix, location_name = j, dates = t)
+nu_1_jt <- nu_doses$nu_1_jt
+nu_2_jt <- nu_doses$nu_2_jt
+message(sprintf("nu from the %s files: %s first doses and %s second doses over the window (%.1f%% second)",
+                nu_suffix, format(sum(nu_1_jt), big.mark = ","), format(sum(nu_2_jt), big.mark = ","),
+                100 * sum(nu_2_jt) / max(1, sum(nu_1_jt) + sum(nu_2_jt))))
 
 message("Add fourier params for seasonal force of infection")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv"))

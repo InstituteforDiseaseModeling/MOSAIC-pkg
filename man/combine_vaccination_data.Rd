@@ -58,6 +58,11 @@ request and decision date are kept in campaign-date order only while
 their summed doses stay within \code{(1 + dose_tolerance)} of the
 request's approved total; further rows are dropped as duplicate listings
 (MWI 20182: two 500,600-dose rows against 500,600 approved)
+- The GTFCC round columns (\code{req_id}, \code{round_sequence},
+\code{round_basis}; see \code{\link{process_GTFCC_vaccination_data}})
+are carried on every GTFCC row, matched or not. WHO-only rows have no
+round information (\code{round_basis = "unknown"}), so
+\code{\link{est_vaccination_rate}} counts their doses as first doses.
 \item \strong{Quality Assurance}:
 - Validates data structure matches downstream requirements
 - Ensures all required columns are present
