@@ -1,3 +1,4 @@
+- [psi collapse fix (v0.102.0)](project_psi_collapse_fix_v0102.md) — floor map = guard constants, now identity; OOS the correction loses to identity; TGO borderline
 - [psi G red-team (config_default v4.0)](project_psi_G_redteam_v4.md) — BLOCKER: bias-correction lm corrupts GMB/ZAF/SEN/SWZ psi (collapse + 9.7x blowup); §8.2 amplitude guard does NOT exist; parallel_seeds=10 violates OOM constraint
 - [forecast-CV leakage red-team](project_forecast_cv_leakage_redteam.md) — plan_forecast_cv: 2 leaks UPSTREAM of fit_date_stop — OOS covariates are realized climate/ENSO (hindcast not forecast); lstm_v2 flat-fill tail UNGUARDED (double na.locf); freeze=arbitrary draw
 - [psi flat-tail: RESOLVED](project_psi_flat_tail_lstm_v2_unfixed.md) — guard fails loudly since 272ceacbc (v0.90.9); shipped C3 CSV has no carry-forward tail (only 0.01-clamp runs: GNB/GMB/GIN/BFA/SEN); still check pred_raw rle, excluding clamp runs

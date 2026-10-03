@@ -64,6 +64,8 @@ took) — artifact not from a tagged release.
   (per-iso status fit/guarded/identity, slope, offset, amp_ratio). Verified on synthetic
   reproductions: ZAF flat-predictor -> identity (was 2.79x blow-up); GMB/SEN/SWZ -> guarded at
   0.50x floor (was 0.02/0.12); COD/SOM/MOZ unchanged (1.30x, status=fit, guard no-op).
+- SUPERSEDED for the floor (v0.102.0): a fit below the 0.5x floor now falls back to identity
+  (status "collapsed"), not a blend — the blend was guard constants. See [[psi-collapse-fix-v0102]].
 - B5: NEW `R/check_psi_amplitude.R` (`check_psi_amplitude()`) — independent post-hoc guard,
   flags collapsed (logit-sd < collapse_abs=0.02 OR ratio<amp_range[1]) / inflated
   (ratio>amp_range[2]); warns + returns per-iso diag. Wired non-fatally at end of
