@@ -23,10 +23,12 @@
 #'     \code{psi_bar}-relative deviation feeding the engine.
 #' }
 #' A country with fewer than \code{min_train} outbreak weeks (this includes
-#' zero-history countries, which have none) or no logit-pred variance falls back
-#' to the \strong{identity} transform (output = input prediction) with a warning.
-#' This is the defined behavior for low-incidence / zero-history countries: their
-#' psi is the uncorrected (region-FiLM-modulated) model output.
+#' zero-history countries, which have none), no logit-pred variance, or an
+#' outbreak-week slope that would collapse its amplitude (see \emph{Robustness})
+#' falls back to the \strong{identity} transform (output = input prediction) with
+#' a warning. This is the defined behavior whenever the correction cannot be
+#' estimated: the country's psi is the uncorrected (region-FiLM-modulated) model
+#' output.
 #'
 #' @section Robustness (B1):
 #' An \emph{unregularized}, \emph{unbounded} per-country \code{lm} corrupts
@@ -44,12 +46,24 @@
 #'     \code{slope_range} and the offset to \code{offset_range} (logit scale)
 #'     before being applied, so no country's correction can be steeper / more
 #'     offset than is plausible for a scale/level fix.
-#'   \item \strong{Amplitude clamp.} The corrected series' logit-scale standard
-#'     deviation is constrained to within \code{amp_range} times the input
-#'     prediction's logit-scale standard deviation (shrinking the affine toward
-#'     identity if it would over-collapse or over-inflate the amplitude), so a
-#'     country's psi cannot be flattened to a constant or inflated beyond a sane
-#'     range.
+#'   \item \strong{Amplitude floor: a collapsing fit is not applied.} The
+#'     corrected logit series is affine in the input, so its logit-scale
+#'     standard deviation is the clamped slope times the input's. A slope below
+#'     \code{amp_range[1]} would flatten the country's seasonal contrast below
+#'     that fraction of the model's. Such a slope is not an estimate of a scale
+#'     correction: on the outbreak weeks the fitted slope is the correlation
+#'     times the ratio of standard deviations, so it lands near zero (or below)
+#'     when the model does not predict outbreak magnitude there. The country
+#'     then falls back to the \strong{identity} transform with status
+#'     \code{"collapsed"} (v0.102.0). Up to v0.101.0 the map was instead blended
+#'     toward identity until it reached the floor. That map was set by the
+#'     guard constants rather than the data, because the slope was clamped
+#'     without re-fitting the intercept. So CIV received slope 0.505 and offset
+#'     -2.64 in every 2026 production refit.
+#'   \item \strong{Amplitude ceiling.} A corrected logit-scale standard deviation
+#'     above \code{amp_range[2]} times the input's is shrunk toward identity
+#'     (blend on a 0.02 grid) until it is within the range, so a country's psi
+#'     cannot be inflated beyond a sane range.
 #' }
 #' Well-behaved countries (ample outbreak weeks, real logit-pred variance, a
 #' slope/offset/amplitude inside the guard ranges) are \strong{unaffected} — the
@@ -73,17 +87,22 @@
 #'   \code{c(0.25, 4)}).
 #' @param offset_range Length-2 numeric \code{c(lo, hi)}; the per-country logit
 #'   offset is clamped to this range (default \code{c(-4, 4)}).
-#' @param amp_range Length-2 numeric \code{c(lo, hi)}; the corrected series'
-#'   logit-scale sd is constrained to within this multiple of the input
-#'   prediction's logit-scale sd (default \code{c(0.5, 2)}), shrinking the affine
-#'   toward identity when violated.
+#' @param amp_range Length-2 numeric \code{c(lo, hi)}, as multiples of the input
+#'   prediction's logit-scale sd (default \code{c(0.5, 2)}); a fit below
+#'   \code{lo} falls back to identity, one above \code{hi} is shrunk toward
+#'   identity.
 #' @param min_pred_sd Minimum logit-pred standard deviation (over outbreak weeks)
 #'   for a country to be eligible for a fit; below it, identity (default 0.05).
 #'
 #' @return \code{pred_df} with an added \code{out_col} in \eqn{(0,1)}. A
 #'   per-country diagnostic data frame is attached as
 #'   \code{attr(., "calibration_diagnostics")} (see
-#'   \code{\link{check_psi_amplitude}}).
+#'   \code{\link{check_psi_amplitude}}). Its \code{status} is \code{"fit"},
+#'   \code{"guarded"} (slope or offset clamped, or amplitude shrunk from the
+#'   ceiling), \code{"identity"} (too few outbreak weeks, degenerate predictor
+#'   or rank-deficient fit), or \code{"collapsed"} (identity because the fit fell
+#'   below the amplitude floor; \code{slope} and \code{offset} then report the
+#'   rejected, clamped fit).
 #'
 #' @seealso \code{\link{est_suitability}}, \code{\link{check_psi_amplitude}}
 #' @importFrom stats lm predict sd qlogis plogis coef
@@ -126,6 +145,7 @@ calibrate_psi_predictions <- function(pred_df, obs_df, fit_date_stop,
      isos       <- unique(pred_df$iso_code)
      n_identity <- 0L
      n_guarded  <- 0L
+     collapsed_isos <- character(0)
      diag_rows  <- vector("list", length(isos))
 
      for (i in seq_along(isos)) {
@@ -157,31 +177,39 @@ calibrate_psi_predictions <- function(pred_df, obs_df, fit_date_stop,
                          b_c <- clamp_to(b, offset_range)
                          status <- if (a_c != a || b_c != b) "guarded" else "fit"
                          yhat <- a_c * xall + b_c
-                         # Amplitude clamp: keep corrected logit-sd within
-                         # amp_range * input logit-sd by shrinking toward identity.
+                         # Amplitude guard on the corrected logit-sd, relative to
+                         # the input's (yhat is affine in xall: the ratio is a_c).
                          sd_out <- stats::sd(yhat, na.rm = TRUE)
                          if (is.finite(sd_in) && sd_in > 0 && is.finite(sd_out) &&
                              sd_out > 0) {
                               lo <- amp_range[1] * sd_in
                               hi <- amp_range[2] * sd_in
-                              if (sd_out < lo || sd_out > hi) {
-                                   target <- min(hi, max(lo, sd_out))
-                                   # Blend toward identity (xall) to hit target sd.
-                                   # sd(w*yhat + (1-w)*xall) is monotone in w when
-                                   # the two series are positively related; solve
-                                   # on a small grid for robustness.
+                              if (sd_out < lo) {
+                                   # Floor: the outbreak weeks do not identify the
+                                   # slope, so the fit is not applied (identity).
+                                   status <- "collapsed"
+                              } else if (sd_out > hi) {
+                                   # Ceiling: blend toward identity (xall) to hit
+                                   # `hi`. sd(w*yhat + (1-w)*xall) is monotone in w
+                                   # when the two series are positively related;
+                                   # solve on a small grid for robustness.
                                    ws <- seq(0, 1, by = 0.02)
                                    sds <- vapply(ws, function(w)
                                         stats::sd(w * yhat + (1 - w) * xall,
                                                   na.rm = TRUE), numeric(1))
-                                   w_best <- ws[which.min(abs(sds - target))]
+                                   w_best <- ws[which.min(abs(sds - hi))]
                                    yhat <- w_best * yhat + (1 - w_best) * xall
                                    status <- "guarded"
                               }
                          }
-                         pred_df[[out_col]][sel] <- stats::plogis(yhat)
                          a_used <- a_c; b_used <- b_c
-                         if (status == "guarded") n_guarded <- n_guarded + 1L
+                         if (status == "collapsed") {
+                              pred_df[[out_col]][sel] <- pred_df[[pred_col]][sel]
+                              collapsed_isos <- c(collapsed_isos, iso)
+                         } else {
+                              pred_df[[out_col]][sel] <- stats::plogis(yhat)
+                              if (status == "guarded") n_guarded <- n_guarded + 1L
+                         }
                     } else {
                          pred_df[[out_col]][sel] <- pred_df[[pred_col]][sel]
                          n_identity <- n_identity + 1L
@@ -217,8 +245,14 @@ calibrate_psi_predictions <- function(pred_df, obs_df, fit_date_stop,
      }
      if (n_guarded > 0L) {
           warning(sprintf(
-               "calibrate_psi_predictions: %d country/countries had their affine correction guarded (slope/offset/amplitude clamped toward identity) to prevent psi collapse or blow-up.",
+               "calibrate_psi_predictions: %d country/countries had their affine correction guarded (slope or offset clamped, or an inflated amplitude shrunk toward identity).",
                n_guarded), call. = FALSE)
+     }
+     if (length(collapsed_isos) > 0L) {
+          warning(sprintf(
+               "calibrate_psi_predictions: %d country/countries (%s) had an outbreak-week slope that would shrink psi's logit-scale amplitude below amp_range[1] = %g of the model's; the outbreak weeks do not identify that slope, so the identity correction was used for those.",
+               length(collapsed_isos), paste(collapsed_isos, collapse = ", "),
+               amp_range[1]), call. = FALSE)
      }
 
      diags <- do.call(rbind, diag_rows)

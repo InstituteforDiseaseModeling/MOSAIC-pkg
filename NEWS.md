@@ -1,3 +1,14 @@
+# MOSAIC 0.102.0
+
+## Suitability
+- `calibrate_psi_predictions()` no longer applies a per-country fit whose slope would shrink psi's logit-scale amplitude below `amp_range[1]` (0.5) of the model's. Such a country now falls back to the identity correction, as it already did with too few outbreak weeks or a degenerate predictor. Its diagnostic status is the new `"collapsed"`, and a warning names it.
+  - **Old behaviour.** Up to v0.101.0 such a fit was blended toward identity until it sat on the 0.5x floor. The slope was clamped without re-fitting the intercept, so the map came from the guard constants rather than the data.
+  - **Evidence the old map was not an estimate.** CIV received slope 0.505 and offset -2.64 in all seven 2026 production refits. That took the square root of its seasonal odds contrast and put its psi about 4x below the median target of its outbreak weeks.
+  - **When the floor binds.** It binds where the outbreak weeks do not identify a slope. On C3's stored 2018+ window, the four floor-clamped countries have outbreak-week slope t of -2.1 to 1.6; every fitted country has 3.4 or more.
+  - **Evidence for identity.** Against the training target, in-sample, the LSTM's own amplitude is close to calibrated: the median all-weeks calibration slope is 1.15 over 29 countries. Out of sample, forward-chained over the rolling-CV fold predictions, identity and the floor map are indistinguishable.
+  - **Unchanged.** Fits that would inflate the amplitude are still shrunk to the 2x ceiling, and every other country's correction is bit-identical.
+  - **Production psi.** On C3 the rule changes CIV, GMB, TGO and UGA; it is re-applied to C3's stored predictions without retraining in `claude/v0102_psi/`.
+
 # MOSAIC 0.101.0
 
 Surveillance artifact fixes, cases dispersions estimated from observed weeks (when the config carries `reported_tier`) with a cross-country trend for locations without a usable estimate of their own, an optional weekly cases scoring rule (the default stays one cell per day), observation-level predictive intervals, the default data objects rebuilt on the corrected surveillance (`priors_default` v17.1, `config_default` v6.1 with `reported_tier`, psi C3), and the figure and documentation fixes prepared for 1.0.0. **Calibration results change**: the resume guard refuses to pool simulations scored by earlier versions (likelihood tag `R/v0.101.0+clamped_k_trend`).
