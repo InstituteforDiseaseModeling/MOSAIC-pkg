@@ -3,7 +3,7 @@ library(MOSAIC)
 set_root_directory("<root_directory_blocked>")
 PATHS <- MOSAIC::get_paths()
 
-DATE_START <- as.Date("2023-02-01")
+DATE_START <- as.Date("2018-01-01")  # matches make_config_default.R default window start
 DATE_STOP  <- as.Date("2026-03-31")
 
 

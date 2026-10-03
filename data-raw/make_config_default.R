@@ -19,25 +19,29 @@ if (!file.exists(file.path(.pkg_here, "DESCRIPTION"))) {
 PATHS$MODEL_INPUT  <- file.path(.pkg_here, "model", "input")
 PATHS$MODEL_OUTPUT <- file.path(.pkg_here, "model", "output")
 
-# date_start: start of the calibration fit window. DEFAULT 2023-01-01, OVERRIDABLE via
+# date_start: start of the calibration fit window. DEFAULT 2018-01-01, OVERRIDABLE via
 # the MOSAIC_BUILD_DATE_START env var -- the single source of truth that flows the SAME
-# start date into BOTH this script and make_priors_default.R. CONFIGURABLE to an earlier
-# start (e.g. 2015-01-01): all covariates (psi from 2010-04-01, demographics/vaccination
-# from 2000, CFR from 1970) cover >=2015, and make_priors_default.R estimates the initial
-# conditions at date_start itself (E/I from a 28-day surveillance window straddling it),
-# so an early start seeds from that era's data. The floor guard below rejects a start
-# before psi coverage (2010-04-01).
+# start date into BOTH this script and make_priors_default.R. The earliest valid start
+# is the psi floor, the latest per-location first date of pred_psi_suitability_day.csv
+# (est_suitability()'s pred_date_start: 2018-01-01 for the shipped psi), enforced by the
+# floor guard below; the other covariates reach further back (demographics and
+# vaccination from 2000, CFR from 1970). An earlier start needs psi regenerated with an
+# earlier pred_date_start. make_priors_default.R estimates the initial conditions at
+# date_start itself (E/I from a 28-day surveillance window straddling it), so a start
+# seeds from that era's data.
 #
-# REBUILD ORDER for a non-default (back-history) start -- the env var is REQUIRED so both
-# builders agree (make_priors' fallback otherwise reads the STALE installed
-# config_default$date_start, silently desyncing the windows):
-#   export MOSAIC_BUILD_DATE_START=2015-01-01
+# REBUILD ORDER -- export the env var for EVERY step so both builders agree.
+# make_priors_default.R falls back to the INSTALLED config_default$date_start, which is
+# stale whenever this default has just moved (it stops on that desync), and this script
+# stops below if the installed priors were built for another window:
+#   export MOSAIC_BUILD_DATE_START=2018-01-01
 #   1. Rscript data-raw/make_priors_default.R     # initial conditions at the new start
 #   2. Rscript -e 'devtools::install(".")'         # so THIS script sees the new priors_default
 #   3. Rscript data-raw/make_config_default.R      # sources beta/IC means from new priors; mu_jt from model/input
-# For the default 2023 build leave the env var unset (both scripts fall back to 2023-01-01).
+# Once the installed config_default carries this default window, both scripts resolve it
+# with the env var unset.
 .env_ds    <- Sys.getenv("MOSAIC_BUILD_DATE_START", "")
-date_start <- if (nzchar(.env_ds)) as.Date(.env_ds) else as.Date("2023-01-01")
+date_start <- if (nzchar(.env_ds)) as.Date(.env_ds) else as.Date("2018-01-01")
 
 # -----------------------------------------------------------------------------
 # Env-desync fail-loud assert (build-order guard)
@@ -65,7 +69,7 @@ if (is.null(.priors_bds) || !nzchar(as.character(.priors_bds))) {
           "Rebuild in order: (1) Rscript data-raw/make_priors_default.R, ",
           "(2) Rscript -e 'devtools::install(\".\")' (so this script sees the new ",
           "priors_default), then (3) re-run this script -- with MOSAIC_BUILD_DATE_START ",
-          "set to the SAME value for all steps (unset = 2023-01-01)."),
+          "set to the SAME value for all steps (unset, this script uses 2018-01-01)."),
           format(date_start), format(as.Date(.priors_bds))))
 }
 
