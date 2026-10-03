@@ -17,8 +17,11 @@
   path
 }
 
-# A frozen psi cache holding `cutoffs`, each entry hashed from `spec`.
-.rv_cache <- function(cutoffs, spec, pred_start = "2023-01-01", pred_stop = "2025-01-01") {
+# A frozen psi cache holding `cutoffs`, each entry hashed from `spec`, predicted
+# from config_default's start (run_rolling_cv() requires the frozen psi to cover
+# the config start).
+.rv_cache <- function(cutoffs, spec, pred_start = MOSAIC::config_default$date_start,
+                      pred_stop = "2025-01-01") {
   dir_cache <- tempfile("rv_cache_"); dir.create(dir_cache)
   spec_s <- MOSAIC:::.rcv_strip_date_keys(spec)
   entries <- lapply(as.list(as.Date(cutoffs)), function(T_k) {
