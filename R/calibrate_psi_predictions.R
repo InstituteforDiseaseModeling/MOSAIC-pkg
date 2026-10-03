@@ -48,22 +48,24 @@
 #'     offset than is plausible for a scale/level fix.
 #'   \item \strong{Amplitude floor: a collapsing fit is not applied.} The
 #'     corrected logit series is affine in the input, so its logit-scale
-#'     standard deviation is the clamped slope times the input's. A slope below
+#'     standard deviation is the clamped slope times the input's, and the rule
+#'     is exactly a cutoff on that slope: a clamped slope below
 #'     \code{amp_range[1]} would flatten the country's seasonal contrast below
-#'     that fraction of the model's. Such a slope is not an estimate of a scale
-#'     correction: on the outbreak weeks the fitted slope is the correlation
-#'     times the ratio of standard deviations, so it lands near zero (or below)
-#'     when the model does not predict outbreak magnitude there. The country
-#'     then falls back to the \strong{identity} transform with status
-#'     \code{"collapsed"} (v0.102.0). Up to v0.101.0 the map was instead blended
-#'     toward identity until it reached the floor. That map was set by the
-#'     guard constants rather than the data, because the slope was clamped
-#'     without re-fitting the intercept. So CIV received slope 0.505 and offset
-#'     -2.64 in every 2026 production refit.
+#'     that fraction of the model's, so the fit is not applied and the country
+#'     falls back to the \strong{identity} transform with status
+#'     \code{"collapsed"} (v0.102.0). The cutoff does not test whether the slope
+#'     is identified, and the output jumps at it. Up to v0.101.0 such a fit was
+#'     instead blended toward identity until it reached the floor. In the
+#'     production refit C3 the four floor maps were CIV and GMB slope 0.505 and
+#'     offset -2.64, 0.66 times the slope and offset clamps (0.25, -4), so the
+#'     guard constants set them; UGA slope 0.505 with its fitted offset -1.21,
+#'     where only the slope clamp bound; and TGO slope 0.501 and offset 0.624,
+#'     an unclamped fit blended to the floor.
 #'   \item \strong{Amplitude ceiling.} A corrected logit-scale standard deviation
-#'     above \code{amp_range[2]} times the input's is shrunk toward identity
-#'     (blend on a 0.02 grid) until it is within the range, so a country's psi
-#'     cannot be inflated beyond a sane range.
+#'     above \code{amp_range[2]} times the input's is blended toward identity,
+#'     with the weight on a 0.02 grid whose amplitude is nearest
+#'     \code{amp_range[2]}, so it can land slightly above it (C3: SWZ 2.02,
+#'     ZAF 2.005); a country's psi cannot be inflated beyond a sane range.
 #' }
 #' Well-behaved countries (ample outbreak weeks, real logit-pred variance, a
 #' slope/offset/amplitude inside the guard ranges) are \strong{unaffected} — the
@@ -185,14 +187,15 @@ calibrate_psi_predictions <- function(pred_df, obs_df, fit_date_stop,
                               lo <- amp_range[1] * sd_in
                               hi <- amp_range[2] * sd_in
                               if (sd_out < lo) {
-                                   # Floor: the outbreak weeks do not identify the
-                                   # slope, so the fit is not applied (identity).
+                                   # Floor: the clamped slope is below
+                                   # amp_range[1]; fit not applied (identity).
                                    status <- "collapsed"
                               } else if (sd_out > hi) {
-                                   # Ceiling: blend toward identity (xall) to hit
-                                   # `hi`. sd(w*yhat + (1-w)*xall) is monotone in w
-                                   # when the two series are positively related;
-                                   # solve on a small grid for robustness.
+                                   # Ceiling: blend toward identity (xall) with the
+                                   # grid weight whose sd is nearest `hi` (it can land
+                                   # just above it). sd(w*yhat + (1-w)*xall) is
+                                   # monotone in w when the two series are positively
+                                   # related; a small grid keeps this robust.
                                    ws <- seq(0, 1, by = 0.02)
                                    sds <- vapply(ws, function(w)
                                         stats::sd(w * yhat + (1 - w) * xall,
@@ -250,7 +253,7 @@ calibrate_psi_predictions <- function(pred_df, obs_df, fit_date_stop,
      }
      if (length(collapsed_isos) > 0L) {
           warning(sprintf(
-               "calibrate_psi_predictions: %d country/countries (%s) had an outbreak-week slope that would shrink psi's logit-scale amplitude below amp_range[1] = %g of the model's; the outbreak weeks do not identify that slope, so the identity correction was used for those.",
+               "calibrate_psi_predictions: %d country/countries (%s) had a clamped outbreak-week slope below amp_range[1] = %g, which would shrink psi's logit-scale amplitude below that fraction of the model's; fit not applied (identity) for those.",
                length(collapsed_isos), paste(collapsed_isos, collapse = ", "),
                amp_range[1]), call. = FALSE)
      }
