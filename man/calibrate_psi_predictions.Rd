@@ -48,10 +48,10 @@ slope is clamped to this range before being applied (default
 \item{offset_range}{Length-2 numeric \code{c(lo, hi)}; the per-country logit
 offset is clamped to this range (default \code{c(-4, 4)}).}
 
-\item{amp_range}{Length-2 numeric \code{c(lo, hi)}; the corrected series'
-logit-scale sd is constrained to within this multiple of the input
-prediction's logit-scale sd (default \code{c(0.5, 2)}), shrinking the affine
-toward identity when violated.}
+\item{amp_range}{Length-2 numeric \code{c(lo, hi)}, as multiples of the input
+prediction's logit-scale sd (default \code{c(0.5, 2)}); a fit below
+\code{lo} falls back to identity, one above \code{hi} is shrunk toward
+identity.}
 
 \item{min_pred_sd}{Minimum logit-pred standard deviation (over outbreak weeks)
 for a country to be eligible for a fit; below it, identity (default 0.05).}
@@ -60,7 +60,12 @@ for a country to be eligible for a fit; below it, identity (default 0.05).}
 \code{pred_df} with an added \code{out_col} in \eqn{(0,1)}. A
 per-country diagnostic data frame is attached as
 \code{attr(., "calibration_diagnostics")} (see
-\code{\link{check_psi_amplitude}}).
+\code{\link{check_psi_amplitude}}). Its \code{status} is \code{"fit"},
+\code{"guarded"} (slope or offset clamped, or amplitude shrunk from the
+ceiling), \code{"identity"} (too few outbreak weeks, degenerate predictor
+or rank-deficient fit), or \code{"collapsed"} (identity because the fit fell
+below the amplitude floor; \code{slope} and \code{offset} then report the
+rejected, clamped fit).
 }
 \description{
 Fits a per-country affine recalibration on the \strong{logit scale},
@@ -86,10 +91,12 @@ without the hard-\eqn{[0,1]}-clip truncation that distorted the
 \code{psi_bar}-relative deviation feeding the engine.
 }
 A country with fewer than \code{min_train} outbreak weeks (this includes
-zero-history countries, which have none) or no logit-pred variance falls back
-to the \strong{identity} transform (output = input prediction) with a warning.
-This is the defined behavior for low-incidence / zero-history countries: their
-psi is the uncorrected (region-FiLM-modulated) model output.
+zero-history countries, which have none), no logit-pred variance, or an
+outbreak-week slope that would collapse its amplitude (see \emph{Robustness})
+falls back to the \strong{identity} transform (output = input prediction) with
+a warning. This is the defined behavior whenever the correction cannot be
+estimated: the country's psi is the uncorrected (region-FiLM-modulated) model
+output.
 }
 \section{Robustness (B1)}{
 
@@ -108,12 +115,24 @@ the identity transform.
 \code{slope_range} and the offset to \code{offset_range} (logit scale)
 before being applied, so no country's correction can be steeper / more
 offset than is plausible for a scale/level fix.
-\item \strong{Amplitude clamp.} The corrected series' logit-scale standard
-deviation is constrained to within \code{amp_range} times the input
-prediction's logit-scale standard deviation (shrinking the affine toward
-identity if it would over-collapse or over-inflate the amplitude), so a
-country's psi cannot be flattened to a constant or inflated beyond a sane
-range.
+\item \strong{Amplitude floor: a collapsing fit is not applied.} The
+corrected logit series is affine in the input, so its logit-scale
+standard deviation is the clamped slope times the input's. A slope below
+\code{amp_range[1]} would flatten the country's seasonal contrast below
+that fraction of the model's. Such a slope is not an estimate of a scale
+correction: on the outbreak weeks the fitted slope is the correlation
+times the ratio of standard deviations, so it lands near zero (or below)
+when the model does not predict outbreak magnitude there. The country
+then falls back to the \strong{identity} transform with status
+\code{"collapsed"} (v0.102.0). Up to v0.101.0 the map was instead blended
+toward identity until it reached the floor. That map was set by the
+guard constants rather than the data, because the slope was clamped
+without re-fitting the intercept. So CIV received slope 0.505 and offset
+-2.64 in every 2026 production refit.
+\item \strong{Amplitude ceiling.} A corrected logit-scale standard deviation
+above \code{amp_range[2]} times the input's is shrunk toward identity
+(blend on a 0.02 grid) until it is within the range, so a country's psi
+cannot be inflated beyond a sane range.
 }
 Well-behaved countries (ample outbreak weeks, real logit-pred variance, a
 slope/offset/amplitude inside the guard ranges) are \strong{unaffected} — the
