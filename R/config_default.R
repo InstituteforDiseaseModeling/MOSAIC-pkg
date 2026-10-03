@@ -47,8 +47,8 @@
 #'     likelihood. The cases dispersion is fitted on tier-1 weeks only; the
 #'     deaths dispersion is fitted on tier-1 weeks where they are enough and
 #'     falls back to every scored week, tiers 2 and 3 included, where they are
-#'     too few (for the integrated deaths likelihood on v6.2 at
-#'     `burn_in_days = 45`: BEN, BFA, CIV, LBR, NAM and ZAF).
+#'     too few (for the integrated deaths likelihood on v7.0 at
+#'     `burn_in_days = 45`: BEN, BFA, CIV, LBR, MLI, NAM and ZAF).
 #'
 #' @details
 #' The object is self-contained: it references no external files and runs

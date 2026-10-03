@@ -1,15 +1,20 @@
 # Provenance: the production psi in config_default (psi C3, MOSAIC v0.101.0; re-corrected in v0.102.0)
 
-`config_default` v6.2 carries the environmental-suitability series `psi_jt` of the
+`config_default` v6.2 and v7.0 carry the environmental-suitability series `psi_jt` of the
 production refit **C3**, with its bias correction re-applied under the v0.102.0 rule (see the
 section of that name below): CIV, GMB, TGO and UGA fall back to the identity correction, and the
-other 36 countries carry C3's psi unchanged. `data-raw/make_config_default.R` builds `psi_jt`
+other 36 countries carry C3's psi unchanged. v7.0's window starts on 2018-01-01, C3's prediction
+start, which is the builder's psi floor. `data-raw/make_config_default.R` builds `psi_jt`
 from `model/input/pred_psi_suitability_day.csv`.
 
 The full provenance bundle is in MOSAIC-data `processed/psi_provenance/v0.101.0_C3/`,
 added in `b5feb59` (its `build_nino4_C.R` path case was corrected in `2ee3725`). It holds the
 scripts, logs, md5s, the variant ENSO input and the repository revisions. Its `README.md` gives
-the step-by-step rebuild and its `PROVENANCE.md` the full record. This note summarises it.
+the step-by-step rebuild and its `PROVENANCE.md` the full record. This note summarises it. The
+v0.102.0 re-correction has its own bundle, MOSAIC-data
+`processed/psi_provenance/v0.102.0_C3_recorrected/` (`4957df4`): the re-application script, the
+old-vs-new and package checks, the amplitude analysis, the before/after table and the release
+red team's caveats.
 
 | file in `model/input/` | md5 (v0.102.0) | C3 as run (v0.101.0) |
 |---|---|---|
@@ -24,17 +29,23 @@ outputs of C3.
 ## The v0.102.0 re-correction
 
 `calibrate_psi_predictions()` (v0.102.0, commit `1e4a1f149`) no longer applies a per-country fit
-that would shrink psi's logit-scale amplitude below `amp_range[1]` (0.5) of the model's. Such a
-country falls back to the identity correction, `psi = pred_bias_corrected = pred_smooth`. Up to
-v0.101.0 such a fit was blended toward identity until it sat on the 0.5x floor, a map that came
-from the guard constants rather than the data.
+that would shrink psi's logit-scale amplitude below `amp_range[1]` (0.5) of the model's. The
+corrected series is affine in the input, so the rule is exactly "clamped slope below 0.5"; it
+does not test whether the slope is identified. Such a country falls back to the identity
+correction, `psi = pred_bias_corrected = pred_smooth`. Up to v0.101.0 such a fit was blended
+toward identity until it sat on the 0.5x floor. For CIV and GMB the guard constants set that map
+(slope 0.505, offset -2.64: 0.66 times the slope and offset clamps, 0.25 and -4); UGA's slope
+was clamped but its offset fitted (-1.21); TGO's (0.501, 0.624) was an unclamped fit blended to
+the floor.
 
 - **Which countries.** In C3, CIV, GMB, TGO and UGA sat on that floor.
 - **How it was applied.** The rule was re-applied to C3's stored predictions without retraining.
   For those four, the `psi` and `pred_bias_corrected` fields were replaced by the row's own
   `pred_smooth`. Every other row of the day and week files is C3's, byte for byte.
 - **Where it is recorded.** The manifest's `bias_correction_reapplied` record holds the rule, the
-  four countries, their C3 maps, the source md5s and the code commit.
+  four countries, their C3 maps, the source md5s and the code commit. Its `source` and `script`
+  fields name the laptop scratch paths the re-application ran from; the scripts themselves are
+  in the MOSAIC-data bundle `processed/psi_provenance/v0.102.0_C3_recorrected/work/`.
 - **Mean psi over the config window:**
   - CIV 0.011 -> 0.029
   - GMB 0.007 -> 0.010
@@ -85,7 +96,8 @@ est_suitability(PATHS,
   `2c575f8c3ea05273d33b0280b5c9c7d5`. It is gitignored and not committed.
 - **Surveillance:** the AI-enhanced combined weekly file, as `update_mosaic_data()` builds it
   with `process_cholera_surveillance_data(PATHS, include_ai = TRUE)`.
-- **Release revision:** `config_default` v6.1 and v6.2 were built on MOSAIC-data `922ef89` data.
+- **Release revision:** `config_default` v6.1, v6.2 and v7.0 were built on MOSAIC-data `922ef89` data
+  (v7.0 at `4957df4`, whose later commits add only the two provenance bundles).
   The panel compiled there differs only in two ZAF 2023 deaths cells, which psi never reads.
 
 ## The Nino4 NMME gap-fill variant of the ENSO input
@@ -114,8 +126,8 @@ A fit run with MOSAIC >= 0.102.0 applies the collapse rule itself. Then copy the
 `model/input/` and run `data-raw/make_config_default.R`. Do not inject `psi_jt` into a config by
 hand.
 
-`model/LAUNCH_sanitized.R` step 4B still carries the older "G" recipe (fit from 2010,
-`rw_subsample = 5`). It does not reproduce C3.
+`model/LAUNCH_sanitized.R` step 4B carries C3's `est_suitability()` call. On the canonical ENSO
+input it fits C3's specification, not C3's psi.
 
 ## Training-data fields
 
@@ -133,7 +145,8 @@ hand.
     seasonal reconstructions of annual or quarterly totals, with no climate input.
   - `process_AI_cholera_data()` drops `assumed_zero` AI rows.
 - **The calibration target** has kept `fourier_*` weeks since v0.47.1, down-weighted through
-  `confidence_weight`; `config_default` v6.1 and v6.2 have 638 imputed location-days in their window.
+  `confidence_weight`; `config_default` v7.0 has 15,365 imputed location-days in its 2018-01-01 to
+  2027-04-29 window (v6.1 and v6.2: 638 over 2023-01-01 to 2027-04-29).
   - Since v0.101.0, `config_default$reported_tier` (1 observed, 2 reconstructed, 3 imputed)
     keeps reconstructed and imputed weeks out of the dispersion estimates.
   - The deaths dispersion falls back to every scored week where the observed weeks are too few.
