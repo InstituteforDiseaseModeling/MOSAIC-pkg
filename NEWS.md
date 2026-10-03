@@ -1,5 +1,12 @@
 # MOSAIC 0.102.0
 
+## Default data objects
+- `config_default` v6.2 changes `psi_jt` in four countries only: CIV, GMB, TGO and UGA. Their production psi (C3) sat on the bias correction's old 0.5x amplitude floor. Under the new collapse rule (see Suitability) they fall back to the identity correction, so their psi is the LSTM's own smoothed prediction. C3's stored predictions were re-corrected without retraining; the other 36 countries are byte-identical.
+  - Mean psi over the window: CIV 0.011 -> 0.029, GMB 0.007 -> 0.010, TGO 0.256 -> 0.068, UGA 0.091 -> 0.123.
+  - TGO sat on the floor in C3 only, of the seven 2026 refits, so its level is borderline.
+  - Every other field is identical to v6.1, and the build is byte-reproducible.
+  - `priors_default` stays at v17.1, because the priors do not read psi. The cases-dispersion panel trend reproduces exactly on v6.2. The toy configs and `estimated_parameters` do not read psi and are unchanged.
+
 ## Suitability
 - `calibrate_psi_predictions()` no longer applies a per-country fit whose slope would shrink psi's logit-scale amplitude below `amp_range[1]` (0.5) of the model's. Such a country now falls back to the identity correction, as it already did with too few outbreak weeks or a degenerate predictor. Its diagnostic status is the new `"collapsed"`, and a warning names it.
   - **Old behaviour.** Up to v0.101.0 such a fit was blended toward identity until it sat on the 0.5x floor. The slope was clamped without re-fitting the intercept, so the map came from the guard constants rather than the data.
