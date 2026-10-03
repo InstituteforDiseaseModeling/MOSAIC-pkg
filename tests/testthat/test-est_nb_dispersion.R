@@ -41,9 +41,9 @@ test_that("weekly cadence is detected, not assumed", {
 
 test_that("the estimate is invariant to the series start weekday", {
      # The reporting-week boundary is DETECTED, not assumed to be Monday, so a
-     # config starting on a Sunday (config_default does) must not split every
-     # reporting week across two blocks -- which would inflate the apparent
-     # noise and bias k downward.
+     # config starting mid-week (config_default v6.x started on Sunday
+     # 2023-01-01) must not split every reporting week across two blocks --
+     # which would inflate the apparent noise and bias k downward.
      y <- .mk_daily(4, seed = 11L)
      r_mon <- est_nb_dispersion(matrix(y, nrow = 1L), date_start = "2023-01-02", shrink = FALSE)
      r_sun <- est_nb_dispersion(matrix(y, nrow = 1L), date_start = "2023-01-01", shrink = FALSE)

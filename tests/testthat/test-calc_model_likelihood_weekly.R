@@ -362,7 +362,7 @@ test_that("downscaled weekly totals are recovered exactly on a Sunday-start grid
      mondays <- as.Date("2023-01-02") + 7L * (0:29)
      Y <- stats::rnbinom(30, mu = 40, size = 0.8)
      dl <- MOSAIC::downscale_weekly_values(mondays, Y)
-     # config_default starts on Sunday 2023-01-01: prepend that day
+     # a Sunday start (config_default v6.x began on Sunday 2023-01-01): prepend that day
      dates <- c(as.Date("2023-01-01"), dl$date)
      obs <- c(5, dl$value)
      b <- MOSAIC:::.mosaic_week_blocks(dates)
@@ -378,10 +378,18 @@ test_that("the scored window and burn-in are respected through the worker", {
      oc[!is.finite(oc)] <- 0; od[!is.finite(od)] <- 0
      cfg$reported_cases <- oc; cfg$reported_deaths <- od
      nT <- ncol(oc)
-     # day 31 (2023-01-31) is a Tuesday: the block Mon 30 Jan - Sun 5 Feb straddles the
-     # burn-in boundary and is partial; the first scored week starts Mon 6 Feb (day 37).
-     expect_identical(format(as.Date(cfg$date_start) + c(30L, 36L), "%a"), c("Tue", "Mon"))
-     sw <- list(idx_cases = 31L, idx_deaths = 31L, n_time = nT)
+     # The scored window starts mid-week on day s0, so the Monday-Sunday block holding
+     # it straddles the burn-in boundary and is partial, and the first scored week
+     # starts on the next Monday (day wk1). The geometry comes from the config's own
+     # dates: from Sunday 2023-01-01, day 31 is a Tuesday, the straddling block is days
+     # 30-36 and wk1 = 37; from Monday 2018-01-01, day 31 is a Wednesday, days 29-35
+     # and wk1 = 36.
+     dates <- as.Date(cfg$date_start) + seq_len(nT) - 1L
+     s0 <- if (format(dates[31L], "%u") == "1") 32L else 31L   # a Monday leaves no straddle
+     wk1 <- s0 + (8L - as.integer(format(dates[s0], "%u"))) %% 7L
+     expect_identical(format(dates[c(wk1 - 7L, wk1)], "%u"), c("1", "1"))
+     expect_true(wk1 - 7L < s0 && s0 < wk1)
+     sw <- list(idx_cases = s0, idx_deaths = s0, n_time = nT)
      ls <- list(weight_cases = 1, weight_deaths = 0, eps_rel_cases = 0.02, eps_rel_deaths = 0.25,
                 cases_scoring = "weekly",
                 .nb_k_cases_resolved = 0.5, .nb_k_deaths_resolved = 1, .score_window_resolved = sw,
@@ -403,13 +411,15 @@ test_that("the scored window and burn-in are respected through the worker", {
      base <- round(oc * 1.1) + 1
      ll0 <- worker_ll(base, ls)
      expect_true(is.finite(ll0))
-     head <- base; head[, 1:36] <- head[, 1:36] * 40 + 300      # burn-in + the straddling week
+     pre <- seq_len(wk1 - 1L)                                  # burn-in + the straddling week
+     head <- base; head[, pre] <- head[, pre] * 40 + 300
      expect_identical(worker_ll(head, ls), ll0)
-     inside <- base; inside[, 37:43] <- inside[, 37:43] * 40 + 300
+     first <- wk1 + 0:6
+     inside <- base; inside[, first] <- inside[, first] * 40 + 300
      expect_false(isTRUE(all.equal(worker_ll(inside, ls), ll0)))
      # the worker's weekly score is calc_model_likelihood() on the sliced window
-     keep <- 31:nT
-     cl <- cfg; cl$date_start <- as.Date(cfg$date_start) + 30L
+     keep <- s0:nT
+     cl <- cfg; cl$date_start <- as.Date(cfg$date_start) + (s0 - 1L)
      direct <- MOSAIC::calc_model_likelihood(oc[, keep, drop = FALSE], base[, keep, drop = FALSE],
                                              od[, keep, drop = FALSE], od[, keep, drop = FALSE],
                                              config = cl, nb_k_cases = 0.5, nb_k_deaths = 1,
@@ -495,11 +505,13 @@ test_that("config_default's daily cases are reporting weeks spread over Monday-S
      # at one of two adjacent integers. Every complete block of the shared helper
      # passes for every location, so the blocks are the reporting weeks; a block
      # one day off would straddle two weeks and fail wherever consecutive weeks
-     # differ by more than one case a day. config_default starts on a Sunday.
+     # differ by more than one case a day.
      cfg <- MOSAIC::config_default
      b <- MOSAIC:::.mosaic_week_blocks(as.Date(cfg$date_start) + seq_len(ncol(cfg$reported_cases)) - 1L)
-     expect_identical(format(as.Date(cfg$date_start), "%a"), "Sun")
-     expect_false(b$complete[1])
+     # ISO weeks, not weeks counted from date_start: the first block is complete
+     # exactly when the window starts on a Monday (2018-01-01 does; Sunday
+     # 2023-01-01 left a one-day first block)
+     expect_identical(b$complete[1], format(as.Date(cfg$date_start), "%u") == "1")
      spread_ok <- function(v) {
           u <- sort(unique(v)); length(u) <= 1L || (length(u) == 2L && diff(u) == 1)
      }
