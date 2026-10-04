@@ -311,22 +311,22 @@ process_GTFCC_vaccination_data <- function(PATHS) {
      ok <- lengths(m) == 3L
      if (!any(ok)) return(unknown)
      campaign <- as.integer(vapply(m[ok], function(z) z[2], character(1)))
-     round <- as.integer(vapply(m[ok], function(z) z[3], character(1)))
+     rnd <- as.integer(vapply(m[ok], function(z) z[3], character(1)))
      d <- as.numeric(doses)[ok]
 
      # A campaign-round listed more than once counts once: its reported doses,
      # or unreported if none of its events reports any
-     key <- paste(campaign, round)
+     key <- paste(campaign, rnd)
      ukey <- unique(key)
      d <- vapply(ukey, function(k) {
           x <- d[key == k]
           if (all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)
      }, numeric(1), USE.NAMES = FALSE)
      campaign <- campaign[match(ukey, key)]
-     round <- round[match(ukey, key)]
+     rnd <- rnd[match(ukey, key)]
 
-     o <- order(campaign, round)
-     dose <- ifelse(round[o] >= 2L, 2L, 1L)
+     o <- order(campaign, rnd)
+     dose <- ifelse(rnd[o] >= 2L, 2L, 1L)
      d <- d[o]
 
      # One dose throughout: the share is 100% whatever the dose counts say

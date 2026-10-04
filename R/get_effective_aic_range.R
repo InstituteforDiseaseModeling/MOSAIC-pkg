@@ -13,10 +13,10 @@
 #'
 #' Uses a heuristic that maps percentiles to Burnham & Anderson's AIC thresholds.
 #' Based on their interpretation:
-#' - 1% → Δ AIC < 2 (substantial support, ~37% relative likelihood)
-#' - 5% → Δ AIC ≈ 4 (boundary of substantial/less support)
-#' - 10% → Δ AIC ≈ 7 (upper end of "considerably less support")
-#' - 20% → Δ AIC ≈ 10 (boundary to "essentially no support")
+#' - 1% → \eqn{\Delta}{Delta} AIC < 2 (substantial support, ~37% relative likelihood)
+#' - 5% → \eqn{\Delta}{Delta} AIC about 4 (boundary of substantial/less support)
+#' - 10% → \eqn{\Delta}{Delta} AIC about 7 (upper end of "considerably less support")
+#' - 20% → \eqn{\Delta}{Delta} AIC about 10 (boundary to "essentially no support")
 #'
 #' This heuristic is used only by \code{\link{plot_effective_range}}. It does
 #' not drive calibration weighting: \code{run_MOSAIC()},

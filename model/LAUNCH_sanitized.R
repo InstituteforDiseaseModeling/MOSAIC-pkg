@@ -4,7 +4,7 @@ set_root_directory("<root_directory_blocked>")
 PATHS <- MOSAIC::get_paths()
 
 DATE_START <- as.Date("2018-01-01")  # matches make_config_default.R default window start
-DATE_STOP  <- as.Date("2026-03-31")
+DATE_STOP  <- as.Date("2030-12-31")  # end of the shipped nu files (est_vaccination_rate, 2D)
 
 
 

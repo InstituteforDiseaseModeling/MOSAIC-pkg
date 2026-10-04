@@ -45,15 +45,18 @@ and versions drift — cite the source of truth (`?fn`, the version-note in `dat
   `data-raw/make_config_default.R`).
 
 ### Back-history / alternate-ψ config rebuild
-To rebuild `config_default` from an earlier start date (or with an alternate ψ), set the env var and
-rebuild both data objects:
+To rebuild `config_default` at another start date (or with an alternate ψ), set the env var for
+every step and rebuild both data objects twice (the default start is 2018-01-01 since v0.103.0;
+the earliest is the ψ prediction start):
 ```bash
-export MOSAIC_BUILD_DATE_START=YYYY-01-01   # priors ic_t0 is data-driven within [date_start, +12mo]
-                                            # (the old hard 2023-02-01 floor is gone)
+export MOSAIC_BUILD_DATE_START=YYYY-01-01   # priors ic_t0 = date_start (initial conditions at the start)
 Rscript data-raw/make_priors_default.R      # 1. rebuild priors
 Rscript -e 'devtools::install(".")'         # 2. install (config build reads the new priors)
 Rscript data-raw/make_config_default.R      # 3. rebuild config
 Rscript -e 'devtools::install(".")'         # 4. install
+# 5-8. repeat 1-4 once: est_initial_V1_V2() divides by the INSTALLED config's populations, so
+#      after a window move the first priors pass is off (V1/V2 x the population ratio, ~1.13
+#      between 2018 and 2023); the second pass is the fixed point (a third reproduces it).
 ```
 To bake an **alternate ψ** (e.g. NMME), stage the ψ DAY csv at `model/input/pred_psi_suitability_day.csv`
 **before** step 3 — the config build reads it for `date_stop` + `psi_jt`. Do NOT hand-inject `psi_jt`

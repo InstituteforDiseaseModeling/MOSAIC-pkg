@@ -39,11 +39,11 @@ This function calculates the meanlog and sdlog parameters of a lognormal
 distribution that best matches a given mode and 95\% confidence intervals.
 }
 \details{
-For a lognormal distribution with parameters meanlog (μ) and sdlog (σ):
+For a lognormal distribution with parameters meanlog (\eqn{\mu}{mu}) and sdlog (\eqn{\sigma}{sigma}):
 \itemize{
-\item Mode = exp(μ - σ²)
-\item Mean = exp(μ + σ²/2)
-\item Variance = (exp(σ²) - 1) * exp(2μ + σ²)
+\item Mode = \eqn{\exp(\mu - \sigma^2)}{exp(mu - sigma^2)}
+\item Mean = \eqn{\exp(\mu + \sigma^2/2)}{exp(mu + sigma^2/2)}
+\item Variance = \eqn{(\exp(\sigma^2) - 1) \exp(2\mu + \sigma^2)}{(exp(sigma^2) - 1) * exp(2 mu + sigma^2)}
 }
 
 The moment matching method (default) matches the 95\% CI exactly on the

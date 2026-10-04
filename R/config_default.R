@@ -75,8 +75,8 @@
 #' October 2022), so over a 2023+ window `nu_2_jt` is zero. Up to v6.2 every
 #' dose was a first dose, `nu_2_jt` was zero everywhere, and every delivery of
 #' a request started at its first delivery date (this moved later deliveries
-#' of 22 pre-2023 requests up to 2.5 years early and did not change the 2023+
-#' series).
+#' of 22 pre-2023 requests up to 2.6 years (961 days) early and did not change
+#' the 2023+ series).
 #'
 #' **Note on Initial Condition Formats**: This configuration includes both count
 #' (`*_j_initial`) and proportion (`prop_*_initial`) representations of initial

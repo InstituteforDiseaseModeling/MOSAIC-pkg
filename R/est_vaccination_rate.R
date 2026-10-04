@@ -34,7 +34,7 @@
 #' MOSAIC v0.102.0 every delivery of a request was released from its first
 #' delivery date, which moved later deliveries of multi-delivery requests --
 #' typically second rounds and later campaigns of GTFCC preventive programmes
-#' -- up to two and a half years early.)
+#' -- up to 2.6 years (961 days) early.)
 #'
 #' \strong{First and second doses.} Each day's doses of a request are split
 #' into first doses (\code{nu_1}) and second doses (\code{nu_2}) by the
@@ -343,6 +343,7 @@ est_vaccination_rate <- function(PATHS,
 #'   with doses (no rows when there are no doses).
 #' @noRd
 .vacc_release <- function(dates, doses, max_rate_per_day) {
+     stopifnot(max_rate_per_day > 0)
      o <- order(dates)
      day_of <- as.numeric(as.Date(dates[o]))
      doses <- as.numeric(doses[o])

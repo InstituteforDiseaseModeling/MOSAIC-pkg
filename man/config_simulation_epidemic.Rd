@@ -25,9 +25,9 @@ the package as \strong{\code{config_simulation_epidemic}}.
    \strong{Time span} \tab 1 Jan 2020 – 31 Dec 2020 (365 days). \cr
    \strong{Locations} \tab “FOO” (5 k), “BAR” (10 k), “BAZ” (20 k). \cr
    \strong{Initial mix} \tab 50 \% susceptible, 20–30 \% first-dose vaccinated, 3 seeding infections in “FOO”. \cr
-   \strong{Transmission} \tab Baseline β fixed per site: \strong{0.30}, \strong{0.50}, \strong{0.40} with ±0.15 seasonal sine forcing. \cr
-   \strong{Mobility} \tab Daily departure probabilities τ\if{html}{\out{<sub>}}i\if{html}{\out{</sub>}} = 0.005, 0.002, 0.006. \cr
-   \strong{Environment} \tab Flat suitability (ψ = 0.7), short environmental half-life (decay_days_long = 90). \cr
+   \strong{Transmission} \tab Baseline \eqn{\beta}{beta} fixed per site: \strong{0.30}, \strong{0.50}, \strong{0.40} with ±0.15 seasonal sine forcing. \cr
+   \strong{Mobility} \tab Daily departure probabilities \eqn{\tau_i}{tau_i} = 0.005, 0.002, 0.006. \cr
+   \strong{Environment} \tab Flat suitability (\eqn{\psi = 0.7}{psi = 0.7}), short environmental half-life (decay_days_long = 90). \cr
    \strong{Observed data} \tab \code{reported_cases} / \code{reported_deaths} matrices are filled with \strong{NA} (no real surveillance data). \cr
    \strong{Seed} \tab \code{set.seed(999999999)} for full reproducibility. \cr
 }
@@ -35,7 +35,7 @@ the package as \strong{\code{config_simulation_epidemic}}.
 
 These settings produce a single, clearly defined epidemic wave in each
 patch—especially pronounced in “BAR”, which has the highest baseline
-transmission (β = 0.50).  The configuration is small enough to run in
+transmission (\eqn{\beta = 0.50}{beta = 0.50}).  The configuration is small enough to run in
 fractions of a second yet exercises all major engine components, making it
 ideal for automated tests and teaching materials.
 }

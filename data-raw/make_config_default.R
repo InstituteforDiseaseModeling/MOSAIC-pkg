@@ -38,6 +38,12 @@ PATHS$MODEL_OUTPUT <- file.path(.pkg_here, "model", "output")
 #   1. Rscript data-raw/make_priors_default.R     # initial conditions at the new start
 #   2. Rscript -e 'devtools::install(".")'         # so THIS script sees the new priors_default
 #   3. Rscript data-raw/make_config_default.R      # sources beta/IC means from new priors; mu_jt from model/input
+#   4. Rscript -e 'devtools::install(".")'
+#   5-8. repeat steps 1-4 once. est_initial_V1_V2() divides doses by the INSTALLED
+#      config_default's N_j_initial, so after a window move the first priors pass uses the
+#      old window's populations (V1/V2 off by the population ratio, about x1.13 between
+#      2018 and 2023); the second pass, against the new config, is the fixed point, and a
+#      third pass must reproduce it byte for byte.
 # Once the installed config_default carries this default window, both scripts resolve it
 # with the env var unset.
 .env_ds    <- Sys.getenv("MOSAIC_BUILD_DATE_START", "")
@@ -267,7 +273,7 @@ message(sprintf("mu_jt built from WHO-annual GAM estimates: %d locations x %d da
 # nu is the doses shipped per request, administered at up to max_rate_per_day
 # a day by est_vaccination_rate(), each GTFCC delivery from its own delivery
 # date (up to MOSAIC v0.102.0 every delivery of a request started at its first
-# delivery date, up to ~2.5 years early for multi-delivery requests). It also
+# delivery date, up to ~2.6 years early for multi-delivery requests). It also
 # splits each day into first and second doses from the request's GTFCC Round
 # events (process_GTFCC_vaccination_data():
 # shipped doses divided across the rounds in proportion to the doses

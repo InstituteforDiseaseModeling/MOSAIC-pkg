@@ -35,7 +35,7 @@
 #' the pooled range and the densities were renormalised as discrete
 #' probabilities, so a narrow P saturated near \code{log(n_points)}.
 #'
-#' Note that KL divergence is not symmetric: KL(P||Q) ≠ KL(Q||P).
+#' Note that KL divergence is not symmetric: KL(P||Q) != KL(Q||P).
 #'
 #' @return A non-negative numeric value representing the KL divergence.
 #'   Returns 0 when the distributions are identical, and larger values

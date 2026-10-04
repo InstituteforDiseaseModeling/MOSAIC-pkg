@@ -23,10 +23,10 @@ top X\% of models under typical (non-dispersed) conditions.
 Uses a heuristic that maps percentiles to Burnham & Anderson's AIC thresholds.
 Based on their interpretation:
 \itemize{
-\item 1\% → Δ AIC < 2 (substantial support, ~37\% relative likelihood)
-\item 5\% → Δ AIC ≈ 4 (boundary of substantial/less support)
-\item 10\% → Δ AIC ≈ 7 (upper end of "considerably less support")
-\item 20\% → Δ AIC ≈ 10 (boundary to "essentially no support")
+\item 1\% → \eqn{\Delta}{Delta} AIC < 2 (substantial support, ~37\% relative likelihood)
+\item 5\% → \eqn{\Delta}{Delta} AIC about 4 (boundary of substantial/less support)
+\item 10\% → \eqn{\Delta}{Delta} AIC about 7 (upper end of "considerably less support")
+\item 20\% → \eqn{\Delta}{Delta} AIC about 10 (boundary to "essentially no support")
 }
 
 This heuristic is used only by \code{\link{plot_effective_range}}. It does

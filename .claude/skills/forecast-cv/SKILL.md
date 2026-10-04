@@ -67,8 +67,9 @@ Only the first is the backtest; the other two are internals of a single psi fit.
   cluster; the Dask/Coiled `dask_spec` option was removed (it now hard-errors).
 - **Two staleness/leakage subtleties:** (i) if `config$date_stop` runs past the climate/ENSO horizon, the
   per-cutoff ψ tail is `na.locf` flat-filled in the scored OOS segment (see est-suitability horizon
-  ceiling); (ii) ICs are seeded at `ic_t0 = max(date_start, 2023-02-01)`, so cutoffs before 2023 seed
-  initial conditions from 2023 data regardless of the cutoff — a leakage-adjacent subtlety.
+  ceiling); (ii) the initial conditions are `priors_default`'s, estimated at `ic_t0 = date_start`
+  (2018-01-01 for `config_default` v7.0, from the 28-day window 2017-12-18..2018-01-14), so a cutoff
+  later than mid-January 2018 cannot leak into them.
 
 ## raw-ψ vs post-ψ* — the "did ψ help?" check
 ψ enters as fixed `psi_jt` but is re-transformed **per simulation, per location** by the sampled ψ\* params.
