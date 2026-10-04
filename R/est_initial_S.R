@@ -46,13 +46,13 @@
 #' **Method Overview:**
 #' 1. Sample from estimated Beta priors for V1, V2, E, I, R compartments
 #' 2. Calculate S as constrained residual: S = 1 - (V1 + V2 + E + I + R)
-#' 3. Apply constraints: ensure S ≥ min_S_proportion and handle over-allocation
+#' 3. Apply constraints: ensure S >= min_S_proportion and handle over-allocation
 #' 4. Fit Beta distribution to S samples using CI expansion method
 #' 5. Return priors-compatible structure with metadata
 #'
 #' **Constraint Handling:**
 #' - If other compartments sum > (1 - min_S_proportion), proportionally scale them down
-#' - Ensures S is always ≥ min_S_proportion for biological realism
+#' - Ensures S is always >= min_S_proportion for biological realism
 #' - Maintains mathematical consistency: all compartments sum to 1
 #'
 #' **Fallback Behavior:**

@@ -95,7 +95,7 @@ test_that("the predictive's blocks are the likelihood's reporting weeks, edge we
 # ---- cases: analytic NB moments; weekly coherence -----------------------------
 
 test_that("cases: weekly totals reproduce the analytic NB mean and variance on ISO weeks", {
-  # Window starts on Sunday 2023-01-01 (the production start): day 1 is its own
+  # Window starts on Sunday 2023-01-01 (config_default v6.x's start): day 1 is its own
   # block, days 2-29 are four ISO weeks with engine total C = 110 each.
   pat   <- c(5, 10, 20, 40, 20, 10, 5)
   daily <- c(7, rep(pat, 4))

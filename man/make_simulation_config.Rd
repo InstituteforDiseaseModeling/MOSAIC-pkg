@@ -265,9 +265,9 @@ between-location movement.
 
 \item{latitude}{A numeric vector of latitudes for each location. Must be same length as location_name.}
 
-\item{mobility_omega}{Exponent weight for destination population in the gravity mobility model. Must be numeric ≥ 0.}
+\item{mobility_omega}{Exponent weight for destination population in the gravity mobility model. Must be numeric and non-negative.}
 
-\item{mobility_gamma}{Exponent weight for distance decay in the gravity mobility model. Must be numeric ≥ 0.}
+\item{mobility_gamma}{Exponent weight for distance decay in the gravity mobility model. Must be numeric and non-negative.}
 
 \item{tau_i}{Departure probability for each origin location (numeric vector of length(location_name) in [0, 1]).
 \subsection{Force of Infection (human-to-human)}{

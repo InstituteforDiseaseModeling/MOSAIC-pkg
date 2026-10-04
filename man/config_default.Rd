@@ -30,8 +30,9 @@ seasonality (\code{a_1_j}, \code{a_2_j}, \code{b_1_j}, \code{b_2_j}), \code{epid
 and the suitability calibration \code{psi_star_a}, \code{psi_star_b}, \code{psi_star_z},
 \code{psi_star_k};
 \item \strong{Location x day matrices} -- birth and death rates (\code{b_jt}, \code{d_jt}),
-one- and two-dose vaccination (\code{nu_1_jt}, \code{nu_2_jt}, with the eligible
-compartments in \code{nu_jt_sources}), environmental suitability (\code{psi_jt},
+first- and second-dose OCV doses per day (\code{nu_1_jt}, \code{nu_2_jt}, with the
+compartments eligible for first doses in \code{nu_jt_sources}; see Details),
+environmental suitability (\code{psi_jt},
 uncalibrated: \code{sample_parameters()} applies \verb{psi_star_*} to it), and
 the reported case fatality ratio \code{mu_jt}, the deaths input of the
 mortality model since MOSAIC v0.96.0;
@@ -46,8 +47,8 @@ dispersion estimates read and the engine ignores; and the
 likelihood. The cases dispersion is fitted on tier-1 weeks only; the
 deaths dispersion is fitted on tier-1 weeks where they are enough and
 falls back to every scored week, tiers 2 and 3 included, where they are
-too few (for the integrated deaths likelihood on v6.2 at
-\code{burn_in_days = 45}: BEN, BFA, CIV, LBR, NAM and ZAF).
+too few (for the integrated deaths likelihood on v7.0 at
+\code{burn_in_days = 45}: BEN, BFA, CIV, LBR, MLI, NAM and ZAF).
 }
 }
 \usage{
@@ -68,6 +69,25 @@ shipped \code{psi_star_b = 1}; to simulate with the calibrated suitability, pass
 the config through \code{sample_parameters()} first. For tutorials or
 fast tests the smaller toy configs \code{\link{config_simulation_epidemic}} and
 \code{\link{config_simulation_endemic}} are also available.
+
+\strong{Vaccination doses}: \code{nu_1_jt + nu_2_jt} is the OCV doses shipped to each
+location, administered at up to 20,000 doses a day by
+\code{\link[=est_vaccination_rate]{est_vaccination_rate()}} from the GTFCC/WHO campaign file, each GTFCC
+delivery from its own delivery date. Since \code{config_default} v7.0 (MOSAIC
+v0.103.0) each request's doses are split by its GTFCC rounds: shipped doses
+are divided across the rounds in proportion to the doses administered in
+each, the first round goes to \code{nu_1_jt} and the second to \code{nu_2_jt}, in that
+order, and doses with no round information (a request without GTFCC Round
+events, or a WHO-only shipment) are first doses. The engine moves \code{phi_1} of
+each day's first doses from the \code{nu_jt_sources} compartments to \code{V1}, and
+\code{phi_2} of its second doses from \code{V1} to \code{V2}, capped at the \code{V1} stock, so a
+two-dose campaign immunises its first-round recipients once. Second rounds
+are pre-2023 campaigns (the ICG suspended two-dose outbreak response in
+October 2022), so over a 2023+ window \code{nu_2_jt} is zero. Up to v6.2 every
+dose was a first dose, \code{nu_2_jt} was zero everywhere, and every delivery of
+a request started at its first delivery date (this moved later deliveries
+of 22 pre-2023 requests up to 2.6 years (961 days) early and did not change
+the 2023+ series).
 
 \strong{Note on Initial Condition Formats}: This configuration includes both count
 (\verb{*_j_initial}) and proportion (\verb{prop_*_initial}) representations of initial

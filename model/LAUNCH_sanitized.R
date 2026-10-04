@@ -3,8 +3,8 @@ library(MOSAIC)
 set_root_directory("<root_directory_blocked>")
 PATHS <- MOSAIC::get_paths()
 
-DATE_START <- as.Date("2023-02-01")
-DATE_STOP  <- as.Date("2026-03-31")
+DATE_START <- as.Date("2018-01-01")  # matches make_config_default.R default window start
+DATE_STOP  <- as.Date("2030-12-31")  # end of the shipped nu files (est_vaccination_rate, 2D)
 
 
 
@@ -257,22 +257,25 @@ compile_suitability_data(PATHS,
 #
 #    AI down-weighting: use_confidence_weight = TRUE is pinned in the B4
 #    arch_control fixture (default when arch_control = NULL). Do NOT disable it.
-#    TODO(parent): set arch_control to the production "G" config (fit_date_start
-#    = 2010, rw_subsample = 5, multi-seed) to reproduce the shipped config_default
-#    psi; arch_control = NULL fits the simpler B4-fixture default config instead.
-
-# PRODUCTION config_default psi = "G" config (see model/README_psi_provenance.md):
-# per-capita-per-country target + AI data + CW ON + tiling CV folds + fit from 2010.
+#
+#    The specification of the production psi C3 behind config_default
+#    (model/README_psi_provenance.md). C3 was fitted on a panel compiled with the
+#    Nino4 NMME gap-fill variant of the ENSO input; the MOSAIC-data bundle
+#    processed/psi_provenance/v0.101.0_C3/ rebuilds that input. The fit is not
+#    bitwise reproducible (keras recurrent dropout). pred_date_start must not be
+#    later than config_default's date_start (the builder's psi floor). Each seed
+#    worker needs ~6 GB: lower parallel_seeds on a laptop.
 est_suitability(PATHS,
-                response_var  = "target_D_rate_per_country_floored",
-                architecture  = "lstm_v2_hierarchical_film",
-                arch_control  = list(n_seeds        = 10L,
-                                     region_map     = "snf_k5",
-                                     parallel_seeds = 1L,
-                                     rw_subsample   = 5L),
-                bias_correct  = TRUE,
-                fit_date_start = "2010-01-01",
-                pred_date_stop = DATE_STOP)
+                fit_date_start  = NULL,          # 2015-01-01
+                fit_date_stop   = NULL,          # last week with cases and complete ENSO
+                pred_date_start = "2018-01-01",
+                pred_date_stop  = NULL,          # last ENSO-complete week
+                feature_set     = "v7.3",
+                response_var    = "target_D_rate_per_country_floored",
+                bias_correct    = TRUE,
+                architecture    = "lstm_v2_hierarchical_film",
+                arch_control    = list(n_seeds = 10L, region_map = "snf_k5",
+                                       parallel_seeds = 10L, seed_base = 11L))
 
 
 

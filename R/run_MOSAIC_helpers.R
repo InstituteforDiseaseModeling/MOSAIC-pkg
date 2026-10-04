@@ -1496,8 +1496,14 @@
 #'   \code{reported_tier} (every scored week when they are too few). Its
 #'   development builds stamped "R/v0.101.0+weekly_cases", whose clamped fits
 #'   kept the 0.1 bound: the resolved k is not part of control.json, so only
-#'   this tag keeps their shards apart.
-.mosaic_likelihood_impl_version <- function() "R/v0.101.0+clamped_k_trend"
+#'   this tag keeps their shards apart. v0.103.0 also censors a cases fit
+#'   within its 95% interval of the lower bound (status near_lower_bound,
+#'   UGA on config_default v7.0) and re-derives the panel trend on
+#'   config_default v7.0 without it; both change the k a location is scored
+#'   at, so shards scored by 0.101.0-0.102.0 (v6.1 trend constants) or by the
+#'   0.103.0 development builds (v7.0 constants with UGA's fit in, both
+#'   stamped "R/v0.101.0+clamped_k_trend") are refused.
+.mosaic_likelihood_impl_version <- function() "R/v0.103.0+near_bound_k_trend"
 
 #' R Engine Semantics Version
 #'

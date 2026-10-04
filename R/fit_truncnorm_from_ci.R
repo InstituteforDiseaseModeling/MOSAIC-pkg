@@ -26,7 +26,7 @@
 #' For a truncated normal distribution:
 #' \itemize{
 #'   \item The mode may differ from the mean due to truncation
-#'   \item If truncation is symmetric and far from the mean, mode ≈ mean
+#'   \item If truncation is symmetric and far from the mean, the mode is close to the mean
 #'   \item Asymmetric truncation shifts the mode away from the mean
 #' }
 #'

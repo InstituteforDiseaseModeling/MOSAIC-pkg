@@ -9,8 +9,15 @@
 #'
 #' @format A list with 4 main components.
 #' \describe{
-#'   \item{metadata}{Version, build date, and a free-text description listing
-#'     the changes that produced this version of the priors.}
+#'   \item{metadata}{\code{version}, build \code{date}, a free-text
+#'     \code{description} listing the changes that produced this version of the
+#'     priors, \code{build_date_start} (the window start the priors were built
+#'     for and the initial conditions estimated at; \code{config_default}'s
+#'     \code{date_start} must equal it), \code{quiet_start_seeded} (the
+#'     locations whose E and I priors are the quiet-start seeding prior of
+#'     \code{\link{est_initial_E_I}}) and \code{imputed_window_fallback} (the
+#'     locations whose E/I window held no observed or reconstructed count and
+#'     was read from their country-level reconstructions).}
 #'   \item{parameters_global}{Named list of 25 global priors (single value
 #'     shared across all locations). See `Global parameters` below.}
 #'   \item{parameters_location}{Named list of 20 location-specific prior

@@ -73,7 +73,7 @@ The function implements a constrained residual approach:
 \enumerate{
 \item Sample from estimated Beta priors for V1, V2, E, I, R compartments
 \item Calculate S as constrained residual: S = 1 - (V1 + V2 + E + I + R)
-\item Apply constraints: ensure S ≥ min_S_proportion and handle over-allocation
+\item Apply constraints: ensure S >= min_S_proportion and handle over-allocation
 \item Fit Beta distribution to S samples using CI expansion method
 \item Return priors-compatible structure with metadata
 }
@@ -81,7 +81,7 @@ The function implements a constrained residual approach:
 \strong{Constraint Handling:}
 \itemize{
 \item If other compartments sum > (1 - min_S_proportion), proportionally scale them down
-\item Ensures S is always ≥ min_S_proportion for biological realism
+\item Ensures S is always >= min_S_proportion for biological realism
 \item Maintains mathematical consistency: all compartments sum to 1
 }
 

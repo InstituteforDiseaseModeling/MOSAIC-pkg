@@ -19,6 +19,18 @@
 #' with surveillance but too few usable draws, or an estimation error, get the
 #' fallback Beta priors (Beta(1, 9999) for E, Beta(0.5, 9999.5) for I).
 #'
+#' Imputed surveillance rows (tier 3 of \code{.surveillance_tier()}: AI Fourier
+#' reconstructions, which spread a year's reported or residual total over its
+#' unobserved weeks along a seasonal shape) are not dated reports. Where a
+#' location's window holds any observed or reconstructed (tier 1-2) count, its
+#' imputed days are unobserved for the back-calculation. A window with no tier
+#' 1-2 count falls back on its country-level reconstructions
+#' (\code{fourier_country_*}), the only estimate of that country's level there
+#' (listed in \code{metadata$imputed_window_fallback}); regional reconstructions
+#' (\code{fourier_regional_*}) never count. The quiet-start test counts tier 1-2
+#' later cases only. Without a \code{disaggregation_method} column every row is
+#' observed.
+#'
 #' @param PATHS List of paths from `get_paths()`.
 #' @param priors Prior distributions for parameters (e.g., `priors_default`).
 #' @param config Configuration object with location codes and `date_start`.
@@ -27,7 +39,7 @@
 #' @param t0 Target date for estimation (default from `config$date_start`).
 #' @param lookback_days Days of surveillance data before t0 to use (default 21).
 #' @param lookahead_days Days of surveillance data from t0 onward that also enter the onset-rate estimate (default 0). With weekly reports downscaled to days, a window that ends at t0 can miss an outbreak already under way at t0; a window straddling t0 estimates the onset rate at t0 itself. A location gets the near-zero template only when the whole window `[t0 - lookback_days, t0 + lookahead_days)` reports no cases.
-#' @param quiet_start What a "quiet-start" location gets. A location is a quiet start when it reports at least one case after the surveillance window, up to `config$date_stop` (the end of the data when `config$date_stop` is NULL), and EITHER (a) its window around t0 reports no cases (or is all NA), OR (b) the E/I priors the window gives imply fewer than one expected initial infection, `N * (E[prop_E] + E[prop_I]) < 1`, with `N` the population at t0 used in the fit and `E[.]` the Beta means. `"template"` (default) leaves the window's priors in place: the near-zero Beta(0.01, 99999.99) for (a), the data-based Beta for (b). `"seed"` gives E and I each the weak seeding prior Beta(`quiet_seed_shape1`, `quiet_seed_shape2`) instead: it stands in for undetected circulation or importation that the model has no mechanism for, so a single-location fit can still reproduce the later outbreak. Locations with no cases anywhere up to `config$date_stop`, and locations whose window-based priors imply at least one expected initial infection, are never changed.
+#' @param quiet_start What a "quiet-start" location gets. A location is a quiet start when it reports at least one observed or reconstructed (tier 1-2) case after the surveillance window, up to `config$date_stop` (the end of the data when `config$date_stop` is NULL), and EITHER (a) its window around t0 reports no cases (or is all NA), OR (b) the E/I priors the window gives imply fewer than one expected initial infection, `N * (E[prop_E] + E[prop_I]) < 1`, with `N` the population at t0 used in the fit and `E[.]` the Beta means. `"template"` (default) leaves the window's priors in place: the near-zero Beta(0.01, 99999.99) for (a), the data-based Beta for (b). `"seed"` gives E and I each the weak seeding prior Beta(`quiet_seed_shape1`, `quiet_seed_shape2`) instead: it stands in for undetected circulation or importation that the model has no mechanism for, so a single-location fit can still reproduce the later outbreak. Locations with no cases anywhere up to `config$date_stop`, and locations whose window-based priors imply at least one expected initial infection, are never changed.
 #' @param quiet_seed_shape1,quiet_seed_shape2 Beta shapes of the quiet-start seeding prior (default 1 and 1e5: mean 1e-5 of the population per compartment, mode at zero).
 #' @param verbose Print progress messages (default TRUE).
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
@@ -39,8 +51,10 @@
 #' @return A list with two main components:
 #' \describe{
 #'   \item{metadata}{List containing estimation details: description, version, date, t0,
-#'     lookback_days, lookahead_days, n_samples, method, quiet_start and
-#'     quiet_start_seeded (the locations given the seeding prior).}
+#'     lookback_days, lookahead_days, n_samples, method, quiet_start,
+#'     quiet_start_seeded (the locations given the seeding prior) and
+#'     imputed_window_fallback (the locations whose window had no tier 1-2
+#'     count and was read from country-level reconstructions).}
 #'   \item{parameters_location}{List with `prop_E_initial` and `prop_I_initial`, each containing:
 #'     \itemize{
 #'       \item parameter_name: Parameter identifier
@@ -140,7 +154,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      results <- list(
           metadata = list(
                description = "Initial E and I compartment estimates from surveillance data",
-               version = "1.2.0",
+               version = "1.3.0",
                date = Sys.Date(),
                t0 = t0,
                lookback_days = lookback_days,
@@ -148,6 +162,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                n_samples = n_samples,
                quiet_start = quiet_start,
                quiet_start_seeded = character(0),
+               imputed_window_fallback = character(0),
                method = "monte_carlo_backcalculation"
           ),
           parameters_location = list(
@@ -167,6 +182,9 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      # ---- Window & availability ----
      end_date <- t0 + lookahead_days - 1
      start_date <- t0 - lookback_days
+     tiered <- .est_initial_E_I_tier_filter(surveillance, start_date, end_date)
+     surveillance <- tiered$surveillance
+     results$metadata$imputed_window_fallback <- intersect(tiered$fallback, location_codes)
      surveillance_window <- surveillance[surveillance$date >= start_date &
                                               surveillance$date <= end_date, ]
      countries_with_data <- unique(surveillance_window$iso_code[
@@ -174,7 +192,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      ])
 
      # Locations that report cases after the window (up to date_stop): the
-     # candidates for the quiet-start seeding prior.
+     # candidates for the quiet-start seeding prior. Imputed rows outside the
+     # window were emptied above, so only tier 1-2 cases count.
      later_stop <- if (!is.null(config$date_stop)) as.Date(config$date_stop) else max(surveillance$date)
      later <- surveillance[surveillance$date > end_date & surveillance$date <= later_stop &
                                 !is.na(surveillance$cases) & surveillance$cases > 0, ]
@@ -339,8 +358,9 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 #'     (per-day survival \code{exp(-gamma_1)} for the symptomatic share
 #'     \code{sigma}, \code{exp(-gamma_2)} for the rest), plus the onsets the
 #'     window cannot see, filled in at the window's mean onset rate: those in
-#'     the last \code{tau_r} days before t0 (reported on or after t0) and those
-#'     older than the window.
+#'     the last \code{tau_r} days before t0 (reported on or after t0), those
+#'     on window days before t0 without a count, and those older than the
+#'     window.
 #'   \item \strong{E}: people infected before t0 whose onset comes after t0.
 #'     A reported case is already past E, so E is the stock in balance with the
 #'     window's mean onset rate \eqn{\lambda}:
@@ -349,12 +369,12 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 #'     \code{iota}).
 #' }
 #'
-#' @param cases Vector of daily suspected cholera cases (must be same length as dates)
+#' @param cases Vector of daily suspected cholera cases (must be same length as dates); NA marks a day without a report
 #' @param dates Vector of dates corresponding to cases (Date class)
 #' @param population Total population of the location (must be positive)
 #' @param t0 Target date for estimation (Date class)
 #' @param lookback_days Days of reports before t0 to use (default 60, must be positive)
-#' @param lookahead_days Days of reports from t0 onward that also enter the onset rate (default 0, non-negative). The onset rate is averaged over the whole window of \code{lookback_days + lookahead_days} days; only reports before t0 enter I directly (later ones are onsets that have not happened yet or that the rate fill-in already covers).
+#' @param lookahead_days Days of reports from t0 onward that also enter the onset rate (default 0, non-negative). The onset rate is averaged over the days of the window of \code{lookback_days + lookahead_days} days that carry a count (a day with NA, or with no row, is unobserved, not zero); only reports before t0 enter I directly (later ones are onsets that have not happened yet or that the rate fill-in already covers).
 #' @param sigma Symptomatic proportion (must be in (0,1])
 #' @param rho Reporting rate - proportion of symptomatic cases reported (must be in (0,1])
 #' @param chi Diagnostic positivity - proportion of suspected cases that are true cholera (must be in (0,1])
@@ -469,14 +489,20 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
   #
   # I(t0) sums the observed onsets that have not yet recovered, with the
   # engine's per-day survival exp(-gamma) for symptomatic (gamma_1) and
-  # asymptomatic (gamma_2) infections. Onsets outside the observed window are
+  # asymptomatic (gamma_2) infections. Onsets the window does not observe are
   # filled in at the same rate lambda: those in the last tau_r days before t0
-  # (reported on/after t0) and those older than the window (reported before
-  # it), which matter when the window is short relative to 1/gamma_1.
+  # (reported on/after t0), those on pre-t0 window days without a count, and
+  # those older than the window (reported before it), which matter when the
+  # window is short relative to 1/gamma_1.
   tau <- round(tau_r)
   total_cases <- sum(cases_filtered, na.rm = TRUE)
   onset_mult <- chi / (rho * sigma)
-  lambda <- total_cases * onset_mult / window_days   # all onsets per day
+  # A window day without a count (NA, or no row) is unobserved, not a zero, so
+  # the onset rate is the mean over the days that carry one: counting a missing
+  # reporting week as zeros halved the rate of a window with one week missing.
+  counted <- !is.na(cases_filtered)
+  daily <- tapply(cases_filtered[counted], as.character(dates_filtered[counted]), sum)
+  lambda <- total_cases * onset_mult / length(daily)   # all onsets per day
 
   if (verbose) {
     cat(sprintf("  Onset multiplier: chi/(rho\u00D7sigma) = %.2f\n", onset_mult))
@@ -487,12 +513,14 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
     sigma * exp(-gamma_1 * age) + (1 - sigma) * exp(-gamma_2 * age)
   }
 
-  # Observed onsets: report day t0 - j (j >= 1) -> onset age j + tau at t0.
+  # Onsets reported on window day t0 - j (j = 1..lookback_days) have age
+  # j + tau at t0; a window day before t0 without a count is filled at lambda.
   # Reports on or after t0 inform lambda only (onsets after t0, or within the
   # last tau days before it, which I_recent fills at lambda).
-  onset_age <- as.numeric(t0 - dates_filtered) + tau
-  onsets <- ifelse(is.na(cases_filtered) | dates_filtered >= t0, 0, cases_filtered) * onset_mult
-  I_observed <- sum(onsets * survival(onset_age))
+  ages <- seq_len(floor(lookback_days))
+  reported <- daily[as.character(t0 - ages)]
+  onsets <- ifelse(is.na(reported), lambda, reported * onset_mult)
+  I_window <- sum(onsets * survival(ages + tau))
 
   # Unobserved recent onsets: ages 1..tau
   I_recent <- if (tau >= 1) lambda * sum(survival(seq_len(tau))) else 0
@@ -502,7 +530,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
   I_older <- lambda * (sigma * tail_sum(gamma_1) + (1 - sigma) * tail_sum(gamma_2))
 
   E_total <- lambda / (-expm1(-iota))
-  I_total <- I_observed + I_recent + I_older
+  I_total <- I_window + I_recent + I_older
 
   # ---- Numerical stability and bounds checking ----
   E_total <- max(0, round(E_total))
@@ -574,6 +602,36 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
           metadata = list(data_available = FALSE, total_cases = NA_real_,
                           mean_count = 0, sd_count = 0, n_samples = n_samples,
                           message = message))
+}
+
+# Tier filter for the back-calculation (.surveillance_tier(): 1 observed,
+# 2 reconstructed WHO reports, 3 imputed). An imputed row is an AI Fourier
+# reconstruction: a year's reported total, or its residual after the observed
+# weeks, spread over the unobserved weeks along a seasonal shape. Its date is
+# not a report date, and its level can sit several-fold off the observed weeks
+# around it (2018 window: ETH ~300/week in December 2017 after an observed 61;
+# KEN ~290/week between observed 44 and 101; BDI 10-14/week between observed
+# zeros). Where a location's window [start_date, end_date] holds any tier 1-2
+# count, its imputed window days are emptied (unobserved). A window with no
+# tier 1-2 count keeps its country-level reconstructions (fourier_country_*),
+# which carry that country's own reported level; regional ones
+# (fourier_regional_*), a borrowed regional shape, never count. Imputed rows
+# outside the window are emptied too, so the quiet-start test sees tier 1-2
+# cases only. Returns list(surveillance, fallback = the locations whose window
+# kept imputed rows). Without a disaggregation_method column nothing changes.
+.est_initial_E_I_tier_filter <- function(surveillance, start_date, end_date) {
+     none <- list(surveillance = surveillance, fallback = character(0))
+     if (!"disaggregation_method" %in% names(surveillance)) return(none)
+     method <- as.character(surveillance$disaggregation_method)
+     imputed <- .surveillance_tier(method) == 3L & !is.na(surveillance$cases)
+     if (!any(imputed)) return(none)
+     in_window <- surveillance$date >= start_date & surveillance$date <= end_date
+     observed_window <- unique(surveillance$iso_code[in_window & !imputed &
+                                                          !is.na(surveillance$cases)])
+     keep <- imputed & in_window & !(surveillance$iso_code %in% observed_window) &
+          startsWith(method, "fourier_country")
+     surveillance$cases[imputed & !keep] <- NA
+     list(surveillance = surveillance, fallback = sort(unique(surveillance$iso_code[keep])))
 }
 
 # Is a location with cases later in the config window a quiet start? (a) its

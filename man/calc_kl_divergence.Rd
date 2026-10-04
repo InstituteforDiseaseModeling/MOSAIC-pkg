@@ -71,7 +71,7 @@ Before v0.100.0 both densities used unweighted bandwidths on one grid over
 the pooled range and the densities were renormalised as discrete
 probabilities, so a narrow P saturated near \code{log(n_points)}.
 
-Note that KL divergence is not symmetric: KL(P||Q) ≠ KL(Q||P).
+Note that KL divergence is not symmetric: KL(P||Q) != KL(Q||P).
 }
 \examples{
 # Example 1: Compare two normal distributions

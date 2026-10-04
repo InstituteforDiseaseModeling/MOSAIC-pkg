@@ -143,8 +143,8 @@
 #'
 #' @param longitude A numeric vector of longitudes for each location. Must be same length as location_name.
 #' @param latitude A numeric vector of latitudes for each location. Must be same length as location_name.
-#' @param mobility_omega Exponent weight for destination population in the gravity mobility model. Must be numeric ≥ 0.
-#' @param mobility_gamma Exponent weight for distance decay in the gravity mobility model. Must be numeric ≥ 0.
+#' @param mobility_omega Exponent weight for destination population in the gravity mobility model. Must be numeric and non-negative.
+#' @param mobility_gamma Exponent weight for distance decay in the gravity mobility model. Must be numeric and non-negative.
 #' @param tau_i Departure probability for each origin location (numeric vector of length(location_name) in \[0, 1\]).
 #'
 #' ## Force of Infection (human-to-human)

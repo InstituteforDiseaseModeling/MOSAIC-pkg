@@ -1228,11 +1228,12 @@ run_MOSAIC <- function(config,
   # bounds should rarely bind. The retired k_min floor bound in 27 of 28
   # estimable locations, which was the defect rather than a setting.
   .nb_bind <- sum(.nb_disp$table$status %in% "clamped_lower_bound", na.rm = TRUE)
+  .nb_near <- sum(.nb_disp$table$status %in% "near_lower_bound", na.rm = TRUE)
   .nb_noest <- sum(grepl("^no_estimate", .nb_disp$table$status), na.rm = TRUE)
   .nb_panel <- .nb_disp$table$location[.nb_disp$table$panel_trend %in% TRUE]
-  if (.nb_bind > 0 || .nb_noest > 0)
-    log_msg("NB dispersion: %d clamped at a hard bound, %d with no own estimate (%d cases from the panel trend%s), of %d location-channels -- see 2_calibration/diagnostics/nb_dispersion.csv",
-            .nb_bind, .nb_noest, length(.nb_panel),
+  if (.nb_bind > 0 || .nb_near > 0 || .nb_noest > 0)
+    log_msg("NB dispersion: %d clamped at a hard bound, %d near it, %d with no own estimate (%d cases from the panel trend%s), of %d location-channels -- see 2_calibration/diagnostics/nb_dispersion.csv",
+            .nb_bind, .nb_near, .nb_noest, length(.nb_panel),
             if (length(.nb_panel)) paste0(": ", paste(.nb_panel, collapse = ", ")) else "",
             nrow(.nb_disp$table))
   tryCatch({

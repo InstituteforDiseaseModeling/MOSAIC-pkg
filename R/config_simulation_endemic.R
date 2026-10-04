@@ -12,14 +12,14 @@
 #' @details
 #' | Aspect | Setting |
 #' | ------ | ------- |
-#' | **Time span** | 1 Jan 2020 – 31 Dec 2024 (≈ 1 826 days). |
+#' | **Time span** | 1 Jan 2020 – 31 Dec 2024 (about 1 826 days). |
 #' | **Locations** | “FOO” (8 k), “BAR” (12 k), “BAZ” (20 k). |
-#' | **Initial mix** | 10 % susceptible, 30 % first-dose vaccinated, ~60 % recovered, ~0.1 % infectious (≥ 1 exposed and ≥ 1 infectious each site). |
-#' | **Transmission** | Site-specific human-to-human β: **0.18**, **0.30**, **0.24**, plus environmental β of half those values, with a first-harmonic seasonal forcing of amplitude 0.2 and a random phase per site. |
-#' | **Environment** | Suitability ψ<sub>jt</sub> = 0.45 + annual 0.25 sin (2π t/365 + φ<sub>j</sub>) + quadrennial 0.15 sin (2π t/1 460 + φ<sub>j</sub>/2), with a random phase φ<sub>j</sub> per site; values clipped to \[0,1\] (shipped range ≈ 0.06–0.85). `psi_star_*` are the identity. |
+#' | **Initial mix** | 10 % susceptible, 30 % first-dose vaccinated, ~60 % recovered, ~0.1 % infectious (at least 1 exposed and at least 1 infectious each site). |
+#' | **Transmission** | Site-specific human-to-human \eqn{\beta}{beta}: **0.18**, **0.30**, **0.24**, plus environmental \eqn{\beta}{beta} of half those values, with a first-harmonic seasonal forcing of amplitude 0.2 and a random phase per site. |
+#' | **Environment** | Suitability \eqn{\psi_{jt}}{psi_jt} = 0.45 + annual 0.25 sin (2\eqn{\pi}{pi} t/365 + \eqn{\phi_j}{phi_j}) + quadrennial 0.15 sin (2\eqn{\pi}{pi} t/1 460 + \eqn{\phi_j}{phi_j}/2), with a random phase \eqn{\phi_j}{phi_j} per site; values clipped to \[0,1\] (shipped range about 0.06–0.85). `psi_star_*` are the identity. |
 #' | **Environmental half-life** | `decay_days_long = 365` days (~1 year); `decay_days_short = 1`. |
-#' | **Immunity waning** | ω₁ ≈ 1/180 d (0.0056), ω₂ ≈ 1/300 d (0.0033). |
-#' | **Mobility** | τ<sub>i</sub> = 0.005, 0.002, 0.006 per day. |
+#' | **Immunity waning** | \eqn{\omega_1 \approx 1/180}{omega_1 ~ 1/180} d (0.0056), \eqn{\omega_2 \approx 1/300}{omega_2 ~ 1/300} d (0.0033). |
+#' | **Mobility** | \eqn{\tau_i}{tau_i} = 0.005, 0.002, 0.006 per day. |
 #' | **Observed data** | `reported_cases` / `reported_deaths` hold one simulated realisation of the model itself (`run_simulation()` on this config), not real surveillance. |
 #' | **Seed** | `set.seed(999999999)` for full reproducibility. |
 #'

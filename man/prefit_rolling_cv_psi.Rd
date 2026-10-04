@@ -78,7 +78,7 @@ GAM behind the \code{emdat_flood_prob*} channels of the default
 
 \strong{Panel-window alignment (v7.4).} The leak-free panel's compile/GAM-fit
 window is deliberately aligned to the psi-LSTM \emph{training} window
-\eqn{[\code{fit_date_start}, T]}, NOT an arbitrary-wide (e.g. 2000->2027)
+[\code{fit_date_start}, T], NOT an arbitrary-wide (e.g. 2000->2027)
 span. Imputed hazard-probability magnitudes dilute when the compile window is
 wider than the LSTM fit window (more all-zero rows shrink the same event
 labels), so the hazard probabilities the LSTM ingests must be computed over

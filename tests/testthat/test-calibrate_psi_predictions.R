@@ -105,9 +105,9 @@ test_that("near-flat (low-variance) predictor falls back to identity (no ZAF-sty
 
 test_that("a fit that would collapse the amplitude falls back to identity (v0.102.0)", {
   # GMB/SEN/SWZ failure mode: a fit with enough variance to run, but outbreak
-  # weeks implying a near-zero slope. Up to v0.101.0 the map was blended toward
-  # identity until it sat on the 0.5x amplitude floor; the slope is not
-  # identified, so the fit is now not applied at all.
+  # weeks implying a near-zero slope, clamped to 0.25, below amp_range[1]. Up to
+  # v0.101.0 the map was blended toward identity until it sat on the 0.5x
+  # amplitude floor; the fit is now not applied at all.
   set.seed(2)
   n     <- 80
   dates <- seq(as.Date("2018-01-01"), by = "week", length.out = n)
@@ -119,10 +119,14 @@ test_that("a fit that would collapse the amplitude falls back to identity (v0.10
   pred_df <- data.frame(iso_code = "GMB", date = dates, pred_smooth = pred)
   obs_df  <- data.frame(iso_code = "GMB", date = dates, transmission_intensity = obs)
 
-  expect_warning(
-    out <- calibrate_psi_predictions(pred_df, obs_df, max(dates),
-                                     slope_range = c(0.25, 4), amp_range = c(0.5, 2)),
-    "\\(GMB\\).*identity")
+  # Exactly one warning: the collapse is not also reported as a guarded fit.
+  w <- character(0)
+  out <- withCallingHandlers(
+    calibrate_psi_predictions(pred_df, obs_df, max(dates),
+                              slope_range = c(0.25, 4), amp_range = c(0.5, 2)),
+    warning = function(cnd) { w <<- c(w, conditionMessage(cnd)); invokeRestart("muffleWarning") })
+  expect_length(w, 1L)
+  expect_match(w, "\\(GMB\\).*below amp_range\\[1\\] = 0.5.*identity")
 
   row <- attr(out, "calibration_diagnostics")
   row <- row[row$iso_code == "GMB", ]
@@ -174,6 +178,45 @@ test_that("negative: an identified slope between the floor and 1 is still applie
   expect_identical(row$status, "fit")
   expect_equal(row$amp_ratio, a, tolerance = 1e-6)
   expect_equal(out$pred_bias_corrected, plogis(a * qlogis(pred) + b), tolerance = 1e-6)
+})
+
+# Noise-free fixture: logit(obs) = a * logit(pred) - 0.4 exactly, so the
+# outbreak-week slope is a and the corrected/input logit-sd ratio is a.
+.psi_boundary <- function(a, ...) {
+  dates <- seq(as.Date("2019-01-03"), by = "week", length.out = 90)
+  pred  <- plogis(seq(-4, 1, length.out = 90))
+  pred_df <- data.frame(iso_code = "AAA", date = dates, pred_smooth = pred)
+  obs_df  <- data.frame(iso_code = "AAA", date = dates,
+                        transmission_intensity = plogis(a * qlogis(pred) - 0.4))
+  w <- character(0)
+  out <- withCallingHandlers(calibrate_psi_predictions(pred_df, obs_df, max(dates), ...),
+                             warning = function(cnd) {
+                               w <<- c(w, conditionMessage(cnd)); invokeRestart("muffleWarning")
+                             })
+  list(out = out, row = attr(out, "calibration_diagnostics"), pred = pred, warnings = w)
+}
+
+test_that("the floor is a cutoff at amp_range[1] on the clamped slope", {
+  below <- .psi_boundary(0.45)
+  expect_identical(below$row$status, "collapsed")
+  expect_equal(below$row$slope, 0.45, tolerance = 1e-8)
+  expect_identical(below$out$pred_bias_corrected, below$pred)
+  expect_length(below$warnings, 1L)
+  above <- .psi_boundary(0.55)
+  expect_identical(above$row$status, "fit")
+  expect_equal(above$row$amp_ratio, 0.55, tolerance = 1e-6)
+  expect_equal(above$out$pred_bias_corrected, plogis(0.55 * qlogis(above$pred) - 0.4),
+               tolerance = 1e-6)
+  expect_length(above$warnings, 0L)
+})
+
+test_that("the floor follows amp_range[1], not a fixed 0.5", {
+  low_floor <- .psi_boundary(0.4, amp_range = c(0.3, 2))
+  expect_identical(low_floor$row$status, "fit")
+  expect_equal(low_floor$row$amp_ratio, 0.4, tolerance = 1e-6)
+  expect_length(low_floor$warnings, 0L)
+  # the same fit collapses under the default floor
+  expect_identical(.psi_boundary(0.4)$row$status, "collapsed")
 })
 
 test_that("negative: an inflating fit is still shrunk to the ceiling, not reset to identity", {

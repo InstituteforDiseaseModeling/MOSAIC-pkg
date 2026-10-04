@@ -22,7 +22,7 @@ est_initial_E_I_location(
 )
 }
 \arguments{
-\item{cases}{Vector of daily suspected cholera cases (must be same length as dates)}
+\item{cases}{Vector of daily suspected cholera cases (must be same length as dates); NA marks a day without a report}
 
 \item{dates}{Vector of dates corresponding to cases (Date class)}
 
@@ -32,7 +32,7 @@ est_initial_E_I_location(
 
 \item{lookback_days}{Days of reports before t0 to use (default 60, must be positive)}
 
-\item{lookahead_days}{Days of reports from t0 onward that also enter the onset rate (default 0, non-negative). The onset rate is averaged over the whole window of \code{lookback_days + lookahead_days} days; only reports before t0 enter I directly (later ones are onsets that have not happened yet or that the rate fill-in already covers).}
+\item{lookahead_days}{Days of reports from t0 onward that also enter the onset rate (default 0, non-negative). The onset rate is averaged over the days of the window of \code{lookback_days + lookahead_days} days that carry a count (a day with NA, or with no row, is unobserved, not zero); only reports before t0 enter I directly (later ones are onsets that have not happened yet or that the rate fill-in already covers).}
 
 \item{sigma}{Symptomatic proportion (must be in (0,1])}
 
@@ -73,8 +73,9 @@ reporting chain: a report on day d is a symptomatic onset on day
 (per-day survival \code{exp(-gamma_1)} for the symptomatic share
 \code{sigma}, \code{exp(-gamma_2)} for the rest), plus the onsets the
 window cannot see, filled in at the window's mean onset rate: those in
-the last \code{tau_r} days before t0 (reported on or after t0) and those
-older than the window.
+the last \code{tau_r} days before t0 (reported on or after t0), those
+on window days before t0 without a count, and those older than the
+window.
 \item \strong{E}: people infected before t0 whose onset comes after t0.
 A reported case is already past E, so E is the stock in balance with the
 window's mean onset rate \eqn{\lambda}:

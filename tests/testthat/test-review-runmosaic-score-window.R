@@ -79,22 +79,25 @@ test_that("peak timing skips a peak whose window is masked instead of returning 
 })
 
 test_that("peak timing with a peak inside the masked cases prefix keeps the LL finite", {
-  fx <- .sw_fixture(idx_cases = 200L, idx_deaths = 31L)
+  # The cases prefix [31, idx_cases - 1] is masked and ends 114 days after the
+  # first catalogued MOZ peak of the config window, so that peak sits inside it:
+  # from 2023-01-01 the 2023-03-27 peak is day 86 and idx_cases is 200, from
+  # 2018-01-01 the 2019-04-08 peak is day 463 and idx_cases is 577.
+  fx2 <- .sw_fixture(idx_cases = 31L, idx_deaths = 31L)
+  pk_day <- as.integer(as.Date(fx2$cfg$epidemic_peaks$peak_date) - as.Date(fx2$cfg$date_start)) + 1L
+  pk_day <- sort(pk_day[pk_day > 31L & pk_day + 114L <= fx2$nT])
+  skip_if(!length(pk_day), "no catalogued MOZ peak inside the config window")
+  idx_c <- pk_day[1] + 114L
+  fx <- .sw_fixture(idx_cases = idx_c, idx_deaths = 31L)
   fx$ls$weight_peak_timing <- 1
-  # MOZ has a catalogued peak on 2023-03-27 (day 86), inside the cases prefix.
-  pk <- MOSAIC::epidemic_peaks
-  pk <- pk[pk$iso_code == "MOZ", ]
-  d86 <- as.Date(fx$cfg$date_start) + 85L
-  skip_if_not(any(abs(as.numeric(as.Date(pk$peak_date) - d86)) <= 14),
-              "fixture peak moved out of the masked prefix")
   base <- round(fx$oc * 1.1) + 1
   ll_base <- .sw_worker_ll(fx, base)
   expect_true(is.finite(ll_base))
   perturbed <- base
-  perturbed[, 31:199] <- perturbed[, 31:199] * 50 + 500
+  prefix <- 31:(idx_c - 1L)
+  perturbed[, prefix] <- perturbed[, prefix] * 50 + 500
   expect_identical(ll_base, .sw_worker_ll(fx, perturbed))
   # The equal-start control still scores that peak for cases.
-  fx2 <- .sw_fixture(idx_cases = 31L, idx_deaths = 31L)
   fx2$ls$weight_peak_timing <- 1
   expect_true(is.finite(.sw_worker_ll(fx2, base)))
 })

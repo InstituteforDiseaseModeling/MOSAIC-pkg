@@ -51,13 +51,14 @@ Poisson rule above still uses every tier. Default \code{NULL} (all weeks).}
 \item{panel_trend}{Optional list with numeric \code{intercept} and
 \code{slope}: a cross-location trend \code{log k = intercept + slope *
 log(mean weekly count)} taken by a location without a usable estimate of
-its own (no estimate, or a fit clamped at the lower bound; see Details).
-\code{run_MOSAIC()} supplies the cases trend fitted on config_default with
-\code{burn_in_days = 45} (\code{MOSAIC:::.NB_DISP_PANEL_TREND}), whatever
-the run's burn-in; refitted on the window of the control default (30) it
-barely moves (BFA, CIV, CMR, ZAF, UGA 0.88, 0.97, 1.63, 1.09, 0.95 instead
-of 0.89, 0.98, 1.65, 1.10, 0.96), far inside the trend's residual SD of
-1.19 on log k. Default \code{NULL}.}
+its own (no estimate, or a fit clamped at or near the lower bound; see
+Details). \code{run_MOSAIC()} supplies the cases trend fitted on
+config_default with \code{burn_in_days = 45}
+(\code{MOSAIC:::.NB_DISP_PANEL_TREND}), whatever the run's burn-in;
+refitted on the window of the control default (30) it moves the locations
+taking it by up to 0.32 on log k (BFA, 1.06 instead of 0.77 on
+config_default v7.0), inside the trend's residual SD of 0.93 on log k.
+Default \code{NULL}.}
 }
 \value{
 A data.frame with one row per location: \code{location},
@@ -75,8 +76,9 @@ weekly count over all scored weeks), \code{k_raw}, \code{se},
 \code{MASS::glm.nb} fails on a rung whose Poisson mean converges,
 \code{theta} is estimated by \code{MASS::theta.ml} at that Poisson mean.
 \code{status} records this fallback only as \code{ok_theta_ml_at_full_df},
-which ranks below \code{clamped_lower_bound} and
-\code{ok_not_identified}: a clamped or unidentified row does not show
+which ranks below \code{clamped_lower_bound}, \code{near_lower_bound}
+and \code{ok_not_identified}: a clamped, near-bound or unidentified row
+does not show
 whether its \code{theta} came from the fallback (\code{rung} and
 \code{trend_df} give the mean model it was estimated at).
 }
@@ -120,11 +122,25 @@ several times less sensitive to the level (on UGA's two observed years a
 twofold level error costs 3.1 nats under the daily cases rule and 0.5 under
 the weekly one, against 22 and 4.6 at the trend's 0.96), and the weekly
 observation-level predictive puts at least half its mass on 0 for any weekly
-mean up to 102. The row keeps
-\code{status = "clamped_lower_bound"} and \code{k_raw} (the fit) with
+mean up to 102.
+
+A fit within its own 95\% interval of the bound, \code{k_raw * exp(-1.96 *
+se / k_raw) <= 0.1} (status \code{near_lower_bound}), is censored the same
+way: the data cannot tell it from a clamped fit, and without the rule a
+location's \code{k} would jump tenfold as its fit crossed 0.1. UGA on
+config_default v7.0 is the case: its fit is 0.117 (interval 0.079 to 0.173),
+its 2019-2027 observed weeks -- isolated spikes between observed zeros, and
+outbreak edges -- clamp on their own, and its fully observed 2018 outbreak
+alone gives 1.36; on synthetic series with its observed outbreak pattern as
+the mean, the fit returns about 0.12 for a true \code{k} of 0.3, 1, 5 or a
+Poisson process alike. At 0.117 a twofold level error costs 13.5 nats of the
+daily cases score over the 2018 window, against 118 at the trend's 1.34.
+
+A censored row keeps its \code{status} and \code{k_raw} (the fit: the bound
+for a clamped fit, the estimate for a near-bound one) with
 \code{panel_trend = TRUE} (the \code{k} used). Without \code{panel_trend} a
-clamped fit keeps the bound, shrunk toward the run's own trend when five or
-more locations have an estimate.
+censored fit keeps \code{k_raw}, shrunk toward the run's own trend when five
+or more locations have an estimate.
 }
 \examples{
 \dontrun{

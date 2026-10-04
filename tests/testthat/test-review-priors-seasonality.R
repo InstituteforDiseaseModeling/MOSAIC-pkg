@@ -29,10 +29,12 @@ test_that("the human-transmission envelope is evaluated at calendar day-of-year"
 
 test_that("sim_params sets season_t0 from date_start", {
      cfg <- MOSAIC::config_default
+     # Both starts keep the window length, so the time-varying matrices still fit
+     nt <- as.integer(as.Date(cfg$date_stop) - as.Date(cfg$date_start))
      cfg$date_start <- "2023-01-01"
+     cfg$date_stop <- as.character(as.Date("2023-01-01") + nt)
      expect_identical(sim_params(cfg, components = SIM_PIPELINE)$season_t0, 0L)
      # A 1 July start: day-of-year 182, so tick 1 is t = 182
-     nt <- as.integer(as.Date(cfg$date_stop) - as.Date(cfg$date_start))
      cfg$date_start <- "2023-07-01"
      cfg$date_stop <- as.character(as.Date("2023-07-01") + nt)
      expect_identical(sim_params(cfg, components = SIM_PIPELINE)$season_t0, 181L)

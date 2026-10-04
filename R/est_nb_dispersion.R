@@ -31,6 +31,12 @@
 .NB_DISP_K_LO <- 0.1
 .NB_DISP_K_HI <- 1e5
 
+# A fit whose log-scale 95% interval reaches the lower bound,
+# k * exp(-z * se / k) <= .NB_DISP_K_LO, cannot be told apart from a clamped one
+# and is censored like it (status near_lower_bound; see est_nb_dispersion()).
+# The interval is the delta-method one the shrinkage uses, Var(log k) ~ (se/k)^2.
+.NB_DISP_NEAR_BOUND_Z <- stats::qnorm(0.975)
+
 # Minimum evidence required before a dispersion estimate is returned at all.
 # MIN_TOTAL follows edgeR's filterByExpr min.total.count = 15.
 .NB_DISP_MIN_WEEKS   <- 20L
@@ -48,31 +54,38 @@
 # estimate cannot trip the rule. The Fisher information about log k per weekly
 # count is at most k^2 * trigamma(k), below 1 + pi^2 / 6 for k <= 1, so se / k
 # is at least 1 / sqrt(2.64 n): 0.04 at 200 weeks, 0.006 at 10,000 (identified
-# fits on config_default: 0.11 to 0.61). Below the lower bound the rule therefore
-# needs theta under about 2e-4 at 185 weeks -- the zero boundary.
+# fits on config_default v7.0: 0.08 to 0.64). Below the lower bound the rule
+# therefore needs theta under about 2e-4 at 185 weeks -- the zero boundary.
 .NB_DISP_SE_DEGENERATE <- 1e-4
 
 # Cross-country trend of the weekly cases dispersion on the series level,
 # log k = intercept + slope * log(mean weekly cases), taken by a location whose
 # own fit gives no usable estimate (see est_nb_dispersion(), argument
-# panel_trend). Fitted on 2026-10-01 by .nb_disp_panel_trend_fit() on
-# config_default v6.1, reported_cases on observed (tier-1) weeks of
-# reported_tier, scored from day 46 (burn_in_days = 45, the v0.100.1 production
-# setting): 22 locations with an estimate of their own, residual SD 1.19 on log
-# k, slope 0.22 +/- 0.14 -- a flat, noisy panel, so the trend is a prior centre
-# of about 1 rather than a precise prediction. On config_default v6.1 it gives
-# BFA 0.89, CIV 0.98, ZAF 1.10 (too few observed weeks) and CMR 1.65 (its fit
-# collapses), the four locations without an estimate of their own there, and
-# UGA 0.96 (its fit is clamped at the lower bound, which is censoring rather
-# than a measurement; see est_nb_dispersion()). (The v6.0 fit, on every week:
-# intercept -0.195, slope 0.143, SD 1.56, n 23; CMR, UGA and ZAF at 1.41, 1.00
-# and 1.20.)
+# panel_trend). Fitted on 2026-10-03 by .nb_disp_panel_trend_fit() on
+# config_default v7.0 (window from 2018-01-01), reported_cases on observed
+# (tier-1) weeks of reported_tier, scored from day 46 (burn_in_days = 45, the
+# production setting): 22 locations with an estimate of their own, residual SD
+# 0.93 on log k, slope 0.23 +/- 0.10 -- a flat, noisy panel, so the trend is a
+# prior centre of about 1 rather than a precise prediction. On config_default
+# v7.0 it gives BFA 0.77 and ZAF 1.11 (too few observed weeks), NER 1.72 and
+# ZWE 2.49 (their fits collapse) and UGA 1.34 (its fit, 0.117, is within its 95%
+# interval of the lower bound), the five locations without a usable estimate of
+# their own there. No v7.0 fit is clamped at the lower bound; a clamped or
+# near-bound fit takes the trend because it is censoring rather than a
+# measurement, and is left out of fitting it (see est_nb_dispersion()). (With
+# UGA's fit in, as the 0.103.0 development builds had it: intercept -0.512,
+# slope 0.257, SD 1.04, n 23. v6.1, 2023-01-01 window: intercept -0.355, slope
+# 0.220, SD 1.19, n 22; BFA, CIV and ZAF too few observed weeks, CMR collapsed,
+# UGA clamped. v6.0, on every week: intercept -0.195, slope 0.143, SD 1.56,
+# n 23.)
 #
 # The constants assume burn_in_days = 45; run_MOSAIC() applies them whatever the
 # run's burn-in. Refitted from day 31 (the control default burn_in_days = 30) the
-# trend is intercept -0.37, slope 0.22, residual SD 1.18 on 22 locations, which
-# gives BFA/CIV/CMR/ZAF/UGA 0.88/0.97/1.63/1.09/0.95: differences of at most
-# 0.014 on log k.
+# trend is intercept 0.03, slope 0.15, residual SD 1.11 on 24 locations (NER
+# and ZWE have an estimate of their own from day 31; TGO does not, and UGA's is
+# near the bound there too), which gives BFA/TGO/UGA/ZAF 1.06/1.20/1.54/1.34
+# against 0.77/0.93/1.37/1.11 from the constants: differences of up to 0.32 on
+# log k (BFA; at most 0.014 on v6.1).
 #
 # Rebuild recipe. The values depend on config_default, and three tests in
 # test-est_nb_dispersion_panel.R read it:
@@ -86,11 +99,11 @@
 #      locations and k from that fit's table (observed weeks only once the
 #      config carries reported_tier) and need no edit, but must pass after the
 #      constants are pasted.
-.NB_DISP_PANEL_TREND <- list(intercept = -0.355403044494224,
-                             slope     = 0.220326123734482,
-                             sigma     = 1.19345523383214,
+.NB_DISP_PANEL_TREND <- list(intercept = -0.293677942825664,
+                             slope     = 0.226379074615144,
+                             sigma     = 0.925495207238152,
                              n         = 22L,
-                             source    = "config_default v6.1, reported_cases, observed weeks, burn_in_days 45")
+                             source    = "config_default v7.0, reported_cases, observed weeks, burn_in_days 45")
 
 # Weekly blocks must never be anchored on the first observation: whenever a
 # series starts off the reporting-week boundary, anchoring there splits every
@@ -160,8 +173,9 @@
 #' weekly total the config was built from: exactly where that total is a whole
 #' count, and within half a case where it is a fractional imputed total (79
 #' weeks in config_default v6.1). Blocks are counted from a fixed Monday
-#' (1970-01-05), never from the first day of the grid: config_default starts on
-#' a Sunday, whose block is a one-day partial week.
+#' (1970-01-05), never from the first day of the grid, so a grid that starts
+#' mid-week opens with a partial week: config_default v6.x started on Sunday
+#' 2023-01-01, a one-day partial week; v7.0 starts on Monday 2018-01-01.
 #'
 #' A week cut by the start or end of the grid is a partial week, and the two
 #' consumers treat it differently, so each states its choice through
@@ -416,12 +430,44 @@
      out$identified <- se < th
      out$k <- min(max(th, .NB_DISP_K_LO), .NB_DISP_K_HI)
      out$status <- if (th < .NB_DISP_K_LO) "clamped_lower_bound"
+                   else if (.nb_disp_near_bound(th, se)) "near_lower_bound"
                    else if (!out$identified) "ok_not_identified"
                    else if (theta_ml_fb) "ok_theta_ml_at_full_df"
                    else if (rung > 1L) "ok_reduced_mean_model"
                    else "ok"
      out
 }
+
+#' Whether a dispersion estimate is within its 95% interval of the lower bound
+#'
+#' \code{TRUE} where the log-scale 95% interval of \code{k},
+#' \code{k * exp(-1.96 * se / k)}, reaches the lower bound of 0.1: such a fit
+#' cannot be told apart from one clamped at the bound (see
+#' \code{\link{est_nb_dispersion}}).
+#'
+#' @param k Numeric vector of dispersion estimates.
+#' @param se Numeric vector of their standard errors.
+#' @return Logical vector; \code{FALSE} where \code{k} or \code{se} is not
+#'   finite.
+#' @keywords internal
+.nb_disp_near_bound <- function(k, se) {
+     ok <- is.finite(k) & is.finite(se) & k > 0
+     out <- rep(FALSE, length(k))
+     out[ok] <- log(k[ok]) - .NB_DISP_NEAR_BOUND_Z * se[ok] / k[ok] <= log(.NB_DISP_K_LO)
+     out
+}
+
+#' Whether a dispersion fit is censored at the lower bound
+#'
+#' A fit clamped at the lower bound (status \code{clamped_lower_bound}) or
+#' within its 95% interval of it (\code{near_lower_bound}) is censored, not a
+#' measurement: it takes the panel trend when one is supplied, and is left out
+#' of fitting a trend.
+#'
+#' @param status Character vector of fit statuses.
+#' @return Logical vector.
+#' @keywords internal
+.nb_disp_censored <- function(status) status %in% c("clamped_lower_bound", "near_lower_bound")
 
 #' Moment estimate of NB dispersion about a fitted Poisson mean
 #'
@@ -468,8 +514,9 @@
 #'   location's own estimate by its precision.
 #' @param identified Logical vector; unidentified estimates carry no usable
 #'   precision and lean on the trend.
-#' @param clamped Logical vector; clamped estimates are censored, so they are
-#'   shrunk toward the trend but excluded from fitting it.
+#' @param clamped Logical vector; estimates censored at or near the lower bound
+#'   (\code{.nb_disp_censored()}) are shrunk toward the trend but excluded from
+#'   fitting it.
 #' @return List with \code{k} (shrunk vector), \code{trend}, \code{sigma} and
 #'   counts.
 #' @keywords internal
@@ -581,8 +628,8 @@
 #' Estimates each location's cases dispersion on the scored window (from day
 #' \code{burn_in_days + 1}, observed weeks only when the config carries
 #' \code{reported_tier}), then regresses log k on log mean weekly cases over the
-#' locations with an estimate of their own: finite, not at a bound, not
-#' collapsed. Used to derive \code{.NB_DISP_PANEL_TREND}.
+#' locations with an estimate of their own: finite, not at or near the lower
+#' bound, not collapsed. Used to derive \code{.NB_DISP_PANEL_TREND}.
 #'
 #' @param config A config with \code{reported_cases}, \code{date_start},
 #'   \code{location_name} and optionally \code{reported_cases_weight} and
@@ -600,7 +647,7 @@
                               date_start = as.Date(config$date_start) + keep[1] - 1L,
                               location_name = config$location_name, shrink = FALSE,
                               obs_tier = sl(config$reported_tier), panel_trend = NULL)
-     ok <- is.finite(tab$k_raw) & !(tab$status %in% "clamped_lower_bound") &
+     ok <- is.finite(tab$k_raw) & !.nb_disp_censored(tab$status) &
           is.finite(tab$mean_weekly) & tab$mean_weekly > 0
      if (sum(ok) < 3L) stop("too few locations with a dispersion estimate to fit a panel trend.")
      lk <- log(tab$k_raw[ok]); lm_ <- log(tab$mean_weekly[ok])
@@ -650,11 +697,25 @@
 #' twofold level error costs 3.1 nats under the daily cases rule and 0.5 under
 #' the weekly one, against 22 and 4.6 at the trend's 0.96), and the weekly
 #' observation-level predictive puts at least half its mass on 0 for any weekly
-#' mean up to 102. The row keeps
-#' \code{status = "clamped_lower_bound"} and \code{k_raw} (the fit) with
+#' mean up to 102.
+#'
+#' A fit within its own 95% interval of the bound, \code{k_raw * exp(-1.96 *
+#' se / k_raw) <= 0.1} (status \code{near_lower_bound}), is censored the same
+#' way: the data cannot tell it from a clamped fit, and without the rule a
+#' location's \code{k} would jump tenfold as its fit crossed 0.1. UGA on
+#' config_default v7.0 is the case: its fit is 0.117 (interval 0.079 to 0.173),
+#' its 2019-2027 observed weeks -- isolated spikes between observed zeros, and
+#' outbreak edges -- clamp on their own, and its fully observed 2018 outbreak
+#' alone gives 1.36; on synthetic series with its observed outbreak pattern as
+#' the mean, the fit returns about 0.12 for a true \code{k} of 0.3, 1, 5 or a
+#' Poisson process alike. At 0.117 a twofold level error costs 13.5 nats of the
+#' daily cases score over the 2018 window, against 118 at the trend's 1.34.
+#'
+#' A censored row keeps its \code{status} and \code{k_raw} (the fit: the bound
+#' for a clamped fit, the estimate for a near-bound one) with
 #' \code{panel_trend = TRUE} (the \code{k} used). Without \code{panel_trend} a
-#' clamped fit keeps the bound, shrunk toward the run's own trend when five or
-#' more locations have an estimate.
+#' censored fit keeps \code{k_raw}, shrunk toward the run's own trend when five
+#' or more locations have an estimate.
 #'
 #' @param obs Numeric matrix of observations, \code{n_locations x n_time_steps},
 #'   on a daily grid.
@@ -680,13 +741,14 @@
 #' @param panel_trend Optional list with numeric \code{intercept} and
 #'   \code{slope}: a cross-location trend \code{log k = intercept + slope *
 #'   log(mean weekly count)} taken by a location without a usable estimate of
-#'   its own (no estimate, or a fit clamped at the lower bound; see Details).
-#'   \code{run_MOSAIC()} supplies the cases trend fitted on config_default with
-#'   \code{burn_in_days = 45} (\code{MOSAIC:::.NB_DISP_PANEL_TREND}), whatever
-#'   the run's burn-in; refitted on the window of the control default (30) it
-#'   barely moves (BFA, CIV, CMR, ZAF, UGA 0.88, 0.97, 1.63, 1.09, 0.95 instead
-#'   of 0.89, 0.98, 1.65, 1.10, 0.96), far inside the trend's residual SD of
-#'   1.19 on log k. Default \code{NULL}.
+#'   its own (no estimate, or a fit clamped at or near the lower bound; see
+#'   Details). \code{run_MOSAIC()} supplies the cases trend fitted on
+#'   config_default with \code{burn_in_days = 45}
+#'   (\code{MOSAIC:::.NB_DISP_PANEL_TREND}), whatever the run's burn-in;
+#'   refitted on the window of the control default (30) it moves the locations
+#'   taking it by up to 0.32 on log k (BFA, 1.06 instead of 0.77 on
+#'   config_default v7.0), inside the trend's residual SD of 0.93 on log k.
+#'   Default \code{NULL}.
 #'
 #' @importFrom splines ns
 #'
@@ -705,8 +767,9 @@
 #'   \code{MASS::glm.nb} fails on a rung whose Poisson mean converges,
 #'   \code{theta} is estimated by \code{MASS::theta.ml} at that Poisson mean.
 #'   \code{status} records this fallback only as \code{ok_theta_ml_at_full_df},
-#'   which ranks below \code{clamped_lower_bound} and
-#'   \code{ok_not_identified}: a clamped or unidentified row does not show
+#'   which ranks below \code{clamped_lower_bound}, \code{near_lower_bound}
+#'   and \code{ok_not_identified}: a clamped, near-bound or unidentified row
+#'   does not show
 #'   whether its \code{theta} came from the fallback (\code{rung} and
 #'   \code{trend_df} give the mean model it was estimated at).
 #'
@@ -800,17 +863,21 @@ est_nb_dispersion <- function(obs,
 
      # A location without a usable estimate of its own takes the panel trend at
      # its level, at every scale (a single-location run has no panel of its own
-     # to borrow from): no estimate (status no_estimate_*), or a fit clamped at
-     # the lower bound. The clamp is censoring, not a measurement: where the few
-     # non-zero observed weeks are mostly the edges of short outbreaks whose
-     # middles are reconstructed (UGA on config_default v6.1), the fit returns
-     # the bound whatever the true k (Poisson, 1 or 5 on synthetic series of that
-     # shape), and at the bound the cases score is several times less sensitive
-     # to the level. The panel fit already leaves clamped fits out. `status`
-     # keeps describing the fit and `panel_trend` the k used. The rest go through
-     # shrinkage among themselves, so a location routed here is never shrunk.
+     # to borrow from): no estimate (status no_estimate_*), or a fit censored at
+     # the lower bound -- clamped there, or within its 95% interval of it
+     # (.nb_disp_censored()). The clamp is censoring, not a measurement: where the
+     # few non-zero observed weeks are mostly the edges of short outbreaks whose
+     # middles are reconstructed, or isolated spikes between observed zeros (UGA
+     # on config_default v6.1 and v7.0), the fit returns about the bound whatever
+     # the true k (Poisson, 1 or 5 on synthetic series of that shape), and near
+     # the bound the cases score is several times less sensitive to the level. A
+     # fit the data cannot tell from the bound is censored too; otherwise k would
+     # jump tenfold as the fit crossed 0.1. The panel fit already leaves censored
+     # fits out. `status` keeps describing the fit and `panel_trend` the k used.
+     # The rest go through shrinkage among themselves, so a location routed here
+     # is never shrunk.
      use_panel <- if (is.null(panel_trend)) rep(FALSE, n_loc) else
-          (grepl("^no_estimate", res$status) | res$status %in% "clamped_lower_bound") &
+          (grepl("^no_estimate", res$status) | .nb_disp_censored(res$status)) &
           is.finite(res$mean_weekly) & res$mean_weekly > 0
      res$panel_trend <- use_panel
      res$k <- NA_real_
@@ -821,7 +888,7 @@ est_nb_dispersion <- function(obs,
           if (shrink) {
                sh <- .nb_disp_shrink(res$mean_weekly[own], res$k_raw[own], se = res$se[own],
                                      identified = res$identified[own],
-                                     clamped = res$status[own] %in% "clamped_lower_bound")
+                                     clamped = .nb_disp_censored(res$status[own]))
                res$k[own] <- sh$k
                attr(res, "shrinkage") <- sh[c("sigma", "n_fit", "n_inherit", "n_poisson", "median_weight")]
           } else {
@@ -839,9 +906,9 @@ est_nb_dispersion <- function(obs,
      if (verbose) {
           fin <- is.finite(res$k)
           message(sprintf(
-               "est_nb_dispersion: %d locations | %d estimated (median k = %.2f) | %d Poisson | %d at a bound | %d unidentified | %d from the panel trend",
+               "est_nb_dispersion: %d locations | %d estimated (median k = %.2f) | %d Poisson | %d at or near the lower bound | %d unidentified | %d from the panel trend",
                n_loc, sum(fin), stats::median(res$k[fin]), sum(is.infinite(res$k)),
-               sum(res$status == "clamped_lower_bound", na.rm = TRUE),
+               sum(.nb_disp_censored(res$status)),
                sum(res$status == "ok_not_identified", na.rm = TRUE), sum(use_panel)))
      }
      res
@@ -863,10 +930,12 @@ est_nb_dispersion <- function(obs,
 #' The estimate uses observed weeks only when the config carries
 #' \code{reported_tier} (\code{\link{est_nb_dispersion}}, argument
 #' \code{obs_tier}); without it every week enters the fit, as before that field
-#' existed. A cases location whose fit gives no estimate, or is clamped at the
-#' lower bound, takes the shipped panel trend (\code{.NB_DISP_PANEL_TREND},
-#' fitted at \code{burn_in_days = 45}) at every scale. Deaths take no panel
-#' trend (a clamped deaths fit keeps the bound): \code{run_MOSAIC()} scores deaths
+#' existed. A cases location whose fit gives no estimate, or is clamped at or
+#' near the lower bound, takes the shipped panel trend
+#' (\code{.NB_DISP_PANEL_TREND}, fitted at \code{burn_in_days = 45}) at every
+#' scale. Deaths take no panel trend: a clamped deaths fit keeps the bound and a
+#' near-bound one keeps its (shrunk) estimate, and both are left out of the
+#' deaths shrinkage-trend fit. \code{run_MOSAIC()} scores deaths
 #' with the reported CFR integrated out, so their NB dispersion is a diagnostic
 #' (and the dispersion of a standalone deaths NB core). A deaths location whose
 #' observed weeks alone are too few is estimated from every week

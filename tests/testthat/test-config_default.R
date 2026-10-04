@@ -77,3 +77,37 @@ test_that("make_simulation_config validation: unknown iso_code is a hard error (
   )
 })
 
+
+test_that("the shipped config_default and priors_default are one build", {
+  # A window move needs two priors passes (est_initial_V1_V2() divides by the
+  # installed config's populations), so a config built against the wrong pass of
+  # the priors, or priors built for another window, must not ship.
+  cfg <- MOSAIC::config_default
+  pri <- MOSAIC::priors_default
+  expect_identical(as.character(pri$metadata$build_date_start), as.character(cfg$date_start))
+
+  # The config's initial conditions are the priors' Beta means, normalised so each
+  # location's six proportions sum to 1: within a few percent of the means for the
+  # large compartments (v7.0: 0.9966-1.0165). The first pass of the 2023 -> 2018
+  # move left V1 x1.11-1.19 off; E and I are tiny counts and round too coarsely.
+  bmean <- function(par, iso) {
+    p <- pri$parameters_location[[par]]$location[[iso]]$parameters
+    p$shape1 / (p$shape1 + p$shape2)
+  }
+  for (comp in c("R", "V1", "V2", "S")) {
+    par <- paste0("prop_", comp, "_initial")
+    r <- cfg[[par]] / vapply(cfg$location_name, function(iso) bmean(par, iso), numeric(1))
+    expect_true(all(r > 0.98 & r < 1.03),
+                label = sprintf("%s / prior mean within [0.98, 1.03] (%.4f-%.4f)", par, min(r), max(r)))
+  }
+  props <- cfg$prop_S_initial + cfg$prop_E_initial + cfg$prop_I_initial +
+    cfg$prop_R_initial + cfg$prop_V1_initial + cfg$prop_V2_initial
+  expect_true(all(abs(props - 1) < 1e-9))
+
+  # Doses are whole and non-negative, and no request delivered from 2023 has a
+  # second round (the ICG suspended two-dose outbreak response in October 2022).
+  nu <- cfg$nu_1_jt + cfg$nu_2_jt
+  expect_true(all(is.finite(nu)) && all(cfg$nu_1_jt >= 0) && all(cfg$nu_2_jt >= 0) && all(nu == round(nu)))
+  dates <- as.Date(cfg$date_start) + seq_len(ncol(cfg$nu_2_jt)) - 1L
+  expect_true(all(cfg$nu_2_jt[, dates >= as.Date("2023-01-01")] == 0))
+})

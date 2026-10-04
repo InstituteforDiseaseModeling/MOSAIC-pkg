@@ -48,7 +48,7 @@ Each distribution is inflated using the most appropriate method:
 
 \strong{Analytic (exact):}
 \describe{
-\item{beta(shape1, shape2)}{Reduce precision \code{s = α+β} by factor \code{f}.
+\item{beta(shape1, shape2)}{Reduce precision \code{s = shape1 + shape2} by factor \code{f}.
 Maximum inflatable factor is \code{f_max = s+1}.}
 \item{gamma(shape, rate)}{\code{shape_new = shape/f, rate_new = rate/f}.}
 \item{lognormal(meanlog, sdlog)}{CV² scaled by \code{f}; \code{meanlog}
