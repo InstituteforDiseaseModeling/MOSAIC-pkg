@@ -21,7 +21,7 @@ of log k), \code{n} and the per-location \code{table}.
 Estimates each location's cases dispersion on the scored window (from day
 \code{burn_in_days + 1}, observed weeks only when the config carries
 \code{reported_tier}), then regresses log k on log mean weekly cases over the
-locations with an estimate of their own: finite, not at a bound, not
-collapsed. Used to derive \code{.NB_DISP_PANEL_TREND}.
+locations with an estimate of their own: finite, not at or near the lower
+bound, not collapsed. Used to derive \code{.NB_DISP_PANEL_TREND}.
 }
 \keyword{internal}

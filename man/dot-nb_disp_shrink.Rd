@@ -18,8 +18,9 @@ location's own estimate by its precision.}
 \item{identified}{Logical vector; unidentified estimates carry no usable
 precision and lean on the trend.}
 
-\item{clamped}{Logical vector; clamped estimates are censored, so they are
-shrunk toward the trend but excluded from fitting it.}
+\item{clamped}{Logical vector; estimates censored at or near the lower bound
+(\code{.nb_disp_censored()}) are shrunk toward the trend but excluded from
+fitting it.}
 }
 \value{
 List with \code{k} (shrunk vector), \code{trend}, \code{sigma} and
