@@ -44,8 +44,9 @@ The estimate uses observed weeks only when the config carries
 existed. A cases location whose fit gives no estimate, or is clamped at or
 near the lower bound, takes the shipped panel trend
 (\code{.NB_DISP_PANEL_TREND}, fitted at \code{burn_in_days = 45}) at every
-scale. Deaths take no panel trend (a clamped deaths fit keeps the bound, a
-near-bound one its own fit): \code{run_MOSAIC()} scores deaths
+scale. Deaths take no panel trend: a clamped deaths fit keeps the bound and a
+near-bound one keeps its (shrunk) estimate, and both are left out of the
+deaths shrinkage-trend fit. \code{run_MOSAIC()} scores deaths
 with the reported CFR integrated out, so their NB dispersion is a diagnostic
 (and the dispersion of a standalone deaths NB core). A deaths location whose
 observed weeks alone are too few is estimated from every week

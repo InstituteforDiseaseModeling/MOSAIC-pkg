@@ -69,7 +69,9 @@ Only the first is the backtest; the other two are internals of a single psi fit.
   per-cutoff ψ tail is `na.locf` flat-filled in the scored OOS segment (see est-suitability horizon
   ceiling); (ii) the initial conditions are `priors_default`'s, estimated at `ic_t0 = date_start`
   (2018-01-01 for `config_default` v7.0, from the 28-day window 2017-12-18..2018-01-14), so a cutoff
-  later than mid-January 2018 cannot leak into them.
+  later than mid-January 2018 cannot leak into the window estimates; the quiet-start seeding, however,
+  is decided from tier-1/2 cases up to `config$date_stop` (`est_initial_E_I()`), so for a cutoff before
+  a quiet-start location's first later outbreak, that outbreak's existence does leak into its seed.
 
 ## raw-ψ vs post-ψ* — the "did ψ help?" check
 ψ enters as fixed `psi_jt` but is re-transformed **per simulation, per location** by the sampled ψ\* params.
