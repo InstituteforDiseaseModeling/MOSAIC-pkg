@@ -17,7 +17,7 @@ the calibration backtest reuses the identical frozen psi across reruns."><meta p
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -142,7 +142,7 @@ GAM behind the <code>emdat_flood_prob*</code> channels of the default
 <code><a href="run_rolling_cv.html">run_rolling_cv</a></code> also warns about.</p>
 <p><strong>Panel-window alignment (v7.4).</strong> The leak-free panel's compile/GAM-fit
 window is deliberately aligned to the psi-LSTM <em>training</em> window
-\([\code{fit_date_start}, T]\), NOT an arbitrary-wide (e.g. 2000-&gt;2027)
+[<code>fit_date_start</code>, T], NOT an arbitrary-wide (e.g. 2000-&gt;2027)
 span. Imputed hazard-probability magnitudes dilute when the compile window is
 wider than the LSTM fit window (more all-zero rows shrink the same event
 labels), so the hazard probabilities the LSTM ingests must be computed over

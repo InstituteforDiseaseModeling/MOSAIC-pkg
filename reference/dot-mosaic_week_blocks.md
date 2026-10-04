@@ -18,8 +18,9 @@ every complete week sum to the processed weekly total the config was
 built from: exactly where that total is a whole count, and within half a
 case where it is a fractional imputed total (79 weeks in config_default
 v6.1). Blocks are counted from a fixed Monday (1970-01-05), never from
-the first day of the grid: config_default starts on a Sunday, whose
-block is a one-day partial week.
+the first day of the grid, so a grid that starts mid-week opens with a
+partial week: config_default v6.x started on Sunday 2023-01-01, a
+one-day partial week; v7.0 starts on Monday 2018-01-01.
 
 ## Usage
 

@@ -58,13 +58,14 @@ A list containing:
 
 ## Details
 
-For a lognormal distribution with parameters meanlog (μ) and sdlog (σ):
+For a lognormal distribution with parameters meanlog (\\\mu\\) and sdlog
+(\\\sigma\\):
 
-- Mode = exp(μ - σ²)
+- Mode = \\\exp(\mu - \sigma^2)\\
 
-- Mean = exp(μ + σ²/2)
+- Mean = \\\exp(\mu + \sigma^2/2)\\
 
-- Variance = (exp(σ²) - 1) \* exp(2μ + σ²)
+- Variance = \\(\exp(\sigma^2) - 1) \exp(2\mu + \sigma^2)\\
 
 The moment matching method (default) matches the 95% CI exactly on the
 log scale: a lognormal is fully determined by two quantiles, so

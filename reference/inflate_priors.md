@@ -61,8 +61,8 @@ Each distribution is inflated using the most appropriate method:
 
 - beta(shape1, shape2):
 
-  Reduce precision `s = α+β` by factor `f`. Maximum inflatable factor is
-  `f_max = s+1`.
+  Reduce precision `s = shape1 + shape2` by factor `f`. Maximum
+  inflatable factor is `f_max = s+1`.
 
 - gamma(shape, rate):
 

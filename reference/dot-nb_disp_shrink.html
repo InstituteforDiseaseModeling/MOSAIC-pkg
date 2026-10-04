@@ -23,7 +23,7 @@ positive mean fall back to Poisson."><meta property="og:image" content="https://
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -96,8 +96,9 @@ precision and lean on the trend.</p></dd>
 
 
 <dt id="arg-clamped">clamped<a class="anchor" aria-label="anchor" href="#arg-clamped"></a></dt>
-<dd><p>Logical vector; clamped estimates are censored, so they are
-shrunk toward the trend but excluded from fitting it.</p></dd>
+<dd><p>Logical vector; estimates censored at or near the lower bound
+(<code><a href="dot-nb_disp_censored.html">.nb_disp_censored()</a></code>) are shrunk toward the trend but excluded from
+fitting it.</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -15,7 +15,7 @@ reported * chi / (rho * sigma)."><meta property="og:image" content="https://inst
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,7 +80,7 @@ reporting chain: a report on day d is a symptomatic onset on day
 
 
 <dl><dt id="arg-cases">cases<a class="anchor" aria-label="anchor" href="#arg-cases"></a></dt>
-<dd><p>Vector of daily suspected cholera cases (must be same length as dates)</p></dd>
+<dd><p>Vector of daily suspected cholera cases (must be same length as dates); NA marks a day without a report</p></dd>
 
 
 <dt id="arg-dates">dates<a class="anchor" aria-label="anchor" href="#arg-dates"></a></dt>
@@ -100,7 +100,7 @@ reporting chain: a report on day d is a symptomatic onset on day
 
 
 <dt id="arg-lookahead-days">lookahead_days<a class="anchor" aria-label="anchor" href="#arg-lookahead-days"></a></dt>
-<dd><p>Days of reports from t0 onward that also enter the onset rate (default 0, non-negative). The onset rate is averaged over the whole window of <code>lookback_days + lookahead_days</code> days; only reports before t0 enter I directly (later ones are onsets that have not happened yet or that the rate fill-in already covers).</p></dd>
+<dd><p>Days of reports from t0 onward that also enter the onset rate (default 0, non-negative). The onset rate is averaged over the days of the window of <code>lookback_days + lookahead_days</code> days that carry a count (a day with NA, or with no row, is unobserved, not zero); only reports before t0 enter I directly (later ones are onsets that have not happened yet or that the rate fill-in already covers).</p></dd>
 
 
 <dt id="arg-sigma">sigma<a class="anchor" aria-label="anchor" href="#arg-sigma"></a></dt>
@@ -154,8 +154,9 @@ protections and parameter validation. Warns if E or I exceed 2% of population.</
 (per-day survival <code>exp(-gamma_1)</code> for the symptomatic share
 <code>sigma</code>, <code>exp(-gamma_2)</code> for the rest), plus the onsets the
 window cannot see, filled in at the window's mean onset rate: those in
-the last <code>tau_r</code> days before t0 (reported on or after t0) and those
-older than the window.</p></li>
+the last <code>tau_r</code> days before t0 (reported on or after t0), those
+on window days before t0 without a count, and those older than the
+window.</p></li>
 <li><p><strong>E</strong>: people infected before t0 whose onset comes after t0.
 A reported case is already past E, so E is the stock in balance with the
 window's mean onset rate \(\lambda\):

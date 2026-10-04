@@ -144,23 +144,25 @@ affine is guarded:
 
 - **Amplitude floor: a collapsing fit is not applied.** The corrected
   logit series is affine in the input, so its logit-scale standard
-  deviation is the clamped slope times the input's. A slope below
-  `amp_range[1]` would flatten the country's seasonal contrast below
-  that fraction of the model's. Such a slope is not an estimate of a
-  scale correction: on the outbreak weeks the fitted slope is the
-  correlation times the ratio of standard deviations, so it lands near
-  zero (or below) when the model does not predict outbreak magnitude
-  there. The country then falls back to the **identity** transform with
-  status `"collapsed"` (v0.102.0). Up to v0.101.0 the map was instead
-  blended toward identity until it reached the floor. That map was set
-  by the guard constants rather than the data, because the slope was
-  clamped without re-fitting the intercept. So CIV received slope 0.505
-  and offset -2.64 in every 2026 production refit.
+  deviation is the clamped slope times the input's, and the rule is
+  exactly a cutoff on that slope: a clamped slope below `amp_range[1]`
+  would flatten the country's seasonal contrast below that fraction of
+  the model's, so the fit is not applied and the country falls back to
+  the **identity** transform with status `"collapsed"` (v0.102.0). The
+  cutoff does not test whether the slope is identified, and the output
+  jumps at it. Up to v0.101.0 such a fit was instead blended toward
+  identity until it reached the floor. In the production refit C3 the
+  four floor maps were CIV and GMB slope 0.505 and offset -2.64, 0.66
+  times the slope and offset clamps (0.25, -4), so the guard constants
+  set them; UGA slope 0.505 with its fitted offset -1.21, where only the
+  slope clamp bound; and TGO slope 0.501 and offset 0.624, an unclamped
+  fit blended to the floor.
 
 - **Amplitude ceiling.** A corrected logit-scale standard deviation
-  above `amp_range[2]` times the input's is shrunk toward identity
-  (blend on a 0.02 grid) until it is within the range, so a country's
-  psi cannot be inflated beyond a sane range.
+  above `amp_range[2]` times the input's is blended toward identity,
+  with the weight on a 0.02 grid whose amplitude is nearest
+  `amp_range[2]`, so it can land slightly above it (C3: SWZ 2.02, ZAF
+  2.005); a country's psi cannot be inflated beyond a sane range.
 
 Well-behaved countries (ample outbreak weeks, real logit-pred variance,
 a slope/offset/amplitude inside the guard ranges) are **unaffected** —

@@ -15,7 +15,7 @@ subsets and sample_parameters() draws into."><meta property="og:image" content="
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -85,8 +85,9 @@ seasonality (<code>a_1_j</code>, <code>a_2_j</code>, <code>b_1_j</code>, <code>b
 and the suitability calibration <code>psi_star_a</code>, <code>psi_star_b</code>, <code>psi_star_z</code>,
 <code>psi_star_k</code>;</p></li>
 <li><p><strong>Location x day matrices</strong> – birth and death rates (<code>b_jt</code>, <code>d_jt</code>),
-one- and two-dose vaccination (<code>nu_1_jt</code>, <code>nu_2_jt</code>, with the eligible
-compartments in <code>nu_jt_sources</code>), environmental suitability (<code>psi_jt</code>,
+first- and second-dose OCV doses per day (<code>nu_1_jt</code>, <code>nu_2_jt</code>, with the
+compartments eligible for first doses in <code>nu_jt_sources</code>; see Details),
+environmental suitability (<code>psi_jt</code>,
 uncalibrated: <code><a href="sample_parameters.html">sample_parameters()</a></code> applies <code>psi_star_*</code> to it), and
 the reported case fatality ratio <code>mu_jt</code>, the deaths input of the
 mortality model since MOSAIC v0.96.0;</p></li>
@@ -101,8 +102,8 @@ dispersion estimates read and the engine ignores; and the
 likelihood. The cases dispersion is fitted on tier-1 weeks only; the
 deaths dispersion is fitted on tier-1 weeks where they are enough and
 falls back to every scored week, tiers 2 and 3 included, where they are
-too few (for the integrated deaths likelihood on v6.2 at
-<code>burn_in_days = 45</code>: BEN, BFA, CIV, LBR, NAM and ZAF).</p></li>
+too few (for the integrated deaths likelihood on v7.0 at
+<code>burn_in_days = 45</code>: BEN, BFA, CIV, LBR, MLI, NAM and ZAF).</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -113,6 +114,24 @@ shipped <code>psi_star_b = 1</code>; to simulate with the calibrated suitability
 the config through <code><a href="sample_parameters.html">sample_parameters()</a></code> first. For tutorials or
 fast tests the smaller toy configs <code><a href="config_simulation_epidemic.html">config_simulation_epidemic</a></code> and
 <code><a href="config_simulation_endemic.html">config_simulation_endemic</a></code> are also available.</p>
+<p><strong>Vaccination doses</strong>: <code>nu_1_jt + nu_2_jt</code> is the OCV doses shipped to each
+location, administered at up to 20,000 doses a day by
+<code><a href="est_vaccination_rate.html">est_vaccination_rate()</a></code> from the GTFCC/WHO campaign file, each GTFCC
+delivery from its own delivery date. Since <code>config_default</code> v7.0 (MOSAIC
+v0.103.0) each request's doses are split by its GTFCC rounds: shipped doses
+are divided across the rounds in proportion to the doses administered in
+each, the first round goes to <code>nu_1_jt</code> and the second to <code>nu_2_jt</code>, in that
+order, and doses with no round information (a request without GTFCC Round
+events, or a WHO-only shipment) are first doses. The engine moves <code>phi_1</code> of
+each day's first doses from the <code>nu_jt_sources</code> compartments to <code>V1</code>, and
+<code>phi_2</code> of its second doses from <code>V1</code> to <code>V2</code>, capped at the <code>V1</code> stock, so a
+two-dose campaign immunises its first-round recipients once. Second rounds
+are pre-2023 campaigns (the ICG suspended two-dose outbreak response in
+October 2022), so over a 2023+ window <code>nu_2_jt</code> is zero. Up to v6.2 every
+dose was a first dose, <code>nu_2_jt</code> was zero everywhere, and every delivery of
+a request started at its first delivery date (this moved later deliveries
+of 22 pre-2023 requests up to 2.6 years (961 days) early and did not change
+the 2023+ series).</p>
 <p><strong>Note on Initial Condition Formats</strong>: This configuration includes both count
 (<code>*_j_initial</code>) and proportion (<code>prop_*_initial</code>) representations of initial
 conditions. The count fields are required by the transmission model for simulation,

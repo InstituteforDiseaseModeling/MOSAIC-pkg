@@ -50,9 +50,11 @@ The estimate uses observed weeks only when the config carries
 ([`est_nb_dispersion`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md),
 argument `obs_tier`); without it every week enters the fit, as before
 that field existed. A cases location whose fit gives no estimate, or is
-clamped at the lower bound, takes the shipped panel trend
+clamped at or near the lower bound, takes the shipped panel trend
 (`.NB_DISP_PANEL_TREND`, fitted at `burn_in_days = 45`) at every scale.
-Deaths take no panel trend (a clamped deaths fit keeps the bound):
+Deaths take no panel trend: a clamped deaths fit keeps the bound and a
+near-bound one keeps its (shrunk) estimate, and both are left out of the
+deaths shrinkage-trend fit.
 [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
 scores deaths with the reported CFR integrated out, so their NB
 dispersion is a diagnostic (and the dispersion of a standalone deaths NB

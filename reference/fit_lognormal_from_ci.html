@@ -9,7 +9,7 @@ distribution that best matches a given mode and 95% confidence intervals."><meta
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -92,9 +92,9 @@ distribution that best matches a given mode and 95% confidence intervals.</p>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>For a lognormal distribution with parameters meanlog (μ) and sdlog (σ):</p><ul><li><p>Mode = exp(μ - σ²)</p></li>
-<li><p>Mean = exp(μ + σ²/2)</p></li>
-<li><p>Variance = (exp(σ²) - 1) * exp(2μ + σ²)</p></li>
+    <p>For a lognormal distribution with parameters meanlog (\(\mu\)) and sdlog (\(\sigma\)):</p><ul><li><p>Mode = \(\exp(\mu - \sigma^2)\)</p></li>
+<li><p>Mean = \(\exp(\mu + \sigma^2/2)\)</p></li>
+<li><p>Variance = \((\exp(\sigma^2) - 1) \exp(2\mu + \sigma^2)\)</p></li>
 </ul><p>The moment matching method (default) matches the 95% CI exactly on the
 log scale: a lognormal is fully determined by two quantiles, so
 <code>meanlog</code> is the midpoint of <code>log(ci_lower)</code> and

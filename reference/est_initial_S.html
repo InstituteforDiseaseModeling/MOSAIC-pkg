@@ -13,7 +13,7 @@ ensuring mathematical consistency while propagating uncertainty from all compart
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -135,11 +135,11 @@ only, not calibration.</p>
 <p>The function implements a constrained residual approach:</p>
 <p><strong>Method Overview:</strong></p><ol><li><p>Sample from estimated Beta priors for V1, V2, E, I, R compartments</p></li>
 <li><p>Calculate S as constrained residual: S = 1 - (V1 + V2 + E + I + R)</p></li>
-<li><p>Apply constraints: ensure S ≥ min_S_proportion and handle over-allocation</p></li>
+<li><p>Apply constraints: ensure S &gt;= min_S_proportion and handle over-allocation</p></li>
 <li><p>Fit Beta distribution to S samples using CI expansion method</p></li>
 <li><p>Return priors-compatible structure with metadata</p></li>
 </ol><p><strong>Constraint Handling:</strong></p><ul><li><p>If other compartments sum &gt; (1 - min_S_proportion), proportionally scale them down</p></li>
-<li><p>Ensures S is always ≥ min_S_proportion for biological realism</p></li>
+<li><p>Ensures S is always &gt;= min_S_proportion for biological realism</p></li>
 <li><p>Maintains mathematical consistency: all compartments sum to 1</p></li>
 </ul><p><strong>Fallback Behavior:</strong></p><ul><li><p>If estimated priors unavailable for any compartment, uses default prior parameters</p></li>
 <li><p>Locations without any estimated compartments use independent S prior (Beta(30, 7.5))</p></li>

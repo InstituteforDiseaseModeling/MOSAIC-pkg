@@ -65,21 +65,21 @@ est_initial_E_I(
 - quiet_start:
 
   What a "quiet-start" location gets. A location is a quiet start when
-  it reports at least one case after the surveillance window, up to
-  `config$date_stop` (the end of the data when `config$date_stop` is
-  NULL), and EITHER (a) its window around t0 reports no cases (or is all
-  NA), OR (b) the E/I priors the window gives imply fewer than one
-  expected initial infection, `N * (E[prop_E] + E[prop_I]) < 1`, with
-  `N` the population at t0 used in the fit and `E[.]` the Beta means.
-  `"template"` (default) leaves the window's priors in place: the
-  near-zero Beta(0.01, 99999.99) for (a), the data-based Beta for (b).
-  `"seed"` gives E and I each the weak seeding prior
-  Beta(`quiet_seed_shape1`, `quiet_seed_shape2`) instead: it stands in
-  for undetected circulation or importation that the model has no
-  mechanism for, so a single-location fit can still reproduce the later
-  outbreak. Locations with no cases anywhere up to `config$date_stop`,
-  and locations whose window-based priors imply at least one expected
-  initial infection, are never changed.
+  it reports at least one observed or reconstructed (tier 1-2) case
+  after the surveillance window, up to `config$date_stop` (the end of
+  the data when `config$date_stop` is NULL), and EITHER (a) its window
+  around t0 reports no cases (or is all NA), OR (b) the E/I priors the
+  window gives imply fewer than one expected initial infection,
+  `N * (E[prop_E] + E[prop_I]) < 1`, with `N` the population at t0 used
+  in the fit and `E[.]` the Beta means. `"template"` (default) leaves
+  the window's priors in place: the near-zero Beta(0.01, 99999.99) for
+  (a), the data-based Beta for (b). `"seed"` gives E and I each the weak
+  seeding prior Beta(`quiet_seed_shape1`, `quiet_seed_shape2`) instead:
+  it stands in for undetected circulation or importation that the model
+  has no mechanism for, so a single-location fit can still reproduce the
+  later outbreak. Locations with no cases anywhere up to
+  `config$date_stop`, and locations whose window-based priors imply at
+  least one expected initial infection, are never changed.
 
 - quiet_seed_shape1, quiet_seed_shape2:
 
@@ -118,8 +118,10 @@ A list with two main components:
 - metadata:
 
   List containing estimation details: description, version, date, t0,
-  lookback_days, lookahead_days, n_samples, method, quiet_start and
-  quiet_start_seeded (the locations given the seeding prior).
+  lookback_days, lookahead_days, n_samples, method, quiet_start,
+  quiet_start_seeded (the locations given the seeding prior) and
+  imputed_window_fallback (the locations whose window had no tier 1-2
+  count and was read from country-level reconstructions).
 
 - parameters_location:
 
@@ -149,6 +151,18 @@ of active infection at t0, so it never seeds more E/I than confirmed
 zeros. Locations with surveillance but too few usable draws, or an
 estimation error, get the fallback Beta priors (Beta(1, 9999) for E,
 Beta(0.5, 9999.5) for I).
+
+Imputed surveillance rows (tier 3 of `.surveillance_tier()`: AI Fourier
+reconstructions, which spread a year's reported or residual total over
+its unobserved weeks along a seasonal shape) are not dated reports.
+Where a location's window holds any observed or reconstructed (tier 1-2)
+count, its imputed days are unobserved for the back-calculation. A
+window with no tier 1-2 count falls back on its country-level
+reconstructions (`fourier_country_*`), the only estimate of that
+country's level there (listed in `metadata$imputed_window_fallback`);
+regional reconstructions (`fourier_regional_*`) never count. The
+quiet-start test counts tier 1-2 later cases only. Without a
+`disaggregation_method` column every row is observed.
 
 ## Examples
 

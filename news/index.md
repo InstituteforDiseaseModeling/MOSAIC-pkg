@@ -1,5 +1,398 @@
 # Changelog
 
+## MOSAIC 0.103.0
+
+The default window moves to a 2018-01-01 start (`config_default` v7.0,
+`priors_default` v18.0). This release is the candidate for MOSAIC 1.0,
+which follows only on a GO or GO-WITH-CAVEATS verdict of the frozen
+acceptance rubric on the 2018-start production suite. OCV doses are
+split into first and second doses and each GTFCC delivery is released on
+its own date; imputed surveillance rows no longer seed the initial
+infections where the start window holds a count; a cases-dispersion fit
+within its 95% interval of the 0.1 lower bound is censored like a
+clamped one (likelihood tag `R/v0.103.0+near_bound_k_trend`, so a resume
+refuses shards scored by earlier versions); and the 0.102.0 wording of
+the psi amplitude floor is corrected.
+
+### Default data objects
+
+- `config_default` v7.0 and `priors_default` v18.0 are rebuilt at
+  `date_start` 2018-01-01. The window is 2018-01-01 to 2027-04-29, 3,406
+  days (1,580 before); `date_stop` is unchanged (the psi horizon), and
+  psi C3 starts on 2018-01-01 for every location, which is the builder’s
+  floor. The surveillance, demographic, CFR and psi inputs are those of
+  v6.2 and v17.1: MOSAIC-data 922ef89 surveillance (built at 4957df4,
+  whose later commits add only the psi provenance bundles),
+  ees-cholera-mapping 780eb54, and psi C3 as re-corrected in 0.102.0.
+  The vaccination inputs are the regenerated files of the dose split and
+  the delivery-dated release (see Vaccination).
+  - **Built in two passes, checked by a third.**
+    [`est_initial_V1_V2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.md)
+    divides doses by the installed `config_default`’s `N_j_initial`, so
+    a priors build against the installed v6.2 divided 2018 vaccinations
+    by 2023 populations. The shipped priors are the second pass, against
+    config v7.0: `prop_V1_initial` x1.11-1.19 in 13 locations,
+    `prop_V2_initial` in NGA and ZMB and `prop_S_initial` through the
+    residual, with every other value identical. A third pass reproduced
+    both objects byte for byte: `priors_default.rda`
+    174987ce20985a54fac13c858f0456df, `.json`
+    bbc4437a09d14a15c79362ea131be988; `config_default.rda`
+    1672781775d206f3b1ce1657ecebc0a0, `.json`
+    dc0364b282b515c31d955bc4d8e16e89.
+  - **The window.** Over 2023-01-01 to 2027-04-29 every time-indexed
+    field equals v6.2 (`nu_1_jt` is now stored as double; its values are
+    identical). The 2018-2022 head adds 42,180 case and 28,085 death
+    cells: the window holds 77,392 and 62,034 (35,212 and 33,949
+    before), 1,275,087 cases and 22,360 deaths (832,887 and 14,347). The
+    head’s `reported_tier` location-days are 27,453 observed, 0
+    reconstructed and 14,727 imputed: 35% of its case cells are AI
+    Fourier reconstructions (1.8% of the 2023+ cells), scored at their
+    confidence weight (mean 0.81 over the head). `N_j_initial` is the
+    2018-01-01 population (sum 1.033e9; 1.173e9 before).
+    `epidemic_peaks` grows from 64 to 97 rows (33 before 2023, none
+    removed). `mu_jt` is 40 x 3,406 (median 2.05%), so the integrated
+    deaths likelihood spans ten CFR years, 2018-2027, instead of five.
+  - **Initial conditions** are re-estimated at 2018-01-01 (E/I from the
+    28-day window 2017-12-18 to 2018-01-14):
+    - The quiet-start set grows from 16 to 18: BDI BEN BFA CAF CIV CMR
+      GHA GIN NAM NER RWA SSD SWZ TCD TGO UGA ZAF ZWE. BEN, CMR and GIN
+      join (no cases in their 2018 window, cases later); BDI joins
+      because its window holds only imputed rows beside observed zeros;
+      COG and TZA leave (their 2018 windows hold cases).
+    - Expected initial E + I, N x (E\[prop_E\] + E\[prop_I\]) at the UN
+      WPP population of each start: ETH 149 -\> 1,022 (its window has no
+      observed or reconstructed count and is read from its country-level
+      reconstructions, `metadata$imputed_window_fallback`), KEN 1,676
+      -\> 666 and ZMB 36 -\> 1,105 (windows read without their imputed
+      rows), BDI 54 -\> 234 (seeded), RWA 247 (seeded, as in v17.1: its
+      window holds only a regional reconstruction), MLI 4 (the near-zero
+      template: its later cases are all imputed), NGA 297 -\> 1,126, COD
+      2,580 -\> 3,632, MWI 7,956 -\> 225, MOZ 1,374 -\> 134, SOM 1,037
+      -\> 271, TZA 1,313 -\> 633, AGO 4 -\> 189. In the config, E + I is
+      15,882 people (23,184 before).
+    - `prop_R_initial` moves in all 40 locations, median ratio 1.77 (IQR
+      1.47-1.87): mostly five fewer years of waning on older immunity,
+      lower where 2018-2022 outbreaks were large (NGA 0.53, MWI 0.78,
+      NER 0.84, CMR 0.85).
+    - `prop_V1_initial` (16 locations) and `prop_V2_initial` (13) follow
+      the campaigns before 2018-01-01: 19.8M -\> 11.8M people in V1 and
+      13.4M -\> 5.0M in V2. 27 locations carry the V1 template and 38
+      the V2 template (24 and 27 before; see Disclosures).
+  - **Unchanged:** every global prior and every other location prior
+    (`epidemic_threshold`, the `mu_jt` block, seasonal a/b, `tau_i`,
+    `beta_j0_tot`, `psi_star_*`, `alpha_1` and the rest), and every
+    point parameter of the config: their inputs and estimators are those
+    of v17.1 and none reads the start date.
+  - **The cases-dispersion panel trend** is refitted on v7.0 (observed
+    weeks, `burn_in_days = 45`). With every fit of its own in, as the
+    0.103.0 development builds had it, it moved from intercept -0.355,
+    slope 0.220, residual SD 1.19 on log k (22 locations, v6.1) to
+    -0.512, 0.257 and 1.04 (23): BFA (0.62) and ZAF (0.94), with too few
+    observed weeks, and NER (1.55) and ZWE (2.36), whose fits collapse,
+    took it; CIV, CMR and UGA have fits of their own, and no fit is
+    clamped. UGA’s fit is censored and left out of the shipped trend
+    (next bullet). Refitted from day 31 (the control default
+    `burn_in_days = 30`) the shipped trend differs by up to 0.32 on log
+    k (BFA; 0.014 on v6.1). The integrated deaths dispersion falls back
+    to every scored week for BEN, BFA, CIV, LBR, MLI, NAM and ZAF (MLI
+    is new).
+  - Cases dispersion: a fit within its own 95% interval of the 0.1 lower
+    bound (`k*exp(-1.96*se/k) <= 0.1`, status `near_lower_bound`) is
+    censored like a clamped fit: it takes the panel trend at every scale
+    and is left out of fitting it. On config_default v7.0 this is UGA
+    (own fit 0.117, interval 0.079–0.173), which takes 1.34. The trend
+    is re-derived without it (intercept −0.294, slope 0.226, SD 0.93, n
+    22): BFA 0.62→0.77, ZAF 0.94→1.11, NER 1.55→1.72, ZWE 2.36→2.49.
+    Likelihood tag `R/v0.103.0+near_bound_k_trend`; resume refuses
+    earlier shards. Near-bound deaths fits are likewise left out of the
+    deaths shrinkage-trend fit (TGO on v7.0, which moves the other
+    deaths NB k slightly in the 40-location panel, e.g. BDI 0.59→0.64);
+    deaths take no panel trend, and
+    [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+    scores deaths with the integrated CFR core, so the deaths NB k is a
+    diagnostic there.
+  - Cases k moves with the 2018 window (national, burn-in 45,
+    0.102.0/v6.2 → 0.103.0/v7.0): COD 29.7→6.5, LBR 6.6→2.4, NER
+    3.6→1.7, CIV 0.98→0.42, CMR 1.65→0.93; KEN 0.27→0.60, ZMB 0.58→1.28,
+    TCD 1.01→2.12, ZWE 1.07→2.49, ETH 3.07→5.20; UGA 0.96→1.34. Which
+    locations take the trend depends on burn-in (production 45).
+  - **Size.** `inst/extdata/config_default.json` 7.8 MB -\> 16.6 MB,
+    `data/config_default.rda` 0.70 MB -\> 1.65 MB, about 11.7 MB in
+    memory (5.2 MB before); the installed package grows from 17.9 Mb to
+    28.1 Mb (R CMD check).
+  - `estimated_parameters` is unchanged apart from its creation date,
+    and the toy endemic and epidemic configs (fixed 2020 windows) do not
+    read `config_default`; none is rebuilt.
+
+### Downstream consumers
+
+- Code that runs on `config_default` itself gets the 2018 window. The
+  engine’s per-tick cost is flat, so a simulation costs about 2.2x as
+  much (3,406 / 1,580 days), and so does every per-run array: member
+  arrays, observation-level draws and the configs a parallel ensemble
+  broadcasts to its workers.
+- What the dependent repositories see depends on how they build their
+  configs:
+  - MOSAIC-Mozambique’s config builders (`code/R/make_config_MOZ.R`,
+    `subnational_sandbox/code/02_build_config_subnational.R`,
+    `code/R/forecast_validation_cutoff_sandbox.R`) set their own window
+    (2017-08-01) and read the all-dose vaccination file with `nu_2 = 0`:
+    they get the delivery-dated timing of the doses, not the
+    first/second-dose split.
+  - MOSAIC-OCV builds on pinned calibrated models and inherits nothing
+    until it rebases.
+  - Forecast-CV psi caches predicted from 2023
+    ([`prefit_rolling_cv_psi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/prefit_rolling_cv_psi.md))
+    are rejected by
+    [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+    against the 2018 config (“predicted from …, after the config
+    start”): it fails loudly. Re-run the prefit with `pred_date_start`
+    at or before 2018-01-01.
+- A 2023 start needs the 0.102.0 objects (config v6.2, priors v17.1) or
+  a rebuild with `MOSAIC_BUILD_DATE_START=2023-01-01`, which must run
+  the priors builder twice (see Builders): a single pass from v7.0
+  divides the 2023 V1/V2 by 2018 populations, about x1.13 too high.
+
+### Vaccination
+
+- OCV doses are split into first doses (`nu_1_jt`) and second doses
+  (`nu_2_jt`) from the GTFCC campaign rounds, so a two-dose campaign no
+  longer counts both rounds as first doses (about twice the distinct
+  people immunised). Up to `config_default` v6.2 every dose went to
+  `nu_1_jt` and `nu_2_jt` was zero; the limitation was documented in
+  `data-raw/make_config_default.R` and mattered only for windows
+  starting before 2023.
+  - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
+    adds `req_id`, `round_sequence` and `round_basis` (and
+    `delivery_schedule`, below) to each request. `round_sequence` lists
+    the request’s rounds as `<dose>:<weight>` blocks in campaign order,
+    R01 before R02 within a campaign, weighted by the doses administered
+    in each round; `round_basis` is `"rounds"`, `"rounds_imputed"` (an
+    unreported round count carries the mean reported round of the
+    request, or all rounds weigh equally) or `"unknown"` (no Round
+    events).
+    [`combine_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/combine_vaccination_data.md)
+    carries the columns; WHO-only rows are `"unknown"`.
+  - [`est_vaccination_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccination_rate.md)
+    splits each request’s daily doses across its round blocks in
+    proportion to their weights, in order and in whole doses, and writes
+    `param_nu_1_vaccination_rate_<suffix>.csv` and
+    `param_nu_2_vaccination_rate_<suffix>.csv` beside the all-dose
+    `param_nu_vaccination_rate_<suffix>.csv`, plus
+    `doses_distributed_dose1`/`doses_distributed_dose2` in the
+    redistributed data file. Doses with no round information are first
+    doses. On every location-day `nu_1 + nu_2 = nu`.
+  - `data-raw/make_config_default.R` reads the three files through
+    `.vacc_nu_jt()`, which stops if a file is missing, does not cover
+    the window, or `nu_1 + nu_2 != nu`.
+  - With the split alone (ees-cholera-mapping 780eb54, before the
+    delivery-dated release below), 2018-2022 carried 81.61M doses:
+    50.19M first and 31.43M second (38.5%). Of those doses, 89.6% had a
+    fully reported round split, 6.4% an imputed share (MWI 2017-G03-D01,
+    ZMB 2017-G07-D01, SSD 2018-I08-D01, ETH 2021-I01-D01) and 4.0% no
+    round information (CMR 2022-I10-D01, MWI 2017-G03-D02 and a WHO-only
+    MWI shipment). The shipped state, after the release, is in the last
+    bullet of this section. No request delivered from 2023 has a second
+    round, so over 2023+ `nu_1` equals the old `nu` on every
+    location-day and `nu_2` is zero, before and after the release: the
+    2023-window `nu_1_jt` is identical to `config_default` v6.2’s.
+  - The split alone left the all-dose file value-identical. After the
+    release below it differs from 0.102.0’s on 1,987 location-days, all
+    before 2023 (1,713 of them in 2018-2022), and its total is unchanged
+    at 182.83M doses. The campaign files gain `req_id`, `round_sequence`
+    and `round_basis` (the split) and `delivery_schedule` (the release);
+    the redistributed file gains
+    `doses_distributed_dose1`/`doses_distributed_dose2`, and its daily
+    doses before 2023 move with the release.
+- [`est_vaccination_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccination_rate.md)
+  releases each GTFCC delivery on its own date.
+  [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
+  sums a request’s deliveries into one row, and up to v0.102.0 every
+  delivery was spread at 20,000 doses a day from the request’s first
+  delivery date, so later deliveries – typically the second round, or
+  later campaigns of a GTFCC preventive programme – were placed up to
+  2.6 years early (961 days, SSD 2019-G01-D01). Each request now carries
+  a `delivery_schedule` (`<date>:<doses>` pairs; WHO-only rows have none
+  and start at their campaign date): deliveries join a stock that is
+  administered at up to 20,000 doses a day, and a request whose stock
+  runs out resumes at its next delivery.
+  - A request with one delivery, or whose next delivery arrives before
+    its stock runs out, is unchanged, so the 2023+ series is identical
+    on every location-day. 22 requests delivered before 2023 (52.2M
+    doses) move later, by a dose-weighted mean of 81 days (SSD
+    2019-G01-D01 746 days, MWI 2017-G03-D01 278, UGA 2018-G03-D01 205;
+    1,713 location-days change in 2018-2022), and 2.37M doses move from
+    before 2018 into 2018-2022 (MWI 2017-G03-D01 +1.87M, SSD
+    2017-G04-D01 +0.50M), where neither a 2018 window’s initial
+    conditions nor its `nu` saw them.
+  - In the shipped files, 2018-2022 carries 83.99M doses: 51.91M first
+    and 32.08M second (38.2%); 87.6% of them have a fully reported round
+    split, 8.5% an imputed share and 3.9% no round information.
+
+### Initial conditions
+
+- [`est_initial_E_I()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I.md)
+  no longer back-calculates E/I from imputed (tier-3, AI Fourier) rows
+  where the 28-day window holds an observed or reconstructed count (a
+  reconstruction spreads a year’s total along a seasonal shape: in the
+  2018 window ETH’s December 2017 rows ran ~300 cases/week after an
+  observed 61). A window without such a count reads its country-level
+  reconstructions (`metadata$imputed_window_fallback`); regional
+  reconstructions never count; the quiet-start test counts observed or
+  reconstructed later cases only.
+  [`est_initial_E_I_location()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I_location.md)
+  treats a day without a count as unobserved, not zero.
+  - [`est_initial_E_I()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I.md)
+    is version 1.3.0, and
+    `priors_default$metadata$imputed_window_fallback` records the
+    fallback locations (ETH at 2018-01-01). Effect at 2018 in Default
+    data objects.
+
+### Builders
+
+- `data-raw/make_config_default.R` builds at 2018-01-01 unless
+  `MOSAIC_BUILD_DATE_START` is set. Its header now names the real floor,
+  the psi prediction start (2018-01-01 for psi C3); it still said psi
+  ran from 2010 and that a 2015 start was possible.
+- `data-raw/make_priors_default.R` stops before any estimation when
+  `MOSAIC_BUILD_DATE_START` is unset and the installed
+  `config_default`’s `date_start` differs from the config builder’s
+  default, the counterpart of the config builder’s check of
+  `build_date_start`: without it, the first build after the default
+  moves would produce priors for the old window. Export the variable for
+  every step of a window move, and run the priors builder twice (see
+  Default data objects).
+- The `{quiet_start_seeded}` placeholder is filled in the newest
+  `priors_default` changelog head only; older entries carry their
+  literal lists.
+- `model/LAUNCH_sanitized.R`: `DATE_START` is 2018-01-01, `DATE_STOP` is
+  2030-12-31 (the end of the shipped `nu` files, which step 2D writes),
+  and step 4B carries the
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  call of psi C3 (with `pred_date_start` 2018-01-01, the 2018 config’s
+  psi floor) instead of the stale “G” recipe and its TODO.
+
+### Tests
+
+- Pinned to the Sunday 2023-01-01 start, now derived from the config’s
+  own dates: the burn-in worker test and the reporting-week test of
+  `test-calc_model_likelihood_weekly.R`; the synthetic psi caches of
+  `test-prefit_rolling_cv_psi.R` and `test-review-cfr-cv-rolling.R`,
+  which
+  [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  rightly rejected against a config that starts earlier;
+  `test-review-priors-seasonality.R`, which moved `date_start` without
+  `date_stop`; and `test-review-runmosaic-score-window.R`, which assumed
+  MOZ’s 2023 peak on day 86 and skipped silently at 2018.
+- `test-calibrate_psi_predictions.R`: noise-free boundary fixtures at
+  the amplitude floor (slope 0.45 collapses, 0.55 is fitted), the floor
+  follows `amp_range[1]` (slope 0.4 is fitted under
+  `amp_range = c(0.3, 2)`), and the collapse test allows exactly one
+  warning. Floors at 0.30 and 0.65 of the input sd and a hard-coded 0.5
+  passed the previous tests and fail these.
+- New: `test-est_initial_E_I_tiers.R` (imputed rows in the E/I window),
+  `test-vaccination-dose-split.R` (the dose split and delivery dating),
+  and a contract test of the shipped objects in `test-config_default.R`:
+  `build_date_start` equals the config’s `date_start`, the config’s R,
+  V1, V2 and S proportions sit at the priors’ Beta means (a config built
+  against first-pass priors fails it), and `nu_1_jt`/`nu_2_jt` are whole
+  and non-negative with `nu_2_jt` zero from 2023.
+- `config_default`’s censored-fit dispersion test runs on v7.0 again, on
+  UGA’s near-bound fit (no fit is clamped there); synthetic tests carry
+  the clamped and the near-bound rules.
+- Full suite on v7.0 / v18.0: 1,863 tests, 14,370 expectations passed, 0
+  failed, 38 skipped.
+
+### Documentation
+
+- The PDF reference manual builds again. The roxygen of nine topics
+  carried Unicode maths (Greek letters, the approximately, at-least and
+  not-equal signs, subscript digits) that LaTeX rejects; they are now
+  `\eqn{}` forms or words, and
+  [`?prefit_rolling_cv_psi`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/prefit_rolling_cv_psi.md)
+  no longer nests `\code{}` inside `\eqn{}`. The release checks had run
+  with `--no-manual`, which hid the error.
+- [`?priors_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/priors_default.md)
+  documents the metadata fields `build_date_start`, `quiet_start_seeded`
+  and `imputed_window_fallback`.
+
+### Changelog corrections
+
+- The 0.102.0 Suitability entry is corrected here rather than in place:
+  - The amplitude floor is exactly a cutoff on the clamped slope: below
+    `amp_range[1]` the fit is not applied (identity). It does not test
+    whether the slope is identified, and its output jumps at the cutoff.
+    “It binds where the outbreak weeks do not identify a slope”
+    describes C3’s four floor countries (outbreak-week slope t of -2.1
+    to 1.6), not the rule.
+  - The old floor map came from the guard constants only for CIV and GMB
+    (slope 0.505 and offset -2.64, 0.66 times the slope and offset
+    clamps 0.25 and -4). UGA’s slope was clamped but its offset fitted
+    (-1.21), and TGO’s map (0.501, 0.624) was an unclamped fit blended
+    to the floor.
+  - A fit above the 2x ceiling is blended toward identity at the
+    0.02-grid weight nearest the ceiling, which can land slightly above
+    it (C3: SWZ 2.02, ZAF 2.005).
+  - The roxygen, the collapse warning, `model/README_psi_provenance.md`
+    (which now points at the MOSAIC-data bundle
+    `processed/psi_provenance/v0.102.0_C3_recorrected/`, 4957df4,
+    instead of laptop paths) and the v6.2 entry of `config_default`’s
+    changelog are corrected.
+- The v17.1 entry of `priors_default`‘s changelog, whose correction
+  0.101.0 promised for the next rebuild, now gives the cause of the
+  tighter seasonal SDs: the fits’ standard errors fell (ZAF’s from 0.52
+  to 0.21 before the envelope scaling, which itself rose from 0.41 to
+  0.46).
+
+### Disclosures
+
+- At the simulation start the initial vaccinated compartments and the
+  vaccination series can count the same doses.
+  [`est_initial_V1_V2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.md)
+  counts every OCV round administered before t0 in full (or, without a
+  reported round, the request’s deliveries before t0), while `nu_jt`
+  releases each request’s shipped doses from their delivery dates at
+  20,000 a day, so the part released after t0 is counted again. At the
+  2018-01-01 start of config_default v7.0 this concerns NGA 2017-I14
+  (256,900 doses after t0, all second doses, which add no protected
+  people) and SSD 2017-G04 (37,800 doses, about 30,000 people, 0.3% of
+  the population). In the 2023-01-01 objects (config v6.1/v6.2, priors
+  v17.1) behind the v2026-10.02 and v2026-10.03 suites it concerns four
+  single-dose requests: MWI 2022-I13 (1.80M doses, about 1.41M people,
+  6.7% of the population), CMR 2022-I17 (0.94M, 2.6%), KEN 2022-I21
+  (0.56M, 0.8%) and SOM 2022-I15 (0.26M, 1.1%); those runs started with
+  that much extra vaccine immunity, delivered in January-March 2023
+  during their early-2023 outbreaks. To be fixed after 1.0 by deriving
+  the initial V1/V2 from the same release series.
+- Pre-existing approximations in the initial V1/V2, to be fixed after
+  1.0 by an expected-value replay of
+  [`sim_phase_vaccinated()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sim_components.md):
+  - the template priors place about 8M people in V1/V2 at the 2018 start
+    where the campaign log has no doses: V1 Beta(0.5, 49.5), mean 1%, in
+    the 27 locations without doses before t0 (4.1M people), and V2
+    Beta(0.5, 99.5), mean 0.5%, in the 38 without second doses (4.05M);
+  - rounds filed under different requests are not paired (NGA
+    2017-I11/I14, about 0.66M people; ZMB 2016-I04/I08, about 0.22M);
+  - two-dose campaigns whose round doses are unreported enter the
+    initial V1 entirely as first doses, while the dose series imputes
+    their split (about 55K people in SSD at 2018);
+  - the pairing’s V2 is 12-21% below what the engine produces from the
+    same doses.
+- Known limitations of the 2018 start:
+  - **Re-ignition.** The engine has no importation term. In the planning
+    analysis of the processed surveillance
+    (`claude/plan_2018_start/reignition_gaps_national.csv`, not the
+    shipped objects), 22 of the 28 national models must re-ignite at
+    least once after 52 or more silent weeks (14 at a 2023 start), with
+    gaps of up to 5-8 years (CAF 435 weeks, CIV 387, BFA 378); the
+    quiet-start seed stands in for undetected circulation. The G2 window
+    pilot is the gate for the 2018 suite.
+  - **Pre-2023 surveillance.** 35% of the 2018-2022 case cells are
+    imputed, and surveillance deaths are 0.79 of the WHO annual totals
+    over 2018-2022 (CMR 0.28, KEN 0.40, ZWE 0.49), against 1.02 over
+    2023-2025. A calibration on `config_default` scores deaths over the
+    whole window unless `control$likelihood$deaths_score_start` is set.
+
 ## MOSAIC 0.102.0
 
 ### Default data objects

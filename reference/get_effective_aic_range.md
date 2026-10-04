@@ -27,13 +27,15 @@ X% of models under typical (non-dispersed) conditions.
 Uses a heuristic that maps percentiles to Burnham & Anderson's AIC
 thresholds. Based on their interpretation:
 
-- 1% → Δ AIC \< 2 (substantial support, ~37% relative likelihood)
+- 1% → \\\Delta\\ AIC \< 2 (substantial support, ~37% relative
+  likelihood)
 
-- 5% → Δ AIC ≈ 4 (boundary of substantial/less support)
+- 5% → \\\Delta\\ AIC about 4 (boundary of substantial/less support)
 
-- 10% → Δ AIC ≈ 7 (upper end of "considerably less support")
+- 10% → \\\Delta\\ AIC about 7 (upper end of "considerably less
+  support")
 
-- 20% → Δ AIC ≈ 10 (boundary to "essentially no support")
+- 20% → \\\Delta\\ AIC about 10 (boundary to "essentially no support")
 
 This heuristic is used only by
 [`plot_effective_range`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_effective_range.md).

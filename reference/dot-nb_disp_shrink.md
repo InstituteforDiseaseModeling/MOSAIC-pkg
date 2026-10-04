@@ -39,8 +39,9 @@ no positive mean fall back to Poisson.
 
 - clamped:
 
-  Logical vector; clamped estimates are censored, so they are shrunk
-  toward the trend but excluded from fitting it.
+  Logical vector; estimates censored at or near the lower bound
+  ([`.nb_disp_censored()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_censored.md))
+  are shrunk toward the trend but excluded from fitting it.
 
 ## Value
 

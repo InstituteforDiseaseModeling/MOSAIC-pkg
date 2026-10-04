@@ -74,7 +74,8 @@ For a truncated normal distribution:
 
 - The mode may differ from the mean due to truncation
 
-- If truncation is symmetric and far from the mean, mode ≈ mean
+- If truncation is symmetric and far from the mean, the mode is close to
+  the mean
 
 - Asymmetric truncation shifts the mode away from the mean
 

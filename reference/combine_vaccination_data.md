@@ -75,7 +75,16 @@ approach:
     kept in campaign-date order only while their summed doses stay
     within `(1 + dose_tolerance)` of the request's approved total;
     further rows are dropped as duplicate listings (MWI 20182: two
-    500,600-dose rows against 500,600 approved)
+    500,600-dose rows against 500,600 approved) - The GTFCC request
+    columns (`req_id`, `delivery_schedule`, `round_sequence`,
+    `round_basis`; see
+    [`process_GTFCC_vaccination_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md))
+    are carried on every GTFCC row, matched or not. WHO-only rows have
+    no delivery schedule and no round information
+    (`round_basis = "unknown"`), so
+    [`est_vaccination_rate`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccination_rate.md)
+    releases their doses from the campaign date and counts them as first
+    doses.
 
 4.  **Quality Assurance**: - Validates data structure matches downstream
     requirements - Ensures all required columns are present - Maintains

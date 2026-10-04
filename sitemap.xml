@@ -96,10 +96,12 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_week_blocks.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_block.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_cadence.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_censored.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_check_trend.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_deaths.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_fit_one.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_mom.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_near_bound.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_panel_predict.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_panel_trend_fit.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-nb_disp_shrink.html</loc></url>

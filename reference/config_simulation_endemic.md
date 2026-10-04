@@ -23,14 +23,14 @@ but spanning five years of daily timesteps.
 |  |  |
 |----|----|
 | Aspect | Setting |
-| **Time span** | 1 Jan 2020 – 31 Dec 2024 (≈ 1 826 days). |
+| **Time span** | 1 Jan 2020 – 31 Dec 2024 (about 1 826 days). |
 | **Locations** | “FOO” (8 k), “BAR” (12 k), “BAZ” (20 k). |
-| **Initial mix** | 10 % susceptible, 30 % first-dose vaccinated, ~60 % recovered, ~0.1 % infectious (≥ 1 exposed and ≥ 1 infectious each site). |
-| **Transmission** | Site-specific human-to-human β: **0.18**, **0.30**, **0.24**, plus environmental β of half those values, with a first-harmonic seasonal forcing of amplitude 0.2 and a random phase per site. |
-| **Environment** | Suitability ψ_(jt) = 0.45 + annual 0.25 sin (2π t/365 + φ_(j)) + quadrennial 0.15 sin (2π t/1 460 + φ_(j)/2), with a random phase φ_(j) per site; values clipped to \[0,1\] (shipped range ≈ 0.06–0.85). `psi_star_*` are the identity. |
+| **Initial mix** | 10 % susceptible, 30 % first-dose vaccinated, ~60 % recovered, ~0.1 % infectious (at least 1 exposed and at least 1 infectious each site). |
+| **Transmission** | Site-specific human-to-human \\\beta\\: **0.18**, **0.30**, **0.24**, plus environmental \\\beta\\ of half those values, with a first-harmonic seasonal forcing of amplitude 0.2 and a random phase per site. |
+| **Environment** | Suitability \\\psi\_{jt}\\ = 0.45 + annual 0.25 sin (2\\\pi\\ t/365 + \\\phi_j\\) + quadrennial 0.15 sin (2\\\pi\\ t/1 460 + \\\phi_j\\/2), with a random phase \\\phi_j\\ per site; values clipped to \[0,1\] (shipped range about 0.06–0.85). `psi_star_*` are the identity. |
 | **Environmental half-life** | `decay_days_long = 365` days (~1 year); `decay_days_short = 1`. |
-| **Immunity waning** | ω₁ ≈ 1/180 d (0.0056), ω₂ ≈ 1/300 d (0.0033). |
-| **Mobility** | τ_(i) = 0.005, 0.002, 0.006 per day. |
+| **Immunity waning** | \\\omega_1 \approx 1/180\\ d (0.0056), \\\omega_2 \approx 1/300\\ d (0.0033). |
+| **Mobility** | \\\tau_i\\ = 0.005, 0.002, 0.006 per day. |
 | **Observed data** | `reported_cases` / `reported_deaths` hold one simulated realisation of the model itself ([`run_simulation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_simulation.md) on this config), not real surveillance. |
 | **Seed** | `set.seed(999999999)` for full reproducibility. |
 

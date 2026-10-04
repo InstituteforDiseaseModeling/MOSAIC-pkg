@@ -11,7 +11,7 @@ criteria to determine if campaigns are duplicates, accounting for date discrepan
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -107,7 +107,14 @@ decision date (+/-7 days) within the dose tolerance instead
 request and decision date are kept in campaign-date order only while
 their summed doses stay within <code>(1 + dose_tolerance)</code> of the
 request's approved total; further rows are dropped as duplicate listings
-(MWI 20182: two 500,600-dose rows against 500,600 approved)</p></li>
+(MWI 20182: two 500,600-dose rows against 500,600 approved)
+- The GTFCC request columns (<code>req_id</code>, <code>delivery_schedule</code>,
+<code>round_sequence</code>, <code>round_basis</code>; see
+<code><a href="process_GTFCC_vaccination_data.html">process_GTFCC_vaccination_data</a></code>) are carried on every
+GTFCC row, matched or not. WHO-only rows have no delivery schedule and
+no round information (<code>round_basis = "unknown"</code>), so
+<code><a href="est_vaccination_rate.html">est_vaccination_rate</a></code> releases their doses from the
+campaign date and counts them as first doses.</p></li>
 <li><p><strong>Quality Assurance</strong>:
 - Validates data structure matches downstream requirements
 - Ensures all required columns are present

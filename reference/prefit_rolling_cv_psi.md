@@ -97,16 +97,16 @@ also warns about.
 
 **Panel-window alignment (v7.4).** The leak-free panel's compile/GAM-fit
 window is deliberately aligned to the psi-LSTM *training* window
-\\\[\code{fit_date_start}, T\]\\, NOT an arbitrary-wide (e.g.
-2000-\>2027) span. Imputed hazard-probability magnitudes dilute when the
-compile window is wider than the LSTM fit window (more all-zero rows
-shrink the same event labels), so the hazard probabilities the LSTM
-ingests must be computed over the same rows the LSTM trains on. The
-compile `date_start` is therefore resolved from the spec's LSTM
-`fit_date_start` (`est_suitability_spec$arch_control$fit_date_start`,
-default `"2015-01-01"`) and `date_stop` from the cutoff `T`. This
-resolved window is folded into the cache spec-hash (below) so a panel
-built over a different window cannot be silently reused.
+\[`fit_date_start`, T\], NOT an arbitrary-wide (e.g. 2000-\>2027) span.
+Imputed hazard-probability magnitudes dilute when the compile window is
+wider than the LSTM fit window (more all-zero rows shrink the same event
+labels), so the hazard probabilities the LSTM ingests must be computed
+over the same rows the LSTM trains on. The compile `date_start` is
+therefore resolved from the spec's LSTM `fit_date_start`
+(`est_suitability_spec$arch_control$fit_date_start`, default
+`"2015-01-01"`) and `date_stop` from the cutoff `T`. This resolved
+window is folded into the cache spec-hash (below) so a panel built over
+a different window cannot be silently reused.
 
 **Isolated, atomic writes.** Each cutoff's
 [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)

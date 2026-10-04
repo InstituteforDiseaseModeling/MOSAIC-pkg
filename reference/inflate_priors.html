@@ -23,7 +23,7 @@ variance tempering in the Sequential Monte Carlo literature (Liu &amp;amp; West
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -116,7 +116,7 @@ When <code>NULL</code> all non-fixed/frozen parameters are inflated.</p></dd>
 
 <p>Each distribution is inflated using the most appropriate method:</p>
 <p><strong>Analytic (exact):</strong></p><dl><dt>beta(shape1, shape2)</dt>
-<dd><p>Reduce precision <code>s = α+β</code> by factor <code>f</code>.
+<dd><p>Reduce precision <code>s = shape1 + shape2</code> by factor <code>f</code>.
 Maximum inflatable factor is <code>f_max = s+1</code>.</p></dd>
 
 <dt>gamma(shape, rate)</dt>

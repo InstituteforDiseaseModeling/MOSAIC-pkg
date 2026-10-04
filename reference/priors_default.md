@@ -19,8 +19,16 @@ A list with 4 main components.
 
 - metadata:
 
-  Version, build date, and a free-text description listing the changes
-  that produced this version of the priors.
+  `version`, build `date`, a free-text `description` listing the changes
+  that produced this version of the priors, `build_date_start` (the
+  window start the priors were built for and the initial conditions
+  estimated at; `config_default`'s `date_start` must equal it),
+  `quiet_start_seeded` (the locations whose E and I priors are the
+  quiet-start seeding prior of
+  [`est_initial_E_I`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I.md))
+  and `imputed_window_fallback` (the locations whose E/I window held no
+  observed or reconstructed count and was read from their country-level
+  reconstructions).
 
 - parameters_global:
 

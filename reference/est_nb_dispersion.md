@@ -79,14 +79,14 @@ est_nb_dispersion(
   Optional list with numeric `intercept` and `slope`: a cross-location
   trend `log k = intercept + slope * log(mean weekly count)` taken by a
   location without a usable estimate of its own (no estimate, or a fit
-  clamped at the lower bound; see Details).
+  clamped at or near the lower bound; see Details).
   [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   supplies the cases trend fitted on config_default with
   `burn_in_days = 45` (`MOSAIC:::.NB_DISP_PANEL_TREND`), whatever the
   run's burn-in; refitted on the window of the control default (30) it
-  barely moves (BFA, CIV, CMR, ZAF, UGA 0.88, 0.97, 1.63, 1.09, 0.95
-  instead of 0.89, 0.98, 1.65, 1.10, 0.96), far inside the trend's
-  residual SD of 1.19 on log k. Default `NULL`.
+  moves the locations taking it by up to 0.32 on log k (BFA, 1.06
+  instead of 0.77 on config_default v7.0), inside the trend's residual
+  SD of 0.93 on log k. Default `NULL`.
 
 ## Value
 
@@ -105,10 +105,11 @@ writes this table, for both channels, to
 rung whose Poisson mean converges, `theta` is estimated by
 [`MASS::theta.ml`](https://rdrr.io/pkg/MASS/man/theta.md.html) at that
 Poisson mean. `status` records this fallback only as
-`ok_theta_ml_at_full_df`, which ranks below `clamped_lower_bound` and
-`ok_not_identified`: a clamped or unidentified row does not show whether
-its `theta` came from the fallback (`rung` and `trend_df` give the mean
-model it was estimated at).
+`ok_theta_ml_at_full_df`, which ranks below `clamped_lower_bound`,
+`near_lower_bound` and `ok_not_identified`: a clamped, near-bound or
+unidentified row does not show whether its `theta` came from the
+fallback (`rung` and `trend_df` give the mean model it was estimated
+at).
 
 ## Details
 
@@ -146,10 +147,25 @@ for a Poisson, a `k = 1` and a `k = 5` reporting process alike. At
 (on UGA's two observed years a twofold level error costs 3.1 nats under
 the daily cases rule and 0.5 under the weekly one, against 22 and 4.6 at
 the trend's 0.96), and the weekly observation-level predictive puts at
-least half its mass on 0 for any weekly mean up to 102. The row keeps
-`status = "clamped_lower_bound"` and `k_raw` (the fit) with
-`panel_trend = TRUE` (the `k` used). Without `panel_trend` a clamped fit
-keeps the bound, shrunk toward the run's own trend when five or more
+least half its mass on 0 for any weekly mean up to 102.
+
+A fit within its own 95% interval of the bound,
+`k_raw * exp(-1.96 * se / k_raw) <= 0.1` (status `near_lower_bound`), is
+censored the same way: the data cannot tell it from a clamped fit, and
+without the rule a location's `k` would jump tenfold as its fit crossed
+0.1. UGA on config_default v7.0 is the case: its fit is 0.117 (interval
+0.079 to 0.173), its 2019-2027 observed weeks – isolated spikes between
+observed zeros, and outbreak edges – clamp on their own, and its fully
+observed 2018 outbreak alone gives 1.36; on synthetic series with its
+observed outbreak pattern as the mean, the fit returns about 0.12 for a
+true `k` of 0.3, 1, 5 or a Poisson process alike. At 0.117 a twofold
+level error costs 13.5 nats of the daily cases score over the 2018
+window, against 118 at the trend's 1.34.
+
+A censored row keeps its `status` and `k_raw` (the fit: the bound for a
+clamped fit, the estimate for a near-bound one) with
+`panel_trend = TRUE` (the `k` used). Without `panel_trend` a censored
+fit keeps `k_raw`, shrunk toward the run's own trend when five or more
 locations have an estimate.
 
 ## Examples

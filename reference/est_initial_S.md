@@ -111,7 +111,7 @@ The function implements a constrained residual approach:
 
 2.  Calculate S as constrained residual: S = 1 - (V1 + V2 + E + I + R)
 
-3.  Apply constraints: ensure S ≥ min_S_proportion and handle
+3.  Apply constraints: ensure S \>= min_S_proportion and handle
     over-allocation
 
 4.  Fit Beta distribution to S samples using CI expansion method
@@ -123,7 +123,7 @@ The function implements a constrained residual approach:
 - If other compartments sum \> (1 - min_S_proportion), proportionally
   scale them down
 
-- Ensures S is always ≥ min_S_proportion for biological realism
+- Ensures S is always \>= min_S_proportion for biological realism
 
 - Maintains mathematical consistency: all compartments sum to 1
 

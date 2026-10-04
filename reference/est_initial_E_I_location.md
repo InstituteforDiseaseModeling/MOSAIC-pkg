@@ -31,7 +31,8 @@ est_initial_E_I_location(
 
 - cases:
 
-  Vector of daily suspected cholera cases (must be same length as dates)
+  Vector of daily suspected cholera cases (must be same length as
+  dates); NA marks a day without a report
 
 - dates:
 
@@ -52,10 +53,11 @@ est_initial_E_I_location(
 - lookahead_days:
 
   Days of reports from t0 onward that also enter the onset rate (default
-  0, non-negative). The onset rate is averaged over the whole window of
-  `lookback_days + lookahead_days` days; only reports before t0 enter I
-  directly (later ones are onsets that have not happened yet or that the
-  rate fill-in already covers).
+  0, non-negative). The onset rate is averaged over the days of the
+  window of `lookback_days + lookahead_days` days that carry a count (a
+  day with NA, or with no row, is unobserved, not zero); only reports
+  before t0 enter I directly (later ones are onsets that have not
+  happened yet or that the rate fill-in already covers).
 
 - sigma:
 
@@ -114,8 +116,8 @@ population.
   survival `exp(-gamma_1)` for the symptomatic share `sigma`,
   `exp(-gamma_2)` for the rest), plus the onsets the window cannot see,
   filled in at the window's mean onset rate: those in the last `tau_r`
-  days before t0 (reported on or after t0) and those older than the
-  window.
+  days before t0 (reported on or after t0), those on window days before
+  t0 without a count, and those older than the window.
 
 - **E**: people infected before t0 whose onset comes after t0. A
   reported case is already past E, so E is the stock in balance with the

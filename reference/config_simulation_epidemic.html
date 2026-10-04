@@ -13,7 +13,7 @@ the package as config_simulation_epidemic."><meta property="og:image" content="h
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -67,9 +67,9 @@ and placeholder <code>reported_cases</code> / <code>reported_deaths</code>.</p>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
 
-<table class="table table"><tr><td>Aspect</td><td>Setting</td></tr><tr><td><strong>Time span</strong></td><td>1 Jan 2020 – 31 Dec 2020 (365 days).</td></tr><tr><td><strong>Locations</strong></td><td>“FOO” (5 k), “BAR” (10 k), “BAZ” (20 k).</td></tr><tr><td><strong>Initial mix</strong></td><td>50 % susceptible, 20–30 % first-dose vaccinated, 3 seeding infections in “FOO”.</td></tr><tr><td><strong>Transmission</strong></td><td>Baseline β fixed per site: <strong>0.30</strong>, <strong>0.50</strong>, <strong>0.40</strong> with ±0.15 seasonal sine forcing.</td></tr><tr><td><strong>Mobility</strong></td><td>Daily departure probabilities τ<sub>i</sub> = 0.005, 0.002, 0.006.</td></tr><tr><td><strong>Environment</strong></td><td>Flat suitability (ψ = 0.7), short environmental half-life (decay_days_long = 90).</td></tr><tr><td><strong>Observed data</strong></td><td><code>reported_cases</code> / <code>reported_deaths</code> matrices are filled with <strong>NA</strong> (no real surveillance data).</td></tr><tr><td><strong>Seed</strong></td><td><code>set.seed(999999999)</code> for full reproducibility.</td></tr></table><p>These settings produce a single, clearly defined epidemic wave in each
+<table class="table table"><tr><td>Aspect</td><td>Setting</td></tr><tr><td><strong>Time span</strong></td><td>1 Jan 2020 – 31 Dec 2020 (365 days).</td></tr><tr><td><strong>Locations</strong></td><td>“FOO” (5 k), “BAR” (10 k), “BAZ” (20 k).</td></tr><tr><td><strong>Initial mix</strong></td><td>50 % susceptible, 20–30 % first-dose vaccinated, 3 seeding infections in “FOO”.</td></tr><tr><td><strong>Transmission</strong></td><td>Baseline \(\beta\) fixed per site: <strong>0.30</strong>, <strong>0.50</strong>, <strong>0.40</strong> with ±0.15 seasonal sine forcing.</td></tr><tr><td><strong>Mobility</strong></td><td>Daily departure probabilities \(\tau_i\) = 0.005, 0.002, 0.006.</td></tr><tr><td><strong>Environment</strong></td><td>Flat suitability (\(\psi = 0.7\)), short environmental half-life (decay_days_long = 90).</td></tr><tr><td><strong>Observed data</strong></td><td><code>reported_cases</code> / <code>reported_deaths</code> matrices are filled with <strong>NA</strong> (no real surveillance data).</td></tr><tr><td><strong>Seed</strong></td><td><code>set.seed(999999999)</code> for full reproducibility.</td></tr></table><p>These settings produce a single, clearly defined epidemic wave in each
 patch—especially pronounced in “BAR”, which has the highest baseline
-transmission (β = 0.50).  The configuration is small enough to run in
+transmission (\(\beta = 0.50\)).  The configuration is small enough to run in
 fractions of a second yet exercises all major engine components, making it
 ideal for automated tests and teaching materials.</p>
     </div>

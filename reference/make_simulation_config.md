@@ -405,12 +405,12 @@ make_simulation_config(
 - mobility_omega:
 
   Exponent weight for destination population in the gravity mobility
-  model. Must be numeric ≥ 0.
+  model. Must be numeric and non-negative.
 
 - mobility_gamma:
 
   Exponent weight for distance decay in the gravity mobility model. Must
-  be numeric ≥ 0.
+  be numeric and non-negative.
 
 - tau_i:
 

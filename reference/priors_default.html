@@ -17,7 +17,7 @@ priors_default$metadata$version."><meta property="og:image" content="https://ins
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,8 +66,15 @@ the literature sources and derivation of each prior). Current version:
     <div class="section level2">
     <h2 id="format">Format<a class="anchor" aria-label="anchor" href="#format"></a></h2>
     <p>A list with 4 main components.</p><dl><dt>metadata</dt>
-<dd><p>Version, build date, and a free-text description listing
-the changes that produced this version of the priors.</p></dd>
+<dd><p><code>version</code>, build <code>date</code>, a free-text
+<code>description</code> listing the changes that produced this version of the
+priors, <code>build_date_start</code> (the window start the priors were built
+for and the initial conditions estimated at; <code>config_default</code>'s
+<code>date_start</code> must equal it), <code>quiet_start_seeded</code> (the
+locations whose E and I priors are the quiet-start seeding prior of
+<code><a href="est_initial_E_I.html">est_initial_E_I</a></code>) and <code>imputed_window_fallback</code> (the
+locations whose E/I window held no observed or reconstructed count and
+was read from their country-level reconstructions).</p></dd>
 
 <dt>parameters_global</dt>
 <dd><p>Named list of 25 global priors (single value

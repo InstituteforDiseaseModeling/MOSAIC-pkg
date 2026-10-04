@@ -11,7 +11,7 @@ structured dataset matching the WHO vaccination data format for use in the MOSAI
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.102.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,12 +70,54 @@ It also returns the processed data as a data frame for further use in R.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>This function performs the following steps:</p><ol><li><p><strong>Load and Transform GTFCC Data</strong>:
+    <p>Each output row is one GTFCC request (<code>req_id</code>, e.g.
+<code>"2019-I05-D01"</code>): <code>doses_shipped</code> is the sum of all its Delivery
+events and <code>campaign_date</code> the first delivery date. Four columns carry
+the request's delivery and round structure (MOSAIC v0.103.0); the round
+columns are read from its Round events (<code>round_id</code>
+<code>C&lt;campaign&gt;-R&lt;round&gt;</code>, <code>doses</code> = doses administered in that
+round):</p><dl><dt><code>req_id</code></dt>
+<dd><p>The GTFCC request identifier, for tracing a row back to the raw log.</p></dd>
+
+<dt><code>delivery_schedule</code></dt>
+<dd><p>The request's deliveries as
+<code>&lt;date&gt;:&lt;doses&gt;</code> pairs separated by <code>;</code>, in date order, with
+deliveries on the same date summed, e.g.
+<code>"2019-04-24:835200;2019-09-25:835200"</code>. Their doses sum to
+<code>doses_shipped</code>; <code><a href="est_vaccination_rate.html">est_vaccination_rate</a></code> releases each
+delivery on its own date.</p></dd>
+
+<dt><code>round_sequence</code></dt>
+<dd><p>The request's doses as an ordered sequence of
+<code>&lt;dose&gt;:&lt;weight&gt;</code> blocks separated by <code>;</code>, e.g.
+<code>"1:357200;2:332900;1:562000;2:693900"</code>. <code>&lt;dose&gt;</code> is 1 for a
+first round (R01) and 2 for a second or later round (R02+), the blocks run
+in campaign order with R01 before R02 inside a campaign (campaign numbers
+follow administration order), consecutive rounds of the same dose are
+merged, and <code>&lt;weight&gt;</code> is the doses administered in the block (a
+campaign-round listed more than once counts once, with its reported
+doses). Weights are relative: <code><a href="est_vaccination_rate.html">est_vaccination_rate</a></code> splits the
+shipped doses across the blocks in proportion to them, so a single block
+is written with weight 1. <code>NA</code> when the round is unknown.</p></dd>
+
+<dt><code>round_basis</code></dt>
+<dd><p>How the sequence was obtained:
+<code>"rounds"</code> (every round reports its doses, or all rounds are of one
+dose so the counts are not needed), <code>"rounds_imputed"</code> (the request
+has first and second rounds but some round dose counts are unreported;
+each unreported round carries the mean reported round of the request, or
+all rounds weigh equally when none is reported) or <code>"unknown"</code> (no
+Round event with a <code>C##-R##</code> identifier: the doses count as first
+doses downstream).</p></dd>
+
+
+</dl><p>This function performs the following steps:</p><ol><li><p><strong>Load and Transform GTFCC Data</strong>:
 - Reads the scraped GTFCC data from ees-cholera-mapping repository.
 - Transforms event-based structure (Request, Decision, Delivery, Round events) to request-based structure.</p></li>
 <li><p><strong>Map to WHO Format</strong>:
 - Aggregates events by request ID to extract doses requested, approved, and shipped.
 - Uses Delivery event dates as campaign dates.
+- Records each delivery's date and doses, and attributes the request's doses to first and second rounds from its Round events.
 - Converts country names to ISO codes for consistency.</p></li>
 <li><p><strong>Infer Missing Campaign Dates</strong>:
 - Computes the delay between decision and campaign dates.

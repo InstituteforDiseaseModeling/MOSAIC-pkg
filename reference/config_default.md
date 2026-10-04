@@ -47,9 +47,9 @@ and persisted as `data/config_default.rda` (its version is in
   `psi_star_b`, `psi_star_z`, `psi_star_k`;
 
 - **Location x day matrices** – birth and death rates (`b_jt`, `d_jt`),
-  one- and two-dose vaccination (`nu_1_jt`, `nu_2_jt`, with the eligible
-  compartments in `nu_jt_sources`), environmental suitability (`psi_jt`,
-  uncalibrated:
+  first- and second-dose OCV doses per day (`nu_1_jt`, `nu_2_jt`, with
+  the compartments eligible for first doses in `nu_jt_sources`; see
+  Details), environmental suitability (`psi_jt`, uncalibrated:
   [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
   applies `psi_star_*` to it), and the reported case fatality ratio
   `mu_jt`, the deaths input of the mortality model since MOSAIC v0.96.0;
@@ -65,8 +65,8 @@ and persisted as `data/config_default.rda` (its version is in
   likelihood. The cases dispersion is fitted on tier-1 weeks only; the
   deaths dispersion is fitted on tier-1 weeks where they are enough and
   falls back to every scored week, tiers 2 and 3 included, where they
-  are too few (for the integrated deaths likelihood on v6.2 at
-  `burn_in_days = 45`: BEN, BFA, CIV, LBR, NAM and ZAF).
+  are too few (for the integrated deaths likelihood on v7.0 at
+  `burn_in_days = 45`: BEN, BFA, CIV, LBR, MLI, NAM and ZAF).
 
 ## Details
 
@@ -81,6 +81,26 @@ first. For tutorials or fast tests the smaller toy configs
 and
 [`config_simulation_endemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.md)
 are also available.
+
+**Vaccination doses**: `nu_1_jt + nu_2_jt` is the OCV doses shipped to
+each location, administered at up to 20,000 doses a day by
+[`est_vaccination_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccination_rate.md)
+from the GTFCC/WHO campaign file, each GTFCC delivery from its own
+delivery date. Since `config_default` v7.0 (MOSAIC v0.103.0) each
+request's doses are split by its GTFCC rounds: shipped doses are divided
+across the rounds in proportion to the doses administered in each, the
+first round goes to `nu_1_jt` and the second to `nu_2_jt`, in that
+order, and doses with no round information (a request without GTFCC
+Round events, or a WHO-only shipment) are first doses. The engine moves
+`phi_1` of each day's first doses from the `nu_jt_sources` compartments
+to `V1`, and `phi_2` of its second doses from `V1` to `V2`, capped at
+the `V1` stock, so a two-dose campaign immunises its first-round
+recipients once. Second rounds are pre-2023 campaigns (the ICG suspended
+two-dose outbreak response in October 2022), so over a 2023+ window
+`nu_2_jt` is zero. Up to v6.2 every dose was a first dose, `nu_2_jt` was
+zero everywhere, and every delivery of a request started at its first
+delivery date (this moved later deliveries of 22 pre-2023 requests up to
+2.6 years (961 days) early and did not change the 2023+ series).
 
 **Note on Initial Condition Formats**: This configuration includes both
 count (`*_j_initial`) and proportion (`prop_*_initial`) representations
