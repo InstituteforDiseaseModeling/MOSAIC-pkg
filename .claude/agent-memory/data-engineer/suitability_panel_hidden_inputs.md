@@ -16,7 +16,12 @@ Learned diffing the v0.100.0 panel rebuild (2026-09-30) against the 2026-09-21 p
 - `poverty_ratio`: merged at panel years only, so a country whose first WB value is after 2000
   gets the GLOBAL MEAN (static-var mean fill), not NOCB from its pre-2000 value; the global mean
   itself moves with the row set (49.11 -> 48.96). ERI/SOM have no WB poverty at all.
-- Panel key is (iso_code, date=Thursday); future horizon rows have NA date_start.
+- Panel key is (iso_code, date=Thursday); future horizon rows have NA date_start. The dates in
+  `model/input/psi_suitability_config.json` are these Thursday stamps. For shipped C3 (checked
+  2026-10-03): fit_date_stop 2026-09-17 is the week of 14-20 Sep, the last surveillance week
+  (config_default's last observed day is 2026-09-20); pred_date_stop 2027-04-29 is the last
+  ENSO/IOD NMME forecast week (enso_weekly to 2027-04-26..05-02), 32 weeks past the fit.
+  The docs' "5 month horizon" text is v0.1-era.
 - `deaths_per_1000` is NOT cholera deaths: it is the UN WPP crude death rate (all-cause deaths per
   1,000 per year, interpolated daily; process_UN_demographics_data.R:78), a demographic covariate
   next to births_per_1000. A cholera-deaths change moves `deaths` (and `source_deaths` only if the source changes), never

@@ -1,5 +1,8 @@
 # Disease-Modeler Agent Memory — Index
 
+- [Warm-start rule 1.1 red-team (2026-10-03)](project_warmstart_rule11_redteam.md) — validated on cfg 6.1 but prod is 6.2: UGA psi guard flips, V6 FAILS (psi_star_a); dugong had 1.0 assembler; run_job.R no rule check
+- [beta transfer vs psi shape](reference_beta_psi_shape_transfer.md) — psi/psibar norm makes beta level- not shape-invariant (BFA q95/mean 13.3 vs 2.4-5.9); zeta screens near-vacuous
+
 - [EMDAT hazard->cholera channels (psi/theta redesign)](reference_emdat_hazard_cholera_channels.md) — flood-only covariate silently drops cyclone/surge=BIGGEST bug; rank flood>cyclone>drought(2nd-order,opposite-lag)>surge>landslide; VERDICT 3 channels not 1 (acute-flood MERGED w/ cyclone/surge/landslide + drought SEPARATE + cyclone-tail phase2); route via time-varying theta_j(t) not psi; EMDAT blind to conflict/displacement
 
 - [Deaths embargo dwell (forecast-CV)](reference_deaths_embargo_dwell.md) — infection->reported-death ~15-17d median (latent 1.4 + I1 dwell 10 + report 4), tail ~45d; DEATHS forecast-CV embargo must be >=6wk, 2wk scores fitted-tail not forecast; cases ~2wk ok
@@ -42,7 +45,9 @@
 - [Priors-estimation review @ v0.99.9](project_priors_estimation_review_v0999.md) — fit_beta_from_ci broken <0.02; seasonal envelope <0 in 25/40; V1/V2 IC ignore phi; zeta_ratio A-vs-C mismatch; est_initial_R rho=0.1 fallback
 - [OCV WHO/GTFCC request dedup (2026-09-30)](project_ocv_who_gtfcc_request_dedup.md) — GTFCC=per-request totals, WHO=per-shipment; ~17M doses double-counted; request-key matching fix; MWI 2018 residual
 - [Priors rebuild prep h2 (2026-09-30)](project_h2_prior_rebuild_prep.md) — E/I VI uniform 10 (derived from chain priors); Harris 2008 row = 127/202 (0.629); sigma prior hardcoded, not table-fit
-- [Docs sync to v0.100.0/v0.100.1](project_docs_sync_v0100.md) — notation; seasonal/CFR plot functions hardcode stale years + orphan weekly table (workaround script); phi_2 inert; template V > prop_R
+- [Docs sync to v0.100.0/v0.100.1 (+v0.103.0 vacc/IC text)](project_docs_sync_v0100.md) — notation; plot defects fixed v0.101.0; vacc text synced to v0.103.0 (e209e5f/6784c23) but vaccination_*.png still WHO-only 100k
 - [v0.100.0 rebuild: priors v17.0 / config v6.0](project_v0100_rebuild_priors_v17.md) — sigma refit 0.24->0.35 (Harris fix), prop_R ~20x down, E/I from the 28-day window at date_start (ic_t0 = date_start), IC MC now seeded; 11 quiet starts then (16 in v17.1)
 - [v17.1 five new quiet starts review (2026-10-01)](project_v0101_quiet_start_review.md) — AI removal correct (annual met); seed LL-neutral vs v17.0 & abs seed, fewer extinctions; TZA = data gap; ZAF early leak; KEEP
+- [OCV nu_1/nu_2 split review (v0.103.0)](project_ocv_nu_split_v0103_review.md) — split SHIPS; engine realizes min(phi_2 d2, V1) per round; V1/V2 IC: ~8M template mass, unpaired split requests (pairing-only NGA 0.66M/ZMB 0.22M; NEWS 0.69/0.27 = replay gap), MWI 2023 1.8M t0 double count; vacc figures stale
+- [2018 IC: tier-3 windows + quiet horizon (v18.0)](project_2018_ic_tier3_quiet_horizon.md) — observed precedence, country-Fourier fallback (ETH), regional never (RWA quiet); BDI joins Q (R2 0.55 flip risk); KEEP unbounded seed horizon
 - [epidemic_threshold engine semantics](reference_epidemic_threshold_engine_semantics.md) — rng: switches ONLY case chi; deaths/onset unaffected; reported CFR = mu*chi_eff/chi_epi; ZAF 1.07e-7 KEEP; fallback = permanent endemic

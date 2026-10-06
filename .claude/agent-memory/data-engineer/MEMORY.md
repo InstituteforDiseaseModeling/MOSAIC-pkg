@@ -24,10 +24,11 @@
 - [processed refresh audit gotchas](processed_refresh_audit_gotchas.md) — PSL ENSO now ERSSTv6 (history revised), WDI urban revision, WHO-annual tie-break keeps OLDEST snapshot, dbf header noise, orphan outputs, 224MB frozen panel not ignored
 - [WHO week convention / W53](who_weekly_w53_quirk.md) — WHO weeks run MON-SUN (Monday stamp), MMWR-NUMBERED (real 2025-W53, 2026 +7d); my round-1 Sun-Sat claim was wrong; join on date_start
 - [Combiner source selection + JHU phantom rows](combiner_completeness_tiebreak_jhu_ai.md) — FIXED 2026-09-30: 4,144 OSF phantom zero-fill rows dropped at source (the '2,235 weeks / 4.9x' figure was phantoms); non-empty>observed>imputed>priority; peaks observed-only
-- [Suitability panel hidden inputs](suitability_panel_hidden_inputs.md) — cases_binary reads model/input peaks; edge-row drop moves spei/anomalies/poverty fill; deaths_per_1000 = WPP crude death rate
+- [Suitability panel hidden inputs](suitability_panel_hidden_inputs.md) — cases_binary reads model/input peaks; edge-row drop moves fills; deaths_per_1000 = WPP; psi config dates = Thursday stamps
 - [WHO multi-week catch-up/YTD reports](who_multiweek_catchup_reports.md) — dashboard 0 = no cases OR no report; R1 ratio branch capped at 4 reported zeros unless >=2 of next 4 zero; peaks miss humped outbreaks
 - [AI fourier full-total double count](ai_fourier_full_total_double_count.md) — R3 is now gap rule min(I,A-O) + WHO-weekly-YTD fallback + <0.5 residue drop + 0.01 tol; true scale ~445k pre-2023 (not 89k)
 - [EMDAT hand export / IDMC orphan / shared processed](emdat_hand_export_and_idmc_orphan.md) — no local-file EMDAT ingest; IDMC panels unread; worktrees overwrite processed/ (check psi md5)
 - [Surveillance curation table](surveillance_curation_table.md) — surveillance_curation.csv who_window/drop/flag + `shape`=cumulative anchors (surveillance_curation_shapes.csv); Sun 2 Mar 2025 = WHO W09 (Mon-Sun); fixtures avoid curated iso-years
 - [ZAF 2023 epicurve provenance](zaf_2023_epicurve_provenance.md) — sitrep #5 onset +2d to report dates, Karachi case, own deaths curve (Hammanskraal + Benoni + FS Parys from 25 May); NDoH 1,272 vs WHO 1,390
 - [Curated shapes: dating rules](feedback_curated_shapes_dating.md) — report-date curves (onset + lag), own deaths curve, verify week conventions at the source, attribute each date, guard totals
+- [OCV round split + GTFCC log semantics](ocv_round_split_provenance.md) — req_id I/G/D; nu_1/nu_2 + delivery-dated release; OPEN IC/nu double count; prop_vaccinated=doses/capita (SSD 141%); ZMB plot window

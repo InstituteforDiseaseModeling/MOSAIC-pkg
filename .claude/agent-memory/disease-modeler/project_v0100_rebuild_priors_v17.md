@@ -29,7 +29,9 @@ Built 2026-09-30 in worktree .claude/worktrees/rebuild (branch rebuild/defaults-
 - IC MC now SEEDED (est_initial_E_I/R/S `seed`, per-ISO derived; builder ic_seed=20260930); two builds byte-identical.
   MC CV of prior means across seeds: E/I 8% at n=100 -> 2-3% at n=1000 (same runtime, builder uses 1000);
   prop_R 12% at n=100 vs prior CV ~1.0 (kept 100; n=1000 ~ +40 min). User ACCEPTED sigma refit + new prop_R (watch posteriors).
-- V2 IC = phi_2*min(r2, phi_1*r1) (engine semantics) -> V2 x0.62, paired-campaign V1 rises (NER 3.8x).
+- V2 IC = phi_2*min(r2, phi_1*r1) -> V2 x0.62, paired-campaign V1 rises (NER 3.8x). CORRECTION 2026-10-03:
+  this is NOT what the engine realizes over a multi-day round (daily cap + re-dosing gives
+  min(phi_2*r2, V1)), so the IC V2 is 12-21% low - see [[ocv-nu-split-v0103-review]].
 - Unchanged: mu_jt (GAM input identical), mobility, tau_i, beta_j0_tot, kappa/zeta_1/zeta_2, nu (already deduped).
 
 **How to apply:** when a calibration under v17/v6 looks different, check sigma (IC and beta scale via 1/sigma)

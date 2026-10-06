@@ -1,3 +1,10 @@
+# MOSAIC 1.0.0
+
+First stable release. The code is identical to 0.103.0: only the version changes, so 1.0.0 simulates, scores and resumes exactly as the 0.103.0 build behind the production suite (the likelihood implementation tag stays `R/v0.103.0+near_bound_k_trend`).
+
+- Released on the project lead's approval after review of the 28 national calibrations of the 2018-start production suite v2026-10.04 (`config_default` v7.0, `priors_default` v18.0), which were promoted to MOSAIC-results as `national/<ISO>/v2026-10-05.01`. The continental calibration of that suite, and with it the formal acceptance evaluation (rubric 1.1.0), were still running at release.
+- Queued fixes ship in 1.0.1.
+
 # MOSAIC 0.103.0
 
 The default window moves to a 2018-01-01 start (`config_default` v7.0, `priors_default` v18.0). This release is the candidate for MOSAIC 1.0, which follows only on a GO or GO-WITH-CAVEATS verdict of the frozen acceptance rubric on the 2018-start production suite. OCV doses are split into first and second doses and each GTFCC delivery is released on its own date; imputed surveillance rows no longer seed the initial infections where the start window holds a count; a cases-dispersion fit within its 95% interval of the 0.1 lower bound is censored like a clamped one (likelihood tag `R/v0.103.0+near_bound_k_trend`, so a resume refuses shards scored by earlier versions); and the 0.102.0 wording of the psi amplitude floor is corrected.
