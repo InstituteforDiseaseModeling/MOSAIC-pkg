@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.103.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,12 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.0.0" id="mosaic-100">MOSAIC 1.0.0<a class="anchor" aria-label="anchor" href="#mosaic-100"></a></h2>
+<p>First stable release. The code is identical to 0.103.0: only the version changes, so 1.0.0 simulates, scores and resumes exactly as the 0.103.0 build behind the production suite (the likelihood implementation tag stays <code>R/v0.103.0+near_bound_k_trend</code>).</p>
+<ul><li>Released on the project lead’s approval after review of the 28 national calibrations of the 2018-start production suite v2026-10.04 (<code>config_default</code> v7.0, <code>priors_default</code> v18.0), which were promoted to MOSAIC-results as <code>national/&lt;ISO&gt;/v2026-10-05.01</code>. The continental calibration of that suite, and with it the formal acceptance evaluation (rubric 1.1.0), were still running at release.</li>
+<li>Queued fixes ship in 1.0.1.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.103.0" id="mosaic-01030">MOSAIC 0.103.0<a class="anchor" aria-label="anchor" href="#mosaic-01030"></a></h2>
 <p>The default window moves to a 2018-01-01 start (<code>config_default</code> v7.0, <code>priors_default</code> v18.0). This release is the candidate for MOSAIC 1.0, which follows only on a GO or GO-WITH-CAVEATS verdict of the frozen acceptance rubric on the 2018-start production suite. OCV doses are split into first and second doses and each GTFCC delivery is released on its own date; imputed surveillance rows no longer seed the initial infections where the start window holds a count; a cases-dispersion fit within its 95% interval of the 0.1 lower bound is censored like a clamped one (likelihood tag <code>R/v0.103.0+near_bound_k_trend</code>, so a resume refuses shards scored by earlier versions); and the 0.102.0 wording of the psi amplitude floor is corrected.</p>
