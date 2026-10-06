@@ -42,8 +42,10 @@ calibrates fine but can OOM at the ensemble step unless `max_best_subset`/`n_ite
 - `fit_windows` default `c(365,120,90,60,30)` are last-N-days diagnostic R2 windows, not a fit/forecast
   split — length-agnostic.
 
-**Should-fix cosmetics:** `plot_model_ensemble.R:268` hardcodes `scale_x_date(date_breaks="3 months")`
-=> ~44 ticks over 11 years (unreadable). `save_simresults=TRUE` (default FALSE, Dask-path hard-errors)
+**Cosmetics:** the `plot_model_ensemble()` fixed 3-month breaks are FIXED (adaptive `.date_break_months()`,
+verified 2026-10-03); `plot_suitability_and_cases.R` / `plot_suitability_by_country.R` still use 3-month
+breaks (psi diagnostics only). The engine is now pure R (the laser-cholera state-array notes above are
+historical; current window cost model: [[window-and-ensemble-cost-scaling]]). `save_simresults=TRUE` (default FALSE, Dask-path hard-errors)
 long-format blast ~423 MB/iter in RAM at 4320 cols + replicates ~300 param cols across 172,800 rows/sim.
 
 Related: [[project_optimize_subset_levers]] (the subset that feeds n_param_sets here).

@@ -1,6 +1,6 @@
 ---
 name: nb-dispersion-estimator-traps
-description: est_nb_dispersion traps - collapse = theta ~1e-30 w/ same-order SE (rule se/max(theta,0.1)<1e-4); clamped 0.1 fits are censoring (UGA k=0.1 whatever the truth) -> routed to the panel trend; k changes need an impl-tag bump (resolved k not in control.json); shrinkage inert
+description: est_nb_dispersion traps - collapse = theta ~1e-30 w/ same-order SE (rule se/max(theta,0.1)<1e-4); clamped 0.1 fits are censoring -> panel trend; near-bound fits (CI reaches 0.1, UGA v7.0 0.117) same mechanism (F4); k changes need an impl-tag bump (resolved k not in control.json); shrinkage inert
 metadata:
   type: reference
 ---
@@ -47,6 +47,25 @@ Measured on config_default v6.0, scored window from step 46, on 2026-10-01. Scri
     mean_s2 already exclude clamped rows. Census over all suite scopes: only UGA, 0.100/0.100/0.105/0.108
     -> 0.964; every other row identical. This also makes F5 (s2 from the bound) moot for cases.
   - Level cost of a 2x error on UGA: daily 3.1 nats at k=0.1 vs 22 at 0.96; weekly 0.5 vs 4.6.
+- **Near-bound fits are the same censoring (F4 ruling, 2026-10-03; recommended, acceptance pending).**
+  - UGA on config_default v7.0 (2018 window, day 46): k_raw 0.117, se 0.024, log-scale 95% interval
+    0.079-0.173 (z from the floor 0.77). Its 2019+ weeks alone clamp; the fully observed 2018 outbreak
+    alone gives 1.36 (the trend gives 1.34). The low k comes from isolated tier-1 spikes between observed
+    zeros (173 on 2020-12-28, 99 on 2025-07-07): likely batch reports. Drop one week and k is 0.198.
+  - Synthetic check (`claude/v0103_uga_k_ruling/synthetic_power.R`): with UGA's observed pattern as the
+    mean, k-hat is 0.11-0.13 for true k from 0.3 to Poisson, i.e. no power. With a 3-week-smoothed mean it
+    ranks k but reads Poisson as 0.30. CMR/MOZ/KEN recover a 4-7x monotone range, yet Poisson truth still
+    reads 1.0-1.7 there, so every k-hat is biased low by the smoother.
+  - Rule in the patch (`claude/v0103_uga_k_ruling/F4_near_bound.patch`): status `near_lower_bound` when
+    k*exp(-1.96*se/k) <= 0.1, censored like clamped (`.nb_disp_censored()`). It moves only UGA at v7.0 at
+    both burn-ins; the next own fit is z 3.43 (CIV, b45) and 2.88 (COG, b30). At v6.2 nothing new moves.
+  - Leaving UGA out of the trend fit re-derives the constants (int -0.512 -> -0.294, slope 0.257 -> 0.226,
+    SD 1.04 -> 0.93, n 23 -> 22). Every trend taker moves with it: BFA 0.62 -> 0.77, ZWE 2.36 -> 2.49.
+  - **v0.103.0 HEAD re-pasted v7.0 constants but kept the tag `R/v0.101.0+clamped_k_trend`.** Any constant
+    change moves trend takers' k, so the tag must be bumped.
+  - Level cost at 0.117 vs 1.34 (2x error, 2018 window): daily 13.5 vs 118 nats; weekly 2.2 vs 23.
+  - Near-bound fixture: weekly rnbinom(150, mu = 8, size = 0.12), seed 2, sum 1078, k_raw 0.1179,
+    se 0.0205.
 - **Any change to how k is resolved needs a likelihood impl-tag bump.** Resume compares the MERGED
   control$likelihood (so a default flip such as cases_scoring is caught), but the resolved k and
   .nb_dispersion_table are private slots set after control.json is written. Only

@@ -1,9 +1,17 @@
 ---
 name: rcmdcheck-baseline-v048
-description: R CMD check baselines for MOSAIC (v0.48 -> v0.100.1). v0.100.1 full check incl. vignettes + serial tests = 1 NOTE; the old vignette-executes-install-code hazard is RESOLVED (re-verify with purl before trusting)
+description: R CMD check baselines for MOSAIC (v0.48 -> v0.103.0); PDF manual fails since >= v0.66.0 (hidden by --no-manual). v0.100.1 full check incl. vignettes + serial tests = 1 NOTE; the old vignette-executes-install-code hazard is RESOLVED (re-verify with purl before trusting)
 metadata:
   type: project
 ---
+
+## UPDATE v0.103.0 (2026-10-03, f6416434d)
+
+Full check WITH the manual: 1 ERROR + 1 WARNING (PDF manual: 15 non-LaTeX Unicode chars on 25
+roxygen lines in 9 R files, plus `\eqn{[\code{fit_date_start}, T]}` at R/prefit_rolling_cv_psi.R:41
+that only shows once the Unicode is fixed) + the `:::` NOTE. Identical at v0.102.0 (Rd2pdf on
+d50d46f59). Earlier "1 NOTE" baselines were all `--no-manual`. Installed size 28.1 Mb (17.9 at
+v0.102.0; the 16.6 MB config JSON). Fix list in [[v0103-2018-start-redteam]].
 
 ## CURRENT (measured 2026-10-01 on v0.100.1 / 41f4dc467, and release/v1.0 d7a5f8e77)
 

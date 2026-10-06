@@ -4,6 +4,10 @@ description: Stage-2 warm-start assembler for the v0.100.x suite (priors v17.0) 
 metadata:
   type: project
 ---
+**Status 2026-10-03:** the v2026-10.02 suite scored NO-GO (west R-POOLED-RWIS 1.305). The assembler now
+defaults to rule 1.1 (pooled priors for excluded countries), and 1.0 is still selectable; see
+[[warmstart-rule-1-1-pooled-excluded]].
+
 **Status 2026-10-02:** the v0.100.1 suite (v2026-10.01) ran as a rehearsal and scored NO-GO; the v1.0
 decision rests on the MOSAIC 0.101.0 suite (v2026-10.02, rubric 1.0.1, priors v17.1). The assembler checks
 national runs against the loaded priors_default, so "v17.0" below means the run's base priors, and

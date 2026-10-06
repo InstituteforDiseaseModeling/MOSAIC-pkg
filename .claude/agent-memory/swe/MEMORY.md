@@ -38,4 +38,8 @@
 - [stray Rplots.pdf device trap](reference_stray_rplots_device_trap.md) — options(device=) stack-trap recipe; plot_* that print unconditionally; graphics.off() before the regression test or it false-passes
 - [prediction CSV quantile coherence](reference_prediction_csv_quantile_coherence.md) — predicted_median must share draws with ci_* (v1.0 evaluator M-OUTPUT BLOCK); medoid_ensemble.rds is 95%-only, re-simulate medoid rows
 - [opt-in tests hide stale expectations](reference_optin_tests_hide_stale_expectations.md) — MOSAIC_RUN_INTEGRATION/skip_if_slow tests never run by default, so a default flip leaves them asserting the old value; run with NOT_CRAN=true
-- [data-object rebuild traps](reference_data_object_rebuild_traps.md) — priors/config rebuild in a worktree: stale default-lib MOSAIC (builders, tests, PSOCK), DOCS_* writes via kappa/zeta, quiet-start placeholder, same-day bytes
+- [data-object rebuild traps](reference_data_object_rebuild_traps.md) — worktree rebuild: stale default-lib MOSAIC, one rlib per task, DOCS_* writes, TWO priors passes on a window move, ASCII roxygen for the PDF manual
+- [2018 start = v1.0 candidate](project_2018_start_v1_candidate.md) — plan claude/plan_2018_start/PLAN.md; eval_start stays 2023; v7.0/v18.0 built 2026-10-03; deploy_v0103 bundle
+- [window + ensemble cost scaling](reference_window_and_ensemble_cost_scaling.md) — per-run cost linear in T (flat per-tick); continental post-cal ~6 min/wave UNEXPLAINED; broadcast = |B| x config x workers (373 GB at 2018)
+- [suite lane kill + check traps](reference_suite_lane_kill_and_check_traps.md) — kill one job = the setsid lane's group minus the lane, snapshot before SIGKILL; `$!` of a bg function; PDF manual ERROR hidden by --no-manual
+- [deploy env leak + install guard](reference_deploy_env_leak_and_install_guard.md) — idle-lane install hole; shell/BASH_ENV/Renviron knob leaks; stage2 assembler env; name-keyed gates; watchdog PID

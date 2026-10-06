@@ -68,8 +68,10 @@ cross-ref WARNING) -- escape as `\[a x b\]`; a NEWS.md `##` heading containing
 " v2.1" makes R's news parser treat level-2 headings as versions (NOTE, and
 `news()` reports the package as version 2.1).
 **Never trust "R CMD check is clean" or "tests pass" without checking WHICH runner.**
-`.github/workflows/R-CMD-check.yaml` does not invoke `R CMD check` at all (build + INSTALL +
-`testthat::test_local()` only). `test_local()` runs from the SOURCE tree; check runs from
+CI (`.github/workflows/R-CMD-check.yaml`, as of v0.103.0) runs `R CMD check --no-manual
+--ignore-vignettes --no-tests` (fails on WARNING), then serial `testthat::test_local()`. So CI never
+builds the PDF manual (broken since at least v0.66.0, see [[v0103-2018-start-redteam]]) and never
+runs tests under check. `test_local()` runs from the SOURCE tree; check runs from
 `<pkg>.Rcheck`. Any test that reaches for `../../R/...` or `../../<anything>` passes in one and
 errors in the other — one such test currently ERRORs the whole check
 (see [[rcmdcheck-baseline-v084]]). Grep `tests/` for `\.\./\.\./` on every review.
@@ -186,3 +188,23 @@ directory is `processed/ENSO`. On dugong/hedgehog (Linux) the same script fails.
 v0.101.0 psi provenance bundle (fixed in MOSAIC-data 2ee3725).
 **md5-pinned data objects: never fix a description string in place.** Record the correction in
 NEWS and carry it to the next rebuild ([[v0101-pending-rebuild-corrections]]).
+**Read the "using options" line of 00check.log before repeating any "R CMD check: N NOTE" claim.**
+The v0.102.0 builder's "1 NOTE" was `--no-tests --no-manual --ignore-vignettes`; tests ran separately.
+**A pre-registered rubric pins the exact MOSAIC version** (M-PROVENANCE BLOCK), and its frozen
+AMENDMENT.md cites the commit. After registration, any reviewer fix that bumps DESCRIPTION breaks the
+gate. Route non-blocking fixes to the next version and say so in the verdict
+([[v0102-psi-collapse-review]]).
+**A failing LaTeX run lists only the errors it reached first.** v0.103.0: the PDF manual's Unicode
+errors (Greek, approx/geq/neq) hid an `\eqn{[\code{...}]}` that still failed once they were gone.
+Before handing over an Rd fix list, apply it to a scratch copy of man/ and re-run
+`R CMD Rd2pdf --no-preview --batch` until exit 0. `\enc{beta-char}{beta}` does NOT fix it (a UTF-8
+package passes the first argument to LaTeX); `\eqn{\beta}{beta}` or ASCII does.
+**Release NEWS assembled from feature commits keeps intermediate-state claims.** v0.103.0's
+"all-dose file byte-identical/unchanged" and its 81.61M dose figures were true only before the next
+commit (delivery-dated release). Re-verify every "unchanged / identical / N doses" claim against
+the final release diff, not the commit that wrote it (third release in a row: v0.100.0, v0.101.0).
+**Any change to a constant that feeds the resolved k (.NB_DISP_PANEL_TREND, bounds, the censoring
+rule) must bump `.mosaic_likelihood_impl_version()`.** The resolved k is not in control.json, so the
+tag in environment.json is the resume guard's only defence. I missed this on the v0.103.0 RC: the
+panel trend was re-pasted for v7.0 under the 0.101 tag (caught by the statistician; fixed with
+`R/v0.103.0+near_bound_k_trend`). Check `git diff` of R/est_nb_dispersion.R against the tag line.

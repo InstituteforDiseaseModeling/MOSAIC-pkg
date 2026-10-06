@@ -21,3 +21,5 @@
 - [enso-data BOM relative-index gap-fill](project_enso_bom_relative_gapfill.md) — NOAA gap month filled with BOM RELATIVE rnino_4 -> ~1 degC Nino4 dip (Aug-Sep 2026); timing-dependent; CPC weekly shows flat ~1.0; NMME fill over-corrects ~0.5
 - [panel anchor traps (v0.101)](project_panel_anchor_traps_v0101.md) — anchors use non-AI rows (5-case floor NOT AI-invariant); backfill-as-trusted (BWA x6.5) and ZAF catch-up plateau (x9.5) both FIXED pre-release; peaks inert for psi
 - [psi refit v0.101.0 final = C3 (2026-10-01)](project_psi_refit_v0101_c3.md) — shipped C3 (round-2 panel, baked 8ad91c7a4); pair means not single runs; seeds 11-110 run low after Jun 2026; SWZ level = clamp coin flip; anchor moves need nonzero targets
+- [psi C3 docs facts (v1.0)](project_psi_c3_docs_facts.md) — 48% zero weeks (docstring 72% stale); forecast ENSO beyond training range; 22/5/13 correction split; old docs figs are legacy fit
+- [MOSAIC-docs style guide](reference_mosaic_docs_style_guide.md) — docs CLAUDE.md+STYLE-GUIDE binding, not auto-loaded; no new math symbols, "we" voice, italic Note-that caveats

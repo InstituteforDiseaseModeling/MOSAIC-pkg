@@ -36,7 +36,8 @@ bytes = 15.6 MB at the default 1,398-tick window, 129 MB at a 2015-start window.
 Measured per-tick cost of that phase rises linearly in `nticks`
 (5.7 / 8.6 / 10.0 / 14.3 µs at 175 / 350 / 700 / 1398 ticks) where the hoisted
 form is flat at 5.7-6.4 µs. 11 ms/run at 1,398 ticks, ~105 ms/run extrapolated at
-4,018. Reported as ENG-A-01 in the v0.84.0 deep review; not fixed as of v0.84.0.
+4,018. Reported as ENG-A-01 in the v0.84.0 deep review. FIXED by v0.101.0: `sim_derived.R:78-84` now
+binds the row first (`e$spatial_hazard <- H[i, ]`); verified 2026-10-03, so per-run cost is linear in T.
 
 ## Rules
 
