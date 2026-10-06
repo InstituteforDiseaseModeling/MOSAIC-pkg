@@ -710,6 +710,86 @@ test_that("without an AFRO annual row the WHO weekly year-to-date total is the a
      expect_equal(sum(out$cases[yr == 2025 & out$disaggregation_method %in% "fourier_country_k1"]), 150)
 })
 
+test_that("a year-to-date account leaves alone an imputed run that starts after WHO's last report (SOM 2026, v1.0.1)", {
+     # WHO stops after its three 2026 weeks (233 cases); Africa CDC then reports a
+     # week of 90 and multi-week totals the AI spreads over the following weeks.
+     # The year-to-date total says nothing about those weeks, so they are kept.
+     fx <- .combiner_fixture(iso = "SOM")
+     who <- .who_processed(fx, 157:159, c(82, 78, 73), 0, iso = "SOM")
+     ai <- list(w = c(160, 161:175), cases = c(90, rep(50, 15)), deaths = 0,
+                cw = c(0.85, rep(0.75, 15)), method = c("observed", rep("fourier_country_k1", 15)))
+     fx <- .combiner_fixture(who = who, ai = ai, annual = data.frame(iso_code = "GHA", year = 2026, cases_total = 10), iso = "SOM")
+     res <- .run_combiner(fx$P)
+     yr <- as.integer(format(res$out$date_start + 3, "%Y"))
+     expect_equal(sum(res$out$cases[yr == 2026], na.rm = TRUE), 233 + 90 + 15 * 50)
+     expect_equal(sum(res$out$disaggregation_method %in% "fourier_country_k1"), 15L)
+     expect_false(any(res$adj$rule %in% c("imputed_dropped_annual_accounted", "imputed_scaled_annual_residual")))
+})
+
+test_that("a re-spread touching the WHO weeks is reconciled while a later run is kept (v1.0.1)", {
+     # Run 1 (weeks 159-165) overlaps WHO's week 159: a re-spread of the period the
+     # 233 cases account for, so it is emptied. Run 2 (weeks 167-170) starts after
+     # WHO's last report and is kept, as is the observed AI week between them.
+     fx <- .combiner_fixture(iso = "SOM")
+     who <- .who_processed(fx, 157:159, c(82, 78, 73), 0, iso = "SOM")
+     ai <- list(w = c(159:165, 166, 167:170), cases = c(rep(20, 7), 30, rep(40, 4)), deaths = 0,
+                cw = c(rep(0.7, 7), 0.85, rep(0.75, 4)),
+                method = c(rep("fourier_country_k1", 7), "observed", rep("fourier_country_k2", 4)))
+     fx <- .combiner_fixture(who = who, ai = ai, annual = data.frame(iso_code = "GHA", year = 2026, cases_total = 10), iso = "SOM")
+     res <- .run_combiner(fx$P)
+     yr <- as.integer(format(res$out$date_start + 3, "%Y"))
+     expect_false(any(res$out$disaggregation_method %in% "fourier_country_k1"))
+     expect_equal(sum(res$out$disaggregation_method %in% "fourier_country_k2"), 4L)
+     expect_equal(sum(res$out$cases[yr == 2026], na.rm = TRUE), 233 + 30 + 4 * 40)
+     dropped <- res$adj[res$adj$rule == "imputed_dropped_annual_accounted", ]
+     expect_equal(nrow(dropped), 6L)                                        # weeks 160-165; WHO keeps 159
+     expect_true(all(grepl("observed weeks 233;", dropped$detail)))
+})
+
+test_that("a current-year annual total equal to the WHO weekly sum accounts only for WHO's weeks; a completed year's does not (ZWE 2026, v1.0.1)", {
+     # 2024 is complete (WHO reports into 2026): its annual 500 = the weekly sum is the
+     # official count, so a later 2024 run is still reconciled away. 2026 is the
+     # current year: its annual 36 is the provisional sum of WHO's three weeks, so the
+     # IFRC run after WHO's last report is kept.
+     fx <- .combiner_fixture(iso = "ZWE")
+     who <- .who_processed(fx, c(60:64, 157:159), c(rep(100, 5), 12, 12, 12), 0, iso = "ZWE")
+     ai <- list(w = c(70:75, 175:180), cases = c(rep(20, 6), rep(11, 6)), deaths = 0, cw = 0.68,
+                method = "fourier_country_k3")
+     annual <- data.frame(iso_code = "ZWE", year = c(2024, 2026), cases_total = c(500, 36))
+     fx <- .combiner_fixture(who = who, ai = ai, annual = annual, iso = "ZWE")
+     res <- .run_combiner(fx$P)
+     yr <- as.integer(format(res$out$date_start + 3, "%Y"))
+     expect_equal(sum(res$out$cases[yr == 2024], na.rm = TRUE), 500)
+     expect_equal(sum(res$out$cases[yr == 2026], na.rm = TRUE), 36 + 6 * 11)
+     expect_equal(sum(res$adj$rule == "imputed_dropped_annual_accounted"), 6L)
+     expect_true(all(grepl("^WHO annual total 500", res$adj$detail[res$adj$rule == "imputed_dropped_annual_accounted"])))
+})
+
+test_that("inferred zeros are imputed: a WHO week wins, an exhausted account keeps them, the daily file carries their weight (v1.0.1)", {
+     # 2023: observed 300 = the annual 300, so the fourier weeks are emptied; the
+     # inferred-zero weeks add no cases and are kept at their weight. In week 42
+     # WHO reports, so its row wins over the inferred zero of that week.
+     fx <- .combiner_fixture(iso = "UGA")
+     who <- .who_processed(fx, 40:42, c(100, 100, 100), 1, iso = "UGA")
+     ai <- list(w = c(10:14, 20:24, 42), cases = c(rep(30, 5), rep(0, 5), 0), deaths = 0,
+                cw = c(rep(0.45, 5), rep(0.6, 6)),
+                method = c(rep("fourier_country_k2", 5), rep("inferred_zero", 6)))
+     fx <- .combiner_fixture(who = who, ai = ai, annual = data.frame(iso_code = "UGA", year = 2023, cases_total = 300), iso = "UGA")
+     res <- .run_combiner(fx$P)
+     out <- res$out
+     iz <- out[out$disaggregation_method %in% "inferred_zero", ]
+     expect_equal(nrow(iz), 5L)
+     expect_equal(iz$cases, rep(0, 5))
+     expect_equal(iz$confidence_weight, rep(0.6, 5))
+     expect_equal(out$source[out$date_start == as.Date("2023-10-16")], "WHO")
+     expect_false(any(out$disaggregation_method %in% "fourier_country_k2"))
+     expect_equal(sum(out$cases, na.rm = TRUE), 300)
+     daily <- utils::read.csv(file.path(fx$P$DATA_CHOLERA_DAILY, "cholera_surveillance_daily_combined.csv"))
+     dz <- daily[daily$disaggregation_method %in% "inferred_zero", ]
+     expect_equal(nrow(dz), 35L)
+     expect_true(all(dz$cases == 0 & dz$confidence_weight == 0.6))
+})
+
 test_that("an AI week repeating a WHO outbreak total is dropped (COG 2023 week 29)", {
      run <- function(ai_w, ai_cases) {
           fx <- .combiner_fixture(iso = "COG")

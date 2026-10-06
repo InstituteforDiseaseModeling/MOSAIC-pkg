@@ -81,9 +81,14 @@
 #'       weight: Cote d'Ivoire 2025 had 8 cases left over 40 weeks). The account is
 #'       the WHO annual total (\code{DATA_WHO_ANNUAL/who_afro_annual.csv}) or,
 #'       for a country-year without an AFRO annual row, the positive year-to-date
-#'       total of its WHO weekly rows (Somalia 2026: the AI spread the WHO
-#'       epidemiological update's 233 cases, which the three WHO weekly rows
-#'       already report). Skipped, with a message, when
+#'       total of its WHO weekly rows, which accounts only for the weeks up to WHO's
+#'       last report of the year: it reconciles those weeks and any imputed AI run
+#'       that touches a WHO-reported week (Somalia 2026 in the 2026-09-18 AI
+#'       snapshot: the AI spread the WHO epidemiological update's 233 cases, which
+#'       the three WHO weekly rows already report), and leaves alone an imputed run
+#'       that starts after WHO's last report (Somalia's Africa CDC weeks of
+#'       February-September 2026). AI \code{inferred_zero} weeks are never emptied.
+#'       Skipped, with a message, when
 #'       \code{PATHS$DATA_WHO_ANNUAL} is not set.
 #'   }
 #'   Every week these rules (or the WHO spreading) change is listed, with its
@@ -119,8 +124,8 @@
 #'     \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
 #'   \item Applies the trust-tier gate before downscaling: only weeks tagged
 #'     \code{disaggregation_method} \code{assumed_zero} (surveillance silence, a pure
-#'     assumption) are NA-blanked. \code{observed}, \code{documented_zero}, direct
-#'     WHO/JHU/SUPP rows, AND \code{fourier_*} (synthetic reconstructions of real
+#'     assumption) are NA-blanked. \code{observed}, \code{documented_zero},
+#'     \code{inferred_zero}, direct WHO/JHU/SUPP rows, AND \code{fourier_*} (synthetic reconstructions of real
 #'     annual/quarterly totals) all reach the daily fit target carrying their
 #'     per-week \code{confidence_weight} (lower for fourier, ~0.4-0.5), which
 #'     \code{calc_model_likelihood()} consumes as a per-observation weight -- so
@@ -179,16 +184,17 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # apply_cw_overlay, use_confidence_weight = TRUE -- production default), so AI /
      # synthetic-fourier rows are down-weighted there, NOT at parity with direct
      # observations. As of v0.47.1 the daily combined file applies a minimal
-     # TRUST-TIER GATE (below): AI `observed`, `documented_zero`, AND `fourier_*`
-     # (synthetic reconstructions of real annual/quarterly totals) all reach the
-     # calibration fit target (reported_cases/reported_deaths) carrying their per-week
-     # confidence_weight (lower for fourier); only `assumed_zero` (a pure assumption)
-     # is NA-blanked. calc_model_likelihood() consumes the per-cell confidence_weight,
+     # TRUST-TIER GATE (below): AI `observed`, `documented_zero`, `inferred_zero`
+     # (since v1.0.1) AND `fourier_*` (synthetic reconstructions of real
+     # annual/quarterly totals) all reach the calibration fit target
+     # (reported_cases/reported_deaths) carrying their per-week confidence_weight
+     # (lower for fourier and inferred zeros); only `assumed_zero` (a pure
+     # assumption) is NA-blanked. calc_model_likelihood() consumes the per-cell confidence_weight,
      # so low-confidence reconstructed weeks inform the fit at reduced weight.
      if (isTRUE(include_ai) && !is.null(d_ai)) {
           warning(sprintf(
-               paste0("include_ai=TRUE: %d AI rows merged. AI `observed`/`documented_zero`/`fourier_*` ",
-                      "weeks enter the fit target carrying their confidence_weight (fourier ~0.4-0.5, ",
+               paste0("include_ai=TRUE: %d AI rows merged. AI `observed`/`documented_zero`/`inferred_zero`/`fourier_*` ",
+                      "weeks enter the fit target carrying their confidence_weight (fourier ~0.4-0.5, inferred zeros 0.2-0.6, ",
                       "down-weighted via calc_model_likelihood per-observation weights); only ",
                       "`assumed_zero` is NA-blanked."),
                nrow(d_ai)), immediate. = TRUE)
@@ -304,6 +310,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # since the weight scores both channels (make_config_default builds
      # reported_cases_weight and reported_deaths_weight from it).
      # Vectorized: O(n log n).
+     all_df$.run_overlaps_who <- .imputed_runs_touching_who(all_df)
      all_df$.priority <- .SURVEILLANCE_PRIORITY[all_df$source]
      all_df$.empty    <- is.na(all_df$cases) & is.na(all_df$deaths)
      all_df$.no_cases <- is.na(all_df$cases)
@@ -360,6 +367,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      dedup$.priority <- NULL
      dedup$.empty <- NULL
      dedup$.tier <- NULL
+     dedup$.run_overlaps_who <- NULL
      dedup$.no_cases <- NULL
 
      removed <- n_before - nrow(dedup)
@@ -557,6 +565,10 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
 # AI file stores 4 decimals, so a year of weeks spreading exactly the WHO total
 # can sum a few thousandths above it.
 .IMPUTED_ACCOUNT_TOLERANCE <- 0.01
+
+# In the current year, an AFRO annual total within this many cases of the WHO weekly sum is that
+# sum, and accounts only for the weeks WHO reported (.cap_imputed_to_annual_account).
+.ANNUAL_EQUALS_WEEKLY_TOLERANCE <- 1
 
 
 #' Trust tier of surveillance rows from their disaggregation method
@@ -820,16 +832,53 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
 #' WHO weekly year-to-date totals, the account where no AFRO annual row exists
 #'
 #' @param who WHO weekly rows (\code{iso_code}, \code{date_start}, \code{cases}).
-#' @return Data frame (iso_code, year, cases_total) per country and ISO year with
-#'   a positive total, or NULL.
+#' @return Data frame (iso_code, year, cases_total, last_week) per country and ISO
+#'   year with a positive total, or NULL. \code{last_week} is the Monday of the
+#'   last WHO week of the year with a case count: the total accounts for the weeks
+#'   up to it and says nothing about the weeks after it.
 #' @noRd
 .who_weekly_year_totals <- function(who) {
      if (is.null(who) || nrow(who) == 0L) return(NULL)
-     yr <- as.integer(format(as.Date(who$date_start) + 3L, "%Y"))
+     ds <- as.Date(who$date_start)
+     yr <- as.integer(format(ds + 3L, "%Y"))
      tot <- stats::aggregate(list(cases_total = who$cases), list(iso_code = who$iso_code, year = yr),
                              FUN = function(x) sum(x, na.rm = TRUE))
+     rep_wk <- !is.na(who$cases)
+     last <- stats::aggregate(list(last_week = ds[rep_wk]), list(iso_code = who$iso_code[rep_wk], year = yr[rep_wk]),
+                              FUN = max)
+     tot <- merge(tot, last, by = c("iso_code", "year"))
      tot <- tot[tot$cases_total > 0, ]
      if (nrow(tot) == 0L) NULL else tot
+}
+
+
+#' Imputed AI runs that touch a WHO-reported week
+#'
+#' An AI \code{fourier_*} total is spread over a run of consecutive weeks. A run
+#' that covers a week WHO reports re-spreads a period the WHO account already
+#' covers (Somalia 2026 in the 2026-09-18 AI snapshot: the WHO epidemiological
+#' update's 233 cases spread over January-April, overlapping the WHO weeks); a run
+#' that starts after WHO's last report is a different source (the Africa CDC weekly
+#' reports of February-September 2026) that a WHO year-to-date total cannot account
+#' for.
+#'
+#' @param df All candidate rows before selection, with \code{.tier}.
+#' @return Logical vector along \code{df}: TRUE for imputed (tier 3) AI rows whose
+#'   run of consecutive imputed AI weeks contains a week with a WHO case count.
+#' @noRd
+.imputed_runs_touching_who <- function(df) {
+     out <- rep(FALSE, nrow(df))
+     ai_imp <- which(df$source == "AI" & df$.tier == 3L & !is.na(df$cases))
+     if (length(ai_imp) == 0L) return(out)
+     who_keys <- df$key[df$source == "WHO" & !is.na(df$cases)]
+     for (iso in unique(df$iso_code[ai_imp])) {
+          i <- ai_imp[df$iso_code[ai_imp] == iso]
+          i <- i[order(df$date_start[i])]
+          run <- cumsum(c(1L, diff(as.integer(df$date_start[i])) != 7L))
+          touch <- tapply(df$key[i] %in% who_keys, run, any)
+          out[i] <- touch[as.character(run)]
+     }
+     out
 }
 
 
@@ -852,9 +901,18 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
 #' year-to-date total of the WHO weekly rows when that is positive -- the AFRO
 #' annual rows for 2023 onward are sums of the same dashboard -- and otherwise the
 #' imputed rows are not reconciled (zero WHO weeks cannot tell no cases from no
-#' report).
+#' report). A year-to-date total, or in the current (latest, incomplete) year an
+#' annual total equal to the year's WHO weekly sum (the AFRO annual rows from 2023
+#' are sums of the dashboard), accounts only for the weeks up to WHO's last report
+#' of the year, so it reconciles the imputed rows of those weeks, and of
+#' any imputed AI run that touches a WHO-reported week (a re-spread of the same
+#' period), against the observed cases of those weeks; an imputed run that starts
+#' after WHO's last report is left as it is. AI \code{inferred_zero} weeks report
+#' no cases, so the account never scales or empties them.
 #'
-#' @param dedup Selected rows (one per country-week) with \code{.tier}.
+#' @param dedup Selected rows (one per country-week) with \code{.tier} and, when
+#'   the combiner supplies it, \code{.run_overlaps_who}
+#'   (\code{.imputed_runs_touching_who()}).
 #' @param annual Output of \code{.read_who_annual_account()} (or NULL).
 #' @param who_weekly Output of \code{.who_weekly_year_totals()} (or NULL).
 #' @return list(data = dedup after the rule, log = list of adjustment-log frames).
@@ -863,22 +921,49 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      log <- list()
      yr  <- as.integer(format(as.Date(dedup$date_start) + 3L, "%Y"))
      key <- paste(dedup$iso_code, yr)
-     imp <- dedup$.tier == 3L & !is.na(dedup$cases)
-     acc <- data.frame(key = character(0), total = numeric(0), basis = character(0))
-     if (!is.null(annual))
-          acc <- rbind(acc, data.frame(key = paste(annual$iso_code, annual$year),
-                                       total = annual$cases_total, basis = "WHO annual total"))
+     # inferred zeros report no cases, so the account neither scales nor empties them
+     # (a fourier row of zero is still an allocation and is reconciled as before)
+     imp <- dedup$.tier == 3L & !is.na(dedup$cases) & !(dedup$disaggregation_method %in% "inferred_zero")
+     touch <- if (is.null(dedup$.run_overlaps_who)) rep(FALSE, nrow(dedup)) else dedup$.run_overlaps_who %in% TRUE
+     acc <- data.frame(key = character(0), total = numeric(0), basis = character(0),
+                       last = as.Date(character(0)))
+     if (!is.null(annual)) {
+          an <- data.frame(key = paste(annual$iso_code, annual$year),
+                           total = annual$cases_total, basis = "WHO annual total", last = as.Date(NA))
+          # In the current (latest, incomplete) year an annual total equal to the
+          # WHO weekly sum is that provisional sum (the AFRO annual rows from 2023 are
+          # sums of the dashboard: Zimbabwe 2026's 36 is its three weekly rows), so it
+          # accounts only for WHO's reported weeks. A completed year's annual total is
+          # the official count for the whole year.
+          if (!is.null(who_weekly)) {
+               # the latest year either source covers (an annual row for a later year
+               # means the year is closed)
+               cur_year <- max(as.integer(format(max(as.Date(who_weekly$last_week)) + 3L, "%Y")),
+                               max(annual$year))
+               wm <- match(an$key, paste(who_weekly$iso_code, who_weekly$year))
+               dash <- !is.na(wm) & annual$year >= cur_year &
+                    abs(an$total - who_weekly$cases_total[wm]) <= .ANNUAL_EQUALS_WEEKLY_TOLERANCE
+               an$last[dash]  <- as.Date(who_weekly$last_week[wm[dash]])
+               an$basis[dash] <- "WHO annual total (= the WHO weekly rows)"
+          }
+          acc <- rbind(acc, an)
+     }
      if (!is.null(who_weekly)) {
           fb <- data.frame(key = paste(who_weekly$iso_code, who_weekly$year),
                            total = who_weekly$cases_total,
-                           basis = "WHO weekly year-to-date total (no AFRO annual row)")
+                           basis = "WHO weekly year-to-date total (no AFRO annual row)",
+                           last = as.Date(who_weekly$last_week))
           acc <- rbind(acc, fb[!fb$key %in% acc$key, ])
      }
      empty_cols <- intersect(c("cases", "deaths", "source", "source_deaths", "note",
                                "confidence_weight", "disaggregation_method"), names(dedup))
      for (k in intersect(unique(key[imp]), acc$key)) {
           rows <- which(key == k)
+          last <- acc$last[match(k, acc$key)]
+          if (!is.na(last))  # a sum of WHO's weeks: their span, and runs that touch it
+               rows <- rows[as.Date(dedup$date_start[rows]) <= last | (imp[rows] & touch[rows])]
           ir   <- rows[imp[rows]]
+          if (length(ir) == 0L) next
           a    <- acc$total[match(k, acc$key)]
           obs  <- sum(dedup$cases[rows][dedup$.tier[rows] <= 2L], na.rm = TRUE)
           tot_imp <- sum(dedup$cases[ir])

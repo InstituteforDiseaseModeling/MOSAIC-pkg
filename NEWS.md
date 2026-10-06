@@ -1,3 +1,15 @@
+# MOSAIC 1.0.1
+
+Two fixes to how the AI-mined surveillance data enter the combined series. The default data objects are not rebuilt (`config_default` v7.0, `priors_default` v18.0); refreshing them with the rerun AI data is a separate release.
+
+- `process_cholera_surveillance_data()`: a year-to-date account now reconciles only the weeks it covers. That means the WHO weekly total of a year with no AFRO annual row, or, in the current year, an AFRO annual total equal to the WHO weekly sum, which is a provisional sum of the dashboard. The account now reconciles imputed rows only up to WHO's last report of the year, plus any imputed AI run that touches a WHO-reported week (a re-spread of the same period).
+  - Before, it reconciled the whole year. Independent AI data after WHO stopped reporting were scaled to zero and dropped: Somalia's Africa CDC weeks of February to September 2026 (25 weeks, about 1,930 cases) and Zimbabwe's IFRC weeks of May to July 2026.
+  - A completed year's annual total is still the account for the whole year.
+  - With the 2026-09-18 AI snapshot behind `config_default` v7.0, the combined surveillance file is unchanged.
+- `process_AI_cholera_data()` keeps the AI repository's `inferred_zero` weeks: zeros inferred from a country's absence from a multi-country summary (Africa CDC, ECDC and WHO situation reports).
+  - They keep their `confidence_weight` (0.2 to 0.6, against 0.8 for documented zeros), which `calc_model_likelihood()` applies per observation.
+  - The combiner treats them as imputed (trust tier 3), so any direct report of the week wins and they stay out of the dispersion estimates. The annual reconciliation never empties them.
+
 # MOSAIC 1.0.0
 
 First stable release. The code is identical to 0.103.0: only the version changes, so 1.0.0 simulates, scores and resumes exactly as the 0.103.0 build behind the production suite (the likelihood implementation tag stays `R/v0.103.0+near_bound_k_trend`).
