@@ -790,6 +790,21 @@ test_that("inferred zeros are imputed: a WHO week wins, an exhausted account kee
      expect_true(all(dz$cases == 0 & dz$confidence_weight == 0.6))
 })
 
+test_that("an inferred zero within four weeks of another row's positive count is dropped; others are kept (v1.0.2)", {
+     # WHO reports cases in weeks 40-42. The AI inferred zeros of weeks 37-46 lie
+     # within 28 days of them and are dropped; those of weeks 10-14 are kept.
+     fx <- .combiner_fixture(iso = "KEN")
+     who <- .who_processed(fx, 40:42, c(17, 40, 67), 0, iso = "KEN")
+     ai <- list(w = c(10:14, 37:39, 43:46), cases = 0, deaths = 0, cw = 0.6, method = "inferred_zero")
+     fx <- .combiner_fixture(who = who, ai = ai, iso = "KEN")
+     res <- .run_combiner(fx$P)
+     iz <- res$out[res$out$disaggregation_method %in% "inferred_zero", ]
+     expect_equal(iz$date_start, as.Date("2023-01-02") + 7 * (10:14 - 1))
+     g <- res$adj[res$adj$rule == "inferred_zero_near_positive", ]
+     expect_equal(nrow(g), 7L)
+     expect_true(all(is.na(res$out$cases[res$out$date_start %in% (as.Date("2023-01-02") + 7 * (c(37:39, 43:46) - 1))])))
+})
+
 test_that("an AI week repeating a WHO outbreak total is dropped (COG 2023 week 29)", {
      run <- function(ai_w, ai_cases) {
           fx <- .combiner_fixture(iso = "COG")

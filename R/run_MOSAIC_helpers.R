@@ -1502,8 +1502,11 @@
 #'   config_default v7.0 without it; both change the k a location is scored
 #'   at, so shards scored by 0.101.0-0.102.0 (v6.1 trend constants) or by the
 #'   0.103.0 development builds (v7.0 constants with UGA's fit in, both
-#'   stamped "R/v0.101.0+clamped_k_trend") are refused.
-.mosaic_likelihood_impl_version <- function() "R/v0.103.0+near_bound_k_trend"
+#'   stamped "R/v0.101.0+clamped_k_trend") are refused. v1.1.0 re-derives the
+#'   panel trend on config_default v7.1 (the refreshed AI-enhanced
+#'   surveillance), which changes the k of every location that takes it, so
+#'   shards scored with the v7.0 constants are refused.
+.mosaic_likelihood_impl_version <- function() "R/v1.1.0+v7.1_k_trend"
 
 #' R Engine Semantics Version
 #'

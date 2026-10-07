@@ -142,6 +142,10 @@ snapshot: the AI spread the WHO epidemiological update's 233 cases, which
 the three WHO weekly rows already report), and leaves alone an imputed run
 that starts after WHO's last report (Somalia's Africa CDC weeks of
 February-September 2026). AI \code{inferred_zero} weeks are never emptied.
+\item \strong{Inferred zeros next to a positive count.} An AI
+\code{inferred_zero} week within 28 days of another row of the country
+that reports cases is dropped before selection: the absence it infers is
+contradicted nearby.
 Skipped, with a message, when
 \code{PATHS$DATA_WHO_ANNUAL} is not set.
 }

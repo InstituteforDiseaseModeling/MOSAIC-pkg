@@ -40,12 +40,28 @@ test_that("the shipped panel trend is the one config_default implies (drift guar
      # intercept/slope/sigma/n into .NB_DISP_PANEL_TREND (R/est_nb_dispersion.R,
      # whose rebuild recipe names the two tests below as well). This test fails
      # by design until then.
+     #
+     # The constants are derived on macOS. On config_default v7.1, MASS::glm.nb
+     # converges or fails on a rung of a very sparse series (NAM, 0.7 cases a
+     # week) depending on the platform's floating-point path, so another
+     # platform can pick a different rung for one or two locations (dugong:
+     # intercept 0.145; GitHub's Ubuntu image: 0.079 and n 21). Elsewhere the
+     # guard therefore only checks that the refit is close: a rebuild that
+     # forgot the constants moves them far more (v7.0 -> v7.1: intercept 0.42,
+     # slope 0.20).
      fit <- MOSAIC:::.nb_disp_panel_trend_fit(MOSAIC::config_default, burn_in_days = 45L)
      tr <- MOSAIC:::.NB_DISP_PANEL_TREND
-     expect_equal(fit$intercept, tr$intercept, tolerance = 1e-6)
-     expect_equal(fit$slope, tr$slope, tolerance = 1e-6)
-     expect_equal(fit$sigma, tr$sigma, tolerance = 1e-6)
-     expect_identical(as.integer(fit$n), tr$n)
+     if (identical(Sys.info()[["sysname"]], "Darwin")) {
+          expect_equal(fit$intercept, tr$intercept, tolerance = 1e-6)
+          expect_equal(fit$slope, tr$slope, tolerance = 1e-6)
+          expect_equal(fit$sigma, tr$sigma, tolerance = 1e-6)
+          expect_identical(as.integer(fit$n), tr$n)
+     } else {
+          expect_lt(abs(fit$intercept - tr$intercept), 0.1)
+          expect_lt(abs(fit$slope - tr$slope), 0.05)
+          expect_lt(abs(fit$sigma - tr$sigma), 0.1)
+          expect_lte(abs(as.integer(fit$n) - tr$n), 2L)
+     }
 })
 
 test_that("locations without an estimate of their own take the panel trend", {
@@ -509,9 +525,10 @@ test_that("the likelihood implementation stamp separates the censored-fit routin
      # The resolved k is not in control.json, so only the stamp keeps shards
      # scored with a clamped fit's 0.1 (the 0.101.0 development builds), with the
      # v6.1 trend constants (0.101.0-0.102.0) or with UGA's near-bound 0.117 (the
-     # 0.103.0 development builds) apart from shards scored under the current rule.
+     # 0.103.0 development builds), or with the v7.0 trend constants (0.103.0-1.0.x)
+     # apart from shards scored under the current rule.
      v <- MOSAIC:::.mosaic_likelihood_impl_version()
-     expect_match(v, "v0\\.103\\.0")
+     expect_match(v, "v1\\.1\\.0")
      expect_false(v %in% c("R/v0.100.0+review_likelihood", "R/v0.101.0+weekly_cases",
-                           "R/v0.101.0+clamped_k_trend"))
+                           "R/v0.101.0+clamped_k_trend", "R/v0.103.0+near_bound_k_trend"))
 })

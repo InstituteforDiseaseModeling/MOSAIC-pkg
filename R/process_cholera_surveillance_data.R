@@ -88,6 +88,10 @@
 #'       the three WHO weekly rows already report), and leaves alone an imputed run
 #'       that starts after WHO's last report (Somalia's Africa CDC weeks of
 #'       February-September 2026). AI \code{inferred_zero} weeks are never emptied.
+#'     \item \strong{Inferred zeros next to a positive count.} An AI
+#'       \code{inferred_zero} week within 28 days of another row of the country
+#'       that reports cases is dropped before selection: the absence it infers is
+#'       contradicted nearby.
 #'       Skipped, with a message, when
 #'       \code{PATHS$DATA_WHO_ANNUAL} is not set.
 #'   }
@@ -260,6 +264,12 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # `fourier_*` or any other modelled method).
      all_df$.tier <- .surveillance_tier(all_df$disaggregation_method)
      adjustments <- list()
+
+     # An inferred zero next to another row's positive count is contradicted
+     # nearby, so the week is left to the other sources (see Details).
+     izg <- .drop_inferred_zeros_near_positive(all_df)
+     all_df <- izg$data
+     adjustments <- c(adjustments, izg$log)
 
      # Cross-source rules applied before selection (see Details): inside a WHO
      # multi-week window the WHO report accounts for every week ...
@@ -584,6 +594,48 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      tier[is.na(method) | method %in% c("observed", "documented_zero")] <- 1L
      tier[!is.na(method) & startsWith(method, "who_catchup")] <- 2L
      tier
+}
+
+
+# An AI inferred_zero week within this many days of another row's positive count
+# of the same country is dropped (.drop_inferred_zeros_near_positive).
+.INFERRED_ZERO_GUARD_DAYS <- 28L
+
+
+#' Drop AI inferred zeros next to a positive count
+#'
+#' An AI \code{inferred_zero} week asserts absence by inference only: an
+#' aggregate whose total finer evidence already reaches, or a country's absence
+#' from a multi-country summary. When any other row of the country (any source)
+#' reports cases within \code{.INFERRED_ZERO_GUARD_DAYS} of it, the inference is
+#' contradicted nearby -- the AI builder claims the residual weeks of an aggregate
+#' as zero even when finer evidence overshoots it (Kenya 2024: a WHO catch-up week
+#' of 199 cases against a JHU total of 147 for the same seven weeks) -- so the week
+#' is left to the other sources rather than scored as an absence. Documented zeros
+#' (an outbreak's declared end, a source stating no cases) are not affected.
+#'
+#' @param df All candidate rows before selection.
+#' @return list(data = df without the dropped rows, log = list of adjustment-log
+#'   frames, rule \code{inferred_zero_near_positive}).
+#' @noRd
+.drop_inferred_zeros_near_positive <- function(df) {
+     iz <- which(df$disaggregation_method %in% "inferred_zero")
+     if (length(iz) == 0L) return(list(data = df, log = list()))
+     pos <- !is.na(df$cases) & df$cases > 0
+     ds  <- as.integer(as.Date(df$date_start))
+     drop <- logical(length(iz))
+     for (iso in unique(df$iso_code[iz])) {
+          k <- which(df$iso_code[iz] == iso)
+          p <- ds[pos & df$iso_code == iso]
+          if (length(p) == 0L) next
+          drop[k] <- vapply(ds[iz[k]], function(x) any(abs(p - x) <= .INFERRED_ZERO_GUARD_DAYS), logical(1))
+     }
+     if (!any(drop)) return(list(data = df, log = list()))
+     rows <- iz[drop]
+     log <- list(.surveillance_adjustment_log(
+          df[rows, ], "inferred_zero_near_positive",
+          detail = sprintf("another row of the country reports cases within %d days", .INFERRED_ZERO_GUARD_DAYS)))
+     list(data = df[-rows, , drop = FALSE], log = log)
 }
 
 
