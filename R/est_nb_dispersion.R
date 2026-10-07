@@ -85,6 +85,13 @@
 # 1.70/1.43/1.82/1.64/1.74 against 1.19/1.32/1.14/1.22/1.18 from the constants:
 # differences of up to 0.46 on log k (TGO).
 #
+# The fit is derived on macOS. Most locations' fits agree across platforms to
+# ~1e-12, but MASS::glm.nb converging or failing on a rung of a very sparse
+# series is platform-dependent: on dugong (Linux) NAM takes rung 2 (k 4.99)
+# where macOS takes rung 3 (k 4.56), which moves a refit's intercept to 0.145.
+# The shipped constants are what every platform uses, so trend takers get the
+# same k everywhere; only such a location's own k differs.
+#
 # Rebuild recipe. The values depend on config_default, and three tests in
 # test-est_nb_dispersion_panel.R read it:
 #   1. "the shipped panel trend is the one config_default implies (drift
