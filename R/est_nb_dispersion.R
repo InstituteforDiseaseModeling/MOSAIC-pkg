@@ -61,31 +61,29 @@
 # Cross-country trend of the weekly cases dispersion on the series level,
 # log k = intercept + slope * log(mean weekly cases), taken by a location whose
 # own fit gives no usable estimate (see est_nb_dispersion(), argument
-# panel_trend). Fitted on 2026-10-03 by .nb_disp_panel_trend_fit() on
-# config_default v7.0 (window from 2018-01-01), reported_cases on observed
-# (tier-1) weeks of reported_tier, scored from day 46 (burn_in_days = 45, the
-# production setting): 22 locations with an estimate of their own, residual SD
-# 0.93 on log k, slope 0.23 +/- 0.10 -- a flat, noisy panel, so the trend is a
-# prior centre of about 1 rather than a precise prediction. On config_default
-# v7.0 it gives BFA 0.77 and ZAF 1.11 (too few observed weeks), NER 1.72 and
-# ZWE 2.49 (their fits collapse) and UGA 1.34 (its fit, 0.117, is within its 95%
-# interval of the lower bound), the five locations without a usable estimate of
-# their own there. No v7.0 fit is clamped at the lower bound; a clamped or
-# near-bound fit takes the trend because it is censoring rather than a
-# measurement, and is left out of fitting it (see est_nb_dispersion()). (With
-# UGA's fit in, as the 0.103.0 development builds had it: intercept -0.512,
-# slope 0.257, SD 1.04, n 23. v6.1, 2023-01-01 window: intercept -0.355, slope
-# 0.220, SD 1.19, n 22; BFA, CIV and ZAF too few observed weeks, CMR collapsed,
-# UGA clamped. v6.0, on every week: intercept -0.195, slope 0.143, SD 1.56,
-# n 23.)
+# panel_trend). Fitted on 2026-10-07 by .nb_disp_panel_trend_fit() on
+# config_default v7.1 (window from 2018-01-01, the refreshed AI-enhanced
+# surveillance), reported_cases on observed (tier-1) weeks of reported_tier,
+# scored from day 46 (burn_in_days = 45, the production setting): 22 locations
+# with an estimate of their own, residual SD 0.88 on log k, slope 0.03 -- a
+# flat, noisy panel, so the trend is a prior centre of about 1.2 rather than a
+# precise prediction. On config_default v7.1 it gives ZAF 1.18 (too few observed
+# weeks) and BEN 1.19, MWI 1.32, TGO 1.15 and UGA 1.22 (their fits collapse),
+# the five locations without a usable estimate of their own there. No v7.1 fit
+# is clamped at or near the lower bound; a clamped or near-bound fit takes the
+# trend because it is censoring rather than a measurement, and is left out of
+# fitting it (see est_nb_dispersion()). The AI documented zeros of v7.1 are
+# observed weeks, so they enter the fits and flatten the trend: v7.0 had
+# intercept -0.294, slope 0.226, SD 0.93, n 22 (v6.1, 2023-01-01 window:
+# intercept -0.355, slope 0.220, SD 1.19, n 22; v6.0, on every week: intercept
+# -0.195, slope 0.143, SD 1.56, n 23).
 #
 # The constants assume burn_in_days = 45; run_MOSAIC() applies them whatever the
 # run's burn-in. Refitted from day 31 (the control default burn_in_days = 30) the
-# trend is intercept 0.03, slope 0.15, residual SD 1.11 on 24 locations (NER
-# and ZWE have an estimate of their own from day 31; TGO does not, and UGA's is
-# near the bound there too), which gives BFA/TGO/UGA/ZAF 1.06/1.20/1.54/1.34
-# against 0.77/0.93/1.37/1.11 from the constants: differences of up to 0.32 on
-# log k (BFA; at most 0.014 on v6.1).
+# trend is intercept 0.61, slope -0.05, residual SD 0.93 on 20 locations (GHA
+# and ZWE also collapse from day 31), which gives BEN/MWI/TGO/UGA/ZAF
+# 1.70/1.43/1.82/1.64/1.74 against 1.19/1.32/1.14/1.22/1.18 from the constants:
+# differences of up to 0.46 on log k (TGO).
 #
 # Rebuild recipe. The values depend on config_default, and three tests in
 # test-est_nb_dispersion_panel.R read it:
@@ -99,11 +97,11 @@
 #      locations and k from that fit's table (observed weeks only once the
 #      config carries reported_tier) and need no edit, but must pass after the
 #      constants are pasted.
-.NB_DISP_PANEL_TREND <- list(intercept = -0.293677942825664,
-                             slope     = 0.226379074615144,
-                             sigma     = 0.925495207238152,
+.NB_DISP_PANEL_TREND <- list(intercept = 0.126624294000834,
+                             slope     = 0.0308850225911451,
+                             sigma     = 0.879626380713652,
                              n         = 22L,
-                             source    = "config_default v7.0, reported_cases, observed weeks, burn_in_days 45")
+                             source    = "config_default v7.1, reported_cases, observed weeks, burn_in_days 45")
 
 # Weekly blocks must never be anchored on the first observation: whenever a
 # series starts off the reporting-week boundary, anchoring there splits every

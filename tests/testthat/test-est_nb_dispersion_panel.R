@@ -509,9 +509,10 @@ test_that("the likelihood implementation stamp separates the censored-fit routin
      # The resolved k is not in control.json, so only the stamp keeps shards
      # scored with a clamped fit's 0.1 (the 0.101.0 development builds), with the
      # v6.1 trend constants (0.101.0-0.102.0) or with UGA's near-bound 0.117 (the
-     # 0.103.0 development builds) apart from shards scored under the current rule.
+     # 0.103.0 development builds), or with the v7.0 trend constants (0.103.0-1.0.x)
+     # apart from shards scored under the current rule.
      v <- MOSAIC:::.mosaic_likelihood_impl_version()
-     expect_match(v, "v0\\.103\\.0")
+     expect_match(v, "v1\\.1\\.0")
      expect_false(v %in% c("R/v0.100.0+review_likelihood", "R/v0.101.0+weekly_cases",
-                           "R/v0.101.0+clamped_k_trend"))
+                           "R/v0.101.0+clamped_k_trend", "R/v0.103.0+near_bound_k_trend"))
 })
