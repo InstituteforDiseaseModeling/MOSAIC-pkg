@@ -23,6 +23,13 @@ saveRDS 0.35-0.54), and the master's serial steps (observation draws, summaries)
 1,080 members. Rejected hypothesis: holding 614 MB of distinct live configs does not slow the engine
 (paired 0.89-1.07). Profile on dugong before trusting any continental post-cal estimate.
 
+**EXPLAINED 2026-10-07 (the F term + the 2018 continental OOM):** `calc_model_ensemble.R:1020`
+`clusterCall(cl, function(rd) {...}, root_dir)` closure carries the whole calc_model_ensemble frame
+(4 preallocated dense NA arrays + param_configs + config/priors) = **5,742 MB per worker** at
+40 loc x 3,406 d x 108 x 10, serialised serially by the master (~0.45 GB/s = the 30 GB/min ramp).
+Workers hold it until their first task's gc, so peak = n_workers x (5.7 + export) GB before ANY task
+runs (empty traj_scratch). Harness `~/ens_mem_diag/` on dugong. Same trap as [[psock-export-and-dead-guard-traps]] #1.
+
 **Broadcast memory** = |B| x sampled-config size x ensemble workers, all on the host (local PSOCK). A
 sampled 40-loc config is 10.15 MB at T=1580 and ~21 MB at T=3406, so a 2018 window doubles it (180 ->
 373 GB at |B|=108, 168 workers). It scales with |B|, so tying ESS_best to N is infeasible for
