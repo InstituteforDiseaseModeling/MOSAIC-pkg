@@ -53,6 +53,26 @@ test_that("process_AI_cholera_data applies keep-and-weight filter, reformats, st
   expect_true(file.exists(file.path(outd, "cholera_country_weekly_processed.csv")))
 })
 
+test_that("process_AI_cholera_data keeps inferred zeros with their weight and drops unknown methods (v1.0.1)", {
+  tmp  <- withr::local_tempdir()
+  repo <- file.path(tmp, "repo"); ddir <- file.path(repo, "data", "UGA"); dir.create(ddir, recursive = TRUE)
+  ws <- seq(as.Date("2026-06-01"), by = "week", length.out = 4)
+  df <- data.frame(iso_code = "UGA", year = 2026, iso_week = as.integer(format(ws, "%V")),
+                   week_start = as.character(ws), week_end = as.character(ws + 6),
+                   sCh = c(0, 0, 0, 4), deaths = 0, source = "AI",
+                   confidence_weight = c(0.6, 0.45, 0.5, 0.9),
+                   disaggregation_method = c("inferred_zero", "inferred_zero", "not_a_method", "observed"),
+                   stringsAsFactors = FALSE)
+  utils::write.csv(df, file.path(ddir, "cholera_weekly_UGA.csv"), row.names = FALSE)
+  res <- process_AI_cholera_data(list(AI_CHOLERA_REPO = repo, DATA_AI_WEEKLY = file.path(tmp, "out")))
+  expect_equal(nrow(res), 3L)
+  expect_equal(sum(res$disaggregation_method == "inferred_zero"), 2L)
+  expect_false(any(res$disaggregation_method == "not_a_method"))
+  iz <- res[res$disaggregation_method == "inferred_zero", ]
+  expect_equal(iz$cases, c(0, 0))
+  expect_equal(iz$confidence_weight, c(0.6, 0.45))
+})
+
 test_that("process_AI_cholera_data errors when the repo data dir is missing", {
   PATHS <- list(AI_CHOLERA_REPO = tempfile("nope"), DATA_AI_WEEKLY = tempfile("out"))
   expect_error(process_AI_cholera_data(PATHS), "not found")

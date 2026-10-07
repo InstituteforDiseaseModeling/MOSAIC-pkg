@@ -47,8 +47,8 @@ Invisibly returns \code{NULL}. Side effects:
 \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
 \item Applies the trust-tier gate before downscaling: only weeks tagged
 \code{disaggregation_method} \code{assumed_zero} (surveillance silence, a pure
-assumption) are NA-blanked. \code{observed}, \code{documented_zero}, direct
-WHO/JHU/SUPP rows, AND \code{fourier_*} (synthetic reconstructions of real
+assumption) are NA-blanked. \code{observed}, \code{documented_zero},
+\code{inferred_zero}, direct WHO/JHU/SUPP rows, AND \code{fourier_*} (synthetic reconstructions of real
 annual/quarterly totals) all reach the daily fit target carrying their
 per-week \code{confidence_weight} (lower for fourier, ~0.4-0.5), which
 \code{calc_model_likelihood()} consumes as a per-observation weight -- so
@@ -135,9 +135,14 @@ integer daily downscale would make them zero-case weeks that keep their
 weight: Cote d'Ivoire 2025 had 8 cases left over 40 weeks). The account is
 the WHO annual total (\code{DATA_WHO_ANNUAL/who_afro_annual.csv}) or,
 for a country-year without an AFRO annual row, the positive year-to-date
-total of its WHO weekly rows (Somalia 2026: the AI spread the WHO
-epidemiological update's 233 cases, which the three WHO weekly rows
-already report). Skipped, with a message, when
+total of its WHO weekly rows, which accounts only for the weeks up to WHO's
+last report of the year: it reconciles those weeks and any imputed AI run
+that touches a WHO-reported week (Somalia 2026 in the 2026-09-18 AI
+snapshot: the AI spread the WHO epidemiological update's 233 cases, which
+the three WHO weekly rows already report), and leaves alone an imputed run
+that starts after WHO's last report (Somalia's Africa CDC weeks of
+February-September 2026). AI \code{inferred_zero} weeks are never emptied.
+Skipped, with a message, when
 \code{PATHS$DATA_WHO_ANNUAL} is not set.
 }
 Every week these rules (or the WHO spreading) change is listed, with its

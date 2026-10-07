@@ -20,6 +20,13 @@
 #'   \item \code{"documented_zero"} — confirmed-absence weeks. They flow through
 #'     the merge and only fill genuine gaps because the surveillance combiner's
 #'     priority de-duplication keeps higher-priority sources where they overlap.
+#'   \item \code{"inferred_zero"} — zero weeks inferred from a country's absence
+#'     from a multi-country summary that lists the countries reporting cases
+#'     (Africa CDC, ECDC and WHO situation reports). They carry a lower
+#'     \code{confidence_weight} (0.2-0.6) than documented zeros, which the
+#'     likelihood applies per observation; the combiner treats them as imputed
+#'     (trust tier 3), so any direct report of the week wins and they stay out of
+#'     the dispersion estimates.
 #' }
 #' We drop \code{"assumed_zero"} (default-zero assumptions with no evidentiary
 #' basis) and any other / missing method tag.
@@ -78,7 +85,7 @@ process_AI_cholera_data <- function(PATHS) {
           df$disaggregation_method <- sub("\r$", "", df$disaggregation_method)
           dm <- df$disaggregation_method
           keep <- !is.na(dm) &
-               (dm %in% c("observed", "documented_zero") | startsWith(dm, "fourier_"))
+               (dm %in% c("observed", "documented_zero", "inferred_zero") | startsWith(dm, "fourier_"))
           df <- df[keep, , drop = FALSE]
           if (nrow(df) == 0) return(NULL)
           df

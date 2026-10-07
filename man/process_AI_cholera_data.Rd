@@ -43,6 +43,13 @@ down-weight them rather than treat them as direct observations.
 \item \code{"documented_zero"} — confirmed-absence weeks. They flow through
 the merge and only fill genuine gaps because the surveillance combiner's
 priority de-duplication keeps higher-priority sources where they overlap.
+\item \code{"inferred_zero"} — zero weeks inferred from a country's absence
+from a multi-country summary that lists the countries reporting cases
+(Africa CDC, ECDC and WHO situation reports). They carry a lower
+\code{confidence_weight} (0.2-0.6) than documented zeros, which the
+likelihood applies per observation; the combiner treats them as imputed
+(trust tier 3), so any direct report of the week wins and they stay out of
+the dispersion estimates.
 }
 We drop \code{"assumed_zero"} (default-zero assumptions with no evidentiary
 basis) and any other / missing method tag.
