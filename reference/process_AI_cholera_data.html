@@ -19,7 +19,7 @@ processed CSV that the surveillance combiner reads as a fourth source.'><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -47,7 +47,7 @@ processed CSV that the surveillance combiner reads as a fourth source.'><meta pr
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Process AI-mined Weekly Cholera Surveillance Data into the MOSAIC Per-Source Schema</h1>
-      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v1.0.0/R/process_AI_cholera_data.R" class="external-link"><code>R/process_AI_cholera_data.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v1.1.0/R/process_AI_cholera_data.R" class="external-link"><code>R/process_AI_cholera_data.R</code></a></small>
       <div class="d-none name"><code>process_AI_cholera_data.Rd</code></div>
     </div>
 
@@ -97,6 +97,13 @@ down-weight them rather than treat them as direct observations.</p></li>
 <li><p><code>"documented_zero"</code> — confirmed-absence weeks. They flow through
 the merge and only fill genuine gaps because the surveillance combiner's
 priority de-duplication keeps higher-priority sources where they overlap.</p></li>
+<li><p><code>"inferred_zero"</code> — zero weeks inferred from a country's absence
+from a multi-country summary that lists the countries reporting cases
+(Africa CDC, ECDC and WHO situation reports). They carry a lower
+<code>confidence_weight</code> (0.2-0.6) than documented zeros, which the
+likelihood applies per observation; the combiner treats them as imputed
+(trust tier 3), so any direct report of the week wins and they stay out of
+the dispersion estimates.</p></li>
 </ul><p>We drop <code>"assumed_zero"</code> (default-zero assumptions with no evidentiary
 basis) and any other / missing method tag.</p>
 <p>The <code>source</code> column in the raw AI file tracks the agent's

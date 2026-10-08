@@ -126,31 +126,31 @@ data(epidemic_peaks)
 head(epidemic_peaks)
 #>     iso_code peak_start  peak_date  peak_stop reported_cases
 #> 1        AGO 2006-03-27 2006-04-23 2006-05-23            757
-#> 118      AGO 2018-01-01 2018-01-04 2018-01-31             24
+#> 174      AGO 2018-01-01 2018-01-04 2018-01-31             24
 #> 2        AGO 2025-04-09 2025-04-28 2025-05-25            303
 #> 3        AGO 2025-10-02 2025-10-13 2025-10-24            149
 #> 4        AGO 2026-04-18 2026-04-27 2026-05-12            106
-#> 120      BDI 2016-08-01 2016-08-21 2016-10-31              9
+#> 5        BDI 1980-02-02 1980-02-10 1980-02-18             15
 #>     outbreak_interval_days
 #> 1                       57
-#> 118                     30
+#> 174                     30
 #> 2                       46
 #> 3                       22
 #> 4                       24
-#> 120                     91
+#> 5                       16
 
 # Countries with epidemic data
 unique(epidemic_peaks$iso_code)
-#>  [1] "AGO" "BDI" "BEN" "CAF" "CIV" "CMR" "COD" "COG" "COM" "ETH" "GHA" "GIN"
-#> [13] "GNB" "KEN" "LBR" "MOZ" "MWI" "NER" "NGA" "RWA" "SDN" "SEN" "SLE" "SOM"
-#> [25] "SSD" "TCD" "TGO" "TZA" "UGA" "ZAF" "ZMB" "ZWE"
+#>  [1] "AGO" "BDI" "BEN" "BFA" "CAF" "CIV" "CMR" "COD" "COG" "COM" "ETH" "GHA"
+#> [13] "GIN" "GNB" "KEN" "LBR" "MLI" "MOZ" "MWI" "NER" "NGA" "RWA" "SDN" "SEN"
+#> [25] "SLE" "SOM" "SSD" "TCD" "TGO" "TZA" "UGA" "ZAF" "ZMB" "ZWE"
 
 # Recent peaks (2024-2025)
 recent_peaks <- epidemic_peaks[epidemic_peaks$peak_date >= as.Date("2024-01-01"), ]
 table(recent_peaks$iso_code)
 #> 
-#> AGO BDI CAF CIV COD COG COM ETH GHA KEN MOZ NER NGA RWA SDN SOM SSD TCD TGO TZA 
-#>   3   4   1   1   3   1   1   3   1   3   3   1   3   1   4   2   3   2   1   3 
+#> AGO BDI CAF CIV CMR COD COG COM ETH GHA KEN MOZ NER NGA RWA SDN SOM SSD TCD TZA 
+#>   3   4   1   1   1   3   1   1   3   1   3   3   1   3   1   4   2   3   2   3 
 #> UGA ZMB ZWE 
 #>   3   2   2 
 
@@ -160,5 +160,5 @@ epidemic_peaks$duration <- as.numeric(
 )
 summary(epidemic_peaks$duration)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>    2.00   16.00   28.00   32.13   50.00  117.00 
+#>    2.00   16.00   25.00   29.34   44.00  117.00 
 ```

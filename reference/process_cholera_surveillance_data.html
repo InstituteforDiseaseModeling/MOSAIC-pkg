@@ -15,7 +15,7 @@ using MOSAIC::downscale_weekly_values with integer allocation."><meta property="
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,7 +43,7 @@ using MOSAIC::downscale_weekly_values with integer allocation."><meta property="
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Process Combined Weekly and Daily Cholera Surveillance Data with Truly Square Data Structure</h1>
-      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v1.0.0/R/process_cholera_surveillance_data.R" class="external-link"><code>R/process_cholera_surveillance_data.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v1.1.0/R/process_cholera_surveillance_data.R" class="external-link"><code>R/process_cholera_surveillance_data.R</code></a></small>
       <div class="d-none name"><code>process_cholera_surveillance_data.Rd</code></div>
     </div>
 
@@ -104,8 +104,8 @@ per-row values; and square-grid cells with no observation get
 <code>PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv</code>.</p></li>
 <li><p>Applies the trust-tier gate before downscaling: only weeks tagged
 <code>disaggregation_method</code> <code>assumed_zero</code> (surveillance silence, a pure
-assumption) are NA-blanked. <code>observed</code>, <code>documented_zero</code>, direct
-WHO/JHU/SUPP rows, AND <code>fourier_*</code> (synthetic reconstructions of real
+assumption) are NA-blanked. <code>observed</code>, <code>documented_zero</code>,
+<code>inferred_zero</code>, direct WHO/JHU/SUPP rows, AND <code>fourier_*</code> (synthetic reconstructions of real
 annual/quarterly totals) all reach the daily fit target carrying their
 per-week <code>confidence_weight</code> (lower for fourier, ~0.4-0.5), which
 <code><a href="calc_model_likelihood.html">calc_model_likelihood()</a></code> consumes as a per-observation weight – so
@@ -182,9 +182,18 @@ integer daily downscale would make them zero-case weeks that keep their
 weight: Cote d'Ivoire 2025 had 8 cases left over 40 weeks). The account is
 the WHO annual total (<code>DATA_WHO_ANNUAL/who_afro_annual.csv</code>) or,
 for a country-year without an AFRO annual row, the positive year-to-date
-total of its WHO weekly rows (Somalia 2026: the AI spread the WHO
-epidemiological update's 233 cases, which the three WHO weekly rows
-already report). Skipped, with a message, when
+total of its WHO weekly rows, which accounts only for the weeks up to WHO's
+last report of the year: it reconciles those weeks and any imputed AI run
+that touches a WHO-reported week (Somalia 2026 in the 2026-09-18 AI
+snapshot: the AI spread the WHO epidemiological update's 233 cases, which
+the three WHO weekly rows already report), and leaves alone an imputed run
+that starts after WHO's last report (Somalia's Africa CDC weeks of
+February-September 2026). AI <code>inferred_zero</code> weeks are never emptied.</p></li>
+<li><p><strong>Inferred zeros next to a positive count.</strong> An AI
+<code>inferred_zero</code> week within 28 days of another row of the country
+that reports cases is dropped before selection: the absence it infers is
+contradicted nearby.
+Skipped, with a message, when
 <code>PATHS$DATA_WHO_ANNUAL</code> is not set.</p></li>
 </ol><p>Every week these rules (or the WHO spreading) change is listed, with its
 before and after values and the evidence, in

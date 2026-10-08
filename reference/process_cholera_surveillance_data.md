@@ -91,10 +91,11 @@ Invisibly returns `NULL`. Side effects:
 
 - Applies the trust-tier gate before downscaling: only weeks tagged
   `disaggregation_method` `assumed_zero` (surveillance silence, a pure
-  assumption) are NA-blanked. `observed`, `documented_zero`, direct
-  WHO/JHU/SUPP rows, AND `fourier_*` (synthetic reconstructions of real
-  annual/quarterly totals) all reach the daily fit target carrying their
-  per-week `confidence_weight` (lower for fourier, ~0.4-0.5), which
+  assumption) are NA-blanked. `observed`, `documented_zero`,
+  `inferred_zero`, direct WHO/JHU/SUPP rows, AND `fourier_*` (synthetic
+  reconstructions of real annual/quarterly totals) all reach the daily
+  fit target carrying their per-week `confidence_weight` (lower for
+  fourier, ~0.4-0.5), which
   [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
   consumes as a per-observation weight – so low-confidence reconstructed
   weeks inform the fit at reduced weight rather than being dropped.
@@ -181,10 +182,20 @@ Four cross-source rules keep one outbreak from being counted twice:
     Cote d'Ivoire 2025 had 8 cases left over 40 weeks). The account is
     the WHO annual total (`DATA_WHO_ANNUAL/who_afro_annual.csv`) or, for
     a country-year without an AFRO annual row, the positive year-to-date
-    total of its WHO weekly rows (Somalia 2026: the AI spread the WHO
-    epidemiological update's 233 cases, which the three WHO weekly rows
-    already report). Skipped, with a message, when
-    `PATHS$DATA_WHO_ANNUAL` is not set.
+    total of its WHO weekly rows, which accounts only for the weeks up
+    to WHO's last report of the year: it reconciles those weeks and any
+    imputed AI run that touches a WHO-reported week (Somalia 2026 in the
+    2026-09-18 AI snapshot: the AI spread the WHO epidemiological
+    update's 233 cases, which the three WHO weekly rows already report),
+    and leaves alone an imputed run that starts after WHO's last report
+    (Somalia's Africa CDC weeks of February-September 2026). AI
+    `inferred_zero` weeks are never emptied.
+
+5.  **Inferred zeros next to a positive count.** An AI `inferred_zero`
+    week within 28 days of another row of the country that reports cases
+    is dropped before selection: the absence it infers is contradicted
+    nearby. Skipped, with a message, when `PATHS$DATA_WHO_ANNUAL` is not
+    set.
 
 Every week these rules (or the WHO spreading) change is listed, with its
 before and after values and the evidence, in

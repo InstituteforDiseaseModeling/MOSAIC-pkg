@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,9 +35,106 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v1.0.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v1.1.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.1.0" id="mosaic-110">MOSAIC 1.1.0<a class="anchor" aria-label="anchor" href="#mosaic-110"></a></h2>
+<p>The default data objects are rebuilt on the refreshed AI-enhanced surveillance (<code>config_default</code> v7.1, <code>priors_default</code> v18.1), from the October 2026 full rerun of ai-cholera-data-mining, and psi is retrained on it (psi D). Two surveillance fixes land with them. The cases-dispersion panel trend is re-derived on v7.1, so the likelihood tag becomes <code>R/v1.1.0+v7.1_k_trend</code>, and a resume refuses shards scored by 1.0.x.</p>
+<div class="section level3">
+<h3 id="surveillance-1-1-0">Surveillance<a class="anchor" aria-label="anchor" href="#surveillance-1-1-0"></a></h3>
+<ul><li>
+<code><a href="../reference/process_cholera_surveillance_data.html">process_cholera_surveillance_data()</a></code> drops an AI <code>inferred_zero</code> week that lies within 28 days of a positive count of the same country (adjustment rule <code>inferred_zero_near_positive</code>).
+<ul><li>The AI builder infers some zeros as the residual of an aggregate that finer data already account for. Where the finer evidence overshoots the aggregate, as for KEN in 2024, it claims zeros inside an outbreak.</li>
+<li>The rule drops 2,689 inferred-zero rows, 283 of them since 2018. The rest stay, at their confidence weight.</li>
+</ul></li>
+<li>New curations in <code>inst/extdata/surveillance_curation.csv</code>:
+<ul><li>
+<code>CIV-2025-first-report</code>: WHO window from 2025 week 23.</li>
+<li>
+<code>CIV-2025-W53-restatement</code> and <code>BEN-2023-W52-restatement</code>: year-end cumulative-series timing artifacts of the AI builder are dropped.</li>
+<li>CIV’s 2025 total is now 586; BEN’s 2023 total is 11 (a 17-case undercount, documented).</li>
+</ul></li>
+<li>
+<strong>Keeping inferred zeros is checked by an A/B calibration</strong> (10,000 x 5, 2018 start, refreshed data, without vs with inferred zeros).
+<ul><li>UGA, on the weeks both arms observe: bias 1.89 -&gt; 1.37, R² 0.04 -&gt; 0.09, MAE 21.3 -&gt; 16.6 cases/week.</li>
+<li>UGA, in the 65 inferred-zero weeks: the arm without them predicts 7,391 cases.</li>
+<li>SOM on the refreshed data: R² 0.32 against 0.13 for the v2026-10.04 production fit on the same weeks. Its 2026 over-prediction falls from 10.9x to 5.4x of the newly reported 2,465 cases.</li>
+</ul></li>
+</ul></div>
+<div class="section level3">
+<h3 id="psi-retrained-on-the-refreshed-surveillance-psi-d-1-1-0">psi retrained on the refreshed surveillance (psi D)<a class="anchor" aria-label="anchor" href="#psi-retrained-on-the-refreshed-surveillance-psi-d-1-1-0"></a></h3>
+<ul><li>
+<code>model/input/pred_psi_suitability_day.csv</code> (the <code>psi_jt</code> source), <code>pred_psi_suitability_week.csv</code> and <code>psi_suitability_config.json</code> are psi D, a retrain of C3 that changes only the surveillance it learns from.
+<ul><li>Same model and settings as C3: <code><a href="../reference/est_suitability.html">est_suitability()</a></code> lstm_v2 hierarchical FiLM, feature set v7.3, target D, 10 seeds 11-110, bias correction under the 0.102.0 rule.</li>
+<li>Same covariates: C3’s compile call and inputs, including the Nino4 NMME gap-fill ENSO input; climate, EMDAT and demographic inputs are byte-identical. Only the 18 surveillance-derived columns of the suitability panel differ (panel md5 1917488487daf33187e98f4c9be46a83).</li>
+<li>Fit 2015-01-01 to 2026-10-01 (C3: to 2026-09-17); predictions 2018-01-01 to 2027-04-29, so the window is unchanged. Day file md5 60163deed20c46cdca0565862639de5d.</li>
+</ul></li>
+<li>
+<strong>The change is well beyond the keras noise floor.</strong> Over 2023+, D against C3 has a median per-country r of 0.74 and mean |diff| of 0.058. A disjoint-seed replicate (seeds 121-220) against D has 0.94 and 0.024. 28 of 40 locations move by more than twice the noise floor.</li>
+<li>
+<strong>Why it was retrained.</strong> C3 had not seen the 2026 reports. With them, SOM’s April-September 2026 psi falls from 0.72-0.91 to 0.11-0.39, so the transmission model no longer forecasts a mid-2026 surge that the reports contradict. psi still rises from November 2026 to March 2027 (0.73-0.93), the forecast period. NER, ERI, BEN and NAM fall and LBR rises over the window, following the new and restated reports.</li>
+<li>
+<code>psi_jt</code> fingerprint (md5 of its values as little-endian doubles): e0498acdc601b3c987fb5bc00815d224.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="default-data-objects-1-1-0">Default data objects<a class="anchor" aria-label="anchor" href="#default-data-objects-1-1-0"></a></h3>
+<ul><li>
+<strong>Inputs.</strong> MOSAIC-data beb95f5, the combined surveillance regenerated by this release from ai-cholera-data-mining dec875e5, and psi D (next section). <code>param_seasonal_dynamics.csv</code> (not re-estimated) and every other input are those of v7.0 and v18.0.
+<ul><li>
+<strong>Built in two passes, checked by a third:</strong> <code>priors_default.rda</code> d19fc415b38d46765a23dd6f8d2d9228, <code>.json</code> e2c396527a4eb8011303e232f883d627; <code>config_default.rda</code> ff2be2f7c4e67e9c38897af7b65180c3, <code>.json</code> 59391c3ee8099cc278c43f6cc2e3527d. The priors do not read psi, so they are byte-identical with psi C3 or D in the config.</li>
+</ul></li>
+<li>
+<strong>Observations (2018-01-01 to 2027-04-29).</strong>
+<ul><li>Observed case cells: 77,392 -&gt; 122,269. Death cells: 62,034 -&gt; 104,720.</li>
+<li>Of these changes, 46,564 case cells go from NA to a value (45,686 of them zeros: AI documented or inferred zeros); 1,687 go from a value to NA; 8,608 values change.</li>
+<li>Cases 1,275,087 -&gt; 1,270,369; deaths 22,360 -&gt; 21,876.</li>
+<li>
+<code>reported_tier</code> location-days 60,662/1,365/15,365 -&gt; 90,839/1,365/30,065 (tiers 1/2/3). Mean case weight 0.875 -&gt; 0.840.</li>
+<li>The last observed day moves later in 30 of 40 locations: SOM 2026-01-18 -&gt; 2026-09-06, UGA 2025-07-13 -&gt; 2026-09-20, KEN 2026-06-21 -&gt; 2026-09-27, BEN 2025-11-02 -&gt; 2026-09-20, NER 2025-01-19 -&gt; 2026-07-26, TGO 2025-03-23 -&gt; 2026-08-30. ERI gains its first.</li>
+<li>Largest changes in cases:
+<ul><li>SOM 2026: 198 -&gt; 2,663; COD 2026: 48,076 -&gt; 50,376 (AI reports after WHO’s last week).</li>
+<li>NGA 2022: 20,316 -&gt; 12,586 (AI observed weeks replace a Fourier reconstruction).</li>
+<li>BFA 2025: 481 -&gt; 0; BEN 2025: 150 -&gt; 0 (AI restatements).</li>
+</ul></li>
+</ul></li>
+<li>
+<strong>Initial conditions</strong> change only in ETH, MLI and RWA (expected E + I):
+<ul><li>ETH 1,036 -&gt; 171: the December 2017 AI reconstruction its window falls back to is restated about 6x lower.</li>
+<li>RWA 250 -&gt; 5: its window now holds AI observed counts.</li>
+<li>MLI 4 -&gt; 409: it is now a seeded quiet start.</li>
+<li>Every other prior and point parameter is identical.</li>
+</ul></li>
+<li>
+<strong><code>epidemic_peaks</code></strong> is re-estimated (<code>model/input/param_epidemic_peaks.csv</code>, 161 -&gt; 223 rows over all years). In the config window it has 97 -&gt; 101 rows:
+<ul><li>added: CMR 2026-08-30, COD 2022-12-25, COD 2026-09-06, ETH 2018-08-13, ETH 2020-01-13, ETH 2020-04-30, KEN 2019-12-08, NER 2021-08-30;</li>
+<li>removed: COD 2018-09-09, COD 2026-08-30, NGA 2022-10-24, TGO 2024-10-17.</li>
+</ul></li>
+<li>
+<strong>Cases dispersion.</strong> AI documented zeros are observed (tier-1) weeks, so they enter the dispersion fits.
+<ul><li>At burn-in 45, k changes for several countries: AGO 6.09 -&gt; 0.97, ETH 5.10 -&gt; 1.30, ZWE 2.49 -&gt; 0.48 (now its own fit), ZMB 1.30 -&gt; 0.63, SSD 2.19 -&gt; 1.12, TCD 2.05 -&gt; 1.04, COG 1.88 -&gt; 0.48, NGA 1.50 -&gt; 1.03.</li>
+<li>The panel trend is re-derived on v7.1 (22 locations; the slope is 0.23 on v7.0):
+<ul><li>intercept 0.127, slope 0.031, residual SD 0.88;</li>
+<li>BEN, MWI, TGO and UGA (collapsed fits) and ZAF (too few observed weeks) take it: 1.19, 1.32, 1.14, 1.22 and 1.18. MWI had a fit of its own on v7.0, 3.52.</li>
+</ul></li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.0.1" id="mosaic-101">MOSAIC 1.0.1<a class="anchor" aria-label="anchor" href="#mosaic-101"></a></h2>
+<p>Two fixes to how the AI-mined surveillance data enter the combined series. The default data objects are not rebuilt (<code>config_default</code> v7.0, <code>priors_default</code> v18.0); refreshing them with the rerun AI data is a separate release.</p>
+<ul><li>
+<code><a href="../reference/process_cholera_surveillance_data.html">process_cholera_surveillance_data()</a></code>: a year-to-date account now reconciles only the weeks it covers. That means the WHO weekly total of a year with no AFRO annual row, or, in the current year, an AFRO annual total equal to the WHO weekly sum, which is a provisional sum of the dashboard. The account now reconciles imputed rows only up to WHO’s last report of the year, plus any imputed AI run that touches a WHO-reported week (a re-spread of the same period).
+<ul><li>Before, it reconciled the whole year. Independent AI data after WHO stopped reporting were scaled to zero and dropped: Somalia’s Africa CDC weeks of February to September 2026 (25 weeks, about 1,930 cases) and Zimbabwe’s IFRC weeks of May to July 2026.</li>
+<li>A completed year’s annual total is still the account for the whole year.</li>
+<li>With the 2026-09-18 AI snapshot behind <code>config_default</code> v7.0, the combined surveillance file is unchanged.</li>
+</ul></li>
+<li>
+<code><a href="../reference/process_AI_cholera_data.html">process_AI_cholera_data()</a></code> keeps the AI repository’s <code>inferred_zero</code> weeks: zeros inferred from a country’s absence from a multi-country summary (Africa CDC, ECDC and WHO situation reports).
+<ul><li>They keep their <code>confidence_weight</code> (0.2 to 0.6, against 0.8 for documented zeros), which <code><a href="../reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> applies per observation.</li>
+<li>The combiner treats them as imputed (trust tier 3), so any direct report of the week wins and they stay out of the dispersion estimates. The annual reconciliation never empties them.</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.0" id="mosaic-100">MOSAIC 1.0.0<a class="anchor" aria-label="anchor" href="#mosaic-100"></a></h2>
 <p>First stable release. The code is identical to 0.103.0: only the version changes, so 1.0.0 simulates, scores and resumes exactly as the 0.103.0 build behind the production suite (the likelihood implementation tag stays <code>R/v0.103.0+near_bound_k_trend</code>).</p>
