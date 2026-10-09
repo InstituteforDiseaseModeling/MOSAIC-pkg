@@ -50,3 +50,5 @@
 - [Rubric amendment 1.0.3 REGISTERED (2026-10-03 18:40)](project_rubric_amendment_1_0_3.md) — merge e6beba91; thresholds df63c969; fingerprint 67d62fad; B3 binds plan to merge; A2 V3 = hand-off V3 mode
 - [Rubric amendment 1.0.4 REGISTERED (2026-10-04 09:17)](project_rubric_amendment_1_0_4.md) — plan-only: 50k/250k, no regional runs; thresholds 643243b7; fingerprint 1376de74; evaluator skips unplanned scales; 1.1.0 next
 - [Rubric amendment 1.1.0 REGISTERED (2026-10-04 10:36)](project_rubric_amendment_1_1_0.md) — full-window EVAL, tiers 1-2 graded, 2023+ breakdown, M-DEGENERATE sampling scale; evaluator 1.1.0; thresholds 850b2258; fingerprint aabb9dd6
+- [Rubric amendment 1.1.2 REGISTERED (2026-10-08 21:36)](project_rubric_amendment_1_1_2.md) — continental-only v2026-10.08-continental; thresholds 5867d424, fingerprint 088c3036; assembler vs 1.1.x eval_start trap -> crosscheck file; stage 2 = rule 1.0 (V6 ZAF again)
+- [Ensemble-size literature (2026-10-09)](reference_ensemble_size_literature.md) — no framework fixes a count; ABC k∝N^{4/(d+4)}, Snyder collapse exp(τ²/2), CRPS ×(1+1/M), GPC best eta rule; review claude/ensemble_size_review/
