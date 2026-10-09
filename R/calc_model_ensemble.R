@@ -1017,10 +1017,18 @@ calc_model_ensemble <- function(config,
     })
 
     if (!is.null(root_dir)) {
-      parallel::clusterCall(cl, function(rd) {
+      # An anonymous function serialises with its enclosing environment, and here
+      # that is this whole frame: the four all-NA ensemble arrays (~1.2 GB each at
+      # 40 locations x 3,406 days x 108 x 10), param_configs, config and priors.
+      # clusterCall would ship ~5.7 GB to every worker before any task ran, which
+      # took the continental ensemble to the 1.47 TB watchdog on dugong. Detach it,
+      # as .ens_task_fun is below.
+      .set_root <- function(rd) {
         MOSAIC::set_root_directory(rd)
-        MOSAIC::get_paths()
-      }, root_dir)
+        invisible(NULL)
+      }
+      environment(.set_root) <- .GlobalEnv
+      parallel::clusterCall(cl, .set_root, root_dir)
     }
 
     # Export the configs AND the worker function to each worker's global env

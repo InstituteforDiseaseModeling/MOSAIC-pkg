@@ -358,12 +358,21 @@ optimize_ensemble_subset <- function(ensemble,
     if (use_parallel) {
       cell_blocks <- parallel::splitIndices(n_cells, min(length(cl), n_cells))
       cell_blocks <- Filter(function(b) length(b) > 0L, cell_blocks)
-      block_res <- parallel::parLapply(cl, cell_blocks, function(cells) {
+      # The block function must not carry this frame: serialising a closure ships
+      # its enclosing environments, which here reach optimize_ensemble_subset()'s
+      # cases_array/deaths_array, the very arrays exported once as .GLOBAL_*.
+      # Give it only the small per-call values; .GLOBAL_* resolve worker-side.
+      .block_fun <- function(cells) {
         MOSAIC:::.optimize_eval_cell_block(
           cells, ns, w_per_param_by_n, .GLOBAL_cases_array, .GLOBAL_deaths_array,
           .GLOBAL_ord_c, .GLOBAL_ord_d, .GLOBAL_pid_full, n_times, objective,
           wis_probs, need_mean_c, need_mean_d)
-      })
+      }
+      environment(.block_fun) <- list2env(list(
+        ns = ns, w_per_param_by_n = w_per_param_by_n, n_times = n_times,
+        objective = objective, wis_probs = wis_probs,
+        need_mean_c = need_mean_c, need_mean_d = need_mean_d), parent = globalenv())
+      block_res <- parallel::parLapply(cl, cell_blocks, .block_fun)
       kern <- .optimize_combine_cell_blocks(block_res, n_cells, n_grid,
                                             objective, need_mean_c, need_mean_d)
     } else {
