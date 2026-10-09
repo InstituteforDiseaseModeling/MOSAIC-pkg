@@ -169,7 +169,9 @@
                call. = FALSE)
      parallel::clusterExport(cl, c("fit_predict_fn", "data_bundle", "hyperparams"),
                              envir = environment())
-     parallel::parLapply(cl, seeds, function(seed) {
+     # Detached from this frame so it does not ship a second copy of data_bundle
+     # to every worker: the names it reads are the clusterExport()ed ones above.
+     .seed_fun <- function(seed) {
           t0  <- proc.time()
           err <- NA_character_
           out <- tryCatch(
@@ -181,7 +183,9 @@
                })
           list(seed = seed, out = out, error = err,
                elapsed = round((proc.time() - t0)["elapsed"] / 60, 2))
-     })
+     }
+     environment(.seed_fun) <- globalenv()
+     parallel::parLapply(cl, seeds, .seed_fun)
 }
 
 #' TRUE when the MOSAIC namespace was created by devtools/pkgload::load_all()
