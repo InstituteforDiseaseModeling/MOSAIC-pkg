@@ -1,3 +1,18 @@
+# MOSAIC 1.2.0
+
+`control$predictions$optimize_subset` now defaults to `TRUE`.
+
+- **Before**, the final ensemble was the tier-selected best subset. `grid_search_best_subset()` returns the smallest size whose best-subset ESS, A and CVw meet the first tier it can satisfy. Under the saturated weights the ESS is about 0.93 n, so at `ESS_best = 100` that is about 108 members in every run, whatever the number of draws. No step compared fit across sizes.
+- **Now** `optimize_ensemble_subset()` runs after the candidate ensemble. It picks the size, between `optimize_min_n` (30) and the tier-selected size, that minimises `optimize_objective` (default `"mae"`) over the simulated candidate members.
+  - That subset drives `posteriors.json`, `posterior_quantiles.csv`, the canonical ensemble and every downstream plot and metric.
+  - The tier subset stays in `is_best_subset` / `weight_best`; the optimised one is written to `is_best_subset_opt` / `weight_best_opt`.
+- **Limits:**
+  - The optimiser can only choose sizes at or below the tier-selected size, because it reuses the candidate's simulations.
+  - It scores fit on the training data, so the posterior is conditioned on ensemble predictive performance rather than purely likelihood-weighted.
+  - Set `optimize_subset = FALSE` for the previous behaviour.
+- **No resume impact:** the resume guard does not compare `control$predictions`, so runs started under 1.1.x resume unchanged.
+- **Production suites:** the suite runner `run_job.R` of the deploy bundles sets `optimize_subset <- FALSE` explicitly. A suite takes the new default only once its runner drops that line.
+
 # MOSAIC 1.1.1
 
 Functions sent to PSOCK workers no longer carry their defining frame. Results are unchanged; the memory each worker receives at set-up falls by orders of magnitude on large runs.

@@ -3566,9 +3566,12 @@ run_mosaic <- run_MOSAIC
 #'       object driving all downstream plots and metrics. The tier-selected subset
 #'       is preserved in the \code{is_best_subset} / \code{weight_best} columns of
 #'       \code{samples.parquet} for provenance; the optimized selection is written
-#'       to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. When
-#'       \code{FALSE} (default), the tier-selected subset is canonical and no
-#'       \code{_opt} columns are written. \strong{Statistical note:} enabling this
+#'       to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. Default
+#'       \code{TRUE} since v1.2.0 (\code{FALSE} before). When \code{FALSE}, the
+#'       tier-selected subset is canonical and no \code{_opt} columns are written.
+#'       The optimizer chooses among subsets of the simulated candidate ensemble,
+#'       so the size it selects is between \code{optimize_min_n} and the
+#'       tier-selected size. \strong{Statistical note:} enabling this
 #'       flag yields a posterior conditioned on ensemble predictive performance
 #'       (MAE / WIS / R^2+bias on the training data) rather than a pure
 #'       likelihood-weighted posterior.
@@ -3874,7 +3877,7 @@ mosaic_control_defaults <- function(calibration = NULL,
   default_predictions <- list(
     n_iter_ensemble    = 10L,            # Stochastic runs per posterior parameter set (ensemble)
     n_iter_best        = 100L,           # Stochastic runs for medoid single-config plots
-    optimize_subset    = FALSE,          # Post-ensemble subset optimization
+    optimize_subset    = TRUE,           # Post-ensemble subset optimization (default TRUE since v1.2.0)
     optimize_min_n     = 30L,            # Minimum subset size -- raised from 4L (Fox et al. 2024)
                                           # to guard against KDE degeneracy when the
                                           # optimized subset drives posterior densities.
