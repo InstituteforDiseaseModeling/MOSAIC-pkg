@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,9 +35,28 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v1.1.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.1.1" id="mosaic-111">MOSAIC 1.1.1<a class="anchor" aria-label="anchor" href="#mosaic-111"></a></h2>
+<p>Functions sent to PSOCK workers no longer carry their defining frame. Results are unchanged; the memory each worker receives at set-up falls by orders of magnitude on large runs.</p>
+<ul><li>
+<strong><code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code>.</strong> The worker set-up passed an anonymous function to <code>clusterCall()</code>, and a closure serialises with its enclosing environment. Here that was the whole calc frame: the four all-NA ensemble arrays, about 1.2 GB each at 40 locations x 3,406 days x 108 x 10, plus <code>param_configs</code>, <code>config</code> and <code>priors</code>.
+<ul><li>Every worker received about 5.7 GB before any task ran. The master serialises one worker at a time, so memory rose about 30 GB a minute: about 1.2 TB at 126 workers.</li>
+<li>That is what took the 2018-start continental ensemble to the 1.47 TB watchdog on dugong, twice, at 168 and at 126 workers. The ramp was the same at both counts because the serialisation rate sets the slope; the worker count only decides where it ends.</li>
+<li>The function is now defined first and detached (<code>environment&lt;-</code> the global environment), as the task function already was.</li>
+</ul></li>
+<li>
+<strong><code><a href="../reference/optimize_ensemble_subset.html">optimize_ensemble_subset()</a></code>.</strong> The parallel cell-block function was defined inside <code>.eval_ns()</code>, so it carried the optimiser’s full <code>cases_array</code> and <code>deaths_array</code>, the arrays it had just exported once as <code>.GLOBAL_*</code>. It now gets an environment holding only its small per-call values.</li>
+<li>
+<strong>The psi seed runner</strong> (<code>ensemble_suitability.R</code>). It sent a second copy of <code>data_bundle</code>, already exported, to every worker; it is detached the same way.</li>
+<li>
+<strong>New test</strong> <code>test-psock-closure-payload.R</code>:
+<ul><li>a source scan fails on any anonymous function passed straight to <code>clusterCall</code> / <code>clusterApply(LB)</code> / <code>parLapply</code> / <code>parSapply</code>;</li>
+<li>a functional test measures the serialised block function the optimiser sends to a real 2-worker cluster (it must be under 1/20 of one ensemble array) and checks the parallel result equals the serial one.</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.1.0" id="mosaic-110">MOSAIC 1.1.0<a class="anchor" aria-label="anchor" href="#mosaic-110"></a></h2>
 <p>The default data objects are rebuilt on the refreshed AI-enhanced surveillance (<code>config_default</code> v7.1, <code>priors_default</code> v18.1), from the October 2026 full rerun of ai-cholera-data-mining, and psi is retrained on it (psi D). Two surveillance fixes land with them. The cases-dispersion panel trend is re-derived on v7.1, so the likelihood tag becomes <code>R/v1.1.0+v7.1_k_trend</code>, and a resume refuses shards scored by 1.0.x.</p>

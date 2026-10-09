@@ -1,5 +1,42 @@
 # Changelog
 
+## MOSAIC 1.1.1
+
+Functions sent to PSOCK workers no longer carry their defining frame.
+Results are unchanged; the memory each worker receives at set-up falls
+by orders of magnitude on large runs.
+
+- **[`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md).**
+  The worker set-up passed an anonymous function to `clusterCall()`, and
+  a closure serialises with its enclosing environment. Here that was the
+  whole calc frame: the four all-NA ensemble arrays, about 1.2 GB each
+  at 40 locations x 3,406 days x 108 x 10, plus `param_configs`,
+  `config` and `priors`.
+  - Every worker received about 5.7 GB before any task ran. The master
+    serialises one worker at a time, so memory rose about 30 GB a
+    minute: about 1.2 TB at 126 workers.
+  - That is what took the 2018-start continental ensemble to the 1.47 TB
+    watchdog on dugong, twice, at 168 and at 126 workers. The ramp was
+    the same at both counts because the serialisation rate sets the
+    slope; the worker count only decides where it ends.
+  - The function is now defined first and detached (`environment<-` the
+    global environment), as the task function already was.
+- **[`optimize_ensemble_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/optimize_ensemble_subset.md).**
+  The parallel cell-block function was defined inside `.eval_ns()`, so
+  it carried the optimiser’s full `cases_array` and `deaths_array`, the
+  arrays it had just exported once as `.GLOBAL_*`. It now gets an
+  environment holding only its small per-call values.
+- **The psi seed runner** (`ensemble_suitability.R`). It sent a second
+  copy of `data_bundle`, already exported, to every worker; it is
+  detached the same way.
+- **New test** `test-psock-closure-payload.R`:
+  - a source scan fails on any anonymous function passed straight to
+    `clusterCall` / `clusterApply(LB)` / `parLapply` / `parSapply`;
+  - a functional test measures the serialised block function the
+    optimiser sends to a real 2-worker cluster (it must be under 1/20 of
+    one ensemble array) and checks the parallel result equals the serial
+    one.
+
 ## MOSAIC 1.1.0
 
 The default data objects are rebuilt on the refreshed AI-enhanced
