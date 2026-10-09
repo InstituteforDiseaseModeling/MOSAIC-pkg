@@ -100,9 +100,12 @@ optimizer (MAE / WIS / R^2+bias) refines the best subset used for
 object driving all downstream plots and metrics. The tier-selected subset
 is preserved in the \code{is_best_subset} / \code{weight_best} columns of
 \code{samples.parquet} for provenance; the optimized selection is written
-to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. When
-\code{FALSE} (default), the tier-selected subset is canonical and no
-\code{_opt} columns are written. \strong{Statistical note:} enabling this
+to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. Default
+\code{TRUE} since v1.2.0 (\code{FALSE} before). When \code{FALSE}, the
+tier-selected subset is canonical and no \code{_opt} columns are written.
+The optimizer chooses among subsets of the simulated candidate ensemble,
+so the size it selects is between \code{optimize_min_n} and the
+tier-selected size. \strong{Statistical note:} enabling this
 flag yields a posterior conditioned on ensemble predictive performance
 (MAE / WIS / R^2+bias on the training data) rather than a pure
 likelihood-weighted posterior.
