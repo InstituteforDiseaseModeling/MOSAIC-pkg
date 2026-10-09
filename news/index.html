@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,9 +35,30 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v1.1.1/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.2.0" id="mosaic-120">MOSAIC 1.2.0<a class="anchor" aria-label="anchor" href="#mosaic-120"></a></h2>
+<p><code>control$predictions$optimize_subset</code> now defaults to <code>TRUE</code>.</p>
+<ul><li>
+<strong>Before</strong>, the final ensemble was the tier-selected best subset. <code><a href="../reference/grid_search_best_subset.html">grid_search_best_subset()</a></code> returns the smallest size whose best-subset ESS, A and CVw meet the first tier it can satisfy. Under the saturated weights the ESS is about 0.93 n, so at <code>ESS_best = 100</code> that is about 108 members in every run, whatever the number of draws. No step compared fit across sizes.</li>
+<li>
+<strong>Now</strong> <code><a href="../reference/optimize_ensemble_subset.html">optimize_ensemble_subset()</a></code> runs after the candidate ensemble. It picks the size, between <code>optimize_min_n</code> (30) and the tier-selected size, that minimises <code>optimize_objective</code> (default <code>"mae"</code>) over the simulated candidate members.
+<ul><li>That subset drives <code>posteriors.json</code>, <code>posterior_quantiles.csv</code>, the canonical ensemble and every downstream plot and metric.</li>
+<li>The tier subset stays in <code>is_best_subset</code> / <code>weight_best</code>; the optimised one is written to <code>is_best_subset_opt</code> / <code>weight_best_opt</code>.</li>
+</ul></li>
+<li>
+<strong>Limits:</strong>
+<ul><li>The optimiser can only choose sizes at or below the tier-selected size, because it reuses the candidate’s simulations.</li>
+<li>It scores fit on the training data, so the posterior is conditioned on ensemble predictive performance rather than purely likelihood-weighted.</li>
+<li>Set <code>optimize_subset = FALSE</code> for the previous behaviour.</li>
+</ul></li>
+<li>
+<strong>No resume impact:</strong> the resume guard does not compare <code>control$predictions</code>, so runs started under 1.1.x resume unchanged.</li>
+<li>
+<strong>Production suites:</strong> the suite runner <code>run_job.R</code> of the deploy bundles sets <code>optimize_subset &lt;- FALSE</code> explicitly. A suite takes the new default only once its runner drops that line.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.1.1" id="mosaic-111">MOSAIC 1.1.1<a class="anchor" aria-label="anchor" href="#mosaic-111"></a></h2>
 <p>Functions sent to PSOCK workers no longer carry their defining frame. Results are unchanged; the memory each worker receives at set-up falls by orders of magnitude on large runs.</p>

@@ -184,10 +184,13 @@ mosaic_control_defaults(
     subset is preserved in the `is_best_subset` / `weight_best` columns
     of `samples.parquet` for provenance; the optimized selection is
     written to new `is_best_subset_opt` / `weight_best_opt` columns.
-    When `FALSE` (default), the tier-selected subset is canonical and no
-    `_opt` columns are written. **Statistical note:** enabling this flag
-    yields a posterior conditioned on ensemble predictive performance
-    (MAE / WIS / R^2+bias on the training data) rather than a pure
+    Default `TRUE` since v1.2.0 (`FALSE` before). When `FALSE`, the
+    tier-selected subset is canonical and no `_opt` columns are written.
+    The optimizer chooses among subsets of the simulated candidate
+    ensemble, so the size it selects is between `optimize_min_n` and the
+    tier-selected size. **Statistical note:** enabling this flag yields
+    a posterior conditioned on ensemble predictive performance (MAE /
+    WIS / R^2+bias on the training data) rather than a pure
     likelihood-weighted posterior.
 
   - `optimize_min_n`: Minimum subset size the optimizer may select

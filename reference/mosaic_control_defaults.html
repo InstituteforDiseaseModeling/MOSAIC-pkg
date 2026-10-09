@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,7 +59,7 @@ paths: File management (output directories, plots)
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Build Complete MOSAIC Control Structure</h1>
-      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v1.1.1/R/run_MOSAIC.R" class="external-link"><code>R/run_MOSAIC.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/R/run_MOSAIC.R" class="external-link"><code>R/run_MOSAIC.R</code></a></small>
       <div class="d-none name"><code>mosaic_control_defaults.Rd</code></div>
     </div>
 
@@ -177,9 +177,12 @@ optimizer (MAE / WIS / R^2+bias) refines the best subset used for
 object driving all downstream plots and metrics. The tier-selected subset
 is preserved in the <code>is_best_subset</code> / <code>weight_best</code> columns of
 <code>samples.parquet</code> for provenance; the optimized selection is written
-to new <code>is_best_subset_opt</code> / <code>weight_best_opt</code> columns. When
-<code>FALSE</code> (default), the tier-selected subset is canonical and no
-<code>_opt</code> columns are written. <strong>Statistical note:</strong> enabling this
+to new <code>is_best_subset_opt</code> / <code>weight_best_opt</code> columns. Default
+<code>TRUE</code> since v1.2.0 (<code>FALSE</code> before). When <code>FALSE</code>, the
+tier-selected subset is canonical and no <code>_opt</code> columns are written.
+The optimizer chooses among subsets of the simulated candidate ensemble,
+so the size it selects is between <code>optimize_min_n</code> and the
+tier-selected size. <strong>Statistical note:</strong> enabling this
 flag yields a posterior conditioned on ensemble predictive performance
 (MAE / WIS / R^2+bias on the training data) rather than a pure
 likelihood-weighted posterior.</p></li>
