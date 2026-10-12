@@ -14,7 +14,8 @@ evaluate_rolling_cv(
   ess_min = 0,
   min_cells_ci = 5L,
   n_boot = 1000L,
-  seed = 1L
+  seed = 1L,
+  observed_tiers = c(1, 2)
 )
 }
 \arguments{
@@ -45,7 +46,11 @@ suppressed (lo = hi = NA) and \code{ci_suppressed = TRUE}. Default \code{5}.}
 
 \item{n_boot}{Bootstrap resamples over cells for the skill CI (default 1000).}
 
-\item{seed}{RNG seed for the bootstrap (default 1).
+\item{seed}{RNG seed for the bootstrap (default 1).}
+
+\item{observed_tiers}{Surveillance tiers scored out of sample when the
+predictions carry \code{observed_tier} (default \code{c(1, 2)}: observed and
+reconstructed weeks); \code{NULL} scores every tier. See Details.
 
 When the predictions carry a \code{model} column (\code{ensemble},
 \code{ensemble_opt}, \code{best}, \code{medoid}), every metric is computed and
@@ -89,6 +94,12 @@ largest scored set; predictions further out are not scored in any window. An
 
 Scoring uses \strong{trusted observed only}: rows whose \code{observed_source}
 is missing or not \code{"AI"} (when \code{trusted_only = TRUE}).
+
+\strong{Surveillance tier.} When the predictions carry \code{observed_tier}
+(the config's \code{reported_tier}: 1 observed, 2 reconstructed, 3 imputed),
+out-of-sample days whose tier is not in \code{observed_tiers} are not scored.
+The in-sample rows, which the baselines are fitted on, keep every tier, as
+the calibration did. Predictions without the column are scored unchanged.
 
 \strong{Embargo and scoring origin.} The harness labels the dates in
 \code{(cutoff, cutoff + embargo]} as \code{segment == "embargo"}; those are

@@ -24,6 +24,12 @@
 #' Scoring uses \strong{trusted observed only}: rows whose \code{observed_source}
 #' is missing or not \code{"AI"} (when \code{trusted_only = TRUE}).
 #'
+#' \strong{Surveillance tier.} When the predictions carry \code{observed_tier}
+#' (the config's \code{reported_tier}: 1 observed, 2 reconstructed, 3 imputed),
+#' out-of-sample days whose tier is not in \code{observed_tiers} are not scored.
+#' The in-sample rows, which the baselines are fitted on, keep every tier, as
+#' the calibration did. Predictions without the column are scored unchanged.
+#'
 #' \strong{Embargo and scoring origin.} The harness labels the dates in
 #' \code{(cutoff, cutoff + embargo]} as \code{segment == "embargo"}; those are
 #' never scored. For each metric the scoring origin is
@@ -75,6 +81,9 @@
 #'   suppressed (lo = hi = NA) and \code{ci_suppressed = TRUE}. Default \code{5}.
 #' @param n_boot Bootstrap resamples over cells for the skill CI (default 1000).
 #' @param seed RNG seed for the bootstrap (default 1).
+#' @param observed_tiers Surveillance tiers scored out of sample when the
+#'   predictions carry \code{observed_tier} (default \code{c(1, 2)}: observed and
+#'   reconstructed weeks); \code{NULL} scores every tier. See Details.
 #'
 #' When the predictions carry a \code{model} column (\code{ensemble},
 #' \code{ensemble_opt}, \code{best}, \code{medoid}), every metric is computed and
@@ -104,7 +113,8 @@ evaluate_rolling_cv <- function(predictions,
                                 ess_min         = 0,
                                 min_cells_ci    = 5L,
                                 n_boot          = 1000L,
-                                seed            = 1L) {
+                                seed            = 1L,
+                                observed_tiers  = c(1, 2)) {
 
      d <- .rcv_eval_input(predictions)
      req <- c("iso_code", "cutoff_date", "date", "metric", "segment",
@@ -126,6 +136,10 @@ evaluate_rolling_cv <- function(predictions,
      emb_end  <- if (any(emb_rows)) tapply(d$date[emb_rows], emb_key[emb_rows], max) else numeric(0)
      if (trusted_only && "observed_source" %in% names(d))
           d <- d[is.na(d$observed_source) | d$observed_source != "AI", ]
+     if (!is.null(observed_tiers) && "observed_tier" %in% names(d)) {
+          untrusted <- d$segment != "IS" & !(d$observed_tier %in% observed_tiers)
+          d$observed[untrusted] <- NA_real_
+     }
      horizons_months <- sort(unique(as.numeric(horizons_months)))
      baselines <- match.arg(baselines, several.ok = TRUE)
      has_ess <- "ess" %in% names(d)

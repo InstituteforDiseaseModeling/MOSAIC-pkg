@@ -71,7 +71,9 @@
 #' The predictions table has one row per (cutoff x location x date x metric) with
 #' columns: \code{run_id, iso_code, anchor_date, cutoff_date, date, metric,
 #' segment} (IS/embargo/OOS), \code{weeks_ahead, horizon_bucket, observed,
-#' observed_source, pred_central} (the scored series), \code{pred_mean,
+#' observed_source, observed_tier} (the config's \code{reported_tier}: 1
+#' observed, 2 reconstructed, 3 imputed; NA where the config has none),
+#' \code{pred_central} (the scored series), \code{pred_mean,
 #' pred_median, central_method}, CI columns (\code{pi*_lo}/\code{pi*_hi}) and
 #' \code{pred_median_obs}, the median of the same draws as the CI columns (the
 #' observation-level predictive median since v0.101.0), which WIS pairs with them.
@@ -219,6 +221,7 @@ run_rolling_cv <- function(PATHS,
      loc_cfg_full <- MOSAIC::get_location_config(iso = iso, config = base_config)
      obs_cases_full  <- .rcv_as_matrix(loc_cfg_full$reported_cases,  length(loc_cfg_full$location_name), length(cfg_dates))
      obs_deaths_full <- .rcv_as_matrix(loc_cfg_full$reported_deaths, length(loc_cfg_full$location_name), length(cfg_dates))
+     obs_tier_full   <- .rcv_tier_matrix(loc_cfg_full, length(cfg_dates))
      has_obs    <- colSums(!is.na(obs_cases_full)) > 0
      L_obs      <- if (any(has_obs)) max(cfg_dates[has_obs]) else cfg_stop
 
@@ -426,6 +429,7 @@ run_rolling_cv <- function(PATHS,
                     obs_cases      = obs_cases_full,     # unmasked, trusted
                     obs_deaths     = obs_deaths_full,
                     obs_dates      = cfg_dates,
+                    obs_tier       = obs_tier_full,
                     location_names = loc_cfg_full$location_name,
                     models         = models,
                     n_reps         = n_reps_best_medoid,
@@ -657,6 +661,7 @@ compile_rolling_cv_predictions <- function(dir_output,
      nloc <- length(loc$location_name)
      oc <- .rcv_as_matrix(loc$reported_cases,  nloc, length(cfg_dates))
      od <- .rcv_as_matrix(loc$reported_deaths, nloc, length(cfg_dates))
+     ot <- .rcv_tier_matrix(loc, length(cfg_dates))
 
      runs <- man$runs
      tabs <- list()
@@ -673,7 +678,7 @@ compile_rolling_cv_predictions <- function(dir_output,
                cutoff = as.Date(runs$cutoff_date[r]), anchor = anchor,
                embargo_days = embargo_days, horizons_months = horizons,
                obs_cases = oc, obs_deaths = od, obs_dates = cfg_dates,
-               location_names = loc$location_name,
+               obs_tier = ot, location_names = loc$location_name,
                models = models, n_reps = n_reps_best_medoid,
                central_method = central_method)
      }
@@ -689,7 +694,8 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rolling_cv_compile_run <- function(ensemble, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, model = "ensemble",
-                                    central_method = c(cases = "median", deaths = "mean")) {
+                                    central_method = c(cases = "median", deaths = "mean"),
+                                    obs_tier = NULL) {
      central_method <- .mosaic_resolve_central_method(central_method)
      n_t   <- ensemble$n_time_points
      ds    <- as.Date(ensemble$date_start); de <- as.Date(ensemble$date_stop)
@@ -716,6 +722,8 @@ compile_rolling_cv_predictions <- function(dir_output,
                central <- if (cm == "mean") mn else med
                obs_src <- if (metric == "cases") obs_cases else obs_deaths
                observed <- if (!is.na(oi)) getrow(obs_src, oi)[obs_idx] else rep(NA_real_, n_t)
+               tier     <- if (!is.na(oi) && !is.null(obs_tier)) getrow(obs_tier, oi)[obs_idx]
+                           else rep(NA_integer_, n_t)
                df <- data.frame(
                     run_id = run_id, model = model, iso_code = locs[i],
                     anchor_date = as.character(anchor), cutoff_date = as.character(cutoff),
@@ -724,6 +732,7 @@ compile_rolling_cv_predictions <- function(dir_output,
                     horizon_bucket = lab$horizon_bucket,
                     observed = as.numeric(observed),
                     observed_source = "config_reported",
+                    observed_tier = as.integer(tier),
                     # pred_central is the scored series (mean or median per channel);
                     # pred_median/pred_mean are both retained for cross-walk.
                     pred_central = as.numeric(central),
@@ -764,6 +773,15 @@ compile_rolling_cv_predictions <- function(dir_output,
                if (length(bad)) paste0("; unknown: ", paste(sprintf("'%s'", bad), collapse = ", ")),
                call. = FALSE)
      unique(models)
+}
+
+#' The config's surveillance trust tier (reported_tier) as an (n_loc x n_t)
+#' matrix, or NULL for a config that predates the field (v6.1)
+#' @keywords internal
+#' @noRd
+.rcv_tier_matrix <- function(loc_cfg, n_t) {
+     if (is.null(loc_cfg$reported_tier)) return(NULL)
+     .rcv_as_matrix(loc_cfg$reported_tier, length(loc_cfg$location_name), n_t)
 }
 
 #' Coerce a config reported_* field to an (n_loc x n_t) matrix
@@ -859,7 +877,8 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rcv_compile_all_models <- function(run_dir, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, models, n_reps,
-                                    central_method = c(cases = "median", deaths = "mean")) {
+                                    central_method = c(cases = "median", deaths = "mean"),
+                                    obs_tier = NULL) {
      central_method <- .mosaic_resolve_central_method(central_method)
      cal      <- file.path(run_dir, "2_calibration")
      ens_path <- file.path(cal, "ensemble_candidate.rds")
@@ -873,7 +892,7 @@ compile_rolling_cv_predictions <- function(dir_output,
                embargo_days = embargo_days, horizons_months = horizons_months,
                obs_cases = obs_cases, obs_deaths = obs_deaths, obs_dates = obs_dates,
                location_names = location_names, model = model,
-               central_method = central_method)
+               central_method = central_method, obs_tier = obs_tier)
      }
 
      parts <- list(emit(ens, "ensemble"))

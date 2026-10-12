@@ -208,7 +208,9 @@ from the run directories with \code{\link{compile_rolling_cv_predictions}}.
 The predictions table has one row per (cutoff x location x date x metric) with
 columns: \code{run_id, iso_code, anchor_date, cutoff_date, date, metric,
 segment} (IS/embargo/OOS), \code{weeks_ahead, horizon_bucket, observed,
-observed_source, pred_central} (the scored series), \code{pred_mean,
+observed_source, observed_tier} (the config's \code{reported_tier}: 1
+observed, 2 reconstructed, 3 imputed; NA where the config has none),
+\code{pred_central} (the scored series), \code{pred_mean,
 pred_median, central_method}, CI columns (\code{pi*_lo}/\code{pi*_hi}) and
 \code{pred_median_obs}, the median of the same draws as the CI columns (the
 observation-level predictive median since v0.101.0), which WIS pairs with them.

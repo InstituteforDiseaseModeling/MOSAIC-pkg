@@ -1,3 +1,12 @@
+# MOSAIC 1.2.1
+
+Rolling-CV scoring can now skip imputed surveillance days.
+
+- **Before**, `run_rolling_cv()` labelled every held-out observation `observed_source = "config_reported"`. So `evaluate_rolling_cv(trusted_only = TRUE)`, which drops only `"AI"` rows, filtered nothing, and imputed and AI-inferred zeros were scored as truth.
+- **Now** the predictions table carries `observed_tier`, the config's `reported_tier` (1 observed, 2 reconstructed, 3 imputed; NA for a config without the field). `compile_rolling_cv_predictions()` writes it too.
+- `evaluate_rolling_cv()` gains `observed_tiers` (default `c(1, 2)`; `NULL` scores every tier). Out-of-sample days outside those tiers are not scored. In-sample rows keep every tier, because the baselines are fitted on them, as the calibration used them.
+- Predictions written before 1.2.1 have no `observed_tier` column and are scored exactly as before.
+
 # MOSAIC 1.2.0
 
 `control$predictions$optimize_subset` now defaults to `TRUE`.
