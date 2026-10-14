@@ -54,3 +54,4 @@
 - [v0.103.0 2018-start red team](project_v0103_2018_start_redteam.md) — 4 objects byte-repro recipe; open traps: two-pass priors undocumented, stale MOSAIC-docs spec, MOZ repo nu, UGA k
 - [v1.0 docs compliance pass](project_v1_docs_compliance_pass.md) — agents self-register symbols in STYLE-GUIDE.md; "reconstructed" tier-2 vs NEWS "reconstruction"; stale rules after pkg bumps; open decisions
 - [ggplot date-breaks pixel trap](reference_ggplot_date_breaks_pixel_trap.md) — date_breaks="12 months" is NOT Jan-1 anchored; reproduce breaks before dating a figure line from pixels
+- [Coarsened posterior v1.3.0 review](project_coarsened_posterior_v130_review.md) — optimizer cost ~K x grid (10 h continental at K=1000); batch ratio ~1.5*sqrt(10/ESS); saturated bit-identity excludes weight_all; fixture regen recipe
