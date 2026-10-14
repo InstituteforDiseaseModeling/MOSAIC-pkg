@@ -25,6 +25,10 @@
 #' that \code{run_MOSAIC()} builds the candidate ensemble from (by default
 #' \eqn{w \propto \exp(-0.5 \min(\Delta, 4))}{w ~ exp(-0.5 min(Delta, 4))} with
 #' \eqn{\Delta = -2(\ell - \max \ell)}{Delta = -2 (ll - max ll)} within the top N).
+#' Under \code{weighting = "coarsened"} (the \code{run_MOSAIC()} default since
+#' 1.3.0) the members are a systematic resample of the coarsened posterior and
+#' carry count weights; the per-N weights are those count weights
+#' (\code{base_weights}) renormalised over the top N.
 #' So at N = the full ensemble the weights, and therefore
 #' \code{diagnostics_score}, reproduce the candidate ensemble, and any score
 #' change reported for a smaller N is due to the subset, not to a change of
@@ -104,7 +108,10 @@
 #'   serial path. Must be a \code{"PSOCK"} cluster (FORK is unsafe at this point
 #'   in the pipeline). For trivially small problems the function falls back to
 #'   serial regardless of \code{cl}.
-#' @param weighting Best-subset weighting scheme for the per-N weights, matching \code{control$targets$best_subset_weighting} (the scheme of \code{weight_best}): \code{"saturated"} (default) or \code{"tempered"}.
+#' @param weighting Weighting scheme for the per-N weights, matching \code{control$targets$best_subset_weighting} (the scheme of \code{weight_best}): \code{"saturated"} (default), \code{"tempered"} or \code{"coarsened"} (renormalised \code{base_weights}).
+#' @param base_weights Member weights aligned with \code{likelihoods}, required
+#'   when \code{weighting = "coarsened"} (the resampled members' count weights,
+#'   \code{weight_best}) and not used otherwise.
 #' @param ess_method ESS formula for \code{evaluation_table$ess}: \code{"kish"} (default) or \code{"perplexity"}.
 #' @param verbose Logical; if \code{TRUE}, emit progress messages.
 #'
@@ -152,9 +159,10 @@ optimize_ensemble_subset <- function(ensemble,
                                      central_method = "median",
                                      stride = 1L,
                                      cl = NULL,
-                                     weighting = c("saturated", "tempered"),
+                                     weighting = c("saturated", "tempered", "coarsened"),
                                      ess_method = c("kish", "perplexity"),
-                                     verbose = TRUE) {
+                                     verbose = TRUE,
+                                     base_weights = NULL) {
 
   objective <- match.arg(objective)
   weighting <- match.arg(weighting)
@@ -207,6 +215,14 @@ optimize_ensemble_subset <- function(ensemble,
     stop("'likelihoods' must contain only finite values.", call. = FALSE)
   }
 
+  if (identical(weighting, "coarsened")) {
+    if (is.null(base_weights) || length(base_weights) != n_params ||
+        any(!is.finite(base_weights)) || any(base_weights <= 0)) {
+      stop("weighting = \"coarsened\" needs base_weights: one positive finite weight per ",
+           "parameter set (the resampled members' count weights).", call. = FALSE)
+    }
+  }
+
   if (!is.null(seeds)) {
     if (length(seeds) != n_params) {
       stop(sprintf("Length of 'seeds' (%d) must match ensemble$n_param_sets (%d).",
@@ -231,6 +247,7 @@ optimize_ensemble_subset <- function(ensemble,
     cases_array  <- eng_cases[, , sort_order, , drop = FALSE]
     deaths_array <- eng_deaths[, , sort_order, , drop = FALSE]
     if (!is.null(seeds)) seeds <- seeds[sort_order]
+    if (!is.null(base_weights)) base_weights <- base_weights[sort_order]
     # Carried in lockstep with cases_array so member<->seed alignment survives.
     if (!is.null(ens_member_seeds)) ens_member_seeds <- ens_member_seeds[sort_order]
   } else {
@@ -341,7 +358,7 @@ optimize_ensemble_subset <- function(ensemble,
     weights_by_n      <- vector("list", n_grid)  # full per-param weights (for ESS)
     w_per_param_by_n  <- vector("list", n_grid)  # weights / n_stoch (kernel input)
     for (g in seq_len(n_grid)) {
-      w_n <- .mosaic_best_subset_weights(likelihoods[1:ns[g]], scheme = weighting)$weights
+      w_n <- .optimize_subset_weights(likelihoods, base_weights, ns[g], weighting)
       weights_by_n[[g]]     <- w_n
       w_per_param_by_n[[g]] <- w_n / n_stoch
     }
@@ -551,8 +568,7 @@ optimize_ensemble_subset <- function(ensemble,
   opt_member_seeds <- if (!is.null(ens_member_seeds)) ens_member_seeds[optimal_indices] else optimal_seeds
 
   # Re-compute the best-subset weights at optimal N (same scheme as the loop)
-  optimal_weights <- .mosaic_best_subset_weights(likelihoods[optimal_indices],
-                                                 scheme = weighting)$weights
+  optimal_weights <- .optimize_subset_weights(likelihoods, base_weights, optimal_n, weighting)
 
   # Slice arrays: the engine arrays are in likelihood order here; the
   # observation-level arrays were left in the ensemble's order, so their members
@@ -833,4 +849,15 @@ optimize_ensemble_subset <- function(ensemble,
 
   K <- 2
   (mae_term + (alpha_50 / 2) * is_50 + (alpha_95 / 2) * is_95) / (K + 0.5)
+}
+
+# Weights of the top-n members (likelihood-sorted inputs): the legacy schemes
+# re-weight the top n by .mosaic_best_subset_weights(); "coarsened" renormalises
+# the members' count weights over the top n.
+.optimize_subset_weights <- function(likelihoods, base_weights, n, weighting) {
+  if (identical(weighting, "coarsened")) {
+    w <- base_weights[seq_len(n)]
+    return(w / sum(w))
+  }
+  .mosaic_best_subset_weights(likelihoods[seq_len(n)], scheme = weighting)$weights
 }

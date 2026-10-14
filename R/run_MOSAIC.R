@@ -1187,6 +1187,28 @@ run_MOSAIC <- function(config,
             paste(config$location_name[.unscorable], collapse = ", "), .scorable_rule)
   }
 
+  # Scored observation cells: the n_obs of the coarsened posterior's learning
+  # rate eta = coarsening_alpha / n_obs. It depends on the observations and the
+  # scored window only, so it is computed once; the auto-mode stopping rule and
+  # the post-calibration posterior both read it.
+  n_obs_scored <- .mosaic_n_scored_obs(config, control$likelihood$.score_window_resolved)
+  if (identical(control$targets$best_subset_weighting, "coarsened")) {
+    if (!is.finite(n_obs_scored)) {
+      stop("best_subset_weighting = \"coarsened\" needs the number of scored observation ",
+           "cells, but the config has no finite reported_cases or reported_deaths inside the ",
+           "scored window.", call. = FALSE)
+    }
+    log_msg("Coarsened posterior: alpha = %g over %s scored observation cells (eta = %.3g)",
+            control$targets$coarsening_alpha, format(n_obs_scored, big.mark = ","),
+            control$targets$coarsening_alpha / n_obs_scored)
+    if (identical(control$likelihood$cases_scoring, "weekly")) {
+      log_msg(paste0("  Note: n_obs counts location-DAYS under either cases rule. The weekly cases ",
+                     "likelihood sums about one-seventh as many cases cells, so with the same ",
+                     "coarsening_alpha the posterior is flatter than under daily scoring ",
+                     "(raise coarsening_alpha to compensate)."))
+    }
+  }
+
   # Estimate the per-location NB dispersion ONCE per calibration. k is a property
   # of the OBSERVATIONS alone, so it is identical for every simulation; the
   # former code recomputed it inside every likelihood call (~7.2M redundant
@@ -1414,7 +1436,7 @@ run_MOSAIC <- function(config,
   # below (a single directory scan), so it is left out to avoid scanning twice.
   resumed_n_reused <- 0L
   if (isTRUE(resume) && identical(state$mode, "auto")) {
-    state <- .mosaic_reconstruct_state(state, dirs, control, param_names_sampled)
+    state <- .mosaic_reconstruct_state(state, dirs, control, param_names_sampled, n_obs_scored)
     resumed_n_reused <- state$total_sims_run
     if (resumed_n_reused > 0L) {
       log_msg("[RESUME] Reusing %d existing simulation(s); continuing from sim_id %d in phase '%s' (batch %d)",
@@ -1584,8 +1606,10 @@ run_MOSAIC <- function(config,
             control$calibration$max_batches_predictive,
             control$calibration$max_batch_predictive,
             control$calibration$batch_size_adaptive)
-    log_msg("Target ESS: %d per parameter | Max simulations: %d",
-            control$targets$ESS_param, control$calibration$max_simulations_total)
+    log_msg("Stopping rule: %.1f%% of parameters at function-specific ESS >= %d on the %s posterior, seed-batch ratio < %.2f | Max simulations: %d",
+            100 * control$targets$ESS_param_prop, as.integer(control$targets$ESS_param),
+            control$targets$best_subset_weighting, control$targets$batch_ratio_max,
+            as.integer(control$calibration$max_simulations_total))
 
     repeat {
       if (state$converged || state$total_sims_run >= control$calibration$max_simulations_total) break
@@ -1719,7 +1743,8 @@ run_MOSAIC <- function(config,
       # which meant the final batch never updated the converged flag and
       # always emitted a spurious "no convergence" warning even when the
       # target was met on that last batch.
-      state <- .mosaic_ess_check_update_state(state, dirs, param_names_sampled, control)
+      state <- .mosaic_ess_check_update_state(state, dirs, param_names_sampled, control,
+                                              n_obs_scored)
       .mosaic_save_state(state, state_file)
       .mosaic_save_checkpoint(state, checkpoint_file)
 
@@ -1785,17 +1810,8 @@ run_MOSAIC <- function(config,
 
   if (sum(results$is_valid) > 0) {
     valid_ll <- results$likelihood[results$is_valid]
-    q1 <- stats::quantile(valid_ll, 0.25, na.rm = TRUE)
-    q3 <- stats::quantile(valid_ll, 0.75, na.rm = TRUE)
-    iqr <- q3 - q1
     iqr_mult <- control$weights$iqr_multiplier
-    lower_threshold <- q1 - iqr_mult * iqr
-
-    # Only apply the lower fence. Log-likelihoods have a long left tail (many
-    # poor fits) but are bounded above near 0. Applying an upper fence via
-    # Q3 + k*IQR would incorrectly discard the highest-likelihood simulations
-    # -- exactly the models we want to keep for the posterior. The lower fence
-    # removes pathologically bad simulations via Tukey lower fence.
+    lower_threshold <- .mosaic_lower_fence(valid_ll, iqr_mult)
     results$is_outlier[results$is_valid] <- valid_ll < lower_threshold
 
     log_msg("  Outlier detection (Tukey lower fence only, multiplier = %.1f):", iqr_mult)
@@ -1830,240 +1846,193 @@ run_MOSAIC <- function(config,
   log_msg("  Combined simulations saved: %s", basename(simulations_file))
 
   # ===========================================================================
-  # PARAMETER-SPECIFIC ESS
+  # POSTERIOR WEIGHTS AND ENSEMBLE MEMBERS
   # ===========================================================================
+  # "coarsened" (default): the generalised-Bayes posterior over every valid
+  # draw, w propto exp(eta * (ll - max ll)), eta = coarsening_alpha / n_obs
+  # (weight_all), and a systematic resample of it as the ensemble members
+  # (is_best_subset / weight_best = count / K). No tier search. As under every
+  # scheme, the parameter posterior summaries are built from the members (or
+  # the optimised subset), the draws the predictions use.
+  # "saturated" / "tempered" (legacy): the tier-searched best subset, weighted
+  # by .mosaic_best_subset_weights() (is_best_subset / weight_best).
+  weighting_scheme <- control$targets$best_subset_weighting
+  coarsened_post   <- NULL
 
-  log_msg("Calculating parameter ESS")
-  # Adaptive n_grid: scales with ESS target so higher targets demand finer
-  # posterior resolution. At ESS_param=100 -> 100; at 500 -> 161; at 1000 -> 230.
-  ess_target_val <- control$targets$ESS_param %||% 100
-  n_grid_adaptive <- as.integer(round(100 * (1 + log(max(ess_target_val, 100) / 100))))
-
-  ess_results <- calc_model_ess_parameter(
-    results = results,
-    param_names = param_names_sampled,
-    likelihood_col = "likelihood",
-    n_grid = n_grid_adaptive,
-    method = control$targets$ESS_method,
-    marginal_method = control$targets$ESS_marginal_method %||% "kde",
-    verbose = control$logging$verbose
-  )
-
-  ess_file <- file.path(dirs$cal_diag, "parameter_ess.csv")
-  write.csv(ess_results, ess_file, row.names = FALSE)
-  log_msg("Saved %s", ess_file)
-
-  log_msg("Optimizing subset selection (testing up to 30 tiers with grid search)...")
-
-  subset_tiers <- get_default_subset_tiers(
-    target_ESS_best = control$targets$ESS_best,
-    target_A = control$targets$A_best,
-    target_CVw = control$targets$CVw_best
-  )
-
-  optimal_subset_result <- NULL
-  tier_used <- NULL
-
-  for (tier_name in names(subset_tiers)) {
-    tier <- subset_tiers[[tier_name]]
-
-    log_msg("  Testing tier '%s' (ESS_B=%.0f, A=%.2f, CVw=%.2f)...",
-            tier$name, tier$ESS_B, tier$A, tier$CVw)
-
-    tier_result <- grid_search_best_subset(
-      results = results[results$is_retained, ],
-      target_ESS = tier$ESS_B,
-      target_A = tier$A,
-      target_CVw = tier$CVw,
-      min_size = control$targets$min_best_subset,
-      max_size = control$targets$max_best_subset,
-      ess_method = control$targets$ESS_method,
-      # Search under the scheme weight_best and the final gate use, so a tier
-      # is only certified at a size where the posterior's own weights meet it.
-      weighting = control$targets$best_subset_weighting %||% "saturated",
-      verbose = control$logging$verbose
-    )
-
-    if (tier_result$converged) {
-      # CRITICAL: Calculate percentile from absolute count
-      tier_percentile <- (tier_result$n / nrow(results)) * 100
-      log_msg("    \u2713 Tier '%s' converged at n=%d (%.1f%% of all draws)",
-              tier$name, tier_result$n, tier_percentile)
-      optimal_subset_result <- tier_result
-      tier_used <- tier$name
-      rm(tier)
-      break
-    } else {
-      log_msg("    \u2717 Tier '%s' failed to converge", tier$name)
-      rm(tier_result)
-      rm(tier)
-    }
-  }
-
-  if (exists("subset_tiers")) rm(subset_tiers)
-  gc(verbose = FALSE)
-
-  if (!is.null(optimal_subset_result)) {
-    # CRITICAL: Use $n (not $n_selected) and calculate percentile from count
-    top_subset_final <- optimal_subset_result$subset
-    n_top_final <- optimal_subset_result$n
-    percentile_used <- (n_top_final / nrow(results)) * 100
-    convergence_tier <- tier_used
-
-  } else {
-    # Fallback: use max_best_subset directly (from retained only)
-    retained_for_fallback <- results[results$is_retained, ]
-    n_top_final <- min(control$targets$max_best_subset, nrow(retained_for_fallback))
-    results_ranked_final <- retained_for_fallback[order(retained_for_fallback$likelihood, decreasing = TRUE), ]
-    top_subset_final <- results_ranked_final[1:n_top_final, ]
-    rm(results_ranked_final, retained_for_fallback)
-
-    percentile_used <- (n_top_final / nrow(results)) * 100
-    convergence_tier <- "fallback"
-
-    log_msg("  All tiers failed - using fallback (top %d simulations, %.1f%%)",
-            n_top_final, percentile_used)
-    subset_weighting <- control$targets$best_subset_weighting %||% "saturated"
-    if (!identical(subset_weighting, "saturated")) {
-      log_warn(paste0("Best-subset tier search ran under best_subset_weighting = '%s'; ",
-                      "every tier failed, so the posterior is the top %d draws by ",
-                      "likelihood with posthoc_criteria_met = NO. '%s' weights are ",
-                      "sharper than 'saturated' and may not meet any tier at this ",
-                      "run size."),
-               subset_weighting, n_top_final, subset_weighting)
-    }
-
-    # Create minimal optimal_subset_result for consistency
-    optimal_subset_result <- list(
-      subset = top_subset_final,
-      n = n_top_final,
-      converged = FALSE,
-      metrics = list(ESS = NA_real_, A = NA_real_, CVw = NA_real_)
-    )
-  }
-
-  # Check if we have sufficient valid data for metric calculation
-  n_valid_final <- sum(is.finite(top_subset_final$likelihood))
-
-  if (n_valid_final < 2) {
-    # Insufficient data for metrics - set to NA
-    log_warn("Insufficient valid simulations (%d) in final subset", n_valid_final)
-    log_msg("  Cannot calculate convergence metrics. Setting to NA.")
-
-    ESS_B_final <- NA_real_
-    A_final <- NA_real_
-    CVw_final <- NA_real_
-    gibbs_temperature_final <- 1
+  if (identical(weighting_scheme, "coarsened") && !any(results$is_valid)) {
+    log_warn("No simulation has a finite likelihood: the coarsened posterior is undefined and no ensemble is built")
+    top_subset_final <- results[0, ]
+    n_top_final <- 0L
+    percentile_used <- 0
+    convergence_tier <- "coarsened"
+    ESS_B_final <- A_final <- CVw_final <- NA_real_
+    gibbs_temperature_final <- NA_real_
     is_diag_best <- .mosaic_empty_is_diag()
     is_diag_all  <- .mosaic_empty_is_diag()
+    final_converged <- FALSE
+
+  } else if (identical(weighting_scheme, "coarsened")) {
+    coarsened_post <- .mosaic_coarsened_posterior(
+      log_lik = results$likelihood,
+      n_obs   = n_obs_scored,
+      alpha   = control$targets$coarsening_alpha,
+      min_K   = control$targets$min_best_subset,
+      max_K   = .mosaic_ensemble_K_max(control$targets),
+      seed    = .mosaic_resample_seed(config)
+    )
+    top_subset_final <- results[coarsened_post$counts > 0L, ]
+    n_top_final      <- nrow(top_subset_final)
+    percentile_used  <- (n_top_final / nrow(results)) * 100
+    convergence_tier <- "coarsened"
+
+    # ESS_B / A / CVw of the member weights: reported, never gated.
+    w_members <- coarsened_post$member_weights[coarsened_post$counts > 0L]
+    ESS_B_final <- calc_model_ess(w_members, method = control$targets$ESS_method)
+    A_final     <- calc_model_agreement_index(w_members * length(w_members))$A
+    CVw_final   <- calc_model_cvw(w_members * length(w_members))
+    # Learning rate on the log-likelihood scale (the legacy schemes report the
+    # inverse temperature on the delta-AIC scale here).
+    gibbs_temperature_final <- coarsened_post$eta
+
+    is_diag_best <- calc_is_diagnostics(top_subset_final$likelihood,
+                                        method = control$targets$ESS_method)
+    is_diag_all  <- calc_is_diagnostics(results$likelihood,
+                                        method = control$targets$ESS_method)
+
+    log_msg("Coarsened posterior (alpha = %g, n_obs = %s, eta = %.3g): Kish ESS %.1f of %d valid draws",
+            control$targets$coarsening_alpha, format(n_obs_scored, big.mark = ","),
+            coarsened_post$eta, coarsened_post$ess_kish, sum(results$is_valid))
+    log_msg("  Ensemble members: systematic resample of K = %d draws (seed %d) -> %d unique draws, weighted by count / K",
+            coarsened_post$K, coarsened_post$seed, coarsened_post$n_unique)
+    log_msg("  K = clamp(round(Kish ESS %.1f), min_best_subset %d, min(max_best_subset %d, max_ensemble_members %d)): %s",
+            coarsened_post$ess_kish, as.integer(control$targets$min_best_subset),
+            as.integer(control$targets$max_best_subset),
+            as.integer(control$targets$max_ensemble_members),
+            .mosaic_ensemble_K_binding(coarsened_post$ess_kish, control$targets))
+    log_msg("  Likelihood concentration at eta = 1 (reference only; not a fit or convergence diagnostic): ESS %s of %d draws",
+            if (is.finite(is_diag_all$ess_is)) sprintf("%.2f", is_diag_all$ess_is) else "NA",
+            is_diag_all$n)
+    # final_converged (summary.json posthoc_criteria_met) is set from the
+    # weight health below: ESS >= ESS_param and batch ratio < batch_ratio_max.
+    final_converged <- FALSE
 
   } else {
-    # Calculate final metrics for best subset
-    aic_final <- -2 * top_subset_final$likelihood
-    best_aic_final <- min(aic_final[is.finite(aic_final)])
+    tier_sel <- .mosaic_tier_best_subset(results, control, log = TRUE)
+    top_subset_final <- tier_sel$top_subset
+    n_top_final      <- tier_sel$n
+    percentile_used  <- tier_sel$percentile
+    convergence_tier <- tier_sel$tier
+    rm(tier_sel)
+    gc(verbose = FALSE)
 
-    if (!is.finite(best_aic_final)) {
-      # All AIC values are non-finite
-      log_warn("No finite AIC values in final subset")
+    # Check if we have sufficient valid data for metric calculation
+    n_valid_final <- sum(is.finite(top_subset_final$likelihood))
+
+    if (n_valid_final < 2) {
+      # Insufficient data for metrics - set to NA
+      log_warn("Insufficient valid simulations (%d) in final subset", n_valid_final)
+      log_msg("  Cannot calculate convergence metrics. Setting to NA.")
+
       ESS_B_final <- NA_real_
       A_final <- NA_real_
       CVw_final <- NA_real_
       gibbs_temperature_final <- 1
       is_diag_best <- .mosaic_empty_is_diag()
       is_diag_all  <- .mosaic_empty_is_diag()
+
     } else {
-      # Delta AIC within the best subset (reported below as the actual range).
+      # Calculate final metrics for best subset
       aic_final <- -2 * top_subset_final$likelihood
       best_aic_final <- min(aic_final[is.finite(aic_final)])
-      delta_aic_final <- aic_final - best_aic_final
 
-      weighting_scheme <- control$targets$best_subset_weighting %||% "saturated"
-      # Same helper as results$weight_best below, so the gate metrics describe
-      # the weights the posterior is built from. The degeneracy check below
-      # exists because "tempered" can put ~96% of the mass on one draw.
-      bsw_final <- .mosaic_best_subset_weights(top_subset_final$likelihood, weighting_scheme)
-      weights_final           <- bsw_final$weights
-      gibbs_temperature_final <- bsw_final$temperature
-      effective_range_best    <- bsw_final$effective_range
+      if (!is.finite(best_aic_final)) {
+        # All AIC values are non-finite
+        log_warn("No finite AIC values in final subset")
+        ESS_B_final <- NA_real_
+        A_final <- NA_real_
+        CVw_final <- NA_real_
+        gibbs_temperature_final <- 1
+        is_diag_best <- .mosaic_empty_is_diag()
+        is_diag_all  <- .mosaic_empty_is_diag()
+      } else {
+        # Delta AIC within the best subset (reported below as the actual range).
+        delta_aic_final <- aic_final - best_aic_final
 
-      w_tilde_final <- weights_final
-      w_final <- weights_final * length(weights_final)
+        # Same helper as results$weight_best below, so the gate metrics describe
+        # the weights the posterior is built from. The degeneracy check below
+        # exists because "tempered" can put ~96% of the mass on one draw.
+        bsw_final <- .mosaic_best_subset_weights(top_subset_final$likelihood, weighting_scheme)
+        weights_final           <- bsw_final$weights
+        gibbs_temperature_final <- bsw_final$temperature
+        effective_range_best    <- bsw_final$effective_range
 
-      # Calculate metrics (use control ESS_method)
-      ESS_B_final <- calc_model_ess(w_tilde_final, method = control$targets$ESS_method)
-      ag_final <- calc_model_agreement_index(w_final)
-      A_final <- ag_final$A
-      CVw_final <- calc_model_cvw(w_final)
+        w_tilde_final <- weights_final
+        w_final <- weights_final * length(weights_final)
 
-      # Guard: whichever scheme is selected, a subset posterior that has
-      # collapsed onto one or two draws is not usable for credible intervals.
-      # "tempered" can do this (96% on one draw, measured), so say so loudly
-      # rather than letting a near point mass through as a posterior.
-      if (is.finite(ESS_B_final) && ESS_B_final < 0.05 * length(w_tilde_final)) {
-        log_warn(paste0("Best-subset weighting '%s' produced a near-degenerate ",
-                        "posterior: ESS_B = %.2f over %d members (%.1f%% of mass ",
-                        "on the single heaviest draw). Credible intervals from ",
-                        "this subset are not trustworthy."),
-                 weighting_scheme, ESS_B_final, length(w_tilde_final),
-                 100 * max(w_tilde_final))
+        # Calculate metrics (use control ESS_method)
+        ESS_B_final <- calc_model_ess(w_tilde_final, method = control$targets$ESS_method)
+        ag_final <- calc_model_agreement_index(w_final)
+        A_final <- ag_final$A
+        CVw_final <- calc_model_cvw(w_final)
+
+        # Guard: whichever scheme is selected, a subset posterior that has
+        # collapsed onto one or two draws is not usable for credible intervals.
+        # "tempered" can do this (96% on one draw, measured), so say so loudly
+        # rather than letting a near point mass through as a posterior.
+        if (is.finite(ESS_B_final) && ESS_B_final < 0.05 * length(w_tilde_final)) {
+          log_warn(paste0("Best-subset weighting '%s' produced a near-degenerate ",
+                          "posterior: ESS_B = %.2f over %d members (%.1f%% of mass ",
+                          "on the single heaviest draw). Credible intervals from ",
+                          "this subset are not trustworthy."),
+                   weighting_scheme, ESS_B_final, length(w_tilde_final),
+                   100 * max(w_tilde_final))
+        }
+
+        # eta = 1 likelihood concentration (reference only). These are the raw,
+        # untempered likelihood ratios, which collapse to an ESS of ~1 on any
+        # informative stochastic likelihood whatever the fit; the weight health
+        # of the coarsened posterior is computed below (calc_weight_health()).
+        is_diag_best <- calc_is_diagnostics(top_subset_final$likelihood,
+                                            method = control$targets$ESS_method)
+        is_diag_all  <- calc_is_diagnostics(results$likelihood,
+                                            method = control$targets$ESS_method)
+
+        actual_range_final <- diff(range(delta_aic_final[is.finite(delta_aic_final)]))
+        log_msg("  Subset selection weights (scheme = %s, effective range = %.1f):",
+                weighting_scheme, effective_range_best)
+        log_msg("    Actual delta AIC range: %.1f", actual_range_final)
+        log_msg("    Temperature: %.4f", gibbs_temperature_final)
+        log_msg("  Likelihood concentration at eta = 1 (reference only; not a fit or convergence diagnostic):")
+        log_msg("    ESS of the untempered likelihood weights: %s of %d draws (best subset: %s of %d)",
+                if (is.finite(is_diag_all$ess_is)) sprintf("%.2f", is_diag_all$ess_is) else "NA",
+                is_diag_all$n,
+                if (is.finite(is_diag_best$ess_is)) sprintf("%.2f", is_diag_best$ess_is) else "NA",
+                is_diag_best$n)
+        log_msg("    Expected to be ~1 for informative data scored over thousands of cells; see weight health below.")
       }
+    }
 
-      # Exact (untruncated) importance-sampling diagnostics. ESS_B above is
-      # computed on truncated weights and is bounded away from its worst case by
-      # construction; these are the numbers that show whether the importance
-      # sampler actually explored the posterior.
-      is_diag_best <- calc_is_diagnostics(top_subset_final$likelihood,
-                                          method = control$targets$ESS_method)
-      is_diag_all  <- calc_is_diagnostics(results$likelihood,
-                                          method = control$targets$ESS_method)
+    log_msg("\nFinal subset (%s): %.1f%% (n=%d) | ESS_B=%s, A=%s, CVw=%s, T=%.4f",
+            convergence_tier, percentile_used, n_top_final,
+            if(is.finite(ESS_B_final)) sprintf("%.1f", ESS_B_final) else "NA",
+            if(is.finite(A_final)) sprintf("%.3f", A_final) else "NA",
+            if(is.finite(CVw_final)) sprintf("%.3f", CVw_final) else "NA",
+            gibbs_temperature_final)
 
-      actual_range_final <- diff(range(delta_aic_final[is.finite(delta_aic_final)]))
-      log_msg("  Subset selection weights (scheme = %s, effective range = %.1f):",
-              weighting_scheme, effective_range_best)
-      log_msg("    Actual delta AIC range: %.1f", actual_range_final)
-      log_msg("    Temperature: %.4f", gibbs_temperature_final)
-      log_msg("  Exact IS diagnostics (untruncated -- not used for the gate):")
-      log_msg("    ESS_IS (best subset): %s of %d draws",
-              if (is.finite(is_diag_best$ess_is)) sprintf("%.2f", is_diag_best$ess_is) else "NA",
-              is_diag_best$n)
-      log_msg("    ESS_IS (all draws):   %s of %d draws",
-              if (is.finite(is_diag_all$ess_is)) sprintf("%.2f", is_diag_all$ess_is) else "NA",
-              is_diag_all$n)
-      log_msg("    Pareto k-hat (all draws): %s [%s]",
-              if (is.finite(is_diag_all$khat)) sprintf("%.3f", is_diag_all$khat) else "NA",
-              is_diag_all$khat_status)
-      if (is.finite(is_diag_all$ess_is) && is_diag_all$ess_is < 2) {
-        log_warn(paste0("Exact importance-sampling ESS is %.2f: the untruncated ",
-                        "posterior is effectively a point mass. ESS_B = %.1f above ",
-                        "is computed on truncated weights and does NOT contradict ",
-                        "this."), is_diag_all$ess_is, ESS_B_final)
-      } else if (is.finite(is_diag_all$khat) && is_diag_all$khat >= 0.7) {
-        log_warn("Pareto k-hat = %.3f (>= 0.7): importance-sampling estimates are unreliable.",
-                 is_diag_all$khat)
-      }
+    # Check convergence based on tier used
+    if (convergence_tier != "fallback") {
+      log_msg("\n\u2713 Post-hoc optimization succeeded with %s criteria", convergence_tier)
+      log_msg("  \u2192 Using %.1f%% of simulations (%d total)",
+              percentile_used, n_top_final)
+      final_converged <- TRUE
+    } else {
+      log_msg("\n\u26A0 Post-hoc optimization: No tier converged, using fallback")
+      log_msg("  Consider running more simulations or adjusting tier criteria")
+      final_converged <- FALSE
     }
   }
 
-  log_msg("\nFinal subset (%s): %.1f%% (n=%d) | ESS_B=%s, A=%s, CVw=%s, T=%.4f",
-          convergence_tier, percentile_used, n_top_final,
-          if(is.finite(ESS_B_final)) sprintf("%.1f", ESS_B_final) else "NA",
-          if(is.finite(A_final)) sprintf("%.3f", A_final) else "NA",
-          if(is.finite(CVw_final)) sprintf("%.3f", CVw_final) else "NA",
-          gibbs_temperature_final)
-
-  # Check convergence based on tier used
-  if (convergence_tier != "fallback") {
-    log_msg("\n\u2713 Post-hoc optimization succeeded with %s criteria", convergence_tier)
-    log_msg("  \u2192 Using %.1f%% of simulations (%d total)",
-            percentile_used, n_top_final)
-    final_converged <- TRUE
-  } else {
-    log_msg("\n\u26A0 Post-hoc optimization: No tier converged, using fallback")
-    log_msg("  Consider running more simulations or adjusting tier criteria")
-    final_converged <- FALSE
-  }
-
-  # Update best subset column
+  # Update best subset column (under "coarsened": the resampled members)
   results$is_best_subset <- FALSE
   results$is_best_subset[results$sim %in% top_subset_final$sim] <- TRUE
 
@@ -2072,18 +2041,6 @@ run_MOSAIC <- function(config,
   results$weight_all <- 0
   results$weight_retained <- 0
   results$weight_best <- 0
-
-  if (sum(results$is_valid) > 0) {
-    log_msg("  Computing adaptive Gibbs weights (all valid: n=%d)...", sum(results$is_valid))
-    all_result <- .mosaic_calc_adaptive_gibbs_weights(
-      likelihood = results$likelihood[results$is_valid],
-      weight_floor = control$weights$floor,
-      verbose = control$logging$verbose
-    )
-    results$weight_all[results$is_valid] <- all_result$weights
-    log_msg("    ESS (all): %.1f", all_result$metrics$ESS_perplexity)
-    rm(all_result)
-  }
 
   if (sum(results$is_retained) > 0) {
     log_msg("  Computing Akaike weights (retained subset: n=%d)...", sum(results$is_retained))
@@ -2101,7 +2058,14 @@ run_MOSAIC <- function(config,
     results$weight_retained[results$is_retained] <- retained_weights
   }
 
-  if (sum(results$is_best_subset) > 0) {
+  if (!is.null(coarsened_post)) {
+    # The coarsened posterior over all draws, and the members' count weights.
+    results$weight_all  <- coarsened_post$weights
+    results$weight_best <- coarsened_post$member_weights
+    log_msg("    ESS (members, %s): %.1f", control$targets$ESS_method,
+            calc_model_ess(results$weight_best[results$is_best_subset],
+                           method = control$targets$ESS_method))
+  } else if (sum(results$is_best_subset) > 0) {
     log_msg("  Computing Akaike weights (best subset: n=%d)...", sum(results$is_best_subset))
     # Best-subset weights under control$targets$best_subset_weighting -- the
     # same helper the convergence gate used, so weight_best (posterior
@@ -2109,7 +2073,7 @@ run_MOSAIC <- function(config,
     # the gated ESS_B/A/CVw are computed from one weighting.
     best_weights <- .mosaic_best_subset_weights(
       results$likelihood[results$is_best_subset],
-      control$targets$best_subset_weighting %||% "saturated",
+      weighting_scheme,
       verbose = control$logging$verbose
     )$weights
     results$weight_best[results$is_best_subset] <- best_weights
@@ -2119,8 +2083,88 @@ run_MOSAIC <- function(config,
     log_msg("    ESS (best): %.1f", ESS_best)
   }
 
+  # ---------------------------------------------------------------------------
+  # Weight health (reported; under "coarsened" it also sets
+  # posthoc_criteria_met). The coarsened posterior is eta_ref =
+  # control$targets$coarsening_alpha / n_obs scored cells; calc_weight_health()
+  # also reports the supported resolution eta* and the weights the parameter
+  # posterior is actually built from: the ensemble members' weight_best under
+  # every scheme (count / K resample weights under "coarsened", with the
+  # resample's K and unique members), switched to weight_best_opt below when
+  # the subset optimiser runs. The coarsened block (all draws, weight_all) is
+  # the posterior the members are resampled from and carries the verdict.
+  # ---------------------------------------------------------------------------
+  weight_health <- NULL
+  w_used_col <- "weight_best"
+  if (sum(results$is_valid) >= 2L && sum(results[[w_used_col]]) > 0) {
+    weight_health <- tryCatch(
+      calc_weight_health(
+        log_lik  = results$likelihood,
+        weights  = results[[w_used_col]],
+        params   = results[, param_names_sampled, drop = FALSE],
+        n_obs    = n_obs_scored,
+        sim      = results$sim,
+        coarsening_alpha = control$targets$coarsening_alpha,
+        ess_target = control$targets$ESS_param,
+        batch_max  = control$targets$batch_ratio_max,
+        ess_method = control$targets$ESS_method
+      ),
+      error = function(e) {
+        log_warn("Weight health could not be computed: %s", conditionMessage(e))
+        NULL
+      })
+    if (!is.null(weight_health)) {
+      weight_health$weights_used_column <- w_used_col
+      weight_health$weighting <- weighting_scheme
+      if (!is.null(coarsened_post)) {
+        weight_health$resample <- list(
+          K = coarsened_post$K, n_unique = coarsened_post$n_unique, seed = coarsened_post$seed,
+          ess_kish_members = calc_model_ess(results$weight_best[results$is_best_subset],
+                                            method = "kish"))
+        final_converged <- identical(weight_health$status, "ok")
+      } else if (is.finite(weight_health$coarsened$eta_ref)) {
+        results$weight_all <- .mosaic_tempered_weights(results$likelihood,
+                                                       weight_health$coarsened$eta_ref)
+      }
+      wc <- weight_health$coarsened; ws <- weight_health$eta_star; wu <- weight_health$weights_used
+      log_msg("  Weight health:")
+      log_msg("    Coarsened posterior (alpha = %g, n_obs = %s, eta_ref = %.3g): Kish ESS %.1f of %d (%.2f%%), batch ratio max %.3f",
+              wc$alpha, format(wc$n_obs, big.mark = ","), wc$eta_ref, wc$ess_kish,
+              weight_health$n_valid, 100 * wc$ess_prop, wc$batch_ratio_max)
+      log_msg("    Supported resolution: eta* = %s (n_obs x eta* = %s effective observations)",
+              if (is.finite(ws$eta)) sprintf("%.3g", ws$eta) else "NA",
+              if (is.finite(ws$n_eff)) sprintf("%.1f", ws$n_eff) else "NA")
+      log_msg("    Weights used (weight_best, %s): Kish ESS %.1f, max share %.3f, %d draws, batch ratio max %.3f",
+              weighting_scheme, wu$ess_kish, wu$max_share, as.integer(wu$n_nonzero), wu$batch_ratio_max)
+      log_msg("    Status: %s -- %s", weight_health$status, weight_health$reasons)
+    }
+  }
+
   log_msg("Weight calculation complete")
 
+  # ===========================================================================
+  # PARAMETER-SPECIFIC ESS
+  # ===========================================================================
+
+  # Variance-ratio (delta-method) ESS of each parameter's posterior mean under
+  # the weights the auto-mode stopping rule scores (.mosaic_gate_weights()), so
+  # the post-hoc table and the rule agree: under "coarsened" the all-draws
+  # coarsened posterior (weight_all) the ensemble members are resampled from,
+  # under the legacy schemes the best-subset weights.
+  log_msg("Calculating parameter ESS")
+  post_weights_all <- if (!is.null(coarsened_post)) results$weight_all else results$weight_best
+  ess_results <- calc_model_ess_parameter(
+    results = results,
+    param_names = param_names_sampled,
+    likelihood_col = "likelihood",
+    weights = if (sum(post_weights_all) > 0) post_weights_all else NULL,
+    verbose = control$logging$verbose
+  )
+  rm(post_weights_all)
+
+  ess_file <- file.path(dirs$cal_diag, "parameter_ess.csv")
+  write.csv(ess_results, ess_file, row.names = FALSE)
+  log_msg("Saved %s", ess_file)
   gc(verbose = FALSE)
 
   subset_summary <- data.frame(
@@ -2134,7 +2178,7 @@ run_MOSAIC <- function(config,
 
     # Standard fields
     optimization_tier = convergence_tier,
-    optimization_method = "grid_search",
+    optimization_method = if (identical(weighting_scheme, "coarsened")) "systematic_resample" else "grid_search",
     n_selected = n_top_final,
     ESS_B = ESS_B_final,
     A = A_final,
@@ -2183,8 +2227,12 @@ run_MOSAIC <- function(config,
     target_ess_param = control$targets$ESS_param,
     target_ess_param_prop = control$targets$ESS_param_prop,
 
-    # Exact IS diagnostics (reported, not gated)
+    # eta = 1 likelihood concentration (reported) and weight health (gated
+    # under "coarsened", reported under the legacy schemes)
     is_diagnostics = list(best = is_diag_best, all = is_diag_all),
+    weight_health = weight_health,
+    weighting = weighting_scheme,
+    target_batch_ratio_max = control$targets$batch_ratio_max,
 
     # Settings
     ess_method = control$targets$ESS_method,
@@ -2527,6 +2575,9 @@ run_MOSAIC <- function(config,
     .opt_nz   <- .opt_bs$weight_best > 0
     cand_seeds       <- .opt_bs$seed_sim[.opt_nz]
     cand_likelihoods <- .opt_bs$likelihood[.opt_nz]
+    # Under "coarsened" the candidates are the resampled members and the per-N
+    # weights are their count weights renormalised over the top N.
+    cand_base_w <- if (identical(weighting_scheme, "coarsened")) .opt_bs$weight_best[.opt_nz] else NULL
 
     # Runs serially: the dominant speedup is the stride search (control$
     # predictions$optimize_stride). The step is export-bound, so spinning up a
@@ -2543,7 +2594,8 @@ run_MOSAIC <- function(config,
         central_method = central_method,
         stride      = as.integer(control$predictions$optimize_stride %||% 3L),
         ess_method  = control$targets$ESS_method,
-        weighting   = control$targets$best_subset_weighting %||% "saturated",
+        weighting   = weighting_scheme,
+        base_weights = cand_base_w,
         verbose     = control$logging$verbose
       ),
       error = function(e) {
@@ -2594,6 +2646,8 @@ run_MOSAIC <- function(config,
       log_msg("  _opt columns written to samples.parquet (%d sims selected)",
               sum(results$is_best_subset_opt))
 
+      # The optimized subset drives the posterior densities under every scheme
+      # (.mosaic_active_subset_cols()).
       if (subset_opt$optimal_n < 30L) {
         log_warn("optimal_n = %d < 30; KDE-based posterior densities may be degenerate",
                 subset_opt$optimal_n)
@@ -2709,8 +2763,32 @@ run_MOSAIC <- function(config,
               description = "Agreement index on the optimized (used) subset. Reported, not gated.")
             conv_diag$metrics$cvw_B_optimized  <- list(value = cvw_opt,
               description = "Weight CV on the optimized (used) subset. Reported, not gated.")
-            conv_diag$metrics$ess_is_optimized <- list(value = is_opt$ess_is,
-              description = "Exact untruncated importance-sampling ESS on the optimized (used) subset. Reported, not gated.")
+            if (!is.null(conv_diag$likelihood_concentration)) {
+              conv_diag$likelihood_concentration$optimized_subset <- list(
+                n = is_opt$n, ess_is = is_opt$ess_is, ess_is_prop = is_opt$ess_is_prop,
+                n_positive_ratios = is_opt$n_positive_ratios)
+            }
+
+            # Weight health of the weights the posterior now uses (the
+            # optimized subset drives the posterior under every scheme). The
+            # coarsened posterior and eta* do not depend on the subset, so only
+            # the weights-used block (and the column it describes) changes.
+            if (!is.null(conv_diag$weight_health)) {
+              wu_opt <- tryCatch({
+                w_full <- results$weight_best_opt
+                w_full[!is.finite(w_full)] <- 0
+                .mosaic_weights_block(
+                  w_full / sum(w_full),
+                  .mosaic_health_param_matrix(results[, param_names_sampled, drop = FALSE],
+                                              is.finite(results$likelihood)),
+                  (as.integer(results$sim) - 1L) %%
+                    as.integer(conv_diag$weight_health$targets$n_batches %||% 10L) + 1L)
+              }, error = function(e) NULL)
+              if (!is.null(wu_opt)) {
+                conv_diag$weight_health$weights_used <- wu_opt
+                conv_diag$weight_health$weights_used_column <- "weight_best_opt"
+              }
+            }
 
             gated_ess <- tryCatch(as.numeric(conv_diag$metrics$ess_best$value),
                                   error = function(e) NA_real_)
@@ -2719,10 +2797,10 @@ run_MOSAIC <- function(config,
                     length(w_opt_norm), ess_opt,
                     as.integer(subset_opt$diagnostics_n),
                     if (is.finite(gated_ess)) sprintf("%.2f", gated_ess) else "NA")
-            log_msg("    A(used) = %.4f | CVw(used) = %.4f | exact IS ESS(used) = %s",
-                    A_opt, cvw_opt,
-                    if (is.finite(is_opt$ess_is)) sprintf("%.2f", is_opt$ess_is) else "NA")
-            tgt <- control$targets$ESS_best %||% NA_real_
+            log_msg("    A(used) = %.4f | CVw(used) = %.4f",
+                    A_opt, cvw_opt)
+            tgt <- if (identical(weighting_scheme, "coarsened")) NA_real_ else
+                     control$targets$ESS_best %||% NA_real_
             if (is.finite(tgt) && is.finite(ess_opt) && ess_opt < tgt && is.finite(gated_ess) && gated_ess >= tgt) {
               log_warn(paste0("The gate PASSED on the tier subset (ESS_B = %.2f >= %.0f) but the ",
                               "subset the posterior actually uses has ESS_B = %.2f, below the same ",
@@ -2943,7 +3021,7 @@ run_MOSAIC <- function(config,
       results_file = file.path(dirs$calibration, "samples.parquet"),
       priors_file  = file.path(dirs$inputs, "priors.json"),
       output_dir   = dirs$res_fig_diag,
-      subset_col   = active_cols$subset_col,
+      subset_col   = active_cols$sample_col,
       verbose      = control$logging$verbose
     ),
     error = function(e) log_warn("parameter sensitivity computation failed: %s", e$message)
@@ -3155,7 +3233,8 @@ run_MOSAIC <- function(config,
     bias_ratio_deaths_ensemble_median <- tryCatch(calc_bias_ratio(obs_d_flat, median_d_flat), error = function(e) NA_real_)
 
     log_msg("Ensemble R\u00b2 (%d params x %d stoch, source=%s): cases = %s (bias=%s), deaths = %s (bias=%s)",
-            n_ensemble_params, n_ensemble_stochastic_per, active_cols$source,
+            n_ensemble_params, n_ensemble_stochastic_per,
+            if (isTRUE(ensemble_is_optimized)) "optimized" else active_cols$source,
             .fmt_num(r2_cases_ensemble,          4L), .fmt_num(bias_ratio_cases_ensemble,  2L),
             .fmt_num(r2_deaths_ensemble,         4L), .fmt_num(bias_ratio_deaths_ensemble, 2L))
 
@@ -3539,16 +3618,42 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param targets List of convergence targets (when to stop). Default is:
 #'   \itemize{
-#'     \item \code{ESS_param}: Target ESS per parameter (default: 100)
+#'     \item \code{ESS_param}: Target per-parameter ESS (default: 100). The
+#'       auto-mode stopping rule needs the (1 - \code{ESS_param_prop}) quantile
+#'       of the per-parameter function-specific ESS (\code{\link{calc_model_ess_parameter}})
+#'       of the posterior weights at or above it.
 #'     \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
-#'     \item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
-#'     \item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
-#'     \item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
-#'     \item \code{min_best_subset}: Smallest best-subset size searched (default: 30)
-#'     \item \code{max_best_subset}: Largest best-subset size searched (default: 1000)
-#'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "perplexity")
-#'     \item \code{ESS_marginal_method}: Per-parameter marginal ESS method, "kde" or "binned" (default: "kde")
-#'     \item \code{best_subset_weighting}: Best-subset posterior weights, "saturated" or "tempered" (default: "saturated"; "tempered" is sharper, not softer)
+#'     \item \code{batch_ratio_max}: Largest acceptable seed-batch ratio of the
+#'       posterior (default: 0.2). The auto-mode stopping rule needs it as well as
+#'       the ESS criterion; \code{weight_health_status} is \code{"ok"} only when it holds.
+#'     \item \code{ESS_best}: Tier-search target for both subset size and ESS within subset (default: 100).
+#'       Legacy schemes only; ignored (with a warning when set) under \code{"coarsened"}.
+#'     \item \code{A_best}: Tier-search target agreement index (default: 0.70). Legacy schemes only.
+#'     \item \code{CVw_best}: Tier-search target CV of weights (default: 1.0). Legacy schemes only.
+#'     \item \code{min_best_subset}: Smallest best subset searched by the tier search, and the
+#'       smallest number of draws resampled for the ensemble under \code{"coarsened"} (default: 30)
+#'     \item \code{max_best_subset}: Largest best subset searched by the tier search, and an
+#'       upper bound on the draws resampled for the ensemble under \code{"coarsened"} (default: 1000)
+#'     \item \code{max_ensemble_members}: Largest number of draws resampled for the ensemble
+#'       under \code{"coarsened"}: \eqn{K} = clamp(round(Kish ESS), \code{min_best_subset},
+#'       min(\code{max_best_subset}, \code{max_ensemble_members})). The ensemble arrays and the
+#'       subset optimiser grow with \eqn{K}, so this caps post-calibration cost (default: 300).
+#'       Not used by the legacy schemes.
+#'     \item \code{ESS_method}: ESS formula, "kish" or "perplexity", for ESS_B and the
+#'       \eqn{\eta = 1} likelihood-concentration numbers (default: "perplexity")
+#'     \item \code{best_subset_weighting}: Posterior weighting scheme (default:
+#'       \code{"coarsened"}). \code{"coarsened"} is the generalised-Bayes posterior
+#'       \eqn{w \propto \exp\{\eta(\ell - \max\ell)\}} over every valid draw, with
+#'       \eqn{\eta = \alpha / n_{obs}}; the ensemble members are a systematic
+#'       resample of it, and the parameter posterior summaries are built from
+#'       those members (or the optimised subset), the draws the predictions use. \code{"saturated"} (the pre-1.3.0 default) and
+#'       \code{"tempered"} weight a tier-searched best subset and are kept so
+#'       older runs can be reproduced.
+#'     \item \code{coarsening_alpha}: Effective number of independent observations of the
+#'       coarsened posterior, \eqn{\eta = \alpha / n_{obs}} with \eqn{n_{obs}} the
+#'       scored observation cells (default: 10). See \code{\link{calc_weight_health}}.
+#'     \item \code{ESS_marginal_method}: Retired in 1.3.0 with the grid-based marginal
+#'       ESS; accepted with a warning and ignored.
 #'   }
 #'
 #' @param predictions List of prediction generation settings. Default is:
@@ -3567,8 +3672,12 @@ run_mosaic <- run_MOSAIC
 #'       is preserved in the \code{is_best_subset} / \code{weight_best} columns of
 #'       \code{samples.parquet} for provenance; the optimized selection is written
 #'       to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. Default
-#'       \code{TRUE} since v1.2.0 (\code{FALSE} before). When \code{FALSE}, the
-#'       tier-selected subset is canonical and no \code{_opt} columns are written.
+#'       \code{FALSE} (it was \code{TRUE} in v1.2.x; reverted in 1.3.0 because, under
+#'       the coarsened posterior, the optimizer re-truncates the resampled members
+#'       by their fit to the training data). An explicit \code{TRUE} is honoured
+#'       under every weighting scheme. When \code{FALSE}, the ensemble members
+#'       (\code{is_best_subset} / \code{weight_best}) are canonical and no
+#'       \code{_opt} columns are written.
 #'       The optimizer chooses among subsets of the simulated candidate ensemble,
 #'       so the size it selects is between \code{optimize_min_n} and the
 #'       tier-selected size. \strong{Statistical note:} enabling this
@@ -3608,7 +3717,9 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param weights List of importance-weight settings. Default is:
 #'   \itemize{
-#'     \item \code{floor}: Minimum weight to prevent underflow (default: 1e-15).
+#'     \item \code{floor}: Retained for compatibility; unused since 1.3.0, when
+#'       \code{weight_all} became the all-draws coarsened-posterior weights
+#'       (default: 1e-15).
 #'     \item \code{iqr_multiplier}: Tukey IQR outlier-detection multiplier
 #'       (default: 1.5; use 3.0 for extreme outliers only).
 #'   }
@@ -3846,38 +3957,69 @@ mosaic_control_defaults <- function(calibration = NULL,
     min_best_subset = 30,        # Minimum subset size for stable metrics
     max_best_subset = 1000,      # Maximum subset size (~1.5% of typical retained)
 
-    # ESS calculation method
-    ESS_method = "perplexity",   # "kish" or "perplexity" (ESS formula)
-    ESS_marginal_method = "kde",  # "kde" (default) or "binned" (more conservative, higher sim cost)
+    # Largest ensemble under "coarsened": K = clamp(round(Kish ESS),
+    # min_best_subset, min(max_best_subset, max_ensemble_members)). The
+    # ensemble arrays and the optional subset optimiser grow with K (the
+    # optimiser roughly with K^2), so this caps post-calibration cost: 300 is
+    # about 2.8x the ~108 members of the pre-1.3.0 saturated subset.
+    max_ensemble_members = 300,
 
-    # Best-subset weighting scheme.
-    #   "saturated" (default, historical): w propto exp(-0.5 * min(delta, 4)).
-    #     Bounds every weight into [exp(-2), 1], so the subset posterior is
-    #     close to uniform and ESS_B is high by construction. See the
-    #     "Assign best-subset weights" section of MOSAIC-docs/05-model-calibration.Rmd.
-    #   "tempered": adaptive-eta Gibbs weights (.mosaic_calc_adaptive_gibbs_weights),
-    #     which pin the WORST retained draw at `weight_floor`.
-    #     WARNING -- this is SHARPER than "saturated", not softer. eta is derived
-    #     from max(delta) WITHIN the set it is given: over all draws max(delta)
-    #     ~2.9e6 gives a near-flat weighting, but within the ~115-member best
-    #     subset max(delta) ~4.2e3, so eta is ~680x larger. Measured on ETH 25k:
-    #     ESS_perplexity 107.48 -> 1.25, with 96.08% of the posterior mass on a
-    #     SINGLE draw. It does preserve the likelihood ordering faithfully
-    #     (Spearman 1.0 vs 0.16), but at the cost of a near point-mass posterior.
-    #     Do not enable it expecting a gentler scheme.
-    # This one setting drives both the convergence-gate metrics (ESS_B, A, CVw)
-    # and results$weight_best, the posterior weights read by posterior
-    # quantiles, posteriors.json, the ensemble and the subset optimizer, via
-    # .mosaic_best_subset_weights(). weight_all/weight_retained do not use it.
-    # Changing it changes the posterior; it is NOT a cosmetic switch.
-    best_subset_weighting = "saturated"
+    # ESS calculation method (ESS_B / A / CVw of the legacy best-subset schemes
+    # and the eta = 1 likelihood-concentration numbers). The per-parameter ESS
+    # of the stopping rule is a variance-ratio (delta-method) ESS (Owen 2013,
+    # eq. 9.9), a variance ratio by definition, so this setting does not apply to it. The
+    # ESS_marginal_method key (the pre-1.3.0 KDE / binned grid estimate) is
+    # retired: it is accepted with a warning and ignored.
+    ESS_method = "perplexity",   # "kish" or "perplexity" (ESS formula)
+
+    # Posterior weighting scheme. Changing it changes the posterior; it is NOT a
+    # cosmetic switch.
+    #   "coarsened" (default since 1.3.0): the coarsened, generalised-Bayes
+    #     posterior over ALL valid draws, w propto exp(eta * (ll - max ll)) with
+    #     eta = coarsening_alpha / n_obs scored cells (Miller & Dunson 2019;
+    #     Bissiri, Holmes & Walker 2016). weight_all holds it (weight health,
+    #     the auto-mode stopping rule, parameter_ess.csv). The ensemble members
+    #     are a systematic resample of K = clamp(round(Kish ESS),
+    #     min_best_subset, max_best_subset) draws, collapsed to unique draws
+    #     weighted by count / K (is_best_subset / weight_best); posterior
+    #     quantiles, posteriors.json and the posterior density plots are
+    #     weighted summaries over those members (or the optimised subset), the
+    #     draws the predictions use. The tier search and its ESS_best / A_best /
+    #     CVw_best targets are not used.
+    #   "saturated" (the default before 1.3.0): w propto exp(-0.5 * min(delta, 4))
+    #     over the top-n draws, n from the tier search. Every weight sits in
+    #     [exp(-2), 1], so the subset is close to uniform and ESS_B is high by
+    #     construction. Kept so runs made before 1.3.0 are reproducible.
+    #   "tempered": adaptive-eta Gibbs weights over the tier subset
+    #     (.mosaic_calc_adaptive_gibbs_weights), which pin the WORST subset draw
+    #     at a weight floor. SHARPER than "saturated", not softer: measured on
+    #     ETH 25k, ESS_perplexity 107.48 -> 1.25 with 96% of the mass on one draw.
+    best_subset_weighting = "coarsened",
+
+    # The coarsened posterior: eta = coarsening_alpha / n_obs scored cells, so
+    # alpha is the effective number of independent observations the likelihood
+    # is trusted with. On the 28 national runs of 2026-10, alpha = 10 gives a
+    # Kish ESS of 110-4,200 over 50,000 draws (BFA, with a nearly flat
+    # likelihood, 7,400); their saturated subsets corresponded to an alpha of
+    # roughly 6-20. Under the legacy schemes it sets weight_all and the
+    # weight-health diagnostic only.
+    coarsening_alpha = 10,
+
+    # Seed-batch stability required of the posterior: the largest, over
+    # parameters, of the between-batch SD of the weighted mean (10 batches by
+    # simulation id) over the posterior SD. The auto-mode stopping rule needs it
+    # below this value as well as the parameter-ESS criterion, and
+    # weight_health_status is "ok" only when it holds.
+    batch_ratio_max = 0.2
   )
 
   # Default prediction settings
   default_predictions <- list(
     n_iter_ensemble    = 10L,            # Stochastic runs per posterior parameter set (ensemble)
     n_iter_best        = 100L,           # Stochastic runs for medoid single-config plots
-    optimize_subset    = TRUE,           # Post-ensemble subset optimization (default TRUE since v1.2.0)
+    optimize_subset    = FALSE,          # Post-ensemble subset optimization (TRUE in 1.2.x; FALSE again
+                                          # since 1.3.0: under the coarsened posterior it re-truncates the
+                                          # resampled members by in-sample fit)
     optimize_min_n     = 30L,            # Minimum subset size -- raised from 4L (Fox et al. 2024)
                                           # to guard against KDE degeneracy when the
                                           # optimized subset drives posterior densities.
@@ -3914,7 +4056,7 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default weight calculation settings
   default_weights <- list(
-    floor = 1e-15,        # Minimum weight to prevent underflow (research-backed optimal value)
+    floor = 1e-15,        # Unused since 1.3.0 (weight_all = all-draws coarsened weights); kept for compatibility
     iqr_multiplier = 1.5  # Tukey IQR outlier detection multiplier (1.5 = standard, 3.0 = extreme outliers only)
   )
 

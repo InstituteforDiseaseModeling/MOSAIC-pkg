@@ -15,8 +15,9 @@ run_rolling_cv(
   base_config = MOSAIC::config_default,
   priors = MOSAIC::priors_default,
   control = NULL,
-  optimize_subset = TRUE,
-  models = c("ensemble", "ensemble_opt", "medoid"),
+  optimize_subset = FALSE,
+  models = if (isTRUE(optimize_subset)) c("ensemble", "ensemble_opt", "medoid") else
+    c("ensemble", "medoid"),
   n_reps_best_medoid = 50L,
   central_method = c(cases = "median", deaths = "mean"),
   est_suitability_spec = list(),
@@ -55,17 +56,19 @@ cheap default (fixed \code{n_simulations}, plots off). See
 directory is wiped before its calibration and simulation shards left by an
 earlier interrupted attempt cannot enter the new posterior.}
 
-\item{optimize_subset}{Logical (default \code{TRUE}); enable
+\item{optimize_subset}{Logical (default \code{FALSE} since MOSAIC 1.3.0,
+\code{TRUE} in 1.2.x, matching \code{mosaic_control_defaults()}); enable
 \code{run_MOSAIC}'s post-ensemble best-subset optimizer
-(\code{control$predictions$optimize_subset}). When \code{TRUE} the harness
-sets this on the resolved control for every cutoff, so the ensemble is
-re-scored against the training-window observed series and the posterior is
-driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
-candidate ensemble.}
+(\code{control$predictions$optimize_subset}). The harness sets this on the
+resolved control for every cutoff. When \code{TRUE} the ensemble is
+re-scored against the training-window observed series and the posterior
+and predictions are driven by the optimizer-selected subset; when
+\code{FALSE} the candidate ensemble (under the default coarsened posterior,
+its systematic resample) is used.}
 
 \item{models}{Character vector of model types to score and carry in
-\code{predictions.parquet} (default
-\code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
+\code{predictions.parquet} (default \code{c("ensemble","medoid")}, plus
+\code{"ensemble_opt"} when \code{optimize_subset = TRUE}). \code{"ensemble"}
 (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 the optimizer-selected subset, emitted only for cutoffs where the optimizer
 actually ran and selected a subset (\code{subset_opt.rds} present, or a

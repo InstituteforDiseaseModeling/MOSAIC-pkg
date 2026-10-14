@@ -78,14 +78,22 @@ test_that("run_MOSAIC passes best_subset_weighting to the tier search and optimi
       for (a in as.list(e)[-1]) if (!missing(a)) walk(a)
     }
   }
+  # The tier search lives in .mosaic_tier_best_subset() (shared by run_MOSAIC and
+  # the auto-mode stopping rule); the optimizer call stays in run_MOSAIC, where
+  # the scheme is read once into weighting_scheme.
+  walk(body(MOSAIC:::.mosaic_tier_best_subset))
   walk(body(MOSAIC::run_MOSAIC))
   fns <- vapply(calls, function(e) as.character(e[[1]]), character(1))
   expect_setequal(unique(fns), c("grid_search_best_subset", "optimize_ensemble_subset"))
   for (e in calls) {
     arg <- e$weighting
     expect_false(is.null(arg))
-    expect_true(any(grepl("best_subset_weighting", deparse(arg), fixed = TRUE)))
+    expect_true(any(grepl("^(scheme|weighting_scheme)$", deparse(arg))))
   }
+  body_txt <- paste(deparse(body(MOSAIC::run_MOSAIC)), collapse = "\n")
+  expect_true(grepl("weighting_scheme <- control$targets$best_subset_weighting", body_txt, fixed = TRUE))
+  tier_txt <- paste(deparse(MOSAIC:::.mosaic_tier_best_subset), collapse = "\n")
+  expect_true(grepl("scheme <- control$targets$best_subset_weighting", tier_txt, fixed = TRUE))
 })
 
 test_that(".mosaic_best_subset_weights has a single definition", {

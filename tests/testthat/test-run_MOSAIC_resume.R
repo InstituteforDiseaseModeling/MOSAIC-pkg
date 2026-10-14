@@ -296,11 +296,15 @@ test_that(".mosaic_reconstruct_state restores exactly from checkpoint", {
   ck$batch_number <- 3L; ck$phase <- "predictive"; ck$phase_batch_count <- 1L
   ck$calib_batches <- 2L; ck$r2_ess <- 0.97; ck$calibration_done <- TRUE
   ck$converged <- TRUE   # already-done run → no ESS recompute needed
+  control <- list(calibration = list(batch_size_adaptive = 2L))
+  # Same stopping-rule metric as this session, so the history is restored as is.
+  gid <- MOSAIC:::.mosaic_gate_metric_id(control)
+  ck$gate_metric <- gid
   ck$ess_tracking <- list(list(batch = 3L, total_sims = 5L, threshold_ess = 120,
-                               min_ess = 110, median_ess = 130, max_ess = 150))
+                               min_ess = 110, median_ess = 130, max_ess = 150,
+                               metric = gid))
   MOSAIC:::.mosaic_save_checkpoint(ck, file.path(dirs$cal_state, "resume_checkpoint.rds"))
 
-  control <- list(calibration = list(batch_size_adaptive = 2L))
   st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, c("a", "b"))
 
   expect_equal(st$total_sims_run, 5L)   # disk watermark, NOT checkpoint's total
@@ -379,19 +383,60 @@ test_that(".mosaic_reconstruct_state refreshes ESS over the full pool when shard
   }
 
   # Checkpoint: not converged, last tracking point at total_sims = 30 (< 55 on disk).
+  control <- MOSAIC:::.mosaic_validate_and_merge_control(mosaic_control_defaults())
+  gid <- MOSAIC:::.mosaic_gate_metric_id(control)
   ck <- state_template()
-  ck$batch_number <- 1L; ck$converged <- FALSE
+  ck$batch_number <- 1L; ck$converged <- FALSE; ck$gate_metric <- gid
   ck$ess_tracking <- list(list(batch = 1L, total_sims = 30L, threshold_ess = 10,
-                               min_ess = 5, median_ess = 12, max_ess = 20))
+                               min_ess = 5, median_ess = 12, max_ess = 20, metric = gid))
   MOSAIC:::.mosaic_save_checkpoint(ck, file.path(dirs$cal_state, "resume_checkpoint.rds"))
 
-  control <- mosaic_control_defaults()
-  st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, pnames)
+  st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, pnames, n_obs = 1000)
 
   expect_equal(st$total_sims_run, n)                # disk watermark
   expect_gt(length(st$ess_tracking), 1L)            # refresh appended a point
   newest <- st$ess_tracking[[length(st$ess_tracking)]]
   expect_equal(newest$total_sims, n)                # computed over the FULL pool
+  expect_identical(newest$metric, gid)
+})
+
+test_that("a checkpoint from another stopping-rule metric is never pooled with new measurements", {
+  # A pre-1.3.0 checkpoint carries no gate stamp and its ess_tracking holds
+  # grid-based marginal ESS values; a 1.3.0 checkpoint made at another alpha
+  # measured a different posterior. Either way the history is discarded, the
+  # convergence verdict is re-derived from the shards, and the batch counters
+  # and phase carry over.
+  skip_if_not_installed("arrow")
+  pnames <- head(MOSAIC::estimated_parameters$parameter_name, 2L)
+  write_pool <- function(dirs, n) {
+    set.seed(43)
+    for (id in seq_len(n)) {
+      df <- data.frame(sim = id, iter = 1L, seed_sim = id, seed_iter = NA_real_,
+                       likelihood = -runif(1, 1, 100))
+      df[[pnames[1]]] <- runif(1); df[[pnames[2]]] <- runif(1)
+      arrow::write_parquet(df, file.path(dirs$cal_samples, sprintf("sim_%07d.parquet", id)))
+    }
+  }
+  control <- MOSAIC:::.mosaic_validate_and_merge_control(mosaic_control_defaults(
+    calibration = list(max_batches_adaptive = 8L)))
+  gid <- MOSAIC:::.mosaic_gate_metric_id(control)
+  for (stamp in list(NULL, "fs_ess+batch_ratio/v1.3.0/coarsened/alpha=15")) {
+    dirs <- make_dirs()
+    write_pool(dirs, 60L)
+    ck <- state_template()
+    ck$batch_number <- 3L; ck$phase <- "calibration"; ck$converged <- TRUE
+    ck$gate_metric <- stamp
+    ck$ess_tracking <- lapply(1:3, function(b) list(batch = b, total_sims = 20L * b,
+      threshold_ess = 2500, min_ess = 2400, median_ess = 2550, max_ess = 2600, metric = stamp))
+    MOSAIC:::.mosaic_save_checkpoint(ck, file.path(dirs$cal_state, "resume_checkpoint.rds"))
+    st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, pnames, n_obs = 1000)
+    expect_equal(st$batch_number, 3L)                      # counters carry over
+    expect_length(st$ess_tracking, 1L)                     # old history discarded
+    expect_identical(st$ess_tracking[[1]]$metric, gid)     # one metric only
+    expect_equal(st$ess_tracking[[1]]$total_sims, 60L)
+    # the stale verdict is not carried: 60 draws cannot reach ESS_param = 100 at 97.5%
+    expect_false(st$converged)
+  }
 })
 
 # ---- input integrity check -------------------------------------------------

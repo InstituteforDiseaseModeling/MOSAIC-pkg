@@ -36,10 +36,29 @@
 #'   workflow.
 #' @param temperature Numeric temperature parameter used for weight scaling
 #'   (default 1, for documentation purposes)
-#' @param is_diagnostics Optional list of exact importance-sampling diagnostics
-#'   from \code{\link{calc_is_diagnostics}}, with elements \code{best} and
-#'   \code{all}. Reported under \code{$importance_sampling} but never gated:
-#'   these are untruncated-weight quantities, unlike the gated ESS_B.
+#' @param is_diagnostics Optional list of \eqn{\eta = 1} diagnostics from
+#'   \code{\link{calc_is_diagnostics}}, with elements \code{best} and
+#'   \code{all}. Their ESS and positive-ratio counts are reported under
+#'   \code{$likelihood_concentration} with an explanatory note (no Pareto
+#'   k-hat) and are never gated: they describe the untempered likelihood, which
+#'   collapses onto one draw for any informative stochastic likelihood whatever
+#'   the fit.
+#' @param weight_health Optional result of \code{\link{calc_weight_health}}.
+#'   Reported under \code{$weight_health}. Under \code{weighting =
+#'   "coarsened"} its posterior ESS and seed-batch ratio are the gated
+#'   \code{ess_coarsened} and \code{batch_ratio} metrics; under the legacy
+#'   schemes it does not enter the overall status.
+#' @param weighting Posterior weighting scheme the inputs come from
+#'   (\code{control$targets$best_subset_weighting}): \code{"saturated"} (default,
+#'   the pre-1.3.0 behaviour) or \code{"tempered"} gate the tier-searched best
+#'   subset (B_size, its cap, ESS_B, A_B, CV_B). \code{"coarsened"} gates the
+#'   coarsened posterior instead: its Kish ESS against \code{target_ess_param}
+#'   and its seed-batch ratio against \code{target_batch_ratio_max}, both read
+#'   from \code{weight_health}; the best-subset metrics, which then describe the
+#'   resampled ensemble members, are reported with status \code{"info"}.
+#' @param target_batch_ratio_max Largest acceptable seed-batch ratio of the
+#'   coarsened posterior (\code{control$targets$batch_ratio_max}); used only
+#'   under \code{weighting = "coarsened"}. Default 0.2.
 #' @param verbose Logical indicating whether to print diagnostic messages
 #'   (default TRUE)
 #'
@@ -167,8 +186,14 @@ calc_convergence_diagnostics <- function(
     ess_method = c("kish", "perplexity"),
     temperature = 1,
     is_diagnostics = NULL,
+    weight_health = NULL,
+    weighting = c("saturated", "tempered", "coarsened"),
+    target_batch_ratio_max = 0.2,
     verbose = TRUE
 ) {
+
+    weighting <- match.arg(weighting)
+    coarsened <- identical(weighting, "coarsened")
 
     # ============================================================================
     # Input validation
@@ -180,8 +205,11 @@ calc_convergence_diagnostics <- function(
               is.numeric(n_successful) && n_successful >= 0 && n_successful <= n_total)
     stopifnot("n_retained must be non-negative integer" =
               is.numeric(n_retained) && n_retained >= 0 && n_retained <= n_successful)
+    # Under "coarsened" the members are resampled from every valid draw, not
+    # from the retained (fence-passing) ones, so they are bounded by n_successful.
     stopifnot("n_best_subset must be non-negative integer" =
-              is.numeric(n_best_subset) && n_best_subset >= 0 && n_best_subset <= n_retained)
+              is.numeric(n_best_subset) && n_best_subset >= 0 &&
+              n_best_subset <= (if (coarsened) n_successful else n_retained))
     stopifnot("ess_best must be numeric" = is.numeric(ess_best))
     stopifnot("A_best must be numeric" = is.numeric(A_best))
     stopifnot("cvw_best must be numeric" = is.numeric(cvw_best))
@@ -287,19 +315,45 @@ calc_convergence_diagnostics <- function(
         status_param_ess <- "info"
     }
 
+    # Coarsened posterior: Kish ESS over every valid draw and seed-batch
+    # stability, from weight_health. Gated only under "coarsened".
+    ess_coarsened <- suppressWarnings(as.numeric(weight_health$coarsened$ess_kish %||% NA_real_))
+    batch_coarsened <- suppressWarnings(as.numeric(weight_health$coarsened$batch_ratio_max %||% NA_real_))
+    if (length(ess_coarsened) != 1L) ess_coarsened <- NA_real_
+    if (length(batch_coarsened) != 1L) batch_coarsened <- NA_real_
+    status_ess_coarsened <- .calc_status(
+        value = ess_coarsened,
+        target = target_ess_param,
+        direction = "higher",
+        pass_threshold = 1.0,
+        warn_threshold = 0.5
+    )
+    status_batch_coarsened <- if (!is.finite(batch_coarsened)) "fail"
+        else if (batch_coarsened < target_batch_ratio_max) "pass"
+        else if (batch_coarsened < 1.5 * target_batch_ratio_max) "warn"
+        else "fail"
+
     # ============================================================================
     # Calculate overall status
     # ============================================================================
 
     # Collect all gated statuses (the percentile status duplicates
-    # B_size_upper and is reported only)
-    all_statuses <- c(
-        status_B_size,
-        status_B_size_upper,
-        status_ess_best,
-        status_A_best,
-        status_cvw_best
-    )
+    # B_size_upper and is reported only). Under "coarsened" the best-subset
+    # metrics describe the resampled ensemble members and are reported only;
+    # the coarsened posterior's ESS and batch stability are gated instead.
+    if (coarsened) {
+        status_B_size <- status_B_size_upper <- status_ess_best <- "info"
+        status_A_best <- status_cvw_best <- "info"
+        all_statuses <- c(status_ess_coarsened, status_batch_coarsened)
+    } else {
+        all_statuses <- c(
+            status_B_size,
+            status_B_size_upper,
+            status_ess_best,
+            status_A_best,
+            status_cvw_best
+        )
+    }
 
     # Include param_ess if available
     if (!is.na(status_param_ess) && status_param_ess != "info") {
@@ -339,7 +393,8 @@ calc_convergence_diagnostics <- function(
                 " of all draws (target <= ", round(target_percentile_max_derived, 2), "%) - ",
                 toupper(status_percentile), " (reported, not gated)")
         message("")
-        message("Best Subset Metrics:")
+        message(if (coarsened) "Ensemble Members (systematic resample; reported, not gated):"
+                else "Best Subset Metrics:")
         message("  Size (B) - Lower: ", n_best_subset,
                 " (target >= ", target_ess_best, ") - ", toupper(status_B_size))
         message("  Size (B) - Upper: ", n_best_subset,
@@ -353,6 +408,14 @@ calc_convergence_diagnostics <- function(
         message("  CVw_B: ", round(cvw_best, 3),
                 " (target <= ", target_cvw_best, ") - ", toupper(status_cvw_best))
         message("")
+        if (coarsened) {
+            message("Coarsened Posterior (gated):")
+            message("  Kish ESS: ", round(ess_coarsened, 1),
+                    " (target >= ", target_ess_param, ") - ", toupper(status_ess_coarsened))
+            message("  Seed-batch ratio: ", round(batch_coarsened, 3),
+                    " (target < ", target_batch_ratio_max, ") - ", toupper(status_batch_coarsened))
+            message("")
+        }
         if (!is.na(pct_pass)) {
             message("Parameter Coverage:")
             message("  Parameters meeting ESS target: ", n_pass, "/", n_params,
@@ -376,7 +439,9 @@ calc_convergence_diagnostics <- function(
             percentile_used = percentile_used,
             temperature = temperature,
             ess_method = ess_method,
-            description = "BFRS convergence with post-hoc optimization"
+            weighting = weighting,
+            description = if (coarsened) "BFRS calibration with the coarsened posterior" else
+                "BFRS convergence with post-hoc optimization"
         ),
 
         targets = list(
@@ -464,19 +529,38 @@ calc_convergence_diagnostics <- function(
         )
     )
 
-    # Exact importance-sampling diagnostics: reported, never gated.
+    # eta = 1 likelihood concentration: reported, never gated, no k-hat.
     if (!is.null(is_diagnostics)) {
-        diagnostics$importance_sampling <- list(
-            best_subset = is_diagnostics$best,
-            all_draws   = is_diagnostics$all,
-            description = paste(
-                "Exact (untruncated) importance-sampling diagnostics.",
-                "ESS_IS is the effective sample size of the raw likelihood",
-                "weights; Pareto k-hat >= 0.7 means IS estimates are",
-                "unreliable. These are NOT the gated ESS_B, which is computed",
-                "on truncated weights and is bounded away from its worst case",
-                "by the truncation itself."
-            )
+        conc <- function(d) {
+            if (is.null(d)) return(NULL)
+            list(n = d$n, ess_is = d$ess_is, ess_is_prop = d$ess_is_prop,
+                 n_positive_ratios = d$n_positive_ratios)
+        }
+        diagnostics$likelihood_concentration <- list(
+            all_draws   = conc(is_diagnostics$all),
+            best_subset = conc(is_diagnostics$best),
+            method      = ess_method,
+            note        = .mosaic_likelihood_concentration_note()
+        )
+    }
+
+    # Weight health of the coarsened posterior and of the weights used. Gated
+    # (as ess_coarsened / batch_ratio) under "coarsened" only.
+    if (!is.null(weight_health)) {
+        diagnostics$weight_health <- weight_health
+    }
+    if (coarsened) {
+        diagnostics$metrics$ess_coarsened <- list(
+            value = ess_coarsened,
+            target = target_ess_param,
+            description = "Kish ESS of the coarsened posterior over all valid draws",
+            status = status_ess_coarsened
+        )
+        diagnostics$metrics$batch_ratio <- list(
+            value = batch_coarsened,
+            target = target_batch_ratio_max,
+            description = "Seed-batch ratio of the coarsened posterior (max over parameters)",
+            status = status_batch_coarsened
         )
     }
 

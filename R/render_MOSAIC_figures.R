@@ -398,17 +398,32 @@ render_MOSAIC_figures <- function(dir_output,
     if (file.exists(opt)) opt else if (file.exists(cand)) cand else NA_character_
   }
 
-  # --- Resolve subset_col from samples.parquet (no control needed) ------------
-  .resolve_subset_col <- function() {
+  # --- Resolve the posterior columns (the prediction members) ---------------
+  # The posterior is built from the draws the predictions use under every
+  # weighting scheme: the optimised subset when samples.parquet has a usable
+  # one, else the ensemble members (is_best_subset / weight_best). The scheme
+  # (from control.json; a run whose control predates best_subset_weighting is
+  # "saturated") only labels the source. .mosaic_posterior_cols() is the mapping
+  # run_MOSAIC() itself uses, so a post-hoc render reads the same columns the
+  # run built its posterior from, for new and pre-1.3.0 run directories alike.
+  .resolve_posterior_cols <- function() {
+    weighting <- tryCatch({
+      cf <- file.path(dirs$inputs, "control.json")
+      ctl <- if (file.exists(cf)) jsonlite::fromJSON(cf, simplifyVector = TRUE) else NULL
+      ctl <- if (!is.null(ctl$control)) ctl$control else ctl
+      w <- ctl$targets$best_subset_weighting
+      if (is.character(w) && length(w) == 1L) w else "saturated"
+    }, error = function(e) "saturated")
+    use_opt <- FALSE
     sp <- file.path(dirs$calibration, "samples.parquet")
-    if (!file.exists(sp)) return("is_best_subset")
-    # Only the one flag column is needed; the full table is ~1.2 GB at production scale.
-    res <- tryCatch(arrow::read_parquet(sp, col_select = dplyr::any_of("is_best_subset_opt")),
-                    error = function(e) NULL)
-    if (is.null(res)) return("is_best_subset")
-    if ("is_best_subset_opt" %in% names(res) &&
-        isTRUE(any(as.logical(res$is_best_subset_opt), na.rm = TRUE)))
-      "is_best_subset_opt" else "is_best_subset"
+    if (file.exists(sp)) {
+      # Only the one flag column is needed; the full table is ~1.2 GB at production scale.
+      res <- tryCatch(arrow::read_parquet(sp, col_select = dplyr::any_of("is_best_subset_opt")),
+                      error = function(e) NULL)
+      use_opt <- !is.null(res) && "is_best_subset_opt" %in% names(res) &&
+                 isTRUE(any(as.logical(res$is_best_subset_opt), na.rm = TRUE))
+    }
+    .mosaic_posterior_cols(weighting, use_opt)
   }
 
   # --- Resolve central_method from the run's control.json -------------------
@@ -424,8 +439,10 @@ render_MOSAIC_figures <- function(dir_output,
     wm_csv      = file.path(dirs$res_fig_diag, "model_fit_windows.csv")
   )
 
-  subset_col <- .resolve_subset_col()
-  weight_col <- if (identical(subset_col, "is_best_subset_opt")) "weight_best_opt" else "weight_best"
+  post_cols  <- .resolve_posterior_cols()
+  subset_col <- post_cols$subset_col   # weighted posterior (density / detail plots)
+  weight_col <- post_cols$weight_col
+  sample_col <- post_cols$sample_col   # posterior draws (sensitivity / correlation)
   # run_MOSAIC() passes the method it resolved; a post-hoc render reads the run
   # directory's. A control.json this renderer cannot interpret must not abort
   # every group.
@@ -603,7 +620,7 @@ render_MOSAIC_figures <- function(dir_output,
         priors_file  = if (file.exists(files$priors)) files$priors else NULL,
         output_dir   = dirs$res_fig_diag,
         sensitivity  = sens_pre,
-        subset_col   = subset_col,
+        subset_col   = sample_col,
         verbose      = verbose
       )
       tryCatch(
@@ -620,7 +637,7 @@ render_MOSAIC_figures <- function(dir_output,
           results_file = files$samples,
           priors_file  = if (file.exists(files$priors)) files$priors else NULL,
           output_dir   = dirs$res_fig_diag,
-          subset_col   = subset_col,
+          subset_col   = sample_col,
           verbose      = verbose
         ),
         error = function(e) warning("parameter correlation plot failed: ",

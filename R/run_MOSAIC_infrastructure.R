@@ -621,7 +621,10 @@
 #'   median, independent of \code{central_method}, for transition cross-walk.
 #' @param bias_ratio_cases_ensemble_mean,bias_ratio_deaths_ensemble_mean,bias_ratio_cases_ensemble_median,bias_ratio_deaths_ensemble_median
 #'   Ensemble bias ratios against both tendencies (see above).
-#' @param posthoc_criteria_met Whether a post-hoc best-subset tier met all its targets.
+#' @param posthoc_criteria_met Whether the posterior met its post-hoc targets: under
+#'   \code{best_subset_weighting = "coarsened"}, Kish ESS >= \code{ESS_param} and
+#'   seed-batch ratio < \code{batch_ratio_max} (\code{weight_health_status == "ok"});
+#'   under the legacy schemes, a best-subset tier met all its targets.
 #' @param io I/O settings for JSON writing
 #' @noRd
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
@@ -726,8 +729,10 @@
     # `converged` is the calibration ESS stopping criterion, evaluated only in
     # auto mode; a fixed-mode run never evaluates it, so it stays FALSE (the
     # field is always logical) with `convergence_evaluated = FALSE`.
-    # `posthoc_criteria_met` is whether a post-hoc best-subset tier met all its
-    # targets (FALSE = fallback subset), in either mode.
+    # `posthoc_criteria_met` (either mode): under "coarsened", whether the
+    # coarsened posterior has Kish ESS >= ESS_param and seed-batch ratio <
+    # batch_ratio_max (weight_health_status == "ok"); under the legacy schemes,
+    # whether a best-subset tier met all its targets (FALSE = fallback subset).
     converged     = .mosaic_run_converged(state),
     convergence_evaluated = .mosaic_convergence_evaluated(state),
     posthoc_criteria_met = as.logical(posthoc_criteria_met)[1],
@@ -766,13 +771,6 @@
     ess_target          = ess_stats$target,
     ess_min             = ess_stats$min_ess,
     ess_median          = ess_stats$median_ess,
-    # Exact (untruncated) importance-sampling diagnostics. REPORTED, NOT GATED.
-    # `ess_best` above is computed on delta-AIC-truncated weights, which bound
-    # every weight into a narrow band and therefore keep ESS_B high regardless
-    # of fit. These fields are the honest IS numbers: ess_is_all is the
-    # effective sample size of the raw likelihood weights over all draws, and
-    # khat_all >= 0.7 means IS estimates are unreliable. A large gap between
-    # ess_best and ess_is_all is expected and is the point of reporting both.
     # Metrics on the subset the posterior ACTUALLY uses. The gated ess_best /
     # A / CVw above are scored on the TIER subset; when subset optimization
     # succeeds, the canonical posterior is built from the smaller optimized
@@ -780,18 +778,22 @@
     # verdict describes draws the run does not use. Reported, never gated.
     ess_best_optimized  = .mosaic_diag_num(diag$metrics$ess_best_optimized$value),
     A_best_optimized    = .mosaic_diag_num(diag$metrics$A_B_optimized$value),
-    cvw_best_optimized  = .mosaic_diag_num(diag$metrics$cvw_B_optimized$value),
-    ess_is_optimized    = .mosaic_diag_num(diag$metrics$ess_is_optimized$value),
-    ess_is_best         = .mosaic_diag_num(diag$importance_sampling$best_subset$ess_is),
-    ess_is_all          = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is),
-    ess_is_all_prop     = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is_prop),
-    khat_all            = .mosaic_diag_num(diag$importance_sampling$all_draws$khat),
-    khat_all_status     = if (!is.null(diag$importance_sampling$all_draws$khat_status)) {
-                              as.character(diag$importance_sampling$all_draws$khat_status)
-                          } else NA_character_,
-    n_positive_ratios_all = if (!is.null(diag$importance_sampling$all_draws$n_positive_ratios)) {
-                              as.integer(diag$importance_sampling$all_draws$n_positive_ratios)
-                          } else NA_integer_,
+    cvw_best_optimized  = .mosaic_diag_num(diag$metrics$cvw_B_optimized$value)
+  )
+  # Weight health (calc_weight_health()). The headline is ess_coarsened: the
+  # Kish ESS of the coarsened posterior, eta_ref = coarsening_alpha /
+  # n_obs_scored. Under best_subset_weighting = "coarsened" (posterior_weighting)
+  # it is the posterior the ensemble members are resampled from (resample_K /
+  # resample_n_unique), and weight_health_status sets posthoc_criteria_met;
+  # under the legacy schemes the block is reported only. weights_used_*
+  # describe the weights the parameter posterior is built from under every
+  # scheme: weight_best (the members), or weight_best_opt after the optimiser.
+  # eta_star is the supported resolution. The eta = 1
+  # likelihood-concentration numbers (formerly ess_is_* / khat_all) are kept in
+  # convergence_diagnostics.json only: they are ~1 for any informative
+  # stochastic likelihood and carry no information about fit or convergence.
+  summary_obj <- c(summary_obj, .mosaic_weight_health_fields(diag$weight_health))
+  summary_obj <- c(summary_obj, list(
     # NB dispersion actually used, estimated once from the weekly observations
     # by est_nb_dispersion(). bound_binds is a standing diagnostic: in a
     # well-specified fit the hard bounds should rarely bind.
@@ -824,7 +826,7 @@
                                    if (is.numeric(v) && is.finite(v)) round(v, 6) else v
                               }))
                           } else NULL
-  )
+  ))
 
   summary_path <- file.path(dirs$results, "summary.json")
   .mosaic_write_json(summary_obj, summary_path, io)

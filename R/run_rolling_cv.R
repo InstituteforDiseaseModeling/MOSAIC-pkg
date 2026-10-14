@@ -103,16 +103,18 @@
 #'   \code{paths$clean_output = TRUE}, so each cutoff's \code{runs/cutoff_<T>/}
 #'   directory is wiped before its calibration and simulation shards left by an
 #'   earlier interrupted attempt cannot enter the new posterior.
-#' @param optimize_subset Logical (default \code{TRUE}); enable
+#' @param optimize_subset Logical (default \code{FALSE} since MOSAIC 1.3.0,
+#'   \code{TRUE} in 1.2.x, matching \code{mosaic_control_defaults()}); enable
 #'   \code{run_MOSAIC}'s post-ensemble best-subset optimizer
-#'   (\code{control$predictions$optimize_subset}). When \code{TRUE} the harness
-#'   sets this on the resolved control for every cutoff, so the ensemble is
-#'   re-scored against the training-window observed series and the posterior is
-#'   driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
-#'   candidate ensemble.
+#'   (\code{control$predictions$optimize_subset}). The harness sets this on the
+#'   resolved control for every cutoff. When \code{TRUE} the ensemble is
+#'   re-scored against the training-window observed series and the posterior
+#'   and predictions are driven by the optimizer-selected subset; when
+#'   \code{FALSE} the candidate ensemble (under the default coarsened posterior,
+#'   its systematic resample) is used.
 #' @param models Character vector of model types to score and carry in
-#'   \code{predictions.parquet} (default
-#'   \code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
+#'   \code{predictions.parquet} (default \code{c("ensemble","medoid")}, plus
+#'   \code{"ensemble_opt"} when \code{optimize_subset = TRUE}). \code{"ensemble"}
 #'   (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 #'   the optimizer-selected subset, emitted only for cutoffs where the optimizer
 #'   actually ran and selected a subset (\code{subset_opt.rds} present, or a
@@ -191,8 +193,10 @@ run_rolling_cv <- function(PATHS,
                            base_config          = MOSAIC::config_default,
                            priors               = MOSAIC::priors_default,
                            control              = NULL,
-                           optimize_subset      = TRUE,
-                           models               = c("ensemble", "ensemble_opt", "medoid"),
+                           optimize_subset      = FALSE,
+                           models               = if (isTRUE(optimize_subset))
+                                                       c("ensemble", "ensemble_opt", "medoid")
+                                                  else c("ensemble", "medoid"),
                            n_reps_best_medoid  = 50L,
                            central_method       = c(cases = "median", deaths = "mean"),
                            est_suitability_spec = list(),
@@ -234,10 +238,11 @@ run_rolling_cv <- function(PATHS,
      if (length(cutoffs) == 0L) stop("No valid cutoffs (check window vs anchor).")
 
      if (is.null(control)) control <- .rcv_cheap_control()
-     # Harness owns the best-subset optimizer toggle: rescore the ensemble against
-     # the (training-window) observed series and drive the posterior from the
-     # optimizer-selected subset. Forced onto the resolved control so it applies
-     # whether `control` is the cheap default or user-supplied.
+     # Harness owns the best-subset optimizer toggle (when TRUE: rescore the
+     # ensemble against the training-window observed series and drive the
+     # posterior from the optimizer-selected subset). Forced onto the resolved
+     # control so it applies whether `control` is the cheap default or
+     # user-supplied.
      if (is.null(control$predictions)) control$predictions <- list()
      control$predictions$optimize_subset <- isTRUE(optimize_subset)
      # Central tendency is harness-owned too: forced onto the inner control so the
@@ -1081,8 +1086,6 @@ compile_rolling_cv_predictions <- function(dir_output,
                                            list(n_simulations = 2000L, n_iterations = 3L))
      ctrl$targets <- utils::modifyList(ctrl$targets %||% list(), list(ESS_param = 100L))
      ctrl$paths   <- utils::modifyList(ctrl$paths   %||% list(), list(plots = FALSE))
-     ctrl$predictions <- utils::modifyList(ctrl$predictions %||% list(),
-                                           list(optimize_subset = TRUE))
      ctrl
 }
 

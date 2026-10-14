@@ -1,68 +1,87 @@
 #' Calculate Parameter-Specific ESS
 #'
-#' Computes the effective sample size (ESS) for individual parameters using
-#' one of two methods: KDE-based marginal posterior estimation (default,
-#' \code{marginal_method = "kde"}, also the \code{run_MOSAIC()} control
-#' default \code{ESS_marginal_method}) or binned marginal ESS.
+#' Computes the effective sample size (ESS) of each parameter's weighted
+#' posterior mean: a function-specific, variance-ratio (delta-method) ESS of
+#' the weights, bounded above by their Kish ESS. \code{run_MOSAIC()} reports it in
+#' \code{parameter_ess.csv} and the auto-mode stopping rule reads it.
 #'
 #' @details
-#' Both methods start from the raw importance weights
-#' \eqn{w_i \propto \exp(\ell_i - \max \ell)}. The \code{"kde"} method
-#' estimates each parameter's weighted marginal density on a grid over the range
-#' of its draws (bandwidth from Silverman's rule on the unweighted draws),
-#' divides it by a uniform density on that range, applies the configured ESS
-#' formula to the normalised grid ratios and rescales from grid points to draws
-#' (\code{n / n_grid}). The \code{"binned"} method applies the ESS formula to
-#' the weight totals of \code{n_bins} equal-width bins and rescales by
-#' \code{n / n_occupied}.
+#' For parameter \eqn{\theta} with normalised weights \eqn{\tilde w_i},
+#' posterior mean \eqn{\tilde\mu = \sum_i \tilde w_i \theta_i} and posterior
+#' variance \eqn{\tilde\sigma^2 = \sum_i \tilde w_i (\theta_i - \tilde\mu)^2},
+#' the delta-method variance of the self-normalised estimate \eqn{\tilde\mu} is
+#' \eqn{\sum_i \tilde w_i^2 (\theta_i - \tilde\mu)^2} (Owen 2013, eq. 9.9). This
+#' is a variance ratio, the definition behind Owen's \eqn{n_e} (eq. 9.13); it is
+#' not the weight-based \eqn{n_e(f)} of Owen's eq. 9.17, which uses weights
+#' proportional to \eqn{w_i |f_i|}.
+#' The ESS is the number of independent posterior draws that would give the
+#' same precision:
+#' \deqn{\mathrm{ESS}_\theta = \frac{\sum_i \tilde w_i (\theta_i - \tilde\mu)^2}
+#'       {\sum_i \tilde w_i^2 (\theta_i - \tilde\mu)^2}.}
+#' It is computed directly from the weights, with no bandwidth or grid, and is
+#' bounded above by the Kish ESS of the weights, \eqn{(\sum w)^2/\sum w^2}.
+#' The bound is needed because both variances are estimated from the same
+#' weights: when one weight dominates, the unbounded ratio degenerates upward.
+#' For example, two draws weighted 0.99 and 0.01 give 50.5, and a near point
+#' mass on a 50,000-draw run gives close to \eqn{n}. The bounded value is
+#' exactly \eqn{n} for uniform weights and about 1 for a point mass, and it
+#' falls as the weights concentrate. It is lower than the Kish ESS for a
+#' parameter whose heavy weights sit in its tails. When the weighted spread is
+#' zero (a point mass, or a parameter constant over the weighted draws), the
+#' Kish ESS is returned.
 #'
-#' \strong{Limitation.} Neither estimate is bounded by the ESS of the importance
-#' weights themselves. Because the KDE bandwidth does not shrink with the
-#' weights and both results are rescaled by the number of draws, a weight
-#' vector that has collapsed onto a single draw (exact IS ESS = 1) still yields
-#' a marginal ESS that grows with \code{n} (for \code{"kde"} roughly \code{n/5}
-#' under a uniform prior and \code{n/25} under a lognormal one; for
-#' \code{"binned"} about \code{n} over the number of occupied bins), and for a
-#' non-uniform prior the uniform reference mixes the prior's shape into the
-#' result. Read these values alongside the exact importance-sampling
-#' diagnostics of \code{\link{calc_is_diagnostics}}, which do detect the
-#' collapse.
+#' The weights are \code{weights} when supplied. \code{run_MOSAIC()} passes the
+#' weights its auto-mode stopping rule scores: under the default
+#' \code{control$targets$best_subset_weighting = "coarsened"} the all-draws
+#' coarsened posterior (\code{weight_all}) that the ensemble members are
+#' resampled from, and the best-subset weights under the legacy schemes. Otherwise they are the raw
+#' importance weights \eqn{w_i \propto \exp(\ell_i - \max \ell)}, which on
+#' production-scale likelihoods collapse to a point mass.
+#'
+#' Until MOSAIC 1.3.0 this function returned a grid estimate (a weighted KDE or
+#' binned marginal rescaled by the number of draws). That estimate did not
+#' measure the posterior: its bandwidth came from the unweighted draws, so a
+#' point mass on a randomly chosen draw of a 50,000-draw production run scored a
+#' median of 2,518 against 2,541 for the run's own weights. It was removed, with
+#' its arguments \code{n_bins}, \code{n_grid}, \code{method} and
+#' \code{marginal_method}; passing any of them now warns and is otherwise
+#' ignored.
 #'
 #' @param results Data frame containing simulation results
 #' @param param_names Character vector of parameter names to analyze (required)
 #' @param likelihood_col Character name of the column containing log-likelihood values (default: "likelihood")
-#' @param n_bins Integer number of bins for the binned method, or NULL for adaptive
-#'   sqrt(n) scaling. Fixed bin count (e.g. 100) removes sample-size dependence
-#'   from ESS estimates. Default: 100. Only used by "binned" method.
-#' @param n_grid Integer number of grid points for KDE evaluation (default: 100, used only by "kde" method)
-#' @param method Character string specifying ESS formula: "kish" or "perplexity"
-#' @param marginal_method Character string specifying how marginal weights are
-#'   constructed: "kde" (default, KDE-based marginal posterior estimation) or
-#'   "binned" (more conservative, directly sensitive to importance weight
-#'   distribution — recommended for final production runs).
+#' @param weights Optional non-negative weights, one per row of \code{results}.
+#'   \code{NULL} (default) uses the raw importance weights
+#'   \eqn{\exp(\ell - \max \ell)}.
 #' @param verbose Logical whether to print progress messages (default: FALSE)
+#' @param ... Defunct arguments of the pre-1.3.0 grid estimate (\code{n_bins},
+#'   \code{n_grid}, \code{method}, \code{marginal_method}); a warning is given
+#'   and they are ignored. Any other argument is an error.
 #'
 #' @return Data frame with columns:
 #'   - parameter: Parameter name
 #'   - type: Parameter type ('global' or 'location')
 #'   - iso_code: ISO code for location parameters (NA for global)
-#'   - ess_marginal: Marginal ESS for this parameter
+#'   - ess_marginal: Function-specific ESS of the parameter's posterior mean
+#'
+#' @references
+#' Owen AB (2013). \emph{Monte Carlo theory, methods and examples}, chapter 9
+#' (importance sampling), eqs. 9.9 and 9.13. \url{https://artowen.su.domains/mc/}
 #'
 #' @examples
 #' \dontrun{
-#' # Basic usage with simulation results
+#' # Function-specific ESS under the raw importance weights
 #' ess_results <- calc_model_ess_parameter(
 #'   results = simulation_results,
 #'   param_names = c("tau_i", "beta_j0_tot", "gamma_2")
 #' )
 #'
-#' # With custom likelihood column name
+#' # Under explicit posterior weights (e.g. the coarsened posterior)
 #' ess_results <- calc_model_ess_parameter(
 #'   results = simulation_results,
 #'   param_names = c("tau_i", "beta_j0_tot", "gamma_2"),
-#'   likelihood_col = "log_lik"
+#'   weights = simulation_results$weight_all
 #' )
-#'
 #' }
 #'
 #' @export
@@ -70,21 +89,29 @@ calc_model_ess_parameter <- function(
     results,
     param_names,
     likelihood_col = "likelihood",
-    n_bins = 100,
-    n_grid = 100,
-    method = c("kish", "perplexity"),
-    marginal_method = c("kde", "binned"),
-    verbose = FALSE
+    weights = NULL,
+    verbose = FALSE,
+    ...
 ) {
 
-    # Validate method parameters
-    method <- match.arg(method)
-    marginal_method <- match.arg(marginal_method)
-    
+    dots <- list(...)
+    if (length(dots)) {
+        defunct <- c("n_bins", "n_grid", "method", "marginal_method")
+        nm <- names(dots)
+        if (is.null(nm) || any(!nzchar(nm)) || !all(nm %in% defunct)) {
+            bad <- if (is.null(nm)) "(unnamed)" else paste(setdiff(nm, defunct), collapse = ", ")
+            stop("calc_model_ess_parameter(): unused argument(s): ", bad, call. = FALSE)
+        }
+        warning(sprintf(paste0("calc_model_ess_parameter(): argument(s) %s are defunct since ",
+                               "MOSAIC 1.3.0 and were ignored. The grid-based marginal ESS they ",
+                               "configured was removed; the function-specific ESS needs no grid."),
+                        paste(nm, collapse = ", ")), call. = FALSE)
+    }
+
     # ==========================================================================
     # Input validation
     # ==========================================================================
-    
+
     if (!is.data.frame(results)) {
         stop("results must be a data frame")
     }
@@ -96,8 +123,7 @@ calc_model_ess_parameter <- function(
     if (!likelihood_col %in% colnames(results)) {
         stop(sprintf("Column '%s' not found in results", likelihood_col))
     }
-    
-    # Validate input parameters
+
     if (missing(param_names) || is.null(param_names)) {
         stop("param_names is required. Please specify which parameters to analyze.")
     }
@@ -110,14 +136,6 @@ calc_model_ess_parameter <- function(
         stop("param_names cannot be empty")
     }
 
-    if (marginal_method == "binned" && !is.null(n_bins) && (!is.numeric(n_bins) || n_bins < 10)) {
-        stop("n_bins must be NULL (adaptive sqrt(n)) or a numeric value >= 10")
-    }
-
-    if (marginal_method == "kde" && (!is.numeric(n_grid) || n_grid < 10)) {
-        stop("n_grid must be a numeric value >= 10")
-    }
-
     if (!is.logical(verbose)) {
         stop("verbose must be logical (TRUE/FALSE)")
     }
@@ -126,313 +144,118 @@ calc_model_ess_parameter <- function(
     valid_rows <- !is.na(results[[likelihood_col]]) & is.finite(results[[likelihood_col]])
     n_valid <- sum(valid_rows)
 
-    # Require minimum of 50 samples for ESS calculation
     if (n_valid < 50) {
         stop(sprintf("Insufficient valid samples: %d (need at least 50 for ESS calculation)",
                      n_valid))
     }
 
-    # Adapt n_grid to sample size if necessary
-    # Rule of thumb: n_grid should be at most n_samples / 2
-    n_grid_adaptive <- min(n_grid, floor(n_valid / 2))
-    if (n_grid_adaptive < n_grid && verbose) {
-        log_msg("Adapting n_grid from %.0f to %.0f based on sample size (%d samples)",
-                n_grid, n_grid_adaptive, n_valid)
+    if (!is.null(weights)) {
+        weights <- as.numeric(weights)
+        if (length(weights) != nrow(results))
+            stop("weights must have one entry per row of results")
+        if (any(weights < 0, na.rm = TRUE)) stop("weights must be non-negative")
+        weights <- weights[valid_rows]
+        weights[!is.finite(weights)] <- 0
+        if (sum(weights) <= 0) stop("weights sum to zero over the valid rows")
     }
-    n_grid <- n_grid_adaptive
 
-    results_valid <- results[valid_rows, ]
-    n_samples <- nrow(results_valid)
-    
-    if (verbose) {
-        log_msg("Calculating parameter-specific ESS for %d valid samples", n_samples)
-    }
-    
+    results_valid <- results[valid_rows, , drop = FALSE]
+
     # ==========================================================================
     # Validate parameters exist
     # ==========================================================================
 
-    # Validate parameter names exist
     missing_params <- setdiff(param_names, colnames(results_valid))
     if (length(missing_params) > 0) {
         stop(sprintf("Parameters not found in results: %s", paste(missing_params, collapse = ", ")))
     }
 
-    # Check that parameters are numeric
-    non_numeric_params <- param_names[!sapply(results_valid[param_names], is.numeric)]
+    non_numeric_params <- param_names[!vapply(results_valid[param_names], is.numeric, logical(1))]
     if (length(non_numeric_params) > 0) {
         stop(sprintf("Parameters must be numeric. Non-numeric parameters found: %s",
                      paste(non_numeric_params, collapse = ", ")))
     }
 
-    # Filter to only include estimated parameters from MOSAIC framework
+    # Only parameters estimated by the MOSAIC framework; compartment counts
+    # (N_j_initial, S_j_initial, ...) are derived from the sampled proportions.
     est_params <- get("estimated_parameters", envir = asNamespace("MOSAIC"))
-
-    # Get base parameter names (without ISO suffixes) from param_names
-    base_params <- unique(gsub("_[A-Z]{3}$", "", param_names))
-
-    # Keep only parameters that are in estimated_parameters
-    valid_base_params <- base_params[base_params %in% est_params$parameter_name]
-
-    # Filter param_names to only those with valid base parameters
-    param_names_filtered <- param_names[gsub("_[A-Z]{3}$", "", param_names) %in% valid_base_params]
-
-    # Exclude initial count variables (N_j_initial, S_j_initial, etc.) but keep proportions
-    # These are compartment counts, not estimated parameters
+    base_of <- gsub("_[A-Z]{3}$", "", param_names)
+    param_names_filtered <- param_names[base_of %in% est_params$parameter_name]
     param_names_filtered <- param_names_filtered[!grepl("^[NSEIRV][12]?_j_initial", param_names_filtered)]
 
     if (length(param_names_filtered) == 0) {
         stop("No valid estimated parameters found in param_names. Check that parameters match those in MOSAIC::estimated_parameters")
     }
 
-    if (length(param_names_filtered) < length(param_names)) {
+    if (verbose && length(param_names_filtered) < length(param_names)) {
         excluded <- setdiff(param_names, param_names_filtered)
-        if (verbose) {
-            log_msg("Excluded %d non-estimated parameters: %s",
-                    length(excluded),
-                    if(length(excluded) <= 5) paste(excluded, collapse = ", ")
-                    else paste(c(head(excluded, 5), "..."), collapse = ", "))
-        }
+        log_msg("Excluded %d non-estimated parameters: %s",
+                length(excluded),
+                if (length(excluded) <= 5) paste(excluded, collapse = ", ")
+                else paste(c(utils::head(excluded, 5), "..."), collapse = ", "))
     }
-
-    # Use filtered parameter names
     param_names <- param_names_filtered
 
-    
     # ==========================================================================
-    # Calculate global ESS for reference
+    # Weights: supplied, or the raw importance weights
     # ==========================================================================
 
-    log_lik <- results_valid[[likelihood_col]]
-    log_lik_centered <- log_lik - max(log_lik)  # For numerical stability
-    
-    # Global importance weights
-    w_global <- exp(log_lik_centered)
-    w_global <- w_global / sum(w_global)
+    if (is.null(weights)) {
+        ll <- results_valid[[likelihood_col]]
+        weights <- exp(ll - max(ll))
+    }
 
-    # Global ESS using specified method
-    ess_global <- calc_model_ess(w_global, method = method)
-    
     if (verbose) {
-        log_msg("Global ESS: %.1f (%.1f%% of samples)",
-                ess_global, 100 * ess_global / n_samples)
+        log_msg("Function-specific parameter ESS: %d valid draws, Kish ESS of the weights %.1f",
+                n_valid, calc_model_ess(weights / sum(weights), method = "kish"))
     }
-    
+
     # ==========================================================================
-    # Helper function for bandwidth selection
+    # Per parameter
     # ==========================================================================
 
-    select_bandwidth <- function(x) {
-        n <- length(x)
-        sd_x <- sd(x)
-        # Silverman's rule of thumb
-        iqr_x <- IQR(x)
-        return(0.9 * min(sd_x, iqr_x/1.34) * n^(-1/5))
-    }
-    
-    
-    # ==========================================================================
-    # Function to calculate marginal ESS for one parameter
-    # ==========================================================================
-    
-    calc_marginal_ess <- function(param_name) {
-
-        # Determine parameter type and ISO code
-        # Extract base parameter name (without ISO suffix)
+    loc_params <- est_params$parameter_name[est_params$scale == "location"]
+    ess_list <- lapply(param_names, function(param_name) {
+        has_iso <- grepl("_[A-Z]{3}$", param_name)
         base_param <- gsub("_[A-Z]{3}$", "", param_name)
-
-        # Check if this is a location-specific parameter
-        param_type <- "global"  # default
-        iso_code <- NA_character_
-
-        # Check if parameter has ISO suffix
-        if (grepl("_[A-Z]{3}$", param_name)) {
-            # Extract ISO code
-            iso_code <- gsub(".*_([A-Z]{3})$", "\\1", param_name)
-
-            # Load estimated_parameters from MOSAIC package
-            est_params <- get("estimated_parameters", envir = asNamespace("MOSAIC"))
-
-            # Check if base parameter is in location scale
-            if (base_param %in% est_params$parameter_name) {
-                param_scale <- est_params$scale[est_params$parameter_name == base_param]
-                if (length(param_scale) > 0 && param_scale == "location") {
-                    param_type <- "location"
-                }
-            }
-        }
-
-        # Extract parameter values
-        param_vals <- results_valid[[param_name]]
-        
-        # Remove any NA or infinite values
-        valid_param <- is.finite(param_vals)
-        min_param_samples <- if (marginal_method == "kde") max(50, n_grid) else 50
-
-        if (sum(valid_param) < min_param_samples) {
-            warning(sprintf("Parameter '%s' has only %d valid samples (need >= %d). Returning NA.",
-                          param_name, sum(valid_param), min_param_samples))
-            return(data.frame(
-                parameter = param_name,
-                type = param_type,
-                iso_code = iso_code,
-                ess_marginal = NA_real_,
-                stringsAsFactors = FALSE
-            ))
-        }
-        
-        param_vals_clean <- param_vals[valid_param]
-        log_lik_clean <- log_lik[valid_param]
-        weights_clean <- w_global[valid_param]
-        weights_clean <- weights_clean / sum(weights_clean)  # Renormalize
-
-        # Check if parameter has near-zero variance (constant)
-        param_range <- range(param_vals_clean)
-        if (diff(param_range) < .Machine$double.eps * 100) {
-            # Parameter is essentially constant, ESS = n_obs
-            return(data.frame(
-                parameter = param_name,
-                type = param_type,
-                iso_code = iso_code,
-                ess_marginal = length(param_vals_clean),
-                stringsAsFactors = FALSE
-            ))
-        }
-
-        # =======================================================================
-        # Compute marginal ESS using selected method
-        # =======================================================================
-
-        n_clean <- length(param_vals_clean)
-
-        if (marginal_method == "binned") {
-            # -------------------------------------------------------------------
-            # Binned marginal Kish ESS
-            # Bins parameter values and computes Kish ESS on bin weights.
-            # Directly sensitive to how importance weight is distributed
-            # across the parameter's range.
-            # Fixed bin count (default 100) removes sample-size dependence.
-            # NULL uses adaptive sqrt(n) scaling (legacy behavior).
-            # -------------------------------------------------------------------
-            n_bins_use <- if (is.null(n_bins)) floor(sqrt(n_clean)) else as.integer(n_bins)
-            n_bins_use <- max(n_bins_use, 5)  # minimum 5 bins
-            breaks <- seq(param_range[1], param_range[2], length.out = n_bins_use + 1)
-            bin_idx <- findInterval(param_vals_clean, breaks, all.inside = TRUE)
-            W_b <- tapply(weights_clean, bin_idx, sum)
-            W_b <- W_b / sum(W_b)
-            n_occupied <- length(W_b)
-            ess_bins <- calc_model_ess(W_b, method = method)
-            ess_marginal <- ess_bins * (n_clean / n_occupied)
-            ess_marginal <- min(ess_marginal, n_clean)
-
-        } else {
-            # -------------------------------------------------------------------
-            # KDE-based marginal ESS (original method)
-            # Estimates the marginal posterior via weighted KDE, computes
-            # posterior/prior ratio on a grid, and applies Kish ESS.
-            # -------------------------------------------------------------------
-            h <- select_bandwidth(param_vals_clean)
-            h <- max(h, diff(param_range) / n_grid)
-            param_grid <- seq(param_range[1], param_range[2], length.out = n_grid)
-
-            # Weighted KDE of the marginal posterior
-            posterior_kde <- tryCatch({
-                density(x = param_vals_clean, weights = weights_clean,
-                        from = param_range[1], to = param_range[2],
-                        n = n_grid, bw = h)
-            }, error = function(e) {
-                density(x = param_vals_clean,
-                        from = param_range[1], to = param_range[2],
-                        n = n_grid, bw = h)
-            })
-
-            # Uniform prior on grid
-            prior_density <- rep(1 / diff(param_range), length(param_grid))
-
-            # Posterior/prior ratio -> marginal weights
-            posterior_density <- posterior_kde$y
-            min_density <- .Machine$double.eps * 100
-            posterior_density[posterior_density < min_density] <- min_density
-            weight_ratio <- posterior_density / (prior_density + min_density)
-            w_marginal <- weight_ratio / sum(weight_ratio)
-
-            ess_marginal_raw <- calc_model_ess(w_marginal, method = method)
-            ess_marginal <- ess_marginal_raw * (n_clean / n_grid)
-            ess_marginal <- min(ess_marginal, n_clean)
-        }
-        
-        return(data.frame(
+        data.frame(
             parameter = param_name,
-            type = param_type,
-            iso_code = iso_code,
-            ess_marginal = ess_marginal,
+            type = if (has_iso && base_param %in% loc_params) "location" else "global",
+            iso_code = if (has_iso) gsub(".*_([A-Z]{3})$", "\\1", param_name) else NA_character_,
+            ess_marginal = .mosaic_function_specific_ess(results_valid[[param_name]], weights),
             stringsAsFactors = FALSE
-        ))
-    }
-    
-    # ==========================================================================
-    # Process all parameters
-    # ==========================================================================
-
-    if (verbose) {
-        log_msg("Processing %d parameters", length(param_names))
-    }
-
-    ess_list <- lapply(param_names, function(param) {
-        if (verbose && length(param_names) > 10) {
-            log_msg("  Processing: %s", param)
-        }
-        calc_marginal_ess(param)
+        )
     })
-    
-    # Combine results
     ess_results <- do.call(rbind, ess_list)
 
-    # Ensure data frame consistency
-    ess_results <- as.data.frame(ess_results, stringsAsFactors = FALSE)
-    
-    # ==========================================================================
-    # Summary statistics
-    # ==========================================================================
-    
     if (verbose) {
-        mean_ess <- mean(ess_results$ess_marginal, na.rm = TRUE)
-        median_ess <- median(ess_results$ess_marginal, na.rm = TRUE)
-
-        log_msg(paste(rep("=", 60), collapse = ""))
-        log_msg("PARAMETER-SPECIFIC ESS SUMMARY")
-        log_msg(paste(rep("=", 60), collapse = ""))
-        log_msg("Marginal method: %s", marginal_method)
-        log_msg("Parameters analyzed: %d", nrow(ess_results))
-        log_msg("Mean marginal ESS: %.1f", mean_ess)
-        log_msg("Median marginal ESS: %.1f", median_ess)
-        log_msg("Global ESS: %.1f", ess_global)
-        
-        # Show worst parameters (excluding NA values)
-        valid_ess <- !is.na(ess_results$ess_marginal)
-        if (sum(valid_ess) > 0) {
-            worst_params <- head(ess_results[valid_ess, ][order(ess_results$ess_marginal[valid_ess]), ],
-                               min(5, sum(valid_ess)))
-            if (nrow(worst_params) > 0) {
-                log_msg("Lowest ESS parameters:")
-                for (i in 1:nrow(worst_params)) {
-                    log_msg("  %s: ESS = %.1f",
-                            worst_params$parameter[i],
-                            worst_params$ess_marginal[i])
-                }
-            }
-        }
-
-        # Report any failed parameters
-        failed_params <- ess_results$parameter[!valid_ess]
-        if (length(failed_params) > 0) {
-            log_msg("Warning: %d parameter(s) failed ESS calculation: %s",
-                    length(failed_params),
-                    paste(failed_params, collapse = ", "))
-        }
-        
-        log_msg(paste(rep("=", 60), collapse = ""))
+        ok <- is.finite(ess_results$ess_marginal)
+        log_msg("Parameters analyzed: %d | median ESS %.1f | min ESS %.1f",
+                nrow(ess_results),
+                if (any(ok)) stats::median(ess_results$ess_marginal[ok]) else NA_real_,
+                if (any(ok)) min(ess_results$ess_marginal[ok]) else NA_real_)
     }
-    
-    return(ess_results)
+
+    ess_results
+}
+
+# Variance-ratio (delta-method) ESS of a weighted posterior mean: posterior
+# variance over the delta-method variance of the self-normalised mean (Owen
+# 2013, eq. 9.9; not the weight-based n_e(f) of eq. 9.17), bounded above by
+# the Kish ESS of the weights. The bound matters: both
+# variances are estimated from the same weights, and when one weight dominates
+# the ratio degenerates upward (two draws weighted 0.99 / 0.01 give 50.5; a
+# production near-point mass whose runner-up sits 34 log units behind gives
+# ~n). Kish ESS when the weighted spread is zero; never below 1. NA when no
+# draw has a finite value and positive weight.
+.mosaic_function_specific_ess <- function(x, w) {
+    ok <- is.finite(x) & is.finite(w) & w > 0
+    if (!any(ok)) return(NA_real_)
+    x <- x[ok]; w <- w[ok] / sum(w[ok])
+    kish <- 1 / sum(w^2)
+    m <- sum(w * x)
+    d2 <- (x - m)^2
+    num <- sum(w * d2); den <- sum(w^2 * d2)
+    if (!(num > 0) || !(den > 0)) return(kish)
+    max(1, min(kish, num / den))
 }

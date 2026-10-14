@@ -24,6 +24,9 @@ calc_convergence_diagnostics(
   ess_method = c("kish", "perplexity"),
   temperature = 1,
   is_diagnostics = NULL,
+  weight_health = NULL,
+  weighting = c("saturated", "tempered", "coarsened"),
+  target_batch_ratio_max = 0.2,
   verbose = TRUE
 )
 }
@@ -75,10 +78,32 @@ workflow.}
 \item{temperature}{Numeric temperature parameter used for weight scaling
 (default 1, for documentation purposes)}
 
-\item{is_diagnostics}{Optional list of exact importance-sampling diagnostics
-from \code{\link{calc_is_diagnostics}}, with elements \code{best} and
-\code{all}. Reported under \code{$importance_sampling} but never gated:
-these are untruncated-weight quantities, unlike the gated ESS_B.}
+\item{is_diagnostics}{Optional list of \eqn{\eta = 1} diagnostics from
+\code{\link{calc_is_diagnostics}}, with elements \code{best} and
+\code{all}. Their ESS and positive-ratio counts are reported under
+\code{$likelihood_concentration} with an explanatory note (no Pareto
+k-hat) and are never gated: they describe the untempered likelihood, which
+collapses onto one draw for any informative stochastic likelihood whatever
+the fit.}
+
+\item{weight_health}{Optional result of \code{\link{calc_weight_health}}.
+Reported under \code{$weight_health}. Under \code{weighting =
+"coarsened"} its posterior ESS and seed-batch ratio are the gated
+\code{ess_coarsened} and \code{batch_ratio} metrics; under the legacy
+schemes it does not enter the overall status.}
+
+\item{weighting}{Posterior weighting scheme the inputs come from
+(\code{control$targets$best_subset_weighting}): \code{"saturated"} (default,
+the pre-1.3.0 behaviour) or \code{"tempered"} gate the tier-searched best
+subset (B_size, its cap, ESS_B, A_B, CV_B). \code{"coarsened"} gates the
+coarsened posterior instead: its Kish ESS against \code{target_ess_param}
+and its seed-batch ratio against \code{target_batch_ratio_max}, both read
+from \code{weight_health}; the best-subset metrics, which then describe the
+resampled ensemble members, are reported with status \code{"info"}.}
+
+\item{target_batch_ratio_max}{Largest acceptable seed-batch ratio of the
+coarsened posterior (\code{control$targets$batch_ratio_max}); used only
+under \code{weighting = "coarsened"}. Default 0.2.}
 
 \item{verbose}{Logical indicating whether to print diagnostic messages
 (default TRUE)}
@@ -195,6 +220,8 @@ print(diagnostics$summary$convergence_status)
 Other calibration-metrics:
 \code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}},
 \code{\link[=calc_model_cvw]{calc_model_cvw()}},
-\code{\link[=calc_model_ess]{calc_model_ess()}}
+\code{\link[=calc_model_ess]{calc_model_ess()}},
+\code{\link[=calc_run_weight_health]{calc_run_weight_health()}},
+\code{\link[=calc_weight_health]{calc_weight_health()}}
 }
 \concept{calibration-metrics}

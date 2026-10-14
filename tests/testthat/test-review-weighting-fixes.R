@@ -147,7 +147,7 @@ test_that("B_size_upper still gates a subset above the cap", {
 
 # ---- weighting-posterior-07: status table shows every gated/reported row ------
 
-test_that("convergence status table includes subset, cap, IS diagnostics and overall rows", {
+test_that("convergence status table includes subset, cap, likelihood-concentration and overall rows", {
   is_all  <- calc_is_diagnostics(c(0, -1e6 * (1:99)), method = "perplexity")
   is_best <- calc_is_diagnostics(-(0:19), method = "perplexity")
   d <- calc_convergence_diagnostics(
@@ -162,20 +162,19 @@ test_that("convergence status table includes subset, cap, IS diagnostics and ove
   st <- calc_model_convergence_status(res_dir, verbose = FALSE)
   m  <- st$metrics_data
   expect_true(all(c("Subset Selection", "Best Subset (B)", "Best Subset (B) cap", "ESS_B",
-                    "ESS_IS (all)", "ESS_IS (B)", "Pareto k-hat", "Overall") %in% m$Metric))
+                    "ESS_IS (all)", "ESS_IS (B)", "Overall") %in% m$Metric))
+  # k-hat is no longer reported (1.3.0); the eta = 1 rows are reference only.
+  expect_false("Pareto k-hat" %in% m$Metric)
+  expect_identical(m$Status[m$Metric == "ESS_IS (all)"], "info")
+  expect_match(m$Description[m$Metric == "ESS_IS (all)"], "reference only")
   expect_identical(length(st$metric_expressions), nrow(m))
   expect_identical(m$Value[m$Metric == "Subset Selection"], "12.0%")
   expect_identical(m$Target[m$Metric == "Subset Selection"], "<=15.0%")
   expect_identical(m$Status[m$Metric == "Best Subset (B) cap"], "pass")
   expect_identical(m$Value[m$Metric == "ESS_IS (all)"], "1 of 100")
   expect_identical(m$Status[m$Metric == "Overall"], tolower(d$summary$convergence_status))
-  # khat_status is the tail-fit status, not a verdict: an "ok" fit must not
-  # read as "Pareto k-hat: ok" next to an unreliable k-hat.
-  khat_desc <- m$Description[m$Metric == "Pareto k-hat"]
-  expect_false(grepl(": ok$", khat_desc))
-  expect_match(khat_desc, "^Pareto k-hat, all draws \\(not gated\\)")
-  if (identical(is_all$khat_status, "ok") && is.finite(is_all$khat) && is_all$khat >= 0.7)
-    expect_match(khat_desc, "unreliable")
+  expect_false(any(grepl("khat", names(unlist(d$likelihood_concentration)))))
+  expect_null(d$importance_sampling)
 })
 
 # ---- weighting-posterior-08: KL is KL(posterior || prior), uncapped ----------
@@ -303,23 +302,21 @@ test_that("bookend batch size does not call an over-predicting fit 'complete'", 
   expect_match(res$message, "over-predicts current ESS")
 })
 
-# ---- weighting-posterior-01 (DEFERRED): pin the known defect -----------------
-# The default kde marginal ESS does not detect importance-weight collapse. This
-# test documents current behaviour; when the stop rule is fixed it should fail
-# and be replaced by an assertion that a point mass gives a marginal ESS near 1.
-test_that("KNOWN DEFECT: kde marginal ESS stays large for a point-mass weight vector", {
+# ---- weighting-posterior-01: the per-parameter ESS detects collapse ----------
+# The pre-1.3.0 kde marginal ESS stayed > 100 for a point mass and was removed;
+# the function-specific ESS that replaced it (and that the stop rule reads) is 1.
+test_that("a point-mass weight vector has a per-parameter ESS of 1", {
   set.seed(7)
   n <- 5000
   res <- data.frame(gamma_1 = runif(n, 0.05, 1), likelihood = c(0, rep(-1e6, n - 1)))
   expect_equal(calc_is_diagnostics(res$likelihood, method = "perplexity")$ess_is, 1,
                tolerance = 1e-8)
-  ess <- calc_model_ess_parameter(res, param_names = "gamma_1", method = "perplexity",
-                                  marginal_method = "kde")
-  expect_gt(ess$ess_marginal[ess$parameter == "gamma_1"], 100)
+  ess <- calc_model_ess_parameter(res, param_names = "gamma_1")
+  expect_equal(ess$ess_marginal[ess$parameter == "gamma_1"], 1)
 })
 
 test_that("a forced fallback under non-saturated best-subset weighting is logged", {
-  body_txt <- paste(deparse(body(MOSAIC::run_MOSAIC)), collapse = "\n")
+  body_txt <- paste(deparse(MOSAIC:::.mosaic_tier_best_subset), collapse = "\n")
   expect_true(grepl("every tier failed, so the posterior is the top %d draws", body_txt,
                     fixed = TRUE))
 })

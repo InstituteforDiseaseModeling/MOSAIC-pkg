@@ -168,7 +168,7 @@ calc_model_posterior_quantiles <- function(results,
 
     # Get parameter columns from results, excluding metadata columns
     exclude_cols <- c("sim", "iter", "seed_sim", "seed_iter", "likelihood", "aic", "delta_aic",
-                     "weight_retained", "weight_best", "weight_best_opt",
+                     "weight_all", "weight_retained", "weight_best", "weight_best_opt",
                      "is_finite", "is_valid", "is_outlier", "is_retained",
                      "is_best_subset", "is_best_subset_opt", "is_best_model", "best_subset_B")
 

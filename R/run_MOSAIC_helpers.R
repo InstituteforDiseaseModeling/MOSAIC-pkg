@@ -600,6 +600,42 @@
     def <- .mosaic_migrate_renamed(def, .p[[1]], .p[[2]], .p[[3]])
   }
 
+  # RETIRED (1.3.0): targets$ESS_marginal_method. It chose the grid estimate
+  # (KDE or binned) of the per-parameter ESS, which did not measure the
+  # posterior and was removed; the stopping rule now reads the function-specific
+  # ESS, which has no method to choose. Detected in the user's ORIGINAL control
+  # (lesson #13): the defaults no longer carry the key, so presence means the
+  # user set it (directly, or through a control.json from an older run).
+  if ("ESS_marginal_method" %in% names(control[["targets"]])) {
+    warning(paste0("control$targets$ESS_marginal_method is retired (MOSAIC 1.3.0) and was ",
+                   "ignored. The grid-based marginal ESS it selected was removed: the ",
+                   "per-parameter ESS is now the function-specific ESS of the posterior ",
+                   "weights (calc_model_ess_parameter()), which needs no method."),
+            call. = FALSE)
+    def$targets$ESS_marginal_method <- NULL
+  }
+
+  # The tier-search targets are not used under the coarsened posterior. Warn
+  # once when the user set one to a non-default value, judged from the ORIGINAL
+  # control (lesson #13): a full mosaic_control_defaults() list carries every
+  # key at its default and must stay silent.
+  if (identical(def$targets$best_subset_weighting, "coarsened")) {
+    .tier_keys <- c("ESS_best", "A_best", "CVw_best")
+    .tier_set <- .tier_keys[vapply(.tier_keys, function(k) {
+      v <- control[["targets"]][[k]]
+      !is.null(v) && !isTRUE(all.equal(v, .ctl_defaults$targets[[k]]))
+    }, logical(1))]
+    if (length(.tier_set)) {
+      warning(sprintf(paste0(
+        "control$targets$%s %s ignored under best_subset_weighting = \"coarsened\" (the ",
+        "default since MOSAIC 1.3.0): the coarsened posterior has no best-subset tier search. ",
+        "The ensemble size is set by the posterior's ESS, bounded by min_best_subset and ",
+        "max_best_subset. Set best_subset_weighting = \"saturated\" to use the tier search."),
+        paste(.tier_set, collapse = ", $"), if (length(.tier_set) > 1L) "are" else "is"),
+        call. = FALSE)
+    }
+  }
+
   # TYPE VALIDATION
   stopifnot(
     "parallel$enable must be logical" =
@@ -634,7 +670,23 @@
       def$targets$min_best_subset >= 10,
     "targets$max_best_subset must be >= min_best_subset" =
       is.numeric(def$targets$max_best_subset) &&
-      def$targets$max_best_subset >= def$targets$min_best_subset
+      def$targets$max_best_subset >= def$targets$min_best_subset,
+    "targets$max_ensemble_members must be a single positive integer >= min_best_subset" =
+      is.numeric(def$targets$max_ensemble_members) &&
+      length(def$targets$max_ensemble_members) == 1L &&
+      is.finite(def$targets$max_ensemble_members) &&
+      def$targets$max_ensemble_members == round(def$targets$max_ensemble_members) &&
+      def$targets$max_ensemble_members >= def$targets$min_best_subset,
+    "targets$coarsening_alpha must be a single positive finite number" =
+      is.numeric(def$targets$coarsening_alpha) && length(def$targets$coarsening_alpha) == 1L &&
+      is.finite(def$targets$coarsening_alpha) && def$targets$coarsening_alpha > 0,
+    "targets$batch_ratio_max must be a single positive finite number" =
+      is.numeric(def$targets$batch_ratio_max) && length(def$targets$batch_ratio_max) == 1L &&
+      is.finite(def$targets$batch_ratio_max) && def$targets$batch_ratio_max > 0,
+    "targets$best_subset_weighting must be one of 'coarsened', 'saturated', 'tempered'" =
+      is.character(def$targets$best_subset_weighting) &&
+      length(def$targets$best_subset_weighting) == 1L &&
+      def$targets$best_subset_weighting %in% c("coarsened", "saturated", "tempered")
   )
 
   # SEMANTIC VALIDATION (reasonable bounds and logical consistency)
@@ -845,32 +897,64 @@
 
 #' Resolve Active Subset/Weight Columns for Posterior Construction
 #'
-#' When \code{control$predictions$optimize_subset = TRUE} and the run produced
-#' \code{is_best_subset_opt} / \code{weight_best_opt} columns, those are the
-#' canonical subset for posterior work. Otherwise the tier-selected columns
-#' (\code{is_best_subset} / \code{weight_best}) are canonical.
+#' The parameter posterior (\code{posterior_quantiles.csv},
+#' \code{posteriors.json}, \code{parameter_estimates.csv}, the posterior
+#' density plots) is computed from exactly the draws the predictions use: the
+#' ensemble members (\code{is_best_subset} / \code{weight_best}), or the
+#' optimised subset (\code{is_best_subset_opt} / \code{weight_best_opt}) when
+#' \code{control$predictions$optimize_subset = TRUE} produced one. This holds
+#' under every weighting scheme. Under \code{"coarsened"} (the default since
+#' 1.3.0) the members are the systematic resample of the coarsened posterior,
+#' weighted by count / K; the all-draws coarsened weights (\code{weight_all})
+#' measure the posterior they are resampled from (weight health, the auto-mode
+#' stopping rule, \code{parameter_ess.csv}) and are not a posterior source.
+#' Under the legacy schemes the members are the tier-searched best subset.
 #'
 #' The \code{any(results$is_best_subset_opt)} guard handles the edge case where
 #' \code{optimize_subset = TRUE} but the optimizer silently failed (e.g.,
 #' \code{stability_flag} + \code{optimal_n == 0}) -- in which case we fall back
-#' to the tier subset.
+#' to the members.
 #'
 #' @param results data.frame with at least \code{is_best_subset} and
 #'   \code{weight_best} columns, optionally \code{is_best_subset_opt} and
 #'   \code{weight_best_opt}.
-#' @param control MOSAIC control list.
-#' @return Named list with \code{subset_col}, \code{weight_col}, and
-#'   \code{source} ("tier" or "optimized").
+#' @param control MOSAIC control list. A list without
+#'   \code{targets$best_subset_weighting} is read as \code{"saturated"}.
+#' @return Named list (see \code{.mosaic_posterior_cols()}).
 #' @noRd
 .mosaic_active_subset_cols <- function(results, control) {
   use_opt <- isTRUE(control$predictions$optimize_subset) &&
              "is_best_subset_opt" %in% names(results) &&
              "weight_best_opt"    %in% names(results) &&
              isTRUE(any(as.logical(results$is_best_subset_opt), na.rm = TRUE))
+  .mosaic_posterior_cols(control$targets$best_subset_weighting %||% "saturated", use_opt)
+}
+
+#' Posterior columns of a run
+#'
+#' The one mapping from a run to the samples.parquet columns its posterior
+#' consumers read, shared by \code{run_MOSAIC()} (through
+#' \code{.mosaic_active_subset_cols()}) and \code{render_MOSAIC_figures()}. The
+#' columns are the prediction members under every scheme; the scheme only
+#' labels \code{source}.
+#'
+#' @param weighting \code{"coarsened"}, \code{"saturated"} or \code{"tempered"}.
+#' @param use_opt Logical; the run has a usable optimised subset.
+#' @return \code{list(subset_col, weight_col, sample_col, source)}:
+#'   \code{subset_col}/\code{weight_col} drive the weighted parameter posterior
+#'   (quantiles, posteriors.json, posterior density plots); \code{sample_col}
+#'   selects the posterior draws of sample-based consumers (the same members);
+#'   \code{source} is \code{"optimized"}, or \code{"resample"} (coarsened) /
+#'   \code{"tier"} (legacy schemes) for the unoptimised members.
+#' @noRd
+.mosaic_posterior_cols <- function(weighting, use_opt = FALSE) {
+  use_opt <- isTRUE(use_opt)
   list(
     subset_col = if (use_opt) "is_best_subset_opt" else "is_best_subset",
     weight_col = if (use_opt) "weight_best_opt"    else "weight_best",
-    source     = if (use_opt) "optimized"          else "tier"
+    sample_col = if (use_opt) "is_best_subset_opt" else "is_best_subset",
+    source     = if (use_opt) "optimized"
+                 else if (identical(weighting, "coarsened")) "resample" else "tier"
   )
 }
 
@@ -1143,6 +1227,9 @@
     # Track batches within each phase (used for predictive batch limits)
     phase_batch_count = 0L,
     phase_last = NULL,
+    # What the auto-mode stopping rule measures (persisted in the resume
+    # checkpoint so a resume never mixes two metrics in one ESS history)
+    gate_metric = .mosaic_gate_metric_id(control),
     # Internal timestamp for state file provenance
     .created_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
   )
@@ -1172,7 +1259,16 @@
     ess_regression_r2 = if (!is.na(state$r2_ess)) round(state$r2_ess, 4) else NULL,
     ess_min = if (length(state$ess_tracking) > 0) {
       round(tail(vapply(state$ess_tracking, `[[`, numeric(1), "min_ess"), 1), 1)
-    } else NULL
+    } else NULL,
+    ess_threshold = if (length(state$ess_tracking) > 0) {
+      round(tail(vapply(state$ess_tracking, `[[`, numeric(1), "threshold_ess"), 1), 1)
+    } else NULL,
+    batch_ratio_max = if (length(state$ess_tracking) > 0 &&
+                          !is.null(tail(state$ess_tracking, 1)[[1]]$batch_ratio_max)) {
+      v <- tail(state$ess_tracking, 1)[[1]]$batch_ratio_max
+      if (is.finite(v)) round(v, 4) else NULL
+    } else NULL,
+    gate_metric = state$gate_metric
   )
 
   # Atomic write: tempfile + rename
@@ -1311,6 +1407,7 @@
 .mosaic_save_checkpoint <- function(state, checkpoint_file) {
   ckpt <- list(
     schema_version      = 1L,
+    gate_metric         = state$gate_metric,
     total_sims_run      = state$total_sims_run,
     batch_number        = state$batch_number,
     phase               = state$phase,
@@ -1353,9 +1450,10 @@
 #' @param dirs Directory list
 #' @param control Control list
 #' @param param_names_est Estimated-parameter names
+#' @param n_obs Scored observation cells (for the stopping rule)
 #' @return Reconstructed state (unchanged if no shards exist -> fresh run)
 #' @noRd
-.mosaic_reconstruct_state <- function(state, dirs, control, param_names_est) {
+.mosaic_reconstruct_state <- function(state, dirs, control, param_names_est, n_obs) {
   scan <- .mosaic_resume_scan(dirs$cal_samples)
 
   if (scan$n == 0L) {
@@ -1383,6 +1481,37 @@
     state$batch_success_rates <- ckpt$batch_success_rates %||% numeric()
     state$batch_sizes_used    <- ckpt$batch_sizes_used    %||% integer()
 
+    # The ESS history must have been measured by the stopping rule this session
+    # runs. A checkpoint from before MOSAIC 1.3.0 (grid-based marginal ESS, no
+    # stamp), or one made under another weighting scheme or coarsening alpha,
+    # measured something else: pooling its history with new measurements would
+    # fit the growth model across two metrics and could carry a convergence
+    # verdict the current rule never reached. Discard that history and re-derive
+    # the rule from the shards; the batch counters and phase carry over.
+    gate_now  <- state$gate_metric %||% .mosaic_gate_metric_id(control)
+    gate_ckpt <- ckpt$gate_metric
+    entry_metrics <- unique(vapply(state$ess_tracking, function(e)
+      if (is.null(e$metric)) NA_character_ else as.character(e$metric), character(1)))
+    gate_mismatch <- identical(state$mode, "auto") && length(state$ess_tracking) > 0L &&
+      (is.null(gate_ckpt) || !identical(as.character(gate_ckpt), gate_now) ||
+       anyNA(entry_metrics) || !all(entry_metrics == gate_now))
+    if (gate_mismatch) {
+      log_msg(paste0("[RESUME] The checkpoint's ESS history (%d measurement(s)) was made by the stopping ",
+                     "rule '%s'; this session's rule is '%s'. That history is discarded and the rule ",
+                     "is re-derived from the %d shards on disk, so measurements of two metrics are ",
+                     "never mixed (batch counters and phase are kept)."),
+              length(state$ess_tracking),
+              if (is.null(gate_ckpt)) "unstamped (before MOSAIC 1.3.0)" else as.character(gate_ckpt),
+              gate_now, scan$n)
+      state$ess_tracking  <- list()
+      state$r2_ess        <- NA_real_
+      state$calib_batches <- 0L
+      state$converged     <- FALSE
+      state$predictive_done <- FALSE
+      max_adaptive <- control$calibration$max_batches_adaptive %||% 8L
+      if (state$batch_number >= max_adaptive) state$calibration_done <- TRUE
+    }
+
     # ess_tracking total_sims is a row COUNT, so compare against the shard
     # count (not the max-id watermark, which would over-fire on failed-sim gaps).
     last_count <- if (length(state$ess_tracking))
@@ -1396,9 +1525,9 @@
     #   - FEWER shards (some were quarantined on this scan) -- in which case a
     #     stale converged=TRUE no longer matches the pool, so clear it and let
     #     the ESS check re-derive convergence rather than trusting the flag.
-    if (identical(state$mode, "auto") && scan$n != last_count) {
+    if (identical(state$mode, "auto") && (gate_mismatch || scan$n != last_count)) {
       if (state$converged && scan$n < last_count) state$converged <- FALSE
-      state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control)
+      state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control, n_obs)
     }
 
   } else if (identical(state$mode, "auto")) {
@@ -1415,7 +1544,7 @@
     log_msg("[RESUME] No checkpoint; bootstrapping from %d shards (watermark %d, batch %d%s)",
             scan$n, scan$watermark, state$batch_number,
             if (isTRUE(state$calibration_done)) ", calibration budget already met" else "")
-    state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control)
+    state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control, n_obs)
 
   } else {
     log_msg("[RESUME] Fixed mode: %d shards present (watermark %d)", scan$n, scan$watermark)
@@ -1879,152 +2008,301 @@
   )
 }
 
-#' ESS Check and Update State
+#' Identifier of the auto-mode stopping-rule metric
+#'
+#' Stamped on every \code{ess_tracking} entry and on the resume checkpoint, so a
+#' resumed run never mixes measurements of two different gate metrics in one
+#' ESS history. It changes whenever what the rule measures changes: the metric
+#' itself, the posterior weighting scheme it is computed on, or the coarsening
+#' alpha (which sets that posterior).
+#' @param control Merged control list.
+#' @return A single character string.
 #' @noRd
-.mosaic_ess_check_update_state <- function(state, dirs, param_names_est, control) {
+.mosaic_gate_metric_id <- function(control) {
+  scheme <- control$targets$best_subset_weighting %||% "coarsened"
+  alpha  <- control$targets$coarsening_alpha %||% 10
+  sprintf("fs_ess+batch_ratio/v1.3.0/%s%s", scheme,
+          if (identical(scheme, "coarsened"))
+            sprintf("/alpha=%s", format(alpha, digits = 15)) else "")
+}
 
-  # Load all simulation files fresh from disk
-  files <- list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
-  if (!length(files)) return(state)
+#' Posterior weights over all draws, as the stopping rule scores them
+#'
+#' \code{"coarsened"}: the coarsened posterior \eqn{\exp\{\eta(\ell - \max\ell)\}}
+#' with \eqn{\eta = \alpha / n_{obs}}, exactly \code{weight_all} of the finished
+#' run. Legacy schemes: the tier-searched best subset of the draws passing the
+#' Tukey lower fence, weighted by \code{.mosaic_best_subset_weights()}, exactly
+#' \code{weight_best}. These are the weights \code{run_MOSAIC()} computes the
+#' post-hoc \code{parameter_ess.csv} from.
+#' @param results Results frame (\code{sim}, \code{likelihood}, parameters).
+#' @param n_obs Scored observation cells.
+#' @param control Merged control list.
+#' @return Normalised weights, one per row of \code{results}.
+#' @noRd
+.mosaic_gate_weights <- function(results, n_obs, control) {
+  ll <- results$likelihood
+  scheme <- control$targets$best_subset_weighting
+  if (identical(scheme, "coarsened")) {
+    eta <- .mosaic_coarsened_eta(control$targets$coarsening_alpha, n_obs)
+    if (!is.finite(eta)) stop("the stopping rule needs n_obs (scored observation cells) under the coarsened posterior")
+    return(.mosaic_tempered_weights(ll, eta))
+  }
+  valid <- is.finite(ll)
+  w <- numeric(length(ll))
+  if (!any(valid)) return(w)
+  retained <- valid
+  retained[valid] <- ll[valid] >= .mosaic_lower_fence(ll[valid], control$weights$iqr_multiplier)
+  pool <- results
+  pool$is_retained <- retained
+  sel <- .mosaic_tier_best_subset(pool, control, log = FALSE)
+  in_b <- results$sim %in% sel$top_subset$sim
+  if (any(in_b)) w[in_b] <- .mosaic_best_subset_weights(ll[in_b], scheme)$weights
+  if (sum(w) > 0) w / sum(w) else w
+}
 
-  log_msg("Checking ESS convergence...")
-  load_start <- Sys.time()
+#' Stopping-rule measurements of a pool of draws
+#'
+#' @param results Results frame of every draw so far.
+#' @param param_names Sampled parameter names.
+#' @param n_obs Scored observation cells.
+#' @param control Merged control list.
+#' @param n_batches Seed batches for the stability ratio (as in
+#'   \code{calc_weight_health()}).
+#' @return \code{list(ess, ess_kish, batch_ratio_max)}: \code{ess} is the
+#'   \code{calc_model_ess_parameter()} table on the posterior weights,
+#'   \code{ess_kish} the Kish ESS of those weights and \code{batch_ratio_max}
+#'   their seed-batch ratio (max over parameters; \code{Inf} when fewer than
+#'   two batches carry weight, \code{NA} when no parameter varies).
+#' @noRd
+.mosaic_gate_metrics <- function(results, param_names, n_obs, control, n_batches = 10L) {
+  w <- .mosaic_gate_weights(results, n_obs, control)
+  if (!(sum(w) > 0)) stop("the posterior weights sum to zero")
+  ess <- calc_model_ess_parameter(results, param_names, weights = w)
+  pcols <- intersect(ess$parameter, names(results))
+  P <- .mosaic_health_param_matrix(results[, pcols, drop = FALSE], is.finite(results$likelihood))
+  batch <- (as.integer(results$sim) - 1L) %% as.integer(n_batches) + 1L
+  br <- .mosaic_batch_ratio(w, P, batch)
+  br <- br[!is.na(br)]
+  list(ess = ess, ess_kish = calc_model_ess(w, method = "kish"),
+       batch_ratio_max = if (length(br)) max(br) else NA_real_)
+}
 
-  # Use efficient streaming method (same as final results loading)
-  # This is much faster and more memory-efficient than rbindlist for large datasets
-  ess_check_results <- tryCatch({
-    .mosaic_load_and_combine_results(
-      dir_params = dirs$cal_samples,
-      method = "streaming",
-      chunk_size = control$io$load_chunk_size %||% 5000L,
-      verbose = FALSE
-    )
-  }, error = function(e) NULL)
+#' Percentile threshold of the per-parameter ESS
+#'
+#' The (1 - \code{prop}) quantile of the per-parameter ESS as an order
+#' statistic: the \eqn{k}-th smallest value, \eqn{k = n - \lceil prop \cdot n
+#' \rceil + 1}, over all \code{n_total} sampled parameters (a parameter
+#' without an ESS counts as 0). Then \code{threshold >= ESS_param} holds
+#' exactly when at least \code{prop} of the parameters reach \code{ESS_param},
+#' which is the convergence count, so the phase logic (ESS gap, growth model)
+#' and the convergence check cannot disagree. An interpolated quantile could:
+#' with 39 parameters and \code{prop} = 0.9756 it sat between the smallest and
+#' second-smallest ESS, so it could clear the target while one parameter, and
+#' hence the count, had not, which closed the predictive phase without
+#' convergence (4 of the 28 national replays).
+#'
+#' @param ess Per-parameter ESS (\code{NA} allowed).
+#' @param prop \code{control$targets$ESS_param_prop}.
+#' @param n_total Number of sampled parameters (\code{>= length(ess)}).
+#' @return A single number.
+#' @noRd
+.mosaic_gate_threshold <- function(ess, prop, n_total = length(ess)) {
+  v <- as.numeric(ess)
+  v[!is.finite(v)] <- 0
+  n_total <- max(as.integer(n_total), length(v))
+  if (n_total < 1L) return(NA_real_)
+  v <- sort(c(v, rep(0, n_total - length(v))))
+  k <- n_total - ceiling(prop * n_total - 1e-9) + 1L
+  v[min(max(k, 1L), n_total)]
+}
 
-  load_time <- difftime(Sys.time(), load_start, units = "secs")
+#' Growth model of the stopping-rule ESS in the number of draws
+#'
+#' Fits ESS = a + b n (linear) and ESS = a + b sqrt(n) and keeps the one with
+#' the higher R-squared (linear on a tie). Linear is the expected shape: the
+#' Kish ESS of fixed importance weights over n independent prior draws is
+#' n (E w)^2 / E w^2. Shared by the calibration phase of the stopping rule and
+#' \code{calc_bookend_batch_size()}, so both size batches from one model.
+#'
+#' @param n Cumulative draws at each measurement.
+#' @param ess Stopping-rule ESS at each measurement.
+#' @param target Target ESS (for \code{est_sims}).
+#' @return \code{list(model, r2, r2_linear, r2_sqrt, intercept, slope, est_sims,
+#'   fit)}. \code{est_sims} is the n at which the chosen model reaches
+#'   \code{target}, clamped at 0, or \code{NA} when the slope is not positive.
+#'   A non-finite R-squared (a constant ESS) counts as 0. With fewer than two
+#'   distinct n there is no fit: \code{fit = NULL}, R-squared 0.
+#' @noRd
+.mosaic_ess_growth_fit <- function(n, ess, target = NA_real_) {
+  ok <- is.finite(n) & is.finite(ess) & n > 0
+  df <- data.frame(n_sims = as.numeric(n[ok]), threshold_ess = as.numeric(ess[ok]))
+  none <- list(model = "linear", r2 = 0, r2_linear = 0, r2_sqrt = 0,
+               intercept = NA_real_, slope = NA_real_, est_sims = NA_real_, fit = NULL)
+  if (nrow(df) < 2L || length(unique(df$n_sims)) < 2L) return(none)
+  r2_of <- function(f) {
+    r <- suppressWarnings(summary(f)$r.squared)
+    if (length(r) == 1L && is.finite(r)) r else 0
+  }
+  fit_lin  <- stats::lm(threshold_ess ~ n_sims, data = df)
+  fit_sqrt <- stats::lm(threshold_ess ~ sqrt(n_sims), data = df)
+  r2_lin <- r2_of(fit_lin); r2_sqrt <- r2_of(fit_sqrt)
+  use_sqrt <- r2_sqrt > r2_lin
+  fit <- if (use_sqrt) fit_sqrt else fit_lin
+  a <- unname(stats::coef(fit)[1]); b <- unname(stats::coef(fit)[2])
+  est <- if (is.finite(a) && is.finite(b) && b > 0 && is.finite(target)) {
+    root <- (target - a) / b
+    if (use_sqrt) max(root, 0)^2 else max(root, 0)
+  } else NA_real_
+  list(model = if (use_sqrt) "sqrt" else "linear", r2 = max(r2_lin, r2_sqrt),
+       r2_linear = r2_lin, r2_sqrt = r2_sqrt, intercept = a, slope = b,
+       est_sims = est, fit = fit)
+}
 
-  if (is.null(ess_check_results) || !nrow(ess_check_results)) {
+#' ESS Check and Update State
+#'
+#' The auto-mode stopping rule. On every draw so far it computes the
+#' per-parameter function-specific ESS (\code{calc_model_ess_parameter()}) of
+#' the posterior weights (\code{.mosaic_gate_weights()}) and their seed-batch
+#' ratio. Convergence needs all of: the (1 - \code{ESS_param_prop}) quantile of
+#' the per-parameter ESS at or above \code{ESS_param} (equivalently, at least
+#' \code{ESS_param_prop} of the parameters there), the seed-batch ratio below
+#' \code{batch_ratio_max}, and \code{min_batches_adaptive} batches. Under the
+#' legacy schemes the weights are the saturated / tempered best-subset weights,
+#' whose ESS cannot exceed the subset size (about 108 draws for "saturated").
+#'
+#' @param state Calibration state.
+#' @param dirs Directory list (shards are read from \code{dirs$cal_samples}).
+#' @param param_names_est Sampled parameter names.
+#' @param control Merged control list.
+#' @param n_obs Scored observation cells (\code{.mosaic_n_scored_obs()}).
+#' @param results Optional results frame of every draw so far; read from the
+#'   shards when \code{NULL}. Lets an offline replay drive the same rule.
+#' @noRd
+.mosaic_ess_check_update_state <- function(state, dirs, param_names_est, control,
+                                           n_obs, results = NULL) {
+
+  if (is.null(results)) {
+    # Load all simulation files fresh from disk
+    files <- list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
+    if (!length(files)) return(state)
+
+    log_msg("Checking ESS convergence...")
+
+    # Use efficient streaming method (same as final results loading)
+    results <- tryCatch({
+      .mosaic_load_and_combine_results(
+        dir_params = dirs$cal_samples,
+        method = "streaming",
+        chunk_size = control$io$load_chunk_size %||% 5000L,
+        verbose = FALSE
+      )
+    }, error = function(e) NULL)
+  } else {
+    log_msg("Checking ESS convergence...")
+  }
+
+  if (is.null(results) || !nrow(results)) {
     return(state)
   }
 
-  # Skip ESS calculation if insufficient samples
   # calc_model_ess_parameter requires at least 50 samples
-  if (nrow(ess_check_results) < 50) {
-    log_msg("  Skipping ESS check: %d simulations (need at least 50)", nrow(ess_check_results))
+  if (nrow(results) < 50) {
+    log_msg("  Skipping ESS check: %d simulations (need at least 50)", nrow(results))
     return(state)
   }
 
-  # Calculate ESS using specified method from control.
-  # Use the same adaptive n_grid as the final post-hoc ESS calculation in
-  # run_MOSAIC (n_grid = 100 * (1 + log(ESS_param/100))). A coarser grid
-  # over-estimates ESS for tight posteriors, which caused the loop to declare
-  # convergence before the finer-grid post-hoc calculation could confirm it.
-  ess_target_val <- control$targets$ESS_param %||% 100
-  n_grid_adaptive <- as.integer(round(100 * (1 + log(max(ess_target_val, 100) / 100))))
+  gm <- tryCatch(
+    .mosaic_gate_metrics(results, param_names_est, n_obs, control),
+    error = function(e) {
+      log_msg("  ESS calculation failed: %s", conditionMessage(e))
+      NULL
+    })
+  if (is.null(gm)) return(state)
 
-  ess_current <- tryCatch({
-    calc_model_ess_parameter(
-      results = ess_check_results,
-      param_names = param_names_est,
-      likelihood_col = "likelihood",
-      n_grid = n_grid_adaptive,
-      method = control$targets$ESS_method,
-      marginal_method = control$targets$ESS_marginal_method %||% "kde",
-      verbose = FALSE
-    )
-  }, error = function(e) {
-    log_msg("  ESS calculation failed: %s", e$message)
-    NULL
-  })
-
-  if (is.null(ess_current) || !"ess_marginal" %in% names(ess_current)) {
-    return(state)
-  }
+  gate_ess <- gm$ess$ess_marginal
+  batch_ratio <- gm$batch_ratio_max
+  batch_max <- control$targets$batch_ratio_max
+  batch_ok <- is.finite(batch_ratio) && batch_ratio < batch_max
 
   # Store ESS history
   state$ess_history[[length(state$ess_history) + 1L]] <- list(
     batch = state$batch_number,
-    total_sims = nrow(ess_check_results),
-    ess_values = ess_current
+    total_sims = nrow(results),
+    ess_values = gm$ess,
+    ess_kish = gm$ess_kish,
+    batch_ratio_max = batch_ratio
   )
 
-  # Calculate percentile-based threshold
+  # Percentile-based threshold: the (1 - ESS_param_prop) quantile of the
+  # per-parameter ESS, as an order statistic (.mosaic_gate_threshold()), so
+  # threshold >= ESS_param exactly when ESS_param_prop of the parameters are.
   percentile_cutoff <- 1 - control$targets$ESS_param_prop
-  threshold_ess <- as.numeric(stats::quantile(
-    ess_current$ess_marginal,
-    probs = percentile_cutoff,
-    na.rm = TRUE
-  ))
+  threshold_ess <- .mosaic_gate_threshold(gate_ess, control$targets$ESS_param_prop,
+                                          length(param_names_est))
 
   state$ess_tracking[[length(state$ess_tracking) + 1L]] <- list(
     batch = state$batch_number,
-    total_sims = nrow(ess_check_results),
+    total_sims = nrow(results),
     threshold_ess = threshold_ess,
-    min_ess = min(ess_current$ess_marginal, na.rm = TRUE),
-    median_ess = stats::median(ess_current$ess_marginal, na.rm = TRUE),
-    max_ess = max(ess_current$ess_marginal, na.rm = TRUE)
+    min_ess = min(gate_ess, na.rm = TRUE),
+    median_ess = stats::median(gate_ess, na.rm = TRUE),
+    max_ess = max(gate_ess, na.rm = TRUE),
+    ess_kish = gm$ess_kish,
+    batch_ratio_max = batch_ratio,
+    metric = .mosaic_gate_metric_id(control)
   )
 
   # Report current ESS status
-  log_msg("  ESS at %.0f%% percentile: %.1f (target: %d, min: %.1f)",
-          percentile_cutoff * 100,
-          threshold_ess,
-          control$targets$ESS_param,
-          min(ess_current$ess_marginal, na.rm = TRUE))
+  log_msg("  Parameter ESS (function-specific, %s posterior) at %.1f%% percentile: %.1f (target: %d, min: %.1f) | Kish ESS %.1f",
+          control$targets$best_subset_weighting, percentile_cutoff * 100, threshold_ess,
+          as.integer(control$targets$ESS_param), min(gate_ess, na.rm = TRUE), gm$ess_kish)
+  log_msg("  Seed-batch ratio: %s (target < %.2f)%s",
+          if (is.finite(batch_ratio)) sprintf("%.3f", batch_ratio) else as.character(batch_ratio),
+          batch_max, if (batch_ok) "" else " -- not yet stable")
 
   # Calibration R^2 check
   # ESS is calculated for ALL batches (data accumulates from batch 1)
   # But calibration model fitting only starts when we have min_batches data points
   # This ensures the model uses data from ALL batches (1, 2, 3, ..., N)
+  # The max_batches_adaptive limit is honoured even when fewer than
+  # min_batches_adaptive measurements exist (a resume that discarded an ESS
+  # history measured by another rule starts the history again), so the
+  # calibration phase never overruns it.
   if (identical(state$phase, "calibration") &&
       !isTRUE(state$calibration_done) &&
       state$batch_number >= control$calibration$min_batches_adaptive &&
-      length(state$ess_tracking) >= control$calibration$min_batches_adaptive) {
+      (length(state$ess_tracking) >= control$calibration$min_batches_adaptive ||
+       state$batch_number >= control$calibration$max_batches_adaptive)) {
 
-    ess_df <- data.frame(
-      sims = vapply(state$ess_tracking, `[[`, numeric(1), "total_sims"),
-      threshold_ess = vapply(state$ess_tracking, `[[`, numeric(1), "threshold_ess")
-    )
+    sims_track   <- vapply(state$ess_tracking, `[[`, numeric(1), "total_sims")
+    thresh_track <- vapply(state$ess_tracking, `[[`, numeric(1), "threshold_ess")
 
-    # Fit sqrt-linear model: ESS ~ sqrt(n) is typical scaling for importance sampling
-    ess_df$sqrt_sims <- sqrt(ess_df$sims)
-    ess_lm <- stats::lm(threshold_ess ~ sqrt_sims, data = ess_df)
-    lm_summary <- summary(ess_lm)
-    r2 <- lm_summary$r.squared
-    coef <- stats::coef(ess_lm)
-    intercept <- coef[1]
-    slope <- coef[2]
+    # Growth model of the ESS in n: linear or sqrt, whichever fits better
+    # (linear on a tie; the Kish ESS of a fixed posterior grows linearly).
+    target_ess <- control$targets$ESS_param
+    gf <- .mosaic_ess_growth_fit(sims_track, thresh_track, target_ess)
+    r2 <- gf$r2
+    intercept <- gf$intercept
+    slope <- gf$slope
+    est_sims <- gf$est_sims
 
     state$calib_batches <- state$calib_batches + 1L
     state$r2_ess <- r2
 
-    # Calculate estimated simulations to reach target ESS
-    # Model: ESS = intercept + slope x sqrt(n)
-    # Solving for n: n = ((target_ess - intercept) / slope)^2
-    target_ess <- control$targets$ESS_param
-    # Guard against NA/NaN coefficients (occurs when ess_df has only 1 row,
-    # making the 2-parameter lm underdetermined -- R sets slope=NA)
-    est_sims <- if (isTRUE(slope > 0) && isTRUE((target_ess - intercept) > 0)) {
-      ((target_ess - intercept) / slope)^2
-    } else {
-      NA_real_
-    }
-
     # Print model fit diagnostics
-    # slope/r2 may be NA when ESS has plateaued (constant response -> rank-deficient lm)
+    # slope may be NA when ESS has plateaued (constant response -> rank-deficient lm)
     slope_print <- if (is.finite(slope)) slope else 0
-    r2_print    <- if (is.finite(r2))    r2    else 0
+    int_print   <- if (is.finite(intercept)) intercept else 0
+    model_str <- if (identical(gf$model, "sqrt")) "sqrt(n)" else "n"
     log_msg("Calibration convergence check (batch %d):", state$batch_number)
-    if (!is.na(est_sims)) {
-      log_msg("  Model: ESS = %.2f + %.4f \u00D7 sqrt(n)  |  ESS regression R\u00B2 = %.4f (target %.2f) | Est. Sims: %.0f",
-              intercept, slope_print, r2_print, control$calibration$target_r2_adaptive, round(est_sims))
-    } else {
-      log_msg("  Model: ESS = %.2f + %.4f \u00D7 sqrt(n)  |  ESS regression R\u00B2 = %.4f (target %.2f) | Est. Sims: N/A%s",
-              intercept, slope_print, r2_print, control$calibration$target_r2_adaptive,
-              if (!is.finite(slope)) " [ESS plateau \u2014 slope undefined]" else "")
-    }
+    log_msg("  Model (%s; R\u00B2 linear %.4f, sqrt %.4f): ESS = %.2f + %.4g \u00D7 %s  |  ESS regression R\u00B2 = %.4f (target %.2f) | Est. Sims: %s%s",
+            gf$model, gf$r2_linear, gf$r2_sqrt, int_print, slope_print, model_str, r2,
+            control$calibration$target_r2_adaptive,
+            if (is.finite(est_sims)) sprintf("%.0f", round(est_sims)) else "N/A",
+            if (!is.finite(slope)) " [ESS plateau \u2014 slope undefined]"
+            else if (slope <= 0) " [ESS not increasing]" else "")
     log_msg("  Data points: %d measurements (batches 1-%d) | Simulations: %d-%d",
-            nrow(ess_df), state$batch_number, min(ess_df$sims), max(ess_df$sims))
+            length(sims_track), state$batch_number, as.integer(min(sims_track)), as.integer(max(sims_track)))
 
     # Check if calibration should end.
     # R^2 is only used as an exit signal when there are at least 5 data points
@@ -2032,19 +2310,19 @@
     # has only 1 residual df, making R^2 trivially near 1 for any monotone ESS
     # trajectory. The max_batches hard limit is always honoured regardless.
     min_r2_points <- 5L
-    r2_converged <- r2 >= control$calibration$target_r2_adaptive && nrow(ess_df) >= min_r2_points
+    r2_converged <- r2 >= control$calibration$target_r2_adaptive && length(sims_track) >= min_r2_points
     if (r2_converged) {
       log_msg("  ESS regression R\u00B2 criterion met with %d data points (min required: %d)",
-              nrow(ess_df), min_r2_points)
-    } else if (r2 >= control$calibration$target_r2_adaptive && nrow(ess_df) < min_r2_points) {
+              length(sims_track), min_r2_points)
+    } else if (r2 >= control$calibration$target_r2_adaptive && length(sims_track) < min_r2_points) {
       log_msg("  ESS regression R\u00B2 = %.4f >= target, but only %d data point(s) \u2014 need >= %d for reliable fit",
-              r2, nrow(ess_df), min_r2_points)
+              r2, length(sims_track), min_r2_points)
     }
 
     if (r2_converged || state$batch_number >= control$calibration$max_batches_adaptive) {
 
       # Calculate remaining gap
-      current_n <- nrow(ess_check_results)
+      current_n <- nrow(results)
       remaining_sims <- if (!is.na(est_sims) && est_sims > current_n) {
         est_sims - current_n
       } else {
@@ -2090,24 +2368,20 @@
       }
     }
 
-  # Predictive phase: continue running capped batches until ESS gap closes
-  # or safety batch limit is reached. Each iteration re-evaluates via
-  # calc_bookend_batch_size() in .mosaic_decide_next_batch().
+  # Predictive phase: continue running capped batches until the ESS gap closes
+  # and the posterior is batch-stable, or the safety batch limit is reached.
+  # Each iteration re-evaluates via calc_bookend_batch_size() in
+  # .mosaic_decide_next_batch().
   } else if (identical(state$phase, "predictive") &&
              !is.null(state$phase_batch_count) &&
              state$phase_batch_count >= 1) {
 
-    pred_gap <- NA_real_
-    if (length(state$ess_tracking)) {
-      cur_thresh <- tail(vapply(state$ess_tracking, `[[`, numeric(1), "threshold_ess"), 1)
-      pred_gap <- control$targets$ESS_param - cur_thresh
-    }
-
+    pred_gap <- control$targets$ESS_param - threshold_ess
     max_pred_batches <- control$calibration$max_batches_predictive %||% 10L
 
-    if (!is.na(pred_gap) && pred_gap <= 0) {
+    if (!is.na(pred_gap) && pred_gap <= 0 && batch_ok) {
       state$predictive_done <- TRUE
-      log_msg("  \u2192 Predictive phase complete: ESS gap closed (gap = %.1f)", pred_gap)
+      log_msg("  \u2192 Predictive phase complete: ESS gap closed (gap = %.1f) and posterior batch-stable", pred_gap)
 
     } else if (state$phase_batch_count >= max_pred_batches) {
       state$predictive_done <- TRUE
@@ -2116,39 +2390,46 @@
 
     } else {
       pred_gap_str <- if (is.na(pred_gap)) "N/A" else sprintf("%.1f", pred_gap)
-      log_msg("  \u2192 Predictive batch %d/%d complete, ESS gap = %s \u2014 continuing predictive phase",
-              state$phase_batch_count, max_pred_batches, pred_gap_str)
+      log_msg("  \u2192 Predictive batch %d/%d complete, ESS gap = %s%s \u2014 continuing predictive phase",
+              state$phase_batch_count, max_pred_batches, pred_gap_str,
+              if (!batch_ok) sprintf(", seed-batch ratio %.3f >= %.2f", batch_ratio, batch_max) else "")
     }
   }
 
   # Check convergence.
   # Denominator is the total number of sampled parameters (not just those with
-  # a valid ESS estimate). Parameters whose KDE returned NA are counted as
-  # "not converged" -- otherwise silent KDE failures would shrink the
-  # denominator and falsely inflate prop_converged, causing the loop to exit
-  # before the post-hoc ESS calculation can confirm the 0.975 target.
+  # a valid ESS estimate): a parameter whose ESS is NA counts as "not
+  # converged" rather than shrinking the denominator.
   n_total        <- length(param_names_est)
-  n_converged    <- sum(ess_current$ess_marginal >= control$targets$ESS_param, na.rm = TRUE)
-  n_ess_computed <- sum(!is.na(ess_current$ess_marginal))
+  n_converged    <- sum(gate_ess >= control$targets$ESS_param, na.rm = TRUE)
+  n_ess_computed <- sum(!is.na(gate_ess))
   prop_converged <- if (n_total > 0L) n_converged / n_total else 0
+  # Integer count against ceiling(prop * n), the rule .mosaic_gate_threshold()
+  # encodes (a prop read back from JSON as 40/41 + 1e-16 must not demand 41/41).
+  ess_ok <- n_total > 0L &&
+    n_converged >= ceiling(control$targets$ESS_param_prop * n_total - 1e-9)
 
-  if (prop_converged >= control$targets$ESS_param_prop) {
+  if (ess_ok && batch_ok) {
     # Only declare convergence after min_batches to ensure sufficient exploration.
     # Early batches can spuriously meet ESS targets with small samples.
     if (state$batch_number >= control$calibration$min_batches_adaptive) {
       state$converged <- TRUE
-      log_msg("  \u2192 CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (%d/%d; %d ESS computed)",
+      log_msg("  \u2192 CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (%d/%d; %d ESS computed) and seed-batch ratio %.3f < %.2f",
               prop_converged * 100, control$targets$ESS_param,
-              n_converged, n_total, n_ess_computed)
+              n_converged, n_total, n_ess_computed, batch_ratio, batch_max)
     } else {
-      log_msg("  ESS criterion met (%.1f%% >= %.0f) but batch %d < min_batches %d \u2014 continuing",
-              prop_converged * 100, control$targets$ESS_param,
+      log_msg("  ESS and stability criteria met (%.1f%% >= %.0f; batch ratio %.3f) but batch %d < min_batches %d \u2014 continuing",
+              prop_converged * 100, control$targets$ESS_param, batch_ratio,
               state$batch_number, control$calibration$min_batches_adaptive)
     }
+  } else if (ess_ok) {
+    log_msg("  ESS criterion met (%.1f%% of parameters >= %.0f) but the seed-batch ratio is %s >= %.2f \u2014 continuing",
+            prop_converged * 100, control$targets$ESS_param,
+            if (is.finite(batch_ratio)) sprintf("%.3f", batch_ratio) else as.character(batch_ratio),
+            batch_max)
   }
 
-  # Clean up and return
-  rm(ess_check_results)
+  rm(results)
   gc(verbose = FALSE)
 
   state
@@ -2157,6 +2438,126 @@
 # =============================================================================
 # WEIGHT CALCULATIONS
 # =============================================================================
+
+#' Tukey lower fence of the log-likelihoods
+#'
+#' Only the lower fence is applied. Log-likelihoods have a long left tail (many
+#' poor fits) but are bounded above near 0; an upper fence Q3 + k * IQR would
+#' discard the highest-likelihood simulations, exactly the models the posterior
+#' wants. Draws below the fence are flagged \code{is_outlier} and leave the
+#' retained set the legacy tier search works on.
+#' @param valid_ll Finite log-likelihoods.
+#' @param iqr_mult \code{control$weights$iqr_multiplier}.
+#' @return The fence, \code{Q1 - iqr_mult * IQR}.
+#' @noRd
+.mosaic_lower_fence <- function(valid_ll, iqr_mult) {
+  q1 <- stats::quantile(valid_ll, 0.25, na.rm = TRUE)
+  q3 <- stats::quantile(valid_ll, 0.75, na.rm = TRUE)
+  q1 - iqr_mult * (q3 - q1)
+}
+
+#' Tier-searched best subset of the legacy weighting schemes
+#'
+#' The best-subset selection of \code{best_subset_weighting = "saturated"} /
+#' \code{"tempered"}: tries the tiers of \code{get_default_subset_tiers()} in
+#' order with \code{grid_search_best_subset()} on the retained draws and stops at
+#' the first that converges; when none does, falls back to the top
+#' \code{max_best_subset} draws by likelihood. \code{run_MOSAIC()} calls it once
+#' after calibration (logging each tier) and the auto-mode stopping rule calls it
+#' silently, so both see the same subset. Not used under \code{"coarsened"}.
+#'
+#' @param results Results frame with \code{likelihood}, \code{sim} and
+#'   \code{is_retained}.
+#' @param control Merged control list.
+#' @param log Logical; log the tier search.
+#' @return \code{list(top_subset, n, percentile, tier, optimal_subset_result)};
+#'   \code{tier} is \code{"fallback"} when no tier converged.
+#' @noRd
+.mosaic_tier_best_subset <- function(results, control, log = TRUE) {
+  .log  <- if (isTRUE(log)) log_msg  else function(...) invisible(NULL)
+  .warn <- if (isTRUE(log)) log_warn else function(...) invisible(NULL)
+  scheme <- control$targets$best_subset_weighting %||% "saturated"
+
+  .log("Optimizing subset selection (testing up to 30 tiers with grid search)...")
+
+  subset_tiers <- get_default_subset_tiers(
+    target_ESS_best = control$targets$ESS_best,
+    target_A = control$targets$A_best,
+    target_CVw = control$targets$CVw_best
+  )
+
+  optimal_subset_result <- NULL
+  tier_used <- NULL
+  retained <- results[results$is_retained, ]
+
+  for (tier_name in names(subset_tiers)) {
+    tier <- subset_tiers[[tier_name]]
+
+    .log("  Testing tier '%s' (ESS_B=%.0f, A=%.2f, CVw=%.2f)...",
+         tier$name, tier$ESS_B, tier$A, tier$CVw)
+
+    tier_result <- grid_search_best_subset(
+      results = retained,
+      target_ESS = tier$ESS_B,
+      target_A = tier$A,
+      target_CVw = tier$CVw,
+      min_size = control$targets$min_best_subset,
+      max_size = control$targets$max_best_subset,
+      ess_method = control$targets$ESS_method,
+      # Search under the scheme weight_best and the final gate use, so a tier
+      # is only certified at a size where the posterior's own weights meet it.
+      weighting = scheme,
+      verbose = control$logging$verbose
+    )
+
+    if (tier_result$converged) {
+      # CRITICAL: Calculate percentile from absolute count
+      tier_percentile <- (tier_result$n / nrow(results)) * 100
+      .log("    \u2713 Tier '%s' converged at n=%d (%.1f%% of all draws)",
+           tier$name, tier_result$n, tier_percentile)
+      optimal_subset_result <- tier_result
+      tier_used <- tier$name
+      break
+    } else {
+      .log("    \u2717 Tier '%s' failed to converge", tier$name)
+    }
+  }
+
+  if (!is.null(optimal_subset_result)) {
+    # CRITICAL: Use $n (not $n_selected) and calculate percentile from count
+    top_subset <- optimal_subset_result$subset
+    n_top <- optimal_subset_result$n
+    tier_used_out <- tier_used
+  } else {
+    # Fallback: use max_best_subset directly (from retained only)
+    n_top <- min(control$targets$max_best_subset, nrow(retained))
+    top_subset <- retained[order(retained$likelihood, decreasing = TRUE), ][seq_len(n_top), ]
+    tier_used_out <- "fallback"
+
+    .log("  All tiers failed - using fallback (top %d simulations, %.1f%%)",
+         n_top, (n_top / nrow(results)) * 100)
+    if (!identical(scheme, "saturated")) {
+      .warn(paste0("Best-subset tier search ran under best_subset_weighting = '%s'; ",
+                   "every tier failed, so the posterior is the top %d draws by ",
+                   "likelihood with posthoc_criteria_met = NO. '%s' weights are ",
+                   "sharper than 'saturated' and may not meet any tier at this ",
+                   "run size."),
+            scheme, n_top, scheme)
+    }
+
+    # Create minimal optimal_subset_result for consistency
+    optimal_subset_result <- list(
+      subset = top_subset,
+      n = n_top,
+      converged = FALSE,
+      metrics = list(ESS = NA_real_, A = NA_real_, CVw = NA_real_)
+    )
+  }
+
+  list(top_subset = top_subset, n = n_top,
+       percentile = (n_top / nrow(results)) * 100,
+       tier = tier_used_out, optimal_subset_result = optimal_subset_result)
+}
 
 #' Best-subset posterior weights under control$targets$best_subset_weighting
 #'

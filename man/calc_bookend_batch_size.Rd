@@ -23,19 +23,38 @@ calc_bookend_batch_size(
 \value{
 List with batch size recommendation. \code{phase} is one of
 \code{"complete"}, \code{"low_confidence"}, \code{"no_progress"} or
-\code{"predictive"}.
+\code{"predictive"}; \code{batch_size} is positive only for
+\code{"predictive"}. \code{model} is \code{"linear"} or \code{"sqrt"} and
+\code{r_squared_linear} / \code{r_squared_sqrt} report both fits when a fit
+was made.
 }
 \description{
 Predicts the number of simulations needed to reach a target ESS based on
-the observed ESS trajectory. Fits sqrt and linear models to the cumulative
-(n_sims, threshold_ESS) data and predicts from the sqrt model unless the
-linear model fits clearly better. A log model is also fitted, but only as a
-diagnostic (a warning when it fits best); it is never used for prediction.
+the observed ESS trajectory. Fits linear and sqrt models to the cumulative
+(n_sims, threshold_ESS) data and predicts from whichever has the higher
+R-squared (linear on a tie), through the same helper as the auto-mode
+calibration phase. Linear is the expected shape: the ESS the stopping rule
+tracks is the function-specific ESS of a fixed posterior (bounded by its
+Kish ESS), and for \eqn{n} independent prior draws the Kish ESS of fixed
+importance weights grows as \eqn{n \, (E w)^2 / E w^2}, linearly in
+\eqn{n}. Replaying the 2026-10 national runs, the coarsened-posterior Kish
+ESS was linear in the number of draws (R-squared 0.995-1.000 against
+0.955-0.978 for sqrt). Before MOSAIC 1.3.0 sqrt was the default and linear
+had to beat it by 0.03, which picked sqrt even at a linear R-squared of 1.000.
+A log model is also fitted, but only as a diagnostic (a warning when it fits
+best); it is never used for prediction.
 }
 \details{
 The extrapolation is only defined when the chosen model's ESS increases with
 the number of simulations. When its slope is zero or negative the target is
 unreachable on the fitted trajectory, and the function returns
 \code{phase = "no_progress"} with \code{batch_size = 0} instead of squaring a
-negative root into a positive requirement.
+negative root into a positive requirement. The ESS can fall as draws are
+added: a much better draw concentrates the weights. A fit below
+\code{target_r_squared} returns \code{phase = "low_confidence"} with
+\code{batch_size = 0} as well. In both cases \code{run_MOSAIC()} runs a batch
+of \code{control$calibration$batch_size_adaptive} instead, capped by
+\code{max_batch_predictive} and \code{max_simulations_total}, so a
+non-monotone trajectory neither stalls the run nor sizes a batch from a
+meaningless extrapolation.
 }

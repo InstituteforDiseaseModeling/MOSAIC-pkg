@@ -73,16 +73,42 @@ simulations either way
 
 \item{targets}{List of convergence targets (when to stop). Default is:
 \itemize{
-\item \code{ESS_param}: Target ESS per parameter (default: 100)
+\item \code{ESS_param}: Target per-parameter ESS (default: 100). The
+auto-mode stopping rule needs the (1 - \code{ESS_param_prop}) quantile
+of the per-parameter function-specific ESS (\code{\link{calc_model_ess_parameter}})
+of the posterior weights at or above it.
 \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
-\item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
-\item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
-\item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
-\item \code{min_best_subset}: Smallest best-subset size searched (default: 30)
-\item \code{max_best_subset}: Largest best-subset size searched (default: 1000)
-\item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "perplexity")
-\item \code{ESS_marginal_method}: Per-parameter marginal ESS method, "kde" or "binned" (default: "kde")
-\item \code{best_subset_weighting}: Best-subset posterior weights, "saturated" or "tempered" (default: "saturated"; "tempered" is sharper, not softer)
+\item \code{batch_ratio_max}: Largest acceptable seed-batch ratio of the
+posterior (default: 0.2). The auto-mode stopping rule needs it as well as
+the ESS criterion; \code{weight_health_status} is \code{"ok"} only when it holds.
+\item \code{ESS_best}: Tier-search target for both subset size and ESS within subset (default: 100).
+Legacy schemes only; ignored (with a warning when set) under \code{"coarsened"}.
+\item \code{A_best}: Tier-search target agreement index (default: 0.70). Legacy schemes only.
+\item \code{CVw_best}: Tier-search target CV of weights (default: 1.0). Legacy schemes only.
+\item \code{min_best_subset}: Smallest best subset searched by the tier search, and the
+smallest number of draws resampled for the ensemble under \code{"coarsened"} (default: 30)
+\item \code{max_best_subset}: Largest best subset searched by the tier search, and an
+upper bound on the draws resampled for the ensemble under \code{"coarsened"} (default: 1000)
+\item \code{max_ensemble_members}: Largest number of draws resampled for the ensemble
+under \code{"coarsened"}: \eqn{K} = clamp(round(Kish ESS), \code{min_best_subset},
+min(\code{max_best_subset}, \code{max_ensemble_members})). The ensemble arrays and the
+subset optimiser grow with \eqn{K}, so this caps post-calibration cost (default: 300).
+Not used by the legacy schemes.
+\item \code{ESS_method}: ESS formula, "kish" or "perplexity", for ESS_B and the
+\eqn{\eta = 1} likelihood-concentration numbers (default: "perplexity")
+\item \code{best_subset_weighting}: Posterior weighting scheme (default:
+\code{"coarsened"}). \code{"coarsened"} is the generalised-Bayes posterior
+\eqn{w \propto \exp\{\eta(\ell - \max\ell)\}} over every valid draw, with
+\eqn{\eta = \alpha / n_{obs}}; the ensemble members are a systematic
+resample of it, and the parameter posterior summaries are built from
+those members (or the optimised subset), the draws the predictions use. \code{"saturated"} (the pre-1.3.0 default) and
+\code{"tempered"} weight a tier-searched best subset and are kept so
+older runs can be reproduced.
+\item \code{coarsening_alpha}: Effective number of independent observations of the
+coarsened posterior, \eqn{\eta = \alpha / n_{obs}} with \eqn{n_{obs}} the
+scored observation cells (default: 10). See \code{\link{calc_weight_health}}.
+\item \code{ESS_marginal_method}: Retired in 1.3.0 with the grid-based marginal
+ESS; accepted with a warning and ignored.
 }}
 
 \item{predictions}{List of prediction generation settings. Default is:
@@ -101,8 +127,12 @@ object driving all downstream plots and metrics. The tier-selected subset
 is preserved in the \code{is_best_subset} / \code{weight_best} columns of
 \code{samples.parquet} for provenance; the optimized selection is written
 to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. Default
-\code{TRUE} since v1.2.0 (\code{FALSE} before). When \code{FALSE}, the
-tier-selected subset is canonical and no \code{_opt} columns are written.
+\code{FALSE} (it was \code{TRUE} in v1.2.x; reverted in 1.3.0 because, under
+the coarsened posterior, the optimizer re-truncates the resampled members
+by their fit to the training data). An explicit \code{TRUE} is honoured
+under every weighting scheme. When \code{FALSE}, the ensemble members
+(\code{is_best_subset} / \code{weight_best}) are canonical and no
+\code{_opt} columns are written.
 The optimizer chooses among subsets of the simulated candidate ensemble,
 so the size it selects is between \code{optimize_min_n} and the
 tier-selected size. \strong{Statistical note:} enabling this
@@ -142,7 +172,9 @@ The number of parameter sets in the ensemble is determined by the best subset
 
 \item{weights}{List of importance-weight settings. Default is:
 \itemize{
-\item \code{floor}: Minimum weight to prevent underflow (default: 1e-15).
+\item \code{floor}: Retained for compatibility; unused since 1.3.0, when
+\code{weight_all} became the all-draws coarsened-posterior weights
+(default: 1e-15).
 \item \code{iqr_multiplier}: Tukey IQR outlier-detection multiplier
 (default: 1.5; use 3.0 for extreme outliers only).
 }}

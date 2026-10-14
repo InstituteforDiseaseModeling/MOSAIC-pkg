@@ -52,7 +52,8 @@ control_ETH$parallel$n_cores <- parallel::detectCores()-1
 
 control_ETH$targets$ESS_param <- 100
 control_ETH$targets$ESS_param_prop <- 0.9
-control_ETH$targets$ESS_best <- 50
+control_ETH$targets$coarsening_alpha <- 10   # coarsened posterior: eta = alpha / n_obs
+control_ETH$targets$batch_ratio_max <- 0.2   # seed-batch stability for convergence
 control_ETH$targets$ESS_method <- 'perplexity'
 
 control_ETH$sampling$sample_tau_i <- FALSE # Travel probability
@@ -110,7 +111,8 @@ control_ETH$parallel$n_cores <- parallel::detectCores()-1
 
 control_ETH$targets$ESS_param <- 100
 control_ETH$targets$ESS_param_prop <- 0.9
-control_ETH$targets$ESS_best <- 50
+control_ETH$targets$coarsening_alpha <- 10   # coarsened posterior: eta = alpha / n_obs
+control_ETH$targets$batch_ratio_max <- 0.2   # seed-batch stability for convergence
 control_ETH$targets$ESS_method <- 'perplexity'
 
 control_ETH$sampling$sample_tau_i <- FALSE
@@ -168,7 +170,8 @@ control$parallel$n_cores <- parallel::detectCores()-1
 
 control$targets$ESS_param <- 100
 control$targets$ESS_param_prop <- 0.95
-control$targets$ESS_best <- 30
+control$targets$coarsening_alpha <- 10   # coarsened posterior: eta = alpha / n_obs
+control$targets$batch_ratio_max <- 0.2   # seed-batch stability for convergence
 control$targets$ESS_method <- 'perplexity'
 
 control$sampling$sample_tau_i <- length(iso_codes) > 1 # Travel probability

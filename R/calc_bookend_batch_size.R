@@ -1,16 +1,32 @@
 #' Calculate Batch Size for Bookend Strategy
 #'
 #' Predicts the number of simulations needed to reach a target ESS based on
-#' the observed ESS trajectory. Fits sqrt and linear models to the cumulative
-#' (n_sims, threshold_ESS) data and predicts from the sqrt model unless the
-#' linear model fits clearly better. A log model is also fitted, but only as a
-#' diagnostic (a warning when it fits best); it is never used for prediction.
+#' the observed ESS trajectory. Fits linear and sqrt models to the cumulative
+#' (n_sims, threshold_ESS) data and predicts from whichever has the higher
+#' R-squared (linear on a tie), through the same helper as the auto-mode
+#' calibration phase. Linear is the expected shape: the ESS the stopping rule
+#' tracks is the function-specific ESS of a fixed posterior (bounded by its
+#' Kish ESS), and for \eqn{n} independent prior draws the Kish ESS of fixed
+#' importance weights grows as \eqn{n \, (E w)^2 / E w^2}, linearly in
+#' \eqn{n}. Replaying the 2026-10 national runs, the coarsened-posterior Kish
+#' ESS was linear in the number of draws (R-squared 0.995-1.000 against
+#' 0.955-0.978 for sqrt). Before MOSAIC 1.3.0 sqrt was the default and linear
+#' had to beat it by 0.03, which picked sqrt even at a linear R-squared of 1.000.
+#' A log model is also fitted, but only as a diagnostic (a warning when it fits
+#' best); it is never used for prediction.
 #'
 #' The extrapolation is only defined when the chosen model's ESS increases with
 #' the number of simulations. When its slope is zero or negative the target is
 #' unreachable on the fitted trajectory, and the function returns
 #' \code{phase = "no_progress"} with \code{batch_size = 0} instead of squaring a
-#' negative root into a positive requirement.
+#' negative root into a positive requirement. The ESS can fall as draws are
+#' added: a much better draw concentrates the weights. A fit below
+#' \code{target_r_squared} returns \code{phase = "low_confidence"} with
+#' \code{batch_size = 0} as well. In both cases \code{run_MOSAIC()} runs a batch
+#' of \code{control$calibration$batch_size_adaptive} instead, capped by
+#' \code{max_batch_predictive} and \code{max_simulations_total}, so a
+#' non-monotone trajectory neither stalls the run nor sizes a batch from a
+#' meaningless extrapolation.
 #'
 #' @param ess_history ESS measurements from calibration phase
 #' @param target_ess Target ESS value
@@ -18,7 +34,10 @@
 #' @param target_r_squared Target R-squared for ESS regression (default: 0.95)
 #' @return List with batch size recommendation. \code{phase} is one of
 #'   \code{"complete"}, \code{"low_confidence"}, \code{"no_progress"} or
-#'   \code{"predictive"}.
+#'   \code{"predictive"}; \code{batch_size} is positive only for
+#'   \code{"predictive"}. \code{model} is \code{"linear"} or \code{"sqrt"} and
+#'   \code{r_squared_linear} / \code{r_squared_sqrt} report both fits when a fit
+#'   was made.
 #' @export
 calc_bookend_batch_size <- function(ess_history,
                                    target_ess,
@@ -47,48 +66,34 @@ calc_bookend_batch_size <- function(ess_history,
         ))
     }
 
-    # Fit models (linear, sqrt, log)
-    fit_linear <- lm(threshold_ess ~ n_sims)
-    fit_sqrt <- lm(threshold_ess ~ sqrt(n_sims))
-    fit_log <- NULL
-    if (all(n_sims > 0)) {
-        tryCatch({
-            fit_log <- lm(threshold_ess ~ log(n_sims))
-        }, error = function(e) {})
-    }
-
-    # Calculate R^2 values
-    r2_linear <- summary(fit_linear)$r.squared
-    r2_sqrt <- summary(fit_sqrt)$r.squared
-    r2_log <- ifelse(!is.null(fit_log), summary(fit_log)$r.squared, 0)
-
-    # DEFAULT TO SQRT (conservative, theoretically justified for importance sampling)
-    best_model <- "sqrt"
-    best_r2 <- r2_sqrt
-    best_fit <- fit_sqrt
-
-    # Only switch to linear with STRONG evidence
-    # Require: High R^2 AND meaningful improvement over sqrt
-    if (r2_linear >= 0.95 && r2_linear - r2_sqrt > 0.03) {
-        best_model <- "linear"
-        best_r2 <- r2_linear
-        best_fit <- fit_linear
-    }
+    # Linear and sqrt growth models; the better R^2 predicts (linear on a tie).
+    gf <- .mosaic_ess_growth_fit(n_sims, threshold_ess, target_ess)
+    best_model <- gf$model
+    best_r2 <- gf$r2
+    best_fit <- gf$fit
 
     # Diagnostic: Warn if log fits best (NEVER use for prediction)
-    if (r2_log > r2_linear && r2_log > r2_sqrt) {
-        warning(sprintf(
-            "Log model fits best (R\u00B2=%.4f) - suggests prior-posterior mismatch. Consider extending calibration.",
-            r2_log
-        ))
+    if (all(n_sims > 0) && length(unique(n_sims)) >= 2L) {
+        r2_log <- tryCatch(suppressWarnings(summary(lm(threshold_ess ~ log(n_sims)))$r.squared),
+                           error = function(e) NA_real_)
+        if (is.finite(r2_log) && r2_log > gf$r2_linear && r2_log > gf$r2_sqrt) {
+            warning(sprintf(
+                "Log model fits best (R\u00B2=%.4f) - suggests prior-posterior mismatch. Consider extending calibration.",
+                r2_log
+            ))
+        }
     }
 
-    # Check confidence against target R^2
-    if (best_r2 < target_r_squared) {
+    # Check confidence against target R^2. Batch size 0: the caller runs its
+    # adaptive batch size instead of a size from an unreliable fit.
+    if (is.null(best_fit) || best_r2 < target_r_squared) {
         return(list(
             phase = "low_confidence",
-            batch_size = 500,  # Default batch
+            batch_size = 0,
+            model = best_model,
             r_squared = best_r2,
+            r_squared_linear = gf$r2_linear,
+            r_squared_sqrt = gf$r2_sqrt,
             message = sprintf("Low confidence (R\u00B2=%.3f < %.2f), continuing calibration",
                             best_r2, target_r_squared)
         ))
@@ -96,8 +101,8 @@ calc_bookend_batch_size <- function(ess_history,
 
     # Predict total simulations needed. Both models are ESS = a + b * f(n) with
     # f increasing, so the target is reachable only when b > 0.
-    a <- unname(coef(best_fit)[1])
-    b <- unname(coef(best_fit)[2])
+    a <- gf$intercept
+    b <- gf$slope
 
     if (!is.finite(b) || b <= 0) {
         return(list(
@@ -105,6 +110,8 @@ calc_bookend_batch_size <- function(ess_history,
             batch_size = 0,
             model = best_model,
             r_squared = best_r2,
+            r_squared_linear = gf$r2_linear,
+            r_squared_sqrt = gf$r2_sqrt,
             message = sprintf(
                 "ESS is not increasing with simulations (%s-model slope = %.4g); target %.1f is unreachable on the fitted trajectory",
                 best_model, b, target_ess)
@@ -113,10 +120,7 @@ calc_bookend_batch_size <- function(ess_history,
 
     # With b > 0, a negative root means the fit places the target below its
     # intercept (reached at n <= 0); clamp it rather than squaring it positive.
-    root <- (target_ess - a) / b
-    total_needed <- if (best_model == "linear") root else max(root, 0)^2
-
-    total_needed <- ceiling(total_needed)
+    total_needed <- ceiling(gf$est_sims)
 
     # The fit places the target at or below the current size, yet the observed
     # ESS is still short of it (gap_to_target > 0 above): the fitted curve
@@ -186,6 +190,8 @@ calc_bookend_batch_size <- function(ess_history,
         batch_size = predictive_batch_size,
         model = best_model,
         r_squared = best_r2,
+        r_squared_linear = gf$r2_linear,
+        r_squared_sqrt = gf$r2_sqrt,
         safety_factor = safety_factor,
         current_ess = current_ess,
         target_ess = target_ess,

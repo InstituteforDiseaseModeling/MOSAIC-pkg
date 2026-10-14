@@ -17,7 +17,11 @@ test_that("no combine pass for the retired 'stochastic' prediction type", {
 })
 
 test_that("the tier log labels its percentage as a share of all draws", {
-  b <- .rm_body()
+  # The tier search moved to .mosaic_tier_best_subset() in 1.3.0 (shared with
+  # the auto-mode stopping rule); run_MOSAIC() calls it.
+  b <- paste(deparse(MOSAIC:::.mosaic_tier_best_subset), collapse = "\n")
   expect_false(grepl("of retained)", b, fixed = TRUE))
   expect_true(grepl("of all draws)", b, fixed = TRUE))
+  expect_true(grepl(".mosaic_tier_best_subset(results, control, log = TRUE)",
+                    gsub("\\s+", " ", .rm_body()), fixed = TRUE))
 })

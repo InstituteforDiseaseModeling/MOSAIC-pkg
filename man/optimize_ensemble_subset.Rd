@@ -13,9 +13,10 @@ optimize_ensemble_subset(
   central_method = "median",
   stride = 1L,
   cl = NULL,
-  weighting = c("saturated", "tempered"),
+  weighting = c("saturated", "tempered", "coarsened"),
   ess_method = c("kish", "perplexity"),
-  verbose = TRUE
+  verbose = TRUE,
+  base_weights = NULL
 )
 }
 \arguments{
@@ -72,11 +73,15 @@ serial path. Must be a \code{"PSOCK"} cluster (FORK is unsafe at this point
 in the pipeline). For trivially small problems the function falls back to
 serial regardless of \code{cl}.}
 
-\item{weighting}{Best-subset weighting scheme for the per-N weights, matching \code{control$targets$best_subset_weighting} (the scheme of \code{weight_best}): \code{"saturated"} (default) or \code{"tempered"}.}
+\item{weighting}{Weighting scheme for the per-N weights, matching \code{control$targets$best_subset_weighting} (the scheme of \code{weight_best}): \code{"saturated"} (default), \code{"tempered"} or \code{"coarsened"} (renormalised \code{base_weights}).}
 
 \item{ess_method}{ESS formula for \code{evaluation_table$ess}: \code{"kish"} (default) or \code{"perplexity"}.}
 
 \item{verbose}{Logical; if \code{TRUE}, emit progress messages.}
+
+\item{base_weights}{Member weights aligned with \code{likelihoods}, required
+when \code{weighting = "coarsened"} (the resampled members' count weights,
+\code{weight_best}) and not used otherwise.}
 }
 \value{
 An S3 object of class \code{mosaic_subset_optimization} containing:
@@ -129,6 +134,10 @@ The per-N weights use the same scheme as the \code{weight_best} posterior
 that \code{run_MOSAIC()} builds the candidate ensemble from (by default
 \eqn{w \propto \exp(-0.5 \min(\Delta, 4))}{w ~ exp(-0.5 min(Delta, 4))} with
 \eqn{\Delta = -2(\ell - \max \ell)}{Delta = -2 (ll - max ll)} within the top N).
+Under \code{weighting = "coarsened"} (the \code{run_MOSAIC()} default since
+1.3.0) the members are a systematic resample of the coarsened posterior and
+carry count weights; the per-N weights are those count weights
+(\code{base_weights}) renormalised over the top N.
 So at N = the full ensemble the weights, and therefore
 \code{diagnostics_score}, reproduce the candidate ensemble, and any score
 change reported for a smaller N is due to the subset, not to a change of

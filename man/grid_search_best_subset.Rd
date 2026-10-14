@@ -78,6 +78,10 @@ floor of 1e-15). Because \eqn{\eta} is rescaled to each subset's own
 met, if at all, at a much larger n than under \code{"saturated"}.
 }
 
+\code{run_MOSAIC()} runs this search only under the legacy schemes
+(\code{best_subset_weighting = "saturated"} or \code{"tempered"}), through
+its tier loop; under the default \code{"coarsened"} posterior (since 1.3.0)
+the ensemble members are a resample of the posterior and no tier search runs.
 Weights come from the same helper as \code{results$weight_best} and the
 final ESS_B/A/CVw gate in \code{run_MOSAIC()}, which passes
 \code{control$targets$best_subset_weighting} here: the size the search
