@@ -1,9 +1,14 @@
 # Calculate comprehensive convergence diagnostics with status indicators
 
-Centralized function for computing all convergence diagnostics and
-status indicators for BFRS calibration results. Takes metrics and
-targets as input, calculates pass/warn/fail status for each metric using
-consistent thresholds, and aggregates to an overall convergence status.
+Assembles the convergence diagnostics of a BFRS calibration
+(`2_calibration/diagnostics/convergence_diagnostics.json`). Since MOSAIC
+1.4.0 the verdict is the simulation-convergence status of
+[`calc_convergence_status`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_status.md)
+(green / yellow / red), carried by `weight_health`;
+`summary$convergence_status` mirrors `summary.json` for one release, and
+new consumers read `3_results/calibration_diagnostics.json`. Under the
+legacy `"saturated"` / `"tempered"` schemes the tier-searched best
+subset is also reported, with its pass/warn/fail statuses.
 
 ## Usage
 
@@ -28,6 +33,9 @@ calc_convergence_diagnostics(
   ess_method = c("kish", "perplexity"),
   temperature = 1,
   is_diagnostics = NULL,
+  weight_health = NULL,
+  weighting = c("saturated", "tempered", "coarsened", "bestfit"),
+  target_batch_ratio_max = 0.2,
   verbose = TRUE
 )
 ```
@@ -75,9 +83,11 @@ calc_convergence_diagnostics(
 
 - param_ess_results:
 
-  Optional data frame with columns `parameter` and `ess_marginal`
-  containing parameter-specific ESS values. If NULL, parameter ESS
-  metrics are omitted.
+  Optional data frame with columns `parameter` and `ess` (or the
+  deprecated `ess_marginal`) containing parameter-specific ESS values.
+  If NULL, parameter ESS metrics are omitted. Under the 1.4.0 status
+  (`weight_health` supplied) the per-parameter ESS is a diagnostic
+  (status `"info"`); only a standalone legacy call gates it.
 
 - target_ess_best:
 
@@ -99,12 +109,13 @@ calc_convergence_diagnostics(
 
 - target_ess_param:
 
-  Numeric target ESS for individual parameters (default 300)
+  Numeric target ESS for individual parameters (default 300); used only
+  by a standalone legacy call (no `weight_health`).
 
 - target_ess_param_prop:
 
   Numeric target proportion of parameters that must meet ESS threshold
-  (default 0.95, meaning 95%)
+  (default 0.95); standalone legacy calls only.
 
 - ess_method:
 
@@ -119,11 +130,43 @@ calc_convergence_diagnostics(
 
 - is_diagnostics:
 
-  Optional list of exact importance-sampling diagnostics from
+  Optional list of \\\eta = 1\\ diagnostics from
   [`calc_is_diagnostics`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_is_diagnostics.md),
-  with elements `best` and `all`. Reported under `$importance_sampling`
-  but never gated: these are untruncated-weight quantities, unlike the
-  gated ESS_B.
+  with elements `best` and `all` (and `optimized` when the subset
+  optimiser ran). Their ESS and positive-ratio counts are reported under
+  `$likelihood_concentration` with an explanatory note and are never
+  gated: they describe the untempered likelihood, which collapses onto
+  one draw for any informative stochastic likelihood whatever the fit.
+
+- weight_health:
+
+  Optional result of
+  [`calc_weight_health`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weight_health.md)
+  for the members the posterior is built from
+  ([`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  passes it under every scheme). When it carries a convergence status,
+  that status is the verdict: `summary$convergence_status` is `"green"`,
+  `"yellow"` or `"red"` (mirroring `summary.json`), `$status` holds the
+  label, reasons, flags and the four checks, and `$metrics` the ESS_all,
+  ensemble ESS, Monte Carlo error, k-hat and informativeness rows.
+  Required under `weighting = "bestfit"` or `"coarsened"`.
+
+- weighting:
+
+  Posterior weighting scheme the inputs come from
+  (`control$targets$posterior_weighting`): `"saturated"` (default, the
+  pre-1.3.0 behaviour) or `"tempered"` also report the tier-searched
+  best subset (B_size, its cap, ESS_B, A_B, CV_B) with the legacy PASS /
+  WARN / FAIL verdict, which becomes `summary$tier_status` when
+  `weight_health` supplies the 1.4.0 status (and is
+  `summary$convergence_status` otherwise, for a standalone legacy call).
+  `"bestfit"` and `"coarsened"` report no tier rows.
+
+- target_batch_ratio_max:
+
+  Deprecated since MOSAIC 1.4.0 and ignored: the seed-batch-ratio rule
+  was retired in favour of the Monte Carlo error bands of
+  [`calc_convergence_status`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_status.md).
 
 - verbose:
 
@@ -135,19 +178,32 @@ A list with the following structure:
 
 - settings:
 
-  List with optimization_tier, percentile_used, temperature, description
+  Weighting scheme, eta, coarsening alpha, ESS method, description (plus
+  optimization_tier, percentile_used and temperature under the legacy
+  schemes)
 
 - targets:
 
-  List of target values with descriptions for each metric
+  Target values with descriptions
 
 - metrics:
 
-  List of metric values with descriptions and status indicators
+  Metric values with descriptions and statuses: ess_all, ess_best, mce,
+  khat and informativeness (1.4.0 status colours), the legacy tier rows
+  under "saturated" / "tempered", and param_ess
 
 - summary:
 
-  List with counts, tier info, and overall convergence status
+  Counts and the overall convergence status (plus the legacy tier
+  verdict `tier_status`)
+
+- status:
+
+  (1.4.0) status, label, reasons, flags and the four checks
+
+- likelihood_concentration, weight_health:
+
+  When supplied
 
 The returned list is ready for JSON serialization and contains all
 information needed for visualization by
@@ -207,8 +263,12 @@ always passes its targets explicitly.
 
 ## Overall Status
 
-The overall convergence status is determined by aggregating individual
-metric statuses:
+With `weight_health` carrying a status, `summary$convergence_status` is
+that status (`"green"`, `"yellow"` or `"red"`: the worst of the
+ensemble-ESS, Monte Carlo error, k-hat and informativeness checks). A
+standalone legacy call (`"saturated"` / `"tempered"`, no
+`weight_health`) aggregates the tier statuses and the per-parameter ESS
+proportion instead:
 
 - **FAIL**: Any metric has status "fail"
 
@@ -223,9 +283,12 @@ metric statuses:
 [`calc_model_agreement_index`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_agreement_index.md)
 
 Other calibration-metrics:
+[`calc_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_status.md),
 [`calc_model_agreement_index()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_agreement_index.md),
 [`calc_model_cvw()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cvw.md),
-[`calc_model_ess()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess.md)
+[`calc_model_ess()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess.md),
+[`calc_run_weight_health()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_run_weight_health.md),
+[`calc_weight_health()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weight_health.md)
 
 ## Examples
 

@@ -15,7 +15,8 @@ and output options.
 3.  `likelihood`: How to score model fit (likelihood components and
     weights)
 
-4.  `targets`: When to stop (ESS convergence thresholds)
+4.  `targets`: The posterior, the ensemble and when to stop (convergence
+    status)
 
 5.  `parallel`: Infrastructure (cores, cluster type)
 
@@ -46,30 +47,45 @@ mosaic_control_defaults(
 
   List of calibration settings. Default is:
 
-  - `n_simulations`: NULL for auto mode, or integer for fixed mode
+  - `n_simulations`: NULL for auto (adaptive) mode, or integer for fixed
+    mode
 
   - `n_iterations`: Number of stochastic engine iterations per parameter
     set (default: 3L)
 
-  - `max_simulations_total`: Maximum total simulations across all phases
-    (default: 100000L)
+  - `max_simulations_total`: Budget cap of auto mode (default: 150000L).
+    A run that reaches it before the convergence status is green ends
+    with the `budget_cap_reached` flag
 
-  - `batch_size_adaptive`: Simulations per batch in Phase 1 adaptive
-    calibration (default: 500L)
+  - `batch_size_adaptive`: Simulations per batch until the minimum run
+    length is met, and the fallback size afterwards (default: 500L)
 
-  - `min_batches_adaptive`: Minimum Phase 1 batches before convergence
-    check (default: 5L)
+  - `max_batch_predictive`: Cap on each projected batch (default:
+    10000L)
 
-  - `max_batches_adaptive`: Maximum Phase 1 batches (default: 8L)
+  - `min_batches_adaptive`: Minimum batches before any stop or
+    projection (default: 5L)
 
-  - `max_batch_predictive`: Cap on each Phase 2 predictive batch
-    (default: 10000L)
+  - `min_draws`: Minimum draws before any stop or projection (default:
+    5000L)
 
-  - `max_batches_predictive`: Maximum Phase 2 predictive batches
-    (default: 10L)
-
-  - `target_r2_adaptive`: ESS regression R-squared target for Phase 1
-    convergence (default: 0.90)
+  Auto mode computes the convergence status
+  ([`calc_convergence_status`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_status.md))
+  on every draw so far after each batch, on the members of
+  `posterior_weighting`, and stops when its sampling checks (ensemble
+  ESS, Monte Carlo error, k-hat) are green at two consecutive checks and
+  both minimum run lengths are met; informativeness never blocks the
+  stop. Once the minimum is met, batches are sized from the projection N
+  x ESS_all target / ESS_all (converted to simulations at the success
+  rate) while the ESS growth slope is at least 0.8, and otherwise grow
+  geometrically (a quarter of the draws so far, between
+  `batch_size_adaptive` and `max_batch_predictive`), so a heavy-tailed
+  run reaches a 150,000 cap in about 20 checks after the minimum run. In
+  parallel each batch is rounded up to a multiple of workers x
+  `io$shard_batch_size`, never beyond the budget left.
+  `max_batches_adaptive`, `max_batches_predictive` and
+  `target_r2_adaptive` were retired in 1.4.0 (warned and ignored when
+  set).
 
 - sampling:
 
@@ -134,35 +150,63 @@ mosaic_control_defaults(
 
 - targets:
 
-  List of convergence targets (when to stop). Default is:
+  List of posterior and convergence settings. Default is:
 
-  - `ESS_param`: Target ESS per parameter (default: 100)
+  - `posterior_weighting`: The ensemble members, from which the
+    parameter posterior and the predictions are built (default:
+    `"bestfit"`). `"bestfit"`: the draws in descending log-likelihood
+    until the Kish ESS of their coarsened weights reaches
+    `best_subset_ratio` x ESS_all, bounded by `min_ensemble_members` /
+    `max_ensemble_members`, carrying those weights. `"coarsened"` (the
+    1.3.0 default): a systematic resample of K = clamp(round(ESS_all),
+    min, max) draws weighted by count / K. `"saturated"` (pre-1.3.0) and
+    `"tempered"`: the tier-searched best subset (with `ESS_best` meaning
+    the tier target, 100 unless set, and `A_best` 0.70, `CVw_best` 1.0,
+    `min_best_subset`, `max_best_subset`). Formerly
+    `best_subset_weighting` (accepted with a deprecation warning).
 
-  - `ESS_param_prop`: Proportion of parameters meeting ESS (default:
-    0.95)
+  - `coarsening_alpha`: Effective number of independent observations of
+    the coarsened posterior, \\\eta = \alpha / n\_{obs}\\ with
+    \\n\_{obs}\\ the scored observation cells (default: 10). See
+    [`calc_weight_health`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weight_health.md).
 
-  - `ESS_best`: Target for both subset size and ESS within subset
-    (default: 100).
+  - `best_subset_ratio`: Share of ESS_all the best-fit ensemble holds
+    (default: 0.2).
 
-  - `A_best`: Target agreement index (default: 0.70). Lower values allow
-    top sims to dominate.
+  - `ESS_best`: Required ensemble ESS (default: 200; 100 under the
+    legacy schemes). The convergence status is green at or above it, and
+    auto mode simulates towards ESS_all =
+    `ESS_best / best_subset_ratio`. Its meaning changed in 1.4.0 (it was
+    the tier-search target in 1.3.x): an explicit value is honoured
+    under every scheme, with a warning when it differs from the scheme's
+    default.
 
-  - `CVw_best`: Target CV of weights (default: 1.0). Higher values
-    permit sharper discrimination.
+  - `min_draws` (in `calibration`) above `max_simulations_total` is
+    clamped to it with a warning.
 
-  - `min_best_subset`: Smallest best-subset size searched (default: 30)
+  - `min_ensemble_members`, `max_ensemble_members`: Bounds on the
+    ensemble size (default: 30, 1000; set the maximum lower for
+    continental runs: the ensemble arrays grow with it).
 
-  - `max_best_subset`: Largest best-subset size searched (default: 1000)
+  - `status_thresholds`: Bands of the convergence status (default
+    `list(ess_yellow_frac = 0.5, mce_green = 0.10, mce_yellow = 0.15, khat_green = 0.5, khat_yellow = 0.7, slope_stall = 0.8, flat_ess_frac = 0.01)`;
+    `flat_ess_frac` is the untempered-ESS share of the draws at or above
+    which the likelihood counts as flat); see
+    [`calc_convergence_status`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_status.md).
 
-  - `ESS_method`: ESS calculation method, "kish" or "perplexity"
-    (default: "perplexity")
+  - `min_best_subset`, `max_best_subset`: Bounds of the legacy tier
+    search (default: 30, 1000); ignored (with a warning when set) under
+    `"bestfit"` and `"coarsened"`.
 
-  - `ESS_marginal_method`: Per-parameter marginal ESS method, "kde" or
-    "binned" (default: "kde")
+  - `ESS_method`: ESS formula, "kish" or "perplexity", of the legacy
+    schemes' ESS_B / A / CVw, the subset optimiser and the \\\eta = 1\\
+    likelihood-concentration numbers (default: "perplexity").
 
-  - `best_subset_weighting`: Best-subset posterior weights, "saturated"
-    or "tempered" (default: "saturated"; "tempered" is sharper, not
-    softer)
+  Deprecated in 1.4.0 (warned and ignored when set): `ESS_param`,
+  `ESS_param_prop` and `batch_ratio_max` (the per-parameter-ESS stopping
+  rule, replaced by the convergence status); `A_best` and `CVw_best`
+  outside the legacy schemes. `ESS_marginal_method` was retired in
+  1.3.0.
 
 - predictions:
 
@@ -178,20 +222,24 @@ mosaic_control_defaults(
     `parallel$enable = TRUE`.
 
   - `optimize_subset`: Logical; when `TRUE`, the post-ensemble optimizer
-    (MAE / WIS / R^2+bias) refines the best subset used for
+    (MAE / WIS / R^2+bias) refines the ensemble members used for
     `posteriors.json`, `posterior_quantiles.csv`, and the ensemble
-    object driving all downstream plots and metrics. The tier-selected
-    subset is preserved in the `is_best_subset` / `weight_best` columns
-    of `samples.parquet` for provenance; the optimized selection is
-    written to new `is_best_subset_opt` / `weight_best_opt` columns.
-    Default `TRUE` since v1.2.0 (`FALSE` before). When `FALSE`, the
-    tier-selected subset is canonical and no `_opt` columns are written.
-    The optimizer chooses among subsets of the simulated candidate
-    ensemble, so the size it selects is between `optimize_min_n` and the
-    tier-selected size. **Statistical note:** enabling this flag yields
-    a posterior conditioned on ensemble predictive performance (MAE /
-    WIS / R^2+bias on the training data) rather than a pure
-    likelihood-weighted posterior.
+    object driving all downstream plots and metrics, and the convergence
+    status is then assessed on the optimised subset. The members are
+    preserved in the `is_best_subset` / `weight_best` columns of
+    `samples.parquet` for provenance; the optimized selection is written
+    to new `is_best_subset_opt` / `weight_best_opt` columns. Default
+    `FALSE` (it was `TRUE` in v1.2.x; reverted in 1.3.0 because, under
+    the coarsened posterior, the optimizer re-truncates the members by
+    their fit to the training data). An explicit `TRUE` is honoured
+    under every weighting scheme. When `FALSE`, the ensemble members
+    (`is_best_subset` / `weight_best`) are canonical and no `_opt`
+    columns are written. The optimizer chooses among subsets of the
+    simulated candidate ensemble, so the size it selects is between
+    `optimize_min_n` and the number of members. **Statistical note:**
+    enabling this flag yields a posterior conditioned on ensemble
+    predictive performance (MAE / WIS / R^2+bias on the training data)
+    rather than a pure likelihood-weighted posterior.
 
   - `optimize_min_n`: Minimum subset size the optimizer may select
     (default `30L`, raised from `4L` to guard against KDE degeneracy in
@@ -234,10 +282,10 @@ mosaic_control_defaults(
 
   List of importance-weight settings. Default is:
 
-  - `floor`: Minimum weight to prevent underflow (default: 1e-15).
+  - `iqr_multiplier`: Tukey lower-fence multiplier of the legacy schemes
+    (default: 1.5; use 3.0 for extreme outliers only).
 
-  - `iqr_multiplier`: Tukey IQR outlier-detection multiplier (default:
-    1.5; use 3.0 for extreme outliers only).
+  `floor` is deprecated (1.4.0; warned and ignored).
 
 - parallel:
 
@@ -275,6 +323,8 @@ mosaic_control_defaults(
     re-running subset optimization or the R_eff posterior-resimulation
     CI path from the saved file). The in-memory object used during the
     run is never affected (default: `FALSE`).
+
+  `verbose_weights` is deprecated (1.4.0; it had no effect).
 
 - paths:
 
@@ -347,9 +397,9 @@ ctrl <- mosaic_control_defaults(
   )
 )
 
-# Use perplexity method for ESS calculations
+# The 1.3.0 resampled ensemble instead of the best-fit default
 ctrl <- mosaic_control_defaults(
-  targets = list(ESS_method = "perplexity")
+  targets = list(posterior_weighting = "coarsened")
 )
 
 # Full workflow configuration (demonstrates logical order)
@@ -357,7 +407,7 @@ ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
   sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
   likelihood = list(weight_wis = 0.02, weight_cases = 1.0),        # How to score
-  targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
+  targets = list(ESS_best = 200, best_subset_ratio = 0.2),         # When to stop
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
   io = mosaic_io_presets("default"),                               # Output format
   paths = list(clean_output = FALSE, plots = TRUE)                 # File management

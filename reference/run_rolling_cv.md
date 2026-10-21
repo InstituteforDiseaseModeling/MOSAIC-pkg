@@ -21,8 +21,9 @@ run_rolling_cv(
   base_config = MOSAIC::config_default,
   priors = MOSAIC::priors_default,
   control = NULL,
-  optimize_subset = TRUE,
-  models = c("ensemble", "ensemble_opt", "medoid"),
+  optimize_subset = FALSE,
+  models = if (isTRUE(optimize_subset)) c("ensemble", "ensemble_opt", "medoid") else
+    c("ensemble", "medoid"),
   n_reps_best_medoid = 50L,
   central_method = c(cases = "median", deaths = "mean"),
   est_suitability_spec = list(),
@@ -80,7 +81,9 @@ run_rolling_cv(
 - control:
 
   `run_MOSAIC` control list, or NULL for an experiment-grade cheap
-  default (fixed `n_simulations`, plots off). See
+  default (fixed `n_simulations` = 2,000, plots off). An adaptive
+  control (no `calibration$n_simulations`) is allowed but warns: every
+  cutoff then runs a full adaptive calibration. See
   [`mosaic_control_defaults`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md).
   The harness forces `paths$clean_output = TRUE`, so each cutoff's
   `runs/cutoff_<T>/` directory is wiped before its calibration and
@@ -89,18 +92,21 @@ run_rolling_cv(
 
 - optimize_subset:
 
-  Logical (default `TRUE`); enable `run_MOSAIC`'s post-ensemble
-  best-subset optimizer (`control$predictions$optimize_subset`). When
-  `TRUE` the harness sets this on the resolved control for every cutoff,
-  so the ensemble is re-scored against the training-window observed
-  series and the posterior is driven by the optimizer-selected subset.
-  Set `FALSE` to use the raw candidate ensemble.
+  Logical (default `FALSE` since MOSAIC 1.3.0, `TRUE` in 1.2.x, matching
+  [`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md));
+  enable `run_MOSAIC`'s post-ensemble best-subset optimizer
+  (`control$predictions$optimize_subset`). The harness sets this on the
+  resolved control for every cutoff. When `TRUE` the ensemble is
+  re-scored against the training-window observed series and the
+  posterior and predictions are driven by the optimizer-selected subset;
+  when `FALSE` the candidate ensemble (under the default coarsened
+  posterior, its systematic resample) is used.
 
 - models:
 
   Character vector of model types to score and carry in
-  `predictions.parquet` (default
-  `c("ensemble","ensemble_opt","medoid")`). `"ensemble"`
+  `predictions.parquet` (default `c("ensemble","medoid")`, plus
+  `"ensemble_opt"` when `optimize_subset = TRUE`). `"ensemble"`
   (posterior-weighted candidate) is always included. `"ensemble_opt"` is
   the optimizer-selected subset, emitted only for cutoffs where the
   optimizer actually ran and selected a subset (`subset_opt.rds`
@@ -264,18 +270,23 @@ The predictions table has one row per (cutoff x location x date x
 metric) with columns:
 `run_id, iso_code, anchor_date, cutoff_date, date, metric, segment`
 (IS/embargo/OOS),
-`weeks_ahead, horizon_bucket, observed, observed_source, pred_central`
-(the scored series), `pred_mean, pred_median, central_method`, CI
-columns (`pi*_lo`/`pi*_hi`) and `pred_median_obs`, the median of the
-same draws as the CI columns (the observation-level predictive median
-since v0.101.0), which WIS pairs with them. Every model's rows carry the
-cutoff run's interval semantics: the `medoid` (and legacy `best`)
-configs are re-simulated through
+`weeks_ahead, horizon_bucket, observed, observed_source, observed_tier`
+(the config's `reported_tier`: 1 observed, 2 reconstructed, 3 imputed;
+NA where the config has none), `pred_central` (the scored series),
+`pred_mean, pred_median, central_method`, CI columns (`pi*_lo`/`pi*_hi`)
+and `pred_median_obs`, the median of the same draws as the CI columns
+(the observation-level predictive median since v0.101.0), which WIS
+pairs with them. Every model's rows carry the cutoff run's interval
+semantics: the `medoid` (and legacy `best`) configs are re-simulated
+through
 [`calc_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
 with the run's observation model and deaths integration, as its own
 ensembles were built. `observed` is the held-out (unmasked) trusted
 surveillance value, so OOS rows carry the real target for post-hoc
-scoring.
+scoring. Every row also carries its cutoff run's `ess` (the ensemble
+ESS, `summary.json` `ess_best`) and `convergence_status` (`"green"` /
+`"yellow"` / `"red"`; NA for a run from before MOSAIC 1.4.0), constant
+per cutoff.
 
 ## See also
 

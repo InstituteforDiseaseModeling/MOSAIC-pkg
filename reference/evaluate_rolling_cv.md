@@ -22,7 +22,8 @@ evaluate_rolling_cv(
   ess_min = 0,
   min_cells_ci = 5L,
   n_boot = 1000L,
-  seed = 1L
+  seed = 1L,
+  observed_tiers = c(1, 2)
 )
 ```
 
@@ -60,8 +61,9 @@ evaluate_rolling_cv(
 
 - ess_min:
 
-  Minimum importance-weight ESS for a cell to enter the summary
-  aggregation. Default `0` (gate off). See Details.
+  Turns the convergence gate on when \> 0: cells whose cutoff run is red
+  (or, before MOSAIC 1.4.0, whose ESS is below `ess_min`) are left out
+  of the summary. Default `0` (no gate). See Details.
 
 - min_cells_ci:
 
@@ -77,6 +79,12 @@ evaluate_rolling_cv(
 
   RNG seed for the bootstrap (default 1).
 
+- observed_tiers:
+
+  Surveillance tiers scored out of sample when the predictions carry
+  `observed_tier` (default `c(1, 2)`: observed and reconstructed weeks);
+  `NULL` scores every tier. See Details.
+
   When the predictions carry a `model` column (`ensemble`,
   `ensemble_opt`, `best`, `medoid`), every metric is computed and
   reported **per model**; absent that column all rows are treated as a
@@ -89,8 +97,8 @@ A list with:
 - cells:
 
   Per (cutoff x model x iso x metric x window) metrics + per-baseline
-  mae_skill and wis_skill, the cell `ess` and `ess_ok` flag (plus
-  `anchor_date` when the predictions carry it).
+  mae_skill and wis_skill, the cell `ess`, `convergence_status` and
+  `ess_ok` flag (plus `anchor_date` when the predictions carry it).
 
 - summary:
 
@@ -121,6 +129,13 @@ predictions further out are not scored in any window. An `IS` window
 Scoring uses **trusted observed only**: rows whose `observed_source` is
 missing or not `"AI"` (when `trusted_only = TRUE`).
 
+**Surveillance tier.** When the predictions carry `observed_tier` (the
+config's `reported_tier`: 1 observed, 2 reconstructed, 3 imputed),
+out-of-sample days whose tier is not in `observed_tiers` are not scored.
+The in-sample rows, which the baselines are fitted on, keep every tier,
+as the calibration did. Predictions without the column are scored
+unchanged.
+
 **Embargo and scoring origin.** The harness labels the dates in
 `(cutoff, cutoff + embargo]` as `segment == "embargo"`; those are never
 scored. For each metric the scoring origin is
@@ -144,14 +159,19 @@ empirical quantiles of its in-sample residuals, so a genuine
 is the analogous MAE ratio. Positive = model beats the baseline; `NA`
 when the baseline (or its interval) cannot be formed.
 
-**Weight-ESS gate.** If the predictions carry an `ess` column (the
-cutoff calibration's importance-weight ESS, constant per cutoff), each
-cell is flagged `ess_ok = (!is.na(ess) & ess >= ess_min)`. Cells failing
-the gate remain in `$cells` (flagged) but are **excluded** from the
-`$summary` aggregation. With `ess_min = 0` (default) the gate is off (NA
-ess still flags `ess_ok = FALSE`, but the gate threshold 0 admits any
-finite ess). When the `ess` column is absent, `ess_ok = TRUE` for all
-cells (back-compat) and `$summary$ess_gated = FALSE`.
+**Convergence gate (opt-in).** With `ess_min = 0` (the default) there is
+no gate: every cell has `ess_ok = TRUE` and enters `$summary`. With
+`ess_min > 0` the gate is on: a cell whose predictions carry a
+`convergence_status` (MOSAIC 1.4.0: the cutoff calibration's
+simulation-convergence status, constant per cutoff) passes when the
+status is not `"red"`; a cell without one (a cutoff run from before
+1.4.0) falls back to the weight-ESS rule
+`ess_ok = (!is.na(ess) & ess >= ess_min)`; a cell with neither passes.
+Cells failing the gate remain in `$cells` (flagged) but are **excluded**
+from the `$summary` aggregation. `$cells$convergence_status` is carried
+as information whatever `ess_min` is. A warning is issued when more than
+half of the cells that carry a status are red (cheap or short cutoff
+calibrations), and when the gate removes every cell.
 
 ## See also
 

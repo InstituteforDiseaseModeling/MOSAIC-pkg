@@ -43,7 +43,10 @@ calc_model_parameter_sensitivity(
 - n_samples:
 
   Maximum number of posterior draws to use. Samples are drawn with
-  replacement using importance weights. Default 2000.
+  replacement using the ensemble members' weights (`weight_best`, or
+  `weight_best_opt` when `subset_col = "is_best_subset_opt"`), the
+  posterior the other outputs use; a file without them falls back to
+  `weight_all` (all valid draws). Default 2000.
 
 - kernel:
 
@@ -57,8 +60,9 @@ calc_model_parameter_sensitivity(
 
 - subset_col:
 
-  Boolean subset-membership column used as the fallback when
-  importance-weight ESS is degenerate. Default `"is_best_subset"`.
+  Boolean subset-membership column (the ensemble members) used instead
+  when the posterior weights are degenerate (Kish ESS below
+  `max(10, 0.05 * n_samples)`) or absent. Default `"is_best_subset"`.
 
 - verbose:
 

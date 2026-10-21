@@ -58,7 +58,7 @@ grid_search_best_subset(
 - weighting:
 
   Character best-subset weighting scheme, matching
-  `control$targets$best_subset_weighting`: "saturated" (default) or
+  `control$targets$posterior_weighting`: "saturated" (default) or
   "tempered"
 
 - verbose:
@@ -107,10 +107,15 @@ and ESS, A and CVw are calculated from those weights:
   linearly with rank), so the targets are met, if at all, at a much
   larger n than under `"saturated"`.
 
-Weights come from the same helper as `results$weight_best` and the final
-ESS_B/A/CVw gate in
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+runs this search only under the legacy schemes
+(`posterior_weighting = "saturated"` or `"tempered"`), through its tier
+loop; under the default `"coarsened"` posterior (since 1.3.0) the
+ensemble members are a resample of the posterior and no tier search
+runs. Weights come from the same helper as `results$weight_best` and the
+final ESS_B/A/CVw gate in
 [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md),
-which passes `control$targets$best_subset_weighting` here: the size the
+which passes `control$targets$posterior_weighting` here: the size the
 search certifies against a tier is then the size at which the
 posterior's own weights meet that tier. Searching under one scheme and
 weighting the posterior under the other certified a subset the final

@@ -73,9 +73,11 @@ plot_forecast_cv_skill(
 
 - show_gated:
 
-  Logical; draw ESS-gated-out origins as hollow points instead of
-  dropping them (default TRUE). Gated origins are excluded from the
-  median + tally regardless.
+  Logical; draw gated-out origins (`ess_ok = FALSE`:
+  [`evaluate_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_rolling_cv.md)
+  run with `ess_min > 0`) as hollow points instead of dropping them
+  (default TRUE). Gated origins are excluded from the median + tally
+  regardless; with the default `ess_min = 0` no origin is gated.
 
 - title, subtitle, caption:
 

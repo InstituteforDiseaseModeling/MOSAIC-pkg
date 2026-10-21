@@ -71,16 +71,13 @@ The function:
 
 2.  Calculates weighted quantiles from best subset (posterior)
 
-3.  Computes the information gain KL(posterior \|\| prior) (no cap) from
-    a weighted kernel density estimate of the posterior and a KDE of the
-    prior, integrated on a grid over the posterior's own support so that
-    the estimate is not limited by grid resolution. Strictly positive
-    parameters are evaluated on the log scale when that reduces the
-    prior's skewness (KL is invariant to monotone reparameterisation).
-    For a Uniform prior and a Gaussian posterior of standard deviation
-    \\s\\ relative to the prior range this is \\-\frac{1}{2}\log(2\pi e
-    s^2)\\. The posterior KDE bandwidth biases it slightly low (about
-    0.03-0.1 nats at 100-plus draws)
+3.  Computes the information gain KL(posterior \|\| prior) with the
+    percentile-scale estimator of
+    [`calc_kl_divergence`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
+    (since MOSAIC 1.4.0): posterior draws mapped to their prior
+    percentiles, 20 equal bins, finite-ESS correction. It is invariant
+    to the parameter's scale and at most `log(20)`, about 3 nats; it is
+    NA when the posterior's Kish ESS is below 20
 
 4.  Returns both prior and posterior rows with a 'type' identifier
 

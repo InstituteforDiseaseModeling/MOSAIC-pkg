@@ -161,20 +161,24 @@ Calculation functions
 - [`calc_bias_ratio()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bias_ratio.md)
   : Bias Ratio Between Estimated and Observed Series
 - [`calc_bookend_batch_size()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bookend_batch_size.md)
-  : Calculate Batch Size for Bookend Strategy
+  : Calculate Batch Size for Bookend Strategy (deprecated)
 - [`calc_convergence_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_diagnostics.md)
   : Calculate comprehensive convergence diagnostics with status
   indicators
+- [`calc_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_status.md)
+  : Simulation-convergence status of a calibration (green / yellow /
+  red)
 - [`calc_diffusion_matrix_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_diffusion_matrix_pi.md)
   : Compute Diffusion Matrix Based on Gravity Model
 - [`calc_fit_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_fit_diagnostics.md)
   : Fit Diagnostics: Bias, Shape, and Variance for a Single
   Observed/Predicted Series
 - [`calc_is_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_is_diagnostics.md)
-  : Exact importance-sampling diagnostics for BFRS draws
+  : Importance-sampling diagnostics of a vector of log importance ratios
 - [`calc_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   [`calculate_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
-  : Calculate Kullback-Leibler Divergence Between Two Distributions
+  : Kullback-Leibler divergence of a weighted sample from a reference
+  sample
 - [`calc_log_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood.md)
   : Dispatcher for multiple distribution log-likelihood functions
 - [`calc_log_likelihood_beta()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_beta.md)
@@ -202,7 +206,7 @@ Calculation functions
 - [`calc_model_agreement_index()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_agreement_index.md)
   : Agreement index A based on entropy of weights
 - [`calc_model_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_convergence_status.md)
-  : Assemble the model convergence-status table
+  : Assemble the model convergence-status table (deprecated)
 - [`calc_model_cor()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cor.md)
   : Pearson (or Rank) Correlation Between Observed and Estimated Series
 - [`calc_model_cvw()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cvw.md)
@@ -226,12 +230,17 @@ Calculation functions
 - [`calc_psi_star()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_psi_star.md)
   : Calibrate Daily Suitability on the Logit Scale (vector; optional
   causal EWMA + time offset + NA filling)
+- [`calc_run_weight_health()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_run_weight_health.md)
+  : Weight health and convergence status of a finished calibration, from
+  its output directory
 - [`calc_spatial_correlation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_correlation.md)
   : Calculate spatial correlation between two locations
 - [`calc_spatial_correlation_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_correlation_matrix.md)
   : Build the full spatial-correlation matrix across all locations
 - [`calc_spatial_hazard()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_hazard.md)
   : Calculate spatial importation hazard
+- [`calc_weight_health()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weight_health.md)
+  : Health of the posterior weights behind a BFRS calibration
 - [`calc_weighted_mode()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weighted_mode.md)
   : Weighted mode estimation using kernel density
 - [`add_reproductive_numbers()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md)
@@ -359,8 +368,10 @@ Plotting functions
   : Plot the model-implied mobility flux network
 - [`plot_mobility_fused()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility_fused.md)
   : Publication figures for the fused overland OD connectivity model
+- [`plot_model_calibration_report()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_calibration_report.md)
+  : Calibration diagnostics report (PDF)
 - [`plot_model_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_convergence_status.md)
-  : Plot model convergence status table
+  : Plot model convergence status table (deprecated)
 - [`plot_model_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_distributions.md)
   : Plot Multi-Method Parameter Distributions
 - [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
@@ -640,11 +651,15 @@ Other exported functions and internal helpers
   : Bias Ratio Between Estimated and Observed Series
 
 - [`calc_bookend_batch_size()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bookend_batch_size.md)
-  : Calculate Batch Size for Bookend Strategy
+  : Calculate Batch Size for Bookend Strategy (deprecated)
 
 - [`calc_convergence_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_diagnostics.md)
   : Calculate comprehensive convergence diagnostics with status
   indicators
+
+- [`calc_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_status.md)
+  : Simulation-convergence status of a calibration (green / yellow /
+  red)
 
 - [`calc_diffusion_matrix_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_diffusion_matrix_pi.md)
   : Compute Diffusion Matrix Based on Gravity Model
@@ -654,11 +669,12 @@ Other exported functions and internal helpers
   Observed/Predicted Series
 
 - [`calc_is_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_is_diagnostics.md)
-  : Exact importance-sampling diagnostics for BFRS draws
+  : Importance-sampling diagnostics of a vector of log importance ratios
 
 - [`calc_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   [`calculate_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
-  : Calculate Kullback-Leibler Divergence Between Two Distributions
+  : Kullback-Leibler divergence of a weighted sample from a reference
+  sample
 
 - [`calc_log_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood.md)
   : Dispatcher for multiple distribution log-likelihood functions
@@ -699,7 +715,7 @@ Other exported functions and internal helpers
   : Agreement index A based on entropy of weights
 
 - [`calc_model_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_convergence_status.md)
-  : Assemble the model convergence-status table
+  : Assemble the model convergence-status table (deprecated)
 
 - [`calc_model_cor()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cor.md)
   : Pearson (or Rank) Correlation Between Observed and Estimated Series
@@ -735,6 +751,10 @@ Other exported functions and internal helpers
   : Calibrate Daily Suitability on the Logit Scale (vector; optional
   causal EWMA + time offset + NA filling)
 
+- [`calc_run_weight_health()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_run_weight_health.md)
+  : Weight health and convergence status of a finished calibration, from
+  its output directory
+
 - [`calc_spatial_correlation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_correlation.md)
   : Calculate spatial correlation between two locations
 
@@ -743,6 +763,9 @@ Other exported functions and internal helpers
 
 - [`calc_spatial_hazard()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_hazard.md)
   : Calculate spatial importation hazard
+
+- [`calc_weight_health()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weight_health.md)
+  : Health of the posterior weights behind a BFRS calibration
 
 - [`calc_weighted_mode()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weighted_mode.md)
   : Weighted mode estimation using kernel density
@@ -1259,8 +1282,11 @@ Other exported functions and internal helpers
 - [`plot_mobility_fused()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility_fused.md)
   : Publication figures for the fused overland OD connectivity model
 
+- [`plot_model_calibration_report()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_calibration_report.md)
+  : Calibration diagnostics report (PDF)
+
 - [`plot_model_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_convergence_status.md)
-  : Plot model convergence status table
+  : Plot model convergence status table (deprecated)
 
 - [`plot_model_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_distributions.md)
   : Plot Multi-Method Parameter Distributions

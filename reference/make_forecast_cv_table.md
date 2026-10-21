@@ -89,11 +89,14 @@ data-quality confound) and excluded from the pooled summary; deaths are
 flagged conditional near-casts (the scoring embargo is shorter than the
 infection-to-reported-death dwell).
 
-Summary rows aggregate only cells that pass the weight-ESS gate
-(`ess_ok`, when the column is present), matching
+Summary rows aggregate only cells that pass the opt-in convergence gate
+(`ess_ok`, when the column is present; every cell passes when
+[`evaluate_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_rolling_cv.md)
+ran with `ess_min = 0`, the default), matching
 `evaluate_rolling_cv()$summary` and
 [`plot_forecast_cv_skill`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_forecast_cv_skill.md);
-`n_gated` counts the origins left out.
+`n_gated` counts the origins left out. A warning is issued when more
+than half of the cells are red or when the gate leaves no cell.
 
 ## See also
 

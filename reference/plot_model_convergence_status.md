@@ -1,9 +1,11 @@
-# Plot model convergence status table
+# Plot model convergence status table (deprecated)
 
-Creates a visual status table showing convergence diagnostics with
-color-coded pass/warn/fail indicators for each metric. Works with both
-likelihood-based and loss-based calibration methods by auto-detecting
-the appropriate diagnostics file.
+**Deprecated since MOSAIC 1.4.0**; use
+[`plot_model_calibration_report`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_calibration_report.md).
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+and
+[`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
+no longer call it. Kept, warning once per session, for one release.
 
 ## Usage
 
@@ -43,6 +45,11 @@ plot_model_convergence_status(
 Invisible NULL. Creates a PDF file with the convergence status table.
 
 ## Details
+
+Creates a visual status table showing convergence diagnostics with
+color-coded pass/warn/fail indicators for each metric. Works with both
+likelihood-based and loss-based calibration methods by auto-detecting
+the appropriate diagnostics file.
 
 The status-table assembly and the `convergence_status.csv` write live in
 [`calc_model_convergence_status`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_convergence_status.md);

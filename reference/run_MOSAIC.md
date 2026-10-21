@@ -14,15 +14,21 @@ allowing:
 
 Executes the full MOSAIC calibration workflow:
 
-1.  Adaptive calibration with R-squared convergence detection
+1.  Simulation of prior draws: a fixed budget, or adaptive batches that
+    stop when the sampling checks of the simulation-convergence status
+    ([`calc_convergence_status`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_convergence_status.md);
+    ensemble ESS, Monte Carlo error, k-hat) are green at two consecutive
+    checks, or at `max_simulations_total`
 
-2.  Predictive batches with model-based sizing and ESS re-evaluation
+2.  The coarsened posterior over all draws and the ensemble members
+    (`targets$posterior_weighting`; default `"bestfit"`), with the
+    convergence status of those members
 
-3.  Post-hoc subset optimization
+3.  The posterior ensemble, the optional subset optimiser, and the
+    parameter posterior from the same members
 
-4.  Posterior quantile and distribution estimation
-
-5.  Posterior predictive checks and uncertainty quantification
+4.  Posterior predictive checks, `summary.json` (schema 2) and
+    `calibration_diagnostics.json`
 
 ## Usage
 
@@ -81,8 +87,8 @@ run_mosaic(
   - `calibration$n_iterations`: stochastic engine iterations per
     parameter set (default: 3)
 
-  - `calibration$max_simulations_total`: Maximum total simulations
-    (default: 100000)
+  - `calibration$max_simulations_total`: Budget cap of the adaptive mode
+    (default: 150000)
 
   - `sampling`: Which parameters to sample vs hold fixed
 
@@ -170,10 +176,10 @@ Invisibly returns a list with:
 
 - summary:
 
-  Named list with run statistics (batches, sims, converged,
-  convergence_evaluated, runtime); fixed mode never evaluates the ESS
-  stopping criterion, so it reports `converged = FALSE` with
-  `convergence_evaluated = FALSE`
+  Named list with run statistics: batches, sims, `convergence_status`
+  (green / yellow / red), `stopping_rule_met` (`NA` in fixed mode), the
+  deprecated `converged` / `convergence_evaluated` (FALSE in fixed
+  mode), resume counts and runtime
 
 ## Control Structure
 
@@ -200,7 +206,8 @@ for complete documentation. The control structure contains:
 
 - targets:
 
-  ESS_param, ESS_best, A_best, CVw_best, etc.
+  posterior_weighting, coarsening_alpha, best_subset_ratio, ESS_best,
+  min/max_ensemble_members, status_thresholds, etc.
 
 - io:
 

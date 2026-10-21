@@ -26,10 +26,15 @@ that
 [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
 builds the candidate ensemble from (by default \\w \propto \exp(-0.5
 \min(\Delta, 4))\\ with \\\Delta = -2(\ell - \max \ell)\\ within the top
-N). So at N = the full ensemble the weights, and therefore
-`diagnostics_score`, reproduce the candidate ensemble, and any score
-change reported for a smaller N is due to the subset, not to a change of
-weighting scheme.
+N). Under `weighting = "coarsened"` (what
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+passes for its default `"bestfit"` members, which carry their coarsened
+weights, and for the `"coarsened"` resample, which carries count
+weights) the per-N weights are the members' own weights (`base_weights`)
+renormalised over the top N. So at N = the full ensemble the weights,
+and therefore `diagnostics_score`, reproduce the candidate ensemble, and
+any score change reported for a smaller N is due to the subset, not to a
+change of weighting scheme.
 
 ## Usage
 
@@ -43,9 +48,10 @@ optimize_ensemble_subset(
   central_method = "median",
   stride = 1L,
   cl = NULL,
-  weighting = c("saturated", "tempered"),
+  weighting = c("saturated", "tempered", "coarsened"),
   ess_method = c("kish", "perplexity"),
-  verbose = TRUE
+  verbose = TRUE,
+  base_weights = NULL
 )
 ```
 
@@ -125,9 +131,11 @@ optimize_ensemble_subset(
 
 - weighting:
 
-  Best-subset weighting scheme for the per-N weights, matching
-  `control$targets$best_subset_weighting` (the scheme of `weight_best`):
-  `"saturated"` (default) or `"tempered"`.
+  Weighting scheme for the per-N weights: `"saturated"` (default) or
+  `"tempered"` (the legacy subset weights), or `"coarsened"`: the
+  members' own weights (`base_weights`) renormalised, which
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  uses under `posterior_weighting = "bestfit"` and `"coarsened"`.
 
 - ess_method:
 
@@ -137,6 +145,12 @@ optimize_ensemble_subset(
 - verbose:
 
   Logical; if `TRUE`, emit progress messages.
+
+- base_weights:
+
+  Member weights aligned with `likelihoods`, required when
+  `weighting = "coarsened"` (the resampled members' count weights,
+  `weight_best`) and not used otherwise.
 
 ## Value
 

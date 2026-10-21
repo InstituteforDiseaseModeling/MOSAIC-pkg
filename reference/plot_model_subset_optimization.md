@@ -7,8 +7,8 @@ Each panel plots a diagnostic against the candidate subset size `N`
 (top-N members by likelihood): (1) the objective score, (2) \\R^2\\ for
 cases and deaths, (3) the bias ratio for cases and deaths (with a dotted
 reference line at bias = 1), and (4) the effective sample size (ESS).
-The preliminary (tier/diagnostics) subset size is marked with a dashed
-grey vertical line and the optimizer-selected size with a solid black
+The ensemble-member (diagnostics) size is marked with a dashed grey
+vertical line and the optimizer-selected size with a solid black
 vertical line plus a point on the score panel.
 
 ## Usage

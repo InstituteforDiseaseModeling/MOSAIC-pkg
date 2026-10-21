@@ -1,8 +1,8 @@
 # Plot Detailed Prior to Posterior Distributions
 
 Creates detailed multi-panel visualizations showing the progression from
-prior to posterior distributions through retained and best subsets, with
-ESS and KL metrics.
+prior to posterior distributions: all valid draws, the posterior over
+them (weight_all) and the ensemble members, with ESS and KL metrics.
 
 ## Usage
 
