@@ -1,3 +1,7 @@
+# MOSAIC 1.4.1
+
+- **Golden tests across platforms.** The 1.2.1 ("saturated") and 1.3.0 ("coarsened") reproduction tests compared bit for bit and failed on CI's macOS and Ubuntu runners, whose libm differs from the macOS arm64 machine that made the fixtures in the last bits (up to ~1e-12 relative in the likelihoods, ~5e-12 in the weights; the selected members were identical). They now require identical member sets, seeds and non-numeric values, and doubles equal to a relative 1e-8. No package code changed.
+
 # MOSAIC 1.4.0
 
 Every calibration now answers "are there enough simulations?" with a single traffic-light **convergence status** (green / yellow / red). The default ensemble is the **best-fitting draws** of the coarsened posterior, and the parameter posterior is built from exactly those members. Fit (R², bias, coverage) is reported beside the status and never enters it. Design: `claude/reporting_audit/SPEC_CONVERGENCE.md`; output contract: `claude/plan_convergence/SCHEMA_v2.md`.

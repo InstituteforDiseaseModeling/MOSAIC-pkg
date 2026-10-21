@@ -3,7 +3,18 @@
 # run is longer and needs MOSAIC_RUN_INTEGRATION=1, like
 # test-run_MOSAIC_integration.R.
 
-test_that("posterior_weighting = 'saturated' reproduces v1.2.1 exactly: posterior, ensembles, medoid", {
+# Golden comparison. The member sets, seeds and every non-double value must be
+# identical; doubles must agree to a relative 1e-8. The fixtures were made on
+# macOS arm64, and other platforms' libm differs in the last bits (CI: up to
+# ~1e-12 relative in the likelihoods, ~5e-12 in the weights), which no
+# methodology change could hide inside.
+.expect_golden <- function(actual, expected, info = NULL) {
+  expect_equal(actual, expected, tolerance = 1e-8, info = info)
+  if (is.data.frame(expected) && "is_best_subset" %in% names(expected))
+    expect_identical(actual$is_best_subset, expected$is_best_subset, info = info)
+}
+
+test_that("posterior_weighting = 'saturated' reproduces v1.2.1: posterior, ensembles, medoid", {
   skip_on_cran()
   skip_if_not_installed("arrow")
   local_test_root()
@@ -19,17 +30,17 @@ test_that("posterior_weighting = 'saturated' reproduces v1.2.1 exactly: posterio
   .stub_run_mosaic(d, weighting = "saturated", mode = "fixed", optimize_subset = TRUE, assign_targets = assign)
   snap <- .stub_posterior_snapshot(d)
   for (k in c("samples", "posteriors", "ensemble_candidate", "ensemble_optimized", "medoid_seed"))
-    expect_identical(snap[[k]], golden[[k]], info = paste(k, if (assign) "(assignment)" else "(targets =)"))
-  # Quantiles and moments are bit-identical; the KL column is a descriptive whose
-  # estimator changed in 1.4.0 (percentile scale replaced the weighted KDE).
+    .expect_golden(snap[[k]], golden[[k]], info = paste(k, if (assign) "(assignment)" else "(targets =)"))
+  # Quantiles and moments match; the KL column is a descriptive whose estimator
+  # changed in 1.4.0 (percentile scale replaced the weighted KDE).
   keep <- setdiff(names(golden$quantiles), "kl")
-  expect_identical(snap$quantiles[keep], golden$quantiles[keep])
+  .expect_golden(snap$quantiles[keep], golden$quantiles[keep])
   kl <- snap$quantiles$kl[snap$quantiles$type == "posterior"]
   expect_true(all(is.na(kl) | (kl >= 0 & kl <= log(20))))
   }
 })
 
-test_that("posterior_weighting = 'coarsened' reproduces v1.3.0 exactly: posterior, ensembles, medoid", {
+test_that("posterior_weighting = 'coarsened' reproduces v1.3.0: posterior, ensembles, medoid", {
   skip_on_cran()
   skip_if_not_installed("arrow")
   local_test_root()
@@ -43,9 +54,9 @@ test_that("posterior_weighting = 'coarsened' reproduces v1.3.0 exactly: posterio
                    targets_extra = list(min_ensemble_members = 10L, max_ensemble_members = 60L))
   snap <- .stub_posterior_snapshot(d)
   for (k in c("samples", "posteriors", "ensemble_candidate", "ensemble_optimized", "medoid_seed"))
-    expect_identical(snap[[k]], golden[[k]], info = k)
+    .expect_golden(snap[[k]], golden[[k]], info = k)
   keep <- setdiff(names(golden$quantiles), "kl")
-  expect_identical(snap$quantiles[keep], golden$quantiles[keep])
+  .expect_golden(snap$quantiles[keep], golden$quantiles[keep])
   sm <- jsonlite::read_json(file.path(d, "3_results", "summary.json"))
   expect_identical(sm$posterior_weighting, "coarsened")
   # ensemble_members is the resample size K, ensemble_members_unique its unique draws
