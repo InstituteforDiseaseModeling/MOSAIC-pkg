@@ -82,7 +82,10 @@
 #' \code{\link{calc_model_ensemble}} with the run's observation model and deaths
 #' integration, as its own ensembles were built.
 #' \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
-#' rows carry the real target for post-hoc scoring.
+#' rows carry the real target for post-hoc scoring. Every row also carries its
+#' cutoff run's \code{ess} (the ensemble ESS, \code{summary.json} \code{ess_best})
+#' and \code{convergence_status} (\code{"green"} / \code{"yellow"} / \code{"red"};
+#' NA for a run from before MOSAIC 1.4.0), constant per cutoff.
 #'
 #' @param PATHS Path list from \code{\link{get_paths}}.
 #' @param iso Character; one ISO3 code or a vector (coupled metapopulation).
@@ -98,7 +101,9 @@
 #'   window defines the anchor and projection span.
 #' @param priors Priors list (default \code{MOSAIC::priors_default}).
 #' @param control \code{run_MOSAIC} control list, or NULL for an experiment-grade
-#'   cheap default (fixed \code{n_simulations}, plots off). See
+#'   cheap default (fixed \code{n_simulations} = 2,000, plots off). An adaptive
+#'   control (no \code{calibration$n_simulations}) is allowed but warns: every
+#'   cutoff then runs a full adaptive calibration. See
 #'   \code{\link{mosaic_control_defaults}}. The harness forces
 #'   \code{paths$clean_output = TRUE}, so each cutoff's \code{runs/cutoff_<T>/}
 #'   directory is wiped before its calibration and simulation shards left by an
@@ -238,6 +243,21 @@ run_rolling_cv <- function(PATHS,
      if (length(cutoffs) == 0L) stop("No valid cutoffs (check window vs anchor).")
 
      if (is.null(control)) control <- .rcv_cheap_control()
+     # An adaptive control (no positive calibration$n_simulations) runs every
+     # cutoff until its convergence status is green or max_simulations_total:
+     # a full production calibration per cutoff. Allowed, but say so.
+     n_sims_ctl <- suppressWarnings(as.numeric(control$calibration$n_simulations))
+     if (!(length(n_sims_ctl) == 1L && is.finite(n_sims_ctl) && n_sims_ctl > 0))
+          warning(sprintf(paste0("run_rolling_cv(): control is adaptive (calibration$n_simulations is not set), ",
+                                 "so each of the %d cutoffs runs until its convergence status is green or ",
+                                 "max_simulations_total (%s simulations): a full calibration per cutoff. ",
+                                 "Set calibration$n_simulations (or control = NULL for the cheap ",
+                                 "2,000-simulation default) for a fixed budget."),
+                          length(cutoffs),
+                          format(as.numeric(control$calibration$max_simulations_total %||%
+                                            mosaic_control_defaults()$calibration$max_simulations_total),
+                                 big.mark = ",", scientific = FALSE)),
+                  call. = FALSE)
      # Harness owns the best-subset optimizer toggle (when TRUE: rescore the
      # ensemble against the training-window observed series and drive the
      # posterior from the optimizer-selected subset). Forced onto the resolved
@@ -945,31 +965,42 @@ compile_rolling_cv_predictions <- function(dir_output,
      parts <- Filter(Negate(is.null), parts)
      if (!length(parts)) return(NULL)
      out <- do.call(rbind, parts)
-     # Attach the per-cutoff importance-weight ESS (metrics$ess_best$value from the
-     # calibration convergence diagnostics) as a single numeric column carried on
-     # EVERY row of this cutoff. NA_real_ when the file/key is absent. This is the
-     # weight-ESS gating contract for the downstream scoring layer.
-     out$ess <- .rcv_read_ess_best(run_dir)
+     # Attach the cutoff run's ensemble ESS and its convergence status (both
+     # constant per cutoff) on EVERY row of this cutoff: the gating contract of
+     # the downstream scoring layer (evaluate_rolling_cv(): ess_ok is
+     # convergence_status != "red" when the status is present).
+     conv <- .rcv_read_convergence(run_dir)
+     out$ess <- conv$ess
+     out$convergence_status <- conv$status
      out
 }
 
-#' Read metrics$ess_best$value from a run's convergence diagnostics.
+#' Read a cutoff run's ensemble ESS and convergence status
 #'
-#' Returns the importance-weight effective sample size for the calibration, or
-#' \code{NA_real_} if the diagnostics file or the key is missing. Never errors --
-#' a missing diagnostic is a benign NA on the row, not a fatal condition.
+#' From \code{3_results/summary.json} (schema 2: \code{ess_best},
+#' \code{convergence_status}). A run from before MOSAIC 1.4.0 has no status
+#' (\code{NA}); its ESS falls back to \code{metrics$ess_best$value} of
+#' \code{convergence_diagnostics.json}. Never errors -- a missing value is a
+#' benign NA on the row, not a fatal condition.
+#' @return \code{list(ess, status)}.
 #' @keywords internal
 #' @noRd
-.rcv_read_ess_best <- function(run_dir) {
-     diag_path <- file.path(run_dir, "2_calibration", "diagnostics",
-                            "convergence_diagnostics.json")
-     if (!file.exists(diag_path)) return(NA_real_)
-     val <- tryCatch({
-          d <- jsonlite::read_json(diag_path, simplifyVector = TRUE)
-          d$metrics$ess_best$value
-     }, error = function(e) NULL)
-     if (is.null(val) || length(val) != 1L || !is.numeric(val)) return(NA_real_)
-     as.numeric(val)
+.rcv_read_convergence <- function(run_dir) {
+     num1 <- function(v) if (length(v) == 1L && is.numeric(v) && is.finite(v)) as.numeric(v) else NA_real_
+     sm_path <- file.path(run_dir, "3_results", "summary.json")
+     sm <- if (file.exists(sm_path))
+          tryCatch(jsonlite::read_json(sm_path, simplifyVector = TRUE), error = function(e) NULL)
+     status <- sm$convergence_status
+     status <- if (is.character(status) && length(status) == 1L &&
+                   status %in% c("green", "yellow", "red")) status else NA_character_
+     ess <- if (!is.na(status)) num1(sm$ess_best) else NA_real_
+     if (is.na(status)) {
+          diag_path <- file.path(run_dir, "2_calibration", "diagnostics", "convergence_diagnostics.json")
+          if (file.exists(diag_path))
+               ess <- num1(tryCatch(jsonlite::read_json(diag_path, simplifyVector = TRUE)$metrics$ess_best$value,
+                                    error = function(e) NULL))
+     }
+     list(ess = ess, status = status)
 }
 
 #' Reported-CFR estimates as of a cutoff
@@ -1084,7 +1115,6 @@ compile_rolling_cv_predictions <- function(dir_output,
      ctrl <- tryCatch(MOSAIC::mosaic_control_defaults(), error = function(e) list())
      ctrl$calibration <- utils::modifyList(ctrl$calibration %||% list(),
                                            list(n_simulations = 2000L, n_iterations = 3L))
-     ctrl$targets <- utils::modifyList(ctrl$targets %||% list(), list(ESS_param = 100L))
      ctrl$paths   <- utils::modifyList(ctrl$paths   %||% list(), list(plots = FALSE))
      ctrl
 }

@@ -1,5 +1,12 @@
-#' Plot model convergence status table
+#' Plot model convergence status table (deprecated)
 #'
+#' @description
+#' \strong{Deprecated since MOSAIC 1.4.0}; use
+#' \code{\link{plot_model_calibration_report}}. \code{run_MOSAIC()} and
+#' \code{render_MOSAIC_figures()} no longer call it. Kept, warning once per
+#' session, for one release.
+#'
+#' @details
 #' Creates a visual status table showing convergence diagnostics with color-coded
 #' pass/warn/fail indicators for each metric. Works with both likelihood-based
 #' and loss-based calibration methods by auto-detecting the appropriate diagnostics file.
@@ -45,6 +52,11 @@ plot_model_convergence_status <- function(results_dir,
                                          status = NULL,
                                          verbose = TRUE) {
 
+    .mosaic_warn_once("plot_model_convergence_status_deprecated", paste0(
+        "plot_model_convergence_status() is deprecated since MOSAIC 1.4.0 and will be removed in ",
+        "the next release: use plot_model_calibration_report() on ",
+        "3_results/calibration_diagnostics.json."))
+
     # --- I/O checks -------------------------------------------------------------
     if (!dir.exists(results_dir)) stop("results_dir does not exist: ", results_dir)
     if (is.null(plots_dir)) plots_dir <- file.path(dirname(results_dir), "plots")
@@ -58,7 +70,7 @@ plot_model_convergence_status <- function(results_dir,
     # calc_model_convergence_status(). The plot is a pure consumer. A precomputed
     # `status` skips recomputation (and the CSV write).
     if (is.null(status)) {
-        status <- calc_model_convergence_status(
+        status <- .mosaic_convergence_status_table(
             results_dir = results_dir,
             output_dir  = plots_dir,
             verbose     = verbose
@@ -109,9 +121,11 @@ plot_model_convergence_status <- function(results_dir,
     )
 
     # Overall status color
-    overall_status_color <- if (diagnostics$summary$convergence_status == "PASS") {
+    # PASS / WARN / FAIL (legacy) or green / yellow / red (MOSAIC 1.4.0)
+    overall_label <- toupper(as.character(diagnostics$summary$convergence_status %||% "NA"))
+    overall_status_color <- if (overall_label %in% c("PASS", "GREEN")) {
         status_colors$pass
-    } else if (diagnostics$summary$convergence_status == "WARN") {
+    } else if (overall_label %in% c("WARN", "YELLOW")) {
         status_colors$warn
     } else {
         status_colors$fail
@@ -129,7 +143,7 @@ plot_model_convergence_status <- function(results_dir,
     rect(badge_x - badge_width/2, badge_y - 0.02,
          badge_x + badge_width/2, badge_y + 0.02,
          col = overall_status_color, border = NA)
-    text(badge_x, badge_y, diagnostics$summary$convergence_status,
+    text(badge_x, badge_y, overall_label,
          col = "white", font = 2, cex = 1.2)
 
     # Table layout (wider margins for larger page)

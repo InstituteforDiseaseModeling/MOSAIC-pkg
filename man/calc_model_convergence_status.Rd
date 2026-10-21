@@ -2,7 +2,7 @@
 % Please edit documentation in R/calc_model_convergence_status.R
 \name{calc_model_convergence_status}
 \alias{calc_model_convergence_status}
-\title{Assemble the model convergence-status table}
+\title{Assemble the model convergence-status table (deprecated)}
 \usage{
 calc_model_convergence_status(results_dir, output_dir = NULL, verbose = TRUE)
 }
@@ -25,14 +25,20 @@ parsed JSON), \code{param_ess_data} (data.frame or \code{NULL}),
 \code{NULL} if no diagnostics file is found or no metrics could be assembled.
 }
 \description{
+\strong{Deprecated since MOSAIC 1.4.0}; use
+\code{\link{plot_model_calibration_report}} on
+\code{3_results/calibration_diagnostics.json}. \code{run_MOSAIC()} and
+\code{render_MOSAIC_figures()} no longer call it. Kept, warning once per
+session, for one release.
+}
+\details{
 Reads the calibration convergence diagnostics JSON from a results directory
 and assembles the metric/value/target/status table that
 \code{\link{plot_model_convergence_status}} renders. The derived
 \code{convergence_status.csv} (distinct from the raw
 \code{convergence_results.parquet}) is written here so it is produced
 independently of plotting, and the plot consumes the returned table.
-}
-\details{
+
 Auto-detects the diagnostics file in this order:
 \code{convergence_diagnostics.json} (likelihood-based) then
 \code{convergence_diagnostics_loss.json} (loss-based).

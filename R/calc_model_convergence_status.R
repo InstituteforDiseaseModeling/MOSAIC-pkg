@@ -1,5 +1,13 @@
-#' Assemble the model convergence-status table
+#' Assemble the model convergence-status table (deprecated)
 #'
+#' @description
+#' \strong{Deprecated since MOSAIC 1.4.0}; use
+#' \code{\link{plot_model_calibration_report}} on
+#' \code{3_results/calibration_diagnostics.json}. \code{run_MOSAIC()} and
+#' \code{render_MOSAIC_figures()} no longer call it. Kept, warning once per
+#' session, for one release.
+#'
+#' @details
 #' Reads the calibration convergence diagnostics JSON from a results directory
 #' and assembles the metric/value/target/status table that
 #' \code{\link{plot_model_convergence_status}} renders. The derived
@@ -29,6 +37,16 @@
 calc_model_convergence_status <- function(results_dir,
                                           output_dir = NULL,
                                           verbose = TRUE) {
+  .mosaic_warn_once("calc_model_convergence_status_deprecated", paste0(
+    "calc_model_convergence_status() is deprecated since MOSAIC 1.4.0 and will be removed in the ",
+    "next release: use plot_model_calibration_report() on 3_results/calibration_diagnostics.json ",
+    "(the status itself is calc_convergence_status())."))
+  .mosaic_convergence_status_table(results_dir, output_dir, verbose)
+}
+
+# The table behind the deprecated calc_model_convergence_status() /
+# plot_model_convergence_status() (kept for one release).
+.mosaic_convergence_status_table <- function(results_dir, output_dir = NULL, verbose = TRUE) {
 
   if (!dir.exists(results_dir)) stop("results_dir does not exist: ", results_dir)
 
@@ -53,6 +71,14 @@ calc_model_convergence_status <- function(results_dir,
   if (verbose) message("Reading convergence diagnostics from: ", diagnostics_file)
 
   diagnostics <- jsonlite::read_json(diagnostics_file)
+
+  # MOSAIC 1.4.0 diagnostics carry the convergence status and its four checks
+  # (schema 2); older runs keep the legacy layout below.
+  if (!is.null(diagnostics$status$checks)) {
+    tab <- .mosaic_status_table_v2(diagnostics, results_dir)
+    return(.mosaic_status_table_finish(tab$metrics_data, tab$metric_expressions, diagnostics,
+                                       tab$param_ess_data, NA, NA, NA, output_dir, verbose))
+  }
 
   # --- Prepare data for table -------------------------------------------------
   metrics_data <- data.frame(
@@ -386,6 +412,14 @@ calc_model_convergence_status <- function(results_dir,
     metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Overall"))
   }
 
+  .mosaic_status_table_finish(metrics_data, metric_expressions, diagnostics, param_ess_data,
+                              n_params, n_pass, target_ess_param, output_dir, verbose)
+}
+
+# Companion CSV + return value of calc_model_convergence_status(), shared by
+# the 1.4.0 and the legacy table layouts.
+.mosaic_status_table_finish <- function(metrics_data, metric_expressions, diagnostics, param_ess_data,
+                                        n_params, n_pass, target_ess_param, output_dir, verbose) {
   if (nrow(metrics_data) == 0) {
     if (verbose) message("No metrics data to assemble.")
     return(invisible(NULL))
@@ -419,6 +453,62 @@ calc_model_convergence_status <- function(results_dir,
     n_pass             = n_pass,
     target_ess_param   = target_ess_param
   ))
+}
+
+# The 1.4.0 table (diagnostics carrying $status, schema 2): valid draws, ESS_all,
+# the four checks of calc_convergence_status() coloured green / yellow / red
+# (Status pass / warn / fail), the legacy tier rows of "saturated" /
+# "tempered" (reported, not gated), the per-parameter ESS (diagnostic) and the
+# overall status.
+.mosaic_status_table_v2 <- function(diagnostics, results_dir) {
+  col2st <- function(x) switch(as.character(x %||% ""), green = "pass", yellow = "warn", red = "fail", "info")
+  num <- function(x) suppressWarnings(as.numeric(unlist(x %||% NA))[1])
+  rows <- list(); expr <- list()
+  add <- function(metric, description, target, value, status, e) {
+    rows[[length(rows) + 1L]] <<- data.frame(Metric = metric, Description = description, Target = target,
+                                             Value = value, Status = status, stringsAsFactors = FALSE)
+    expr[[length(expr) + 1L]] <<- e
+  }
+  add("N_sim", "Simulations with a finite likelihood (the posterior's draws)", "-",
+      format(num(diagnostics$summary$n_successful), big.mark = ","), "info", expression(bold(N[sim])))
+  m <- diagnostics$metrics
+  add("ESS_all", "Kish ESS of the coarsened posterior over all valid draws", 
+      paste(">=", .mosaic_format_status_value(num(m$ess_all$target))),
+      .mosaic_format_status_value(num(m$ess_all$value)), "info", expression(bold(ESS[all])))
+  for (ck in diagnostics$status$checks) {
+    v <- num(ck$value)
+    vtxt <- switch(ck$check,
+      mce = if (is.finite(v)) sprintf("%.1f%%", 100 * v) else "NA",
+      khat = if (is.finite(v)) sprintf("%.2f", v) else "undefined",
+      informativeness = if (is.finite(v)) format(signif(v, 3)) else "NA",
+      .mosaic_format_status_value(v))
+    ttxt <- switch(ck$check,
+      ess = paste(">=", .mosaic_format_status_value(num(ck$threshold_green))),
+      mce = sprintf("<= %.0f%%", 100 * num(ck$threshold_green)),
+      khat = paste("<", num(ck$threshold_green)),
+      informativeness = "< 1", "-")
+    add(as.character(ck$label %||% ck$check), as.character(ck$reason %||% ""), ttxt, vtxt,
+        col2st(ck$colour), as.expression(bquote(bold(.(as.character(ck$label %||% ck$check))))))
+  }
+  for (nm in intersect(c("B_size", "B_size_upper", "ess_B", "A_B", "cvw_B"), names(m))) {
+    add(switch(nm, B_size = "Best Subset (B)", B_size_upper = "Best Subset (B) cap", ess_B = "ESS_B",
+               A_B = "A_B", cvw_B = "CV_B"),
+        paste0(m[[nm]]$description %||% nm, " (legacy tier search; not gated)"), "-",
+        .mosaic_format_status_value(num(m[[nm]]$value)), "info",
+        as.expression(bquote(bold(.(nm)))))
+  }
+  pe_file <- file.path(results_dir, "parameter_ess.csv")
+  pe <- if (file.exists(pe_file)) utils::read.csv(pe_file, stringsAsFactors = FALSE) else NULL
+  if (!is.null(m$param_ess)) {
+    add("Parameter ESS", "Per-parameter ESS of the members' weights (diagnostic, not gated)", "-",
+        sprintf("min %s, median %s", .mosaic_format_status_value(num(m$param_ess$min)),
+                .mosaic_format_status_value(num(m$param_ess$median))), "info",
+        expression(bold("Parameter ESS")))
+  }
+  st <- as.character(diagnostics$status$convergence_status %||% NA)
+  add("Overall", as.character(diagnostics$status$convergence_label %||% "Simulation convergence"),
+      "green", toupper(st), col2st(st), expression(bold("Overall")))
+  list(metrics_data = do.call(rbind, rows), metric_expressions = expr, param_ess_data = pe)
 }
 
 

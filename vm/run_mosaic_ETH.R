@@ -19,17 +19,14 @@ control_ETH$calibration$n_simulations <- NULL   # NULL = adaptive/auto mode; int
 control_ETH$calibration$n_iterations <- 2
 control_ETH$calibration$batch_size_adaptive <- 500
 control_ETH$calibration$min_batches_adaptive <- 5
-control_ETH$calibration$max_batches_adaptive <- 10
-control_ETH$calibration$target_r2_adaptive <- 0.95
-control_ETH$calibration$max_simulations_total <- 1e+06
+control_ETH$calibration$min_draws <- 5000
+control_ETH$calibration$max_simulations_total <- 150000   # budget cap (MOSAIC 1.4.0 adaptive mode)
 
 control_ETH$parallel$enable <- TRUE
 control_ETH$parallel$n_cores <- parallel::detectCores()-1
 
-control_ETH$targets$ESS_param <- 100
-control_ETH$targets$ESS_param_prop <- 0.9
-control_ETH$targets$ESS_best <- 50
-control_ETH$targets$ESS_method <- 'perplexity'
+# The best-fit ensemble and its convergence status use the package defaults
+# (ESS_best 200 at best_subset_ratio 0.2).
 
 control_ETH$sampling$sample_tau_i <- FALSE
 control_ETH$sampling$sample_mobility_gamma <- FALSE   # Gravity model exponent

@@ -116,8 +116,76 @@ test_that("ess gate: cells flagged, summary uses only ess_ok, reports n_used/n_t
 
   # NA ess -> ess_ok FALSE
   p_na <- make_pred_long(ess = NA_real_); p_na$ess <- NA_real_
-  ev_na <- evaluate_rolling_cv(p_na, ess_min = 50, n_boot = 10L)
+  expect_warning(ev_na <- evaluate_rolling_cv(p_na, ess_min = 50, n_boot = 10L), "removed every cell")
   expect_false(any(ev_na$cells$ess_ok))
+})
+
+test_that("convergence gate: ess_ok is convergence_status != 'red', legacy ess rule only without a status", {
+  mk_cut <- function(id, shift, ess, status) {
+    p <- make_pred_long(ess = ess); p$run_id <- id
+    p$cutoff_date <- as.character(as.Date("2025-06-01") + shift); p$date <- p$date + shift
+    p$convergence_status <- status
+    p
+  }
+  d <- rbind(mk_cut("c_green", 0, 5, "green"),       # low legacy ess, but green: kept
+             mk_cut("c_yellow", 7, 5, "yellow"),     # yellow: kept
+             mk_cut("c_red", 14, 500, "red"),        # high legacy ess, but red: gated out
+             mk_cut("c_old", 21, 5, NA_character_))  # pre-1.4.0 cutoff: legacy rule
+  ev <- evaluate_rolling_cv(d, ess_min = 50, n_boot = 10L)
+  ok <- tapply(ev$cells$ess_ok, ev$cells$run_id, all)
+  expect_identical(as.vector(ok[c("c_green", "c_yellow", "c_red", "c_old")]), c(TRUE, TRUE, FALSE, FALSE))
+  expect_true("convergence_status" %in% names(ev$cells))
+  expect_identical(unique(ev$cells$convergence_status[ev$cells$run_id == "c_red"]), "red")
+  expect_true(all(ev$summary$ess_gated))
+
+  # Default ess_min = 0: no gate. Every cell (red, NA ess, mixed old/new
+  # cutoffs) has ess_ok TRUE and enters the summary; the status stays as an
+  # informational column.
+  d0 <- rbind(d, transform(mk_cut("c_old_na", 28, NA_real_, NA_character_), ess = NA_real_))
+  ev0 <- evaluate_rolling_cv(d0, n_boot = 10L)
+  expect_true(all(ev0$cells$ess_ok))
+  expect_false(any(ev0$summary$ess_gated))
+  expect_identical(ev0$summary$n_cells_used, ev0$summary$n_cells_total)
+  expect_identical(unique(ev0$cells$convergence_status[ev0$cells$run_id == "c_red"]), "red")
+})
+
+test_that("rolling-CV gate warns when most cells are red or the gate empties the summary", {
+  mk_cut <- function(id, shift, status) {
+    p <- make_pred_long(ess = 500); p$run_id <- id
+    p$cutoff_date <- as.character(as.Date("2025-06-01") + shift); p$date <- p$date + shift
+    p$convergence_status <- status
+    p
+  }
+  d <- rbind(mk_cut("r1", 0, "red"), mk_cut("r2", 7, "red"), mk_cut("g1", 14, "green"))
+  # ungated: warns that most cells are red but scores them
+  expect_warning(ev <- evaluate_rolling_cv(d, n_boot = 10L), "2 of 3|cells come from cutoff calibrations whose convergence status is red")
+  expect_true(all(ev$cells$ess_ok))
+  # gated with every cell red: both warnings, no cell used
+  dr <- rbind(mk_cut("r1", 0, "red"), mk_cut("r2", 7, "red"))
+  w <- testthat::capture_warnings(evr <- evaluate_rolling_cv(dr, ess_min = 1, n_boot = 10L))
+  expect_true(any(grepl("status is red", w)))
+  expect_true(any(grepl("removed every cell", w)))
+  expect_true(all(evr$summary$n_cells_used == 0L))
+  # a mostly green run is silent
+  dg <- rbind(mk_cut("g1", 0, "green"), mk_cut("g2", 7, "yellow"), mk_cut("r1", 14, "red"))
+  expect_silent(evaluate_rolling_cv(dg, n_boot = 10L))
+})
+
+test_that("forecast-CV table and skill plot warn when the gate leaves no cell", {
+  cells <- data.frame(model = "ensemble", iso_code = "A", metric = "cases",
+                      cutoff_date = c("2025-01-01", "2025-02-01"), window = "OOS<=3mo",
+                      wis_skill_seasonal = c(0.2, 0.1), R2_corr = c(0.5, 0.6),
+                      bias_ratio = c(1, 1.1), convergence_status = "red", ess_ok = FALSE,
+                      stringsAsFactors = FALSE)
+  w <- testthat::capture_warnings(tab <- make_forecast_cv_table(cells, model = "ensemble", metrics = "cases",
+                                                                 horizons_months = 3, primary_horizon = 3,
+                                                                 exploratory_isos = character(0)))
+  expect_true(any(grepl("make_forecast_cv_table\\(\\): the convergence gate removed every cell", w)))
+  expect_true(any(grepl("status is red", w)))
+  skip_if_not_installed("ggplot2")
+  w2 <- testthat::capture_warnings(plot_forecast_cv_skill(cells, value = "R2_corr", model = "ensemble",
+                                                           metrics = "cases", verbose = FALSE))
+  expect_true(any(grepl("plot_forecast_cv_skill\\(\\): the convergence gate removed every cell", w2)))
 })
 
 test_that("ess gate is back-compat off when ess column absent (ess_ok TRUE)", {

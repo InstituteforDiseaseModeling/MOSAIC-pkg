@@ -31,10 +31,9 @@
 #' Kish ESS is returned.
 #'
 #' The weights are \code{weights} when supplied. \code{run_MOSAIC()} passes the
-#' weights its auto-mode stopping rule scores: under the default
-#' \code{control$targets$best_subset_weighting = "coarsened"} the all-draws
-#' coarsened posterior (\code{weight_all}) that the ensemble members are
-#' resampled from, and the best-subset weights under the legacy schemes. Otherwise they are the raw
+#' weights of the ensemble members the posterior is built from (zero outside
+#' them), so \code{parameter_ess.csv} is a diagnostic of the written posterior
+#' (since MOSAIC 1.4.0; it gates nothing). Otherwise they are the raw
 #' importance weights \eqn{w_i \propto \exp(\ell_i - \max \ell)}, which on
 #' production-scale likelihoods collapse to a point mass.
 #'
@@ -203,11 +202,6 @@ calc_model_ess_parameter <- function(
     if (is.null(weights)) {
         ll <- results_valid[[likelihood_col]]
         weights <- exp(ll - max(ll))
-    }
-
-    if (verbose) {
-        log_msg("Function-specific parameter ESS: %d valid draws, Kish ESS of the weights %.1f",
-                n_valid, calc_model_ess(weights / sum(weights), method = "kish"))
     }
 
     # ==========================================================================

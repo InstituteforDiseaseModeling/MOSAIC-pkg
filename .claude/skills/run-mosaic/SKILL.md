@@ -4,7 +4,7 @@ description: >
   Assemble or modify a MOSAIC config + priors + control and launch a run_MOSAIC()
   calibration (or a single deterministic run_simulation() sim). Covers install/environment,
   building/subsetting a config (locations, dates, psi_jt), choosing priors and the
-  pin-vs-sample lever, the control object (canonical names, weights, ESS/R² targets,
+  pin-vs-sample lever, the control object (canonical names, weights, the 1.4.0 convergence status,
   io presets), where to run (laptop vs hedgehog/dugong), and reading the output tree.
   Use for "how do I install / configure / run / deploy / build a scenario" and any
   "set up a calibration" task. Composed by the forecast-cv skill.
@@ -88,40 +88,62 @@ numbers here.** Key levers (semantics, not values):
 
 ## 3. Control object
 `control = MOSAIC::mosaic_control_defaults()` then override. **Use the canonical key names** —
-`*_adaptive` / `*_total` / `ESS_method` (e.g. `target_r2_adaptive`, `n_simulations`,
-`max_simulations_total`). The renamed legacy names (`batch_size`, `min_batches`, `max_batches`,
-`target_r2`, `max_predictive_batch`, `max_simulations`, `ess_method`) are honoured with a
-deprecation warning, or ignored with a warning if the canonical key is also set (v0.37.1; CLAUDE.md
-**Lesson #13**). The retired `likelihood$nb_k_min_cases`/`nb_k_min_deaths` warn and are ignored
+`*_adaptive` / `*_total` / `ESS_method` (e.g. `batch_size_adaptive`, `n_simulations`,
+`max_simulations_total`). The renamed legacy names (`batch_size`, `min_batches`, `max_predictive_batch`,
+`max_simulations`, `ess_method`, and since 1.4.0 `targets$best_subset_weighting` ->
+`targets$posterior_weighting`) are honoured with a deprecation warning, or ignored with a warning if the
+canonical key is also set (v0.37.1; CLAUDE.md **Lesson #13**). **Retired in 1.4.0** (warned and ignored):
+`targets$ESS_param`, `ESS_param_prop`, `batch_ratio_max`, `calibration$max_batches_adaptive`,
+`max_batches_predictive`, `target_r2_adaptive` (and their old names `max_batches`, `target_r2`),
+`weights$floor`, `io$verbose_weights`; `A_best` / `CVw_best` / `min_best_subset` / `max_best_subset`
+apply only under `posterior_weighting = "saturated"`/`"tempered"`.
+
+**1.4.0 posterior, ensemble and convergence keys** (`?mosaic_control_defaults`):
+`targets$posterior_weighting` (`"bestfit"` default: the best-fitting draws holding
+`best_subset_ratio` = 0.2 of the posterior ESS; `"coarsened"` = 1.3.0 resample; `"saturated"` = pre-1.3.0),
+`coarsening_alpha` (10), `ESS_best` (200, the ensemble ESS for GREEN), `min_ensemble_members` /
+`max_ensemble_members` (30 / 1000; lower the max for continental runs), `status_thresholds`;
+`calibration$min_draws` (5000) and `min_batches_adaptive` (5) before any stop, `max_simulations_total`
+(150000, the budget cap), `batch_size_adaptive`, `max_batch_predictive` (cap on projected batches). The retired `likelihood$nb_k_min_cases`/`nb_k_min_deaths` warn and are ignored
 (dispersion is estimated per location; `likelihood$nb_k_cases` *replaces* the estimate), and
 `io$format = "csv"` warns and is coerced to parquet. Any *other* unknown or typo'd key is still
 **silently ignored** — there is no general unknown-key validator, so check spelling. Common levers:
-`weight_cases` / `weight_deaths`, ESS thresholds, `n_iter_ensemble`, `clean_output`, and the `io`
+`weight_cases` / `weight_deaths`, `ESS_best` / `max_ensemble_members`, `n_iter_ensemble`, `clean_output`, and the `io`
 preset (`default` / `debug` / `fast` / `archive`; `?mosaic_io_presets`). Multi-location-only samplers:
 `sample_tau_i`, `sample_mobility_*`. `central_method` (default `c(cases = "median", deaths = "mean")`
 since v0.101.0; `"mean"` reproduces v0.98.0-v0.100.x, `"median"` v0.46.1-v0.97.x) sets the ensemble
 central line, and with it `r2_*_ensemble`/`bias_ratio_*_ensemble` — see `?calc_model_ensemble`.
 
 **FIXED vs AUTO mode (matters for resumability and for what you can measure):**
-- `n_simulations = <integer>` ⇒ **FIXED**: runs exactly that many simulations in a single batch,
-  regardless of convergence. The ESS criterion is never evaluated, so `summary.json` has
-  `converged = FALSE` with `convergence_evaluated = FALSE`, and the run ends with
-  `[RUN_SUMMARY] status=completed_fixed mode=fixed` (`completed_fixed_partial` if the ensemble
-  metrics are missing) — EXPECTED, not an error. Whether a post-hoc best-subset tier met all its
-  targets is `posthoc_criteria_met` in both `summary.json` and `[RUN_SUMMARY]`.
+- `n_simulations = <integer>` ⇒ **FIXED**: runs exactly that many simulations in a single batch.
+  The convergence status is **assessed at the end, not used to stop**: `summary.json` has
+  `convergence_status` (green/yellow/red) with the `fixed_budget` flag and `stopping_rule_met = null`;
+  the legacy alias `converged` stays FALSE (deprecated). The run ends with
+  `[RUN_SUMMARY] status=completed_fixed mode=fixed convergence_status=<colour> stopping_rule_met=NA`
+  (`completed_fixed_partial` if the ensemble metrics are missing) — EXPECTED, not an error.
   Use it when you want a predictable runtime or a controlled comparison — it is the only mode in
   which two runs do the same amount of work. Note the whole budget dispatches as one batch, so
   mid-run resume is coarse: shards land per simulation, but the adaptive checkpointing that AUTO
   does per batch is absent.
-- `n_simulations = NULL` ⇒ **AUTO** (adaptive + predictive batches): each batch is
-  dispatch→gather→write→checkpoint, so per-batch resume works and the run stops when the ESS/R²
-  targets are met. Prefer AUTO for production fits, with `max_simulations_total = <budget>` as
-  the ceiling.
-- Pinning FIXED pins only the SIMULATIONS. Post-calibration still runs a best-subset grid search
-  plus `n_iter_ensemble` × subset-size and `n_iter_best` medoid re-simulations — hundreds to
-  thousands of extra engine runs. For a like-for-like timing comparison also pin
-  `targets$min_best_subset == targets$max_best_subset`, `predictions$n_iter_ensemble` and
-  `predictions$n_iter_best`.
+- `n_simulations = NULL` ⇒ **AUTO** (adaptive): each batch is dispatch→gather→write→checkpoint, so
+  per-batch resume works. After every batch the convergence status is computed on all draws so far;
+  the run **stops at GREEN** once `min_batches_adaptive` and `min_draws` are met, else at
+  `max_simulations_total` (flag `budget_cap_reached`; YELLOW never stops a run). Batches are sized from
+  the projection N x 1000 / ESS_all while k-hat < 0.5 and the ESS growth slope >= 0.8, otherwise grow by
+  a quarter of the draws so far. `run_state.json` carries the per-check `convergence_history`. Prefer
+  AUTO for production fits.
+- **Reading the status** (`3_results/summary.json`, schema 2): `convergence_status` + `convergence_reasons`
+  (one per non-green check, with the projected draws) + `convergence_flags`; the four checks are ensemble ESS
+  (`ess_best` vs 200), Monte Carlo error (`mce_p90` vs 10%), Pareto k-hat (`khat_tempered` vs 0.5) and data
+  informativeness (`flat_likelihood`). It measures **simulation adequacy only** — fit is `r2_*_ensemble` /
+  `bias_ratio_*`. Every number is in `3_results/calibration_diagnostics.json`; with `plots = TRUE` it is drawn
+  as `3_results/figures/diagnostics/calibration_report.pdf`. Deprecated aliases (one release):
+  `converged`, `convergence_evaluated`, `posthoc_criteria_met` (= green), `weight_health_status`,
+  `ess_coarsened`, `n_best_subset`, `ess_min`/`ess_median`, `ess_target`.
+- Pinning FIXED pins only the SIMULATIONS. Post-calibration still runs `n_iter_ensemble` × members
+  and `n_iter_best` medoid re-simulations — hundreds to thousands of extra engine runs. For a
+  like-for-like timing comparison also pin `targets$min_ensemble_members == targets$max_ensemble_members`,
+  `predictions$n_iter_ensemble` and `predictions$n_iter_best`.
 - Validation rule: `batch_size_adaptive` must be strictly **<** `max_simulations_total`.
 - Resume: `run_MOSAIC(resume = TRUE)` requires `clean_output = FALSE`. A **non-resume** run into an
   existing `dir_output` moves leftover `sim_*.parquet` shards to `2_calibration/samples_stale_<time>/`

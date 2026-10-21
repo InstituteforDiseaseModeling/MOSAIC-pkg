@@ -144,15 +144,21 @@ test_that("calc_model_parameter_sensitivity writes parameter_sensitivity.csv", {
   )
 })
 
-# ---- convergence_status.csv written by the calc helper -----------------------
+# ---- the deprecated convergence-status table still works (one release) -------
 
-test_that("calc_model_convergence_status writes convergence_status.csv", {
+test_that("calc_model_convergence_status writes convergence_status.csv, with a deprecation warning", {
   res_dir <- withr::local_tempdir()
   out_dir <- withr::local_tempdir()
   write_p4_diag(res_dir)
 
-  status <- calc_model_convergence_status(results_dir = res_dir,
-                                          output_dir = out_dir, verbose = FALSE)
+  rm(list = intersect(c("calc_model_convergence_status_deprecated", "plot_model_convergence_status_deprecated"),
+                      ls(MOSAIC:::.mosaic_once)), envir = MOSAIC:::.mosaic_once)
+  expect_warning(status <- calc_model_convergence_status(results_dir = res_dir,
+                                                         output_dir = out_dir, verbose = FALSE),
+                 "deprecated since MOSAIC 1.4.0.*plot_model_calibration_report")
+  pd <- withr::local_tempdir()
+  expect_warning(plot_model_convergence_status(res_dir, pd, status = status, verbose = FALSE),
+                 "plot_model_calibration_report")
   expect_false(is.null(status))
   expect_true(nrow(status$metrics_data) > 0L)
 

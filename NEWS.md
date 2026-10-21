@@ -1,3 +1,102 @@
+# MOSAIC 1.4.0
+
+Every calibration now answers "are there enough simulations?" with a single traffic-light **convergence status** (green / yellow / red). The default ensemble is the **best-fitting draws** of the coarsened posterior, and the parameter posterior is built from exactly those members. Fit (R², bias, coverage) is reported beside the status and never enters it. Design: `claude/reporting_audit/SPEC_CONVERGENCE.md`; output contract: `claude/plan_convergence/SCHEMA_v2.md`.
+
+- **The ensemble** (`control$targets$posterior_weighting = "bestfit"`, the new default):
+  - The posterior over all draws is unchanged from 1.3.0: `weight_all ∝ exp(eta (ll − max ll))` with `eta = coarsening_alpha / n_obs` and alpha 10.
+  - The members are the draws taken in descending log-likelihood until the Kish ESS of their weights reaches `best_subset_ratio` (0.2) × ESS_all, bounded by `min_ensemble_members` / `max_ensemble_members` (30 / 1,000). They carry those weights renormalised in `is_best_subset` / `weight_best`.
+  - Those weights drive the ensemble, the medoid, the trajectories, the forecast-year CFR pilot, `posterior_quantiles.csv`, `posteriors.json` and `parameter_estimates.csv`.
+  - `"coarsened"` (the 1.3.0 resample, now bounded by `min/max_ensemble_members`) and `"saturated"` / `"tempered"` (pre-1.3.0) remain opt-ins. A fixed-mode stub run reproduces 1.3.0 and 1.2.1 respectively, bit for bit, in its posterior, ensembles and medoid (golden tests).
+- **The convergence status** (`calc_convergence_status()`, new export; the only place the rule lives) is the worst of four checks:
+
+  | Check | Green | Yellow | Red |
+  |---|---|---|---|
+  | Ensemble ESS | ≥ `ESS_best` (200) | ≥ 100 | below |
+  | Monte Carlo error of the members' posterior means (90th percentile, in posterior SDs) | ≤ 10% | ≤ 15% | above |
+  | Pareto k-hat of the tempered weights | < 0.5 | < 0.7 | ≥ 0.7 |
+  | Data informativeness | untempered ESS < 1% of draws | flat likelihood (≥ 1%) or not assessed | |
+
+  - Each non-green check gives a plain-language reason with its remedy and the projected draws.
+  - Flags never change the colour: `budget_cap_reached`, `ess_growth_stalled`, `ensemble_size_bound`, `fixed_budget`.
+  - The bands are `control$targets$status_thresholds`.
+- **Adaptive mode** (`n_simulations = NULL`):
+  - After every batch the status is computed on all draws so far, on the members of the configured `posterior_weighting`. The run stops when the three sampling checks (ensemble ESS, Monte Carlo error, k-hat) are green at two consecutive checks once both minimum run lengths are met (`min_batches_adaptive`, new `min_draws` = 5,000), or at `max_simulations_total` (default now 150,000). Informativeness never blocks the stop (a flat-likelihood run stops YELLOW with `stopping_rule_met` TRUE); a yellow or red sampling check does not stop it.
+  - Batch sizing:
+    - `batch_size_adaptive` until the minimum run length is met;
+    - then the projection N × (`ESS_best` / `best_subset_ratio`) / ESS_all, × 1.1, converted from valid draws to simulations at the run's success rate and capped by `max_batch_predictive`, while the log-log ESS growth slope is ≥ 0.8 (k-hat does not gate it);
+    - otherwise geometric growth of a quarter of the draws so far, so a heavy-tailed run reaches 150,000 in 21 checks after the minimum run (31 in all at the defaults, about 26 with 1,000-draw batches; 290 with the fixed 500-draw fallback).
+  - The gate keeps an in-memory pool of the draws, so a check costs about 1.5 s at 150,000 draws instead of re-reading every shard.
+    - in parallel, each batch is rounded up to a multiple of workers × shard size so it fills the cluster, never beyond the budget left.
+  - `run_state.json` (schema 2) gains `convergence_history` (`batch, n, ess_all, ess_best, mce_p90, khat, slope, status, sampling_green`).
+  - A resume from a 1.3.x or earlier checkpoint re-derives that history from the shards and never mixes metrics.
+  - Replay on the 28 national runs under the final rules (two consecutive greens, cap 50,000): of the 27 fitted models 15 are GREEN, 6 yellow and 6 red at 50,000 draws; BFA stops YELLOW (flat likelihood) at about 8,900. At the 150,000 cap the 28-run suite needs about 2.07M draws (1.48x the fixed 50,000-draw suite) and six runs reach the cap (CIV, SOM, ZAF, CAF, NER, UGA). Real adaptive runs on dugong (pre-red-team snapshot, one green to stop): MOZ green at 21,161 draws, COD green at 75,262, Kenya counties green at 13,848, UGA yellow at the 150,000 cap.
+- **Fixed mode** computes the same status at the end. `stopping_rule_met` is null, and the `fixed_budget` flag is raised. The growth slope comes from a replay of ESS_all over the draws in simulation order.
+- **`summary.json` schema 2** (`schema_version = "2"`):
+  - New fields: `convergence_status` / `_label` / `_reasons` / `_reasons_text` / `_flags` / `_flags_text`, `check_*_status`, `stopping_rule_met`, `posterior_weighting`, `eta`, `ess_all`, `ess_all_target`, `ess_best`, `ess_best_target`, `best_subset_ratio`, `best_subset_mass`, `ensemble_members`, `ensemble_members_unique`, `ensemble_binding`, `mce_median` / `_p90` / `_max`, `khat_tempered`, `khat_status`, `eta_star`, `eta_star_n_eff`, `flat_likelihood`, `ess_growth_slope`, `sims_used`, `sims_projected_for_target`, `budget_exhausted`, `param_ess_min`, `param_ess_median`.
+  - Missing numbers are JSON null.
+  - Removed: `weights_used_*`, `batch_ratio_coarsened_*`, `ess_coarsened_prop`, `eta_ref`, `weight_health_reasons`, `likelihood_concentration_note`.
+- **`3_results/calibration_diagnostics.json`** (new; written whatever `plots` is): the run, the status and its checks, the sampling quantities with the ESS and best-fit paths, per-parameter Monte Carlo error and KL with the prior family, and fit tables on every scored day (the summary.json definition) plus a labelled tier-1/2 row, with weekly totals and predictive bounds on complete scored weeks.
+- **The calibration-diagnostics report** (`plot_model_calibration_report()`, new export):
+  - It is drawn from that JSON into `3_results/figures/diagnostics/calibration_report.pdf` when `plots = TRUE`. `render_MOSAIC_figures()` re-renders it.
+  - A pre-1.4.0 run directory (decided from summary.json's `schema_version`) gets a one-page notice ("Calibrated with an earlier selection rule; simulation convergence was not assessed on the 1.4.0 scale", the dashboard's wording); a 1.4.0 run whose JSON is missing gets a page saying so.
+  - It replaces the convergence-status PDF and `convergence_status.csv`.
+- **Other outputs**:
+  - `parameter_ess.csv` holds `parameter, type, iso_code, ess`: the variance-ratio ESS on the members' weights, a diagnostic. `ess_marginal` is kept as a deprecated duplicate.
+  - `convergence_results.parquet`: `is_member` replaces `retained`. The fence columns are written under the legacy schemes only.
+  - `convergence_diagnostics.json` keeps its `summary` block, whose `convergence_status` mirrors summary.json, and adds a `status` block.
+  - `subset_selection_summary.csv`, the Tukey fence and `weight_retained` are produced under the legacy schemes only.
+  - Parameter sensitivity resamples by the members' weights (`weight_best`), not `weight_retained`, and with the correlation figure leaves out the derived compartments.
+  - Detail plots show the posterior ESS and the ensemble members.
+- **KL divergence** (`calc_kl_divergence()`, the `kl` column) is now the percentile-scale estimator with a finite-ESS correction. It is at most log(20) ≈ 3.0 nats, and NA when the Kish ESS is below 20. Its values are **not comparable** with those of 1.3.x and earlier (the weighted KDE).
+- **Migration** (aliases written for one release):
+
+  | Old (≤ 1.3.x) | New (1.4.0) |
+  |---|---|
+  | `converged` | `stopping_rule_met` (alias kept: FALSE in fixed mode) |
+  | `posthoc_criteria_met`, `weight_health_status` | `convergence_status` (aliases: `== "green"`; `"ok"` / `"warn"`) |
+  | `convergence_evaluated` | `mode` (alias kept) |
+  | `ess_coarsened` | `ess_all` (alias kept) |
+  | `n_best_subset` | `ensemble_members` (alias kept) |
+  | `ess_min`, `ess_median` | `param_ess_min`, `param_ess_median` (aliases kept) |
+  | `ess_target` (was `ESS_param`) | `ess_best_target` (alias kept; values not comparable across schemas) |
+  | `targets$best_subset_weighting` | `targets$posterior_weighting` (accepted with a warning) |
+  | parquet `retained` | `is_member` |
+  | `parameter_ess.csv` `ess_marginal` | `ess` (duplicate kept) |
+  | rolling-CV `ess` gate | `convergence_status` column (information); with `ess_min > 0`, `ess_ok = convergence_status != "red"` |
+
+- **Retired control keys** (warned and ignored when set): `targets$ESS_param`, `ESS_param_prop`, `batch_ratio_max`, `calibration$max_batches_adaptive`, `max_batches_predictive`, `target_r2_adaptive`, `weights$floor`, `io$verbose_weights`.
+  - `A_best`, `CVw_best`, `min_best_subset` and `max_best_subset` are honoured only under `"saturated"` / `"tempered"`, where `ESS_best` keeps its legacy meaning (the tier target, 100 unless set).
+- **Deprecated functions** (warn once per session; removed next release):
+  - `calc_model_convergence_status()` and `plot_model_convergence_status()`: use `plot_model_calibration_report()`.
+  - `calc_bookend_batch_size()`: keeps its 1.3.0 signature and behaviour, but `run_MOSAIC()` no longer calls it.
+- **Rolling CV.**
+  - `run_rolling_cv()` writes `ess` (the cutoff run's `ess_best`) and `convergence_status`, constant per cutoff, into `predictions.parquet`.
+  - `evaluate_rolling_cv()` carries the status into `cells`. With `ess_min = 0` (the default) there is no gate and every cell has `ess_ok = TRUE`, as before 1.4.0. With `ess_min > 0` the gate is `convergence_status != "red"`, and cutoffs from before 1.4.0 keep the `ess >= ess_min` rule. It warns when more than half the cells are red or the gate removes every cell; `make_forecast_cv_table()` and `plot_forecast_cv_skill()` warn the same way.
+  - `run_rolling_cv()` warns when handed an adaptive control: every cutoff would run a full adaptive calibration.
+
+- **Red team round 1** (2026-10-20; `claude/redteam/ROUND1_DECISIONS.md`). Behaviour changes against the first 1.4.0 draft:
+  - **Stopping rule:** green on the three sampling checks at two consecutive checks (one green check selects a favourable fluctuation). Informativeness is reported but does not block the stop.
+  - **Informativeness** is N-invariant: the Kish ESS of the untempered (eta = 1) weights as a share of the valid draws (`ess_untempered_frac`), flat at ≥ `status_thresholds$flat_ess_frac` (0.01). eta* is a diagnostic only. Not assessable (yellow, "not assessed") with fewer valid draws than 1 / `flat_ess_frac`.
+  - **The gate scores the configured scheme's members** (bestfit, coarsened resample, saturated tier subset with its own `ESS_best`). With the subset optimiser the final status describes the optimised members, and a reason says so when the stopping rule was met on the scheme's members.
+  - **`ESS_best`** changed meaning (tier target in 1.3.x, ensemble ESS target now): a value that differs from the scheme's default warns, and an explicit value is honoured under every scheme. `min_draws` above `max_simulations_total` is clamped with a warning.
+  - **New summary.json / calibration_diagnostics.json fields** (`sampling` block): `ess_untempered_frac`, `sims_projected_for_green` (simulations for GREEN: the larger of the ESS and Monte Carlo error projections, at the run's success rate; null when green), `projection_reliable` (FALSE when the growth slope is < 0.8 or unknown), `n_locations` and `alpha_per_location` (eta pools the locations; unchanged in 1.4.0, logged when there are several). `sims_used` counts valid draws.
+  - **summary.json** no longer writes the always-null `*_tier`, `A_best_optimized`, `n_retained` (bestfit) or `ess_pct_above_target` / `ess_n_above_target` outside the legacy schemes. `convergence_diagnostics.json` states `ess_method = "kish"` and the summary's k-hat string, and drops the per-parameter pass share.
+  - **Degenerate runs** (fewer than two valid draws) get a RED status with the reason, both diagnostics JSONs and the real report.
+  - **calibration_diagnostics.json**: the fit table's primary rows use every scored day (the summary.json definition, so the report and the summary agree), with a separate tier 1-2 row when the run has surveillance tiers (`fit.table[].subset`); partial edge weeks are dropped from `fit.weekly`; non-integer numbers are rounded to 4 significant digits.
+  - **Report:** "Simulations projected for green" (marked indicative when ESS growth stalled), flags in words, the all-draws posterior labelled "coarsened (alpha = 10)", R² and "Bias (pred./obs.)" headings, WIS units, and an appendix limited to the metrics shown, with this run's thresholds.
+  - **Other outputs:** `control.json` writes an adaptive `n_simulations` as null (it was `{}`); `run_state.json` and `_README.md` report summary.json's status (`stopping_rule_met` null in fixed mode); `posteriors.json` keeps the priors' build metadata under `metadata$priors_metadata`; a resumed partial batch gets its own batch number; the run log gives one line per check with every check's colour (informativeness included), no longer writes `posthoc_criteria_met` in `[RUN_SUMMARY]`, and drops the spurious subset-optimisation warning.
+  - **`"coarsened"`**: the resample size is now bounded by `max_ensemble_members` (default 1,000; the 1.3.0 cap was 300).
+
+- **Red team round 2** (2026-10-21; `claude/redteam/ROUND2_DECISIONS.md`):
+  - **`ESS_best` shim (lesson #13):** a raw value equal to the 1.4.0 default (200) counts as unset, so `ctrl <- mosaic_control_defaults(); ctrl$targets$posterior_weighting <- "saturated"` gets the 1.2.1 tier target 100 (the 1.2.1 golden reproduces under both usages); a different value is honoured with a warning. The trade-off: under `"saturated"` / `"tempered"` an `ESS_best` of exactly 200 cannot be requested, because it is read as unset and becomes 100; set any other value (e.g. 201) to override.
+  - **Under `"coarsened"`** the ESS_all target of the projection and the reasons is `ESS_best` (the resample's ensemble ESS is about ESS_all).
+  - **Batches** rounded to fill the cluster never exceed `max_batch_predictive` (rounded down to whole waves instead); the `min_draws` clamp warns in adaptive mode only.
+  - **calibration_diagnostics.json** keeps full precision for every scalar; only `fit.weekly`, `fit.per_location`, `ess_path` and `loglik_path` are rounded. `run.n_simulations` (attempted) and `kl_summary.withheld` are added.
+  - **Display rule** (report and run log): a value whose rounding would land on the other side of a threshold gets another decimal ("15.04%", never "15.0%" red beside "yellow <= 15%").
+  - **Report:** long table values wrap; reasons fit the column; KL bands withheld below ensemble ESS 100 are drawn grey and counted as withheld; a failed run reads "1 valid of 40 simulated"; worst-fitting locations without any R² are ranked by |log bias|; an isolated scored week gets interval bars instead of a ribbon sliver; HSIC bars start at 0 (negative U-statistic estimates noted); the legacy page carries the run's location and MOSAIC version.
+  - **summary.json** no longer writes `ess_best_optimized` / `cvw_best_optimized` outside the legacy schemes; `[RUN_SUMMARY]` integers have no thousands separators; a failed run reports the members it has.
+- **Round 3** (2026-10-21): a run with fewer than two valid draws is labelled "Run failed: no usable draws" (RED; a fourth `convergence_label` for this case only); `sims_projected_for_green` includes one confirming batch in adaptive mode only (the report says so) and none in fixed mode; the report prints every reason, continuing on a page of its own when page 1 is full; `calc_run_weight_health()` reproduces the run's own status (the members of its `posterior_weighting`, its ESS_all target and batch sizes).
+
 # MOSAIC 1.3.0
 
 The calibration now rests on a declared coarsened (generalised-Bayes) posterior over every draw: the ensemble members are a resample of it, the parameter posterior summaries are built from those members (the draws the predictions use, as before), and the auto-mode stopping rule measures that posterior. Until 1.2.1 the posterior was the saturated best subset: about 108 members in every country, each but the best at the same weight, and the stopping rule read a marginal ESS that a point mass could pass. The old scheme stays available as `best_subset_weighting = "saturated"`. Under it, with `optimize_subset = TRUE` (the 1.2.x default, now reverted), a fixed-mode run's best subset (`is_best_subset` / `weight_best` and the `_opt` columns), posterior quantiles, `posteriors.json`, ensembles and medoid are bit-identical to 1.2.1; `weight_all`, `parameter_ess.csv`, the summary fields and the auto-mode stopping rule are not (see below).

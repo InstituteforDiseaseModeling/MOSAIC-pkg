@@ -2,7 +2,7 @@
 % Please edit documentation in R/calc_bookend_batch_size.R
 \name{calc_bookend_batch_size}
 \alias{calc_bookend_batch_size}
-\title{Calculate Batch Size for Bookend Strategy}
+\title{Calculate Batch Size for Bookend Strategy (deprecated)}
 \usage{
 calc_bookend_batch_size(
   ess_history,
@@ -29,6 +29,14 @@ List with batch size recommendation. \code{phase} is one of
 was made.
 }
 \description{
+\strong{Deprecated since MOSAIC 1.4.0.} \code{run_MOSAIC()} no longer calls it:
+the adaptive mode sizes its batches from the projection
+\eqn{N \times ESS_{all}^{target} / ESS_{all}} of the convergence status
+(\code{\link{calc_convergence_status}}), with geometric growth when the
+projection is not valid. The function keeps its pre-1.4.0 signature and
+behaviour for one release and warns once per session when called.
+}
+\details{
 Predicts the number of simulations needed to reach a target ESS based on
 the observed ESS trajectory. Fits linear and sqrt models to the cumulative
 (n_sims, threshold_ESS) data and predicts from whichever has the higher
@@ -43,8 +51,7 @@ ESS was linear in the number of draws (R-squared 0.995-1.000 against
 had to beat it by 0.03, which picked sqrt even at a linear R-squared of 1.000.
 A log model is also fitted, but only as a diagnostic (a warning when it fits
 best); it is never used for prediction.
-}
-\details{
+
 The extrapolation is only defined when the chosen model's ESS increases with
 the number of simulations. When its slope is zero or negative the target is
 unreachable on the fitted trajectory, and the function returns

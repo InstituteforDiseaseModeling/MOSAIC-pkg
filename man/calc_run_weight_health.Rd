@@ -2,14 +2,19 @@
 % Please edit documentation in R/calc_weight_health.R
 \name{calc_run_weight_health}
 \alias{calc_run_weight_health}
-\title{Weight health of a finished calibration, recomputed from its output directory}
+\title{Weight health and convergence status of a finished calibration, from its output directory}
 \usage{
 calc_run_weight_health(
   dir_output,
   write = TRUE,
   coarsening_alpha = NULL,
-  weight_col = c("auto", "weight_all", "weight_best", "weight_best_opt"),
-  n_batches = 10L
+  weight_col = NULL,
+  n_batches = 10L,
+  best_subset_ratio = NULL,
+  ess_best_target = NULL,
+  min_members = NULL,
+  max_members = NULL,
+  thresholds = NULL
 )
 }
 \arguments{
@@ -19,49 +24,68 @@ calc_run_weight_health(
 \code{TRUE}.}
 
 \item{coarsening_alpha}{Effective number of independent observations of the
-declared posterior. Default \code{NULL} means the run's
+posterior. Default \code{NULL} means the run's
 \code{control$targets$coarsening_alpha}, or the package default for a run
 that predates it.}
 
-\item{weight_col}{Which weights the posterior used: \code{"auto"} (default:
-\code{weight_best_opt} when the run has a non-empty optimised subset, else
-\code{weight_best}, the ensemble members, under every scheme),
-\code{"weight_all"}, \code{"weight_best"} or \code{"weight_best_opt"}.
-A run whose control.json has no \code{best_subset_weighting} predates the
-key and is read as \code{"saturated"}.}
+\item{weight_col}{Deprecated since MOSAIC 1.4.0 and ignored (with a
+warning): the status is assessed on the best-fit members.}
 
 \item{n_batches}{Number of seed batches. Default \code{10}.}
+
+\item{best_subset_ratio, ess_best_target, min_members, max_members}{Optional
+overrides of the best-fit settings (see Details).}
+
+\item{thresholds}{Optional named list overriding the status bands.}
 }
 \value{
-Invisibly, a list with \code{location}, \code{weights_used_column},
-\code{fields} (the flat \code{summary.json}-style fields) and
+Invisibly, a list with \code{location}, \code{dir_output},
+\code{timestamp}, \code{fields} (the flat summary.json schema 2 fields) and
 \code{weight_health} (the full \code{calc_weight_health()} result).
 }
 \description{
-Recomputes \code{\link{calc_weight_health}} for an existing
-\code{run_MOSAIC()} output directory, so that results produced before the
-diagnostic existed can be backfilled without re-running anything. It reads
-\code{2_calibration/samples.parquet}, \code{1_inputs/config.json} and
-\code{1_inputs/control.json} (and \code{3_results/summary.json} when present,
-for the location label). It never modifies those files.
+Recomputes \code{\link{calc_weight_health}} (and so the 1.4.0
+\code{\link{calc_convergence_status}}) for an existing \code{run_MOSAIC()}
+output directory from its stored likelihoods, so runs produced before the
+diagnostic existed (MOSAIC 1.1.x, 1.3.0) can be assessed without re-running
+anything. It reads \code{2_calibration/samples.parquet},
+\code{1_inputs/config.json} and \code{1_inputs/control.json} (and
+\code{3_results/summary.json} when present, for the location label). It
+never modifies those files.
 }
 \details{
 \code{n_obs} is the number of scored location-day cells with a finite cases
 or deaths observation inside the scored window, after the burn-in and the
 deaths-era start of \code{control$likelihood}.
+
+The best-fit settings come from the run's control when it is a 1.4.0
+control (it carries \code{targets$status_thresholds}):
+\code{targets$best_subset_ratio}, \code{targets$ESS_best},
+\code{targets$min_ensemble_members}, \code{targets$max_ensemble_members}
+and \code{targets$status_thresholds}. An older control is assessed on
+the 1.4.0 defaults, because its \code{ESS_best} and member caps meant
+something else. Arguments override both. A run is fixed-budget when its
+control has a positive \code{calibration$n_simulations}; an adaptive run has
+exhausted its budget when its draws reach
+\code{calibration$max_simulations_total}. The growth slope is replayed over
+the draws in simulation order (\code{.mosaic_ess_replay()}, as for a
+fixed-budget run), so a stalled growth is flagged. Simulations attempted
+are the rows of \code{samples.parquet}.
 }
 \examples{
 \dontrun{
 wh <- calc_run_weight_health("output/national/MOZ/v2026-10-08.01")
-wh$fields$ess_coarsened
+wh$fields$convergence_status
+wh$fields$convergence_reasons
 }
 
 }
 \seealso{
-\code{\link{calc_weight_health}}
+\code{\link{calc_weight_health}}, \code{\link{calc_convergence_status}}
 
 Other calibration-metrics:
 \code{\link[=calc_convergence_diagnostics]{calc_convergence_diagnostics()}},
+\code{\link[=calc_convergence_status]{calc_convergence_status()}},
 \code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}},
 \code{\link[=calc_model_cvw]{calc_model_cvw()}},
 \code{\link[=calc_model_ess]{calc_model_ess()}},

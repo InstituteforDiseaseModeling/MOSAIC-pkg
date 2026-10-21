@@ -118,10 +118,10 @@ test_that("posterior quantiles under coarsened come from the prediction members,
   expect_identical(cols[c("subset_col", "weight_col", "sample_col", "source")],
                    list(subset_col = "is_best_subset", weight_col = "weight_best",
                         sample_col = "is_best_subset", source = "resample"))
-  q <- calc_model_posterior_quantiles(res, probs = c(0.25, 0.5),
+  expect_warning(q <- calc_model_posterior_quantiles(res, probs = c(0.25, 0.5),
                                       output_dir = withr::local_tempdir(),
                                       subset_col = cols$subset_col, weight_col = cols$weight_col,
-                                      verbose = FALSE)
+                                      verbose = FALSE), "percentile-scale KL divergence is NA")
   post <- q[q$parameter == "gamma_1" & q$type == "posterior", ]
   expect_equal(post$q0.5, 3, tolerance = 1e-12)
   expect_equal(post$q0.25, 2.25, tolerance = 1e-12)
@@ -136,9 +136,10 @@ test_that("posterior quantiles under coarsened come from the prediction members,
   expect_identical(cols_opt[c("subset_col", "weight_col", "sample_col", "source")],
                    list(subset_col = "is_best_subset_opt", weight_col = "weight_best_opt",
                         sample_col = "is_best_subset_opt", source = "optimized"))
-  q2 <- calc_model_posterior_quantiles(res, probs = 0.5, output_dir = withr::local_tempdir(),
+  expect_warning(q2 <- calc_model_posterior_quantiles(res, probs = 0.5, output_dir = withr::local_tempdir(),
                                        subset_col = cols_opt$subset_col,
-                                       weight_col = cols_opt$weight_col, verbose = FALSE)
+                                       weight_col = cols_opt$weight_col, verbose = FALSE),
+                 "percentile-scale KL divergence is NA")
   post2 <- q2[q2$parameter == "gamma_1" & q2$type == "posterior", ]
   expect_equal(post2$q0.5, 3.5, tolerance = 1e-12)
   expect_equal(post2$mean, 3.5, tolerance = 1e-12)
@@ -147,9 +148,9 @@ test_that("posterior quantiles under coarsened come from the prediction members,
 test_that("every scheme takes the posterior from the members, or the optimised subset", {
   r <- data.frame(is_best_subset = c(TRUE, TRUE), weight_best = c(.5, .5),
                   is_best_subset_opt = c(TRUE, FALSE), weight_best_opt = c(1, 0))
-  for (sch in c("coarsened", "saturated", "tempered")) {
+  for (sch in c("bestfit", "coarsened", "saturated", "tempered")) {
     a <- MOSAIC:::.mosaic_active_subset_cols(
-      r, list(targets = list(best_subset_weighting = sch), predictions = list(optimize_subset = TRUE)))
+      r, list(targets = list(posterior_weighting = sch), predictions = list(optimize_subset = TRUE)))
     expect_identical(a$subset_col, "is_best_subset_opt")
     expect_identical(a$weight_col, "weight_best_opt")
     expect_identical(a$sample_col, "is_best_subset_opt")
@@ -190,84 +191,161 @@ test_that("ESS_marginal_method is retired: warned and dropped only when the user
   expect_warning(MOSAIC:::.mosaic_validate_and_merge_control(ctl), "retired")
 })
 
-test_that("tier targets warn once under coarsened only when set to a non-default value", {
+test_that("tier settings warn once outside the legacy schemes, only when the user set them", {
   expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(mosaic_control_defaults()))
-  ctl <- mosaic_control_defaults(); ctl$targets$ESS_best <- 250; ctl$targets$CVw_best <- 2
-  w <- testthat::capture_warnings(MOSAIC:::.mosaic_validate_and_merge_control(ctl))
+  ctl <- mosaic_control_defaults(); ctl$targets$A_best <- 0.5; ctl$targets$max_best_subset <- 400
+  w <- testthat::capture_warnings(m <- MOSAIC:::.mosaic_validate_and_merge_control(ctl))
   expect_length(w, 1L)
-  expect_match(w, "ESS_best, \\$CVw_best are ignored under best_subset_weighting = \"coarsened\"")
+  expect_match(w, "A_best, \\$max_best_subset are ignored under posterior_weighting = \"bestfit\"")
+  expect_null(m$targets$A_best)
   # a value equal to the default is not "set"
-  expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(list(targets = list(A_best = 0.70))))
-  # legacy schemes use them: silent
+  expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(list(targets = list(max_best_subset = 1000))))
+  # ESS_best changed meaning in 1.4.0: an explicit value differing from the
+  # scheme's default is honoured with a warning (D12); the default is silent
+  expect_warning(m250 <- MOSAIC:::.mosaic_validate_and_merge_control(list(targets = list(ESS_best = 250))),
+                 "ESS_best = 250 is honoured, but its meaning changed in MOSAIC 1.4.0")
+  expect_identical(m250$targets$ESS_best, 250)
+  expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(list(targets = list(ESS_best = 200))))
+  expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(mosaic_control_defaults()))
+  # a 1.3.x control.json (coarsened, ESS_best 100) warns and keeps 100
+  expect_warning(m13 <- MOSAIC:::.mosaic_validate_and_merge_control(
+    list(targets = list(posterior_weighting = "coarsened", ESS_best = 100))), "meaning changed")
+  expect_identical(m13$targets$ESS_best, 100)
+  # legacy schemes use the tier settings: silent, with their pre-1.4.0 defaults
+  sat <- expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(
+    list(targets = list(posterior_weighting = "saturated", A_best = 0.6))))
+  expect_identical(sat$targets[c("ESS_best", "A_best", "CVw_best")],
+                   list(ESS_best = 100, A_best = 0.6, CVw_best = 1.0))
+  expect_warning(sat2 <- MOSAIC:::.mosaic_validate_and_merge_control(
+    mosaic_control_defaults(targets = list(posterior_weighting = "saturated", ESS_best = 50))),
+    "and the tier-search target")
+  expect_identical(sat2$targets$ESS_best, 50)                 # user-set tier target honoured
+  # a raw 200 is the 1.4.0 default, i.e. unset (lesson #13, CN1): under "saturated"
+  # the 1.2.1 tier target 100 applies, silently, in either usage pattern
+  sat3 <- expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(
+    list(targets = list(posterior_weighting = "saturated", ESS_best = 200))))
+  expect_identical(sat3$targets$ESS_best, 100)
+  ctl_sat <- mosaic_control_defaults(); ctl_sat$targets$posterior_weighting <- "saturated"
+  sat5 <- expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(ctl_sat))
+  expect_identical(sat5$targets$ESS_best, 100)
+  ctl_bsw <- mosaic_control_defaults(); ctl_bsw$targets$best_subset_weighting <- "saturated"
+  expect_warning(sat6 <- MOSAIC:::.mosaic_validate_and_merge_control(ctl_bsw), "best_subset_weighting is deprecated")
+  expect_identical(sat6$targets$ESS_best, 100)
+  # the legacy default 100 set explicitly under "saturated" is silent too
   expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(
-    list(targets = list(best_subset_weighting = "saturated", ESS_best = 250))))
+    list(targets = list(posterior_weighting = "saturated", ESS_best = 100))))
+  # mosaic_control_defaults() gives a legacy scheme its tier default, silently
+  sat4 <- expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(
+    mosaic_control_defaults(targets = list(posterior_weighting = "saturated"))))
+  expect_identical(sat4$targets$ESS_best, 100)
+  # min_draws above the budget is clamped with a warning (C6)
+  expect_warning(mc <- MOSAIC:::.mosaic_validate_and_merge_control(
+    list(calibration = list(min_draws = 20000L, max_simulations_total = 10000L))),
+    "min_draws \\(20,000\\) exceeds calibration\\$max_simulations_total")
+  expect_identical(as.numeric(mc$calibration$min_draws), 10000)
+  # a fixed budget uses neither, so no warning and no clamp (PN1)
+  mf <- expect_silent(MOSAIC:::.mosaic_validate_and_merge_control(
+    list(calibration = list(n_simulations = 300L, min_draws = 20000L, max_simulations_total = 10000L))))
+  expect_identical(as.numeric(mf$calibration$min_draws), 20000)
 })
 
-test_that("batch_ratio_max is a validated control default", {
-  expect_identical(mosaic_control_defaults()$targets$batch_ratio_max, 0.2)
-  for (bad in list(0, -0.1, Inf, NA_real_, "0.2", c(.1, .2)))
-    expect_error(MOSAIC:::.mosaic_validate_and_merge_control(
-      list(targets = list(batch_ratio_max = bad))), "batch_ratio_max")
+test_that("the 1.4.0 retired keys warn once and are dropped, judged from the raw control", {
+  expect_null(mosaic_control_defaults()$targets$batch_ratio_max)
+  expect_null(mosaic_control_defaults()$targets$ESS_param)
+  expect_null(mosaic_control_defaults()$weights$floor)
+  expect_null(mosaic_control_defaults()$io$verbose_weights)
+  ctl <- mosaic_control_defaults()
+  ctl$targets$ESS_param <- 1000; ctl$targets$batch_ratio_max <- 0.2
+  ctl$weights$floor <- 1e-15; ctl$io$verbose_weights <- TRUE
+  ctl$calibration$max_batches_adaptive <- 8L
+  w <- testthat::capture_warnings(m <- MOSAIC:::.mosaic_validate_and_merge_control(ctl))
+  expect_length(w, 4L)
+  expect_true(any(grepl("ESS_param, control\\$targets\\$batch_ratio_max are deprecated", w)))
+  expect_true(any(grepl("weights\\$floor is deprecated", w)))
+  expect_true(any(grepl("verbose_weights is deprecated", w)))
+  expect_true(any(grepl("max_batches_adaptive is deprecated", w)))
+  expect_null(m$targets$ESS_param); expect_null(m$weights$floor); expect_null(m$calibration$max_batches_adaptive)
+  # best_subset_weighting is the deprecated name of posterior_weighting
+  expect_warning(m2 <- MOSAIC:::.mosaic_validate_and_merge_control(
+    list(targets = list(best_subset_weighting = "coarsened"))), "best_subset_weighting is deprecated")
+  expect_identical(m2$targets$posterior_weighting, "coarsened")
+  expect_null(m2$targets$best_subset_weighting)
+  expect_warning(m3 <- MOSAIC:::.mosaic_validate_and_merge_control(
+    list(targets = list(best_subset_weighting = "coarsened", posterior_weighting = "saturated"))),
+    "was ignored because")
+  expect_identical(m3$targets$posterior_weighting, "saturated")
 })
 
-# ---- convergence diagnostics under coarsened -----------------------------------
+test_that("the 1.4.0 control keys have the SCHEMA defaults and are validated", {
+  tg <- mosaic_control_defaults()$targets
+  expect_identical(tg$posterior_weighting, "bestfit")
+  expect_identical(tg$best_subset_ratio, 0.2)
+  expect_identical(tg$ESS_best, 200)
+  expect_identical(c(tg$min_ensemble_members, tg$max_ensemble_members), c(30L, 1000L))
+  expect_identical(tg$status_thresholds, MOSAIC:::.mosaic_convergence_defaults()$thresholds)
+  cal <- mosaic_control_defaults()$calibration
+  expect_identical(cal$max_simulations_total, 150000L)
+  expect_identical(cal$min_draws, 5000L)
+  v <- function(...) MOSAIC:::.mosaic_validate_and_merge_control(mosaic_control_defaults(...))
+  expect_error(v(targets = list(posterior_weighting = "best")), "posterior_weighting")
+  expect_error(v(targets = list(best_subset_ratio = 0)), "best_subset_ratio")
+  expect_error(v(targets = list(best_subset_ratio = 1.5)), "best_subset_ratio")
+  expect_error(v(targets = list(ESS_best = -1)), "ESS_best")
+  expect_error(v(targets = list(min_ensemble_members = 0)), "min_ensemble_members")
+  expect_error(v(targets = list(min_ensemble_members = 50, max_ensemble_members = 40)), "max_ensemble_members")
+  expect_error(v(targets = list(status_thresholds = list(mce_green = 0.3))), "mce_green <= mce_yellow")
+  expect_error(v(targets = list(status_thresholds = list(foo = 1))), "unknown convergence threshold")
+  expect_error(v(calibration = list(min_draws = -1)), "min_draws")
+  expect_identical(v(targets = list(status_thresholds = list(mce_green = 0.08)))$targets$status_thresholds$mce_yellow,
+                   0.15)
+})
 
-test_that("calc_convergence_diagnostics gates the coarsened posterior, not the tier metrics", {
-  wh <- list(coarsened = list(ess_kish = 1500, batch_ratio_max = 0.12, alpha = 10),
-             targets = list(ess_target = 1000, batch_max = 0.2), status = "ok")
-  args <- list(n_total = 5000, n_successful = 5000, n_retained = 4900, n_best_subset = 950,
-               ess_best = 20, A_best = 0.1, cvw_best = 9, percentile_used = 19,
-               convergence_tier = "coarsened", target_ess_best = 100, target_A_best = 0.7,
-               target_cvw_best = 1, target_max_best_subset = 1000, target_ess_param = 1000,
-               weight_health = wh, weighting = "coarsened", verbose = FALSE)
+# ---- convergence diagnostics ---------------------------------------------------
+
+test_that("calc_convergence_diagnostics carries the 1.4.0 status, not the tier metrics", {
+  set.seed(3)
+  ll <- -300 * (runif(3000) - 0.5)^2
+  wh <- calc_weight_health(ll, params = data.frame(x = runif(3000)), n_obs = 1000, fixed_mode = TRUE)
+  args <- list(n_total = 3000, n_successful = 3000, n_retained = 3000,
+               n_best_subset = wh$bestfit$n_members, ess_best = NA_real_, A_best = NA_real_,
+               cvw_best = NA_real_, percentile_used = 0, convergence_tier = "bestfit",
+               weight_health = wh, weighting = "bestfit", verbose = FALSE)
   d <- do.call(calc_convergence_diagnostics, args)
-  expect_identical(d$summary$convergence_status, "PASS")    # tier metrics would FAIL
-  expect_identical(d$metrics$ess_best$status, "info")
-  expect_identical(d$metrics$ess_coarsened$status, "pass")
-  expect_identical(d$metrics$batch_ratio$status, "pass")
-  args$weight_health$coarsened$batch_ratio_max <- 0.25      # 1.25 x target -> warn
-  expect_identical(do.call(calc_convergence_diagnostics, args)$summary$convergence_status, "WARN")
-  args$weight_health$coarsened$ess_kish <- 400             # < 0.5 x target -> fail
-  expect_identical(do.call(calc_convergence_diagnostics, args)$summary$convergence_status, "FAIL")
-  # the same inputs under "saturated" gate the tier metrics
-  args$weighting <- "saturated"
-  d_sat <- do.call(calc_convergence_diagnostics, args)
-  expect_identical(d_sat$metrics$ess_best$status, "fail")
-  expect_null(d_sat$metrics$ess_coarsened)
+  expect_identical(d$summary$convergence_status, wh$status)
+  expect_identical(d$status$convergence_status, wh$status)
+  expect_identical(d$metrics$ess_best$status, wh$convergence$checks$colour[1])
+  expect_null(d$metrics$B_size)
+  expect_null(d$metrics$batch_ratio)
+  expect_error(do.call(calc_convergence_diagnostics, utils::modifyList(args, list(weight_health = NULL))),
+               "needs weight_health")
+  # under "saturated" the tier rows are reported and the tier verdict is tier_status
+  sat <- do.call(calc_convergence_diagnostics, utils::modifyList(args, list(
+    weighting = "saturated", ess_best = 20, A_best = 0.1, cvw_best = 9, target_ess_best = 100,
+    n_best_subset = 100, percentile_used = 3)))
+  expect_identical(sat$summary$convergence_status, wh$status)
+  expect_identical(sat$summary$tier_status, "FAIL")
+  expect_identical(sat$metrics$ess_B$status, "fail")
 })
 
-# ---- ensemble-size cap (max_ensemble_members) ----------------------------------
+# ---- ensemble-size bounds under coarsened --------------------------------------
 
-test_that("max_ensemble_members caps K under coarsened when it binds, and not otherwise", {
-  # flat likelihood over 2,000 draws: Kish ESS = 2,000
-  ll <- rep(-5, 2000)
-  tg <- MOSAIC:::.mosaic_validate_and_merge_control(mosaic_control_defaults())$targets
-  expect_identical(tg$max_ensemble_members, 300)
-  expect_identical(MOSAIC:::.mosaic_ensemble_K_max(tg), 300L)        # min(1000, 300)
-  cp <- MOSAIC:::.mosaic_coarsened_posterior(ll, 100, 10, tg$min_best_subset,
-                                             MOSAIC:::.mosaic_ensemble_K_max(tg), 1L)
+test_that("min/max_ensemble_members bound K under coarsened, and the binding is reported", {
+  ll <- rep(-5, 2000)                       # flat: Kish ESS = 2,000
+  cp <- MOSAIC:::.mosaic_coarsened_posterior(ll, 100, 10, 30, 300, 1L)
   expect_identical(cp$K, 300L)
   expect_identical(sum(cp$counts), 300L)
-  expect_identical(MOSAIC:::.mosaic_ensemble_K_binding(cp$ess_kish, tg), "bound by max_ensemble_members")
-  # cap above max_best_subset: max_best_subset binds
-  tg2 <- utils::modifyList(tg, list(max_best_subset = 200, max_ensemble_members = 500))
-  expect_identical(MOSAIC:::.mosaic_ensemble_K_max(tg2), 200L)
-  expect_identical(MOSAIC:::.mosaic_ensemble_K_binding(2000, tg2), "bound by max_best_subset")
-  # cap not binding: ESS below it, K = round(ESS)
+  expect_identical(MOSAIC:::.mosaic_resample_binding(cp$ess_kish, 30, 300), "max_members")
   w_ll <- log(c(rep(1, 120), rep(1e-12, 1880)))
-  cp3 <- MOSAIC:::.mosaic_coarsened_posterior(w_ll, 10, 10, 30, MOSAIC:::.mosaic_ensemble_K_max(tg), 1L)
+  cp3 <- MOSAIC:::.mosaic_coarsened_posterior(w_ll, 10, 10, 30, 300, 1L)
   expect_identical(cp3$K, as.integer(round(cp3$ess_kish)))
-  expect_lt(cp3$K, 300L)
-  expect_identical(MOSAIC:::.mosaic_ensemble_K_binding(cp3$ess_kish, tg), "Kish ESS (no bound binds)")
-  expect_identical(MOSAIC:::.mosaic_ensemble_K_binding(12, tg), "bound by min_best_subset")
-  # legacy targets list without the key: bounded by max_best_subset only
-  expect_identical(MOSAIC:::.mosaic_ensemble_K_max(list(max_best_subset = 1000)), 1000L)
+  expect_identical(MOSAIC:::.mosaic_resample_binding(cp3$ess_kish, 30, 300), "ratio")
+  expect_identical(MOSAIC:::.mosaic_resample_binding(12, 30, 300), "min_members")
 })
 
 test_that("max_ensemble_members is validated", {
   v <- function(x) MOSAIC:::.mosaic_validate_and_merge_control(
     mosaic_control_defaults(targets = list(max_ensemble_members = x)))
-  expect_error(v(10), "max_ensemble_members")          # < min_best_subset (30)
+  expect_error(v(10), "max_ensemble_members")          # < min_ensemble_members (30)
   expect_error(v(150.5), "max_ensemble_members")
   expect_error(v(c(100, 200)), "max_ensemble_members")
   expect_error(v(Inf), "max_ensemble_members")

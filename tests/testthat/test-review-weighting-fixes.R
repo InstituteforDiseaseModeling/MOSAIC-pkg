@@ -159,7 +159,7 @@ test_that("convergence status table includes subset, cap, likelihood-concentrati
   res_dir <- withr::local_tempdir()
   jsonlite::write_json(d, file.path(res_dir, "convergence_diagnostics.json"),
                        auto_unbox = TRUE, pretty = TRUE, digits = NA)
-  st <- calc_model_convergence_status(res_dir, verbose = FALSE)
+  st <- suppressWarnings(calc_model_convergence_status(res_dir, verbose = FALSE))   # deprecated (1.4.0)
   m  <- st$metrics_data
   expect_true(all(c("Subset Selection", "Best Subset (B)", "Best Subset (B) cap", "ESS_B",
                     "ESS_IS (all)", "ESS_IS (B)", "Overall") %in% m$Metric))
@@ -177,25 +177,28 @@ test_that("convergence status table includes subset, cap, likelihood-concentrati
   expect_null(d$importance_sampling)
 })
 
-# ---- weighting-posterior-08: KL is KL(posterior || prior), uncapped ----------
+# ---- weighting-posterior-08: KL is KL(posterior || prior) (percentile scale) --
 
-test_that("posterior KL is the uncapped information gain and ranks identifiability", {
+test_that("posterior KL is the information gain and ranks identifiability up to log(20)", {
   set.seed(1)
   prior <- runif(20000)
-  # Gaussian of sd s inside U(0,1): KL = -0.5 * log(2 * pi * e * s^2), evaluated
-  # at the sample sd. The tight cases are narrower than one cell of a 1000-point
-  # pooled grid, where a pooled-grid KDE KL levels off near 6.2.
+  # Gaussian of sd s inside U(0,1): KL = -0.5 * log(2 * pi * e * s^2). The
+  # percentile-scale estimate tracks it while the posterior spans several of
+  # the 20 bins and reaches its ceiling log(20) - 19 / (2 ESS) inside one bin.
+  ceiling_115 <- log(20) - 19 / (2 * 115)
   kl_u <- vapply(c(0.05, 1.2e-3, 1e-4, 1e-5), function(s) {
     post <- rnorm(115, 0.5, s)
     c(computed = MOSAIC:::.mosaic_posterior_kl(prior, post, rep(1, 115)),
       analytic = -0.5 * log(2 * pi * exp(1) * sd(post)^2))
   }, numeric(2))
-  expect_true(all(abs(kl_u["computed", ] - kl_u["analytic", ]) < 0.1))
-  expect_gt(kl_u["computed", 4], 10)
-  expect_true(all(diff(kl_u["computed", ]) > 0))
+  expect_lt(abs(kl_u["computed", 1] - kl_u["analytic", 1]), 0.25)
+  expect_true(all(diff(kl_u["computed", ]) >= -1e-12))
+  expect_true(all(kl_u["computed", ] <= log(20)))
+  expect_true(all(abs(kl_u["computed", 2:4] - ceiling_115) < 0.25))
 
   # Lognormal(0, 1.5) prior, lognormal(0, s) posterior:
-  # KL = log(1.5 / s) + s^2 / (2 * 1.5^2) - 1/2 (1.13, 2.21, 3.41, 4.51)
+  # KL = log(1.5 / s) + s^2 / (2 * 1.5^2) - 1/2 (1.13, 2.21, ...): no log-scale
+  # switch is needed, the percentile scale is invariant
   prior_ln <- rlnorm(20000, 0, 1.5)
   kl_ln <- vapply(c(0.3, 0.1, 0.03, 0.01), function(s) {
     post <- rlnorm(115, 0, s)
@@ -203,8 +206,9 @@ test_that("posterior KL is the uncapped information gain and ranks identifiabili
     c(computed = MOSAIC:::.mosaic_posterior_kl(prior_ln, post),
       analytic = log(1.5 / s_hat) + (s_hat^2 + mean(log(post))^2) / (2 * 1.5^2) - 0.5)
   }, numeric(2))
-  expect_true(all(abs(kl_ln["computed", ] - kl_ln["analytic", ]) < 0.15))
-  expect_true(all(diff(kl_ln["computed", ]) > 0))
+  expect_lt(abs(kl_ln["computed", 1] - kl_ln["analytic", 1]), 0.25)
+  expect_true(all(diff(kl_ln["computed", ]) >= -1e-12))
+  expect_true(all(kl_ln["computed", ] <= log(20)))
 
   # Weights are normalised; non-finite draws are dropped together with their weights
   post_wide <- rnorm(115, 0.5, 0.05)
@@ -218,7 +222,7 @@ test_that("posterior KL is the uncapped information gain and ranks identifiabili
 
 # ---- weighting-posterior-14 (+ -08 wiring): unknown rows are not failures ----
 
-test_that("unknown-scale quantile rows are skipped silently and KL is not capped", {
+test_that("unknown-scale quantile rows are skipped silently and KL is computed", {
   set.seed(42)
   n <- 2000
   results <- data.frame(decay_shape_1 = runif(n, 0.1, 10), not_a_model_param = rnorm(n),
@@ -236,7 +240,11 @@ test_that("unknown-scale quantile rows are skipped silently and KL is not capped
                                       priors = priors, verbose = FALSE)
   expect_true("not_a_model_param" %in% q$parameter)
   kl <- q$kl[q$parameter == "decay_shape_1" & q$type == "posterior"]
-  expect_true(is.finite(kl) && kl > 3 && kl < 20)
+  # The fixture's "prior" (all finite draws) contains the 500 concentrated
+  # members, 25% of its mass, so the posterior covers a quarter of the prior
+  # percentile scale: KL = log(4) = 1.386 at most (bins straddling the quarter's
+  # edges lower the binned value, here to about 1.23).
+  expect_true(is.finite(kl) && kl > 1.1 && kl < log(4))
   priors_path <- file.path(out_dir, "priors.json")
   jsonlite::write_json(priors, priors_path, auto_unbox = TRUE, pretty = TRUE, digits = NA)
   out <- calc_model_posterior_distributions(
@@ -268,13 +276,14 @@ test_that("all-equal log-likelihoods report a tied tail, not underflow", {
 })
 
 # ---- weighting-posterior-13: no extrapolation from a non-increasing fit ------
+# (the deprecated calc_bookend_batch_size() keeps its pre-1.4.0 behaviour)
 
 test_that("bookend batch size refuses to extrapolate a declining ESS trajectory", {
   hist <- list(list(total_sims = 1000, threshold_ess = 300),
                list(total_sims = 4000, threshold_ess = 281),
                list(total_sims = 9000, threshold_ess = 260))
-  res <- calc_bookend_batch_size(hist, target_ess = 400, max_total_sims = 1e5,
-                                 target_r_squared = 0.9)
+  res <- suppressWarnings(calc_bookend_batch_size(hist, target_ess = 400, max_total_sims = 1e5,
+                                                  target_r_squared = 0.9))
   expect_identical(res$phase, "no_progress")
   expect_identical(res$batch_size, 0)
 })
@@ -300,6 +309,21 @@ test_that("bookend batch size does not call an over-predicting fit 'complete'", 
   expect_identical(res$phase, "low_confidence")
   expect_identical(res$batch_size, 0)
   expect_match(res$message, "over-predicts current ESS")
+})
+
+# ---- 1.4.0: no projection from stalled growth ----------------------------------
+# The 1.4.0 batch sizer projects N x target / ESS_all only while the growth slope
+# is >= 0.8; a declining or flat ESS falls back to the
+# geometric growth instead of extrapolating.
+
+test_that("the 1.4.0 batch sizer refuses to project a declining ESS trajectory", {
+  n <- c(1000, 4000, 9000)
+  slope <- MOSAIC:::.mosaic_gate_slope(n, c(300, 281, 260))
+  expect_lt(slope, 0)
+  res <- MOSAIC:::.mosaic_projected_batch_size(n_draws = 9000, ess_all = 260, ess_all_target = 400,
+                                               slope = slope, batch_size_min = 500)
+  expect_identical(res$method, "geometric")
+  expect_identical(res$batch_size, 2250L)
 })
 
 # ---- weighting-posterior-01: the per-parameter ESS detects collapse ----------

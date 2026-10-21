@@ -1,0 +1,603 @@
+# MOSAIC calibration metric glossary (MOSAIC 1.4.0).
+#
+# One entry per metric shown in the calibration-diagnostics report, summary.json
+# and the dashboard. Single source for the report appendix, the docs
+# (MOSAIC-docs/05-model-calibration.Rmd) and the dashboard; read it with
+# MOSAIC:::.mosaic_glossary().
+#
+# Fields (all required):
+#   key               identifier; matches the summary.json field where one exists
+#   label             display name
+#   definition        what the number is, in plain language
+#   formula           how it is computed
+#   how_to_read       what high / low values mean
+#   threshold         bands used by MOSAIC, always marked as a convention, or "none"
+#   not_a_measure_of  what the number does not tell you
+#
+# Design: claude/reporting_audit/SPEC_CONVERGENCE.md (sections 2 and 5).
+
+version: "1.4.0"
+metrics:
+
+  - key: draws
+    label: Draws
+    definition: >-
+      One parameter set sampled from the priors and simulated (several stochastic
+      runs per draw, combined into one log-likelihood). Every draw is a prior draw;
+      the posterior is a reweighting of them.
+    formula: >-
+      N = number of draws simulated; draws whose log-likelihood is not finite get
+      zero posterior weight.
+    how_to_read: >-
+      More draws give a more precise posterior and a larger ESS; the ESS grows in
+      proportion to N.
+    threshold: >-
+      Minimum run length 5 batches and 5,000 draws before any stop; budget cap
+      max_simulations_total = 150,000 national (conventions).
+    not_a_measure_of: Fit, or how well the posterior is represented on its own.
+
+  - key: mode
+    label: Run mode (fixed budget or adaptive)
+    definition: >-
+      How the number of draws was decided. A fixed-budget run simulates a set
+      number of draws and then assesses the convergence status; an adaptive run
+      simulates in batches and stops when the status is green or the budget cap
+      is reached. Each draw is simulated n_iterations times (stochastic runs per
+      draw) and the runs are combined into one log-likelihood.
+    formula: >-
+      mode = "fixed" or "auto" (adaptive); stopping_rule_met is TRUE when an
+      adaptive run stopped at green and null in fixed mode.
+    how_to_read: >-
+      In fixed mode the status is advisory (flag fixed_budget); in adaptive mode
+      it is the stopping rule: the run stops when the three sampling checks
+      (ensemble ESS, Monte Carlo error, k-hat) are green at two consecutive
+      checks after the minimum run length. A flat likelihood does not block the
+      stop (more simulations cannot fix it) but keeps the status yellow.
+    threshold: none
+    not_a_measure_of: Convergence on its own; read the convergence status.
+
+  - key: coarsening_alpha
+    label: Coarsened posterior (alpha, eta, scored cells)
+    definition: >-
+      The posterior weights every draw by its likelihood, tempered so that the data
+      count as alpha effectively independent observations. A smaller alpha gives a
+      wider, more cautious posterior. It is a choice of posterior definition (Miller
+      and Dunson 2019; Bissiri, Holmes and Walker 2016), not a property of the
+      sampler.
+    formula: >-
+      w_i proportional to exp(eta * (ll_i - max ll)), eta = alpha / n_obs, where
+      n_obs is the number of scored observation cells; default alpha = 10.
+    how_to_read: >-
+      A draw 1 / eta log-likelihood units below the best draw gets weight 1/e of the
+      best draw's.
+    threshold: none (alpha = 10 is a modelling choice, not a pass/fail bar)
+    not_a_measure_of: Simulation convergence or fit.
+
+  - key: posterior_weighting
+    label: Posterior weighting scheme
+    definition: >-
+      Which ensemble the run reports: "bestfit" (default) keeps the best-fitting
+      draws up to a share of the posterior ESS; "coarsened" resamples members
+      from the coarsened posterior; "saturated" is the pre-1.3.0 rule, kept for
+      reproducing old runs.
+    formula: control$targets$posterior_weighting.
+    how_to_read: The convergence status is defined on the bestfit and coarsened schemes.
+    threshold: none
+    not_a_measure_of: Fit or convergence.
+
+  - key: n_obs_scored
+    label: Scored observation cells
+    definition: >-
+      The number of location-time cells the likelihood scores (after the burn-in,
+      finite observations only). It sets the learning rate of the coarsened
+      posterior.
+    formula: Count of scored cells; eta = alpha / n_obs_scored.
+    how_to_read: More cells means each one carries less weight at a fixed alpha.
+    threshold: none
+    not_a_measure_of: Data quality or informativeness (see eta*).
+
+  - key: ess_all
+    label: Posterior ESS (all draws)
+    definition: >-
+      Effective sample size of the posterior weights over every draw: the number of
+      independent posterior draws the weighted draws are worth.
+    formula: ESS_all = (sum w)^2 / sum w^2 (Kish), over all valid draws.
+    how_to_read: >-
+      Higher is more precise. It grows in proportion to the draws, so the draws
+      needed for a target are N x target / ESS_all.
+    threshold: >-
+      Target ESS_best / best_subset_ratio = 200 / 0.2 = 1,000 (convention; the
+      adaptive mode simulates towards it).
+    not_a_measure_of: Fit, or whether the data inform the parameters.
+
+  - key: ess_prop
+    label: ESS as % of draws
+    definition: >-
+      Posterior ESS divided by the draws. Roughly constant for a given model and
+      data, so it fixes the draws needed for a target.
+    formula: ESS_all / N.
+    how_to_read: >-
+      Small values mean the posterior is sharp relative to the prior, so many draws
+      are needed per effective draw.
+    threshold: none
+    not_a_measure_of: Quality of the fit.
+
+  - key: best_fit_ensemble
+    label: Best-fit ensemble (ensemble members)
+    definition: >-
+      The draws taken in descending log-likelihood until their subset ESS reaches a
+      stated share of ESS_all, carrying their posterior weights renormalised within
+      the subset. The predictions and the parameter posterior both use these
+      members.
+    formula: >-
+      Sort draws by log-likelihood (ties by sim id); add draws until the Kish ESS of
+      their weights >= best_subset_ratio x ESS_all; bounded by min_ensemble_members
+      and max_ensemble_members.
+    how_to_read: >-
+      With best_subset_ratio = 0.2 the ensemble holds about the top 38% of the
+      posterior on the production runs. A size at the member bound is flagged.
+    threshold: >-
+      best_subset_ratio = 0.2; members bounded to [30, 1,000] national
+      (conventions).
+    not_a_measure_of: The full posterior; it is its best-fitting part.
+
+  - key: ensemble_members
+    label: Ensemble members (count)
+    definition: Number of draws in the best-fit ensemble.
+    formula: n = size of the best-fit selection after the member bounds.
+    how_to_read: >-
+      Larger ensembles cost more to simulate for the predictions; the count is set
+      by the ESS target, not chosen.
+    threshold: Bounded to [30, 1,000] national (convention).
+    not_a_measure_of: Precision; ESS_best is the precision measure.
+
+  - key: n_iter_ensemble
+    label: Stochastic runs per member
+    definition: >-
+      How many times each ensemble member is re-simulated with new seeds to build
+      the predictions.
+    formula: control$predictions$n_iter_ensemble.
+    how_to_read: >-
+      More runs give smoother predictive intervals; it does not change which
+      draws are members.
+    threshold: none
+    not_a_measure_of: Convergence of the calibration.
+
+  - key: ess_best
+    label: Ensemble ESS (ESS_best)
+    definition: >-
+      Effective sample size of the best-fit ensemble. The Monte Carlo error of a
+      posterior mean is about SD / sqrt(ESS), so about 7% of the posterior SD at
+      200 and 10% at 100.
+    formula: >-
+      Kish ESS of the members' renormalised weights; equals best_subset_ratio x
+      ESS_all by construction unless a member bound binds.
+    how_to_read: Higher is more precise.
+    threshold: >-
+      GREEN >= 200, YELLOW 100-199, RED < 100 (convention: half of Vehtari et al.
+      2021's ESS > 400, which is the same rule as rstan's "ESS > 100 per chain"
+      over the recommended 4 chains; 200 is a cost compromise and 400 an optional
+      gold standard).
+    not_a_measure_of: Fit, or whether the data inform the parameters.
+
+  - key: best_subset_mass
+    label: Posterior mass kept (m)
+    definition: Share of the posterior weight held by the best-fit ensemble.
+    formula: m = sum of member weights / sum of all weights; KL(ensemble || posterior) = -ln m exactly.
+    how_to_read: >-
+      m = 1 means the ensemble is the whole posterior; m = 0.38 means it keeps the
+      best-fitting 38%.
+    threshold: none (set by best_subset_ratio)
+    not_a_measure_of: Fit or convergence.
+
+  - key: mce
+    label: Monte Carlo error of posterior means
+    definition: >-
+      The Monte Carlo standard error of each parameter's ensemble posterior mean
+      (the part of it due to simulation noise), as a share of its posterior SD.
+      Draws are split into 10 seed batches by simulation id; each batch is an
+      independent tenth-size run.
+    formula: >-
+      Per parameter: SD of the batch weighted means of the members / members'
+      posterior SD / sqrt(B'), over the B' batches (up to 10) holding at least 1% of
+      the members' weight (batch means, Flegal and Jones 2010); summarised by the
+      median, 90th percentile (mce_p90) and maximum over parameters.
+    how_to_read: >-
+      It is a standard error: 3% means the posterior mean carries a simulation
+      standard error of 3% of the posterior SD, and two independent reruns would
+      differ by about sqrt(2) x 3% = 4% (SD). The true value is nearly the same for
+      every parameter (about 1 / sqrt(ESS_best)); each per-parameter value is
+      estimated from about 10 batches, so the spread over parameters is mostly
+      estimation noise and the "worst" parameter is not a finding. The 90th
+      percentile is therefore a conservative summary, about 1.28 x the typical
+      value. Lower is better.
+    threshold: >-
+      90th percentile GREEN <= 10%, YELLOW 10-15%, RED > 15% of the posterior SD
+      (convention; matches the ESS bands: about 6.8% median at ESS 200 and 9.8% at
+      100 on the production runs).
+    not_a_measure_of: Fit or identifiability.
+
+  - key: khat_tempered
+    label: Validity guard (Pareto k-hat)
+    definition: >-
+      Shape of the upper tail of the tempered importance weights (Vehtari et al.
+      2024). A heavy tail means a few draws carry much of the weight, so the ESS and
+      Monte Carlo error may be optimistic. The tempered weights are bounded, so the
+      true tail shape is at most 0 and k-hat falls as draws accumulate; the reason
+      says whether it is falling.
+    formula: >-
+      Pareto k-hat of eta x log-likelihood (the coarsened posterior's log weights),
+      not of the untempered likelihood, whose k-hat is always huge and
+      uninformative.
+    how_to_read: >-
+      Below 0.5 the weights have a light enough tail for plain importance sampling.
+      0.5-0.7: the largest weights form a heavy tail at this number of draws, so
+      the ESS and Monte Carlo error may be optimistic (MOSAIC uses plain, not
+      Pareto-smoothed, weights, so the PSIS reading of this band does not apply).
+      At or above 0.7 a few draws dominate and the ESS and Monte Carlo error are
+      unreliable. The reason gives the trend of k-hat over the latter part of the
+      run. Falling: it quotes the simulations at which k-hat would reach 0.5 at
+      that rate and whether that is within max_simulations_total, without
+      promising it (ZAF went from 2.8 at 5k draws to 0.57 at 50k; CIV falls only
+      about 0.03 per doubling, about 800k simulations to reach 0.5). Uncertain:
+      the trend is within twice its standard error of zero. Not falling: more
+      simulations alone are inefficient. With stalled ESS growth the k-hat reason
+      repeats that remedy rather than contradicting it. Undefined k-hat is green
+      only when the tail ratios are tied (weights nearly flat), or when there are
+      fewer than 5 distinct tail ratios on a plateau of at least 10 draws tied at
+      the best log-likelihood (BFA at 20-30k draws); any other cause (e.g. too few
+      draws for a tail fit) is yellow, "not assessed". k-hat does not gate the
+      draw projection; the ESS growth slope does.
+    threshold: GREEN < 0.5, YELLOW 0.5-0.7, RED >= 0.7 (bands from Vehtari et al. 2024; convention).
+    not_a_measure_of: Fit.
+
+  - key: eta_star
+    label: Supported resolution (eta*)
+    definition: >-
+      The sharpest posterior (largest eta, at most 1) the draws can support at the
+      ESS_all target, quoted also as effective observations (eta* x scored cells).
+      A diagnostic only.
+    formula: >-
+      Largest eta in (0, 1] with Kish ESS of exp(eta x (ll - max ll)) >= ESS_all
+      target, by bisection on log(eta); undefined (null) when no eta reaches the
+      target, e.g. with fewer valid draws than the target.
+    how_to_read: >-
+      It grows with the number of draws (BFA: below 1 at 7k draws, 1 from 20k), so
+      it is not used to judge informativeness; ess_untempered_frac is.
+    threshold: none (diagnostic only since 1.4.0 red-team round 1)
+    not_a_measure_of: Convergence or informativeness; it meets the ESS target by construction.
+
+  - key: flat_likelihood
+    label: Data informativeness (flat likelihood)
+    definition: >-
+      Whether the likelihood is flat: the posterior is close to the prior and the
+      data barely constrain the model. Sampling can be adequate while the result is
+      uninformative.
+    formula: >-
+      flat_likelihood = (ess_untempered_frac >= flat_ess_frac, default 0.01) and
+      the untempered Kish ESS >= 20; null (not assessed) with fewer than two valid
+      draws (a failed run). The absolute floor matters on small runs: the share is
+      at least 1 / N, so with a few hundred draws a collapsed, informative
+      likelihood (ESS 1-3) would otherwise reach 1%. BFA is flat from 1,000
+      draws (ESS 56) to 50,000 (ESS 2,627).
+    how_to_read: >-
+      TRUE means "enough simulations" does not mean a usable fit; check the data
+      (e.g. very few reported cases). It never blocks the adaptive stop, since more
+      simulations cannot fix it: a flat run stops with stopping_rule_met TRUE and
+      a yellow status. Null ("not assessed") is shown yellow: it is
+      never read as informative. When many draws tie at the best log-likelihood the
+      reason adds a plateau note (BFA: 808 of 50,000 draws tie): the likelihood
+      cannot rank those draws.
+    threshold: GREEN if not flat, YELLOW if flat or not assessed (convention; never red).
+    not_a_measure_of: Fit quality or convergence.
+
+  - key: ess_untempered_frac
+    label: Untempered-likelihood ESS share
+    definition: >-
+      The effective sample size of the untempered (eta = 1) likelihood weights as a
+      share of the valid draws: the part of the prior the raw likelihood leaves
+      plausible. It does not depend on the number of draws.
+    formula: Kish ESS of exp(ll - max ll) over the valid draws / valid draws.
+    how_to_read: >-
+      With informative data the raw likelihood collapses onto about one draw, so
+      the share is about 1 / N (0.002% at 50,000 draws on 27 of the 28 production
+      models). A share of 1% or more means the likelihood is flat over a sizeable
+      part of the prior (BFA: 5.3% at 7k, 15k, 30k and 50k draws). The share is a
+      prior volume, so it depends on the number of parameters: in a one-parameter
+      toy a 20-fold contraction already gives about 5%.
+    threshold: Flat at >= 0.01 (convention, set from the production pools; never red).
+    not_a_measure_of: Simulation convergence or fit.
+
+  - key: ess_growth_slope
+    label: ESS growth (log-log slope)
+    definition: >-
+      How fast the posterior ESS grows as draws accumulate: from the per-check
+      history of an adaptive run, or, for a fixed-budget run and a backfill, from a
+      replay of ESS_all over the draws in simulation order (up to 40 log-spaced
+      points).
+    formula: >-
+      Least-squares slope of log(ESS_all) on log(draws) over the points at or
+      beyond a quarter of the largest draw count (at least 3).
+    how_to_read: >-
+      Near 1 the ESS grows in proportion to the draws, so the draw projections are
+      reliable (projection_reliable). Below 0.8 better draws keep arriving and
+      concentrating the weights; more draws alone are then inefficient. Unknown
+      (fewer than 3 points) makes the projections indicative only.
+    threshold: Stalled when < 0.8 (convention; a flag, never a colour).
+    not_a_measure_of: Fit.
+
+  - key: best_loglik_path
+    label: Best log-likelihood found so far
+    definition: >-
+      The log-likelihood of the best draw (and the 100th best) among the first n
+      draws, relative to the final best.
+    formula: max over the first n draws of ll, minus the final max ll.
+    how_to_read: >-
+      Jumps line up with dips in the ESS. A curve still climbing at the end means
+      the prior region with good fits has not been fully explored.
+    threshold: none
+    not_a_measure_of: Fit to the data.
+
+  - key: convergence_status
+    label: Simulation convergence status
+    definition: >-
+      Are there enough simulations to represent the best-fitting ensemble
+      reliably? green "Converged: enough simulations"; yellow "Usable with
+      caution"; red "Not converged: more simulations needed".
+    formula: >-
+      Worst of four checks: ensemble ESS, Monte Carlo error (90th percentile),
+      validity guard (k-hat) and data informativeness. Computed by
+      calc_convergence_status().
+    how_to_read: >-
+      GREEN: the posterior means carry a simulation standard error of at most
+      about 10% of the posterior SD (two independent reruns would typically differ
+      by up to about 14%, sqrt(2) x 10%). Every non-green check gives one reason
+      with its remedy and, where possible, the simulations projected to fix it,
+      marked unreliable when the ESS growth has stalled.
+    threshold: The bands of the four checks (conventions).
+    not_a_measure_of: Fit (R2, bias, coverage are reported separately and never enter it).
+
+  - key: convergence_flags
+    label: Convergence flags
+    definition: >-
+      Notes shown beside the status that never change its colour:
+      budget_cap_reached, ess_growth_stalled, ensemble_size_bound and
+      fixed_budget.
+    formula: >-
+      budget_cap_reached when the draws reached max_simulations_total;
+      ess_growth_stalled when the log-log ESS growth slope is below 0.8 (adaptive
+      history or fixed-mode replay);
+      ensemble_size_bound when the min or max member bound, not the ratio, set
+      the ensemble size; fixed_budget for fixed-budget runs (the status is
+      assessed, not used to stop).
+    how_to_read: A flag explains why a run stopped where it did or how to read its status.
+    threshold: none
+    not_a_measure_of: Convergence on their own.
+
+  - key: ensemble_binding
+    label: Ensemble size binding
+    definition: Which rule set the number of ensemble members.
+    formula: >-
+      "ratio" when the ESS share target set it, "min_members" or "max_members"
+      when a member bound did (then the ensemble_size_bound flag is raised).
+    how_to_read: >-
+      "max_members" means the ensemble ESS target was not reached within the
+      member cap; "min_members" means more members were kept than the target
+      needed.
+    threshold: Members bounded to [30, 1,000] national (convention).
+    not_a_measure_of: Precision; ESS_best is the precision measure.
+
+  - key: sims_projected_for_target
+    label: Valid draws projected for the ESS target
+    definition: >-
+      Total valid draws (finite log-likelihood) needed for the ESS_all target only,
+      assuming the ESS keeps growing in proportion to the draws. Covers the ESS
+      check alone; see sims_projected_for_green for the status. Units: valid
+      draws.
+    formula: sims_used x ESS_all target / ESS_all, where sims_used counts valid draws; null when the target is met.
+    how_to_read: >-
+      Reliable when the ESS growth slope is known and >= 0.8 (projection_reliable);
+      otherwise indicative only.
+    threshold: none
+    not_a_measure_of: A guarantee; the projection assumes ESS proportional to N.
+
+  - key: sims_projected_for_green
+    label: Simulations projected for green
+    definition: >-
+      Total simulations projected for a GREEN status, plus, in adaptive mode, one
+      confirming batch (the second green check the stopping rule needs; a
+      fixed-budget run has no stopping rule, so none is added): the larger of the
+      ESS projection and the Monte Carlo error projection, converted from valid
+      draws to simulations at the run's success rate (valid / attempted). Units:
+      simulations.
+    formula: >-
+      T = max(N x ESS_all target / ESS_all, N x (mce_p90 / 0.10)^2) / (valid /
+      attempted), over the checks that are not green and that more draws can fix;
+      in adaptive mode plus a confirming batch of 0.25 x T within
+      [batch_size_adaptive, max_batch_predictive] (fixed mode: T alone). Null when the three sampling checks (ESS, MCE, k-hat)
+      are green (an informativeness-only yellow needs no more simulations), and
+      when only k-hat is behind (no projection exists for it).
+    how_to_read: >-
+      An estimate, labelled unreliable when projection_reliable is FALSE (UGA's
+      457k at 50k draws is one: its growth slope is far below 0.8, so the ESS
+      is not growing in proportion to the draws).
+    threshold: none
+    not_a_measure_of: A guarantee, or the draws needed for k-hat to fall.
+
+  - key: projection_reliable
+    label: Projection reliable
+    definition: Whether the draw projections can be trusted.
+    formula: TRUE when the ESS growth slope is known and >= 0.8; k-hat does not enter.
+    how_to_read: >-
+      FALSE: every reason that quotes a projection is marked "unreliable" (stalled
+      growth) or "indicative only" (slope not yet known).
+    threshold: Slope 0.8 (convention).
+    not_a_measure_of: Convergence.
+
+  - key: alpha_per_location
+    label: Alpha per location
+    definition: >-
+      The coarsening alpha divided by the number of locations. eta = alpha / n_obs
+      pools the scored cells over every location, so in a run with J locations
+      each location's data count as about alpha / J effective observations.
+    formula: coarsening_alpha / n_locations.
+    how_to_read: >-
+      Equal to alpha in a national (one-location) run; 40 times smaller per
+      country in a 40-country run. Recorded so multi-location posteriors are read
+      with that in mind.
+    threshold: none (alpha is a convention)
+    not_a_measure_of: Convergence or fit.
+
+  - key: posterior_members
+    label: Parameter posterior (ensemble members)
+    definition: >-
+      The parameter posterior (posteriors.json, posterior quantiles, KL) is the
+      posterior over the best-fit ensemble members, the same draws and weights as
+      the predictions, not the full coarsened posterior over every draw.
+    formula: Weighted summaries of the members with their renormalised posterior weights.
+    how_to_read: >-
+      Because it keeps only the best-fitting part (about 38% of the posterior
+      weight), its intervals can be narrower and its means shifted. On 8
+      production models (312 parameters) the median 95% interval width was 0.99 of
+      the full posterior's, but 9% of parameters lost more than 20% of their width
+      (UGA zeta_1 kept 25%); mean shifts had a median of 0.04 posterior SD, a 90th
+      percentile of 0.15 and a maximum of 0.40, which is larger than the Monte
+      Carlo error GREEN certifies. These posteriors also feed warm-start priors.
+    threshold: none
+    not_a_measure_of: The full coarsened posterior; read it as the best-fit region.
+
+  - key: kl_divergence
+    label: KL divergence, prior to posterior
+    definition: >-
+      How far a parameter's posterior moved from its prior, in nats. Computed on
+      the prior's own percentile scale (each draw mapped to its prior percentile,
+      where the prior is uniform), so it does not depend on units, heavy prior
+      tails, integer values or bounds.
+    formula: >-
+      20 equal percentile bins; KL = sum p_b log(p_b x 20) over the posterior bin
+      masses p_b, minus the finite-ESS correction (20 - 1) / (2 ESS); at most
+      log(20), about 3 nats; null when the ensemble ESS is below 20.
+    how_to_read: >-
+      Bands < 0.05 largely prior, 0.05-0.5 partly informed, >= 0.5 data-informed,
+      shown only when the ensemble ESS is at least 100 (below it the correction
+      leaves a bias of about 0.05 nats, enough to put a quarter of unmoved
+      parameters in "partly informed"). Informative priors are expected to stay
+      near the prior. Computed on the ensemble members (see posterior_members).
+    threshold: 0.05 and 0.5 (descriptive bands, a convention; never gated).
+    not_a_measure_of: Convergence, or whether a prior was right.
+
+  - key: scored_days
+    label: Scored days
+    definition: >-
+      The days the likelihood scores: after the burn-in, every day with a finite
+      observation, whatever its surveillance tier. The fit metrics in summary.json
+      use the same days; the calibration report adds a separately labelled row on
+      observed and reconstructed weeks only (tiers 1-2). Days are counted per
+      channel. The scored observation cells (n_obs_scored) count location-days
+      with a cases or a deaths observation, so they can exceed either channel's
+      count of scored days.
+    formula: Location-days in the scored window with a finite observation.
+    how_to_read: More scored days means more data behind the fit metrics.
+    threshold: none
+    not_a_measure_of: Data quality.
+
+  - key: burn_in_days
+    label: Burn-in (unscored)
+    definition: >-
+      The first days of the simulation, excluded from the likelihood and the fit
+      metrics while the model settles from its initial conditions.
+    formula: control$likelihood$burn_in_days.
+    how_to_read: Shaded in the time series; nothing in it is scored.
+    threshold: none
+    not_a_measure_of: Fit.
+
+  - key: r2
+    label: R2
+    definition: >-
+      Squared correlation between observed and the ensemble central line (cases
+      median, deaths mean) over scored days.
+    formula: cor(observed, central)^2.
+    how_to_read: Measures timing and shape; 1 is perfect agreement in shape.
+    threshold: none (reported, never gated)
+    not_a_measure_of: Level; a 5x over-prediction can have R2 = 1 (see Bias).
+
+  - key: bias
+    label: Bias
+    definition: Sum of predicted over sum of observed over scored days.
+    formula: sum(central) / sum(observed).
+    how_to_read: 1 = right level; above 1 = over-prediction; below 1 = under-prediction.
+    threshold: none (reported, never gated)
+    not_a_measure_of: Timing or shape.
+
+  - key: coverage
+    label: Interval coverage
+    definition: Share of scored days inside the 50% and 95% predictive intervals.
+    formula: mean(lower <= observed <= upper) for each interval.
+    how_to_read: >-
+      Near nominal = honest uncertainty; well above = intervals too wide; well
+      below = overconfident.
+    threshold: none (nominal 50% and 95%)
+    not_a_measure_of: Accuracy of the central line.
+
+  - key: wis
+    label: WIS
+    definition: >-
+      Weighted interval score (Bracher et al. 2021) from the median and the 50% and
+      95% intervals, in counts per day. It rewards both accuracy and honest
+      interval width.
+    formula: >-
+      (0.5 |y - median| + sum_k (alpha_k / 2) IS_alpha_k) / (K + 0.5), with the
+      interval score IS_alpha = (u - l) + (2 / alpha)(l - y) 1(y < l) + (2 /
+      alpha)(y - u) 1(y > u).
+    how_to_read: Lower is better; most comparable across models of the same data.
+    threshold: none (reported, never gated)
+    not_a_measure_of: Comparability across different data sets (it is in counts).
+
+  - key: fit_time_series
+    label: Weekly observed and ensemble series
+    definition: >-
+      Observed weekly totals (points) and the ensemble central line over the
+      scored weeks; summed over locations in a multi-location run.
+    formula: Weekly sums of the daily observed and central-line values on scored days.
+    how_to_read: >-
+      Shows when the model is early, late, too high or too low; gaps are weeks
+      that were not scored.
+    threshold: none
+    not_a_measure_of: Uncertainty when no predictive intervals are drawn.
+
+  - key: weekly_scatter
+    label: Weekly predicted vs observed (log-log)
+    definition: >-
+      Weekly totals of the central line against observed, on log(1 + count) axes,
+      so low counts and peaks are both visible.
+    formula: Sum of daily values per reporting week; both axes log(1 + count).
+    how_to_read: >-
+      Points on the dashed line agree; above it is over-prediction. A column at
+      observed = 1 marks weeks with no reported cases.
+    threshold: none
+    not_a_measure_of: Uncertainty (intervals are not shown).
+
+  - key: weekly_distribution
+    label: Distribution of weekly counts
+    definition: >-
+      Histograms of the observed and the predicted weekly totals on the same log
+      axis as the scatter.
+    formula: Histogram of log(1 + weekly count) for observed and predicted.
+    how_to_read: >-
+      Overlap means the model reproduces how often each level of incidence occurs;
+      a predicted distribution shifted right means systematic over-prediction, a
+      missing right tail means peaks are under-predicted.
+    threshold: none
+    not_a_measure_of: Timing.
+
+  - key: likelihood_concentration
+    label: Likelihood concentration (eta = 1)
+    definition: >-
+      ESS and k-hat of the untempered likelihood ratios. With thousands of scored
+      cells and a stochastic likelihood they are about 1 and huge whatever the fit.
+    formula: calc_is_diagnostics(log_lik), eta = 1.
+    how_to_read: >-
+      How sharply the raw likelihood ranks the draws; kept in JSON for reference
+      only.
+    threshold: none (never gated or shown as a verdict)
+    not_a_measure_of: Fit, convergence, or the posterior actually built.

@@ -34,7 +34,7 @@ grid_search_best_subset(
 
 \item{ess_method}{Character ESS calculation method: "kish" or "perplexity"}
 
-\item{weighting}{Character best-subset weighting scheme, matching \code{control$targets$best_subset_weighting}: "saturated" (default) or "tempered"}
+\item{weighting}{Character best-subset weighting scheme, matching \code{control$targets$posterior_weighting}: "saturated" (default) or "tempered"}
 
 \item{verbose}{Logical print progress messages}
 }
@@ -79,12 +79,12 @@ met, if at all, at a much larger n than under \code{"saturated"}.
 }
 
 \code{run_MOSAIC()} runs this search only under the legacy schemes
-(\code{best_subset_weighting = "saturated"} or \code{"tempered"}), through
+(\code{posterior_weighting = "saturated"} or \code{"tempered"}), through
 its tier loop; under the default \code{"coarsened"} posterior (since 1.3.0)
 the ensemble members are a resample of the posterior and no tier search runs.
 Weights come from the same helper as \code{results$weight_best} and the
 final ESS_B/A/CVw gate in \code{run_MOSAIC()}, which passes
-\code{control$targets$best_subset_weighting} here: the size the search
+\code{control$targets$posterior_weighting} here: the size the search
 certifies against a tier is then the size at which the posterior's own
 weights meet that tier. Searching under one scheme and weighting the
 posterior under the other certified a subset the final gate then failed.

@@ -5,6 +5,8 @@ metadata:
   type: reference
 ---
 
+Update 2026-10-20 (1.4.0 WS1): the KL path no longer uses a KDE (`.kl_divergence_kde`/`.bw_nrd0_weighted` removed; percentile-scale estimator, see [[v140-ws1-statistical-core]]). The invariant still holds for any other weighted KDE.
+
 Invariant: for a weighted sample, bandwidth = 0.9 * min(sd_w, IQR_w/1.34) * n_eff^(-1/5), with
 n_eff = 1/sum(w^2) (normalised) and sd_w bias-corrected by n_eff/(n_eff-1). Equal weights must
 reduce EXACTLY to stats::bw.nrd0 (tested). n_eff < 2 -> bandwidth undefined -> return NA,

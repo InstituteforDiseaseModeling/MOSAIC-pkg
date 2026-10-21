@@ -65,10 +65,13 @@ check. NGA is flagged exploratory (surveillance data-quality confound) and
 excluded from the pooled summary; deaths are flagged conditional near-casts
 (the scoring embargo is shorter than the infection-to-reported-death dwell).
 
-Summary rows aggregate only cells that pass the weight-ESS gate
-(\code{ess_ok}, when the column is present), matching
-\code{evaluate_rolling_cv()$summary} and \code{\link{plot_forecast_cv_skill}};
-\code{n_gated} counts the origins left out.
+Summary rows aggregate only cells that pass the opt-in convergence gate
+(\code{ess_ok}, when the column is present; every cell passes when
+\code{evaluate_rolling_cv()} ran with \code{ess_min = 0}, the default),
+matching \code{evaluate_rolling_cv()$summary} and
+\code{\link{plot_forecast_cv_skill}}; \code{n_gated} counts the origins
+left out. A warning is issued when more than half of the cells are red or
+when the gate leaves no cell.
 }
 \seealso{
 \code{\link{plot_forecast_cv_grid}}, \code{\link{evaluate_rolling_cv}}

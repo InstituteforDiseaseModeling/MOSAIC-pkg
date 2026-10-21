@@ -24,6 +24,7 @@ and \eqn{A = H(\tilde{\mathbf w}) / \log|\mathcal B|}, with the convention
 
 Other calibration-metrics:
 \code{\link[=calc_convergence_diagnostics]{calc_convergence_diagnostics()}},
+\code{\link[=calc_convergence_status]{calc_convergence_status()}},
 \code{\link[=calc_model_cvw]{calc_model_cvw()}},
 \code{\link[=calc_model_ess]{calc_model_ess()}},
 \code{\link[=calc_run_weight_health]{calc_run_weight_health()}},

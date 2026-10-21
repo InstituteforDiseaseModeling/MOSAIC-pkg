@@ -1,254 +1,231 @@
-#' Calculate Kullback-Leibler Divergence Between Two Distributions
+#' Kullback-Leibler divergence of a weighted sample from a reference sample
 #'
 #' @description
-#' Computes the Kullback-Leibler (KL) divergence between two probability
-#' distributions represented by weighted samples. The KL divergence measures
-#' how one probability distribution diverges from a reference distribution.
+#' Computes KL(P || Q), how far the distribution P of \code{samples1}
+#' (weighted by \code{weights1}) has moved from the reference distribution Q of
+#' \code{samples2} (weighted by \code{weights2}), in nats. In MOSAIC, P is a
+#' parameter's posterior and Q its prior, both represented by draws. The
+#' estimate is made on Q's own percentile scale, so it does not depend on the
+#' parameter's units, on heavy prior tails, on integer values or on bounds.
 #'
-#' @param samples1 Numeric vector of samples from the first distribution (P).
-#' @param weights1 Numeric vector of weights for \code{samples1}. Must be the
-#'   same length as \code{samples1}. If NULL, uniform weights are used.
-#' @param samples2 Numeric vector of samples from the second distribution (Q).
-#' @param weights2 Numeric vector of weights for \code{samples2}. Must be the
-#'   same length as \code{samples2}. If NULL, uniform weights are used.
-#' @param n_points Integer minimum number of grid points over the support of \code{samples1} (default 1000); the grid is refined further when needed to resolve the P bandwidth.
-#' @param eps Numeric floor applied to the Q density before taking logs (default 1e-10).
+#' @param samples1 Numeric vector of samples from P (e.g. the posterior).
+#' @param weights1 Non-negative weights for \code{samples1}, same length. If
+#'   NULL, uniform weights are used.
+#' @param samples2 Numeric vector of samples from Q (e.g. the prior).
+#' @param weights2 Non-negative weights for \code{samples2}, same length. If
+#'   NULL, uniform weights are used.
+#' @param n_points Ignored since MOSAIC 1.4.0 (kept so existing calls work; a
+#'   warning is issued when supplied).
+#' @param eps Ignored since MOSAIC 1.4.0 (as \code{n_points}).
+#' @param n_bins Number of equal-probability bins on Q's percentile scale.
+#'   Default 20.
+#' @param seed Integer seed of the random tie-breaking. The caller's RNG stream
+#'   is restored afterwards. Default 1.
 #'
 #' @details
-#' The KL divergence KL(P||Q) is calculated as:
-#' \deqn{KL(P||Q) = \int p(x) \log(p(x) / q(x)) dx}
+#' \strong{Percentile-scale (PIT) estimator.} Each draw of P is mapped to its
+#' percentile under Q, \eqn{u = F_Q(x)}. Under Q itself \eqn{u} is uniform, so
+#' the KL divergence is unchanged by this monotone map and becomes the
+#' divergence of the distribution of \eqn{u} from U(0, 1). The unit interval is
+#' cut into \eqn{B} = \code{n_bins} equal bins, \eqn{p_b} is the P-weight in
+#' bin \eqn{b}, and
+#' \deqn{\widehat{KL} = \max\left(0,\ \sum_b p_b \log(p_b B) - \frac{B - 1}{2\,ESS_P}\right),}
+#' where \eqn{ESS_P = (\sum w)^2 / \sum w^2} is the Kish effective sample size
+#' of \code{weights1}. The subtracted term is the leading finite-sample bias of
+#' the plug-in divergence of a \eqn{B}-cell histogram (the Miller-Madow
+#' correction), so an unmoved posterior scores about 0 rather than
+#' \eqn{(B - 1)/(2 ESS_P)}.
 #'
-#' where P represents the distribution from \code{samples1} and Q represents
-#' the distribution from \code{samples2}.
+#' \strong{Percentiles.} When \code{samples1} and \code{samples2} are the same
+#' draws (the posterior is a reweighting of the prior draws), the percentile of
+#' a draw is the midpoint of its cumulative Q-weight after ordering by value,
+#' ties in random order; with uniform \code{weights2} this is
+#' \code{(rank(x, ties.method = "random") - 0.5) / n}. Otherwise it is the
+#' randomised probability integral transform against Q's weighted empirical
+#' CDF, \eqn{u = F_Q(x^-) + U\,[F_Q(x) - F_Q(x^-)]} with \eqn{U \sim U(0, 1)}.
+#' Random tie-breaking spreads an integer-valued or point-mass parameter evenly
+#' over the percentiles its atom occupies.
 #'
-#' Both densities are weighted kernel density estimates whose bandwidths use
-#' the weighted Silverman rule with the Kish effective sample size
-#' \eqn{n_{eff} = (\sum w)^2 / \sum w^2}, so a concentrated weight vector
-#' yields a narrow density even when the draws are spread out (with equal
-#' weights this is \code{stats::bw.nrd0()}). The integral
-#' \eqn{\int p \log(p/q)} is evaluated by the trapezoidal rule on a grid over
-#' the support of P only (where the integrand is non-zero), with Q interpolated
-#' from a full-range KDE, so the value does not level off at
-#' \code{log(n_points)} when P is much narrower than Q.
+#' \strong{Range.} Binning can only lose information, so the estimate is at
+#' most \eqn{\log B} (3.0 nats at \eqn{B = 20}), reached when P falls into a
+#' single bin (1/\eqn{B} of Q's mass); it ranks parameters by how much they
+#' moved up to that ceiling. It is computed when \eqn{ESS_P \ge B}; below that
+#' \code{NA} is returned with a warning. P-mass outside Q's range is counted in
+#' the outer bins. Near \eqn{ESS_P = B} the correction leaves a positive bias
+#' for an unmoved posterior (about 0.05 nats at \eqn{ESS_P = 40}), so MOSAIC
+#' reports the descriptive bands (\code{.mosaic_kl_band()}) only from
+#' \eqn{ESS_P \ge 100}.
 #'
-#' Before v0.100.0 both densities used unweighted bandwidths on one grid over
-#' the pooled range and the densities were renormalised as discrete
-#' probabilities, so a narrow P saturated near \code{log(n_points)}.
+#' Before MOSAIC 1.4.0 both densities were weighted kernel density estimates
+#' integrated on a grid. That estimator failed for heavy-tailed priors
+#' (bandwidth set by the tail), integer-valued parameters (spikes) and priors
+#' bounded near the posterior (boundary bias), and was unbounded; values from
+#' the two estimators are not comparable.
 #'
 #' Note that KL divergence is not symmetric: KL(P||Q) != KL(Q||P).
 #'
-#' @return A non-negative numeric value representing the KL divergence.
-#'   Returns 0 when the distributions are identical, and larger values
-#'   indicate greater divergence. Returns \code{NA} with a warning when either
-#'   weight vector has Kish effective sample size below 2 (the KDE bandwidth
-#'   is then undefined).
+#' @return A non-negative numeric value, at most \code{log(n_bins)}: about 0
+#'   when P equals Q. \code{NA} with a warning when the Kish effective sample
+#'   size of \code{weights1} is below \code{n_bins}; 0 with a warning when all
+#'   samples are equal.
 #'
 #' @examples
-#' # Example 1: Compare two normal distributions
+#' # Posterior as a reweighting of prior draws
 #' set.seed(123)
-#' samples1 <- rnorm(1000, mean = 0, sd = 1)
-#' samples2 <- rnorm(1000, mean = 0.5, sd = 1.2)
-#' kl_div <- calc_kl_divergence(samples1, NULL, samples2, NULL)
-#' print(paste("KL divergence:", round(kl_div, 4)))
+#' prior <- rnorm(20000)
+#' w <- dnorm(prior, mean = 0.5, sd = 0.5) / dnorm(prior)   # target N(0.5, 0.5^2)
+#' calc_kl_divergence(prior, w, prior, NULL)
+#' log(1 / 0.5) + (0.5^2 + 0.5^2) / 2 - 0.5                  # analytic KL
 #'
-#' # Example 2: Using weighted samples
-#' samples1 <- rnorm(500)
-#' weights1 <- runif(500, 0.5, 1.5)
-#' samples2 <- rnorm(500, mean = 1)
-#' weights2 <- runif(500, 0.5, 1.5)
-#' kl_div_weighted <- calc_kl_divergence(samples1, weights1, samples2, weights2)
-#'
-#' # Example 3: Comparing posterior to prior in Bayesian analysis
-#' # prior_samples <- rnorm(1000, mean = 0, sd = 2)  # Prior
-#' # posterior_samples <- rnorm(1000, mean = 1, sd = 0.5)  # Posterior
-#' # kl_div <- calc_kl_divergence(posterior_samples, NULL, prior_samples, NULL)
+#' # Two separate samples
+#' calc_kl_divergence(rnorm(5000, 1, 0.5), NULL, rnorm(5000), NULL)
 #'
 #' @export
-#'
-
 calc_kl_divergence <- function(samples1,
                                weights1 = NULL,
                                samples2,
                                weights2 = NULL,
                                n_points = 1000,
-                               eps = 1e-10) {
+                               eps = 1e-10,
+                               n_bins = 20L,
+                               seed = 1L) {
 
-     # Input validation
+     if (!missing(n_points) || !missing(eps))
+          warning("calc_kl_divergence(): n_points and eps are ignored since MOSAIC 1.4.0 ",
+                  "(percentile-scale estimator).", call. = FALSE)
+
      if (!is.numeric(samples1) || !is.numeric(samples2)) {
           stop("samples1 and samples2 must be numeric vectors")
      }
-
      if (length(samples1) == 0 || length(samples2) == 0) {
           stop("samples1 and samples2 must not be empty")
      }
-
      if (length(samples1) < 2 || length(samples2) < 2) {
-          stop("samples1 and samples2 must have at least 2 points for density estimation")
+          stop("samples1 and samples2 must have at least 2 points")
      }
-
      if (any(!is.finite(samples1)) || any(!is.finite(samples2))) {
           stop("samples1 and samples2 must contain only finite values")
      }
-
-     # Handle weights
-     if (is.null(weights1)) {
-          weights1 <- rep(1 / length(samples1), length(samples1))
-     } else {
-          if (!is.numeric(weights1)) {
-               stop("weights1 must be numeric or NULL")
-          }
-          if (length(weights1) != length(samples1)) {
-               stop("weights1 must have the same length as samples1")
-          }
-          if (any(weights1 < 0)) {
-               stop("weights1 must be non-negative")
-          }
-          if (sum(weights1) == 0) {
-               stop("weights1 must have non-zero sum")
-          }
-          # Normalize weights
-          weights1 <- weights1 / sum(weights1)
+     weights1 <- .mosaic_kl_weights(weights1, samples1, "weights1")
+     weights2 <- .mosaic_kl_weights(weights2, samples2, "weights2")
+     n_bins <- suppressWarnings(as.integer(n_bins))
+     if (length(n_bins) != 1L || is.na(n_bins) || n_bins < 2L) {
+          stop("n_bins must be an integer >= 2")
+     }
+     if (length(seed) != 1L || !is.numeric(seed) || !is.finite(seed)) {
+          stop("seed must be a single finite number")
      }
 
-     if (is.null(weights2)) {
-          weights2 <- rep(1 / length(samples2), length(samples2))
-     } else {
-          if (!is.numeric(weights2)) {
-               stop("weights2 must be numeric or NULL")
-          }
-          if (length(weights2) != length(samples2)) {
-               stop("weights2 must have the same length as samples2")
-          }
-          if (any(weights2 < 0)) {
-               stop("weights2 must be non-negative")
-          }
-          if (sum(weights2) == 0) {
-               stop("weights2 must have non-zero sum")
-          }
-          # Normalize weights
-          weights2 <- weights2 / sum(weights2)
-     }
-
-     # Validate n_points
-     if (!is.numeric(n_points) || length(n_points) != 1 || n_points <= 0) {
-          stop("n_points must be a positive integer")
-     }
-     n_points <- as.integer(n_points)
-     if (n_points < 2) {
-          stop("n_points must be at least 2")
-     }
-
-     # Validate eps
-     if (!is.numeric(eps) || length(eps) != 1 || eps <= 0) {
-          stop("eps must be a positive numeric value")
-     }
-
-     # Handle edge case where all samples are identical
      if (min(c(samples1, samples2)) == max(c(samples1, samples2))) {
           warning("All samples have the same value. Returning 0.")
           return(0)
      }
 
-     kl_div <- .kl_divergence_kde(samples1, weights1, samples2, weights2,
-                                  n_grid = n_points, q_floor = eps)
-
-     if (!is.finite(kl_div)) {
-          warning("KL divergence calculation resulted in non-finite value. Returning NA.")
+     ess <- 1 / sum(weights1^2)
+     # Relative tolerance: n equal weights give 1 / sum(w^2) a few ulp below n.
+     if (ess < n_bins * (1 - 1e-9)) {
+          warning(sprintf(paste0("calc_kl_divergence(): Kish ESS of weights1 is %.1f, below n_bins = %d; ",
+                                 "the percentile-scale estimate is unreliable, returning NA."),
+                          ess, n_bins), call. = FALSE)
           return(NA_real_)
      }
 
-     kl_div
+     same <- length(samples1) == length(samples2) && all(samples1 == samples2)
+     u <- .mosaic_with_fixed_seed(seed, function() {
+          if (same) .mosaic_pit_same_draws(samples1, weights2)
+          else .mosaic_pit_reference(samples1, samples2, weights2)
+     })
+     .mosaic_kl_pit(u, weights1, n_bins, ess)
 }
 
-#' Weighted Silverman (nrd0) kernel bandwidth
-#'
-#' \code{stats::bw.nrd0()} with the weighted SD and weighted IQR in place of
-#' the unweighted ones and the Kish effective sample size
-#' \eqn{n_{eff} = 1/\sum w_i^2} (normalised weights) in place of \eqn{n}:
-#' \eqn{0.9 \min(\hat\sigma_w, \mathrm{IQR}_w/1.34) n_{eff}^{-1/5}}. The
-#' weighted variance is bias-corrected by \eqn{n_{eff}/(n_{eff}-1)}. With equal
-#' weights it returns \code{stats::bw.nrd0(x)} exactly. Returns \code{NA_real_}
-#' when \eqn{n_{eff} < 2} (as \code{bw.nrd0} needs two points; the correction
-#' also diverges as \eqn{n_{eff} \to 1}, inflating a near-point-mass density)
-#' or when the weighted spread is zero.
-#'
-#' @param x Numeric finite values.
-#' @param w Non-negative weights aligned with \code{x}, positive sum.
-#' @return Numeric scalar bandwidth, or \code{NA_real_}.
-#' @keywords internal
+#' Validate and normalise a KL weight vector (NULL means uniform)
 #' @noRd
-.bw_nrd0_weighted <- function(x, w) {
-     if (length(x) < 2L) return(NA_real_)
-     w <- w / sum(w)
-     if (max(w) - min(w) <= 1e-12 * max(w)) return(stats::bw.nrd0(x))
-     n_eff <- 1 / sum(w^2)
-     if (n_eff < 2) return(NA_real_)
-     mu <- sum(w * x)
-     sd_w <- sqrt(sum(w * (x - mu)^2) * n_eff / (n_eff - 1))
-     q <- weighted_quantiles(x, w, c(0.25, 0.75))
-     lo <- min(sd_w, (q[2] - q[1]) / 1.34)
-     if (!is.finite(lo) || lo <= 0) lo <- sd_w
-     if (!is.finite(lo) || lo <= 0) return(NA_real_)
-     0.9 * lo * n_eff^(-0.2)
+.mosaic_kl_weights <- function(w, x, nm) {
+     if (is.null(w)) return(rep(1 / length(x), length(x)))
+     if (!is.numeric(w)) stop(nm, " must be numeric or NULL")
+     if (length(w) != length(x)) stop(nm, " must have the same length as samples", substr(nm, 8, 8))
+     if (any(!is.finite(w))) stop(nm, " must be finite")
+     if (any(w < 0)) stop(nm, " must be non-negative")
+     if (sum(w) == 0) stop(nm, " must have non-zero sum")
+     w / sum(w)
 }
 
-#' KL(P || Q) from two weighted samples by kernel density estimation
+#' Prior percentiles of the prior's own draws
 #'
-#' Shared core of \code{calc_kl_divergence()} and the posterior-quantile KL.
-#' Both KDEs use \code{.bw_nrd0_weighted()}, so a concentrated weight vector
-#' gives a narrow density even when the draws themselves are spread out. The
-#' integrand \eqn{p \log(p/q)} vanishes where \eqn{p = 0}, so it is integrated
-#' by the trapezoidal rule on a grid over P's own support (draws holding
-#' non-negligible weight, \eqn{\pm 4} bandwidths), sized to resolve P's
-#' bandwidth (at least \code{n_grid}, at most \eqn{2^{16}} points); \eqn{q} is
-#' interpolated from a full-range KDE resolving Q's bandwidth. A single grid
-#' over the pooled range levels off near \code{log(n_grid)} once P is narrower
-#' than one grid cell.
-#'
-#' @param p_x,q_x Numeric finite samples of P and Q.
-#' @param p_w,q_w Non-negative weights aligned with the samples, positive sum.
-#' @param n_grid Minimum number of grid points over P's support.
-#' @param q_floor Floor applied to the Q density before taking logs.
-#' @return Non-negative numeric scalar, or \code{NA_real_} when a bandwidth is
-#'   undefined (Kish effective sample size below 2) or the result is not finite.
-#' @keywords internal
+#' Midpoint of each draw's cumulative reference weight after ordering by value,
+#' ties in random order (\code{rank(ties.method = "random")}); with uniform
+#' weights this is \code{(rank - 0.5) / n}. Draws the RNG: call inside
+#' \code{.mosaic_with_fixed_seed()}.
+#' @param x Numeric draws.
+#' @param w Normalised reference weights aligned with \code{x}.
+#' @return Numeric percentiles in (0, 1).
 #' @noRd
-.kl_divergence_kde <- function(p_x, p_w, q_x, q_w, n_grid = 1024L,
-                               q_floor = .Machine$double.xmin) {
-     p_w <- p_w / sum(p_w)
-     q_w <- q_w / sum(q_w)
-     bw_p <- .bw_nrd0_weighted(p_x, p_w)
-     bw_q <- .bw_nrd0_weighted(q_x, q_w)
-     if (!is.finite(bw_p) || !is.finite(bw_q) || bw_p <= 0 || bw_q <= 0) {
-          return(NA_real_)
-     }
-     n_cap <- 2^16
+.mosaic_pit_same_draws <- function(x, w) {
+     o <- order(rank(x, ties.method = "random"))
+     u <- numeric(length(x))
+     u[o] <- cumsum(w[o]) - w[o] / 2
+     u
+}
 
-     # P on its own support: draws whose weight could move the density
-     sig <- p_w > 1e-10 * max(p_w)
-     lo <- min(p_x[sig]) - 4 * bw_p
-     hi <- max(p_x[sig]) + 4 * bw_p
-     n_p <- min(n_cap, max(as.integer(n_grid),
-                           2^ceiling(log2(8 * (hi - lo) / bw_p))))
-     p_dens <- suppressWarnings(stats::density(p_x, weights = p_w, bw = bw_p,
-                                               from = lo, to = hi, n = n_p))
+#' Randomised probability integral transform against a weighted reference sample
+#'
+#' \eqn{u = F(x^-) + U [F(x) - F(x^-)]} with \eqn{F} the weighted empirical CDF
+#' of \code{ref}. Draws the RNG: call inside \code{.mosaic_with_fixed_seed()}.
+#' @param x Numeric points to transform.
+#' @param ref Numeric reference draws.
+#' @param w Normalised weights aligned with \code{ref}.
+#' @return Numeric percentiles in the unit interval.
+#' @noRd
+.mosaic_pit_reference <- function(x, ref, w) {
+     o <- order(ref)
+     r <- ref[o]
+     cw <- c(0, pmin(cumsum(w[o]), 1))
+     below <- cw[findInterval(x, r, left.open = TRUE) + 1L]     # F(x-): weight strictly below x
+     upto  <- cw[findInterval(x, r) + 1L]                       # F(x): weight at or below x
+     below + stats::runif(length(x)) * (upto - below)
+}
 
-     # Q: full-range KDE whose grid resolves Q's bandwidth
-     q_lo <- min(q_x, lo) - 4 * bw_q
-     q_hi <- max(q_x, hi) + 4 * bw_q
-     n_q <- min(n_cap, max(1024, 2^ceiling(log2(8 * (q_hi - q_lo) / bw_q))))
-     q_dens <- suppressWarnings(stats::density(q_x, weights = q_w, bw = bw_q,
-                                               from = q_lo, to = q_hi, n = n_q))
+#' Binned KL of percentile-scale draws from U(0, 1), with the finite-ESS correction
+#' @param u Percentiles in the unit interval.
+#' @param w Normalised weights aligned with \code{u}.
+#' @param n_bins Number of equal bins.
+#' @param ess Kish ESS of \code{w}.
+#' @return Non-negative numeric scalar.
+#' @noRd
+.mosaic_kl_pit <- function(u, w, n_bins, ess) {
+     b <- pmin(pmax(ceiling(u * n_bins), 1L), n_bins)
+     p <- vapply(seq_len(n_bins), function(k) sum(w[b == k]), numeric(1))
+     p <- p / sum(p)
+     kl <- sum(ifelse(p > 0, p * log(p * n_bins), 0))
+     max(0, kl - (n_bins - 1) / (2 * ess))
+}
 
-     x <- p_dens$x
-     dx <- diff(x)
-     trapz <- function(f) sum(dx * (f[-1] + f[-length(f)]) / 2)
-     p <- pmax(p_dens$y, 0)
-     p <- p / trapz(p)
-     q <- pmax(stats::approx(q_dens$x, q_dens$y, xout = x, rule = 2)$y, q_floor)
-     integrand <- ifelse(p > 0, p * (log(p) - log(q)), 0)
-     kl <- trapz(integrand)
-     if (!is.finite(kl)) NA_real_ else max(kl, 0)
+#' Descriptive band of a prior-to-posterior KL divergence
+#'
+#' "largely prior" below \code{edges[1]}, "partly informed" below
+#' \code{edges[2]}, "data-informed" from \code{edges[2]}. The bands are
+#' suppressed (\code{NA}) when the Kish ESS behind the posterior is below
+#' \code{ess_min}: the finite-ESS correction leaves a null bias of about 0.05
+#' nats at ESS 40, so a quarter of unmoved parameters would land in "partly
+#' informed" (red-team round 1, T12).
+#' @param kl Numeric vector of KL values (nats).
+#' @param ess Kish ESS of the posterior weights the KL values were computed
+#'   with (the ensemble ESS, \code{ess_best}); a single number.
+#' @param edges The two band edges. Default \code{c(0.05, 0.5)}.
+#' @param ess_min Smallest ESS for which bands are given. Default 100.
+#' @return Character vector parallel to \code{kl} (\code{NA} where \code{kl}
+#'   is \code{NA} or the ESS is below \code{ess_min} or unknown).
+#' @noRd
+.mosaic_kl_band <- function(kl, ess, edges = c(0.05, 0.5), ess_min = 100) {
+     kl <- suppressWarnings(as.numeric(kl))
+     ess <- suppressWarnings(as.numeric(unlist(ess)))
+     out <- rep(NA_character_, length(kl))
+     if (length(ess) != 1L || !is.finite(ess) || ess < ess_min) return(out)
+     edges <- sort(as.numeric(edges))
+     ok <- is.finite(kl)
+     out[ok] <- ifelse(kl[ok] < edges[1], "largely prior",
+                       ifelse(kl[ok] < edges[2], "partly informed", "data-informed"))
+     out
 }
 
 #' @rdname calc_kl_divergence
@@ -256,5 +233,5 @@ calc_kl_divergence <- function(samples1,
 calculate_kl_divergence <- function(samples1, weights1 = NULL, samples2, weights2 = NULL,
                                     n_points = 1000, eps = 1e-10) {
      .Deprecated("calc_kl_divergence")
-     calc_kl_divergence(samples1, weights1, samples2, weights2, n_points, eps)
+     calc_kl_divergence(samples1, weights1, samples2, weights2)
 }

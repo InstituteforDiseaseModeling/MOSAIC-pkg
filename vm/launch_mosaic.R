@@ -3,8 +3,8 @@
 # ==============================================================================
 # VM-compatible launcher for a production-level MOSAIC calibration. Edit the
 # `iso_codes` and `dir_output` assignments below to select the country/region.
-# - High ESS convergence targets
-# - Adaptive batch sizing with BFRS convergence
+# - Fixed 1,000-draw budget by default; --adaptive for the adaptive mode
+#   (stops on the 1.4.0 convergence status)
 # - Multi-location mobility params auto-enabled when length(iso_codes) > 1
 # ==============================================================================
 #
@@ -57,23 +57,27 @@ config <- get_location_config(iso=iso_codes)
 
 control <- mosaic_control_defaults()
 
-control$calibration$n_simulations <- 1000        # integer = fixed mode; NULL = adaptive/auto
+# Fixed budget by default: exactly 1,000 draws (its convergence status is
+# assessed, not used to stop). Pass --adaptive for the MOSAIC 1.4.0 adaptive
+# mode, which stops when the sampling checks of the convergence status are
+# green at two consecutive checks (or at max_simulations_total = 150,000):
+#   ~/bin/r-mosaic-Rscript ~/launch_mosaic.R --adaptive
+adaptive <- "--adaptive" %in% commandArgs(trailingOnly = TRUE)
+control$calibration$n_simulations <- if (adaptive) NULL else 1000   # integer = fixed mode; NULL = adaptive
 control$calibration$n_iterations <- 3
 control$calibration$batch_size_adaptive <- 1000
 control$calibration$min_batches_adaptive <- 5
-control$calibration$max_batches_adaptive <- 10
-control$calibration$target_r2_adaptive <- 0.95
-control$calibration$max_simulations_total <- 1e+06
+control$calibration$min_draws <- 5000
+control$calibration$max_simulations_total <- 150000
+cat("Calibration mode:", if (adaptive) "adaptive (--adaptive), cap 150,000 simulations" else "fixed, 1,000 draws", "\n")
 
 control$parallel$enable <- TRUE
 control$parallel$n_cores <- parallel::detectCores()-1
 
-control$targets$ESS_param <- 1000
-control$targets$ESS_param_prop <- 0.95
-control$targets$ESS_best <- 100
-control$targets$min_best_subset <- 30
-control$targets$max_best_subset <- 1500
-control$targets$ESS_method <- 'perplexity'
+# Member caps from WS6 sizing (claude/plan_convergence/ws6/WS6_REPORT.md): national
+# 1000, a multi-country (regional) run 300 (~0.30 TB at 168 workers), the
+# 40-location continental run 108.
+control$targets$max_ensemble_members <- if (length(iso_codes) >= 40) 108 else if (length(iso_codes) > 1) 300 else 1000
 
 control$sampling$sample_tau_i <- length(iso_codes) > 1 # Travel probability
 control$sampling$sample_mobility_gamma <- length(iso_codes) > 1  # Gravity model exponent

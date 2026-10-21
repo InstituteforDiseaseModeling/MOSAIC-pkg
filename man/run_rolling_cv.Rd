@@ -50,7 +50,9 @@ window defines the anchor and projection span.}
 \item{priors}{Priors list (default \code{MOSAIC::priors_default}).}
 
 \item{control}{\code{run_MOSAIC} control list, or NULL for an experiment-grade
-cheap default (fixed \code{n_simulations}, plots off). See
+cheap default (fixed \code{n_simulations} = 2,000, plots off). An adaptive
+control (no \code{calibration$n_simulations}) is allowed but warns: every
+cutoff then runs a full adaptive calibration. See
 \code{\link{mosaic_control_defaults}}. The harness forces
 \code{paths$clean_output = TRUE}, so each cutoff's \code{runs/cutoff_<T>/}
 directory is wiped before its calibration and simulation shards left by an
@@ -222,7 +224,10 @@ Every model's rows carry the cutoff run's interval semantics: the
 \code{\link{calc_model_ensemble}} with the run's observation model and deaths
 integration, as its own ensembles were built.
 \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
-rows carry the real target for post-hoc scoring.
+rows carry the real target for post-hoc scoring. Every row also carries its
+cutoff run's \code{ess} (the ensemble ESS, \code{summary.json} \code{ess_best})
+and \code{convergence_status} (\code{"green"} / \code{"yellow"} / \code{"red"};
+NA for a run from before MOSAIC 1.4.0), constant per cutoff.
 }
 \seealso{
 \code{\link{run_MOSAIC}}, \code{\link{est_suitability}},

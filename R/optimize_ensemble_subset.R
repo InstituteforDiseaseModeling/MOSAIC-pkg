@@ -25,10 +25,11 @@
 #' that \code{run_MOSAIC()} builds the candidate ensemble from (by default
 #' \eqn{w \propto \exp(-0.5 \min(\Delta, 4))}{w ~ exp(-0.5 min(Delta, 4))} with
 #' \eqn{\Delta = -2(\ell - \max \ell)}{Delta = -2 (ll - max ll)} within the top N).
-#' Under \code{weighting = "coarsened"} (the \code{run_MOSAIC()} default since
-#' 1.3.0) the members are a systematic resample of the coarsened posterior and
-#' carry count weights; the per-N weights are those count weights
-#' (\code{base_weights}) renormalised over the top N.
+#' Under \code{weighting = "coarsened"} (what \code{run_MOSAIC()} passes for
+#' its default \code{"bestfit"} members, which carry their coarsened weights,
+#' and for the \code{"coarsened"} resample, which carries count weights) the
+#' per-N weights are the members' own weights (\code{base_weights})
+#' renormalised over the top N.
 #' So at N = the full ensemble the weights, and therefore
 #' \code{diagnostics_score}, reproduce the candidate ensemble, and any score
 #' change reported for a smaller N is due to the subset, not to a change of
@@ -108,7 +109,7 @@
 #'   serial path. Must be a \code{"PSOCK"} cluster (FORK is unsafe at this point
 #'   in the pipeline). For trivially small problems the function falls back to
 #'   serial regardless of \code{cl}.
-#' @param weighting Weighting scheme for the per-N weights, matching \code{control$targets$best_subset_weighting} (the scheme of \code{weight_best}): \code{"saturated"} (default), \code{"tempered"} or \code{"coarsened"} (renormalised \code{base_weights}).
+#' @param weighting Weighting scheme for the per-N weights: \code{"saturated"} (default) or \code{"tempered"} (the legacy subset weights), or \code{"coarsened"}: the members' own weights (\code{base_weights}) renormalised, which \code{run_MOSAIC()} uses under \code{posterior_weighting = "bestfit"} and \code{"coarsened"}.
 #' @param base_weights Member weights aligned with \code{likelihoods}, required
 #'   when \code{weighting = "coarsened"} (the resampled members' count weights,
 #'   \code{weight_best}) and not used otherwise.

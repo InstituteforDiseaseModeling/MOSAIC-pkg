@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_model_convergence_status.R
 \name{plot_model_convergence_status}
 \alias{plot_model_convergence_status}
-\title{Plot model convergence status table}
+\title{Plot model convergence status table (deprecated)}
 \usage{
 plot_model_convergence_status(
   results_dir,
@@ -27,11 +27,16 @@ and CSV write are skipped.}
 Invisible NULL. Creates a PDF file with the convergence status table.
 }
 \description{
+\strong{Deprecated since MOSAIC 1.4.0}; use
+\code{\link{plot_model_calibration_report}}. \code{run_MOSAIC()} and
+\code{render_MOSAIC_figures()} no longer call it. Kept, warning once per
+session, for one release.
+}
+\details{
 Creates a visual status table showing convergence diagnostics with color-coded
 pass/warn/fail indicators for each metric. Works with both likelihood-based
 and loss-based calibration methods by auto-detecting the appropriate diagnostics file.
-}
-\details{
+
 The status-table assembly and the \code{convergence_status.csv} write live in
 \code{\link{calc_model_convergence_status}}; this function renders the PDF
 table from that result. Pass a precomputed \code{status} object to skip

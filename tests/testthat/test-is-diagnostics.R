@@ -66,14 +66,15 @@ test_that("ESS_B on truncated weights cannot fall below the truncation floor", {
   expect_lt(calc_is_diagnostics(c(0, rep(-1e6, 99)))$ess_is, 2)
 })
 
-test_that("best_subset_weighting defaults to coarsened and is validated", {
+test_that("posterior_weighting defaults to bestfit and is validated", {
   ctrl <- mosaic_control_defaults()
-  expect_identical(ctrl$targets$best_subset_weighting, "coarsened")
-  for (ok in c("coarsened", "saturated", "tempered"))
+  expect_identical(ctrl$targets$posterior_weighting, "bestfit")
+  expect_null(ctrl$targets$best_subset_weighting)
+  for (ok in c("bestfit", "coarsened", "saturated", "tempered"))
     expect_identical(MOSAIC:::.mosaic_validate_and_merge_control(
-      list(targets = list(best_subset_weighting = ok)))$targets$best_subset_weighting, ok)
+      list(targets = list(posterior_weighting = ok)))$targets$posterior_weighting, ok)
   expect_error(MOSAIC:::.mosaic_validate_and_merge_control(
-    list(targets = list(best_subset_weighting = "flat"))), "best_subset_weighting")
+    list(targets = list(posterior_weighting = "flat"))), "posterior_weighting")
 })
 
 test_that("the two weighting schemes are genuinely different estimators", {

@@ -116,11 +116,3 @@ test_that("ess_marginal uses supplied weights", {
   expect_error(MOSAIC::calc_model_ess_parameter(df, "gamma_1", weights = rep(1, 3)),
                "one entry per row")
 })
-
-test_that("the auto-mode stop rule reads ess_marginal on the posterior weights", {
-  src <- paste(deparse(MOSAIC:::.mosaic_ess_check_update_state), collapse = "\n")
-  expect_true(grepl("gate_ess <- gm$ess$ess_marginal", src, fixed = TRUE))
-  expect_true(grepl("sum(gate_ess >= control$targets$ESS_param", src, fixed = TRUE))
-  gm_src <- paste(deparse(MOSAIC:::.mosaic_gate_metrics), collapse = "\n")
-  expect_true(grepl("calc_model_ess_parameter(results, param_names, weights = w)", gm_src, fixed = TRUE))
-})

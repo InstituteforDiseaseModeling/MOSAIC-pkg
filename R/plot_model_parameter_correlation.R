@@ -43,12 +43,18 @@ plot_model_parameter_correlation <- function(results_file,
                  "N_j_initial")
 
   param_cols <- setdiff(names(results), meta_cols)
+  # Sampled parameters only: the compartment counts (S_j_initial, ...) and the
+  # route split of beta_j0_tot are derived from sampled ones and would pad the
+  # figure with exact duplicates (R14). Custom columns outside the parameter
+  # table are kept when nothing matches.
+  est_cols <- .mosaic_weight_health_param_cols(param_cols)
+  if (length(est_cols) >= 2L) param_cols <- est_cols
 
   # Use requested subset if available, otherwise retained
 
   if (subset_col %in% names(results) && any(as.logical(results[[subset_col]]))) {
     sims <- results[as.logical(results[[subset_col]]), param_cols, drop = FALSE]
-    subset_label <- if (identical(subset_col, "is_best_subset_opt")) "optimized best subset" else "best subset"
+    subset_label <- if (identical(subset_col, "is_best_subset_opt")) "optimised ensemble members" else "ensemble members"
   } else if ("is_retained" %in% names(results) && any(results$is_retained)) {
     sims <- results[results$is_retained == TRUE, param_cols, drop = FALSE]
     subset_label <- "retained"

@@ -22,9 +22,12 @@ test_that("legacy calibration names set on top of defaults are honoured (+ warn)
   res <- suppressWarnings(norm(ctl))
   expect_equal(res$calibration$batch_size_adaptive,   250)
   expect_equal(res$calibration$min_batches_adaptive,  3)
-  expect_equal(res$calibration$max_batches_adaptive,  10)
-  expect_equal(res$calibration$target_r2_adaptive,    0.95)
   expect_equal(res$calibration$max_simulations_total, 1e6)
+  # max_batches / target_r2 named keys retired in 1.4.0 (the two-phase planner):
+  # warned and dropped, never migrated
+  expect_null(res$calibration[["max_batches_adaptive"]])
+  expect_null(res$calibration[["target_r2_adaptive"]])
+  expect_null(res$calibration[["max_batches"]])
 
   # legacy keys are removed (use exact [[ ]] to avoid $ partial matching)
   expect_null(res$calibration[["batch_size"]])
@@ -55,10 +58,10 @@ test_that("when both legacy and canonical are user-set, canonical wins (+ warn)"
 
 test_that("canonical names alone produce no deprecation warnings", {
   ctl <- mosaic_control_defaults()
-  ctl$calibration$max_batches_adaptive <- 11
+  ctl$calibration$min_batches_adaptive <- 11
   ctl$targets$ESS_method <- "kish"
   expect_no_warning(res <- norm(ctl))
-  expect_equal(res$calibration$max_batches_adaptive, 11)
+  expect_equal(res$calibration$min_batches_adaptive, 11)
   expect_equal(res$targets$ESS_method, "kish")
 })
 

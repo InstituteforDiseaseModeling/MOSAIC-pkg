@@ -31,9 +31,11 @@ test_that("an unknown scheme is rejected", {
   expect_error(MOSAIC:::.mosaic_best_subset_weights(c(-1, -2), "flat"), "saturated' or 'tempered")
 })
 
-test_that("run_MOSAIC derives weight_best and the gate weights from the same helper", {
+test_that("run_MOSAIC derives the legacy weight_best from one helper call", {
   body_txt <- paste(deparse(body(MOSAIC::run_MOSAIC)), collapse = "\n")
+  # one call (the legacy subset weights feed weight_best and ESS_B / A / CVw);
+  # the 1.4.0 gate scores the best-fit selection (.mosaic_gate_health()), not them
   expect_identical(lengths(regmatches(body_txt, gregexpr(".mosaic_best_subset_weights(",
-                                                          body_txt, fixed = TRUE))), 2L)
+                                                          body_txt, fixed = TRUE))), 1L)
   expect_false(grepl("pmin(delta_aic_best, 4", body_txt, fixed = TRUE))
 })

@@ -2,156 +2,185 @@
 % Please edit documentation in R/calc_weight_health.R
 \name{calc_weight_health}
 \alias{calc_weight_health}
-\title{Health of the importance weights behind a BFRS calibration}
+\title{Health of the posterior weights behind a BFRS calibration}
 \usage{
 calc_weight_health(
   log_lik,
-  weights,
+  weights = NULL,
   params,
   n_obs,
   sim = NULL,
   coarsening_alpha = 10,
-  ess_target = NULL,
-  batch_max = 0.2,
+  best_subset_ratio = 0.2,
+  ess_best_target = 200,
+  min_members = 30L,
+  max_members = 1000L,
   n_batches = 10L,
-  ess_method = c("kish", "perplexity")
+  thresholds = list(),
+  slope = NA_real_,
+  budget_exhausted = FALSE,
+  fixed_mode = FALSE,
+  n_attempted = NULL,
+  n_locations = NULL,
+  ess_all_target = NULL,
+  max_simulations = NULL,
+  batch_size_min = 500L,
+  batch_size_max = 10000L,
+  ess_target = NULL,
+  batch_max = NULL,
+  ess_method = NULL
 )
 }
 \arguments{
 \item{log_lik}{Numeric vector of per-draw log-likelihoods. Non-finite
 entries get zero weight.}
 
-\item{weights}{Numeric vector of the weights actually used, one per draw
-(zero outside the subset; normalised internally).}
+\item{weights, ess_target, batch_max, ess_method}{Deprecated since MOSAIC
+1.4.0 and ignored (with a warning): the posterior summaries use the
+best-fit members, the ESS target is \code{ess_best_target}, the Monte
+Carlo error bands replace the batch-ratio limit, and the \eqn{\eta = 1}
+block is gone.}
 
 \item{params}{Data frame or matrix of sampled parameter values, one row per
-draw. Non-numeric columns and columns that are constant over the valid
-draws are dropped.}
+draw. Non-numeric columns and columns constant over the valid draws are
+dropped.}
 
 \item{n_obs}{Number of scored observation cells (see
-\code{calc_run_weight_health()}). Sets \eqn{\eta_{ref} = \alpha / n_{obs}}
-and \code{eta_star$n_eff}.}
+\code{calc_run_weight_health()}); sets \eqn{\eta = \alpha / n_{obs}}.}
 
-\item{sim}{Simulation ids, one per draw, used to form the seed batches.
+\item{sim}{Simulation ids, one per draw (seed batches and selection ties).
 Default \code{seq_along(log_lik)}.}
 
 \item{coarsening_alpha}{Positive number: the effective number of independent
-observations of the declared posterior. Default \code{10}, the
-\code{run_MOSAIC()} default.}
+observations of the posterior. Default \code{10}.}
 
-\item{ess_target}{Kish ESS target. Default \code{NULL} means
-\code{min(1000, 0.02 * n_valid)}; \code{run_MOSAIC()} passes
-\code{control$targets$ESS_param}.}
+\item{best_subset_ratio}{Share of ESS_all the best-fit ensemble must reach,
+in (0, 1]. Default \code{0.2}.}
 
-\item{batch_max}{Largest acceptable batch ratio. Default \code{0.2};
-\code{run_MOSAIC()} passes \code{control$targets$batch_ratio_max}.}
+\item{ess_best_target}{Required ensemble ESS. Default \code{200}.}
+
+\item{min_members, max_members}{Bounds on the ensemble size. Defaults
+\code{30} and \code{1000}.}
 
 \item{n_batches}{Number of seed batches. Default \code{10}.}
 
-\item{ess_method}{ESS formula for the \eqn{\eta = 1} block only,
-\code{"kish"} or \code{"perplexity"}.}
+\item{thresholds}{Named list overriding the status bands (see
+\code{\link{calc_convergence_status}}).}
+
+\item{slope}{Log-log ESS growth slope over recent batches (from
+\code{run_state.json}); \code{NA} for a single snapshot.}
+
+\item{budget_exhausted}{Logical; the run stopped at its simulation cap.}
+
+\item{fixed_mode}{Logical; a fixed-budget run (the status is assessed, not
+used to stop).}
+
+\item{n_attempted}{Simulations attempted, valid or not (converts projected
+valid draws to simulations). Default \code{NULL}: \code{length(log_lik)}.}
+
+\item{n_locations}{Number of locations in the run (recorded with
+\code{alpha_per_location}; \eqn{\eta} is pooled over locations).
+Default \code{NULL} (unknown).}
+
+\item{ess_all_target}{ESS_all target of the reasons and projections.
+Default \code{NULL}: \code{ess_best_target / best_subset_ratio} (the
+best-fit rule). Under \code{"coarsened"} pass the scheme's own target
+(the resample size, so about \code{ess_best_target}).}
+
+\item{max_simulations}{The run's \code{max_simulations_total} (adaptive), so
+the k-hat reason can say whether its projection is within the budget.
+Default \code{NULL} (unknown).}
+
+\item{batch_size_min, batch_size_max}{\code{batch_size_adaptive} and
+\code{max_batch_predictive}: bound the confirming batch included in
+\code{sims_projected_for_green}. Defaults 500 and 10,000.}
 }
 \value{
 A list with elements \code{n_draws}, \code{n_valid}, \code{targets},
-\code{coarsened}, \code{eta_star}, \code{weights_used},
-\code{likelihood_concentration}, \code{status} (\code{"ok"} or
-\code{"warn"}) and \code{reasons} (one string).
+\code{coarsened}, \code{bestfit}, \code{mce}, \code{informativeness},
+\code{eta_star}, \code{slope}, \code{flat}, \code{context},
+\code{convergence}, \code{status}
+(\code{"green"}, \code{"yellow"} or \code{"red"}) and \code{reasons} (one
+string).
 }
 \description{
 Draws are sampled from the prior and scored by the log-likelihood
-\eqn{\ell}, so the posterior weights of the draws are a tempered
+\eqn{\ell}, so the posterior weights of the draws are a coarsened
 (generalised-Bayes) likelihood, \eqn{w_i \propto \exp\{\eta(\ell_i -
-\max_j \ell_j)\}}. The learning rate \eqn{\eta} is the number of independent
-observations the likelihood is trusted with, per scored cell. \eqn{\eta = 1}
-trusts every scored cell as independent evidence. That is far too much for
-daily cells holding weekly reports from an imperfect, stochastic model:
-every reasonable draw would then sit thousands of log units from the best
-one, and the weights collapse onto a single draw whatever the fit.
+\max_j \ell_j)\}}, with \eqn{\eta = \alpha / n_{obs}}: \eqn{\alpha}
+(\code{coarsening_alpha}) is the effective number of independent
+observations the likelihood is trusted with and \eqn{n_{obs}} the number of
+scored observation cells (Miller and Dunson 2019; Bissiri, Holmes and Walker
+2016). \eqn{\eta} is fixed before the weights are seen, so the ESS of these
+weights is not circular.
 
-Four groups of numbers are returned.
-
+The result holds:
 \describe{
-\item{\code{coarsened}}{The headline. This is the \emph{declared}
-posterior (since MOSAIC 1.3.0, by default, the posterior
-\code{run_MOSAIC()} resamples its ensemble members from), a coarsened posterior (Miller and Dunson 2019) with learning
-rate \eqn{\eta_{ref} = \alpha / n_{obs}}. Here \eqn{\alpha} (argument
-\code{coarsening_alpha}) is the effective number of independent
-observations the likelihood is trusted with, and \eqn{n_{obs}} is the
-number of scored observation cells. It gives the Kish ESS of those
-weights over every valid draw (\code{ess_kish}, \code{ess_prop}) and
-their seed-batch stability. \eqn{\eta_{ref}} is fixed before the
-weights are seen, so this ESS is not circular: it measures how many
-effective draws the run supplies for a posterior declared in advance.}
-\item{\code{eta_star}}{The "supported resolution". This is the largest
-\eqn{\eta} at which the draws still give a Kish ESS of at least
-\code{ess_target} and a batch ratio below \code{batch_max}, found by
-bisection on \eqn{\log\eta}. \code{n_eff = n_obs * eta} is the number
-of effective observations the draws can resolve. Its ESS meets the
-target by construction, so it is reported as a resolution and never
-used as a health verdict.}
-\item{\code{weights_used}}{The weights the posterior summaries are
-actually built from: in \code{run_MOSAIC()}, the ensemble members'
-weights (\code{weight_best}: count / K resample weights under
-\code{"coarsened"}, best-subset weights under the legacy schemes), or
-\code{weight_best_opt} once the subset optimiser has run. Kish and perplexity ESS,
-the largest weight share, the number of non-zero weights and the
-seed-batch stability. Under \code{"coarsened"} \code{run_MOSAIC()} adds
-\code{resample} (the number of draws \code{K} systematically resampled
-for the ensemble, the unique members and the seed).}
-\item{\code{likelihood_concentration}}{The \eqn{\eta = 1} numbers from
-\code{\link{calc_is_diagnostics}}: ESS and the number of non-underflowing
-ratios. They are kept for reference with an explanatory note and never
-enter \code{status}.}
+\item{\code{coarsened}}{The posterior over every valid draw: \code{eta},
+\code{ess_kish}
+(ESS_all), \code{ess_prop}, the largest weight share, \code{khat}
+(Pareto k-hat of the tempered weights,
+\code{calc_is_diagnostics(eta * log_lik)}) with \code{khat_status}, and
+\code{khat_trend} / \code{khat_trend_slope} (whether k-hat falls as
+draws accumulate, \code{.mosaic_khat_trend()}); \code{n_locations} and
+\code{alpha_per_location} (\eqn{\eta} is pooled over locations).}
+\item{\code{bestfit}}{The best-fit ensemble: draws in descending
+log-likelihood until their subset ESS reaches
+\code{best_subset_ratio * ESS_all}, bounded by
+\code{[min_members, max_members]}. Members (\code{idx}, \code{sim}),
+their renormalised weights, \code{ess_best}, \code{mass} (posterior
+weight held), \code{binding} and \code{capped}.}
+\item{\code{mce}}{Monte Carlo standard error of the members' posterior
+means per parameter (seed batches by \code{(sim - 1) mod n_batches};
+SD of the batch means / posterior SD / \eqn{\sqrt{B'}}, over the
+\eqn{B'} batches holding at least 1 percent of the members' weight),
+with median, p90 and max.}
+\item{\code{informativeness}}{The N-invariant informativeness measure:
+\code{ess_untempered} (Kish ESS of the untempered, \eqn{\eta = 1},
+weights), \code{ess_untempered_frac} (that ESS / valid draws),
+\code{n_tied_max} (valid draws tied at the best log-likelihood) and
+\code{flat_ess_frac} (the threshold). \code{flat} is
+\code{ess_untempered_frac >= flat_ess_frac}, \code{NA} when not
+assessable (fewer than \code{1 / flat_ess_frac} valid draws).}
+\item{\code{eta_star}}{A diagnostic only (since red-team round 1): the
+largest \eqn{\eta \le 1} at which the Kish ESS over all draws still
+reaches the ESS_all target (\code{ess_best_target / best_subset_ratio}),
+by bisection on \eqn{\log\eta}; \code{n_eff = n_obs * eta}. It grows
+with the draws, so it no longer decides flatness.}
+\item{\code{slope}}{The log-log ESS growth slope, supplied by the caller
+from a batch history (\code{NA} for a single snapshot).}
+\item{\code{convergence}}{The \code{\link{calc_convergence_status}}
+result (through \code{.mosaic_health_status()}); \code{status} and
+\code{reasons} repeat its colour and its reasons (joined by "; ").}
+\item{\code{context}}{\code{budget_exhausted}, \code{fixed_mode} and
+\code{n_attempted}, so the status can be re-derived for other members.}
 }
 
-\strong{Seed-batch stability.} Draws are split into \code{n_batches}
-disjoint batches by simulation id (\code{(sim - 1) mod n_batches}). Each
-batch is an independent sub-run, because draw \code{sim} is sampled with
-seed \code{sim}. For each parameter, the ratio is the standard deviation of
-the within-batch weighted means across batches, divided by the posterior
-standard deviation from all draws. Only batches carrying positive weight
-count. When fewer than two batches carry weight the ratio is \code{Inf}.
-Parameters with zero posterior spread are skipped. For a posterior with
-Kish ESS \eqn{E} the ratio of one parameter is roughly \eqn{\sqrt{B/E}}; the
-reported maximum over parameters is larger (about \eqn{1.5\sqrt{B/E}} for
-40 parameters, \eqn{1.8\sqrt{B/E}} for 1,500), so with the default 10
-batches the \code{batch_max = 0.2} criterion needs \eqn{E} of roughly 550
-to 800, more than the default \code{ESS_param}.
+The \eqn{\eta = 1} likelihood-concentration numbers are not part of this
+result (they are in \code{convergence_diagnostics.json} only, from
+\code{\link{calc_is_diagnostics}}), nor is the all-draws seed-batch ratio.
 
-\strong{Status.} \code{"ok"} when the declared (coarsened) posterior has
-Kish ESS \eqn{\ge} \code{ess_target} \emph{and} batch ratio \eqn{<}
-\code{batch_max}. Otherwise it is \code{"warn"}, with the reasons spelled
-out. Neither the \eqn{\eta = 1} numbers nor \eqn{\eta^*} affect it.
-
-No Monte Carlo-noise ceiling is applied to \eqn{\eta^*}. The ceiling would
-be \eqn{\eta \le 1.7/\sigma_{seed}}, where \eqn{\sigma_{seed}} is the
+No Monte Carlo-noise ceiling is applied to \eqn{\eta^*}. It would be
+\eqn{\eta \le 1.7/\sigma_{seed}}, where \eqn{\sigma_{seed}} is the
 seed-to-seed SD of the log-likelihood at fixed parameters (Doucet et al.
-2015). It needs the per-replicate log-likelihoods, which
-\code{run_MOSAIC()} collapses by log-mean-exp and does not store.
-
-The default \code{coarsening_alpha = 10} is \code{control$targets$coarsening_alpha}.
-On the 2026-10 national runs the pre-1.3.0 saturated subset posteriors
-corresponded to an \eqn{\alpha} of roughly 6 to 20.
+2015), which needs per-replicate log-likelihoods that \code{run_MOSAIC()}
+collapses by log-mean-exp and does not store.
 }
 \details{
-Reports whether the prior draws of a calibration represent its posterior
-well enough to trust posterior summaries. The calculation itself changes no
-weight, subset or posterior. Under the default
-\code{control$targets$best_subset_weighting = "coarsened"}
-\code{run_MOSAIC()} resamples its ensemble members, from which the parameter
-posterior summaries are built, from the coarsened posterior described here,
-and \code{status} is its convergence verdict (\code{posthoc_criteria_met}).
+Computes every quantity behind the MOSAIC 1.4.0 simulation-convergence
+status from the scored draws, and the status itself through
+\code{\link{calc_convergence_status}} (the only place the rule lives). The
+calculation changes no weight, subset or posterior.
 }
 \examples{
 set.seed(1)
-n <- 5000
+n <- 20000
 theta <- runif(n)
-ll <- -2000 * (theta - 0.4)^2           # a likelihood over 1000 cells
-w_used <- numeric(n); top <- order(-ll)[1:100]; w_used[top] <- 1 / 100
-wh <- calc_weight_health(ll, w_used, data.frame(theta = theta), n_obs = 1000,
-                         coarsening_alpha = 10, ess_target = 200)
-wh$coarsened$ess_kish
+ll <- -2e5 * (theta - 0.4)^2            # a likelihood over 100,000 cells
+wh <- calc_weight_health(ll, params = data.frame(theta = theta), n_obs = 1e5)
+wh$bestfit$ess_best
 wh$status
+wh$convergence$checks
 
 }
 \references{
@@ -166,10 +195,11 @@ of Markov chain Monte Carlo when using an unbiased likelihood estimator.
 \emph{Biometrika} 102(2):295-313.
 }
 \seealso{
-\code{\link{calc_run_weight_health}}, \code{\link{calc_is_diagnostics}}
+\code{\link{calc_convergence_status}}, \code{\link{calc_run_weight_health}}
 
 Other calibration-metrics:
 \code{\link[=calc_convergence_diagnostics]{calc_convergence_diagnostics()}},
+\code{\link[=calc_convergence_status]{calc_convergence_status()}},
 \code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}},
 \code{\link[=calc_model_cvw]{calc_model_cvw()}},
 \code{\link[=calc_model_ess]{calc_model_ess()}},
