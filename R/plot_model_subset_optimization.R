@@ -6,7 +6,7 @@
 # likelihood and selects the N that maximizes prediction quality; run_MOSAIC()
 # writes its evaluation table to optimization_diagnostics.csv but renders no
 # figure. This function fills that gap, drawing the objective score, R^2, bias
-# ratio, and ESS as functions of subset size N, with the preliminary (tier)
+# ratio, and ESS as functions of subset size N, with the ensemble members'
 # size and the optimized (argmax-score) size marked.
 # =============================================================================
 
@@ -18,8 +18,8 @@
 #' diagnostic against the candidate subset size \code{N} (top-N members by
 #' likelihood): (1) the objective score, (2) \eqn{R^2} for cases and deaths,
 #' (3) the bias ratio for cases and deaths (with a dotted reference line at
-#' bias = 1), and (4) the effective sample size (ESS). The preliminary
-#' (tier/diagnostics) subset size is marked with a dashed grey vertical line and
+#' bias = 1), and (4) the effective sample size (ESS). The
+#' ensemble-member (diagnostics) size is marked with a dashed grey vertical line and
 #' the optimizer-selected size with a solid black vertical line plus a point on
 #' the score panel.
 #'
@@ -179,7 +179,7 @@ plot_model_subset_optimization <- function(subset_opt,
 
     rule_lab <- if (flat_profile) "largest N (flat score profile)" else "argmax-score N"
     subtitle <- sprintf(
-      "central = %s   |   preliminary (tier) N = %d [dashed]  %s  optimized %s = %d [solid]   (%s = %d members)",
+      "central = %s   |   members N = %d [dashed]  %s  optimized %s = %d [solid]   (%s = %d members)",
       central_lab, diagnostics_n, glyph_arrow, rule_lab, optimal_n, glyph_delta,
       diagnostics_n - optimal_n
     )

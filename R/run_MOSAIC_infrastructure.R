@@ -62,8 +62,10 @@
 #' Called at the very end of a successful run.
 #'
 #' @param state_file Path to run_state.json
+#' @param summary The summary.json list (\code{.mosaic_write_summary_json()}),
+#'   whose convergence status run_state.json and _README.md then report.
 #' @noRd
-.mosaic_finalize_state <- function(state_file) {
+.mosaic_finalize_state <- function(state_file, summary = NULL) {
   if (!file.exists(state_file)) return(invisible(NULL))
   persisted <- tryCatch(
     jsonlite::read_json(state_file),
@@ -72,6 +74,14 @@
   if (is.null(persisted)) return(invisible(NULL))
   persisted$status <- "completed"
   persisted$updated_at <- format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
+  # The final status is summary.json's (it describes the members the posterior
+  # uses; fixed mode never applies the stopping rule, so stopping_rule_met is
+  # null there), so the two files agree (P13).
+  one <- function(x) if (length(x) == 1L && !is.na(x)) x else NULL
+  if (!is.null(summary)) {
+    persisted["stopping_rule_met"] <- list(one(summary$stopping_rule_met))
+    persisted["convergence_status"] <- list(one(summary$convergence_status))
+  }
   tmp <- tempfile(tmpdir = dirname(state_file), fileext = ".json.tmp")
   on.exit(unlink(tmp), add = TRUE)
   jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA)
@@ -81,10 +91,17 @@
   # state_file path: dir_output/2_calibration/state/run_state.json (3 levels deep)
   dir_output <- dirname(dirname(dirname(state_file)))
   readme_path <- file.path(dir_output, "_README.md")
+  conv <- one(summary$convergence_status)
   readme_lines <- c(
     "# MOSAIC Run Complete",
     "",
     paste0("**Status:** completed"),
+    paste0("**Simulation convergence:** ",
+           if (is.null(conv)) "not assessed"
+           else sprintf("%s -- %s%s", toupper(conv), one(summary$convergence_label) %||% "",
+                        if (identical(summary$mode, "fixed")) " (fixed budget: assessed, not used to stop)" else "")),
+    if (!is.null(conv) && conv != "green" && nzchar(one(summary$convergence_reasons_text) %||% ""))
+      paste0("**Reasons:** ", summary$convergence_reasons_text),
     paste0("**Completed:** ", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
     "",
     "## Output Structure",
@@ -271,7 +288,8 @@
   if (!is.null(dirs$res_fig_diag))
     paths <- c(paths, file.path(dirs$res_fig_diag,
                                 c("model_fit_windows.csv", "optimization_diagnostics.csv",
-                                  "parameter_sensitivity.csv")))
+                                  "parameter_sensitivity.csv", "calibration_report.pdf",
+                                  "convergence_status.csv", "convergence_status.pdf")))
   # reproductive_numbers.{csv,rds} come from add_reproductive_numbers() on
   # trajectories_ensemble.rds, which is rebuilt above; with overwrite = FALSE
   # it would otherwise return the earlier run's R_eff as "skipped_exists".
@@ -279,8 +297,10 @@
     paths <- c(paths, file.path(dirs$res_posterior,
                                 c("cfr_posterior.csv", "reproductive_numbers.csv",
                                   "reproductive_numbers.rds")))
+  # calibration_diagnostics.json is what the report is drawn from; the
+  # convergence_status.* files are the pre-1.4.0 table, no longer written.
   if (!is.null(dirs$results))
-    paths <- c(paths, file.path(dirs$results, "summary.json"))
+    paths <- c(paths, file.path(dirs$results, c("summary.json", "calibration_diagnostics.json")))
   stale <- paths[file.exists(paths)]
   if (length(stale)) {
     unlink(stale)
@@ -579,50 +599,49 @@
 # OUTPUT GENERATION
 # =============================================================================
 
-#' Coerce a possibly-absent JSON scalar to a rounded numeric
-#' @param x Value read back from convergence_diagnostics.json.
-#' @return Numeric scalar, or NA_real_ when absent/non-finite.
-#' @keywords internal
-#' @noRd
-.mosaic_diag_num <- function(x) {
-  if (is.null(x)) return(NA_real_)
-  x <- suppressWarnings(as.numeric(x))
-  if (length(x) != 1L || !is.finite(x)) return(NA_real_)
-  round(x, 6)
-}
-
-#' Write Summary JSON at Run Completion
+#' Write Summary JSON at Run Completion (summary.json schema 2)
+#'
+#' The machine-readable run summary, \code{3_results/summary.json}, in the
+#' MOSAIC 1.4.0 schema 2 (claude/plan_convergence/SCHEMA_v2.md section 1):
+#' provenance and counts, the simulation-convergence status
+#' (\code{convergence_status}, reasons, flags, the four checks) with every
+#' quantity behind it, the fit metrics (unchanged), and the deprecated aliases
+#' kept for one release (\code{converged}, \code{convergence_evaluated},
+#' \code{posthoc_criteria_met}, \code{weight_health_status},
+#' \code{ess_coarsened}, \code{n_best_subset}, \code{ess_min},
+#' \code{ess_median}, \code{ess_target}). Missing numbers are JSON null.
 #'
 #' @param dirs Directory structure
 #' @param state Internal calibration state
 #' @param start_time POSIXct start time for wall-clock calculation
 #' @param config Base simulation config (for provenance fields)
-#' @param r2_cases_ensemble R-squared for cases (central tendency -- median for
-#'   cases and mean for deaths by default, per central_method -- of the canonical
-#'   posterior ensemble;
-#'   tier-selected when optimize_subset = FALSE, optimizer-refined when
-#'   optimize_subset = TRUE)
-#' @param r2_deaths_ensemble R-squared for deaths (canonical ensemble, see above)
-#' @param n_ensemble_params Number of parameter sets in the canonical ensemble
-#' @param n_ensemble_stochastic_per Stochastic reruns per parameter set
-#' @param r2_cases_ensemble_tier Tier-subset R-squared for cases, preserved for
-#'   comparison when optimize_subset = TRUE. NA when the flag is FALSE (in which
-#'   case r2_cases_ensemble already holds the tier metric).
-#' @param r2_deaths_ensemble_tier Tier-subset R-squared for deaths (see above).
-#' @param bias_ratio_cases_ensemble_tier Tier-subset bias ratio for cases.
-#' @param bias_ratio_deaths_ensemble_tier Tier-subset bias ratio for deaths.
-#' @param n_ensemble_params_tier Tier-subset param count (= n_ensemble_params when
-#'   optimize_subset = FALSE; typically larger than n_ensemble_params when TRUE).
-#' @param central_method Resolved per-channel central tendency
-#'   (\code{c(cases=, deaths=)}) that the canonical r2_*_ensemble fields and the
-#'   prediction plots use. Recorded as provenance in summary.json.
+#' @param nb_dispersion The per-location NB dispersion table.
+#' @param r2_cases_ensemble,r2_deaths_ensemble,bias_ratio_cases_ensemble,bias_ratio_deaths_ensemble
+#'   Fit of the canonical ensemble's central line (central_method).
+#' @param central_method Resolved per-channel central tendency.
 #' @param r2_cases_ensemble_mean,r2_deaths_ensemble_mean,r2_cases_ensemble_median,r2_deaths_ensemble_median
-#'   Ensemble R-squared computed against BOTH the weighted mean and weighted
-#'   median, independent of \code{central_method}, for transition cross-walk.
+#'   Ensemble R-squared against both tendencies, for cross-walk.
 #' @param bias_ratio_cases_ensemble_mean,bias_ratio_deaths_ensemble_mean,bias_ratio_cases_ensemble_median,bias_ratio_deaths_ensemble_median
-#'   Ensemble bias ratios against both tendencies (see above).
-#' @param posthoc_criteria_met Whether a post-hoc best-subset tier met all its targets.
-#' @param io I/O settings for JSON writing
+#'   Ensemble bias ratios against both tendencies.
+#' @param n_ensemble_params Parameter sets in the canonical ensemble.
+#' @param n_ensemble_stochastic_per Stochastic reruns per parameter set.
+#' @param r2_cases_ensemble_tier,r2_deaths_ensemble_tier,bias_ratio_cases_ensemble_tier,bias_ratio_deaths_ensemble_tier,n_ensemble_params_tier
+#'   Fit of the members before the subset optimiser (NA when it did not run).
+#' @param cfr_implied Implied CFR per location.
+#' @param conv_health The \code{calc_weight_health()} result describing the
+#'   members the posterior uses (NULL when no posterior was built).
+#' @param weighting \code{control$targets$posterior_weighting}.
+#' @param param_ess The parameter_ess table (\code{ess} column), or NULL.
+#' @param n_simulations_total Draws in samples.parquet.
+#' @param n_retained Draws passing the Tukey fence (legacy schemes; NA otherwise).
+#'   Outside "saturated" / "tempered" the fields that carry nothing there
+#'   (\code{n_retained} when NA, the \code{*_tier} fit when the optimiser did not
+#'   run, \code{A_best_optimized}, \code{ess_n_above_target},
+#'   \code{ess_pct_above_target}) are not written.
+#' @param n_members_candidate Members before the subset optimiser.
+#' @param opt_metrics Legacy ESS_B / A / CVw of the optimised subset, or NULL.
+#' @param io I/O settings
+#' @return The summary list (invisibly written to \code{3_results/summary.json}).
 #' @noRd
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
                                        nb_dispersion = NULL,
@@ -647,46 +666,33 @@
                                        bias_ratio_deaths_ensemble_tier = NA_real_,
                                        n_ensemble_params_tier = NA_integer_,
                                        cfr_implied = NULL,
-                                       posthoc_criteria_met = NA,
+                                       conv_health = NULL,
+                                       weighting = NA_character_,
+                                       param_ess = NULL,
+                                       n_simulations_total = NA_integer_,
+                                       n_retained = NA_integer_,
+                                       n_members_candidate = NA_integer_,
+                                       opt_metrics = NULL,
                                        io) {
-  # Read convergence diagnostics
-  diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
-  diag <- if (file.exists(diag_file)) {
-    jsonlite::read_json(diag_file)
-  } else {
-    list()
-  }
+  r4 <- function(x) if (length(x) == 1L && is.finite(x)) round(x, 4) else NA_real_
+  int1 <- function(x) if (length(x) == 1L && !is.na(x)) as.integer(x) else NA_integer_
 
-  # Read parameter ESS
-  ess_file <- file.path(dirs$cal_diag, "parameter_ess.csv")
-  ess_stats <- list(
-    n_params = NA_integer_, n_above_target = NA_integer_,
-    pct_above_target = NA_real_, min_ess = NA_real_, median_ess = NA_real_,
-    target = NA_real_
-  )
-  if (file.exists(ess_file)) {
-    ess_df <- utils::read.csv(ess_file, stringsAsFactors = FALSE)
-    if ("ess_marginal" %in% names(ess_df)) {
-      ess_vals <- ess_df$ess_marginal[is.finite(ess_df$ess_marginal)]
-      ess_target <- if (!is.null(diag$targets$ess_param$value)) {
-        as.numeric(diag$targets$ess_param$value)
-      } else if (!is.null(diag$targets$ess_min$value)) {
-        as.numeric(diag$targets$ess_min$value)  # legacy fallback
-      } else 100  # default fallback
-      ess_stats$n_params <- length(ess_vals)
-      ess_stats$n_above_target <- sum(ess_vals >= ess_target)
-      ess_stats$pct_above_target <- if (length(ess_vals) > 0) {
-        round(100 * ess_stats$n_above_target / length(ess_vals), 1)
-      } else NA_real_
-      ess_stats$min_ess <- if (length(ess_vals) > 0) round(min(ess_vals), 1) else NA_real_
-      ess_stats$median_ess <- if (length(ess_vals) > 0) round(stats::median(ess_vals), 1) else NA_real_
-      ess_stats$target <- ess_target
-    }
-  }
+  # Per-parameter ESS of the members' weights: a diagnostic.
+  pe <- if (!is.null(param_ess) && "ess" %in% names(param_ess)) param_ess$ess else numeric(0)
+  pe <- pe[is.finite(pe)]
+  fields <- .mosaic_weight_health_fields(conv_health)
+  fields <- .mosaic_schema2_round1_fields(fields, conv_health, length(config$location_name),
+                                          conv_health$coarsened$alpha %||% NA_real_)
+  fields$posterior_weighting <- as.character(weighting)[1]
+  legacy <- isTRUE(fields$posterior_weighting %in% c("saturated", "tempered"))
+  ess_target <- fields$ess_best_target
+  auto <- !identical(state$mode, "fixed")
+  stopping_rule_met <- if (auto) isTRUE(state$converged) else NA
 
   wall_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
 
   summary_obj <- list(
+    schema_version = "2",
     # Provenance: what was run and when
     location      = paste(config$location_name, collapse = ", "),
     date_start    = config$date_start,
@@ -695,103 +701,72 @@
     mode          = if (!is.null(state$mode)) state$mode else NA_character_,
     resumed       = isTRUE(state$resumed),
     n_simulations_reused = if (!is.null(state$n_sims_reused)) as.integer(state$n_sims_reused) else 0L,
-    # Run statistics
+    # Run statistics. n_simulations_total counts the draws in samples.parquet;
+    # n_sim_id_frontier is the largest sim id attempted (they differ by the
+    # failed-sim count).
     wall_time_seconds          = round(wall_time, 1),
     n_batches                  = state$batch_number,
-    # n_simulations_total reports the count of usable shards in samples.parquet
-    # (= nrow(results)), matching the denominator used by n_retained and the
-    # implied success rate. n_sim_id_frontier preserves the prior
-    # state$total_sims_run semantic (max sim_id ever attempted, includes
-    # failed-and-skipped sim ids); the two differ exactly by the failed-sim
-    # count after resume-with-gaps or on any partial worker failure.
-    n_simulations_total        = if (!is.null(diag$summary$total_simulations_original)) {
-                                   as.integer(diag$summary$total_simulations_original)
-                                 } else as.integer(state$total_sims_run),
+    n_simulations_total        = int1(if (is.na(n_simulations_total)) state$total_sims_run else n_simulations_total),
     n_sim_id_frontier          = as.integer(state$total_sims_run),
     n_simulations_successful   = state$total_sims_successful,
-    n_retained                 = if (!is.null(diag$summary$retained_simulations)) diag$summary$retained_simulations else NA_integer_,
-    # n_best_subset reflects the subset that r2_*_ensemble was actually
-    # computed against — the optimizer-refined one when optimize_subset = TRUE
-    # and the optimizer landed a refined subset, otherwise the tier subset.
-    # n_best_subset_tier preserves the pre-opt size for provenance.
-    n_best_subset              = if (!is.null(diag$summary$n_best_subset_optimized)) {
-                                   as.integer(diag$summary$n_best_subset_optimized)
-                                 } else if (!is.null(diag$metrics$B_size$value)) {
-                                   as.integer(diag$metrics$B_size$value)
-                                 } else NA_integer_,
-    n_best_subset_tier         = if (!is.null(diag$metrics$B_size$value)) as.integer(diag$metrics$B_size$value) else NA_integer_,
-    # Convergence and model fit. The pipeline produces the posterior ENSEMBLE
-    # and the MEDOID member; the single best-likelihood model is not produced,
-    # so summary.json reports ensemble (+ tier) fit metrics only.
-    # `converged` is the calibration ESS stopping criterion, evaluated only in
-    # auto mode; a fixed-mode run never evaluates it, so it stays FALSE (the
-    # field is always logical) with `convergence_evaluated = FALSE`.
-    # `posthoc_criteria_met` is whether a post-hoc best-subset tier met all its
-    # targets (FALSE = fallback subset), in either mode.
-    converged     = .mosaic_run_converged(state),
-    convergence_evaluated = .mosaic_convergence_evaluated(state),
-    posthoc_criteria_met = as.logical(posthoc_criteria_met)[1],
-    r2_cases_ensemble  = if (!is.na(r2_cases_ensemble)) round(r2_cases_ensemble, 4) else NA_real_,
-    r2_deaths_ensemble = if (!is.na(r2_deaths_ensemble)) round(r2_deaths_ensemble, 4) else NA_real_,
-    bias_ratio_cases_ensemble  = if (!is.na(bias_ratio_cases_ensemble)) round(bias_ratio_cases_ensemble, 4) else NA_real_,
-    bias_ratio_deaths_ensemble = if (!is.na(bias_ratio_deaths_ensemble)) round(bias_ratio_deaths_ensemble, 4) else NA_real_,
-    # Resolved central tendency the canonical r2_*_ensemble fields + plots use.
+    n_retained                 = int1(n_retained),
+    # Simulation convergence (calc_convergence_status()): adaptive runs stop on
+    # it; fixed-budget runs assess it.
+    stopping_rule_met          = stopping_rule_met
+  )
+  summary_obj <- c(summary_obj, fields[setdiff(names(fields), c("ess_coarsened", "weight_health_status"))])
+  summary_obj$param_ess_min    <- if (length(pe)) round(min(pe), 1) else NA_real_
+  summary_obj$param_ess_median <- if (length(pe)) round(stats::median(pe), 1) else NA_real_
+
+  summary_obj <- c(summary_obj, list(
+    # Fit of the canonical ensemble (the optimised one when optimize_subset =
+    # TRUE produced a subset): central line per central_method.
+    r2_cases_ensemble  = r4(r2_cases_ensemble),
+    r2_deaths_ensemble = r4(r2_deaths_ensemble),
+    bias_ratio_cases_ensemble  = r4(bias_ratio_cases_ensemble),
+    bias_ratio_deaths_ensemble = r4(bias_ratio_deaths_ensemble),
     central_method_cases  = if (!is.null(central_method)) central_method[["cases"]]  else NA_character_,
     central_method_deaths = if (!is.null(central_method)) central_method[["deaths"]] else NA_character_,
-    # Dual ensemble metrics (BOTH tendencies, central_method-independent) so
-    # runs made under any default (both median v0.46.1-v0.97.x, both mean
-    # v0.98.0-v0.100.x, cases median / deaths mean since v0.101.0) compare.
-    r2_cases_ensemble_mean     = if (!is.na(r2_cases_ensemble_mean))     round(r2_cases_ensemble_mean, 4)     else NA_real_,
-    r2_deaths_ensemble_mean    = if (!is.na(r2_deaths_ensemble_mean))    round(r2_deaths_ensemble_mean, 4)    else NA_real_,
-    r2_cases_ensemble_median   = if (!is.na(r2_cases_ensemble_median))   round(r2_cases_ensemble_median, 4)   else NA_real_,
-    r2_deaths_ensemble_median  = if (!is.na(r2_deaths_ensemble_median))  round(r2_deaths_ensemble_median, 4)  else NA_real_,
-    bias_ratio_cases_ensemble_mean    = if (!is.na(bias_ratio_cases_ensemble_mean))    round(bias_ratio_cases_ensemble_mean, 4)    else NA_real_,
-    bias_ratio_deaths_ensemble_mean   = if (!is.na(bias_ratio_deaths_ensemble_mean))   round(bias_ratio_deaths_ensemble_mean, 4)   else NA_real_,
-    bias_ratio_cases_ensemble_median  = if (!is.na(bias_ratio_cases_ensemble_median))  round(bias_ratio_cases_ensemble_median, 4)  else NA_real_,
-    bias_ratio_deaths_ensemble_median = if (!is.na(bias_ratio_deaths_ensemble_median)) round(bias_ratio_deaths_ensemble_median, 4) else NA_real_,
-    n_ensemble_params          = if (!is.na(n_ensemble_params)) as.integer(n_ensemble_params) else NA_integer_,
-    n_ensemble_stochastic_per  = if (!is.na(n_ensemble_stochastic_per)) as.integer(n_ensemble_stochastic_per) else NA_integer_,
-    # Tier-subset ensemble metrics — populated ONLY when optimize_subset = TRUE,
-    # preserved for comparison. When the flag is off, the canonical
-    # r2_cases_ensemble fields above ARE the tier metrics and these fields are NA.
-    r2_cases_ensemble_tier  = if (!is.na(r2_cases_ensemble_tier)) round(r2_cases_ensemble_tier, 4) else NA_real_,
-    r2_deaths_ensemble_tier = if (!is.na(r2_deaths_ensemble_tier)) round(r2_deaths_ensemble_tier, 4) else NA_real_,
-    bias_ratio_cases_ensemble_tier  = if (!is.na(bias_ratio_cases_ensemble_tier)) round(bias_ratio_cases_ensemble_tier, 4) else NA_real_,
-    bias_ratio_deaths_ensemble_tier = if (!is.na(bias_ratio_deaths_ensemble_tier)) round(bias_ratio_deaths_ensemble_tier, 4) else NA_real_,
-    n_ensemble_params_tier = if (!is.na(n_ensemble_params_tier)) as.integer(n_ensemble_params_tier) else NA_integer_,
-    # ESS summary
-    ess_n_params        = ess_stats$n_params,
-    ess_n_above_target  = ess_stats$n_above_target,
-    ess_pct_above_target = ess_stats$pct_above_target,
-    ess_target          = ess_stats$target,
-    ess_min             = ess_stats$min_ess,
-    ess_median          = ess_stats$median_ess,
-    # Exact (untruncated) importance-sampling diagnostics. REPORTED, NOT GATED.
-    # `ess_best` above is computed on delta-AIC-truncated weights, which bound
-    # every weight into a narrow band and therefore keep ESS_B high regardless
-    # of fit. These fields are the honest IS numbers: ess_is_all is the
-    # effective sample size of the raw likelihood weights over all draws, and
-    # khat_all >= 0.7 means IS estimates are unreliable. A large gap between
-    # ess_best and ess_is_all is expected and is the point of reporting both.
-    # Metrics on the subset the posterior ACTUALLY uses. The gated ess_best /
-    # A / CVw above are scored on the TIER subset; when subset optimization
-    # succeeds, the canonical posterior is built from the smaller optimized
-    # subset instead. A gap between these two groups means the convergence
-    # verdict describes draws the run does not use. Reported, never gated.
-    ess_best_optimized  = .mosaic_diag_num(diag$metrics$ess_best_optimized$value),
-    A_best_optimized    = .mosaic_diag_num(diag$metrics$A_B_optimized$value),
-    cvw_best_optimized  = .mosaic_diag_num(diag$metrics$cvw_B_optimized$value),
-    ess_is_optimized    = .mosaic_diag_num(diag$metrics$ess_is_optimized$value),
-    ess_is_best         = .mosaic_diag_num(diag$importance_sampling$best_subset$ess_is),
-    ess_is_all          = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is),
-    ess_is_all_prop     = .mosaic_diag_num(diag$importance_sampling$all_draws$ess_is_prop),
-    khat_all            = .mosaic_diag_num(diag$importance_sampling$all_draws$khat),
-    khat_all_status     = if (!is.null(diag$importance_sampling$all_draws$khat_status)) {
-                              as.character(diag$importance_sampling$all_draws$khat_status)
-                          } else NA_character_,
-    n_positive_ratios_all = if (!is.null(diag$importance_sampling$all_draws$n_positive_ratios)) {
-                              as.integer(diag$importance_sampling$all_draws$n_positive_ratios)
-                          } else NA_integer_,
+    r2_cases_ensemble_mean     = r4(r2_cases_ensemble_mean),
+    r2_deaths_ensemble_mean    = r4(r2_deaths_ensemble_mean),
+    r2_cases_ensemble_median   = r4(r2_cases_ensemble_median),
+    r2_deaths_ensemble_median  = r4(r2_deaths_ensemble_median),
+    bias_ratio_cases_ensemble_mean    = r4(bias_ratio_cases_ensemble_mean),
+    bias_ratio_deaths_ensemble_mean   = r4(bias_ratio_deaths_ensemble_mean),
+    bias_ratio_cases_ensemble_median  = r4(bias_ratio_cases_ensemble_median),
+    bias_ratio_deaths_ensemble_median = r4(bias_ratio_deaths_ensemble_median),
+    n_ensemble_params          = int1(n_ensemble_params),
+    n_ensemble_stochastic_per  = int1(n_ensemble_stochastic_per),
+    # Members before the subset optimiser and their fit: populated only when
+    # optimize_subset = TRUE produced a subset.
+    n_best_subset_tier = int1(n_members_candidate),
+    r2_cases_ensemble_tier  = r4(r2_cases_ensemble_tier),
+    r2_deaths_ensemble_tier = r4(r2_deaths_ensemble_tier),
+    bias_ratio_cases_ensemble_tier  = r4(bias_ratio_cases_ensemble_tier),
+    bias_ratio_deaths_ensemble_tier = r4(bias_ratio_deaths_ensemble_tier),
+    n_ensemble_params_tier = int1(n_ensemble_params_tier),
+    # Legacy ESS_B / A / CVw of the optimised subset (opt-in optimiser only).
+    ess_best_optimized  = r4(opt_metrics$ess %||% NA_real_),
+    A_best_optimized    = r4(opt_metrics$A %||% NA_real_),
+    cvw_best_optimized  = r4(opt_metrics$cvw %||% NA_real_),
+    # Per-parameter ESS against the ensemble ESS target (diagnostic).
+    ess_n_params         = if (length(pe)) length(pe) else NA_integer_,
+    ess_n_above_target   = if (length(pe) && is.finite(ess_target)) sum(pe >= ess_target) else NA_integer_,
+    ess_pct_above_target = if (length(pe) && is.finite(ess_target)) round(100 * mean(pe >= ess_target), 1) else NA_real_,
+    # Deprecated aliases (schema 2; removed in the next release). converged
+    # keeps its legacy meaning (FALSE in fixed mode); ess_target is now the
+    # ensemble ESS target (it was the per-parameter ESS_param in 1.3.x).
+    converged             = .mosaic_run_converged(state),
+    convergence_evaluated = .mosaic_convergence_evaluated(state),
+    posthoc_criteria_met  = if (is.na(fields$convergence_status)) NA else identical(fields$convergence_status, "green"),
+    weight_health_status  = fields$weight_health_status,
+    ess_coarsened         = fields$ess_coarsened,
+    n_best_subset         = fields$ensemble_members,
+    ess_min               = summary_obj$param_ess_min,
+    ess_median            = summary_obj$param_ess_median,
+    ess_target            = ess_target
+  ))
+  summary_obj <- c(summary_obj, list(
     # NB dispersion actually used, estimated once from the weekly observations
     # by est_nb_dispersion(). bound_binds is a standing diagnostic: in a
     # well-specified fit the hard bounds should rarely bind.
@@ -818,16 +793,31 @@
     # predictions: sum simulated reported_deaths / sum simulated reported_cases
     # over the calibration window, per ensemble member). Reports median +
     # 95% CI across members, plus the observed period CFR for direct comparison.
-    # NA when ensemble was not computed (e.g., very small calibrations).
     cfr_implied         = if (!is.null(cfr_implied)) {
                               lapply(cfr_implied, function(x) lapply(x, function(v) {
                                    if (is.numeric(v) && is.finite(v)) round(v, 6) else v
                               }))
                           } else NULL
-  )
+  ))
+
+  # Fields that carry no information outside the legacy schemes (R10): the
+  # pre-optimiser *_tier fit when the optimiser did not run, the legacy
+  # agreement index, the Tukey-fence count of "bestfit", and the share of
+  # per-parameter ESS above the ensemble ESS target (two different ESS).
+  if (!legacy) {
+    tier_f <- c("n_best_subset_tier", "r2_cases_ensemble_tier", "r2_deaths_ensemble_tier",
+                "bias_ratio_cases_ensemble_tier", "bias_ratio_deaths_ensemble_tier", "n_ensemble_params_tier")
+    if (all(vapply(summary_obj[tier_f], function(v) length(v) == 1L && is.na(v), logical(1))))
+      summary_obj[tier_f] <- NULL
+    summary_obj[c("ess_best_optimized", "A_best_optimized", "cvw_best_optimized",
+                  "ess_n_above_target", "ess_pct_above_target")] <- NULL
+    if (length(summary_obj$n_retained) == 1L && is.na(summary_obj$n_retained)) summary_obj$n_retained <- NULL
+  }
 
   summary_path <- file.path(dirs$results, "summary.json")
-  .mosaic_write_json(summary_obj, summary_path, io)
+  .mosaic_atomic_write(summary_obj, summary_path, function(data, file)
+    jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE,
+                         digits = .MOSAIC_JSON_DIGITS, na = "null"))
   summary_obj
 }
 
@@ -1067,3 +1057,320 @@
   invisible(output_path)
 }
 
+
+# =============================================================================
+# CALIBRATION DIAGNOSTICS (3_results/calibration_diagnostics.json, schema 2)
+# =============================================================================
+
+#' Fit tables of the canonical ensemble on the scored days
+#'
+#' From the ensemble prediction table (\code{.mosaic_assemble_prediction_table()},
+#' whose unscored head is already \code{NA}), on the days with a finite
+#' observation and central line: per channel, the R-squared and bias of the
+#' central line, the 50 and 95 percent interval coverage and the weighted
+#' interval score (Bracher et al. 2021, median and the two intervals; in
+#' reported counts per location-day); per location and channel, R-squared,
+#' bias, 95 percent coverage and the observed total; and the weekly
+#' (Monday-start) totals over the scored days of the observations, the
+#' engine-level central line and the observation-level 50 and 95 percent
+#' interval bounds.
+#'
+#' The primary table rows (\code{subset = "scored"}) use every scored day, the
+#' definition of summary.json's \code{r2_*_ensemble} / \code{bias_ratio_*} fields,
+#' so the report and the summary agree (red team round 1, D8). When the config
+#' carries a surveillance tier (\code{config$reported_tier}: 1 observed, 2
+#' reconstructed, 3 imputed), a second row per channel (\code{subset =
+#' "tier12"}) restricts them to tier-1/2 days. A week whose scored days at the
+#' start or end of a series are fewer than seven (a partial edge week) is left
+#' out of \code{weekly}, so a total is never compared over a short week (C12).
+#'
+#' @param pt Prediction table (\code{location}, \code{date}, \code{metric},
+#'   \code{observed}, \code{predicted_central}, \code{predicted_median},
+#'   \code{ci_<k>_lower/upper}), or NULL.
+#' @param config Model config (\code{reported_tier}, \code{location_name},
+#'   \code{date_start}).
+#' @return \code{list(table, per_location, weekly)} of data frames (zero rows
+#'   when there is nothing to score).
+#' @noRd
+.mosaic_calibration_fit <- function(pt, config) {
+  empty <- list(
+    table = data.frame(metric = character(0), subset = character(0), r2 = numeric(0), bias = numeric(0),
+                       cov50 = numeric(0), cov95 = numeric(0), wis = numeric(0), n_scored = integer(0)),
+    per_location = data.frame(location = character(0), metric = character(0), r2 = numeric(0),
+                              bias = numeric(0), cov95 = numeric(0), observed_total = numeric(0)),
+    weekly = data.frame(location = character(0), metric = character(0), week = character(0),
+                        observed = numeric(0), predicted = numeric(0), lo50 = numeric(0),
+                        hi50 = numeric(0), lo95 = numeric(0), hi95 = numeric(0)))
+  if (is.null(pt) || !nrow(pt)) return(empty)
+  pt <- as.data.frame(pt)
+  pt$date <- as.Date(pt$date)
+  pt$metric <- ifelse(grepl("death", as.character(pt$metric), ignore.case = TRUE), "deaths", "cases")
+
+  locs <- as.character(config$location_name)
+  tier <- config$reported_tier
+  has_tier <- !is.null(tier)
+  pt$tier <- NA_integer_
+  if (has_tier) {
+    n_t <- if (is.matrix(tier)) ncol(tier) else length(tier) / max(1L, length(locs))
+    tier <- if (is.matrix(tier)) tier else matrix(as.numeric(tier), nrow = length(locs), ncol = n_t,
+                                                  byrow = length(locs) == 1L)
+    t_idx <- as.integer(pt$date - as.Date(config$date_start)) + 1L
+    l_idx <- match(pt$location, locs)
+    ok <- !is.na(l_idx) & t_idx >= 1L & t_idx <= ncol(tier)
+    pt$tier[ok] <- as.integer(tier[cbind(l_idx[ok], t_idx[ok])])
+  }
+
+  ci <- grep("^ci_[0-9]+_lower$", names(pt), value = TRUE)
+  k <- sub("^ci_([0-9]+)_lower$", "\\1", ci)
+  width <- vapply(k, function(i) mean(pt[[paste0("ci_", i, "_upper")]] - pt[[paste0("ci_", i, "_lower")]],
+                                      na.rm = TRUE), numeric(1))
+  ord <- k[order(-width)]
+  pick <- function(pos, side) if (length(ord) >= pos) pt[[paste0("ci_", ord[pos], "_", side)]] else rep(NA_real_, nrow(pt))
+  pt$lo95 <- pick(1L, "lower"); pt$hi95 <- pick(1L, "upper")
+  pt$lo50 <- pick(2L, "lower"); pt$hi50 <- pick(2L, "upper")
+
+  sc <- pt[is.finite(pt$observed) & is.finite(pt$predicted_central), , drop = FALSE]
+  if (!nrow(sc)) return(empty)
+  med <- if ("predicted_median" %in% names(sc)) sc$predicted_median else sc$predicted_central
+  sc$med <- ifelse(is.finite(med), med, sc$predicted_central)
+  is_int <- function(y, l, u, a) (u - l) + (2 / a) * (l - y) * (y < l) + (2 / a) * (y - u) * (y > u)
+  r2 <- function(y, x) suppressWarnings(tryCatch(calc_model_R2(y, x), error = function(e) NA_real_))
+  bias <- function(y, x) suppressWarnings(tryCatch(calc_bias_ratio(y, x), error = function(e) NA_real_))
+  cover <- function(y, l, u) { ok <- is.finite(l) & is.finite(u); if (any(ok)) mean(y[ok] >= l[ok] & y[ok] <= u[ok]) else NA_real_ }
+
+  row_of <- function(x, m, subset) {
+    if (!nrow(x)) return(NULL)
+    okw <- is.finite(x$lo50) & is.finite(x$hi50) & is.finite(x$lo95) & is.finite(x$hi95)
+    wis <- if (any(okw)) with(x[okw, ], mean((0.5 * abs(observed - med) + 0.25 * is_int(observed, lo50, hi50, 0.5) +
+                                               0.025 * is_int(observed, lo95, hi95, 0.05)) / 2.5)) else NA_real_
+    data.frame(metric = m, subset = subset, r2 = r2(x$observed, x$predicted_central),
+               bias = bias(x$observed, x$predicted_central),
+               cov50 = cover(x$observed, x$lo50, x$hi50), cov95 = cover(x$observed, x$lo95, x$hi95),
+               wis = wis, n_scored = nrow(x), stringsAsFactors = FALSE)
+  }
+  tab <- do.call(rbind, lapply(c("cases", "deaths"), function(m) {
+    x <- sc[sc$metric == m, , drop = FALSE]
+    rbind(row_of(x, m, "scored"),
+          if (has_tier) row_of(x[x$tier %in% c(1L, 2L), , drop = FALSE], m, "tier12"))
+  }))
+  per_loc <- do.call(rbind, lapply(split(sc, list(sc$location, sc$metric), drop = TRUE), function(x)
+    data.frame(location = x$location[1], metric = x$metric[1], r2 = r2(x$observed, x$predicted_central),
+               bias = bias(x$observed, x$predicted_central), cov95 = cover(x$observed, x$lo95, x$hi95),
+               observed_total = sum(x$observed))))
+  # Weekly totals over the scored days; an interval bound is summed only when
+  # it is finite on every scored day of the week (else null). Partial weeks at
+  # either edge of a location-channel series are dropped.
+  sc$week <- sc$date - (as.integer(format(sc$date, "%u")) - 1L)
+  wsum <- function(x) if (all(is.finite(x))) sum(x) else NA_real_
+  by <- list(location = sc$location, metric = sc$metric, week = sc$week)
+  wk <- stats::aggregate(cbind(observed = sc$observed, predicted = sc$predicted_central,
+                               lo50 = sc$lo50, hi50 = sc$hi50, lo95 = sc$lo95, hi95 = sc$hi95),
+                         by = by, FUN = wsum)
+  nd <- stats::aggregate(list(n_days = rep(1L, nrow(sc))), by = by, FUN = sum)
+  wk <- merge(wk, nd, by = c("location", "metric", "week"))
+  wk <- wk[order(wk$location, wk$metric, wk$week), , drop = FALSE]
+  grp <- paste(wk$location, wk$metric)
+  first <- !duplicated(grp); last <- !duplicated(grp, fromLast = TRUE)
+  wk <- wk[!((first | last) & wk$n_days < 7L), setdiff(names(wk), "n_days"), drop = FALSE]
+  wk$week <- format(wk$week, "%Y-%m-%d")
+  rownames(tab) <- rownames(per_loc) <- rownames(wk) <- NULL
+  list(table = tab %||% empty$table, per_location = per_loc[order(per_loc$location, per_loc$metric), , drop = FALSE],
+       weekly = wk)
+}
+
+#' Round the non-integer numbers of a JSON-bound object to significant digits
+#'
+#' Recurses through lists and data frames; whole numbers (counts, draw
+#' indices) and non-numeric values are left exactly as they are.
+#' @param x A list, data frame or vector.
+#' @param digits Significant digits. Default 4.
+#' @return \code{x}, rounded.
+#' @noRd
+.mosaic_signif_json <- function(x, digits = 4L) {
+  if (is.data.frame(x)) {
+    x[] <- lapply(x, .mosaic_signif_json, digits = digits)
+    return(x)
+  }
+  if (is.list(x)) {
+    cls <- class(x)
+    out <- lapply(x, .mosaic_signif_json, digits = digits)
+    attributes(out) <- attributes(x)
+    class(out) <- cls
+    return(out)
+  }
+  if (is.double(x) && !inherits(x, c("Date", "POSIXt"))) {
+    whole <- !is.finite(x) | x == round(x)
+    x[!whole] <- signif(x[!whole], digits)
+  }
+  x
+}
+
+#' The summary.json / calibration_diagnostics.json fields added in red-team round 1
+#'
+#' \code{n_locations} and \code{alpha_per_location} (\code{coarsening_alpha /
+#' n_locations}: eta pools the locations, D2) are run-level; the convergence
+#' fields \code{ess_untempered_frac}, \code{sims_projected_for_green} and
+#' \code{projection_reliable} come from \code{.mosaic_weight_health_fields()}
+#' and are filled with \code{NA} (JSON null) when the status does not carry
+#' them, so the schema is complete for every run.
+#' @param f \code{.mosaic_weight_health_fields()} result.
+#' @param wh The \code{calc_weight_health()} result (may be \code{NULL}).
+#' @param n_locations Locations in the run.
+#' @param alpha \code{coarsening_alpha}.
+#' @return \code{f} with the round-1 fields.
+#' @noRd
+.mosaic_schema2_round1_fields <- function(f, wh, n_locations, alpha) {
+  f$n_locations <- as.integer(n_locations)
+  a <- suppressWarnings(as.numeric(f$coarsening_alpha %||% alpha))
+  if (length(a) != 1L || !is.finite(a)) a <- suppressWarnings(as.numeric(alpha))
+  f$alpha_per_location <- if (length(a) == 1L && is.finite(a) && n_locations > 0) a / n_locations else NA_real_
+  for (nm in c("ess_untempered_frac", "sims_projected_for_green"))
+    if (is.null(f[[nm]])) f[[nm]] <- NA_real_
+  if (is.null(f$projection_reliable)) f$projection_reliable <- NA
+  f
+}
+
+#' Assemble calibration_diagnostics.json (schema 2)
+#'
+#' Every number the calibration-diagnostics report and the dashboard show,
+#' computed once (claude/plan_convergence/SCHEMA_v2.md section 2): run
+#' description, the convergence status and its four checks, the sampling
+#' quantities with the ESS and best-fit paths (at most 60 points), per-parameter
+#' Monte Carlo error and prior-to-posterior KL with the prior family, the fit
+#' tables on scored tier-1/2 days, and the eta = 1 likelihood concentration.
+#' Written by \code{run_MOSAIC()} whatever \code{plots} is.
+#'
+#' @param conv_health The \code{calc_weight_health()} result describing the
+#'   members the posterior uses (NULL when no posterior was built).
+#' @param state Calibration state (\code{mode}).
+#' @param config,control The run's config and merged control.
+#' @param n_obs_scored Scored observation cells.
+#' @param ess_replay \code{.mosaic_ess_replay()} result.
+#' @param quantiles_file posterior_quantiles.csv of the run.
+#' @param prediction_table The ensemble prediction table, or NULL.
+#' @param is_diag_all eta = 1 diagnostics over all draws (\code{calc_is_diagnostics()}).
+#' @return A list ready for JSON.
+#' @noRd
+.mosaic_calibration_diagnostics <- function(conv_health, state, config, control, n_obs_scored,
+                                            ess_replay, quantiles_file, prediction_table = NULL,
+                                            is_diag_all = NULL) {
+  f <- .mosaic_weight_health_fields(conv_health)
+  num <- function(x) { x <- suppressWarnings(as.numeric(unlist(x))); if (length(x) == 1L) x else NA_real_ }
+  thin <- function(df, n = 60L) if (nrow(df) > n) df[unique(round(seq(1, nrow(df), length.out = n))), , drop = FALSE] else df
+  conv <- conv_health$convergence
+  locs <- as.character(config$location_name)
+
+  run <- list(
+    mosaic_version = as.character(utils::packageVersion("MOSAIC")),
+    locations = I(locs),
+    n_locations = length(locs),
+    mode = state$mode %||% NA_character_,
+    posterior_weighting = control$targets$posterior_weighting,
+    coarsening_alpha = num(control$targets$coarsening_alpha),
+    eta = num(control$targets$coarsening_alpha / n_obs_scored),
+    n_obs_scored = as.integer(n_obs_scored),
+    # simulations attempted (valid or not): the report header reads "1 valid of 40 simulated"
+    n_simulations = as.integer(state$total_sims_run %||% NA_integer_),
+    burn_in_days = as.integer(control$likelihood$burn_in_days %||% 0L),
+    n_iterations = as.integer(control$calibration$n_iterations),
+    n_iter_ensemble = as.integer(control$predictions$n_iter_ensemble %||% NA_integer_),
+    date_start = as.character(config$date_start),
+    date_stop = as.character(config$date_stop))
+
+  checks <- if (!is.null(conv$checks)) {
+    ck <- conv$checks
+    data.frame(check = ck$check, label = ck$label, value = ck$value, threshold_green = ck$threshold_green,
+               threshold_yellow = ck$threshold_yellow, colour = ck$colour, reason = ck$reason,
+               stringsAsFactors = FALSE)
+  } else data.frame(check = character(0), label = character(0), value = numeric(0), threshold_green = numeric(0),
+                    threshold_yellow = numeric(0), colour = character(0), reason = character(0))
+  status <- list(convergence_status = f$convergence_status, convergence_label = f$convergence_label,
+                 reasons = I(as.character(unlist(conv$reasons) %||% character(0))),
+                 flags = I(as.character(unlist(conv$flags) %||% character(0))),
+                 flags_text = f$convergence_flags_text,
+                 stopping_rule_met = if (identical(state$mode, "fixed")) NA else isTRUE(state$converged),
+                 checks = checks)
+
+  rp <- if (is.null(ess_replay)) data.frame(n = integer(0), ess_all = numeric(0), best_gap = numeric(0),
+                                             top100_gap = numeric(0)) else thin(ess_replay)
+  f <- .mosaic_schema2_round1_fields(f, conv_health, length(locs), control$targets$coarsening_alpha)
+  sampling <- c(f[c("n_locations", "alpha_per_location", "ess_untempered_frac", "sims_projected_for_green",
+                    "projection_reliable", "ess_all", "ess_all_target", "ess_best", "ess_best_target",
+                    "best_subset_ratio", "best_subset_mass", "ensemble_members", "ensemble_members_unique",
+                    "ensemble_binding", "khat_tempered", "khat_status", "eta_star", "eta_star_n_eff",
+                    "flat_likelihood", "ess_growth_slope", "sims_used", "sims_projected_for_target",
+                    "budget_exhausted")],
+                list(ess_path = rp[, c("n", "ess_all"), drop = FALSE],
+                     loglik_path = rp[, c("n", "best_gap", "top100_gap"), drop = FALSE]))
+
+  # Per parameter: the sampled parameters with a Monte Carlo error, their
+  # prior family and their prior-to-posterior KL (posterior_quantiles.csv).
+  mce <- conv_health$mce$per_parameter
+  mce <- if (is.null(mce)) numeric(0) else unlist(mce)
+  q <- if (!is.null(quantiles_file) && file.exists(quantiles_file))
+    utils::read.csv(quantiles_file, stringsAsFactors = FALSE) else NULL
+  q <- if (!is.null(q) && "type" %in% names(q)) q[q$type == "posterior", , drop = FALSE] else q
+  pnames <- names(mce) %||% character(0)
+  qi <- if (!is.null(q)) match(pnames, q$parameter) else rep(NA_integer_, length(pnames))
+  loc <- if (!is.null(q) && "location" %in% names(q)) as.character(q$location[qi]) else rep(NA_character_, length(pnames))
+  loc[is.na(loc) | !nzchar(loc)] <- NA_character_
+  base <- ifelse(is.na(loc), pnames, sub(paste0("_", "(", paste(locs, collapse = "|"), ")$"), "", pnames))
+  kl <- if (!is.null(q) && "kl" %in% names(q)) suppressWarnings(as.numeric(q$kl[qi])) else rep(NA_real_, length(pnames))
+  band_edges <- c(0.05, 0.5)
+  # Bands are suppressed below an ensemble ESS of about 100, where the null
+  # PIT-KL bias would put prior-only parameters in "partly informed" (T12).
+  band <- .mosaic_kl_band(kl, ess = f$ess_best, edges = band_edges)
+  params <- data.frame(parameter = pnames, base = base, location = loc,
+                       prior_family = if (!is.null(q) && "prior_distribution" %in% names(q))
+                                        as.character(q$prior_distribution[qi]) else rep(NA_character_, length(pnames)),
+                       mce = as.numeric(mce), kl = kl, kl_band = band, stringsAsFactors = FALSE)
+  o <- order(-ifelse(is.na(params$mce), -Inf, params$mce))
+  worst <- params[o[seq_len(min(5L, sum(!is.na(params$mce))))], c("parameter", "mce"), drop = FALSE]
+  rownames(params) <- rownames(worst) <- NULL
+
+  fit <- tryCatch(.mosaic_calibration_fit(prediction_table, config),
+                  error = function(e) .mosaic_calibration_fit(NULL, config))
+
+  list(
+    schema_version = "2",
+    run = run,
+    status = status,
+    sampling = sampling,
+    parameters = params,
+    mce_summary = list(median = f$mce_median, p90 = f$mce_p90, max = f$mce_max, worst = worst),
+    kl_summary = list(largely_prior = sum(band %in% "largely prior"),
+                      partly_informed = sum(band %in% "partly informed"),
+                      data_informed = sum(band %in% "data-informed"),
+                      # KL computed but its band withheld (ensemble ESS < 100, T12 / RN3)
+                      withheld = sum(is.finite(kl) & is.na(band)),
+                      band_edges = band_edges),
+    fit = fit,
+    likelihood_concentration = list(ess_is_all = num(is_diag_all$ess_is),
+                                    note = .mosaic_likelihood_concentration_note()))
+}
+
+#' Write calibration_diagnostics.json atomically (NA and Inf as JSON null)
+#'
+#' The bulky arrays (\code{fit.weekly}, \code{fit.per_location},
+#' \code{sampling.ess_path}, \code{sampling.loglik_path}) are rounded to four
+#' significant digits (\code{.mosaic_signif_json()}); every scalar in
+#' \code{status}, \code{sampling}, \code{mce_summary}, \code{parameters} and
+#' \code{fit.table} keeps full precision, so the report and summary.json show
+#' the same number (RN2). Size: claude/redteam/swe_r1/p14_size_40loc.R.
+#' @param obj \code{.mosaic_calibration_diagnostics()} result.
+#' @param path Destination.
+#' @return \code{path}, invisibly.
+#' @noRd
+.mosaic_write_calibration_diagnostics <- function(obj, path) {
+  # Only the bulky arrays are rounded; every scalar the report, the log and
+  # summary.json quote keeps full precision, so one number is shown everywhere
+  # (red team round 2, RN2 / CN3).
+  for (k in c("weekly", "per_location"))
+    if (!is.null(obj$fit[[k]])) obj$fit[[k]] <- .mosaic_signif_json(obj$fit[[k]], 4L)
+  for (k in c("ess_path", "loglik_path"))
+    if (!is.null(obj$sampling[[k]])) obj$sampling[[k]] <- .mosaic_signif_json(obj$sampling[[k]], 4L)
+  .mosaic_atomic_write(obj, path, function(data, file)
+    jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE, digits = NA,
+                         na = "null", null = "null", dataframe = "rows"))
+  invisible(path)
+}

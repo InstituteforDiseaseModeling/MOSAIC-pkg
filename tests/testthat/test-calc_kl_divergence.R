@@ -1,230 +1,213 @@
 # test-calc_kl_divergence.R
+# The percentile-scale (PIT) estimator (MOSAIC 1.4.0): draws mapped to their
+# prior percentiles, B = 20 equal bins, KL = sum p log(p B) minus the
+# finite-ESS correction (B - 1) / (2 ESS). Analytic references in comments.
 
-test_that("calc_kl_divergence handles basic distributions correctly", {
-  set.seed(123)
+# ---- hand-computed fixture -----------------------------------------------------
 
-  # Test 1: Identical distributions should have KL divergence close to 0
-  samples <- rnorm(1000)
-  kl_div <- calc_kl_divergence(samples, NULL, samples, NULL)
-  expect_true(kl_div >= 0)
-  expect_true(kl_div < 0.01)  # Should be very close to 0
-
-  # Test 2: Different distributions should have positive KL divergence
-  samples1 <- rnorm(1000, mean = 0, sd = 1)
-  samples2 <- rnorm(1000, mean = 2, sd = 1)
-  kl_div <- calc_kl_divergence(samples1, NULL, samples2, NULL)
-  expect_true(kl_div > 0)
-
-  # Test 3: KL divergence is not symmetric
-  kl_div_forward <- calc_kl_divergence(samples1, NULL, samples2, NULL)
-  kl_div_backward <- calc_kl_divergence(samples2, NULL, samples1, NULL)
-  expect_false(abs(kl_div_forward - kl_div_backward) < 1e-10)
+test_that("the binned estimator matches a hand-computed fixture", {
+  # 40 prior draws 1..40, uniform reference: percentiles (r - 0.5)/40, 2 draws per bin.
+  # Posterior weight 3 on draws 1..20 (bins 1..10), 1 on 21..40 (bins 11..20):
+  # p_b = 6/80 for b <= 10 and 2/80 above, so the binned divergence is
+  # 10 (3/40) log(20 * 3/40) + 10 (1/40) log(20 * 1/40) = (3/4) log(3/2) + (1/4) log(1/2)
+  # = 0.13081; ESS = 80^2 / (20 * 9 + 20 * 1) = 32, correction 19 / 64 = 0.297 > 0.131 -> 0.
+  x <- 1:40
+  w <- c(rep(3, 20), rep(1, 20))
+  kl_plug <- (3 / 4) * log(3 / 2) + (1 / 4) * log(1 / 2)
+  expect_equal(calc_kl_divergence(x, w, x, NULL), 0)
+  # 50 tied copies of every draw: each value still spans half a bin, ESS 1600,
+  # correction 19 / 3200
+  xx <- rep(x, each = 50); ww <- rep(w, each = 50)
+  expect_equal(calc_kl_divergence(xx, ww, xx, NULL), kl_plug - 19 / (2 * 1600), tolerance = 1e-12)
+  expect_equal(kl_plug - 19 / 3200, 0.124875, tolerance = 1e-5)
 })
 
-test_that("calc_kl_divergence handles weighted samples", {
-  set.seed(456)
+# ---- reference cases -----------------------------------------------------------
 
-  samples1 <- rnorm(500)
-  weights1 <- runif(500, 0.5, 1.5)
-  samples2 <- rnorm(500, mean = 1)
-  weights2 <- runif(500, 0.5, 1.5)
-
-  # Should work with weights
-  kl_div <- calc_kl_divergence(samples1, weights1, samples2, weights2)
-  expect_true(is.numeric(kl_div))
-  expect_true(kl_div >= 0)
-
-  # Different from unweighted version
-  kl_div_unweighted <- calc_kl_divergence(samples1, NULL, samples2, NULL)
-  expect_false(abs(kl_div - kl_div_unweighted) < 1e-10)
+test_that("an identified normal posterior agrees with the analytic normal-normal KL", {
+  set.seed(42)
+  x <- rnorm(50000)                                    # prior N(0, 1)
+  for (pr in list(c(0.3, 0.5), c(0, 0.8), c(0.5, 0.3))) {
+    w <- stats::dnorm(x, pr[1], pr[2]) / stats::dnorm(x)
+    analytic <- log(1 / pr[2]) + (pr[2]^2 + pr[1]^2) / 2 - 0.5
+    kl <- calc_kl_divergence(x, w, x, NULL)
+    expect_lt(abs(kl - analytic), 0.05 + 0.05 * analytic)
+    expect_lte(kl, analytic + 0.01)                    # binning can only lose information
+  }
+  # two separate samples (randomised PIT against the reference ECDF)
+  kl2 <- calc_kl_divergence(rnorm(20000, 0.5, 0.5), NULL, rnorm(20000), NULL)
+  expect_lt(abs(kl2 - (log(2) + (0.25 + 0.25) / 2 - 0.5)), 0.06)
 })
+
+test_that("a heavy-tailed lognormal prior gives the same KL as on the log scale", {
+  set.seed(3)
+  y <- rlnorm(50000, 0, 2)
+  w <- stats::dnorm(log(y), 1, 0.5) / stats::dnorm(log(y), 0, 2)
+  analytic <- log(2 / 0.5) + (0.25 + 1) / (2 * 4) - 0.5     # KL(N(1, .5^2) || N(0, 2^2)) = 1.0431
+  kl <- calc_kl_divergence(y, w, y, NULL)
+  expect_lt(abs(kl - analytic), 0.08)
+  # invariance: any monotone transform gives the identical estimate
+  expect_identical(calc_kl_divergence(log(y), w, log(y), NULL), kl)
+  expect_identical(calc_kl_divergence(-1 / y, w, -1 / y, NULL), kl)
+})
+
+test_that("integer-valued parameters: unmoved is 0, shifted is close to the discrete KL", {
+  set.seed(4)
+  z <- rpois(50000, 5)
+  expect_equal(calc_kl_divergence(z, rep(1, 50000), z, NULL), 0)
+  w <- stats::dpois(z, 7) / stats::dpois(z, 5)
+  k <- 0:60
+  analytic <- sum(stats::dpois(k, 7) * log(stats::dpois(k, 7) / stats::dpois(k, 5)))  # 0.355
+  kl <- calc_kl_divergence(z, w, z, NULL)
+  expect_lt(abs(kl - analytic), 0.06)
+  expect_gt(kl, 0.2)
+})
+
+test_that("a bounded beta prior with the posterior near its boundary is estimated without boundary bias", {
+  set.seed(5)
+  b <- rbeta(50000, 0.5, 20)
+  w <- stats::dbeta(b, 2, 60) / stats::dbeta(b, 0.5, 20)
+  f <- function(t) { p <- stats::dbeta(t, 2, 60); q <- stats::dbeta(t, 0.5, 20)
+                     ifelse(p > 0, p * log(p / q), 0) }
+  analytic <- stats::integrate(f, 0, 1, subdivisions = 2000L)$value   # 0.419
+  expect_lt(abs(calc_kl_divergence(b, w, b, NULL) - analytic), 0.05)
+})
+
+test_that("flat or prior-like weights give about 0", {
+  set.seed(6)
+  x <- rnorm(20000)
+  expect_equal(calc_kl_divergence(x, rep(1, 20000), x, NULL), 0)
+  expect_equal(calc_kl_divergence(x, NULL, x, NULL), 0)
+  expect_lt(calc_kl_divergence(x, rexp(20000), x, NULL), 0.005)       # noise weights
+  w <- numeric(20000); w[sample(20000, 300)] <- 1                     # random prior subsample
+  expect_lt(calc_kl_divergence(x, w, x, NULL), 0.02)
+  expect_lt(calc_kl_divergence(x[w > 0], NULL, x, NULL), 0.02)
+})
+
+test_that("the estimate is bounded by log(n_bins) and ranks concentration up to it", {
+  set.seed(7)
+  x <- runif(20000)
+  kl <- vapply(c(0.2, 0.08, 0.04), function(s) {
+    w <- stats::dnorm(x, 0.5, s)
+    calc_kl_divergence(x, w, x, NULL)
+  }, numeric(1))
+  expect_true(all(diff(kl) > 0))
+  expect_true(all(kl <= log(20)))
+  r <- rank(x)
+  pm <- numeric(20000); pm[r > 10200 & r <= 10800] <- 1                # percentiles .51-.54: one bin
+  expect_equal(calc_kl_divergence(x, pm, x, NULL), log(20) - 19 / (2 * 600), tolerance = 1e-12)
+  expect_lte(calc_kl_divergence(x, pm, x, NULL, n_bins = 50L), log(50))
+})
+
+test_that("a posterior with fewer effective draws than bins returns NA with a warning", {
+  x <- rnorm(1000)
+  w <- numeric(1000); w[1:10] <- 1
+  expect_warning(kl <- calc_kl_divergence(x, w, x, NULL), "Kish ESS of weights1 is 10.0, below n_bins = 20")
+  expect_true(is.na(kl))
+  expect_false(is.na(suppressWarnings(calc_kl_divergence(x, w, x, NULL, n_bins = 5L))))
+})
+
+test_that("the estimate is deterministic and leaves the caller's RNG untouched", {
+  set.seed(8)
+  z <- rpois(5000, 3); w <- stats::dpois(z, 4) / stats::dpois(z, 3) * runif(5000)
+  set.seed(99); a <- runif(1)
+  set.seed(99); k1 <- calc_kl_divergence(z, w, z, NULL); b <- runif(1)
+  expect_identical(a, b)
+  expect_identical(calc_kl_divergence(z, w, z, NULL), k1)
+  expect_gt(k1, 0)
+  # the seed only moves which tied draws fall either side of a bin edge
+  expect_gt(abs(calc_kl_divergence(z, w, z, NULL, seed = 2) - k1), 1e-6)
+  expect_lt(abs(calc_kl_divergence(z, w, z, NULL, seed = 2) - k1), 0.02)
+})
+
+test_that("weights are normalised internally and reference weights are honoured", {
+  set.seed(9)
+  x <- rnorm(5000); w <- runif(5000)
+  expect_identical(calc_kl_divergence(x, w, x, NULL), calc_kl_divergence(x, 7 * w, x, NULL))
+  # a weighted reference equal to the posterior gives 0
+  q <- stats::dnorm(x, 0.5, 0.7) / stats::dnorm(x)
+  expect_equal(calc_kl_divergence(x, q, x, q), 0)
+  expect_gt(calc_kl_divergence(x, q, x, NULL), 0.1)
+})
+
+# ---- validation and compatibility -----------------------------------------------
 
 test_that("calc_kl_divergence validates input parameters", {
-  set.seed(789)
-  samples1 <- rnorm(100)
-  samples2 <- rnorm(100)
-
-  # Test non-numeric samples
-  expect_error(calc_kl_divergence(c("a", "b"), NULL, samples2, NULL),
-               "samples1 and samples2 must be numeric vectors")
-  expect_error(calc_kl_divergence(samples1, NULL, c("a", "b"), NULL),
-               "samples1 and samples2 must be numeric vectors")
-
-  # Test empty samples
-  expect_error(calc_kl_divergence(numeric(0), NULL, samples2, NULL),
-               "samples1 and samples2 must not be empty")
-  expect_error(calc_kl_divergence(samples1, NULL, numeric(0), NULL),
-               "samples1 and samples2 must not be empty")
-
-  # Test samples with insufficient data points
-  expect_error(calc_kl_divergence(c(1), NULL, samples2, NULL),
-               "samples1 and samples2 must have at least 2 points for density estimation")
-  expect_error(calc_kl_divergence(samples1, NULL, c(1), NULL),
-               "samples1 and samples2 must have at least 2 points for density estimation")
-
-  # Test non-finite values
-  expect_error(calc_kl_divergence(c(1, 2, NA), NULL, samples2, NULL),
-               "samples1 and samples2 must contain only finite values")
-  expect_error(calc_kl_divergence(samples1, NULL, c(1, 2, Inf), NULL),
-               "samples1 and samples2 must contain only finite values")
-
-  # Test weight validation
-  expect_error(calc_kl_divergence(samples1, rep(1, 50), samples2, NULL),
-               "weights1 must have the same length as samples1")
-  expect_error(calc_kl_divergence(samples1, NULL, samples2, rep(1, 50)),
-               "weights2 must have the same length as samples2")
-  expect_error(calc_kl_divergence(samples1, c(-1, rep(1, 99)), samples2, NULL),
-               "weights1 must be non-negative")
-  expect_error(calc_kl_divergence(samples1, rep(0, 100), samples2, NULL),
-               "weights1 must have non-zero sum")
-
-  # Test n_points validation
-  expect_error(calc_kl_divergence(samples1, NULL, samples2, NULL, n_points = -1),
-               "n_points must be a positive integer")
-  expect_error(calc_kl_divergence(samples1, NULL, samples2, NULL, n_points = 0),
-               "n_points must be a positive integer")
-  expect_error(calc_kl_divergence(samples1, NULL, samples2, NULL, n_points = 1),
-               "n_points must be at least 2")
-  expect_error(calc_kl_divergence(samples1, NULL, samples2, NULL, n_points = "abc"),
-               "n_points must be a positive integer")
-
-  # Test eps validation
-  expect_error(calc_kl_divergence(samples1, NULL, samples2, NULL, eps = -1),
-               "eps must be a positive numeric value")
-  expect_error(calc_kl_divergence(samples1, NULL, samples2, NULL, eps = 0),
-               "eps must be a positive numeric value")
-  expect_error(calc_kl_divergence(samples1, NULL, samples2, NULL, eps = "abc"),
-               "eps must be a positive numeric value")
+  s1 <- rnorm(100); s2 <- rnorm(100)
+  expect_error(calc_kl_divergence(c("a", "b"), NULL, s2, NULL), "must be numeric")
+  expect_error(calc_kl_divergence(s1, NULL, c("a", "b"), NULL), "must be numeric")
+  expect_error(calc_kl_divergence(numeric(0), NULL, s2, NULL), "must not be empty")
+  expect_error(calc_kl_divergence(1, NULL, s2, NULL), "at least 2 points")
+  expect_error(calc_kl_divergence(c(1, 2, NA), NULL, s2, NULL), "finite values")
+  expect_error(calc_kl_divergence(s1, NULL, c(1, 2, Inf), NULL), "finite values")
+  expect_error(calc_kl_divergence(s1, rep(1, 50), s2, NULL), "same length as samples1")
+  expect_error(calc_kl_divergence(s1, NULL, s2, rep(1, 50)), "same length as samples2")
+  expect_error(calc_kl_divergence(s1, c(-1, rep(1, 99)), s2, NULL), "non-negative")
+  expect_error(calc_kl_divergence(s1, rep(0, 100), s2, NULL), "non-zero sum")
+  expect_error(calc_kl_divergence(s1, "a", s2, NULL), "numeric or NULL")
+  expect_error(calc_kl_divergence(s1, NULL, s2, NULL, n_bins = 1), "n_bins")
+  expect_error(calc_kl_divergence(s1, NULL, s2, NULL, seed = NA), "seed")
 })
 
-test_that("calc_kl_divergence handles edge cases", {
-  # Test with identical values
-  expect_warning(
-    kl_div <- calc_kl_divergence(rep(5, 100), NULL, rep(5, 100), NULL),
-    "All samples have the same value"
-  )
-  expect_equal(kl_div, 0)
-
-  # Test with very small sample sizes
-  kl_div <- calc_kl_divergence(c(1, 2), NULL, c(1.5, 2.5), NULL)
-  expect_true(is.numeric(kl_div))
-  expect_true(kl_div >= 0)
+test_that("n_points and eps are accepted for compatibility but ignored, with a warning", {
+  set.seed(10)
+  s1 <- rnorm(500, 0.5); s2 <- rnorm(500)
+  ref <- calc_kl_divergence(s1, NULL, s2, NULL)
+  expect_warning(k1 <- calc_kl_divergence(s1, NULL, s2, NULL, n_points = 100), "ignored since MOSAIC 1.4.0")
+  expect_warning(k2 <- calc_kl_divergence(s1, NULL, s2, NULL, eps = 1e-3), "ignored since MOSAIC 1.4.0")
+  expect_identical(k1, ref)
+  expect_identical(k2, ref)
 })
 
-test_that("calc_kl_divergence works with different n_points", {
-  set.seed(321)
-  samples1 <- rnorm(500)
-  samples2 <- rnorm(500, mean = 0.5)
-
-  # Test with different n_points values
-  kl_div_100 <- calc_kl_divergence(samples1, NULL, samples2, NULL, n_points = 100)
-  kl_div_1000 <- calc_kl_divergence(samples1, NULL, samples2, NULL, n_points = 1000)
-  kl_div_5000 <- calc_kl_divergence(samples1, NULL, samples2, NULL, n_points = 5000)
-
-  # All should be positive
-  expect_true(all(c(kl_div_100, kl_div_1000, kl_div_5000) >= 0))
-
-  # They should be reasonably close but not identical
-  expect_true(abs(kl_div_100 - kl_div_1000) < 0.5)
-  expect_true(abs(kl_div_1000 - kl_div_5000) < 0.1)
+test_that("identical constants return 0 with a warning", {
+  expect_warning(kl <- calc_kl_divergence(rep(5, 100), NULL, rep(5, 100), NULL),
+                 "All samples have the same value")
+  expect_equal(kl, 0)
 })
 
-test_that("calc_kl_divergence works with different eps values", {
-  set.seed(654)
-  samples1 <- rnorm(500)
-  samples2 <- rnorm(500, mean = 0.5)
-
-  # Test with different eps values
-  kl_div_small <- calc_kl_divergence(samples1, NULL, samples2, NULL, eps = 1e-15)
-  kl_div_default <- calc_kl_divergence(samples1, NULL, samples2, NULL, eps = 1e-10)
-  kl_div_large <- calc_kl_divergence(samples1, NULL, samples2, NULL, eps = 1e-5)
-
-  # All should be positive
-  expect_true(all(c(kl_div_small, kl_div_default, kl_div_large) >= 0))
-
-  # They should be reasonably close
-  expect_true(abs(kl_div_small - kl_div_default) < 0.01)
-  expect_true(abs(kl_div_default - kl_div_large) < 0.01)
-})
-
-test_that("deprecated calculate_kl_divergence function still works", {
+test_that("deprecated calculate_kl_divergence still works", {
   set.seed(987)
-  samples1 <- rnorm(100)
-  samples2 <- rnorm(100, mean = 1)
-
-  # Should produce deprecation warning
-  expect_warning(
-    kl_div_old <- calculate_kl_divergence(samples1, NULL, samples2, NULL),
-    "deprecated"
-  )
-
-  # Should produce same result as new function
-  kl_div_new <- calc_kl_divergence(samples1, NULL, samples2, NULL)
-  expect_equal(kl_div_old, kl_div_new)
+  s1 <- rnorm(100); s2 <- rnorm(100, mean = 1)
+  expect_warning(old <- calculate_kl_divergence(s1, NULL, s2, NULL), "deprecated")
+  expect_identical(old, calc_kl_divergence(s1, NULL, s2, NULL))
 })
 
-test_that("calc_kl_divergence produces reasonable values for known distributions", {
-  set.seed(1234)
-  n <- 10000  # Large sample for better approximation
-
-  # Test 1: Two normal distributions with same variance
-  # Theoretical KL divergence: 0.5 * ((mu1 - mu2)^2 / sigma^2)
-  mu1 <- 0
-  mu2 <- 1
-  sigma <- 1
-  samples1 <- rnorm(n, mean = mu1, sd = sigma)
-  samples2 <- rnorm(n, mean = mu2, sd = sigma)
-
-  theoretical_kl <- 0.5 * ((mu1 - mu2)^2 / sigma^2)
-  empirical_kl <- calc_kl_divergence(samples1, NULL, samples2, NULL, n_points = 2000)
-
-  # Should be within reasonable tolerance (accounting for sampling and estimation error)
-  expect_true(abs(empirical_kl - theoretical_kl) < 0.1)
-
-  # Test 2: Identical distributions should have KL close to 0
-  samples_identical <- rnorm(n)
-  kl_identical <- calc_kl_divergence(samples_identical, NULL, samples_identical, NULL)
-  expect_true(kl_identical < 0.001)
+test_that("the posterior-quantile KL is calc_kl_divergence on the members against all draws", {
+  set.seed(11)
+  prior <- rnorm(20000)
+  post <- prior[1:400] * 0.4 + 0.3
+  w <- runif(400)
+  expect_identical(MOSAIC:::.mosaic_posterior_kl(prior, post, w),
+                   calc_kl_divergence(post, w / sum(w), prior, NULL))
+  expect_true(is.na(MOSAIC:::.mosaic_posterior_kl(prior, post[1:5])))          # < 10 draws
+  w1 <- c(1, rep(1e-9, 399))                                                  # Kish ESS ~ 1
+  expect_true(is.na(MOSAIC:::.mosaic_posterior_kl(prior, post, w1)))
+  expect_equal(MOSAIC:::.mosaic_posterior_kl(rep(2, 50), rep(2, 20)), 0)
+  expect_true(is.na(MOSAIC:::.mosaic_posterior_kl(rep(2, 50), rep(3, 20))))
 })
 
-test_that("calc_kl_divergence handles weight normalization correctly", {
-  set.seed(5678)
-  samples1 <- rnorm(100)
-  samples2 <- rnorm(100, mean = 0.5)
-
-  # Test with unnormalized weights
-  weights1 <- runif(100, 1, 10)  # Not normalized
-  weights2 <- runif(100, 2, 20)  # Not normalized
-
-  # Function should normalize internally
-  kl_div <- calc_kl_divergence(samples1, weights1, samples2, weights2)
-  expect_true(is.numeric(kl_div))
-  expect_true(kl_div >= 0)
-
-  # Should get same result with pre-normalized weights
-  weights1_norm <- weights1 / sum(weights1)
-  weights2_norm <- weights2 / sum(weights2)
-  kl_div_norm <- calc_kl_divergence(samples1, weights1_norm, samples2, weights2_norm)
-
-  expect_equal(kl_div, kl_div_norm, tolerance = 1e-10)
+test_that("exactly n_bins equal weights is assessed, not NA (T12 tolerance)", {
+  set.seed(12)
+  prior <- seq(0.00005, 0.99995, length.out = 10000)      # uniform reference, percentiles = values
+  # 20 equal weights all in the first bin: KL = log(20) - 19 / (2 * 20)
+  inside <- seq(0.01, 0.04, length.out = 20)
+  expect_silent(k <- calc_kl_divergence(inside, rep(1, 20), prior, NULL))
+  expect_rel_equal(k, log(20) - 19 / 40, rel = 1e-12)
+  # one draw per bin: plug-in 0, so 0 after the correction
+  expect_identical(calc_kl_divergence((1:20 - 0.5) / 20, rep(1, 20), prior, NULL), 0)
+  # 19 equal weights is below n_bins: NA with a warning
+  expect_warning(k19 <- calc_kl_divergence(inside[1:19], rep(1, 19), prior, NULL), "below n_bins")
+  expect_true(is.na(k19))
 })
 
-test_that("calc_kl_divergence handles extreme distributions", {
-  set.seed(9999)
-
-  # Test with very different scales
-  samples1 <- rnorm(500, mean = 0, sd = 0.01)  # Very narrow
-  samples2 <- rnorm(500, mean = 0, sd = 10)    # Very wide
-
-  kl_div <- calc_kl_divergence(samples1, NULL, samples2, NULL)
-  expect_true(is.numeric(kl_div))
-  expect_true(kl_div > 0)  # Should be large due to very different spreads
-
-  # Test with separated distributions
-  samples1 <- rnorm(500, mean = -10, sd = 1)
-  samples2 <- rnorm(500, mean = 10, sd = 1)
-
-  kl_div <- calc_kl_divergence(samples1, NULL, samples2, NULL)
-  expect_true(is.numeric(kl_div))
-  expect_true(kl_div > 1)  # Should be large due to separation
+test_that("KL bands are suppressed below ESS 100 (T12)", {
+  band <- MOSAIC:::.mosaic_kl_band
+  kl <- c(0.01, 0.049999, 0.05, 0.3, 0.5, 2, NA)
+  expect_identical(band(kl, ess = 200),
+                   c("largely prior", "largely prior", "partly informed", "partly informed",
+                     "data-informed", "data-informed", NA))
+  expect_identical(band(kl, ess = 100)[1], "largely prior")
+  expect_identical(band(kl, ess = 99.9), rep(NA_character_, 7))
+  expect_identical(band(kl, ess = NA), rep(NA_character_, 7))
+  expect_identical(band(c(0.1, 0.4), ess = 500, edges = c(0.2, 0.3)), c("largely prior", "data-informed"))
 })

@@ -109,7 +109,9 @@ plot_model_parameter_sensitivity <- function(results_file,
     nm   <- clean_label(sens_top$parameter[i])
     desc <- sens_top$description[i]
     if (!is.na(desc) && nchar(desc) > 0) {
-      desc <- substr(desc, 1, max_desc_chars)
+      # Cut at a word boundary with an ellipsis, not mid-word (R14).
+      if (nchar(desc) > max_desc_chars)
+        desc <- paste0(sub("\\s+\\S*$", "", substr(desc, 1, max_desc_chars)), "...")
       paste0(nm, "   ", desc)
     } else {
       nm
@@ -138,14 +140,20 @@ plot_model_parameter_sensitivity <- function(results_file,
   # Plot
   # -----------------------------------------------------------------------
   sig_note <- "bars coloured by significance (*p<0.05 **p<0.01 ***p<0.001)"
+  # R2-HSIC is non-negative, but its unbiased (U-statistic) estimate can fall
+  # slightly below 0 when a parameter and the log-likelihood are independent.
+  # Bars are drawn from 0 and the caption says so (RN6); the CSV keeps the
+  # estimate as computed.
+  n_neg <- sum(sens_top$hsic_r2 < 0, na.rm = TRUE)
+  sens_top$hsic_bar <- pmax(sens_top$hsic_r2, 0)
 
   p_sens <- ggplot2::ggplot(
     sens_top,
-    ggplot2::aes(x = .data$hsic_r2, y = .data$param_label, fill = .data$sig_tier)
+    ggplot2::aes(x = .data$hsic_bar, y = .data$param_label, fill = .data$sig_tier)
   ) +
     ggplot2::geom_col(width = 0.7) +
     ggplot2::geom_text(
-      ggplot2::aes(label = .data$sig, x = .data$hsic_r2 + 0.002),
+      ggplot2::aes(label = .data$sig, x = .data$hsic_bar + 0.002),
       hjust = 0, size = 3.5, color = "#333333"
     ) +
     ggplot2::geom_vline(xintercept = 0, color = "#333333", linewidth = 0.4) +
@@ -158,20 +166,27 @@ plot_model_parameter_sensitivity <- function(results_file,
     ) +
     ggplot2::labs(
       title    = "Parameter Sensitivity (HSIC)",
+      # Two lines and positioned on the whole plot, so the subtitle is not
+      # clipped at the right edge (R14).
       subtitle = sprintf(
-        "Top %d of %d parameters by R\u00b2-HSIC with log-likelihood (%s%s); %s",
+        "Top %d of %d parameters by R\u00b2-HSIC with log-likelihood (%s%s);\n%s",
         top_n, p, subset_label,
         if (length(n_used) == 1L && !is.na(n_used)) sprintf(", n = %d", as.integer(n_used)) else "",
         sig_note
       ),
       x = expression(R^2 * "-HSIC  (kernel independence measure)"),
-      y = NULL
+      y = NULL,
+      caption = if (n_neg > 0) sprintf(paste0("%d negative estimate%s drawn at 0: the U-statistic estimator ",
+                                              "is unbiased, so independence can give values slightly below 0."),
+                                       n_neg, if (n_neg == 1) "" else "s") else NULL
     ) +
     theme_mosaic(base_size = 11) +
     ggplot2::theme(
       panel.grid.major.y = ggplot2::element_blank(),
       axis.text.y        = ggplot2::element_text(size = 11),
-      legend.position    = c(0.80, 0.15)
+      legend.position    = c(0.80, 0.15),
+      plot.title.position = "plot",
+      plot.margin        = ggplot2::margin(10, 30, 10, 10)
     )
 
   fig_height <- max(7, top_n * 0.4 + 2)

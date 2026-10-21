@@ -1,7 +1,8 @@
 #' Plot Detailed Prior to Posterior Distributions
 #'
 #' Creates detailed multi-panel visualizations showing the progression from prior
-#' to posterior distributions through retained and best subsets, with ESS and KL metrics.
+#' to posterior distributions: all valid draws, the posterior over them (weight_all)
+#' and the ensemble members, with ESS and KL metrics.
 #'
 #' @param quantiles_file Path to the posterior_quantiles.csv file from calc_model_posterior_quantiles
 #' @param results_file Path to samples.parquet file containing all simulation results
@@ -94,7 +95,11 @@ plot_model_posteriors_detail <- function(quantiles_file,
   # keeps the object alive, so the rm() that went with the deletion freed
   # nothing anyway.
   results_all <- results_full  # All simulations
-  results_retained <- results_full[results_full$is_retained, ]  # Non-outlier models
+  # Every valid draw: the coarsened posterior (weight_all) is defined over all of
+  # them (the legacy Tukey-fence subset is not a posterior).
+  valid_rows <- if ("is_finite" %in% names(results_full)) as.logical(results_full$is_finite) else
+    is.finite(results_full$likelihood)
+  results_retained <- results_full[valid_rows %in% TRUE, ]
   results_best <- results_full[as.logical(results_full[[subset_col]]), ]  # Best subset
 
   # Load priors
@@ -368,10 +373,10 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     posterior_weights <- results_best[[weight_col]]
 
-    # Check if retained weights exist
+    # The posterior weights over every valid draw (weight_all)
     retained_weights <- NULL
-    if ("weight_retained" %in% names(results_retained)) {
-      retained_weights <- results_retained$weight_retained
+    if ("weight_all" %in% names(results_retained)) {
+      retained_weights <- results_retained$weight_all
     }
 
     # Basic validation only - weights should already be proper
@@ -503,12 +508,12 @@ plot_model_posteriors_detail <- function(quantiles_file,
       p_prior <- p_prior + ggplot2::scale_x_continuous(limits = x_limits)
     }
 
-    # Panel 2: Unweighted Retained Samples
+    # Panel 2: all valid draws, unweighted
     p_retained <- ggplot2::ggplot() +
       ggplot2::geom_histogram(data = df_retained,
                     ggplot2::aes(x = x, y = ggplot2::after_stat(density)),
                     bins = 50, fill = posterior_color, alpha = 0.4, color = "white") +
-      ggplot2::labs(title = "Retained Samples (Unweighted)",
+      ggplot2::labs(title = "All Valid Draws (Unweighted)",
            subtitle = paste("n =", length(retained_samples)),
            x = NULL, y = "Density") +
       ggplot2::theme_minimal() +
@@ -530,7 +535,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
       p_retained <- p_retained + ggplot2::scale_x_continuous(limits = x_limits)
     }
 
-    # Panel 3: Weighted Retained Samples (if weights exist)
+    # Panel 3: the posterior over all valid draws (weight_all), when present
     if (!is.null(df_retained_weighted)) {
       p_retained_weighted <- ggplot2::ggplot() +
         ggplot2::geom_histogram(data = df_retained_weighted,
@@ -539,8 +544,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
         ggplot2::geom_density(data = df_retained_weighted,
                     ggplot2::aes(x = x, weight = w),
                     color = posterior_color, linewidth = 1.0, alpha = 0.6) +
-        ggplot2::labs(title = "Retained Samples (Weighted)",
-             subtitle = paste("ESS =", round(ess_retained, 1)),
+        ggplot2::labs(title = "Posterior, All Draws (weight_all)",
+             subtitle = paste("Posterior ESS =", round(ess_retained, 1)),
              x = NULL, y = "Density")
 
       # Apply scale with scientific notation for tiny values
@@ -573,7 +578,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
       ggplot2::geom_histogram(data = df_best,
                     ggplot2::aes(x = x, y = ggplot2::after_stat(density)),
                     bins = 50, fill = posterior_color, alpha = 0.6, color = "white") +
-      ggplot2::labs(title = "Best Subset (Unweighted)",
+      ggplot2::labs(title = "Ensemble Members (Unweighted)",
            subtitle = paste("n =", length(best_samples)),
            x = NULL, y = "Density")
 
@@ -606,8 +611,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
       ggplot2::geom_density(data = df_best_weighted,
                   ggplot2::aes(x = x, weight = w),
                   color = posterior_color, linewidth = 1.2, alpha = 0.8) +
-      ggplot2::labs(title = "Best Subset (Weighted)",
-           subtitle = paste("Effective Sample Size =", round(ess_best, 1)),
+      ggplot2::labs(title = "Ensemble Members (Weighted)",
+           subtitle = paste("Ensemble ESS =", round(ess_best, 1)),
            x = NULL, y = "Density")
 
     # Apply scale with scientific notation for tiny values

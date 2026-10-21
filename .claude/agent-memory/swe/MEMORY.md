@@ -43,3 +43,6 @@
 - [window + ensemble cost scaling](reference_window_and_ensemble_cost_scaling.md) — per-run cost linear in T (flat per-tick); continental post-cal F term EXPLAINED (root_dir clusterCall ships the frame, 5.7 GB/worker); broadcast = |B| x config x workers (373 GB at 2018)
 - [suite lane kill + check traps](reference_suite_lane_kill_and_check_traps.md) — kill one job = the setsid lane's group minus the lane, snapshot before SIGKILL; `$!` of a bg function; PDF manual ERROR hidden by --no-manual
 - [deploy env leak + install guard](reference_deploy_env_leak_and_install_guard.md) — idle-lane install hole; shell/BASH_ENV/Renviron knob leaks; stage2 assembler env; name-keyed gates; watchdog PID
+- [1.4.0 WS2 pipeline traps](reference_v140_ws2_pipeline_traps.md) — digits=I(17) writes NA as "NA" (use na="null"); legacy-control fixtures; scheme-dependent ESS_best; in-memory gate pool + geometric fallback
+- [1.4.0 WS6 validation](project_v140_ws6_validation.md) — real stops = replay (same draws); measured ensemble memory model (config 65 B/cell, worker = base + |B|xconfig); HSIC 67 GB at p=916
+- [remote process-mgmt traps](reference_remote_process_mgmt_traps.md) — pkill -f matches your own ssh shell; pgrep -af field 0 is the PID; scheduler launch spacing

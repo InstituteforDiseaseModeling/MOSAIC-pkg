@@ -15,8 +15,9 @@ run_rolling_cv(
   base_config = MOSAIC::config_default,
   priors = MOSAIC::priors_default,
   control = NULL,
-  optimize_subset = TRUE,
-  models = c("ensemble", "ensemble_opt", "medoid"),
+  optimize_subset = FALSE,
+  models = if (isTRUE(optimize_subset)) c("ensemble", "ensemble_opt", "medoid") else
+    c("ensemble", "medoid"),
   n_reps_best_medoid = 50L,
   central_method = c(cases = "median", deaths = "mean"),
   est_suitability_spec = list(),
@@ -49,23 +50,27 @@ window defines the anchor and projection span.}
 \item{priors}{Priors list (default \code{MOSAIC::priors_default}).}
 
 \item{control}{\code{run_MOSAIC} control list, or NULL for an experiment-grade
-cheap default (fixed \code{n_simulations}, plots off). See
+cheap default (fixed \code{n_simulations} = 2,000, plots off). An adaptive
+control (no \code{calibration$n_simulations}) is allowed but warns: every
+cutoff then runs a full adaptive calibration. See
 \code{\link{mosaic_control_defaults}}. The harness forces
 \code{paths$clean_output = TRUE}, so each cutoff's \code{runs/cutoff_<T>/}
 directory is wiped before its calibration and simulation shards left by an
 earlier interrupted attempt cannot enter the new posterior.}
 
-\item{optimize_subset}{Logical (default \code{TRUE}); enable
+\item{optimize_subset}{Logical (default \code{FALSE} since MOSAIC 1.3.0,
+\code{TRUE} in 1.2.x, matching \code{mosaic_control_defaults()}); enable
 \code{run_MOSAIC}'s post-ensemble best-subset optimizer
-(\code{control$predictions$optimize_subset}). When \code{TRUE} the harness
-sets this on the resolved control for every cutoff, so the ensemble is
-re-scored against the training-window observed series and the posterior is
-driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
-candidate ensemble.}
+(\code{control$predictions$optimize_subset}). The harness sets this on the
+resolved control for every cutoff. When \code{TRUE} the ensemble is
+re-scored against the training-window observed series and the posterior
+and predictions are driven by the optimizer-selected subset; when
+\code{FALSE} the candidate ensemble (under the default coarsened posterior,
+its systematic resample) is used.}
 
 \item{models}{Character vector of model types to score and carry in
-\code{predictions.parquet} (default
-\code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
+\code{predictions.parquet} (default \code{c("ensemble","medoid")}, plus
+\code{"ensemble_opt"} when \code{optimize_subset = TRUE}). \code{"ensemble"}
 (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 the optimizer-selected subset, emitted only for cutoffs where the optimizer
 actually ran and selected a subset (\code{subset_opt.rds} present, or a
@@ -208,7 +213,9 @@ from the run directories with \code{\link{compile_rolling_cv_predictions}}.
 The predictions table has one row per (cutoff x location x date x metric) with
 columns: \code{run_id, iso_code, anchor_date, cutoff_date, date, metric,
 segment} (IS/embargo/OOS), \code{weeks_ahead, horizon_bucket, observed,
-observed_source, pred_central} (the scored series), \code{pred_mean,
+observed_source, observed_tier} (the config's \code{reported_tier}: 1
+observed, 2 reconstructed, 3 imputed; NA where the config has none),
+\code{pred_central} (the scored series), \code{pred_mean,
 pred_median, central_method}, CI columns (\code{pi*_lo}/\code{pi*_hi}) and
 \code{pred_median_obs}, the median of the same draws as the CI columns (the
 observation-level predictive median since v0.101.0), which WIS pairs with them.
@@ -217,7 +224,10 @@ Every model's rows carry the cutoff run's interval semantics: the
 \code{\link{calc_model_ensemble}} with the run's observation model and deaths
 integration, as its own ensembles were built.
 \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
-rows carry the real target for post-hoc scoring.
+rows carry the real target for post-hoc scoring. Every row also carries its
+cutoff run's \code{ess} (the ensemble ESS, \code{summary.json} \code{ess_best})
+and \code{convergence_status} (\code{"green"} / \code{"yellow"} / \code{"red"};
+NA for a run from before MOSAIC 1.4.0), constant per cutoff.
 }
 \seealso{
 \code{\link{run_MOSAIC}}, \code{\link{est_suitability}},

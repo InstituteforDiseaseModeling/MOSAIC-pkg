@@ -88,19 +88,15 @@ CONTROL_SETTINGS <- list(
   # Calibration
   n_simulations = NULL,         # NULL = adaptive/auto mode; integer = fixed mode
   n_iterations = 3,             # stochastic engine iterations per parameter set
-  batch_size_adaptive = 1000,   # Simulations per Phase 1 adaptive batch
-  min_batches_adaptive = 5,     # Minimum batches before convergence check
-  max_batches_adaptive = 10,    # Maximum adaptive batches
-  target_r2_adaptive = 0.95,    # R^2 convergence threshold
-  max_simulations_total = 50000,  # Safety limit on total simulations
+  batch_size_adaptive = 1000,   # Batch size until the minimum run length is met
+  min_batches_adaptive = 5,     # Minimum batches before any stop or projection
+  min_draws = 5000,             # Minimum draws before any stop or projection
+  max_simulations_total = 50000,  # Budget cap (as before 1.4.0): stops at a green convergence status or here
 
-  # Targets
-  ESS_param = 1000,             # Target ESS per parameter
-  ESS_param_prop = 1 - 1/41,        # Proportion threshold (95%)
-  ESS_best = 100,               # Target for top-weighted samples
-  min_best_subset = 30,         # Minimum best subset size
-  max_best_subset = 1500,       # Maximum best subset size
-  ESS_method = 'perplexity',    # ESS calculation method
+  # Targets (MOSAIC 1.4.0 best-fit ensemble; the package defaults)
+  ESS_best = 200,               # Required ensemble ESS (green at or above)
+  best_subset_ratio = 0.2,      # Ensemble = best fits holding 0.2 x ESS_all
+  max_ensemble_members = 1000,  # Upper bound on the ensemble size
 
   # Likelihood weights
   weight_cases = 1.0,           # Weight for case data
@@ -308,8 +304,7 @@ for (i in seq_along(COUNTRIES)) {
     control$calibration$n_iterations <- CONTROL_SETTINGS$n_iterations
     control$calibration$batch_size_adaptive <- CONTROL_SETTINGS$batch_size_adaptive
     control$calibration$min_batches_adaptive <- CONTROL_SETTINGS$min_batches_adaptive
-    control$calibration$max_batches_adaptive <- CONTROL_SETTINGS$max_batches_adaptive
-    control$calibration$target_r2_adaptive <- CONTROL_SETTINGS$target_r2_adaptive
+    control$calibration$min_draws <- CONTROL_SETTINGS$min_draws
     control$calibration$max_simulations_total <- CONTROL_SETTINGS$max_simulations_total
 
     # Parallel settings
@@ -317,12 +312,9 @@ for (i in seq_along(COUNTRIES)) {
     control$parallel$n_cores <- CONTROL_SETTINGS$n_cores
 
     # Target settings
-    control$targets$ESS_param <- CONTROL_SETTINGS$ESS_param
-    control$targets$ESS_param_prop <- CONTROL_SETTINGS$ESS_param_prop
     control$targets$ESS_best <- CONTROL_SETTINGS$ESS_best
-    control$targets$min_best_subset <- CONTROL_SETTINGS$min_best_subset
-    control$targets$max_best_subset <- CONTROL_SETTINGS$max_best_subset
-    control$targets$ESS_method <- CONTROL_SETTINGS$ESS_method
+    control$targets$best_subset_ratio <- CONTROL_SETTINGS$best_subset_ratio
+    control$targets$max_ensemble_members <- CONTROL_SETTINGS$max_ensemble_members
 
     # CRITICAL: Disable multi-location parameters for single-location runs
     control$sampling$sample_tau_i <- FALSE           # Travel probability

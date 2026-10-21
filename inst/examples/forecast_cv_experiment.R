@@ -122,7 +122,11 @@ SPEC <- list(
      # --- scoring -------------------------------------------------------------
      metrics   = c("cases", "deaths"),
      baselines = c("seasonal", "persistence", "persistence_last"),  # seasonal=climatology=PRIMARY
-     ess_min   = as.numeric(Sys.getenv("FORECAST_CV_ESS_MIN", "50")),  # weight-ESS floor
+     # Convergence gate of evaluate_rolling_cv(): 0 (default) = no gate; > 0 =
+     # drop cutoffs whose MOSAIC 1.4.0 convergence status is red (pre-1.4.0
+     # cutoffs: ESS below this floor). The 2,000-draw cutoff calibrations are
+     # red under 1.4.0, so a gate would leave no cell.
+     ess_min   = as.numeric(Sys.getenv("FORECAST_CV_ESS_MIN", "0")),
      min_cells_ci = 5L,                                                # suppress CI below this n
 
      # --- models + central tendency -------------------------------------------
@@ -227,7 +231,6 @@ if (PHASE %in% c("all", "calibrate")) {
           ctrl$calibration <- modifyList(ctrl$calibration %||% list(),
                                          list(n_simulations = as.integer(Sys.getenv("FORECAST_CV_N_SIM", "2000")),
                                               n_iterations   = as.integer(Sys.getenv("FORECAST_CV_N_ITER", "3"))))
-          ctrl$targets     <- modifyList(ctrl$targets %||% list(), list(ESS_param = 100L))
      }
      # R fixes its connection table at startup and every PSOCK worker holds one
      # slot, so the CALIBRATION pool is capped even where the box is far larger.
@@ -336,7 +339,9 @@ if (PHASE %in% c("all", "score")) {
      cat(sprintf("\n===== OOS (%g-mo) R2 + bias, ensemble, per country x origin =====\n", SPEC$primary_horizon))
      print(oos, row.names = FALSE)
 
-     cat(sprintf("\nESS gate (floor %g): %d/%d cells pass\n", SPEC$ess_min, sum(cells$ess_ok, na.rm = TRUE), nrow(cells)))
+     cat(sprintf("\nConvergence gate (%s): %d/%d cells pass\n",
+                 if (SPEC$ess_min > 0) sprintf("on, ess_min %g", SPEC$ess_min) else "off",
+                 sum(cells$ess_ok, na.rm = TRUE), nrow(cells)))
 
      manifest <- list(
           experiment = "forecast_cv (HINDCAST / conditional model skill, realized covariates -- NOT forecast skill)",

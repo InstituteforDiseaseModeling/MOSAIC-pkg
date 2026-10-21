@@ -55,16 +55,31 @@ test_that("parameter_sensitivity.csv records the weighting and n_used the plot s
                         a = stats::runif(n), b = stats::runif(n), c = stats::runif(n))
   samples$likelihood <- -50 * (samples$a - 0.5)^2 + stats::rnorm(n, sd = 0.1)
   samples$is_finite <- TRUE; samples$is_valid <- TRUE; samples$is_retained <- TRUE
-  samples$weight_retained <- rep(1 / n, n)
+  # weight_retained (legacy Akaike) is ignored: the posterior weights are weight_all
+  samples$weight_retained <- c(1, rep(0, n - 1))
+  samples$weight_all <- rep(1 / n, n)
   samples$is_best_subset <- FALSE
   d <- withr::local_tempdir()
   sp <- file.path(d, "samples.parquet"); arrow::write_parquet(samples, sp)
 
   res <- calc_model_parameter_sensitivity(sp, output_dir = d, n_samples = 100, verbose = FALSE)
-  expect_identical(res$subset_label, "importance-weighted by weight_retained")
+  expect_identical(res$subset_label, "posterior-weighted by weight_all (all valid draws)")
+  # R19: the members' weights (weight_best) are the posterior when present
+  samples_m <- samples; samples_m$is_best_subset <- seq_len(n) <= 60L
+  samples_m$weight_best <- ifelse(samples_m$is_best_subset, 1 / 60, 0)
+  spm <- file.path(d, "samples_m.parquet"); arrow::write_parquet(samples_m, spm)
+  resm <- calc_model_parameter_sensitivity(spm, n_samples = 100, verbose = FALSE)
+  expect_identical(resm$subset_label, "ensemble members, weighted by weight_best")
   csv <- utils::read.csv(file.path(d, "parameter_sensitivity.csv"), stringsAsFactors = FALSE)
   expect_true(all(csv$weighting == res$subset_label))
   expect_true(all(csv$n_used == res$n_used))
+  # degenerate posterior weights fall back to the ensemble members
+  samples2 <- samples; samples2$weight_all <- c(1, rep(0, n - 1))
+  samples2$is_best_subset <- seq_len(n) <= 40L
+  sp2 <- file.path(d, "samples2.parquet"); arrow::write_parquet(samples2, sp2)
+  res2 <- calc_model_parameter_sensitivity(sp2, n_samples = 100, verbose = FALSE)
+  expect_match(res2$subset_label, "^ensemble members \\(posterior ESS = 1 < threshold 10\\)")
+  expect_identical(res2$n_used, 40L)
 
   back <- MOSAIC:::.mosaic_read_sensitivity_csv(file.path(d, "parameter_sensitivity.csv"))
   expect_identical(back$subset_label, res$subset_label)
@@ -79,7 +94,7 @@ test_that("parameter_sensitivity.csv records the weighting and n_used the plot s
   plot_model_parameter_sensitivity(results_file = sp, output_dir = d,
                                    sensitivity = back, verbose = FALSE)
   sub <- saved$labels$subtitle
-  expect_match(sub, "importance-weighted by weight_retained, n = 100", fixed = TRUE)
+  expect_match(sub, "posterior-weighted by weight_all (all valid draws), n = 100", fixed = TRUE)
 
   # A CSV written before the columns existed still reads, with n_used = NA.
   old <- csv[, c("parameter", "hsic_r2", "p_value", "sig", "description")]

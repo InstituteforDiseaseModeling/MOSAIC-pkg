@@ -21,7 +21,10 @@ over the retained set \eqn{\mathcal B = \{i : w_i > 0\}}, after normalizing with
 
 Other calibration-metrics:
 \code{\link[=calc_convergence_diagnostics]{calc_convergence_diagnostics()}},
+\code{\link[=calc_convergence_status]{calc_convergence_status()}},
 \code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}},
-\code{\link[=calc_model_ess]{calc_model_ess()}}
+\code{\link[=calc_model_ess]{calc_model_ess()}},
+\code{\link[=calc_run_weight_health]{calc_run_weight_health()}},
+\code{\link[=calc_weight_health]{calc_weight_health()}}
 }
 \concept{calibration-metrics}

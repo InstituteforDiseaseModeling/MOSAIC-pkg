@@ -44,9 +44,11 @@ model of \code{\link{make_forecast_cv_table}} and
 
 \item{metrics}{Channels to facet (default \code{c("cases","deaths")}).}
 
-\item{show_gated}{Logical; draw ESS-gated-out origins as hollow points instead
-of dropping them (default TRUE). Gated origins are excluded from the median +
-tally regardless.}
+\item{show_gated}{Logical; draw gated-out origins (\code{ess_ok = FALSE}:
+\code{evaluate_rolling_cv()} run with \code{ess_min > 0}) as hollow points
+instead of dropping them (default TRUE). Gated origins are excluded from the
+median + tally regardless; with the default \code{ess_min = 0} no origin is
+gated.}
 
 \item{title, subtitle, caption}{Plot labels (sensible defaults from \code{value}).}
 

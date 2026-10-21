@@ -17,14 +17,18 @@
 #' @param priors_file Path to \code{priors.json} (used for parameter descriptions).
 #' @param output_dir Optional directory to write \code{parameter_sensitivity.csv} (the \code{sens_df} columns plus run-level \code{weighting} and \code{n_used}). When \code{NULL} (default) no file is written.
 #' @param n_samples Maximum number of posterior draws to use. Samples are drawn
-#'   with replacement using importance weights. Default 2000.
+#'   with replacement using the ensemble members' weights (\code{weight_best},
+#'   or \code{weight_best_opt} when \code{subset_col = "is_best_subset_opt"}),
+#'   the posterior the other outputs use; a file without them falls back to
+#'   \code{weight_all} (all valid draws). Default 2000.
 #' @param kernel Kernel type for input parameters passed to
 #'   \code{\link[sensitivity]{sensiHSIC}}. One of \code{"rbf"} (default),
 #'   \code{"laplace"}, or \code{"dcov"}.
 #' @param test_method Significance test method. \code{"Asymptotic"} (default) or
 #'   \code{"Permutation"}.
-#' @param subset_col Boolean subset-membership column used as the fallback when
-#'   importance-weight ESS is degenerate. Default \code{"is_best_subset"}.
+#' @param subset_col Boolean subset-membership column (the ensemble members)
+#'   used instead when the posterior weights are degenerate (Kish ESS below
+#'   \code{max(10, 0.05 * n_samples)}) or absent. Default \code{"is_best_subset"}.
 #' @param verbose Print progress messages.
 #'
 #' @return A list with \code{sens_df} (data.frame with columns \code{parameter},
@@ -64,6 +68,12 @@ calc_model_parameter_sensitivity <- function(results_file,
                  "N_j_initial")
 
   param_cols <- setdiff(names(results), meta_cols)
+  # Sampled parameters only: the compartment counts (S_j_initial, ...) and the
+  # route split of beta_j0_tot are derived from sampled ones and would pad the
+  # figure with exact duplicates (R14). Custom columns outside the parameter
+  # table are kept when nothing matches.
+  est_cols <- .mosaic_weight_health_param_cols(param_cols)
+  if (length(est_cols) >= 2L) param_cols <- est_cols
 
   # Filter to valid simulations with finite likelihood
   sims <- results[results$is_finite == TRUE & is.finite(results$likelihood), ]
@@ -96,46 +106,46 @@ calc_model_parameter_sensitivity <- function(results_file,
   has_best_subset <- subset_col %in% names(results) &&
                      any(as.logical(results[[subset_col]]), na.rm = TRUE)
 
-  w_retained <- if ("weight_retained" %in% names(sims)) sims$weight_retained else NULL
-  ess_retained <- if (!is.null(w_retained)) .compute_ess(w_retained) else 0
+  # The posterior weights: the ensemble members' weights (weight_best, or
+  # weight_best_opt for the optimised members), the posterior every other
+  # output is built from since MOSAIC 1.4.0 (R19). A run without them falls
+  # back to weight_all, the coarsened posterior over every valid draw. The
+  # legacy Akaike weight_retained is not a posterior and is not used.
+  member_wcol <- switch(subset_col, is_best_subset = "weight_best",
+                        is_best_subset_opt = "weight_best_opt", NULL)
+  post_wcol <- if (!is.null(member_wcol) && member_wcol %in% names(sims) &&
+                   any(is.finite(sims[[member_wcol]]) & sims[[member_wcol]] > 0)) member_wcol
+               else if ("weight_all" %in% names(sims)) "weight_all" else NULL
+  w_post <- if (!is.null(post_wcol)) sims[[post_wcol]] else NULL
+  ess_post <- if (!is.null(w_post)) .compute_ess(w_post) else 0
   ess_threshold <- max(10, n_samples * 0.05)   # ESS must be >= 5% of requested n
 
-  if (ess_retained < ess_threshold && has_best_subset) {
-    # Degenerate weights: fall back to best_subset samples
+  if (ess_post < ess_threshold && has_best_subset) {
+    # Degenerate or absent posterior weights: use the ensemble members.
     sims_sub <- results[as.logical(results[[subset_col]]), ]
     n_use <- nrow(sims_sub)
-    label_name <- if (identical(subset_col, "is_best_subset_opt")) "best_subset_opt" else "best_subset"
-    subset_label <- sprintf("%s (ESS of retained = %.0f < threshold %.0f)",
-                            label_name, ess_retained, ess_threshold)
+    label_name <- if (identical(subset_col, "is_best_subset_opt")) "optimised ensemble members" else "ensemble members"
+    subset_label <- sprintf("%s (posterior ESS = %.0f < threshold %.0f)",
+                            label_name, ess_post, ess_threshold)
     estimator_type <- if (n_use < 200) "U-stat" else "V-stat"
     if (verbose) {
-      log_msg(paste0("Warning: ESS of weight_retained = %.0f (n = %d). ",
-                     "Falling back to best_subset (n = %d, estimator = %s)."),
-              ess_retained, n_total, n_use, estimator_type)
+      log_msg(paste0("Posterior ESS = %.0f (n = %d) is below %.0f: using the %s (n = %d, ",
+                     "estimator = %s)."),
+              ess_post, n_total, ess_threshold, label_name, n_use, estimator_type)
     }
   } else {
-    weight_col <- if (!is.null(w_retained) && ess_retained >= ess_threshold) {
-      "weight_retained"
-    } else if ("weight_all" %in% names(sims) &&
-               any(is.finite(sims$weight_all) & sims$weight_all > 0)) {
-      "weight_all"
-    } else {
-      NULL
-    }
-
     n_use <- min(n_samples, n_total)
-
-    if (!is.null(weight_col)) {
-      w <- sims[[weight_col]]
+    if (!is.null(w_post) && ess_post >= ess_threshold) {
+      w <- w_post
       w[!is.finite(w) | w < 0] <- 0
       idx <- sample(n_total, size = n_use, prob = w + .Machine$double.eps, replace = TRUE)
+      subset_label <- if (identical(post_wcol, "weight_all")) "posterior-weighted by weight_all (all valid draws)"
+                      else sprintf("ensemble members, weighted by %s", post_wcol)
     } else {
       idx <- sample(n_total, size = n_use, replace = FALSE)
+      subset_label <- "uniform"
     }
-
     sims_sub <- sims[idx, ]
-    subset_label <- if (!is.null(weight_col))
-      sprintf("importance-weighted by %s", weight_col) else "uniform"
     estimator_type <- "V-stat"
   }
 

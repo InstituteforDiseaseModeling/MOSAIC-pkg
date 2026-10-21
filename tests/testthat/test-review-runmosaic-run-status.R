@@ -30,21 +30,32 @@ test_that("auto mode status tree is unchanged", {
                    "success")
 })
 
-test_that("summary.json keeps converged logical in fixed mode and adds the new fields", {
+test_that("summary.json schema 2: stopping_rule_met null in fixed mode, legacy aliases kept", {
   dirs <- MOSAIC:::.mosaic_ensure_dir_tree(withr::local_tempdir(), clean_output = FALSE)
   state <- list(mode = "fixed", converged = FALSE, batch_number = 1L,
-                total_sims_run = 10L, total_sims_successful = 10L)
+                total_sims_run = 3000L, total_sims_successful = 3000L)
   cfg <- list(location_name = "MOZ", date_start = "2023-01-01", date_stop = "2023-12-31")
-  s <- MOSAIC:::.mosaic_write_summary_json(dirs, state, Sys.time(), cfg,
-                                           posthoc_criteria_met = TRUE,
-                                           io = mosaic_control_defaults()$io)
-  expect_identical(s$converged, FALSE)
+  set.seed(2)
+  wh <- calc_weight_health(-300 * (runif(3000) - 0.5)^2, params = data.frame(x = runif(3000)),
+                           n_obs = 1000, fixed_mode = TRUE)
+  s <- MOSAIC:::.mosaic_write_summary_json(dirs, state, Sys.time(), cfg, conv_health = wh,
+                                           weighting = "bestfit", io = mosaic_control_defaults()$io)
+  expect_identical(s$schema_version, "2")
+  expect_identical(s$converged, FALSE)                      # alias: legacy meaning in fixed mode
   expect_identical(s$convergence_evaluated, FALSE)
-  expect_identical(s$posthoc_criteria_met, TRUE)
+  expect_true(is.na(s$stopping_rule_met))
+  expect_identical(s$posthoc_criteria_met, identical(wh$status, "green"))
+  expect_identical(s$convergence_status, wh$status)
   js <- jsonlite::read_json(file.path(dirs$results, "summary.json"))
+  expect_true("stopping_rule_met" %in% names(js))
+  expect_null(js$stopping_rule_met)                         # JSON null
   expect_identical(js$converged, FALSE)
-  expect_identical(js$convergence_evaluated, FALSE)
-  expect_true(isTRUE(js$posthoc_criteria_met))
+  expect_identical(js$posterior_weighting, "bestfit")
+  # adaptive: stopping_rule_met is the gate's verdict, converged its alias
+  s2 <- MOSAIC:::.mosaic_write_summary_json(dirs, utils::modifyList(state, list(mode = "auto", converged = TRUE)),
+                                            Sys.time(), cfg, conv_health = wh, weighting = "bestfit",
+                                            io = mosaic_control_defaults()$io)
+  expect_true(s2$stopping_rule_met); expect_true(s2$converged); expect_true(s2$convergence_evaluated)
 })
 
 test_that("summary.json reports the dispersion block per channel, panel-trend count included", {

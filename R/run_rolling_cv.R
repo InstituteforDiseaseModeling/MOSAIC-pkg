@@ -71,7 +71,9 @@
 #' The predictions table has one row per (cutoff x location x date x metric) with
 #' columns: \code{run_id, iso_code, anchor_date, cutoff_date, date, metric,
 #' segment} (IS/embargo/OOS), \code{weeks_ahead, horizon_bucket, observed,
-#' observed_source, pred_central} (the scored series), \code{pred_mean,
+#' observed_source, observed_tier} (the config's \code{reported_tier}: 1
+#' observed, 2 reconstructed, 3 imputed; NA where the config has none),
+#' \code{pred_central} (the scored series), \code{pred_mean,
 #' pred_median, central_method}, CI columns (\code{pi*_lo}/\code{pi*_hi}) and
 #' \code{pred_median_obs}, the median of the same draws as the CI columns (the
 #' observation-level predictive median since v0.101.0), which WIS pairs with them.
@@ -80,7 +82,10 @@
 #' \code{\link{calc_model_ensemble}} with the run's observation model and deaths
 #' integration, as its own ensembles were built.
 #' \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
-#' rows carry the real target for post-hoc scoring.
+#' rows carry the real target for post-hoc scoring. Every row also carries its
+#' cutoff run's \code{ess} (the ensemble ESS, \code{summary.json} \code{ess_best})
+#' and \code{convergence_status} (\code{"green"} / \code{"yellow"} / \code{"red"};
+#' NA for a run from before MOSAIC 1.4.0), constant per cutoff.
 #'
 #' @param PATHS Path list from \code{\link{get_paths}}.
 #' @param iso Character; one ISO3 code or a vector (coupled metapopulation).
@@ -96,21 +101,25 @@
 #'   window defines the anchor and projection span.
 #' @param priors Priors list (default \code{MOSAIC::priors_default}).
 #' @param control \code{run_MOSAIC} control list, or NULL for an experiment-grade
-#'   cheap default (fixed \code{n_simulations}, plots off). See
+#'   cheap default (fixed \code{n_simulations} = 2,000, plots off). An adaptive
+#'   control (no \code{calibration$n_simulations}) is allowed but warns: every
+#'   cutoff then runs a full adaptive calibration. See
 #'   \code{\link{mosaic_control_defaults}}. The harness forces
 #'   \code{paths$clean_output = TRUE}, so each cutoff's \code{runs/cutoff_<T>/}
 #'   directory is wiped before its calibration and simulation shards left by an
 #'   earlier interrupted attempt cannot enter the new posterior.
-#' @param optimize_subset Logical (default \code{TRUE}); enable
+#' @param optimize_subset Logical (default \code{FALSE} since MOSAIC 1.3.0,
+#'   \code{TRUE} in 1.2.x, matching \code{mosaic_control_defaults()}); enable
 #'   \code{run_MOSAIC}'s post-ensemble best-subset optimizer
-#'   (\code{control$predictions$optimize_subset}). When \code{TRUE} the harness
-#'   sets this on the resolved control for every cutoff, so the ensemble is
-#'   re-scored against the training-window observed series and the posterior is
-#'   driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
-#'   candidate ensemble.
+#'   (\code{control$predictions$optimize_subset}). The harness sets this on the
+#'   resolved control for every cutoff. When \code{TRUE} the ensemble is
+#'   re-scored against the training-window observed series and the posterior
+#'   and predictions are driven by the optimizer-selected subset; when
+#'   \code{FALSE} the candidate ensemble (under the default coarsened posterior,
+#'   its systematic resample) is used.
 #' @param models Character vector of model types to score and carry in
-#'   \code{predictions.parquet} (default
-#'   \code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
+#'   \code{predictions.parquet} (default \code{c("ensemble","medoid")}, plus
+#'   \code{"ensemble_opt"} when \code{optimize_subset = TRUE}). \code{"ensemble"}
 #'   (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 #'   the optimizer-selected subset, emitted only for cutoffs where the optimizer
 #'   actually ran and selected a subset (\code{subset_opt.rds} present, or a
@@ -189,8 +198,10 @@ run_rolling_cv <- function(PATHS,
                            base_config          = MOSAIC::config_default,
                            priors               = MOSAIC::priors_default,
                            control              = NULL,
-                           optimize_subset      = TRUE,
-                           models               = c("ensemble", "ensemble_opt", "medoid"),
+                           optimize_subset      = FALSE,
+                           models               = if (isTRUE(optimize_subset))
+                                                       c("ensemble", "ensemble_opt", "medoid")
+                                                  else c("ensemble", "medoid"),
                            n_reps_best_medoid  = 50L,
                            central_method       = c(cases = "median", deaths = "mean"),
                            est_suitability_spec = list(),
@@ -219,6 +230,7 @@ run_rolling_cv <- function(PATHS,
      loc_cfg_full <- MOSAIC::get_location_config(iso = iso, config = base_config)
      obs_cases_full  <- .rcv_as_matrix(loc_cfg_full$reported_cases,  length(loc_cfg_full$location_name), length(cfg_dates))
      obs_deaths_full <- .rcv_as_matrix(loc_cfg_full$reported_deaths, length(loc_cfg_full$location_name), length(cfg_dates))
+     obs_tier_full   <- .rcv_tier_matrix(loc_cfg_full, length(cfg_dates))
      has_obs    <- colSums(!is.na(obs_cases_full)) > 0
      L_obs      <- if (any(has_obs)) max(cfg_dates[has_obs]) else cfg_stop
 
@@ -231,10 +243,26 @@ run_rolling_cv <- function(PATHS,
      if (length(cutoffs) == 0L) stop("No valid cutoffs (check window vs anchor).")
 
      if (is.null(control)) control <- .rcv_cheap_control()
-     # Harness owns the best-subset optimizer toggle: rescore the ensemble against
-     # the (training-window) observed series and drive the posterior from the
-     # optimizer-selected subset. Forced onto the resolved control so it applies
-     # whether `control` is the cheap default or user-supplied.
+     # An adaptive control (no positive calibration$n_simulations) runs every
+     # cutoff until its convergence status is green or max_simulations_total:
+     # a full production calibration per cutoff. Allowed, but say so.
+     n_sims_ctl <- suppressWarnings(as.numeric(control$calibration$n_simulations))
+     if (!(length(n_sims_ctl) == 1L && is.finite(n_sims_ctl) && n_sims_ctl > 0))
+          warning(sprintf(paste0("run_rolling_cv(): control is adaptive (calibration$n_simulations is not set), ",
+                                 "so each of the %d cutoffs runs until its convergence status is green or ",
+                                 "max_simulations_total (%s simulations): a full calibration per cutoff. ",
+                                 "Set calibration$n_simulations (or control = NULL for the cheap ",
+                                 "2,000-simulation default) for a fixed budget."),
+                          length(cutoffs),
+                          format(as.numeric(control$calibration$max_simulations_total %||%
+                                            mosaic_control_defaults()$calibration$max_simulations_total),
+                                 big.mark = ",", scientific = FALSE)),
+                  call. = FALSE)
+     # Harness owns the best-subset optimizer toggle (when TRUE: rescore the
+     # ensemble against the training-window observed series and drive the
+     # posterior from the optimizer-selected subset). Forced onto the resolved
+     # control so it applies whether `control` is the cheap default or
+     # user-supplied.
      if (is.null(control$predictions)) control$predictions <- list()
      control$predictions$optimize_subset <- isTRUE(optimize_subset)
      # Central tendency is harness-owned too: forced onto the inner control so the
@@ -426,6 +454,7 @@ run_rolling_cv <- function(PATHS,
                     obs_cases      = obs_cases_full,     # unmasked, trusted
                     obs_deaths     = obs_deaths_full,
                     obs_dates      = cfg_dates,
+                    obs_tier       = obs_tier_full,
                     location_names = loc_cfg_full$location_name,
                     models         = models,
                     n_reps         = n_reps_best_medoid,
@@ -657,6 +686,7 @@ compile_rolling_cv_predictions <- function(dir_output,
      nloc <- length(loc$location_name)
      oc <- .rcv_as_matrix(loc$reported_cases,  nloc, length(cfg_dates))
      od <- .rcv_as_matrix(loc$reported_deaths, nloc, length(cfg_dates))
+     ot <- .rcv_tier_matrix(loc, length(cfg_dates))
 
      runs <- man$runs
      tabs <- list()
@@ -673,7 +703,7 @@ compile_rolling_cv_predictions <- function(dir_output,
                cutoff = as.Date(runs$cutoff_date[r]), anchor = anchor,
                embargo_days = embargo_days, horizons_months = horizons,
                obs_cases = oc, obs_deaths = od, obs_dates = cfg_dates,
-               location_names = loc$location_name,
+               obs_tier = ot, location_names = loc$location_name,
                models = models, n_reps = n_reps_best_medoid,
                central_method = central_method)
      }
@@ -689,7 +719,8 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rolling_cv_compile_run <- function(ensemble, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, model = "ensemble",
-                                    central_method = c(cases = "median", deaths = "mean")) {
+                                    central_method = c(cases = "median", deaths = "mean"),
+                                    obs_tier = NULL) {
      central_method <- .mosaic_resolve_central_method(central_method)
      n_t   <- ensemble$n_time_points
      ds    <- as.Date(ensemble$date_start); de <- as.Date(ensemble$date_stop)
@@ -716,6 +747,8 @@ compile_rolling_cv_predictions <- function(dir_output,
                central <- if (cm == "mean") mn else med
                obs_src <- if (metric == "cases") obs_cases else obs_deaths
                observed <- if (!is.na(oi)) getrow(obs_src, oi)[obs_idx] else rep(NA_real_, n_t)
+               tier     <- if (!is.na(oi) && !is.null(obs_tier)) getrow(obs_tier, oi)[obs_idx]
+                           else rep(NA_integer_, n_t)
                df <- data.frame(
                     run_id = run_id, model = model, iso_code = locs[i],
                     anchor_date = as.character(anchor), cutoff_date = as.character(cutoff),
@@ -724,6 +757,7 @@ compile_rolling_cv_predictions <- function(dir_output,
                     horizon_bucket = lab$horizon_bucket,
                     observed = as.numeric(observed),
                     observed_source = "config_reported",
+                    observed_tier = as.integer(tier),
                     # pred_central is the scored series (mean or median per channel);
                     # pred_median/pred_mean are both retained for cross-walk.
                     pred_central = as.numeric(central),
@@ -764,6 +798,15 @@ compile_rolling_cv_predictions <- function(dir_output,
                if (length(bad)) paste0("; unknown: ", paste(sprintf("'%s'", bad), collapse = ", ")),
                call. = FALSE)
      unique(models)
+}
+
+#' The config's surveillance trust tier (reported_tier) as an (n_loc x n_t)
+#' matrix, or NULL for a config that predates the field (v6.1)
+#' @keywords internal
+#' @noRd
+.rcv_tier_matrix <- function(loc_cfg, n_t) {
+     if (is.null(loc_cfg$reported_tier)) return(NULL)
+     .rcv_as_matrix(loc_cfg$reported_tier, length(loc_cfg$location_name), n_t)
 }
 
 #' Coerce a config reported_* field to an (n_loc x n_t) matrix
@@ -859,7 +902,8 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rcv_compile_all_models <- function(run_dir, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, models, n_reps,
-                                    central_method = c(cases = "median", deaths = "mean")) {
+                                    central_method = c(cases = "median", deaths = "mean"),
+                                    obs_tier = NULL) {
      central_method <- .mosaic_resolve_central_method(central_method)
      cal      <- file.path(run_dir, "2_calibration")
      ens_path <- file.path(cal, "ensemble_candidate.rds")
@@ -873,7 +917,7 @@ compile_rolling_cv_predictions <- function(dir_output,
                embargo_days = embargo_days, horizons_months = horizons_months,
                obs_cases = obs_cases, obs_deaths = obs_deaths, obs_dates = obs_dates,
                location_names = location_names, model = model,
-               central_method = central_method)
+               central_method = central_method, obs_tier = obs_tier)
      }
 
      parts <- list(emit(ens, "ensemble"))
@@ -921,31 +965,42 @@ compile_rolling_cv_predictions <- function(dir_output,
      parts <- Filter(Negate(is.null), parts)
      if (!length(parts)) return(NULL)
      out <- do.call(rbind, parts)
-     # Attach the per-cutoff importance-weight ESS (metrics$ess_best$value from the
-     # calibration convergence diagnostics) as a single numeric column carried on
-     # EVERY row of this cutoff. NA_real_ when the file/key is absent. This is the
-     # weight-ESS gating contract for the downstream scoring layer.
-     out$ess <- .rcv_read_ess_best(run_dir)
+     # Attach the cutoff run's ensemble ESS and its convergence status (both
+     # constant per cutoff) on EVERY row of this cutoff: the gating contract of
+     # the downstream scoring layer (evaluate_rolling_cv(): ess_ok is
+     # convergence_status != "red" when the status is present).
+     conv <- .rcv_read_convergence(run_dir)
+     out$ess <- conv$ess
+     out$convergence_status <- conv$status
      out
 }
 
-#' Read metrics$ess_best$value from a run's convergence diagnostics.
+#' Read a cutoff run's ensemble ESS and convergence status
 #'
-#' Returns the importance-weight effective sample size for the calibration, or
-#' \code{NA_real_} if the diagnostics file or the key is missing. Never errors --
-#' a missing diagnostic is a benign NA on the row, not a fatal condition.
+#' From \code{3_results/summary.json} (schema 2: \code{ess_best},
+#' \code{convergence_status}). A run from before MOSAIC 1.4.0 has no status
+#' (\code{NA}); its ESS falls back to \code{metrics$ess_best$value} of
+#' \code{convergence_diagnostics.json}. Never errors -- a missing value is a
+#' benign NA on the row, not a fatal condition.
+#' @return \code{list(ess, status)}.
 #' @keywords internal
 #' @noRd
-.rcv_read_ess_best <- function(run_dir) {
-     diag_path <- file.path(run_dir, "2_calibration", "diagnostics",
-                            "convergence_diagnostics.json")
-     if (!file.exists(diag_path)) return(NA_real_)
-     val <- tryCatch({
-          d <- jsonlite::read_json(diag_path, simplifyVector = TRUE)
-          d$metrics$ess_best$value
-     }, error = function(e) NULL)
-     if (is.null(val) || length(val) != 1L || !is.numeric(val)) return(NA_real_)
-     as.numeric(val)
+.rcv_read_convergence <- function(run_dir) {
+     num1 <- function(v) if (length(v) == 1L && is.numeric(v) && is.finite(v)) as.numeric(v) else NA_real_
+     sm_path <- file.path(run_dir, "3_results", "summary.json")
+     sm <- if (file.exists(sm_path))
+          tryCatch(jsonlite::read_json(sm_path, simplifyVector = TRUE), error = function(e) NULL)
+     status <- sm$convergence_status
+     status <- if (is.character(status) && length(status) == 1L &&
+                   status %in% c("green", "yellow", "red")) status else NA_character_
+     ess <- if (!is.na(status)) num1(sm$ess_best) else NA_real_
+     if (is.na(status)) {
+          diag_path <- file.path(run_dir, "2_calibration", "diagnostics", "convergence_diagnostics.json")
+          if (file.exists(diag_path))
+               ess <- num1(tryCatch(jsonlite::read_json(diag_path, simplifyVector = TRUE)$metrics$ess_best$value,
+                                    error = function(e) NULL))
+     }
+     list(ess = ess, status = status)
 }
 
 #' Reported-CFR estimates as of a cutoff
@@ -1060,10 +1115,7 @@ compile_rolling_cv_predictions <- function(dir_output,
      ctrl <- tryCatch(MOSAIC::mosaic_control_defaults(), error = function(e) list())
      ctrl$calibration <- utils::modifyList(ctrl$calibration %||% list(),
                                            list(n_simulations = 2000L, n_iterations = 3L))
-     ctrl$targets <- utils::modifyList(ctrl$targets %||% list(), list(ESS_param = 100L))
      ctrl$paths   <- utils::modifyList(ctrl$paths   %||% list(), list(plots = FALSE))
-     ctrl$predictions <- utils::modifyList(ctrl$predictions %||% list(),
-                                           list(optimize_subset = TRUE))
      ctrl
 }
 

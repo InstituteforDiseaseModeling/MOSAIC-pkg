@@ -23,7 +23,10 @@ calc_model_parameter_sensitivity(
 \item{output_dir}{Optional directory to write \code{parameter_sensitivity.csv} (the \code{sens_df} columns plus run-level \code{weighting} and \code{n_used}). When \code{NULL} (default) no file is written.}
 
 \item{n_samples}{Maximum number of posterior draws to use. Samples are drawn
-with replacement using importance weights. Default 2000.}
+with replacement using the ensemble members' weights (\code{weight_best},
+or \code{weight_best_opt} when \code{subset_col = "is_best_subset_opt"}),
+the posterior the other outputs use; a file without them falls back to
+\code{weight_all} (all valid draws). Default 2000.}
 
 \item{kernel}{Kernel type for input parameters passed to
 \code{\link[sensitivity]{sensiHSIC}}. One of \code{"rbf"} (default),
@@ -32,8 +35,9 @@ with replacement using importance weights. Default 2000.}
 \item{test_method}{Significance test method. \code{"Asymptotic"} (default) or
 \code{"Permutation"}.}
 
-\item{subset_col}{Boolean subset-membership column used as the fallback when
-importance-weight ESS is degenerate. Default \code{"is_best_subset"}.}
+\item{subset_col}{Boolean subset-membership column (the ensemble members)
+used instead when the posterior weights are degenerate (Kish ESS below
+\code{max(10, 0.05 * n_samples)}) or absent. Default \code{"is_best_subset"}.}
 
 \item{verbose}{Print progress messages.}
 }

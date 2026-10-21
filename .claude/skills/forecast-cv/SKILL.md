@@ -5,7 +5,7 @@ description: >
   an expanding-window rolling-origin backtest that, per cutoff, re-fits psi, injects it,
   calibrates on data up to the cutoff, and projects forward. Covers the correct leakage-strict
   args (embargo, horizons, cutoffs), the raw-psi vs post-psi* attenuation check, per-cutoff
-  ESS/convergence gating, and post-hoc scoring (WIS / R2 / coverage). Composes the run-mosaic
+  convergence-status gating (ess_ok), and post-hoc scoring (WIS / R2 / coverage). Composes the run-mosaic
   and est-suitability skills. Use for "rolling-origin CV", "OOS forecast skill", "backtest the
   model across cutoffs".
 ---
@@ -62,7 +62,7 @@ Only the first is the backtest; the other two are internals of a single psi fit.
 - `est_suitability_spec` — **modeling** knobs only (architecture, `response_var`, `arch_control`); date keys
   are ignored/harness-owned. Keep `arch_control$parallel_seeds = 1L` (see est-suitability for the RAM math).
 - `control = NULL` → an experiment-grade cheap default (fixed `n_simulations`, plots off).
-- `models = c("ensemble","ensemble_opt","medoid")`, `central_method = c(cases = "median", deaths = "mean")` (package default since v0.101.0; both `"mean"` in v0.98.0-v0.100.x), `optimize_subset = TRUE`,
+- `models = c("ensemble","medoid")` (`"ensemble_opt"` is added only when `optimize_subset = TRUE`), `central_method = c(cases = "median", deaths = "mean")` (package default since v0.101.0; both `"mean"` in v0.98.0-v0.100.x), `optimize_subset = FALSE` (default since v1.3.0: the optimizer re-truncates the coarsened posterior on the training data),
   `n_reps_best_medoid = 50` (medoid reruns — see where-to-run). Everything runs on the local PSOCK
   cluster; the Dask/Coiled `dask_spec` option was removed (it now hard-errors).
 - **Two staleness/leakage subtleties:** (i) if `config$date_stop` runs past the climate/ENSO horizon, the
@@ -90,11 +90,15 @@ cutoff×location×date×metric: `segment`=IS/embargo/OOS, held-out `observed`, `
 `pred_median`+CI cols), and `runs/cutoff_<T>/` (native `run_MOSAIC` dirs; rebuildable via
 `compile_rolling_cv_predictions()`). Score post-hoc with `evaluate_rolling_cv()` / `plot_rolling_cv()`
 (**separate exported fns** — not inside `run_rolling_cv`; see `?evaluate_rolling_cv`).
-- **Gate on per-cutoff ESS + coverage FIRST.** The cheap CV control is a *short FIXED-mode* run
-  (`n_simulations=2000`, `n_iterations=3`, `ESS_param=100`): the ESS stopping criterion is never evaluated
-  (`summary.json` has `mode = "fixed"`, `converged = FALSE`, `convergence_evaluated = FALSE`; the log's
-  `[RUN_SUMMARY]` line has `status=completed_fixed` — `status` is not a summary.json field), so
-  weights can be under-converged and a "win" may be a lucky draw. Read per-cutoff ESS before trusting a score.
+- **Gate on per-cutoff convergence status + coverage FIRST.** The cheap CV control is a *short FIXED-mode*
+  run (`n_simulations=2000`, `n_iterations=3`): the convergence status is assessed but not used to stop
+  (`summary.json` has `mode = "fixed"`, `convergence_status` green/yellow/red with the `fixed_budget` flag,
+  `stopping_rule_met = null`; the log's `[RUN_SUMMARY]` line has `status=completed_fixed`), so weights can be
+  under-converged and a "win" may be a lucky draw. Since MOSAIC 1.4.0 every `predictions.parquet` row carries
+  its cutoff run's `ess` (= summary.json `ess_best`, the ensemble ESS) and `convergence_status`;
+  `evaluate_rolling_cv()` carries the status into `cells` and sets **`ess_ok = convergence_status != "red"`**
+  (cutoffs from before 1.4.0 have no status and keep the legacy `ess >= ess_min` rule). Red cutoffs are
+  flagged and left out of `$summary`; read the yellow ones' reasons before trusting a score.
 - **Primary verdict = WIS-skill-vs-baseline + bias_ratio.** R²-corr is scale/offset-invariant — blind to
   the magnitude/level that `psi_star_b` controls — so it is **diagnostic-only**, never the ψ verdict. (Eval
   WIS uses the empirical 50/95 ensemble quantiles, so it is not directly comparable to the likelihood's

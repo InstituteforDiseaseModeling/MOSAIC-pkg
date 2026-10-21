@@ -143,10 +143,18 @@ run_MOSAIC(config, priors, dir_output = file.path("~/MOSAIC/output", iso), contr
 |-------------------|-------------------------|
 | `batch_size`      | `batch_size_adaptive`   |
 | `min_batches`     | `min_batches_adaptive`  |
-| `max_batches`     | `max_batches_adaptive`  |
-| `target_r2`       | `target_r2_adaptive`    |
 | `max_simulations` | `max_simulations_total` |
 | `ess_method`      | `ESS_method`            |
+| `best_subset_weighting` | `posterior_weighting` |
+
+Retired in MOSAIC 1.4.0 (warned and ignored when set): `max_batches` / `max_batches_adaptive`,
+`target_r2` / `target_r2_adaptive`, `max_batches_predictive`, `targets$ESS_param`, `ESS_param_prop`,
+`batch_ratio_max`, `weights$floor`, `io$verbose_weights`. Adaptive mode stops on the convergence
+status (`targets$ESS_best`, default 200, and `targets$status_thresholds`), after `min_batches_adaptive`
+and `min_draws` (5,000), or at `max_simulations_total` (150,000). `ESS_best` now means the ensemble
+ESS target (it was the tier target, 100, in 1.3.x): setting it warns. `min/max_best_subset` apply
+only under `posterior_weighting = "saturated"`; the best-fit ensemble is bounded by
+`min/max_ensemble_members` (30 / 1,000).
 
 ## 4. Monitor (tail the log)
 ```bash

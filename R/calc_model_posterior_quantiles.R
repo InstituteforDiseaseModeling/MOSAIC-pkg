@@ -67,16 +67,12 @@
 #' The function:
 #' 1. Calculates unweighted quantiles from ALL finite simulations (prior)
 #' 2. Calculates weighted quantiles from best subset (posterior)
-#' 3. Computes the information gain KL(posterior || prior) (no cap) from a
-#'    weighted kernel density estimate of the posterior and a KDE of the prior,
-#'    integrated on a grid over the posterior's own support so that the
-#'    estimate is not limited by grid resolution. Strictly positive parameters
-#'    are evaluated on the log scale when that reduces the prior's skewness (KL
-#'    is invariant to monotone reparameterisation). For a Uniform prior and a
-#'    Gaussian posterior of standard deviation \eqn{s} relative to the prior
-#'    range this is \eqn{-\frac{1}{2}\log(2\pi e s^2)}{-0.5 log(2 pi e s^2)}.
-#'    The posterior KDE bandwidth biases it slightly low (about 0.03-0.1 nats
-#'    at 100-plus draws)
+#' 3. Computes the information gain KL(posterior || prior) with the
+#'    percentile-scale estimator of \code{\link{calc_kl_divergence}} (since
+#'    MOSAIC 1.4.0): posterior draws mapped to their prior percentiles, 20
+#'    equal bins, finite-ESS correction. It is invariant to the parameter's
+#'    scale and at most \code{log(20)}, about 3 nats; it is NA when the
+#'    posterior's Kish ESS is below 20
 #' 4. Returns both prior and posterior rows with a 'type' identifier
 #' 5. KL divergence appears only in posterior rows
 #'
@@ -168,7 +164,7 @@ calc_model_posterior_quantiles <- function(results,
 
     # Get parameter columns from results, excluding metadata columns
     exclude_cols <- c("sim", "iter", "seed_sim", "seed_iter", "likelihood", "aic", "delta_aic",
-                     "weight_retained", "weight_best", "weight_best_opt",
+                     "weight_all", "weight_retained", "weight_best", "weight_best_opt",
                      "is_finite", "is_valid", "is_outlier", "is_retained",
                      "is_best_subset", "is_best_subset_opt", "is_best_model", "best_subset_B")
 
@@ -406,16 +402,16 @@ calc_model_posterior_quantiles <- function(results,
     best_subset_idx <- as.logical(results[[subset_col]])
     best_subset_weights <- results[[weight_col]][best_subset_idx]
 
-    # The weighted KDE behind the posterior KL needs a Kish n_eff >= 2 (its
-    # bandwidth is undefined below that), so a near-degenerate posterior gives
-    # KL = NA for every parameter. Say so once rather than leave a column of NAs.
+    # The percentile-scale posterior KL needs a Kish ESS of at least its 20
+    # bins, so a near-degenerate posterior gives KL = NA for every parameter.
+    # Say so once rather than leave a column of NAs.
     w_ok <- best_subset_weights[is.finite(best_subset_weights) & best_subset_weights >= 0]
     if (length(w_ok) && sum(w_ok) > 0) {
         w_ok <- w_ok / sum(w_ok)
         n_eff_post <- 1 / sum(w_ok^2)
-        if (n_eff_post < 2) {
+        if (n_eff_post < 20) {
             warning(sprintf(paste0("calc_model_posterior_quantiles: posterior weights ('%s') ",
-                                   "have Kish n_eff = %.2f < 2, so the weighted-KDE KL ",
+                                   "have Kish n_eff = %.2f < 20, so the percentile-scale KL ",
                                    "divergence is NA for the posterior rows."),
                             weight_col, n_eff_post), call. = FALSE)
         }
@@ -580,38 +576,27 @@ calc_model_posterior_quantiles <- function(results,
 
 #' KL divergence of a weighted posterior sample from the prior sample
 #'
-#' Information gain KL(posterior || prior) = \eqn{\int p \log(p/q)} from a
-#' weighted kernel density estimate \eqn{p} of the posterior draws and an
-#' unweighted KDE \eqn{q} of the prior draws, computed by
-#' \code{.kl_divergence_kde()} (the core of \code{calc_kl_divergence()}).
-#'
-#' The posterior bandwidth is the weighted Silverman rule on the weighted SD
-#' and IQR with the Kish effective sample size \eqn{n_{eff} = 1/\sum w_i^2}.
-#' An unweighted bandwidth takes the spread of the draws rather than of the
-#' posterior, so importance weights concentrated on a few draws spread over
-#' the prior were smoothed back towards the prior (point-mass weights on a
-#' U(0,1) prior gave KL ~0.85). The integral is evaluated on a grid over the
-#' posterior's own support, where the integrand is non-zero. Because KL is
-#' invariant under a monotone reparameterisation, a strictly positive
-#' parameter is evaluated on the log scale when that makes the prior draws
-#' less skewed, which keeps a single KDE bandwidth appropriate for
-#' heavy-tailed (lognormal, gamma) priors.
+#' Information gain KL(posterior || prior) by the percentile-scale estimator of
+#' \code{calc_kl_divergence()}: each posterior draw is mapped to its percentile
+#' under the prior draws (randomised ties), the percentiles are binned into 20
+#' equal bins, and the binned divergence from uniform is corrected for the
+#' posterior's finite Kish ESS. The estimate is invariant to monotone
+#' reparameterisation, so it needs no log-scale switch for heavy-tailed priors,
+#' and is at most \code{log(20)} (about 3 nats).
 #'
 #' Non-finite draws are dropped (with their weights). Returns \code{NA_real_}
-#' when either sample has fewer than 10 finite draws, 0 for identical
-#' constants, and \code{NA_real_} for different constants or when the
-#' posterior weights have Kish effective sample size below 2.
+#' when either sample has fewer than 10 finite draws or the posterior weights
+#' have Kish ESS below 20, 0 for identical constants, and \code{NA_real_} for
+#' different constants.
 #'
 #' @param prior_samples Numeric prior draws (unweighted).
 #' @param posterior_samples Numeric posterior draws.
 #' @param posterior_weights Optional non-negative weights aligned with
 #'   \code{posterior_samples}.
-#' @param n_grid Integer minimum number of grid points over the posterior support.
 #' @return Numeric scalar.
 #' @keywords internal
 #' @noRd
-.mosaic_posterior_kl <- function(prior_samples, posterior_samples, posterior_weights = NULL,
-                                 n_grid = 1024L) {
+.mosaic_posterior_kl <- function(prior_samples, posterior_samples, posterior_weights = NULL) {
     prior_samples <- prior_samples[is.finite(prior_samples)]
     keep <- is.finite(posterior_samples)
     if (is.null(posterior_weights)) {
@@ -634,21 +619,9 @@ calc_model_posterior_quantiles <- function(results,
     if (prior_const && post_const) {
         return(if (unique(prior_samples) == unique(posterior_samples)) 0 else NA_real_)
     }
-    if (prior_const || post_const) return(NA_real_)
+    if (prior_const) return(NA_real_)
+    if (1 / sum(posterior_weights^2) < 20) return(NA_real_)
 
-    skew <- function(x) {
-        s <- stats::sd(x)
-        if (!is.finite(s) || s == 0) return(Inf)
-        abs(mean((x - mean(x))^3)) / s^3
-    }
-    if (min(prior_samples) > 0 && min(posterior_samples) > 0 &&
-        skew(log(prior_samples)) < skew(prior_samples)) {
-        prior_samples     <- log(prior_samples)
-        posterior_samples <- log(posterior_samples)
-    }
-
-    tryCatch(.kl_divergence_kde(posterior_samples, posterior_weights,
-                                prior_samples, rep(1, length(prior_samples)),
-                                n_grid = n_grid),
+    tryCatch(calc_kl_divergence(posterior_samples, posterior_weights, prior_samples, NULL),
              error = function(e) NA_real_)
 }

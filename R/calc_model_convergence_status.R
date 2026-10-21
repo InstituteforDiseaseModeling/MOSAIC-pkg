@@ -1,5 +1,13 @@
-#' Assemble the model convergence-status table
+#' Assemble the model convergence-status table (deprecated)
 #'
+#' @description
+#' \strong{Deprecated since MOSAIC 1.4.0}; use
+#' \code{\link{plot_model_calibration_report}} on
+#' \code{3_results/calibration_diagnostics.json}. \code{run_MOSAIC()} and
+#' \code{render_MOSAIC_figures()} no longer call it. Kept, warning once per
+#' session, for one release.
+#'
+#' @details
 #' Reads the calibration convergence diagnostics JSON from a results directory
 #' and assembles the metric/value/target/status table that
 #' \code{\link{plot_model_convergence_status}} renders. The derived
@@ -29,6 +37,16 @@
 calc_model_convergence_status <- function(results_dir,
                                           output_dir = NULL,
                                           verbose = TRUE) {
+  .mosaic_warn_once("calc_model_convergence_status_deprecated", paste0(
+    "calc_model_convergence_status() is deprecated since MOSAIC 1.4.0 and will be removed in the ",
+    "next release: use plot_model_calibration_report() on 3_results/calibration_diagnostics.json ",
+    "(the status itself is calc_convergence_status())."))
+  .mosaic_convergence_status_table(results_dir, output_dir, verbose)
+}
+
+# The table behind the deprecated calc_model_convergence_status() /
+# plot_model_convergence_status() (kept for one release).
+.mosaic_convergence_status_table <- function(results_dir, output_dir = NULL, verbose = TRUE) {
 
   if (!dir.exists(results_dir)) stop("results_dir does not exist: ", results_dir)
 
@@ -53,6 +71,14 @@ calc_model_convergence_status <- function(results_dir,
   if (verbose) message("Reading convergence diagnostics from: ", diagnostics_file)
 
   diagnostics <- jsonlite::read_json(diagnostics_file)
+
+  # MOSAIC 1.4.0 diagnostics carry the convergence status and its four checks
+  # (schema 2); older runs keep the legacy layout below.
+  if (!is.null(diagnostics$status$checks)) {
+    tab <- .mosaic_status_table_v2(diagnostics, results_dir)
+    return(.mosaic_status_table_finish(tab$metrics_data, tab$metric_expressions, diagnostics,
+                                       tab$param_ess_data, NA, NA, NA, output_dir, verbose))
+  }
 
   # --- Prepare data for table -------------------------------------------------
   metrics_data <- data.frame(
@@ -102,6 +128,10 @@ calc_model_convergence_status <- function(results_dir,
     metric_expressions[[length(metric_expressions) + 1]] <- expression(bold(N[retained]))
   }
 
+  # Under the coarsened posterior the best-subset rows describe the resampled
+  # ensemble members and are reported, not gated.
+  coarsened_run <- identical(as.character(diagnostics$settings$weighting %||% ""), "coarsened")
+
   # Subset selection row: keyed off summary$percentile_used directly. It is
   # reported, not gated (calc_convergence_diagnostics() gates the same
   # information through B_size_upper), so it carries status "info".
@@ -118,7 +148,8 @@ calc_model_convergence_status <- function(results_dir,
     }
     metrics_data <- rbind(metrics_data, data.frame(
       Metric = "Subset Selection",
-      Description = "Best subset as % of all draws (not gated)",
+      Description = if (coarsened_run) "Unique ensemble members as % of all draws (not gated)"
+                    else "Best subset as % of all draws (not gated)",
       Target = if (is.finite(target_percentile)) sprintf("<=%.1f%%", target_percentile) else "-",
       Value = sprintf("%.1f%%", percentile_val),
       Status = "info",
@@ -190,6 +221,16 @@ calc_model_convergence_status <- function(results_dir,
 
     if (is.null(target_value) || length(target_value) == 0) target_value <- "-"
     if (is.null(metric$status) || length(metric$status) == 0) metric$status <- "info"
+    if (coarsened_run) {
+      better_description <- switch(metric_name,
+        "B_size"       = "Unique ensemble members (systematic resample of the posterior; not gated)",
+        "B_size_upper" = "Ensemble members against max_best_subset (not gated)",
+        "ess_best"     = "Effective sample size of the members' count weights (not gated)",
+        "A_B"          = "Agreement of the members' count weights (not gated)",
+        "cvw_B"        = "Variability of the members' count weights (not gated)",
+        better_description)
+      target_value <- "-"
+    }
 
     metrics_data <- rbind(metrics_data, data.frame(
       Metric = display_name,
@@ -286,15 +327,16 @@ calc_model_convergence_status <- function(results_dir,
     }
   }
 
-  # Exact importance-sampling diagnostics: reported, never gated. The docs
-  # require these to be read alongside ESS_B, so they belong in the table.
-  is_all  <- diagnostics$importance_sampling$all_draws
-  is_best <- diagnostics$importance_sampling$best_subset
+  # eta = 1 likelihood concentration: reference only, never gated. Runs from
+  # before 1.3.0 store it under importance_sampling (with a k-hat, not shown).
+  conc <- diagnostics$likelihood_concentration %||% diagnostics$importance_sampling
+  is_all  <- conc$all_draws
+  is_best <- conc$best_subset
   if (!is.null(is_all) || !is.null(is_best)) {
-    .is_row <- function(metric, description, value, target, expr) {
+    .is_row <- function(metric, description, value, target, expr, status = "info") {
       metrics_data <<- rbind(metrics_data, data.frame(
         Metric = metric, Description = description, Target = target,
-        Value = value, Status = "info", stringsAsFactors = FALSE
+        Value = value, Status = status, stringsAsFactors = FALSE
       ))
       metric_expressions[[length(metric_expressions) + 1]] <<- expr
     }
@@ -303,30 +345,57 @@ calc_model_convergence_status <- function(results_dir,
       if (!is.null(d$n)) paste0(v, " of ", format(d$n, big.mark = ",")) else v
     }
     if (!is.null(is_all)) {
-      .is_row("ESS_IS (all)", "Exact IS ESS, all draws (not gated)",
+      .is_row("ESS_IS (all)",
+              "eta = 1 likelihood concentration, all draws (reference only; ~1 expected)",
               .ess_is_value(is_all), "-", expression(bold(ESS[IS]~"(all)")))
     }
     if (!is.null(is_best)) {
-      .is_row("ESS_IS (B)", "Exact IS ESS, best subset (not gated)",
+      .is_row("ESS_IS (B)",
+              "eta = 1 likelihood concentration, best subset (reference only)",
               .ess_is_value(is_best), "-", expression(bold(ESS[IS]~"(B)")))
     }
-    if (!is.null(is_all)) {
-      # khat_status is the status of the tail fit ("ok", "insufficient
-      # draws", ...), not a reliability verdict, so it is shown only when the
-      # fit did not succeed; the reliability reading is khat against 0.7.
-      khat_desc <- "Pareto k-hat, all draws (not gated)"
-      fit_status <- is_all$khat_status
-      if (length(fit_status) == 1L && !is.na(fit_status) &&
-          !identical(as.character(fit_status), "ok")) {
-        khat_desc <- paste0(khat_desc, "; fit: ", fit_status)
-      } else {
-        khat_num <- suppressWarnings(as.numeric(is_all$khat))
-        if (length(khat_num) == 1L && is.finite(khat_num) && khat_num >= 0.7)
-          khat_desc <- paste0(khat_desc, "; IS estimate unreliable")
-      }
-      .is_row("Pareto k-hat", khat_desc, .mosaic_format_status_value(is_all$khat),
-              "< 0.7", expression(bold(hat(k))))
+  }
+
+  # The coarsened posterior. Under best_subset_weighting = "coarsened" its Kish
+  # ESS and seed-batch ratio are gated metrics (metrics$ess_coarsened /
+  # metrics$batch_ratio); under the legacy schemes the weight-health row is
+  # reported, not gated.
+  wh <- diagnostics$weight_health
+  if (coarsened_run && !is.null(diagnostics$metrics$ess_coarsened)) {
+    .gm <- function(name, label, description, target_fmt, value_fmt, expr) {
+      m <- diagnostics$metrics[[name]]
+      v <- suppressWarnings(as.numeric(m$value %||% NA))
+      metrics_data <<- rbind(metrics_data, data.frame(
+        Metric = label, Description = description,
+        Target = sprintf(target_fmt, .mosaic_format_status_value(suppressWarnings(as.numeric(m$target %||% NA)))),
+        Value = if (is.finite(v)) sprintf(value_fmt, v) else as.character(v),
+        Status = as.character(m$status %||% "info"), stringsAsFactors = FALSE
+      ))
+      metric_expressions[[length(metric_expressions) + 1]] <<- expr
     }
+    .gm("ess_coarsened", "Posterior ESS",
+        sprintf("Kish ESS of the coarsened posterior over all valid draws (alpha = %s)",
+                .mosaic_format_status_value(suppressWarnings(as.numeric(wh$coarsened$alpha %||% NA)))),
+        ">=%s", "%.1f", expression(bold(ESS[post])))
+    .gm("batch_ratio", "Seed-batch ratio",
+        "Between-batch SD of posterior means / posterior SD (max over parameters)",
+        "<%s", "%.3f", expression(bold("Seed-batch ratio")))
+  } else if (!is.null(wh$coarsened$ess_kish)) {
+    .wh_num <- function(x) suppressWarnings(as.numeric(x %||% NA))
+    wh_status <- if (identical(as.character(wh$status), "ok")) "pass" else "warn"
+    metrics_data <- rbind(metrics_data, data.frame(
+      Metric = "Declared-posterior ESS",
+      Description = sprintf("Declared posterior (alpha = %s): Kish ESS and seed-batch ratio (not gated)",
+                            .mosaic_format_status_value(.wh_num(wh$coarsened$alpha))),
+      Target = sprintf(">=%s; batch <%s",
+                       .mosaic_format_status_value(.wh_num(wh$targets$ess_target)),
+                       format(.wh_num(wh$targets$batch_max))),
+      Value = sprintf("%s; batch %.2f",
+                      .mosaic_format_status_value(.wh_num(wh$coarsened$ess_kish)),
+                      .wh_num(wh$coarsened$batch_ratio_max)),
+      Status = wh_status, stringsAsFactors = FALSE
+    ))
+    metric_expressions[[length(metric_expressions) + 1]] <- expression(bold(ESS[coarsened]))
   }
 
   # Overall verdict (the aggregate of the gated statuses)
@@ -343,6 +412,14 @@ calc_model_convergence_status <- function(results_dir,
     metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Overall"))
   }
 
+  .mosaic_status_table_finish(metrics_data, metric_expressions, diagnostics, param_ess_data,
+                              n_params, n_pass, target_ess_param, output_dir, verbose)
+}
+
+# Companion CSV + return value of calc_model_convergence_status(), shared by
+# the 1.4.0 and the legacy table layouts.
+.mosaic_status_table_finish <- function(metrics_data, metric_expressions, diagnostics, param_ess_data,
+                                        n_params, n_pass, target_ess_param, output_dir, verbose) {
   if (nrow(metrics_data) == 0) {
     if (verbose) message("No metrics data to assemble.")
     return(invisible(NULL))
@@ -376,6 +453,62 @@ calc_model_convergence_status <- function(results_dir,
     n_pass             = n_pass,
     target_ess_param   = target_ess_param
   ))
+}
+
+# The 1.4.0 table (diagnostics carrying $status, schema 2): valid draws, ESS_all,
+# the four checks of calc_convergence_status() coloured green / yellow / red
+# (Status pass / warn / fail), the legacy tier rows of "saturated" /
+# "tempered" (reported, not gated), the per-parameter ESS (diagnostic) and the
+# overall status.
+.mosaic_status_table_v2 <- function(diagnostics, results_dir) {
+  col2st <- function(x) switch(as.character(x %||% ""), green = "pass", yellow = "warn", red = "fail", "info")
+  num <- function(x) suppressWarnings(as.numeric(unlist(x %||% NA))[1])
+  rows <- list(); expr <- list()
+  add <- function(metric, description, target, value, status, e) {
+    rows[[length(rows) + 1L]] <<- data.frame(Metric = metric, Description = description, Target = target,
+                                             Value = value, Status = status, stringsAsFactors = FALSE)
+    expr[[length(expr) + 1L]] <<- e
+  }
+  add("N_sim", "Simulations with a finite likelihood (the posterior's draws)", "-",
+      format(num(diagnostics$summary$n_successful), big.mark = ","), "info", expression(bold(N[sim])))
+  m <- diagnostics$metrics
+  add("ESS_all", "Kish ESS of the coarsened posterior over all valid draws", 
+      paste(">=", .mosaic_format_status_value(num(m$ess_all$target))),
+      .mosaic_format_status_value(num(m$ess_all$value)), "info", expression(bold(ESS[all])))
+  for (ck in diagnostics$status$checks) {
+    v <- num(ck$value)
+    vtxt <- switch(ck$check,
+      mce = if (is.finite(v)) sprintf("%.1f%%", 100 * v) else "NA",
+      khat = if (is.finite(v)) sprintf("%.2f", v) else "undefined",
+      informativeness = if (is.finite(v)) format(signif(v, 3)) else "NA",
+      .mosaic_format_status_value(v))
+    ttxt <- switch(ck$check,
+      ess = paste(">=", .mosaic_format_status_value(num(ck$threshold_green))),
+      mce = sprintf("<= %.0f%%", 100 * num(ck$threshold_green)),
+      khat = paste("<", num(ck$threshold_green)),
+      informativeness = "< 1", "-")
+    add(as.character(ck$label %||% ck$check), as.character(ck$reason %||% ""), ttxt, vtxt,
+        col2st(ck$colour), as.expression(bquote(bold(.(as.character(ck$label %||% ck$check))))))
+  }
+  for (nm in intersect(c("B_size", "B_size_upper", "ess_B", "A_B", "cvw_B"), names(m))) {
+    add(switch(nm, B_size = "Best Subset (B)", B_size_upper = "Best Subset (B) cap", ess_B = "ESS_B",
+               A_B = "A_B", cvw_B = "CV_B"),
+        paste0(m[[nm]]$description %||% nm, " (legacy tier search; not gated)"), "-",
+        .mosaic_format_status_value(num(m[[nm]]$value)), "info",
+        as.expression(bquote(bold(.(nm)))))
+  }
+  pe_file <- file.path(results_dir, "parameter_ess.csv")
+  pe <- if (file.exists(pe_file)) utils::read.csv(pe_file, stringsAsFactors = FALSE) else NULL
+  if (!is.null(m$param_ess)) {
+    add("Parameter ESS", "Per-parameter ESS of the members' weights (diagnostic, not gated)", "-",
+        sprintf("min %s, median %s", .mosaic_format_status_value(num(m$param_ess$min)),
+                .mosaic_format_status_value(num(m$param_ess$median))), "info",
+        expression(bold("Parameter ESS")))
+  }
+  st <- as.character(diagnostics$status$convergence_status %||% NA)
+  add("Overall", as.character(diagnostics$status$convergence_label %||% "Simulation convergence"),
+      "green", toupper(st), col2st(st), expression(bold("Overall")))
+  list(metrics_data = do.call(rbind, rows), metric_expressions = expr, param_ess_data = pe)
 }
 
 

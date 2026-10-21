@@ -84,7 +84,11 @@ BENCH_WORKLOADS_HEAVY <- list(
     cfg <- .bench_fx(ctx, Sys.getenv("BENCH_CALIB_CFG", "config_moz.rds"))
     ctl <- list(
       calibration = list(n_simulations = ctx$calib_n, n_iterations = as.integer(Sys.getenv('BENCH_CALIB_ITER','1'))),
-      targets     = list(min_best_subset = 30L, max_best_subset = 30L),
+      # min/max_best_subset bound the legacy tier search only; since MOSAIC
+      # 1.4.0 the default "bestfit" ignores them (with a warning), so the
+      # scheme is named to keep the 30-member workload this benchmark has
+      # always timed.
+      targets     = list(posterior_weighting = "saturated", min_best_subset = 30L, max_best_subset = 30L),
       predictions = list(n_iter_ensemble = 2L, n_iter_best = 5L),
       parallel    = list(enable = TRUE, n_cores = ctx$calib_cores),
       io          = MOSAIC::mosaic_io_presets("fast"),

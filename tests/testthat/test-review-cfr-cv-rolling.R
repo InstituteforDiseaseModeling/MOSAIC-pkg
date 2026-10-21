@@ -288,11 +288,21 @@ test_that("run_rolling_cv(optimize_subset = FALSE) drops ensemble_opt up front",
     PATHS = list(MODEL_INPUT = tempdir(), DATA_WHO_ANNUAL = .rv_who_dir()), iso = "MOZ",
     n_cutoffs = 1L, latest_cutoff = max(cuts), step_months = 1L,
     horizons_months = 1, embargo_weeks = 1L, optimize_subset = FALSE,
+    models = c("ensemble", "ensemble_opt", "medoid"),
     base_config = MOSAIC::config_default, priors = MOSAIC::priors_default,
     est_suitability_spec = spec, psi_cache = cache,
     dir_output = tempfile("rv_out_"), verbose = FALSE)), "'ensemble_opt' is dropped")
   expect_gt(length(seen$models), 0L)
   expect_false(any(vapply(seen$models, function(m) "ensemble_opt" %in% m, logical(1))))
+})
+
+test_that("run_rolling_cv defaults: optimize_subset = FALSE and models follow it (1.3.0)", {
+  f <- formals(run_rolling_cv)
+  expect_false(f$optimize_subset)
+  expect_identical(eval(f$models, list(optimize_subset = FALSE)), c("ensemble", "medoid"))
+  expect_identical(eval(f$models, list(optimize_subset = TRUE)),
+                   c("ensemble", "ensemble_opt", "medoid"))
+  expect_false(mosaic_control_defaults()$predictions$optimize_subset)
 })
 
 test_that("compile_rolling_cv_predictions rejects an unknown model name", {

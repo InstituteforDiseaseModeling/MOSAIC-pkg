@@ -42,7 +42,7 @@ Key settings:
 \itemize{
 \item \code{calibration$n_simulations}: NULL for auto mode, integer for fixed mode
 \item \code{calibration$n_iterations}: stochastic engine iterations per parameter set (default: 3)
-\item \code{calibration$max_simulations_total}: Maximum total simulations (default: 100000)
+\item \code{calibration$max_simulations_total}: Budget cap of the adaptive mode (default: 150000)
 \item \code{sampling}: Which parameters to sample vs hold fixed
 \item \code{parallel}: Cluster settings for parallel execution
 }}
@@ -108,7 +108,7 @@ Invisibly returns a list with:
 \describe{
 \item{dirs}{Named list of output directories}
 \item{files}{Named list of key output files}
-\item{summary}{Named list with run statistics (batches, sims, converged, convergence_evaluated, runtime); fixed mode never evaluates the ESS stopping criterion, so it reports \code{converged = FALSE} with \code{convergence_evaluated = FALSE}}
+\item{summary}{Named list with run statistics: batches, sims, \code{convergence_status} (green / yellow / red), \code{stopping_rule_met} (\code{NA} in fixed mode), the deprecated \code{converged} / \code{convergence_evaluated} (FALSE in fixed mode), resume counts and runtime}
 }
 }
 \description{
@@ -123,11 +123,18 @@ This function accepts pre-configured config and priors objects, allowing:
 
 Executes the full MOSAIC calibration workflow:
 \enumerate{
-\item Adaptive calibration with R-squared convergence detection
-\item Predictive batches with model-based sizing and ESS re-evaluation
-\item Post-hoc subset optimization
-\item Posterior quantile and distribution estimation
-\item Posterior predictive checks and uncertainty quantification
+\item Simulation of prior draws: a fixed budget, or adaptive batches that
+stop when the sampling checks of the simulation-convergence status
+(\code{\link{calc_convergence_status}}; ensemble ESS, Monte Carlo error,
+k-hat) are green at two consecutive checks, or at
+\code{max_simulations_total}
+\item The coarsened posterior over all draws and the ensemble members
+(\code{targets$posterior_weighting}; default \code{"bestfit"}), with the
+convergence status of those members
+\item The posterior ensemble, the optional subset optimiser, and the
+parameter posterior from the same members
+\item Posterior predictive checks, \code{summary.json} (schema 2) and
+\code{calibration_diagnostics.json}
 }
 }
 \section{Control Structure}{
@@ -138,7 +145,7 @@ See \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}} for comple
 \item{sampling}{sample_tau_i, sample_mobility_gamma, sample_beta_j0_tot, etc.}
 \item{parallel}{enable, n_cores, type, progress}
 \item{paths}{clean_output, plots}
-\item{targets}{ESS_param, ESS_best, A_best, CVw_best, etc.}
+\item{targets}{posterior_weighting, coarsening_alpha, best_subset_ratio, ESS_best, min/max_ensemble_members, status_thresholds, etc.}
 \item{io}{format, compression, compression_level}
 }
 }

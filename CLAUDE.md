@@ -137,9 +137,9 @@ The `run_MOSAIC()` workflow is the **centerpiece** of the package — it orchest
 - `R/run_MOSAIC_helpers.R` — convergence detection, weight calculation
 - `R/run_MOSAIC_infrastructure.R` — directory setup, I/O, summary generation
 
-**BFRS calibration (2 phases):**
-1. **Adaptive calibration** — batches of simulations until convergence (R² target, ESS thresholds)
-2. **Predictive batches** — model-based batch sizing with ESS re-evaluation until convergence
+**Posterior and ensemble (v1.4.0, `targets$posterior_weighting = "bestfit"`):** every draw carries the coarsened weight w ∝ exp(η(ℓ − ℓmax)), η = `coarsening_alpha` (10) / n_obs_scored, pooled across locations. The ensemble members are the best draws by log-likelihood until their Kish ESS reaches `best_subset_ratio` (0.2) × ESS_all, within `min/max_ensemble_members` (30/1000); the parameter posterior is computed from those same members. `"coarsened"` (SIR resample) and `"saturated"` (legacy tier search) are opt-in.
+
+**Convergence status** (`calc_convergence_status()`, the only place the rule lives): worst of four checks — ensemble ESS (≥ 200 green, 100–199 yellow), member Monte Carlo error p90 (≤ 10% / ≤ 15% of posterior SD), tempered k-hat (< 0.5 / < 0.7), informativeness (flat when the untempered ESS share ≥ `flat_ess_frac` 0.01 and the untempered ESS ≥ 20 ⇒ yellow). Fit (R², bias, coverage) is never part of it. **Adaptive mode** (`n_simulations = NULL`) stops when the three sampling checks are green at two consecutive checks after `min_draws` (5,000), or at `max_simulations_total` (150,000); batches are sized by N × ESS_all target / ESS_all while the ESS growth slope is ≥ 0.8, else grow by a quarter. Fixed mode assesses the status with the `fixed_budget` flag. Contract: summary.json schema 2 and `3_results/calibration_diagnostics.json` (written regardless of `plots`; `calibration_report.pdf` only when `plots = TRUE`).
 
 **Post-calibration:**
 - Medoid model identified, config saved to `2_calibration/best_model/config_medoid.json` (no `config_best.json` is produced)
@@ -195,6 +195,8 @@ All shape term weights default to 0 (OFF). The shape terms read the daily series
 | `R/run_MOSAIC_infrastructure.R` | Directory setup, I/O, summary generation |
 | `R/calc_model_likelihood.R` | Multi-component likelihood |
 | `R/calc_model_ensemble.R` | Posterior-weighted ensemble predictions |
+| `R/calc_convergence_status.R` | v1.4.0 convergence status (RAG checks, reasons, flags) |
+| `R/plot_model_calibration_report.R` | Calibration report PDF, rendered from `calibration_diagnostics.json` |
 | `R/sample_parameters.R` | Sample 301 parameters from priors |
 | `R/make_simulation_config.R` | Config validation (60+ parameters) |
 | `R/calc_model_R2.R` | R² (corr and SSE methods) + bias ratio |

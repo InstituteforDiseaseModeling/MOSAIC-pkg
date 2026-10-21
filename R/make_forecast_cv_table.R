@@ -11,10 +11,13 @@
 #' excluded from the pooled summary; deaths are flagged conditional near-casts
 #' (the scoring embargo is shorter than the infection-to-reported-death dwell).
 #'
-#' Summary rows aggregate only cells that pass the weight-ESS gate
-#' (\code{ess_ok}, when the column is present), matching
-#' \code{evaluate_rolling_cv()$summary} and \code{\link{plot_forecast_cv_skill}};
-#' \code{n_gated} counts the origins left out.
+#' Summary rows aggregate only cells that pass the opt-in convergence gate
+#' (\code{ess_ok}, when the column is present; every cell passes when
+#' \code{evaluate_rolling_cv()} ran with \code{ess_min = 0}, the default),
+#' matching \code{evaluate_rolling_cv()$summary} and
+#' \code{\link{plot_forecast_cv_skill}}; \code{n_gated} counts the origins
+#' left out. A warning is issued when more than half of the cells are red or
+#' when the gate leaves no cell.
 #'
 #' @param cells Scored cells: \code{evaluate_rolling_cv(...)$cells}, or a path to
 #'   a \code{scores_cells.parquet}/\code{.csv}. Must carry \code{iso_code,
@@ -78,6 +81,8 @@ make_forecast_cv_table <- function(cells,
      windows <- sprintf("OOS<=%gmo", horizons_months)
      d <- cells[cells$model == model & cells$metric %in% metrics & cells$window %in% windows, , drop = FALSE]
      if (!nrow(d)) stop("No scored cells for model='", model, "' at the requested horizons.")
+     .rcv_gate_warnings(d, gate_on = "ess_ok" %in% names(d) && any(!(as.logical(d$ess_ok) %in% TRUE)),
+                        where = "make_forecast_cv_table()")
      d$cutoff_date <- as.Date(d$cutoff_date)
      d$horizon_mo  <- as.numeric(sub("^OOS<=([0-9.]+)mo$", "\\1", d$window))
      train_anchor <- if (!is.null(train_start)) {

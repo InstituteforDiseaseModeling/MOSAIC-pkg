@@ -195,11 +195,15 @@ calc_model_posterior_distributions <- function(
     # update_priors_from_posteriors() starts from the priors.
     posteriors$mu_jt <- NULL
 
-    # Update metadata
-    posteriors$metadata$description <- "Posterior distributions fitted from calibration quantiles"
-    posteriors$metadata$date <- Sys.Date()
-    posteriors$metadata$source_priors <- priors_file
-    posteriors$metadata$source_quantiles <- quantiles_file
+    # Metadata of the posterior. The priors' own build metadata (version,
+    # build window, seeding notes) describes the priors, not this posterior,
+    # so it is kept under priors_metadata rather than mixed in (R20).
+    posteriors$metadata <- list(
+        description = "Posterior distributions fitted from calibration quantiles",
+        date = Sys.Date(),
+        source_priors = priors_file,
+        source_quantiles = quantiles_file,
+        priors_metadata = priors$metadata)
 
     # Track fitting results
     n_updated <- 0

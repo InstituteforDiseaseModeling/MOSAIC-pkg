@@ -1,3 +1,9 @@
+expect_kl_na_warning <- function(expr) {
+  out <- NULL
+  testthat::expect_warning(out <- expr, "percentile-scale KL divergence is NA")
+  out
+}
+
 # Regression test: ensure the new subset_col / weight_col arguments default to
 # the legacy column names so pre-refactor callers see identical output.
 
@@ -29,18 +35,19 @@ test_that("calc_model_posterior_quantiles with default args matches explicit tie
   out_explicit <- tempfile("pq_explicit_"); dir.create(out_explicit)
   on.exit({ unlink(out_default, recursive = TRUE); unlink(out_explicit, recursive = TRUE) }, add = TRUE)
 
-  q_default <- calc_model_posterior_quantiles(
+  # tiny mock posteriors (Kish n_eff < 20): the KL-divergence NA warning is expected
+  q_default <- expect_kl_na_warning(calc_model_posterior_quantiles(
     results    = results,
     output_dir = out_default,
     verbose    = FALSE
-  )
-  q_explicit <- calc_model_posterior_quantiles(
+  ))
+  q_explicit <- expect_kl_na_warning(calc_model_posterior_quantiles(
     results    = results,
     output_dir = out_explicit,
     subset_col = "is_best_subset",
     weight_col = "weight_best",
     verbose    = FALSE
-  )
+  ))
 
   # Same row count, same parameters, same quantiles
   expect_equal(nrow(q_default), nrow(q_explicit))
@@ -61,16 +68,16 @@ test_that("calc_model_posterior_quantiles with subset_col='is_best_subset_opt' d
   out_opt  <- tempfile("pq_opt_");  dir.create(out_opt)
   on.exit({ unlink(out_tier, recursive = TRUE); unlink(out_opt, recursive = TRUE) }, add = TRUE)
 
-  q_tier <- calc_model_posterior_quantiles(
+  q_tier <- expect_kl_na_warning(calc_model_posterior_quantiles(
     results = results, output_dir = out_tier, verbose = FALSE
-  )
-  q_opt <- calc_model_posterior_quantiles(
+  ))
+  q_opt <- expect_kl_na_warning(calc_model_posterior_quantiles(
     results    = results,
     output_dir = out_opt,
     subset_col = "is_best_subset_opt",
     weight_col = "weight_best_opt",
     verbose    = FALSE
-  )
+  ))
 
   # Posterior rows differ (different subset selected)
   post_tier <- q_tier[q_tier$type == "posterior", ]
@@ -83,14 +90,17 @@ test_that("calc_model_posterior_quantiles with subset_col='is_best_subset_opt' d
   expect_false(isTRUE(all.equal(q50_tier, q50_opt, tolerance = 1e-10)))
 })
 
-test_that("a posterior with Kish n_eff < 2 warns that KL is NA", {
+test_that("a posterior with Kish n_eff < 20 warns that KL is NA", {
   results <- make_mock_results_for_quantiles()
   results$weight_best[results$is_best_subset] <- c(0.97, rep(0.03 / 9, 9))
   out <- withr::local_tempdir()
   expect_warning(q <- calc_model_posterior_quantiles(results, output_dir = out, verbose = FALSE),
-                 "Kish n_eff = 1\\.06 < 2")
+                 "Kish n_eff = 1\\.06 < 20")
   expect_true(all(is.na(q$kl[q$type == "posterior"])))
-  # A well-spread posterior does not warn
-  expect_no_warning(calc_model_posterior_quantiles(make_mock_results_for_quantiles(),
-                                                   output_dir = out, verbose = FALSE))
+  # A posterior with at least 20 effective members does not warn and has KL
+  spread <- make_mock_results_for_quantiles(n = 200)
+  spread$is_best_subset <- seq_len(200) <= 60
+  spread$weight_best <- ifelse(spread$is_best_subset, 1 / 60, 0)
+  expect_no_warning(q2 <- calc_model_posterior_quantiles(spread, output_dir = out, verbose = FALSE))
+  expect_true(all(is.finite(q2$kl[q2$type == "posterior"])))
 })

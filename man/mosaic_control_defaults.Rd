@@ -20,16 +20,32 @@ mosaic_control_defaults(
 \arguments{
 \item{calibration}{List of calibration settings. Default is:
 \itemize{
-\item \code{n_simulations}: NULL for auto mode, or integer for fixed mode
+\item \code{n_simulations}: NULL for auto (adaptive) mode, or integer for fixed mode
 \item \code{n_iterations}: Number of stochastic engine iterations per parameter set (default: 3L)
-\item \code{max_simulations_total}: Maximum total simulations across all phases (default: 100000L)
-\item \code{batch_size_adaptive}: Simulations per batch in Phase 1 adaptive calibration (default: 500L)
-\item \code{min_batches_adaptive}: Minimum Phase 1 batches before convergence check (default: 5L)
-\item \code{max_batches_adaptive}: Maximum Phase 1 batches (default: 8L)
-\item \code{max_batch_predictive}: Cap on each Phase 2 predictive batch (default: 10000L)
-\item \code{max_batches_predictive}: Maximum Phase 2 predictive batches (default: 10L)
-\item \code{target_r2_adaptive}: ESS regression R-squared target for Phase 1 convergence (default: 0.90)
-}}
+\item \code{max_simulations_total}: Budget cap of auto mode (default: 150000L). A run
+that reaches it before the convergence status is green ends with the
+\code{budget_cap_reached} flag
+\item \code{batch_size_adaptive}: Simulations per batch until the minimum run length is
+met, and the fallback size afterwards (default: 500L)
+\item \code{max_batch_predictive}: Cap on each projected batch (default: 10000L)
+\item \code{min_batches_adaptive}: Minimum batches before any stop or projection (default: 5L)
+\item \code{min_draws}: Minimum draws before any stop or projection (default: 5000L)
+}
+Auto mode computes the convergence status (\code{\link{calc_convergence_status}})
+on every draw so far after each batch, on the members of
+\code{posterior_weighting}, and stops when its sampling checks (ensemble
+ESS, Monte Carlo error, k-hat) are green at two consecutive checks and both
+minimum run lengths are met; informativeness never blocks the stop. Once
+the minimum is met, batches are sized from the projection N x ESS_all
+target / ESS_all (converted to simulations at the success rate) while the
+ESS growth slope is at least 0.8, and otherwise grow geometrically (a quarter of the draws so far,
+between \code{batch_size_adaptive} and \code{max_batch_predictive}), so a
+heavy-tailed run reaches a 150,000 cap in about 20 checks after the minimum run.
+In parallel each batch is rounded up to a multiple of workers x
+\code{io$shard_batch_size}, never beyond the budget left.
+\code{max_batches_adaptive},
+\code{max_batches_predictive} and \code{target_r2_adaptive} were retired in
+1.4.0 (warned and ignored when set).}
 
 \item{sampling}{List of parameter sampling flags (what to sample). Default is:
 \itemize{
@@ -71,19 +87,54 @@ simulations either way
 \item ... (see \code{mosaic_control_defaults()} for complete list)
 }}
 
-\item{targets}{List of convergence targets (when to stop). Default is:
+\item{targets}{List of posterior and convergence settings. Default is:
 \itemize{
-\item \code{ESS_param}: Target ESS per parameter (default: 100)
-\item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
-\item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
-\item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
-\item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
-\item \code{min_best_subset}: Smallest best-subset size searched (default: 30)
-\item \code{max_best_subset}: Largest best-subset size searched (default: 1000)
-\item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "perplexity")
-\item \code{ESS_marginal_method}: Per-parameter marginal ESS method, "kde" or "binned" (default: "kde")
-\item \code{best_subset_weighting}: Best-subset posterior weights, "saturated" or "tempered" (default: "saturated"; "tempered" is sharper, not softer)
-}}
+\item \code{posterior_weighting}: The ensemble members, from which the
+parameter posterior and the predictions are built (default:
+\code{"bestfit"}). \code{"bestfit"}: the draws in descending
+log-likelihood until the Kish ESS of their coarsened weights reaches
+\code{best_subset_ratio} x ESS_all, bounded by
+\code{min_ensemble_members} / \code{max_ensemble_members}, carrying
+those weights. \code{"coarsened"} (the 1.3.0 default): a systematic
+resample of K = clamp(round(ESS_all), min, max) draws weighted by
+count / K. \code{"saturated"} (pre-1.3.0) and \code{"tempered"}: the
+tier-searched best subset (with \code{ESS_best} meaning the tier target,
+100 unless set, and \code{A_best} 0.70, \code{CVw_best} 1.0,
+\code{min_best_subset}, \code{max_best_subset}). Formerly
+\code{best_subset_weighting} (accepted with a deprecation warning).
+\item \code{coarsening_alpha}: Effective number of independent observations of the
+coarsened posterior, \eqn{\eta = \alpha / n_{obs}} with \eqn{n_{obs}} the
+scored observation cells (default: 10). See \code{\link{calc_weight_health}}.
+\item \code{best_subset_ratio}: Share of ESS_all the best-fit ensemble holds (default: 0.2).
+\item \code{ESS_best}: Required ensemble ESS (default: 200; 100 under the
+legacy schemes). The convergence status is green at or above it, and auto
+mode simulates towards ESS_all = \code{ESS_best / best_subset_ratio}. Its
+meaning changed in 1.4.0 (it was the tier-search target in 1.3.x): an
+explicit value is honoured under every scheme, with a warning when it
+differs from the scheme's default.
+\item \code{min_draws} (in \code{calibration}) above
+\code{max_simulations_total} is clamped to it with a warning.
+\item \code{min_ensemble_members}, \code{max_ensemble_members}: Bounds on the
+ensemble size (default: 30, 1000; set the maximum lower for continental runs:
+the ensemble arrays grow with it).
+\item \code{status_thresholds}: Bands of the convergence status (default
+\code{list(ess_yellow_frac = 0.5, mce_green = 0.10, mce_yellow = 0.15,
+    khat_green = 0.5, khat_yellow = 0.7, slope_stall = 0.8,
+    flat_ess_frac = 0.01)}; \code{flat_ess_frac} is the untempered-ESS share
+of the draws at or above which the likelihood counts as flat); see
+\code{\link{calc_convergence_status}}.
+\item \code{min_best_subset}, \code{max_best_subset}: Bounds of the legacy tier
+search (default: 30, 1000); ignored (with a warning when set) under
+\code{"bestfit"} and \code{"coarsened"}.
+\item \code{ESS_method}: ESS formula, "kish" or "perplexity", of the legacy
+schemes' ESS_B / A / CVw, the subset optimiser and the \eqn{\eta = 1}
+likelihood-concentration numbers (default: "perplexity").
+}
+Deprecated in 1.4.0 (warned and ignored when set): \code{ESS_param},
+\code{ESS_param_prop} and \code{batch_ratio_max} (the per-parameter-ESS
+stopping rule, replaced by the convergence status); \code{A_best} and
+\code{CVw_best} outside the legacy schemes. \code{ESS_marginal_method} was
+retired in 1.3.0.}
 
 \item{predictions}{List of prediction generation settings. Default is:
 \itemize{
@@ -95,17 +146,22 @@ prediction plots (default: 100L). Applied identically to both models.
 These runs execute on an internal PSOCK cluster when
 \code{parallel$enable = TRUE}.
 \item \code{optimize_subset}: Logical; when \code{TRUE}, the post-ensemble
-optimizer (MAE / WIS / R^2+bias) refines the best subset used for
+optimizer (MAE / WIS / R^2+bias) refines the ensemble members used for
 \code{posteriors.json}, \code{posterior_quantiles.csv}, and the ensemble
-object driving all downstream plots and metrics. The tier-selected subset
-is preserved in the \code{is_best_subset} / \code{weight_best} columns of
+object driving all downstream plots and metrics, and the convergence
+status is then assessed on the optimised subset. The members
+are preserved in the \code{is_best_subset} / \code{weight_best} columns of
 \code{samples.parquet} for provenance; the optimized selection is written
 to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. Default
-\code{TRUE} since v1.2.0 (\code{FALSE} before). When \code{FALSE}, the
-tier-selected subset is canonical and no \code{_opt} columns are written.
+\code{FALSE} (it was \code{TRUE} in v1.2.x; reverted in 1.3.0 because, under
+the coarsened posterior, the optimizer re-truncates the members by their
+fit to the training data). An explicit \code{TRUE} is honoured
+under every weighting scheme. When \code{FALSE}, the ensemble members
+(\code{is_best_subset} / \code{weight_best}) are canonical and no
+\code{_opt} columns are written.
 The optimizer chooses among subsets of the simulated candidate ensemble,
 so the size it selects is between \code{optimize_min_n} and the
-tier-selected size. \strong{Statistical note:} enabling this
+number of members. \strong{Statistical note:} enabling this
 flag yields a posterior conditioned on ensemble predictive performance
 (MAE / WIS / R^2+bias on the training data) rather than a pure
 likelihood-weighted posterior.
@@ -142,10 +198,10 @@ The number of parameter sets in the ensemble is determined by the best subset
 
 \item{weights}{List of importance-weight settings. Default is:
 \itemize{
-\item \code{floor}: Minimum weight to prevent underflow (default: 1e-15).
-\item \code{iqr_multiplier}: Tukey IQR outlier-detection multiplier
-(default: 1.5; use 3.0 for extreme outliers only).
-}}
+\item \code{iqr_multiplier}: Tukey lower-fence multiplier of the legacy
+schemes (default: 1.5; use 3.0 for extreme outliers only).
+}
+\code{floor} is deprecated (1.4.0; warned and ignored).}
 
 \item{parallel}{List of parallelization settings (infrastructure). Default is:
 \itemize{
@@ -174,7 +230,8 @@ re-analysable raw archive (e.g. re-running subset optimization or the
 R_eff posterior-resimulation CI path from the saved file). The
 in-memory object used during the run is never affected (default:
 \code{FALSE}).
-}}
+}
+\code{verbose_weights} is deprecated (1.4.0; it had no effect).}
 
 \item{paths}{List of path and output settings (file management). Default is:
 \itemize{
@@ -201,7 +258,7 @@ calibration strategy, parameter sampling, parallelization, and output options.
 \item \code{calibration}: How to run (simulations, iterations, batch sizes)
 \item \code{sampling}: What to sample (which parameters to vary)
 \item \code{likelihood}: How to score model fit (likelihood components and weights)
-\item \code{targets}: When to stop (ESS convergence thresholds)
+\item \code{targets}: The posterior, the ensemble and when to stop (convergence status)
 \item \code{parallel}: Infrastructure (cores, cluster type)
 \item \code{io}: Output format (file format, compression)
 \item \code{paths}: File management (output directories, plots)
@@ -256,9 +313,9 @@ ctrl <- mosaic_control_defaults(
   )
 )
 
-# Use perplexity method for ESS calculations
+# The 1.3.0 resampled ensemble instead of the best-fit default
 ctrl <- mosaic_control_defaults(
-  targets = list(ESS_method = "perplexity")
+  targets = list(posterior_weighting = "coarsened")
 )
 
 # Full workflow configuration (demonstrates logical order)
@@ -266,7 +323,7 @@ ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
   sampling = list(sample_tau_i = TRUE, sample_beta_j0_tot = TRUE),  # What to sample
   likelihood = list(weight_wis = 0.02, weight_cases = 1.0),        # How to score
-  targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
+  targets = list(ESS_best = 200, best_subset_ratio = 0.2),         # When to stop
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
   io = mosaic_io_presets("default"),                               # Output format
   paths = list(clean_output = FALSE, plots = TRUE)                 # File management

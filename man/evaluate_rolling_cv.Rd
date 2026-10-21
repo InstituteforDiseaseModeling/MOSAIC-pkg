@@ -14,7 +14,8 @@ evaluate_rolling_cv(
   ess_min = 0,
   min_cells_ci = 5L,
   n_boot = 1000L,
-  seed = 1L
+  seed = 1L,
+  observed_tiers = c(1, 2)
 )
 }
 \arguments{
@@ -36,8 +37,9 @@ A scalar applies to all metrics; a named vector (e.g.
 \code{c(cases = 4, deaths = 6)}) applies per metric, and omitted metrics get
 0. Default \code{0}.}
 
-\item{ess_min}{Minimum importance-weight ESS for a cell to enter the summary
-aggregation. Default \code{0} (gate off). See Details.}
+\item{ess_min}{Turns the convergence gate on when > 0: cells whose cutoff
+run is red (or, before MOSAIC 1.4.0, whose ESS is below \code{ess_min}) are
+left out of the summary. Default \code{0} (no gate). See Details.}
 
 \item{min_cells_ci}{Minimum number of finite cells in a (model, metric,
 window) group required to emit a bootstrap CI; below this the CI is
@@ -45,7 +47,11 @@ suppressed (lo = hi = NA) and \code{ci_suppressed = TRUE}. Default \code{5}.}
 
 \item{n_boot}{Bootstrap resamples over cells for the skill CI (default 1000).}
 
-\item{seed}{RNG seed for the bootstrap (default 1).
+\item{seed}{RNG seed for the bootstrap (default 1).}
+
+\item{observed_tiers}{Surveillance tiers scored out of sample when the
+predictions carry \code{observed_tier} (default \code{c(1, 2)}: observed and
+reconstructed weeks); \code{NULL} scores every tier. See Details.
 
 When the predictions carry a \code{model} column (\code{ensemble},
 \code{ensemble_opt}, \code{best}, \code{medoid}), every metric is computed and
@@ -56,7 +62,7 @@ single \code{"ensemble"} model (back-compatible).}
 A list with:
 \describe{
 \item{cells}{Per (cutoff x model x iso x metric x window) metrics + per-baseline
-mae_skill and wis_skill, the cell \code{ess} and \code{ess_ok} flag (plus
+mae_skill and wis_skill, the cell \code{ess}, \code{convergence_status} and \code{ess_ok} flag (plus
 \code{anchor_date} when the predictions carry it).}
 \item{summary}{Aggregated across \code{ess_ok} cells per (model x metric x
 window): \code{n_cells_used} / \code{n_cells_total}, mean/median of each
@@ -90,6 +96,12 @@ largest scored set; predictions further out are not scored in any window. An
 Scoring uses \strong{trusted observed only}: rows whose \code{observed_source}
 is missing or not \code{"AI"} (when \code{trusted_only = TRUE}).
 
+\strong{Surveillance tier.} When the predictions carry \code{observed_tier}
+(the config's \code{reported_tier}: 1 observed, 2 reconstructed, 3 imputed),
+out-of-sample days whose tier is not in \code{observed_tiers} are not scored.
+The in-sample rows, which the baselines are fitted on, keep every tier, as
+the calibration did. Predictions without the column are scored unchanged.
+
 \strong{Embargo and scoring origin.} The harness labels the dates in
 \code{(cutoff, cutoff + embargo]} as \code{segment == "embargo"}; those are
 never scored. For each metric the scoring origin is
@@ -113,14 +125,19 @@ quantiles of its in-sample residuals, so a genuine \strong{WIS-skill} exists:
 MAE ratio. Positive = model beats the baseline; \code{NA} when the baseline
 (or its interval) cannot be formed.
 
-\strong{Weight-ESS gate.} If the predictions carry an \code{ess} column (the
-cutoff calibration's importance-weight ESS, constant per cutoff), each cell is
-flagged \code{ess_ok = (!is.na(ess) & ess >= ess_min)}. Cells failing the gate
-remain in \code{$cells} (flagged) but are \strong{excluded} from the
-\code{$summary} aggregation. With \code{ess_min = 0} (default) the gate is off
-(NA ess still flags \code{ess_ok = FALSE}, but the gate threshold 0 admits any
-finite ess). When the \code{ess} column is absent, \code{ess_ok = TRUE} for all
-cells (back-compat) and \code{$summary$ess_gated = FALSE}.
+\strong{Convergence gate (opt-in).} With \code{ess_min = 0} (the default)
+there is no gate: every cell has \code{ess_ok = TRUE} and enters
+\code{$summary}. With \code{ess_min > 0} the gate is on: a cell whose
+predictions carry a \code{convergence_status} (MOSAIC 1.4.0: the cutoff
+calibration's simulation-convergence status, constant per cutoff) passes when
+the status is not \code{"red"}; a cell without one (a cutoff run from before
+1.4.0) falls back to the weight-ESS rule \code{ess_ok = (!is.na(ess) & ess >=
+ess_min)}; a cell with neither passes. Cells failing the gate remain in
+\code{$cells} (flagged) but are \strong{excluded} from the \code{$summary}
+aggregation. \code{$cells$convergence_status} is carried as information
+whatever \code{ess_min} is. A warning is issued when more than half of the
+cells that carry a status are red (cheap or short cutoff calibrations), and
+when the gate removes every cell.
 }
 \seealso{
 \code{\link{run_rolling_cv}}, \code{\link{calc_model_R2}}, \code{\link{calc_bias_ratio}}

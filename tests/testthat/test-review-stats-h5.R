@@ -66,7 +66,7 @@ test_that("saturated tier-search ESS matches a hand-computed value", {
   expect_equal(g$metrics$ESS, ess_hand, tolerance = 1e-12)
 })
 
-test_that("run_MOSAIC passes best_subset_weighting to the tier search and optimizer", {
+test_that("run_MOSAIC passes posterior_weighting to the tier search and optimizer", {
   calls <- list()
   walk <- function(e) {
     if (is.call(e)) {
@@ -78,14 +78,22 @@ test_that("run_MOSAIC passes best_subset_weighting to the tier search and optimi
       for (a in as.list(e)[-1]) if (!missing(a)) walk(a)
     }
   }
+  # The tier search lives in .mosaic_tier_best_subset() (shared by run_MOSAIC and
+  # the auto-mode stopping rule); the optimizer call stays in run_MOSAIC, where
+  # the scheme is read once into weighting_scheme.
+  walk(body(MOSAIC:::.mosaic_tier_best_subset))
   walk(body(MOSAIC::run_MOSAIC))
   fns <- vapply(calls, function(e) as.character(e[[1]]), character(1))
   expect_setequal(unique(fns), c("grid_search_best_subset", "optimize_ensemble_subset"))
   for (e in calls) {
     arg <- e$weighting
     expect_false(is.null(arg))
-    expect_true(any(grepl("best_subset_weighting", deparse(arg), fixed = TRUE)))
+    expect_true(any(grepl("^(scheme|weighting_scheme|opt_weighting)$", deparse(arg))))
   }
+  body_txt <- paste(deparse(body(MOSAIC::run_MOSAIC)), collapse = "\n")
+  expect_true(grepl("weighting_scheme <- control$targets$posterior_weighting", body_txt, fixed = TRUE))
+  tier_txt <- paste(deparse(MOSAIC:::.mosaic_tier_best_subset), collapse = "\n")
+  expect_true(grepl("scheme <- control$targets$posterior_weighting", tier_txt, fixed = TRUE))
 })
 
 test_that(".mosaic_best_subset_weights has a single definition", {
@@ -97,87 +105,48 @@ test_that(".mosaic_best_subset_weights has a single definition", {
   expect_length(defs, 1L)
 })
 
-# ---- Items 3 and 4: weighted (Kish) KDE bandwidth, shared KL core -----------
+# ---- Items 3 and 4 (revised in 1.4.0): one KL core, percentile scale ---------
+# The weighted-KDE KL and its weighted bandwidth were replaced by the
+# percentile-scale estimator of calc_kl_divergence(); the properties these items
+# pinned (no smoothing of concentrated importance weights back to the prior, NA
+# rather than a spurious number for near-one-hot weights, one shared core) are
+# re-asserted on it.
 
-test_that("weighted nrd0 bandwidth reduces to bw.nrd0 and uses Kish n_eff", {
-  set.seed(4)
-  x <- stats::rnorm(300)
-  expect_identical(MOSAIC:::.bw_nrd0_weighted(x, rep(2, 300)), stats::bw.nrd0(x))
-  # Three-point hand check: x = (0, 1, 2), w = (0.5, 0.25, 0.25):
-  # n_eff = 1 / 0.375 = 2.666667, mu = 0.75, weighted var = 0.6875,
-  # corrected by n_eff / (n_eff - 1) = 1.6 -> sd_w = sqrt(1.1) = 1.048809
-  q <- weighted_quantiles(c(0, 1, 2), c(0.5, 0.25, 0.25), c(0.25, 0.75))
-  lo <- min(sqrt(1.1), diff(q) / 1.34)
-  expect_equal(MOSAIC:::.bw_nrd0_weighted(c(0, 1, 2), c(0.5, 0.25, 0.25)),
-               0.9 * lo * (8 / 3)^(-0.2), tolerance = 1e-12)
-  # All mass on one value: bandwidth undefined
-  expect_true(is.na(MOSAIC:::.bw_nrd0_weighted(c(0, 1, 2), c(0, 1, 0))))
-})
-
-test_that("near-one-hot weights (Kish n_eff < 2) give NA, not an inflated bandwidth", {
-  # w = (0.999, 0.001): n_eff = 1 / (0.999^2 + 0.001^2) = 1.002002; the
-  # n_eff / (n_eff - 1) correction would be ~501, inflating the SD ~22x and
-  # smoothing a near point mass into a wide density (posterior KL ~2 on U(0,1)).
+test_that("near-one-hot weights give NA, not a spurious small number", {
   w <- c(0.999, 0.001)
-  expect_equal(1 / sum(w^2), 1.002002, tolerance = 1e-6)
-  expect_true(is.na(MOSAIC:::.bw_nrd0_weighted(c(0.2, 0.1), w)))
   set.seed(1)
   prior <- stats::runif(20000)
   x <- stats::runif(1000)
   expect_true(is.na(MOSAIC:::.mosaic_posterior_kl(prior, x, c(w, rep(0, 998)))))
   expect_warning(kl <- calc_kl_divergence(x, weights1 = c(w, rep(0, 998)), samples2 = prior),
-                 "non-finite|NA")
+                 "below n_bins")
   expect_true(is.na(kl))
-  # Boundary: n_eff = 1.9 -> NA; n_eff = 2 (two equal weights) -> finite,
-  # equal to the hand value 0.9 * min(sd_w, IQR_w / 1.34) * 2^-0.2
-  p <- (1 + sqrt(2 / 1.9 - 1)) / 2
-  expect_true(is.na(MOSAIC:::.bw_nrd0_weighted(c(0, 1), c(p, 1 - p))))
-  xx <- c(0, 1, 5)
-  ww <- c(1, 1, 0)
-  sd_w <- sqrt(0.25 * 2 / 1)
-  q <- weighted_quantiles(xx, ww / 2, c(0.25, 0.75))
-  expect_equal(MOSAIC:::.bw_nrd0_weighted(xx, ww),
-               0.9 * min(sd_w, diff(q) / 1.34) * 2^(-0.2), tolerance = 1e-12)
-})
-
-test_that("posterior KL uses the weighted bandwidth for importance-weighted draws", {
-  set.seed(1)
-  prior <- stats::runif(20000)
-  # Importance-weighted U(0,1) draws targeting N(0.5, 0.01):
-  # KL = -0.5 * log(2 * pi * e * 0.01^2) = 3.186. The unweighted bandwidth
-  # (~0.066) smoothed this back to ~1.3.
-  x <- stats::runif(1000)
-  w <- stats::dnorm(x, 0.5, 0.01)
-  analytic <- -0.5 * log(2 * pi * exp(1) * 0.01^2)
-  kl <- MOSAIC:::.mosaic_posterior_kl(prior, x, w)
-  expect_lt(abs(kl - analytic), 0.2)
-  # Unweighted-bandwidth reference, computed inline, is far below
-  p <- stats::density(x, weights = w / sum(w), bw = stats::bw.nrd0(x), from = 0, to = 1, n = 2048)
-  dx <- diff(p$x)
-  kl_unw <- sum(dx * (p$y * log(pmax(p$y, 1e-300)))[-1])
-  expect_lt(kl_unw, 2)
-  # All weight on one draw: undefined, not a spurious small number
   w1 <- numeric(1000); w1[7] <- 1
   expect_true(is.na(MOSAIC:::.mosaic_posterior_kl(prior, x, w1)))
 })
 
-test_that("calc_kl_divergence no longer plateaus near log(n_points)", {
+test_that("concentrated importance weights are not smoothed back towards the prior", {
+  set.seed(1)
+  prior <- stats::runif(20000)
+  # Importance-weighted U(0,1) draws targeting N(0.5, 0.01^2): the posterior sits
+  # in the two central percentile bins, so the estimate is near log(10) = 2.30
+  # less the finite-ESS correction; the old unweighted-bandwidth KDE gave ~1.3.
+  x <- stats::runif(5000)
+  w <- stats::dnorm(x, 0.5, 0.01)
+  kl <- MOSAIC:::.mosaic_posterior_kl(prior, x, w)
+  ess <- sum(w)^2 / sum(w^2)
+  expect_gt(kl, log(10) - 19 / (2 * ess) - 0.1)
+  expect_lte(kl, log(20))
+})
+
+test_that("one KL core: the posterior-quantile KL is calc_kl_divergence", {
   set.seed(2)
   prior <- stats::runif(20000)
-  for (s in c(1e-3, 1e-4)) {
-    post <- stats::rnorm(500, 0.5, s)
-    analytic <- -0.5 * log(2 * pi * exp(1) * stats::sd(post)^2)
-    kl <- calc_kl_divergence(post, NULL, prior, NULL, n_points = 1000)
-    expect_lt(abs(kl - analytic), 0.1)
-  }
-  expect_gt(calc_kl_divergence(stats::rnorm(500, 0.5, 1e-4), NULL, prior, NULL), log(1000) + 0.5)
-  # Same variance, shifted normals: KL = 0.5 * (mu1 - mu2)^2 / sigma^2 = 0.5
-  a <- stats::rnorm(1e4); b <- stats::rnorm(1e4, 1)
-  expect_lt(abs(calc_kl_divergence(a, NULL, b, NULL) - 0.5), 0.05)
-  # One core: the posterior-quantile KL equals calc_kl_divergence on the same scale
   post <- stats::rnorm(200, 0.3, 0.02)
-  expect_equal(MOSAIC:::.mosaic_posterior_kl(prior, post, n_grid = 1000L),
-               calc_kl_divergence(post, NULL, prior, NULL, n_points = 1000,
-                                  eps = .Machine$double.xmin),
-               tolerance = 1e-12)
+  expect_identical(MOSAIC:::.mosaic_posterior_kl(prior, post),
+                   calc_kl_divergence(post, rep(1 / 200, 200), prior, NULL))
+  # shifted normals, same variance: KL = 0.5 (binned estimate slightly lower)
+  a <- stats::rnorm(2e4); b <- stats::rnorm(2e4, 1)
+  kl <- calc_kl_divergence(a, NULL, b, NULL)
+  expect_lt(abs(kl - 0.5), 0.06)
 })

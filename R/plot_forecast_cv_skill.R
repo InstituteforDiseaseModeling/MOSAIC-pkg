@@ -39,9 +39,11 @@ utils::globalVariables(c("val", "unit_lab", "origin", "ess_ok", "med_val", "lab"
 #'   model of \code{\link{make_forecast_cv_table}} and
 #'   \code{\link{plot_forecast_cv_grid}}).
 #' @param metrics Channels to facet (default \code{c("cases","deaths")}).
-#' @param show_gated Logical; draw ESS-gated-out origins as hollow points instead
-#'   of dropping them (default TRUE). Gated origins are excluded from the median +
-#'   tally regardless.
+#' @param show_gated Logical; draw gated-out origins (\code{ess_ok = FALSE}:
+#'   \code{evaluate_rolling_cv()} run with \code{ess_min > 0}) as hollow points
+#'   instead of dropping them (default TRUE). Gated origins are excluded from the
+#'   median + tally regardless; with the default \code{ess_min = 0} no origin is
+#'   gated.
 #' @param title,subtitle,caption Plot labels (sensible defaults from \code{value}).
 #' @param dir_output Directory to write the figure (PNG + PDF); NULL returns the
 #'   ggplot only.
@@ -113,6 +115,7 @@ plot_forecast_cv_skill <- function(x,
      d$val <- suppressWarnings(as.numeric(d[[col]]))
      d <- d[is.finite(d$val), , drop = FALSE]
      if (!nrow(d)) stop("no finite '", col, "' for model='", model, "', window='", win, "'.")
+     .rcv_gate_warnings(d, gate_on = any(!(d$ess_ok %in% TRUE)), where = "plot_forecast_cv_skill()")
      if (!isTRUE(show_gated)) d <- d[d$ess_ok %in% TRUE, , drop = FALSE]
      d$metric <- factor(d$metric, levels = metrics)
      d$origin <- as.character(d$cutoff_date)
@@ -127,6 +130,9 @@ plot_forecast_cv_skill <- function(x,
                      n_good = if (all(is.na(gd))) NA_integer_ else sum(gd),
                      stringsAsFactors = FALSE)
      }))
+     if (is.null(summ))   # every origin gated out: no medians to draw
+          summ <- data.frame(unit = character(0), metric = character(0), med_val = numeric(0),
+                             n_origins = integer(0), n_good = integer(0), stringsAsFactors = FALSE)
      ng <- stats::aggregate(ess_ok ~ unit + metric, data = d, FUN = function(v) sum(!(v %in% TRUE)))
      summ <- merge(summ, data.frame(unit = ng$unit, metric = ng$metric, n_gated = ng$ess_ok),
                    by = c("unit", "metric"), all.x = TRUE)
@@ -143,7 +149,7 @@ plot_forecast_cv_skill <- function(x,
 
      if (is.null(title))    title <- sprintf("%s (%g-mo horizon)", xlab, horizon_months)
      if (is.null(subtitle)) subtitle <- "HINDCAST / conditional model performance (realized covariates) -- NOT operational forecast skill; points = forecast origins, no CI"
-     if (is.null(caption))  caption <- sprintf("model=%s | diamond = per-country median over ESS-passing origins | annotation = %s | * exploratory",
+     if (is.null(caption))  caption <- sprintf("model=%s | diamond = per-country median over origins passing the gate | annotation = %s | * exploratory",
                                                model, if (all(is.na(summ$n_good))) "median" else if (value=="bias_ratio") "origins in [0.5,2]" else "origins better than ref")
 
      gg <- ggplot2::ggplot(d, ggplot2::aes(x = val, y = unit_lab))
@@ -155,7 +161,7 @@ plot_forecast_cv_skill <- function(x,
                               shape = 18, size = 4.2, colour = "black", inherit.aes = FALSE) +
           ggplot2::geom_text(data = summ, ggplot2::aes(x = -Inf, y = unit_lab, label = lab),
                              hjust = -0.2, vjust = 0.5, size = 3.0, colour = "grey30", inherit.aes = FALSE) +
-          ggplot2::scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1), name = "ESS pass", drop = FALSE) +
+          ggplot2::scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1), name = "Gate pass", drop = FALSE) +
           ggplot2::facet_wrap(~ metric, ncol = 1, scales = "free_x") +
           ggplot2::labs(title = title, subtitle = subtitle, caption = caption,
                         x = xlab, y = NULL, colour = "Origin (cutoff)") +

@@ -24,6 +24,9 @@ calc_convergence_diagnostics(
   ess_method = c("kish", "perplexity"),
   temperature = 1,
   is_diagnostics = NULL,
+  weight_health = NULL,
+  weighting = c("saturated", "tempered", "coarsened", "bestfit"),
+  target_batch_ratio_max = 0.2,
   verbose = TRUE
 )
 }
@@ -50,8 +53,11 @@ calc_convergence_diagnostics(
 used (e.g., "tier_3", "fallback")}
 
 \item{param_ess_results}{Optional data frame with columns \code{parameter} and
-\code{ess_marginal} containing parameter-specific ESS values. If NULL,
-parameter ESS metrics are omitted.}
+\code{ess} (or the deprecated \code{ess_marginal}) containing
+parameter-specific ESS values. If NULL, parameter ESS metrics are omitted.
+Under the 1.4.0 status (\code{weight_health} supplied) the per-parameter
+ESS is a diagnostic (status \code{"info"}); only a standalone legacy call
+gates it.}
 
 \item{target_ess_best}{Numeric target for both subset size and ESS (default 300).
 Both B_size and ESS_B must be >= target_ess_best.}
@@ -63,10 +69,11 @@ Both B_size and ESS_B must be >= target_ess_best.}
 \item{target_max_best_subset}{Numeric maximum best subset size in absolute count
 (default 1000). Replaced target_percentile_max for absolute count-based control.}
 
-\item{target_ess_param}{Numeric target ESS for individual parameters (default 300)}
+\item{target_ess_param}{Numeric target ESS for individual parameters (default
+300); used only by a standalone legacy call (no \code{weight_health}).}
 
 \item{target_ess_param_prop}{Numeric target proportion of parameters that must
-meet ESS threshold (default 0.95, meaning 95\%)}
+meet ESS threshold (default 0.95); standalone legacy calls only.}
 
 \item{ess_method}{Character string specifying ESS calculation method: "kish" (default)
 or "perplexity". This should match the method used for all ESS calculations in the
@@ -75,10 +82,36 @@ workflow.}
 \item{temperature}{Numeric temperature parameter used for weight scaling
 (default 1, for documentation purposes)}
 
-\item{is_diagnostics}{Optional list of exact importance-sampling diagnostics
-from \code{\link{calc_is_diagnostics}}, with elements \code{best} and
-\code{all}. Reported under \code{$importance_sampling} but never gated:
-these are untruncated-weight quantities, unlike the gated ESS_B.}
+\item{is_diagnostics}{Optional list of \eqn{\eta = 1} diagnostics from
+\code{\link{calc_is_diagnostics}}, with elements \code{best} and
+\code{all} (and \code{optimized} when the subset optimiser ran). Their
+ESS and positive-ratio counts are reported under
+\code{$likelihood_concentration} with an explanatory note and are never
+gated: they describe the untempered likelihood, which collapses onto one
+draw for any informative stochastic likelihood whatever the fit.}
+
+\item{weight_health}{Optional result of \code{\link{calc_weight_health}}
+for the members the posterior is built from (\code{run_MOSAIC()} passes
+it under every scheme). When it carries a convergence status, that status
+is the verdict: \code{summary$convergence_status} is \code{"green"},
+\code{"yellow"} or \code{"red"} (mirroring \code{summary.json}),
+\code{$status} holds the label, reasons, flags and the four checks, and
+\code{$metrics} the ESS_all, ensemble ESS, Monte Carlo error, k-hat and
+informativeness rows. Required under \code{weighting = "bestfit"} or
+\code{"coarsened"}.}
+
+\item{weighting}{Posterior weighting scheme the inputs come from
+(\code{control$targets$posterior_weighting}): \code{"saturated"} (default,
+the pre-1.3.0 behaviour) or \code{"tempered"} also report the
+tier-searched best subset (B_size, its cap, ESS_B, A_B, CV_B) with the
+legacy PASS / WARN / FAIL verdict, which becomes \code{summary$tier_status}
+when \code{weight_health} supplies the 1.4.0 status (and is
+\code{summary$convergence_status} otherwise, for a standalone legacy
+call). \code{"bestfit"} and \code{"coarsened"} report no tier rows.}
+
+\item{target_batch_ratio_max}{Deprecated since MOSAIC 1.4.0 and ignored: the
+seed-batch-ratio rule was retired in favour of the Monte Carlo error bands
+of \code{\link{calc_convergence_status}}.}
 
 \item{verbose}{Logical indicating whether to print diagnostic messages
 (default TRUE)}
@@ -86,20 +119,32 @@ these are untruncated-weight quantities, unlike the gated ESS_B.}
 \value{
 A list with the following structure:
 \describe{
-\item{settings}{List with optimization_tier, percentile_used, temperature, description}
-\item{targets}{List of target values with descriptions for each metric}
-\item{metrics}{List of metric values with descriptions and status indicators}
-\item{summary}{List with counts, tier info, and overall convergence status}
+\item{settings}{Weighting scheme, eta, coarsening alpha, ESS method,
+description (plus optimization_tier, percentile_used and temperature
+under the legacy schemes)}
+\item{targets}{Target values with descriptions}
+\item{metrics}{Metric values with descriptions and statuses: ess_all,
+ess_best, mce, khat and informativeness (1.4.0 status colours), the
+legacy tier rows under "saturated" / "tempered", and param_ess}
+\item{summary}{Counts and the overall convergence status (plus the
+legacy tier verdict \code{tier_status})}
+\item{status}{(1.4.0) status, label, reasons, flags and the four checks}
+\item{likelihood_concentration, weight_health}{When supplied}
 }
 
 The returned list is ready for JSON serialization and contains all information
 needed for visualization by \code{\link{plot_model_convergence_status}}.
 }
 \description{
-Centralized function for computing all convergence diagnostics and status
-indicators for BFRS calibration results. Takes metrics and targets as input,
-calculates pass/warn/fail status for each metric using consistent thresholds,
-and aggregates to an overall convergence status.
+Assembles the convergence diagnostics of a BFRS calibration
+(\code{2_calibration/diagnostics/convergence_diagnostics.json}). Since MOSAIC
+1.4.0 the verdict is the simulation-convergence status of
+\code{\link{calc_convergence_status}} (green / yellow / red), carried by
+\code{weight_health}; \code{summary$convergence_status} mirrors
+\code{summary.json} for one release, and new consumers read
+\code{3_results/calibration_diagnostics.json}. Under the legacy
+\code{"saturated"} / \code{"tempered"} schemes the tier-searched best
+subset is also reported, with its pass/warn/fail statuses.
 }
 \section{Status Thresholds}{
 
@@ -146,8 +191,12 @@ passes its targets explicitly.
 
 \section{Overall Status}{
 
-The overall convergence status is determined by aggregating individual metric
-statuses:
+With \code{weight_health} carrying a status, \code{summary$convergence_status}
+is that status (\code{"green"}, \code{"yellow"} or \code{"red"}: the worst
+of the ensemble-ESS, Monte Carlo error, k-hat and informativeness checks).
+A standalone legacy call (\code{"saturated"} / \code{"tempered"}, no
+\code{weight_health}) aggregates the tier statuses and the per-parameter
+ESS proportion instead:
 \itemize{
 \item \strong{FAIL}: Any metric has status "fail"
 \item \strong{WARN}: No failures, but at least one metric has status "warn"
@@ -193,8 +242,11 @@ print(diagnostics$summary$convergence_status)
 \code{\link{calc_model_agreement_index}}
 
 Other calibration-metrics:
+\code{\link[=calc_convergence_status]{calc_convergence_status()}},
 \code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}},
 \code{\link[=calc_model_cvw]{calc_model_cvw()}},
-\code{\link[=calc_model_ess]{calc_model_ess()}}
+\code{\link[=calc_model_ess]{calc_model_ess()}},
+\code{\link[=calc_run_weight_health]{calc_run_weight_health()}},
+\code{\link[=calc_weight_health]{calc_weight_health()}}
 }
 \concept{calibration-metrics}

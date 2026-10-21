@@ -398,17 +398,33 @@ render_MOSAIC_figures <- function(dir_output,
     if (file.exists(opt)) opt else if (file.exists(cand)) cand else NA_character_
   }
 
-  # --- Resolve subset_col from samples.parquet (no control needed) ------------
-  .resolve_subset_col <- function() {
+  # --- Resolve the posterior columns (the prediction members) ---------------
+  # The posterior is built from the draws the predictions use under every
+  # weighting scheme: the optimised subset when samples.parquet has a usable
+  # one, else the ensemble members (is_best_subset / weight_best). The scheme
+  # (from control.json: posterior_weighting, or best_subset_weighting before
+  # 1.4.0; a run whose control predates both is "saturated") only labels the
+  # source. .mosaic_posterior_cols() is the mapping
+  # run_MOSAIC() itself uses, so a post-hoc render reads the same columns the
+  # run built its posterior from, for new and pre-1.3.0 run directories alike.
+  .resolve_posterior_cols <- function() {
+    weighting <- tryCatch({
+      cf <- file.path(dirs$inputs, "control.json")
+      ctl <- if (file.exists(cf)) jsonlite::fromJSON(cf, simplifyVector = TRUE) else NULL
+      ctl <- if (!is.null(ctl$control)) ctl$control else ctl
+      w <- ctl$targets$posterior_weighting %||% ctl$targets$best_subset_weighting
+      if (is.character(w) && length(w) == 1L) w else "saturated"
+    }, error = function(e) "saturated")
+    use_opt <- FALSE
     sp <- file.path(dirs$calibration, "samples.parquet")
-    if (!file.exists(sp)) return("is_best_subset")
-    # Only the one flag column is needed; the full table is ~1.2 GB at production scale.
-    res <- tryCatch(arrow::read_parquet(sp, col_select = dplyr::any_of("is_best_subset_opt")),
-                    error = function(e) NULL)
-    if (is.null(res)) return("is_best_subset")
-    if ("is_best_subset_opt" %in% names(res) &&
-        isTRUE(any(as.logical(res$is_best_subset_opt), na.rm = TRUE)))
-      "is_best_subset_opt" else "is_best_subset"
+    if (file.exists(sp)) {
+      # Only the one flag column is needed; the full table is ~1.2 GB at production scale.
+      res <- tryCatch(arrow::read_parquet(sp, col_select = dplyr::any_of("is_best_subset_opt")),
+                      error = function(e) NULL)
+      use_opt <- !is.null(res) && "is_best_subset_opt" %in% names(res) &&
+                 isTRUE(any(as.logical(res$is_best_subset_opt), na.rm = TRUE))
+    }
+    .mosaic_posterior_cols(weighting, use_opt)
   }
 
   # --- Resolve central_method from the run's control.json -------------------
@@ -424,8 +440,10 @@ render_MOSAIC_figures <- function(dir_output,
     wm_csv      = file.path(dirs$res_fig_diag, "model_fit_windows.csv")
   )
 
-  subset_col <- .resolve_subset_col()
-  weight_col <- if (identical(subset_col, "is_best_subset_opt")) "weight_best_opt" else "weight_best"
+  post_cols  <- .resolve_posterior_cols()
+  subset_col <- post_cols$subset_col   # weighted posterior (density / detail plots)
+  weight_col <- post_cols$weight_col
+  sample_col <- post_cols$sample_col   # posterior draws (sensitivity / correlation)
   # run_MOSAIC() passes the method it resolved; a post-hoc render reads the run
   # directory's. A control.json this renderer cannot interpret must not abort
   # every group.
@@ -448,14 +466,11 @@ render_MOSAIC_figures <- function(dir_output,
     attempted["convergence"] <- TRUE
     .vmsg("Rendering convergence figures...")
 
+    # The calibration-diagnostics report, from calibration_diagnostics.json
+    # (MOSAIC 1.4.0+); a run made before 1.4.0 gets a one-page legacy notice.
     tryCatch(
-      plot_model_convergence_status(
-        results_dir = dirs$cal_diag,
-        plots_dir   = dirs$res_fig_diag,
-        verbose     = verbose
-      ),
-      error = function(e) warning("convergence_status plot failed: ",
-                                  conditionMessage(e), call. = FALSE)
+      .mosaic_render_calibration_report(dir_output, dirs$res_fig_diag, verbose = verbose),
+      error = function(e) warning("calibration report failed: ", conditionMessage(e), call. = FALSE)
     )
 
     if (file.exists(files$samples)) {
@@ -478,9 +493,10 @@ render_MOSAIC_figures <- function(dir_output,
                                      conditionMessage(e), call. = FALSE))
     }
 
-    # Subset-optimization figure (from subset_opt.rds, when present).
-    subset_opt <- .load_rds(file.path(dirs$calibration, "subset_opt.rds"),
-                            "subset_optimization")
+    # Subset-optimization figure (from subset_opt.rds, written only when the
+    # opt-in subset optimiser ran: absence is normal, so no warning).
+    subset_opt_path <- file.path(dirs$calibration, "subset_opt.rds")
+    subset_opt <- if (file.exists(subset_opt_path)) .load_rds(subset_opt_path, "subset_optimization")
     if (!is.null(subset_opt)) {
       tryCatch(
         plot_model_subset_optimization(
@@ -603,7 +619,7 @@ render_MOSAIC_figures <- function(dir_output,
         priors_file  = if (file.exists(files$priors)) files$priors else NULL,
         output_dir   = dirs$res_fig_diag,
         sensitivity  = sens_pre,
-        subset_col   = subset_col,
+        subset_col   = sample_col,
         verbose      = verbose
       )
       tryCatch(
@@ -620,7 +636,7 @@ render_MOSAIC_figures <- function(dir_output,
           results_file = files$samples,
           priors_file  = if (file.exists(files$priors)) files$priors else NULL,
           output_dir   = dirs$res_fig_diag,
-          subset_col   = subset_col,
+          subset_col   = sample_col,
           verbose      = verbose
         ),
         error = function(e) warning("parameter correlation plot failed: ",
@@ -1185,4 +1201,75 @@ render_MOSAIC_figures <- function(dir_output,
   out$source <- if (out$n_posterior == 0L) "input config" else
     if (out$n_posterior == length(status)) "posterior" else "partial posterior"
   out
+}
+
+
+#' Render the calibration-diagnostics report of a run directory
+#'
+#' \code{plot_model_calibration_report()} on
+#' \code{3_results/calibration_diagnostics.json}, written to
+#' \code{3_results/figures/diagnostics/calibration_report.pdf}. A run made
+#' before MOSAIC 1.4.0 (decided from summary.json's \code{schema_version}) gets a
+#' single page carrying the shared legacy notice, and a 1.4.0 run whose
+#' diagnostics file is missing or unreadable gets a page saying so; either
+#' page has the report footer, and nothing fails.
+#' @param dir_output Run directory.
+#' @param fig_dir Destination directory.
+#' @param verbose Logical.
+#' @return The PDF path, invisibly.
+#' @noRd
+.mosaic_render_calibration_report <- function(dir_output, fig_dir, verbose = FALSE) {
+  js <- file.path(dir_output, "3_results", "calibration_diagnostics.json")
+  sm_path <- file.path(dir_output, "3_results", "summary.json")
+  sm <- if (file.exists(sm_path)) tryCatch(jsonlite::read_json(sm_path), error = function(e) NULL)
+  # Legacy or not is decided by the run's schema (R8), not by whether the
+  # diagnostics file happens to be there: a 1.4.0 run that lost it is not
+  # "made before 1.4.0".
+  schema2 <- !is.null(sm) && .mosaic_calrep_is_schema2(sm)
+  if (file.exists(js) && (schema2 || is.null(sm))) {
+    out <- tryCatch(plot_model_calibration_report(js, dir_output = fig_dir, verbose = verbose),
+                    error = function(e) {
+                      warning("calibration report: ", conditionMessage(e), call. = FALSE)
+                      NULL
+                    })
+    if (!is.null(out)) return(out)
+  }
+  what <- if (schema2) "missing" else "pre140"
+  notice <- .mosaic_calrep_legacy_text(what)
+  detail <- if (schema2)
+    paste("This run was made by MOSAIC 1.4.0 or later, but its calibration_diagnostics.json is missing",
+          "or unreadable,\nso the report cannot be drawn. Its convergence status is in 3_results/summary.json;",
+          "re-run render_MOSAIC_figures() after restoring the file.")
+  else paste("This run was made before MOSAIC 1.4.0, so it has no convergence status on the",
+             "1.4.0 scale and no calibration_diagnostics.json;\nits earlier diagnostics remain in",
+             "2_calibration/diagnostics/ and 3_results/summary.json.")
+  # The version that made the run (environment.json R$MOSAIC), and the run's
+  # location rather than the directory name (PN3).
+  env_path <- file.path(dir_output, "1_inputs", "environment.json")
+  env <- if (file.exists(env_path)) tryCatch(jsonlite::read_json(env_path), error = function(e) NULL)
+  ver <- unlist(env$R$MOSAIC %||% env$mosaic_version %||% NULL)
+  cfg_path <- file.path(dir_output, "1_inputs", "config.json")
+  cfg_loc <- if (is.null(sm$location) && file.exists(cfg_path))
+    tryCatch(paste(unlist(jsonlite::read_json(cfg_path)$location_name), collapse = ", "), error = function(e) NULL)
+  run_lab <- unlist(sm$location %||% NULL) %||% cfg_loc %||% basename(normalizePath(dir_output, mustWork = FALSE))
+  if (length(run_lab) != 1L || !nzchar(run_lab)) run_lab <- basename(normalizePath(dir_output, mustWork = FALSE))
+  foot <- sprintf("%s  |  MOSAIC %s  |  generated %s  |  page 1 of 1", run_lab,
+                  if (length(ver) == 1L) ver else "?", format(Sys.Date()))
+  dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
+  out <- file.path(fig_dir, "calibration_report.pdf")
+  tmp <- tempfile(pattern = "calibration_report_", tmpdir = fig_dir, fileext = ".pdf")
+  grDevices::pdf(tmp, width = 11, height = 8.5, useDingbats = FALSE)
+  dev <- grDevices::dev.cur()
+  on.exit(if (dev %in% grDevices::dev.list()) grDevices::dev.off(dev), add = TRUE)
+  grid::grid.newpage()
+  grid::grid.text("Calibration diagnostics", x = 0.06, y = 0.9, hjust = 0,
+                  gp = grid::gpar(fontsize = 18, fontface = "bold"))
+  grid::grid.text(run_lab, x = 0.06, y = 0.85, hjust = 0, gp = grid::gpar(fontsize = 11, col = "grey40"))
+  grid::grid.text(paste0(notice, "."), x = 0.06, y = 0.75, hjust = 0, gp = grid::gpar(fontsize = 13))
+  grid::grid.text(detail, x = 0.06, y = 0.68, hjust = 0, vjust = 1, gp = grid::gpar(fontsize = 10, col = "grey30"))
+  grid::grid.text(foot, x = 0.965, y = 0.025, hjust = 1, gp = grid::gpar(fontsize = 7.5, col = "grey50"))
+  grDevices::dev.off(dev)
+  if (!file.rename(tmp, out)) { file.copy(tmp, out, overwrite = TRUE); unlink(tmp) }
+  if (isTRUE(verbose)) message("Calibration report (", what, " notice): ", out)
+  invisible(out)
 }

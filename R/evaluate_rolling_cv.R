@@ -24,6 +24,12 @@
 #' Scoring uses \strong{trusted observed only}: rows whose \code{observed_source}
 #' is missing or not \code{"AI"} (when \code{trusted_only = TRUE}).
 #'
+#' \strong{Surveillance tier.} When the predictions carry \code{observed_tier}
+#' (the config's \code{reported_tier}: 1 observed, 2 reconstructed, 3 imputed),
+#' out-of-sample days whose tier is not in \code{observed_tiers} are not scored.
+#' The in-sample rows, which the baselines are fitted on, keep every tier, as
+#' the calibration did. Predictions without the column are scored unchanged.
+#'
 #' \strong{Embargo and scoring origin.} The harness labels the dates in
 #' \code{(cutoff, cutoff + embargo]} as \code{segment == "embargo"}; those are
 #' never scored. For each metric the scoring origin is
@@ -47,14 +53,19 @@
 #' MAE ratio. Positive = model beats the baseline; \code{NA} when the baseline
 #' (or its interval) cannot be formed.
 #'
-#' \strong{Weight-ESS gate.} If the predictions carry an \code{ess} column (the
-#' cutoff calibration's importance-weight ESS, constant per cutoff), each cell is
-#' flagged \code{ess_ok = (!is.na(ess) & ess >= ess_min)}. Cells failing the gate
-#' remain in \code{$cells} (flagged) but are \strong{excluded} from the
-#' \code{$summary} aggregation. With \code{ess_min = 0} (default) the gate is off
-#' (NA ess still flags \code{ess_ok = FALSE}, but the gate threshold 0 admits any
-#' finite ess). When the \code{ess} column is absent, \code{ess_ok = TRUE} for all
-#' cells (back-compat) and \code{$summary$ess_gated = FALSE}.
+#' \strong{Convergence gate (opt-in).} With \code{ess_min = 0} (the default)
+#' there is no gate: every cell has \code{ess_ok = TRUE} and enters
+#' \code{$summary}. With \code{ess_min > 0} the gate is on: a cell whose
+#' predictions carry a \code{convergence_status} (MOSAIC 1.4.0: the cutoff
+#' calibration's simulation-convergence status, constant per cutoff) passes when
+#' the status is not \code{"red"}; a cell without one (a cutoff run from before
+#' 1.4.0) falls back to the weight-ESS rule \code{ess_ok = (!is.na(ess) & ess >=
+#' ess_min)}; a cell with neither passes. Cells failing the gate remain in
+#' \code{$cells} (flagged) but are \strong{excluded} from the \code{$summary}
+#' aggregation. \code{$cells$convergence_status} is carried as information
+#' whatever \code{ess_min} is. A warning is issued when more than half of the
+#' cells that carry a status are red (cheap or short cutoff calibrations), and
+#' when the gate removes every cell.
 #'
 #' @param predictions A \code{run_rolling_cv} output directory, a path to a
 #'   \code{predictions.parquet}, or the predictions data frame itself.
@@ -68,13 +79,17 @@
 #'   A scalar applies to all metrics; a named vector (e.g.
 #'   \code{c(cases = 4, deaths = 6)}) applies per metric, and omitted metrics get
 #'   0. Default \code{0}.
-#' @param ess_min Minimum importance-weight ESS for a cell to enter the summary
-#'   aggregation. Default \code{0} (gate off). See Details.
+#' @param ess_min Turns the convergence gate on when > 0: cells whose cutoff
+#'   run is red (or, before MOSAIC 1.4.0, whose ESS is below \code{ess_min}) are
+#'   left out of the summary. Default \code{0} (no gate). See Details.
 #' @param min_cells_ci Minimum number of finite cells in a (model, metric,
 #'   window) group required to emit a bootstrap CI; below this the CI is
 #'   suppressed (lo = hi = NA) and \code{ci_suppressed = TRUE}. Default \code{5}.
 #' @param n_boot Bootstrap resamples over cells for the skill CI (default 1000).
 #' @param seed RNG seed for the bootstrap (default 1).
+#' @param observed_tiers Surveillance tiers scored out of sample when the
+#'   predictions carry \code{observed_tier} (default \code{c(1, 2)}: observed and
+#'   reconstructed weeks); \code{NULL} scores every tier. See Details.
 #'
 #' When the predictions carry a \code{model} column (\code{ensemble},
 #' \code{ensemble_opt}, \code{best}, \code{medoid}), every metric is computed and
@@ -84,7 +99,7 @@
 #' @return A list with:
 #' \describe{
 #'   \item{cells}{Per (cutoff x model x iso x metric x window) metrics + per-baseline
-#'     mae_skill and wis_skill, the cell \code{ess} and \code{ess_ok} flag (plus
+#'     mae_skill and wis_skill, the cell \code{ess}, \code{convergence_status} and \code{ess_ok} flag (plus
 #'     \code{anchor_date} when the predictions carry it).}
 #'   \item{summary}{Aggregated across \code{ess_ok} cells per (model x metric x
 #'     window): \code{n_cells_used} / \code{n_cells_total}, mean/median of each
@@ -104,7 +119,8 @@ evaluate_rolling_cv <- function(predictions,
                                 ess_min         = 0,
                                 min_cells_ci    = 5L,
                                 n_boot          = 1000L,
-                                seed            = 1L) {
+                                seed            = 1L,
+                                observed_tiers  = c(1, 2)) {
 
      d <- .rcv_eval_input(predictions)
      req <- c("iso_code", "cutoff_date", "date", "metric", "segment",
@@ -126,9 +142,14 @@ evaluate_rolling_cv <- function(predictions,
      emb_end  <- if (any(emb_rows)) tapply(d$date[emb_rows], emb_key[emb_rows], max) else numeric(0)
      if (trusted_only && "observed_source" %in% names(d))
           d <- d[is.na(d$observed_source) | d$observed_source != "AI", ]
+     if (!is.null(observed_tiers) && "observed_tier" %in% names(d)) {
+          untrusted <- d$segment != "IS" & !(d$observed_tier %in% observed_tiers)
+          d$observed[untrusted] <- NA_real_
+     }
      horizons_months <- sort(unique(as.numeric(horizons_months)))
      baselines <- match.arg(baselines, several.ok = TRUE)
      has_ess <- "ess" %in% names(d)
+     has_status <- "convergence_status" %in% names(d)
 
      # Resolve per-metric embargo (weeks). Scalar -> recycle; named -> lookup.
      emb_of <- .rcv_embargo_lookup(embargo_weeks, metrics)
@@ -147,7 +168,13 @@ evaluate_rolling_cv <- function(predictions,
                ev <- cd$ess[is.finite(cd$ess)]
                if (length(ev)) ev[1] else NA_real_
           } else NA_real_
-          ess_ok <- if (!has_ess) TRUE else (!is.na(ess_val) && ess_val >= ess_min)
+          # cell-level convergence status (constant per cutoff; NA before 1.4.0)
+          status_val <- if (has_status) {
+               sv <- as.character(cd$convergence_status)
+               sv <- sv[!is.na(sv) & sv %in% c("green", "yellow", "red")]
+               if (length(sv)) sv[1] else NA_character_
+          } else NA_character_
+          ess_ok <- .rcv_ess_ok(status_val, ess_val, ess_min, has_ess)
 
           # Per-metric scoring origin: the later of the harness embargo end (the
           # last "embargo"-labelled date, else the cutoff) and the caller's
@@ -174,7 +201,7 @@ evaluate_rolling_cv <- function(predictions,
                cell_rows[[length(cell_rows) + 1L]] <- cbind(
                     as.data.frame(base_meta), window = "IS",
                     .rcv_window_metrics(is_df), .rcv_empty_skill(baselines),
-                    ess = ess_val, ess_ok = ess_ok)
+                    ess = ess_val, convergence_status = status_val, ess_ok = ess_ok)
 
           # OOS cumulative horizons
           for (h in horizons_months) {
@@ -185,10 +212,11 @@ evaluate_rolling_cv <- function(predictions,
                cell_rows[[length(cell_rows) + 1L]] <- cbind(
                     as.data.frame(base_meta), window = sprintf("OOS<=%gmo", h),
                     .rcv_window_metrics(sl), sk,
-                    ess = ess_val, ess_ok = ess_ok)
+                    ess = ess_val, convergence_status = status_val, ess_ok = ess_ok)
           }
      }
      cells_df <- do.call(rbind, cell_rows)
+     .rcv_gate_warnings(cells_df, gate_on = ess_min > 0, where = "evaluate_rolling_cv()")
 
      # ---- aggregate across ESS-passing cells per (model, metric, window) ----
      agg_keys <- unique(cells_df[, c("model", "metric", "window")])
@@ -206,7 +234,7 @@ evaluate_rolling_cv <- function(predictions,
                window = agg_keys$window[i],
                n_cells_used  = n_used,
                n_cells_total = n_total,
-               ess_gated     = has_ess,
+               ess_gated     = ess_min > 0 && (has_ess || has_status),
                R2_corr_med = round(stats::median(sub$R2_corr, na.rm = TRUE), 3),
                R2_sse_med  = round(stats::median(sub$R2_sse,  na.rm = TRUE), 3),
                bias_med    = round(stats::median(sub$bias_ratio, na.rm = TRUE), 3),
@@ -238,6 +266,59 @@ evaluate_rolling_cv <- function(predictions,
 
 
 # ============================ internal helpers ============================
+
+#' Whether a cell passes the opt-in convergence gate
+#'
+#' No gate when \code{ess_min <= 0}. Otherwise a cell with a convergence status
+#' passes unless it is red; a cell without one (pre-1.4.0 cutoff) passes when
+#' its ESS is at least \code{ess_min}; a cell with neither passes. Shared by
+#' \code{evaluate_rolling_cv()} so mixed old/new cutoffs are scored under one rule.
+#' @param status Cell convergence status (\code{NA} before 1.4.0).
+#' @param ess Cell ESS (\code{NA} when absent).
+#' @param ess_min Gate threshold; \code{<= 0} disables the gate.
+#' @param has_ess Whether the predictions carry an \code{ess} column.
+#' @return Logical scalar.
+#' @keywords internal
+#' @noRd
+.rcv_ess_ok <- function(status, ess, ess_min, has_ess) {
+     if (!is.finite(ess_min) || ess_min <= 0) return(TRUE)
+     if (!is.na(status)) return(status != "red")
+     if (!isTRUE(has_ess)) return(TRUE)
+     !is.na(ess) && ess >= ess_min
+}
+
+#' Warn when the convergence status would empty a forecast-CV summary
+#'
+#' Called by \code{evaluate_rolling_cv()}, \code{make_forecast_cv_table()} and
+#' \code{plot_forecast_cv_skill()}: warns when more than half of the cells that
+#' carry a convergence status are red (the cutoff calibrations are too short for
+#' the 1.4.0 status; the gate, if switched on, would drop them), and when the
+#' gate (\code{ess_ok}) removes every cell.
+#' @param cells Scored cells (\code{convergence_status}, \code{ess_ok} optional).
+#' @param gate_on Whether a gate is applied.
+#' @param where Caller name for the message.
+#' @return Invisible NULL.
+#' @keywords internal
+#' @noRd
+.rcv_gate_warnings <- function(cells, gate_on, where) {
+     if (is.null(cells) || !nrow(cells)) return(invisible(NULL))
+     if ("convergence_status" %in% names(cells)) {
+          st <- as.character(cells$convergence_status)
+          st <- st[!is.na(st)]
+          if (length(st) && mean(st == "red") > 0.5)
+               warning(sprintf(paste0("%s: %d of %d cells come from cutoff calibrations whose convergence ",
+                                      "status is red (too few simulations for the MOSAIC 1.4.0 status)%s."),
+                               where, sum(st == "red"), length(st),
+                               if (isTRUE(gate_on)) "; the gate leaves them out of the summary"
+                               else "; they are scored (no gate: ess_min = 0)"),
+                       call. = FALSE)
+     }
+     if (isTRUE(gate_on) && "ess_ok" %in% names(cells) && !any(as.logical(cells$ess_ok) %in% TRUE))
+          warning(sprintf(paste0("%s: the convergence gate removed every cell, so the summary has no ",
+                                 "cells; set ess_min = 0 to score them without the gate."), where),
+                  call. = FALSE)
+     invisible(NULL)
+}
 
 #' @keywords internal
 #' @noRd

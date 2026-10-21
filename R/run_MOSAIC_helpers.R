@@ -301,6 +301,11 @@
   cm <- tryCatch(.mosaic_resolve_central_method(control$predictions$central_method),
                  error = function(e) NULL)
   if (!is.null(cm)) control$predictions$central_method <- as.list(cm)
+  # Adaptive mode: n_simulations is NULL, which jsonlite writes as {} (an
+  # empty object that consumers read as a value, P10). NA is written as JSON
+  # null by .mosaic_write_json(na = "null"), and reads back as NULL (auto mode).
+  if ("calibration" %in% names(control) && is.null(control$calibration$n_simulations))
+    control$calibration["n_simulations"] <- list(NA)
   control
 }
 
@@ -587,18 +592,127 @@
   }
 
   .mosaic_renamed_params <- list(
-    c("calibration", "batch_size",           "batch_size_adaptive"),
-    c("calibration", "min_batches",          "min_batches_adaptive"),
-    c("calibration", "max_batches",          "max_batches_adaptive"),
-    c("calibration", "target_r2",            "target_r2_adaptive"),
-    c("calibration", "target_r2_ess",        "target_r2_adaptive"),
-    c("calibration", "max_predictive_batch", "max_batch_predictive"),
-    c("calibration", "max_simulations",      "max_simulations_total"),
-    c("targets",     "ess_method",           "ESS_method")
+    c("calibration", "batch_size",            "batch_size_adaptive"),
+    c("calibration", "min_batches",           "min_batches_adaptive"),
+    c("calibration", "max_predictive_batch",  "max_batch_predictive"),
+    c("calibration", "max_simulations",       "max_simulations_total"),
+    c("targets",     "ess_method",            "ESS_method"),
+    c("targets",     "best_subset_weighting", "posterior_weighting")
   )
   for (.p in .mosaic_renamed_params) {
     def <- .mosaic_migrate_renamed(def, .p[[1]], .p[[2]], .p[[3]])
   }
+
+  # RETIRED (1.3.0): targets$ESS_marginal_method. It chose the grid estimate
+  # (KDE or binned) of the per-parameter ESS, which did not measure the
+  # posterior and was removed. Detected in the user's ORIGINAL control
+  # (lesson #13): the defaults no longer carry the key, so presence means the
+  # user set it (directly, or through a control.json from an older run).
+  if ("ESS_marginal_method" %in% names(control[["targets"]])) {
+    warning(paste0("control$targets$ESS_marginal_method is retired (MOSAIC 1.3.0) and was ",
+                   "ignored. The grid-based marginal ESS it selected was removed: the ",
+                   "per-parameter ESS is now the function-specific ESS of the posterior ",
+                   "weights (calc_model_ess_parameter()), which needs no method."),
+            call. = FALSE)
+    def$targets$ESS_marginal_method <- NULL
+  }
+
+  # RETIRED (1.4.0): the per-parameter-ESS stopping rule and its two-phase
+  # batch planner. Auto mode now stops when calc_convergence_status() is GREEN
+  # (or at max_simulations_total). None of these keys is in the defaults any
+  # more, so presence in the ORIGINAL control means the user set it (lesson #13).
+  .retired_14 <- list(
+    calibration = c("max_batches_adaptive", "max_batches_predictive", "target_r2_adaptive",
+                    "max_batches", "target_r2", "target_r2_ess"),
+    targets     = c("ESS_param", "ESS_param_prop", "batch_ratio_max"),
+    weights     = "floor",
+    io          = "verbose_weights")
+  .retired_why <- c(
+    calibration = paste0("the adaptive mode runs until the convergence status is green ",
+                         "(and min_batches_adaptive / min_draws are met) or max_simulations_total"),
+    targets     = paste0("the convergence status (calc_convergence_status()) replaces the ",
+                         "per-parameter ESS and seed-batch-ratio gate; the targets are ESS_best ",
+                         "and targets$status_thresholds, and the per-parameter ESS is reported only"),
+    weights     = "weight_all is the coarsened posterior over all valid draws, which has no floor",
+    io          = "it had no effect")
+  for (.sec in names(.retired_14)) {
+    .hit <- intersect(.retired_14[[.sec]], names(control[[.sec]]))
+    if (length(.hit)) {
+      warning(sprintf("control$%s$%s %s deprecated (MOSAIC 1.4.0) and ignored: %s.",
+                      .sec, paste(.hit, collapse = sprintf(", control$%s$", .sec)),
+                      if (length(.hit) > 1L) "are" else "is", .retired_why[[.sec]]),
+              call. = FALSE)
+      for (.k in .hit) def[[.sec]][[.k]] <- NULL
+    }
+  }
+
+  # Tier-search settings belong to the legacy "saturated" / "tempered" schemes.
+  # Under them ESS_best keeps its legacy meaning (the tier target, 100 unless
+  # the user changed it from the 1.4.0 default), and A_best / CVw_best default
+  # to their pre-1.4.0 values, so those schemes reproduce their releases.
+  # Under "bestfit" / "coarsened" they are ignored, with a warning when the
+  # user set one (judged from the ORIGINAL control, lesson #13: a full
+  # mosaic_control_defaults() list carries min/max_best_subset at their
+  # defaults and must stay silent).
+  .legacy_scheme <- isTRUE(def$targets$posterior_weighting %in% c("saturated", "tempered"))
+  .user_set <- function(k) {
+    v <- control[["targets"]][[k]]
+    !is.null(v) && (is.null(.ctl_defaults$targets[[k]]) ||
+                    !isTRUE(all.equal(v, .ctl_defaults$targets[[k]])))
+  }
+  # ESS_best changed meaning in 1.4.0 (D12): under "bestfit" / "coarsened" it
+  # is the ensemble ESS target of the convergence status (default 200); in
+  # 1.3.x it was the tier-search target (default 100).
+  # Lesson #13 (red team round 2, CN1): the dominant usage is
+  # `ctrl <- mosaic_control_defaults(); ctrl$targets$... <- x`, so a raw value
+  # equal to the 1.4.0 default (200) is the default, not a choice: it counts
+  # as unset. Unset, a legacy scheme takes its 1.2.1 tier target 100 (so the
+  # 1.2.1 golden reproduces under that usage) and the other schemes 200. A
+  # value that differs from 200 is the user's: honoured under every scheme,
+  # with a warning unless it is the legacy scheme's own default 100, so a
+  # 1.3.x control.json or an older launcher setting 100 cannot halve the
+  # stopping target silently.
+  .ess_best_raw <- control[["targets"]][["ESS_best"]]
+  .ess_best_v14 <- .ctl_defaults$targets$ESS_best
+  .ess_best_default <- if (.legacy_scheme) 100 else .ess_best_v14
+  .ess_best_set <- is.numeric(.ess_best_raw) && length(.ess_best_raw) == 1L && is.finite(.ess_best_raw) &&
+    .ess_best_raw > 0 && !isTRUE(all.equal(.ess_best_raw, .ess_best_v14))
+  if (!.ess_best_set && (is.null(.ess_best_raw) || isTRUE(all.equal(.ess_best_raw, .ess_best_v14)))) {
+    def$targets$ESS_best <- .ess_best_default
+  } else if (.ess_best_set && !isTRUE(all.equal(.ess_best_raw, .ess_best_default))) {
+    warning(sprintf(paste0(
+      "control$targets$ESS_best = %s is honoured, but its meaning changed in MOSAIC 1.4.0: it is the ",
+      "ensemble ESS target of the convergence status%s (default %s under posterior_weighting = \"%s\"; ",
+      "auto mode simulates towards ESS_all = ESS_best / best_subset_ratio). In MOSAIC 1.3.x it was the ",
+      "tier-search target (default 100). Remove it to use the default."),
+      format(.ess_best_raw), if (.legacy_scheme) " and the tier-search target" else "",
+      format(.ess_best_default), def$targets$posterior_weighting), call. = FALSE)
+  }
+  if (.legacy_scheme) {
+    def$targets$A_best   <- def$targets$A_best   %||% 0.70
+    def$targets$CVw_best <- def$targets$CVw_best %||% 1.0
+  } else {
+    .tier_set <- Filter(.user_set, c("A_best", "CVw_best", "min_best_subset", "max_best_subset"))
+    if (length(.tier_set)) {
+      warning(sprintf(paste0(
+        "control$targets$%s %s ignored under posterior_weighting = \"%s\": %s belong%s to the ",
+        "legacy tier search of \"saturated\" / \"tempered\". The ensemble size is bounded by ",
+        "min_ensemble_members and max_ensemble_members."),
+        paste(.tier_set, collapse = ", $"), if (length(.tier_set) > 1L) "are" else "is",
+        def$targets$posterior_weighting, if (length(.tier_set) > 1L) "they" else "it",
+        if (length(.tier_set) > 1L) "" else "s"), call. = FALSE)
+    }
+    def$targets$A_best <- NULL
+    def$targets$CVw_best <- NULL
+  }
+
+  # The status bands: defaults merged with the user's overrides, validated
+  # (.mosaic_convergence_thresholds() stops on an unknown name or a bad value).
+  def$targets$status_thresholds <- tryCatch(
+    .mosaic_convergence_thresholds(as.list(def$targets$status_thresholds)),
+    error = function(e) stop("control$targets$status_thresholds: ", conditionMessage(e), call. = FALSE))
+
+  .pos_int <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x) && x >= 1 && x == round(x)
 
   # TYPE VALIDATION
   stopifnot(
@@ -614,27 +728,42 @@
       is.numeric(def$calibration$batch_size_adaptive) && def$calibration$batch_size_adaptive > 0,
     "calibration$min_batches_adaptive must be positive integer" =
       is.numeric(def$calibration$min_batches_adaptive) && def$calibration$min_batches_adaptive > 0,
-    "calibration$max_batches_adaptive must be positive integer" =
-      is.numeric(def$calibration$max_batches_adaptive) && def$calibration$max_batches_adaptive > 0,
-    "calibration$target_r2_adaptive must be in [0, 1]" =
-      is.numeric(def$calibration$target_r2_adaptive) &&
-      def$calibration$target_r2_adaptive >= 0 && def$calibration$target_r2_adaptive <= 1,
-    "targets$ESS_param must be positive" =
-      is.numeric(def$targets$ESS_param) && def$targets$ESS_param > 0,
-    "targets$ESS_param_prop must be in [0, 1]" =
-      is.numeric(def$targets$ESS_param_prop) &&
-      def$targets$ESS_param_prop >= 0 && def$targets$ESS_param_prop <= 1,
-    "targets$A_best must be in [0, 1]" =
-      is.numeric(def$targets$A_best) &&
-      def$targets$A_best >= 0 && def$targets$A_best <= 1,
-    "targets$CVw_best must be positive" =
-      is.numeric(def$targets$CVw_best) && def$targets$CVw_best > 0,
+    "calibration$min_draws must be a single non-negative whole number" =
+      is.numeric(def$calibration$min_draws) && length(def$calibration$min_draws) == 1L &&
+      is.finite(def$calibration$min_draws) && def$calibration$min_draws >= 0 &&
+      def$calibration$min_draws == round(def$calibration$min_draws),
+    "calibration$max_batch_predictive must be a single positive whole number" =
+      .pos_int(def$calibration$max_batch_predictive),
+    "targets$posterior_weighting must be one of 'bestfit', 'coarsened', 'saturated', 'tempered'" =
+      is.character(def$targets$posterior_weighting) &&
+      length(def$targets$posterior_weighting) == 1L &&
+      def$targets$posterior_weighting %in% c("bestfit", "coarsened", "saturated", "tempered"),
+    "targets$best_subset_ratio must be a single number in (0, 1]" =
+      is.numeric(def$targets$best_subset_ratio) && length(def$targets$best_subset_ratio) == 1L &&
+      is.finite(def$targets$best_subset_ratio) && def$targets$best_subset_ratio > 0 &&
+      def$targets$best_subset_ratio <= 1,
+    "targets$ESS_best must be a single positive finite number" =
+      is.numeric(def$targets$ESS_best) && length(def$targets$ESS_best) == 1L &&
+      is.finite(def$targets$ESS_best) && def$targets$ESS_best > 0,
+    "targets$min_ensemble_members must be a single positive whole number" =
+      .pos_int(def$targets$min_ensemble_members),
+    "targets$max_ensemble_members must be a single whole number >= min_ensemble_members" =
+      .pos_int(def$targets$max_ensemble_members) &&
+      def$targets$max_ensemble_members >= def$targets$min_ensemble_members,
     "targets$min_best_subset must be positive integer >= 10" =
       is.numeric(def$targets$min_best_subset) &&
       def$targets$min_best_subset >= 10,
     "targets$max_best_subset must be >= min_best_subset" =
       is.numeric(def$targets$max_best_subset) &&
-      def$targets$max_best_subset >= def$targets$min_best_subset
+      def$targets$max_best_subset >= def$targets$min_best_subset,
+    "targets$coarsening_alpha must be a single positive finite number" =
+      is.numeric(def$targets$coarsening_alpha) && length(def$targets$coarsening_alpha) == 1L &&
+      is.finite(def$targets$coarsening_alpha) && def$targets$coarsening_alpha > 0,
+    "targets$A_best must be in [0, 1]" =
+      is.null(def$targets$A_best) ||
+      (is.numeric(def$targets$A_best) && def$targets$A_best >= 0 && def$targets$A_best <= 1),
+    "targets$CVw_best must be positive" =
+      is.null(def$targets$CVw_best) || (is.numeric(def$targets$CVw_best) && def$targets$CVw_best > 0)
   )
 
   # SEMANTIC VALIDATION (reasonable bounds and logical consistency)
@@ -664,6 +793,20 @@
          .MOSAIC_MAX_SIMULATIONS, call. = FALSE)
   }
 
+  # min_draws above the budget would make the stopping rule unreachable: the
+  # run could only end at max_simulations_total (C6). Clamp with a warning,
+  # in adaptive mode only: a fixed budget (n_simulations set) uses neither (PN1).
+  if (is.null(def$calibration$n_simulations) &&
+      def$calibration$min_draws > def$calibration$max_simulations_total) {
+    warning(sprintf(paste0("calibration$min_draws (%s) exceeds calibration$max_simulations_total (%s), so the ",
+                           "stopping rule could never be met; min_draws clamped to %s."),
+                    format(def$calibration$min_draws, big.mark = ",", scientific = FALSE),
+                    format(def$calibration$max_simulations_total, big.mark = ",", scientific = FALSE),
+                    format(def$calibration$max_simulations_total, big.mark = ",", scientific = FALSE)),
+            call. = FALSE)
+    def$calibration$min_draws <- def$calibration$max_simulations_total
+  }
+
   # Check batch_size_adaptive < max_simulations_total
   if (def$calibration$batch_size_adaptive >= def$calibration$max_simulations_total) {
     stop("calibration$batch_size_adaptive (", def$calibration$batch_size_adaptive,
@@ -687,13 +830,6 @@
              "control$predictions$central_method is invalid (", conditionMessage(e),
              "). Use \"mean\", \"median\" or a vector named by channel, e.g. ",
              "c(cases = \"median\", deaths = \"mean\") (the default).", call. = FALSE))
-
-  # LOGICAL CONSISTENCY
-  if (def$calibration$min_batches_adaptive > def$calibration$max_batches_adaptive) {
-    stop("calibration$min_batches_adaptive (", def$calibration$min_batches_adaptive,
-         ") must be <= calibration$max_batches_adaptive (", def$calibration$max_batches_adaptive, ")",
-         call. = FALSE)
-  }
 
   # IO VALIDATION
   def$io <- .mosaic_validate_io(def$io)
@@ -845,32 +981,69 @@
 
 #' Resolve Active Subset/Weight Columns for Posterior Construction
 #'
-#' When \code{control$predictions$optimize_subset = TRUE} and the run produced
-#' \code{is_best_subset_opt} / \code{weight_best_opt} columns, those are the
-#' canonical subset for posterior work. Otherwise the tier-selected columns
-#' (\code{is_best_subset} / \code{weight_best}) are canonical.
+#' The parameter posterior (\code{posterior_quantiles.csv},
+#' \code{posteriors.json}, \code{parameter_estimates.csv}, the posterior
+#' density plots) is computed from exactly the draws the predictions use: the
+#' ensemble members (\code{is_best_subset} / \code{weight_best}), or the
+#' optimised subset (\code{is_best_subset_opt} / \code{weight_best_opt}) when
+#' \code{control$predictions$optimize_subset = TRUE} produced one. This holds
+#' under every weighting scheme. Under \code{"bestfit"} (the default since
+#' 1.4.0) the members are the best-fit selection with their coarsened weights;
+#' under \code{"coarsened"} the systematic resample, weighted by count / K;
+#' under the legacy schemes the tier-searched best subset. The all-draws
+#' coarsened weights (\code{weight_all}) define the posterior the members are
+#' selected from and are not a posterior source.
 #'
 #' The \code{any(results$is_best_subset_opt)} guard handles the edge case where
 #' \code{optimize_subset = TRUE} but the optimizer silently failed (e.g.,
 #' \code{stability_flag} + \code{optimal_n == 0}) -- in which case we fall back
-#' to the tier subset.
+#' to the members.
 #'
 #' @param results data.frame with at least \code{is_best_subset} and
 #'   \code{weight_best} columns, optionally \code{is_best_subset_opt} and
 #'   \code{weight_best_opt}.
-#' @param control MOSAIC control list.
-#' @return Named list with \code{subset_col}, \code{weight_col}, and
-#'   \code{source} ("tier" or "optimized").
+#' @param control MOSAIC control list. A list without
+#'   \code{targets$posterior_weighting} (or its pre-1.4.0 name
+#'   \code{best_subset_weighting}) is read as \code{"saturated"}.
+#' @return Named list (see \code{.mosaic_posterior_cols()}).
 #' @noRd
 .mosaic_active_subset_cols <- function(results, control) {
   use_opt <- isTRUE(control$predictions$optimize_subset) &&
              "is_best_subset_opt" %in% names(results) &&
              "weight_best_opt"    %in% names(results) &&
              isTRUE(any(as.logical(results$is_best_subset_opt), na.rm = TRUE))
+  .mosaic_posterior_cols(control$targets$posterior_weighting %||%
+                           control$targets$best_subset_weighting %||% "saturated", use_opt)
+}
+
+#' Posterior columns of a run
+#'
+#' The one mapping from a run to the samples.parquet columns its posterior
+#' consumers read, shared by \code{run_MOSAIC()} (through
+#' \code{.mosaic_active_subset_cols()}) and \code{render_MOSAIC_figures()}. The
+#' columns are the prediction members under every scheme; the scheme only
+#' labels \code{source}.
+#'
+#' @param weighting \code{"bestfit"}, \code{"coarsened"}, \code{"saturated"}
+#'   or \code{"tempered"}.
+#' @param use_opt Logical; the run has a usable optimised subset.
+#' @return \code{list(subset_col, weight_col, sample_col, source)}:
+#'   \code{subset_col}/\code{weight_col} drive the weighted parameter posterior
+#'   (quantiles, posteriors.json, posterior density plots); \code{sample_col}
+#'   selects the posterior draws of sample-based consumers (the same members);
+#'   \code{source} is \code{"optimized"}, or \code{"bestfit"},
+#'   \code{"resample"} (coarsened) or \code{"tier"} (legacy schemes) for the
+#'   unoptimised members.
+#' @noRd
+.mosaic_posterior_cols <- function(weighting, use_opt = FALSE) {
+  use_opt <- isTRUE(use_opt)
   list(
     subset_col = if (use_opt) "is_best_subset_opt" else "is_best_subset",
     weight_col = if (use_opt) "weight_best_opt"    else "weight_best",
-    source     = if (use_opt) "optimized"          else "tier"
+    sample_col = if (use_opt) "is_best_subset_opt" else "is_best_subset",
+    source     = if (use_opt) "optimized"
+                 else if (identical(weighting, "bestfit")) "bestfit"
+                 else if (identical(weighting, "coarsened")) "resample" else "tier"
   )
 }
 
@@ -887,11 +1060,13 @@
 
 #' Write JSON with Atomic Rename (NFS-Safe)
 #' @noRd
-.mosaic_write_json <- function(obj, path, io) {
-  # Define write function
+.mosaic_write_json <- function(obj, path, io, na = c("string", "null")) {
+  na <- match.arg(na)
+  # Define write function. digits = I(17) makes jsonlite write NA as the
+  # string "NA" by default; na = "null" writes JSON null (control.json).
   write_func <- function(data, file) {
     jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE,
-                         digits = .MOSAIC_JSON_DIGITS)
+                         digits = .MOSAIC_JSON_DIGITS, na = na)
   }
 
   # Use NFS-safe atomic write
@@ -1129,20 +1304,18 @@
     batch_number = 0L,
     batch_success_rates = numeric(),
     batch_sizes_used = integer(),
-    phase = if (identical(nspec$mode, "fixed")) "fixed" else "calibration",
-    calib_batches = 0L,
-    r2_ess = NA_real_,
-    calibration_done = FALSE,
-    ess_history = list(),
-    ess_tracking = list(),
+    phase = if (identical(nspec$mode, "fixed")) "fixed" else "adaptive",
+    # One entry per adaptive convergence check (run_state.json
+    # convergence_history): batch, n, ess_all, ess_best, mce_p90, khat, slope,
+    # status.
+    convergence_history = list(),
     param_names_est = param_names_est,
     converged = FALSE,
-    predictive_done = FALSE,
     mode = nspec$mode,
     fixed_target = nspec$fixed_target,
-    # Track batches within each phase (used for predictive batch limits)
-    phase_batch_count = 0L,
-    phase_last = NULL,
+    # What the auto-mode stopping rule measures (persisted in the resume
+    # checkpoint so a resume never mixes two metrics in one history)
+    gate_metric = .mosaic_gate_metric_id(control),
     # Internal timestamp for state file provenance
     .created_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
   )
@@ -1157,28 +1330,32 @@
 #'
 #' @noRd
 .mosaic_save_state <- function(state, path) {
-  # Extract only the fields needed for monitoring
+  hist <- state$convergence_history %||% list()
+  last <- if (length(hist)) hist[[length(hist)]] else NULL
   persisted <- list(
-    schema_version = 1L,
+    schema_version = 2L,
     status = "running",
     created_at = if (!is.null(state$.created_at)) state$.created_at
                  else format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
     updated_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    mode = state$mode,
     phase = state$phase,
     batch = state$batch_number,
     sims_completed = state$total_sims_successful,
     sims_target = if (identical(state$mode, "fixed")) state$fixed_target else NULL,
-    converged = isTRUE(state$converged),
-    ess_regression_r2 = if (!is.na(state$r2_ess)) round(state$r2_ess, 4) else NULL,
-    ess_min = if (length(state$ess_tracking) > 0) {
-      round(tail(vapply(state$ess_tracking, `[[`, numeric(1), "min_ess"), 1), 1)
-    } else NULL
+    # Adaptive mode: TRUE once the stopping rule is met (green at two
+    # consecutive checks, minimum run length met). Fixed mode: null (P13).
+    stopping_rule_met = if (identical(state$mode, "fixed")) NULL else isTRUE(state$converged),
+    convergence_status = if (!is.null(last)) last$status else NULL,
+    gate_metric = state$gate_metric,
+    convergence_history = hist
   )
 
   # Atomic write: tempfile + rename
   tmp <- tempfile(tmpdir = dirname(path), fileext = ".json.tmp")
   on.exit(unlink(tmp), add = TRUE)
-  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA)
+  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null",
+                       na = "null", digits = NA)
   file.rename(tmp, path)
 }
 
@@ -1194,7 +1371,7 @@
 # draws and double-count mass in the post-hoc importance weights.
 #
 # Decision-relevant state that cannot be recovered from shards alone
-# (ess_tracking, phase, batch counters, convergence flags) is persisted each
+# (convergence_history, batch counters, the stopping-rule flag) is persisted each
 # batch to an internal RDS checkpoint (resume_checkpoint.rds). This is distinct
 # from the slim, human-facing run_state.json monitoring file.
 
@@ -1310,17 +1487,13 @@
 #' @noRd
 .mosaic_save_checkpoint <- function(state, checkpoint_file) {
   ckpt <- list(
-    schema_version      = 1L,
+    schema_version      = 2L,
+    gate_metric         = state$gate_metric,
     total_sims_run      = state$total_sims_run,
     batch_number        = state$batch_number,
     phase               = state$phase,
-    phase_batch_count   = state$phase_batch_count,
-    calib_batches       = state$calib_batches,
-    r2_ess              = state$r2_ess,
-    calibration_done    = state$calibration_done,
-    predictive_done     = state$predictive_done,
     converged           = state$converged,
-    ess_tracking        = state$ess_tracking,
+    convergence_history = state$convergence_history,
     batch_success_rates = state$batch_success_rates,
     batch_sizes_used    = state$batch_sizes_used
   )
@@ -1349,13 +1522,25 @@
 #' (and the resume checkpoint if present). Always sets total_sims_run from the
 #' disk watermark so the next sim_id never collides with an existing draw.
 #'
+#' The convergence history must have been measured by the stopping rule this
+#' session runs (\code{.mosaic_gate_metric_id()}). A 1.4.0 checkpoint with the
+#' same metric is restored as is, and the pool is re-checked when the shards
+#' on disk differ from what its last entry saw. A checkpoint from MOSAIC 1.3.x
+#' or earlier (a per-parameter-ESS \code{ess_tracking}, no
+#' \code{convergence_history}), one under other best-fit settings, or no
+#' checkpoint at all has its history re-derived from the shards: the status is
+#' recomputed at the earlier batch boundaries (the checkpoint's batch sizes, or
+#' multiples of \code{batch_size_adaptive}; at most 40 points) and on the whole
+#' pool, so measurements of two metrics are never mixed.
+#'
 #' @param state Fresh state from .mosaic_init_state()
 #' @param dirs Directory list
 #' @param control Control list
 #' @param param_names_est Estimated-parameter names
+#' @param n_obs Scored observation cells (for the stopping rule)
 #' @return Reconstructed state (unchanged if no shards exist -> fresh run)
 #' @noRd
-.mosaic_reconstruct_state <- function(state, dirs, control, param_names_est) {
+.mosaic_reconstruct_state <- function(state, dirs, control, param_names_est, n_obs) {
   scan <- .mosaic_resume_scan(dirs$cal_samples)
 
   if (scan$n == 0L) {
@@ -1367,61 +1552,107 @@
   state$total_sims_run        <- scan$watermark
   state$total_sims_successful <- scan$n
 
-  ckpt <- .mosaic_load_checkpoint(file.path(dirs$cal_state, "resume_checkpoint.rds"))
+  if (!identical(state$mode, "auto")) {
+    log_msg("[RESUME] Fixed mode: %d shards present (watermark %d)", scan$n, scan$watermark)
+    return(state)
+  }
 
+  ckpt <- .mosaic_load_checkpoint(file.path(dirs$cal_state, "resume_checkpoint.rds"))
+  bs <- as.integer(control$calibration$batch_size_adaptive %||% 500L)
   if (!is.null(ckpt)) {
-    # ---- Exact restore from checkpoint -------------------------------------
     state$batch_number        <- ckpt$batch_number        %||% state$batch_number
-    state$phase               <- ckpt$phase               %||% state$phase
-    state$phase_batch_count   <- ckpt$phase_batch_count   %||% state$phase_batch_count
-    state$calib_batches       <- ckpt$calib_batches       %||% state$calib_batches
-    state$r2_ess              <- ckpt$r2_ess              %||% state$r2_ess
-    state$calibration_done    <- isTRUE(ckpt$calibration_done)
-    state$predictive_done     <- isTRUE(ckpt$predictive_done)
-    state$converged           <- isTRUE(ckpt$converged)
-    state$ess_tracking        <- ckpt$ess_tracking        %||% list()
     state$batch_success_rates <- ckpt$batch_success_rates %||% numeric()
     state$batch_sizes_used    <- ckpt$batch_sizes_used    %||% integer()
-
-    # ess_tracking total_sims is a row COUNT, so compare against the shard
-    # count (not the max-id watermark, which would over-fire on failed-sim gaps).
-    last_count <- if (length(state$ess_tracking))
-      tail(vapply(state$ess_tracking, `[[`, numeric(1), "total_sims"), 1) else 0
-    log_msg("[RESUME] Restored checkpoint: %d sims, batch %d, phase '%s', converged=%s",
-            state$total_sims_run, state$batch_number, state$phase, isTRUE(state$converged))
-
-    # Refresh ESS/convergence from the ACTUAL on-disk pool whenever it differs
-    # from what the checkpoint was certified against:
-    #   - more shards than the checkpoint (a partial batch wrote after it), or
-    #   - FEWER shards (some were quarantined on this scan) -- in which case a
-    #     stale converged=TRUE no longer matches the pool, so clear it and let
-    #     the ESS check re-derive convergence rather than trusting the flag.
-    if (identical(state$mode, "auto") && scan$n != last_count) {
-      if (state$converged && scan$n < last_count) state$converged <- FALSE
-      state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control)
-    }
-
-  } else if (identical(state$mode, "auto")) {
-    # ---- Lightweight bootstrap (no checkpoint; e.g. pre-feature run) --------
-    bs <- control$calibration$batch_size_adaptive %||% 1000L
+  } else {
     # Estimate batches from the shard COUNT (not the max-id watermark, which
     # over-counts when failed sims leave gaps).
     state$batch_number <- max(1L, as.integer(ceiling(scan$n / max(bs, 1L))))
-    # If the recovered pool already exhausted the adaptive batch budget, mark
-    # calibration done so resume proceeds to the predictive phase rather than
-    # re-running the full adaptive allotment from the resume point.
-    max_adaptive <- control$calibration$max_batches_adaptive %||% 8L
-    if (state$batch_number >= max_adaptive) state$calibration_done <- TRUE
-    log_msg("[RESUME] No checkpoint; bootstrapping from %d shards (watermark %d, batch %d%s)",
-            scan$n, scan$watermark, state$batch_number,
-            if (isTRUE(state$calibration_done)) ", calibration budget already met" else "")
-    state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control)
+  }
+  state$phase <- "adaptive"
 
-  } else {
-    log_msg("[RESUME] Fixed mode: %d shards present (watermark %d)", scan$n, scan$watermark)
+  # The gate's in-memory pool, read from the shards once here (the only full
+  # read of an adaptive run); run_MOSAIC() takes it over from state$.gate_pool.
+  pool <- tryCatch(.mosaic_gate_pool_update(NULL, dirs$cal_samples, param_names_est),
+                   error = function(e) NULL)
+  results <- pool$data
+  if (is.null(results) || !nrow(results)) return(state)
+  state$.gate_pool <- pool
+
+  gate_now  <- state$gate_metric %||% .mosaic_gate_metric_id(control)
+  gate_ckpt <- if (is.null(ckpt$gate_metric)) NA_character_ else as.character(ckpt$gate_metric)
+  hist_ckpt <- ckpt$convergence_history %||% list()
+  same <- !is.null(ckpt) && identical(gate_ckpt, gate_now) && length(hist_ckpt) > 0L
+
+  if (same) {
+    state$convergence_history <- hist_ckpt
+    state$converged <- isTRUE(ckpt$converged)
+    last_n <- as.numeric(hist_ckpt[[length(hist_ckpt)]]$n %||% NA)
+    n_now <- sum(is.finite(results$likelihood))
+    log_msg("[RESUME] Restored checkpoint: %d sims, batch %d, %d convergence check(s), stopping rule met = %s",
+            state$total_sims_run, state$batch_number, length(hist_ckpt), isTRUE(state$converged))
+    # Re-check when the pool differs from what the last check saw (a partial
+    # batch wrote after it, or shards were quarantined on this scan).
+    if (!isTRUE(n_now == last_n)) {
+      state$converged <- FALSE
+      if (isTRUE(n_now > last_n)) {
+        # A partial batch wrote shards after the last check: count it as a
+        # batch, so its check is not labelled with the previous batch number
+        # (two history entries with one batch label, C14).
+        state$batch_number <- state$batch_number + 1L
+        state$batch_sizes_used <- c(state$batch_sizes_used,
+                                    as.integer(max(0, scan$watermark - sum(as.numeric(state$batch_sizes_used)))))
+      } else {
+        # Fewer draws than the last check saw (shards quarantined): drop the
+        # entries that counted them.
+        keep <- vapply(state$convergence_history, function(e) isTRUE(as.numeric(e$n %||% NA) <= n_now),
+                       logical(1))
+        state$convergence_history <- state$convergence_history[keep]
+      }
+      state <- .mosaic_convergence_check_update_state(state, dirs, param_names_est, control,
+                                                      n_obs, results = results)
+    }
+    return(state)
   }
 
-  state
+  log_msg(paste0("[RESUME] %s; the convergence history is re-derived from the %d shards on disk ",
+                 "with this session's rule ('%s'), so measurements of two metrics are never mixed"),
+          if (is.null(ckpt)) "No checkpoint"
+          else if (is.na(gate_ckpt) || !grepl("^convergence_status/", gate_ckpt))
+            sprintf("The checkpoint was made by an earlier stopping rule ('%s')",
+                    if (is.na(gate_ckpt)) "unstamped, before MOSAIC 1.3.0" else gate_ckpt)
+          else sprintf("The checkpoint's rule ('%s') differs", gate_ckpt),
+          scan$n, gate_now)
+  # Batch boundaries: from the checkpoint's batch sizes, or (no checkpoint) at
+  # every batch_size_adaptive-th shard in id order, as many as the batches the
+  # shard count implies, so gaps in the ids never invent extra batches.
+  ids_sorted <- sort(as.numeric(results$sim[is.finite(results$sim)]))
+  cum <- if (length(state$batch_sizes_used)) cumsum(as.numeric(state$batch_sizes_used))
+         else if (state$batch_number > 1L && length(ids_sorted))
+           ids_sorted[pmin(length(ids_sorted), bs * seq_len(state$batch_number - 1L))]
+         else numeric(0)
+  bounds <- sort(unique(cum[cum > 0 & cum < scan$watermark]))
+  if (length(bounds) > 39L) bounds <- bounds[unique(round(seq(1, length(bounds), length.out = 39L)))]
+  # Each re-derived entry is labelled with the batch it closes (its position in
+  # the cumulative batch sizes), and the final check with a later number, so a
+  # thinned or round-0 history never carries one batch label twice (C14).
+  bidx <- match(bounds, cum)
+  state$batch_number <- max(as.integer(state$batch_number), if (length(bidx)) max(bidx) + 1L else 1L)
+  state$convergence_history <- list()
+  state$converged <- FALSE
+  for (k in seq_along(bounds)) {
+    sub <- results[results$sim <= bounds[k], , drop = FALSE]
+    if (sum(is.finite(sub$likelihood)) < 2L) next
+    wh <- tryCatch(.mosaic_gate_health(sub, param_names_est, n_obs, control,
+                                       history = state$convergence_history,
+                                       n_attempted = bounds[k], members = TRUE,
+                                       seed = state$resample_seed, n_locations = state$n_locations),
+                   error = function(e) NULL)
+    if (!is.null(wh))
+      state$convergence_history <- c(state$convergence_history,
+                                     list(.mosaic_history_entry(wh, bidx[k])))
+  }
+  .mosaic_convergence_check_update_state(state, dirs, param_names_est, control, n_obs,
+                                         results = results)
 }
 
 #' Which Transmission Engine Produced a Run Directory?
@@ -1793,372 +2024,912 @@
   invisible(TRUE)
 }
 
-#' Decide Next Batch Size
+#' Identifier of the auto-mode stopping-rule metric
+#'
+#' Stamped on the resume checkpoint, so a resumed run never mixes measurements
+#' of two different gate metrics in one convergence history. It changes
+#' whenever what the rule measures changes: the rule itself (the 1.4.0
+#' convergence status, evaluated on the best-fit selection), the coarsening
+#' alpha that defines the posterior, the best-fit settings and the status
+#' bands.
+#' @param control Merged control list.
+#' @return A single character string.
 #' @noRd
-.mosaic_decide_next_batch <- function(state, control, ess_tracking) {
-
-  # Phase tracking is now managed in main loop
-  # This function just decides what to do next
-
-  # Calibration phase
-  if (identical(state$phase, "calibration") && !isTRUE(state$calibration_done)) {
-    return(list(
-      phase = "calibration",
-      batch_size = control$calibration$batch_size_adaptive
-    ))
-  }
-
-  # Predictive batch
-  # Require calibration_done before running predictive
-  if (isTRUE(state$calibration_done) && !isTRUE(state$predictive_done)) {
-    res <- tryCatch({
-      calc_bookend_batch_size(
-        ess_history = ess_tracking,
-        target_ess = control$targets$ESS_param,
-        max_total_sims = control$calibration$max_simulations_total,
-        target_r_squared = control$calibration$target_r2_adaptive
-      )
-    }, error = function(e) NULL)
-
-    # Log predictive batch calculation details
-    if (!is.null(res) && !is.null(res$model) && res$batch_size > 0) {
-      log_msg("Predictive batch calculation:")
-      log_msg("  Model: %s (R\u00B2 = %.4f)", res$model, res$r_squared)
-      log_msg("  Current ESS: %.1f \u2192 Target: %.0f", res$current_ess, res$target_ess)
-      log_msg("  Predicted batch size: %.0f sims (safety factor: %.2f)",
-              res$batch_size, res$safety_factor)
-      log_msg("  Expected total after batch: %.0f sims", res$total_predicted)
-    }
-
-    # Determine batch size: use model prediction if available, else fall back
-    # to the adaptive batch size (ensures we never run trivially small batches
-    # or stall when the model can't predict).
-    floor_size <- control$calibration$batch_size_adaptive
-
-    if (!is.null(res) && res$batch_size > 0) {
-      size <- as.integer(res$batch_size)
-    } else {
-      # Model returned 0 or failed -- use floor as fallback
-      if (!is.null(res) && !is.null(res$message)) {
-        log_msg("Predictive model: %s \u2014 using batch_size_adaptive as fallback", res$message)
-      } else if (is.null(res)) {
-        log_msg("Predictive batch calculation failed \u2014 using batch_size_adaptive as fallback")
-      }
-      size <- as.integer(floor_size)
-    }
-
-    # Apply floor: never run a predictive batch smaller than batch_size_adaptive
-    if (size < floor_size) {
-      size <- as.integer(floor_size)
-    }
-
-    # Cap predictive batch to avoid multi-hour single batches with no
-    # checkpointing. Capped batches run with ESS re-evaluation between each;
-    # predictive_done is set by .mosaic_ess_check_update_state() when the
-    # ESS gap closes or max_batches_predictive is reached.
-    max_pred <- control$calibration$max_batch_predictive
-    if (!is.null(max_pred) && size > max_pred) {
-      log_msg("  Capping predictive batch: %d \u2192 %d (max_batch_predictive)", size, max_pred)
-      size <- as.integer(max_pred)
-    }
-
-    return(list(
-      phase = "predictive",
-      batch_size = size
-    ))
-  }
-
-  # If we reach here, calibration_done and predictive_done are both TRUE
-  # but convergence hasn't been declared. This shouldn't happen in normal
-  # operation -- the predictive phase should run until convergence or its
-  # batch limit. Return batch_size=0 to signal the loop to stop.
-  list(
-    phase = "predictive",
-    batch_size = 0L,
-    message = "Predictive phase exhausted without convergence"
-  )
+.mosaic_gate_metric_id <- function(control) {
+  tg <- control$targets
+  f <- function(x) format(as.numeric(x %||% NA), digits = 15)
+  th <- .mosaic_convergence_thresholds(as.list(tg$status_thresholds %||% list()))
+  sprintf("convergence_status/v1.4.0/alpha=%s/ratio=%s/ess_best=%s/members=%s-%s/bands=%s",
+          f(tg$coarsening_alpha %||% 10), f(tg$best_subset_ratio), f(tg$ESS_best),
+          f(tg$min_ensemble_members), f(tg$max_ensemble_members),
+          paste(vapply(th, f, character(1)), collapse = ","))
 }
 
-#' ESS Check and Update State
+#' Log-log ESS growth slope over the latter part of a run
+#'
+#' \code{.mosaic_ess_growth_slope()} over the points at or beyond a quarter of
+#' the largest draw count (at least three points), so the slope describes the
+#' recent growth rather than the first batches. Used by the adaptive gate (on
+#' the convergence history) and by the fixed-mode replay (on log-spaced
+#' points), so both report the same quantity.
+#' @param n Draw counts.
+#' @param ess ESS_all at those counts.
+#' @return Numeric scalar, or \code{NA_real_} with fewer than three usable points.
 #' @noRd
-.mosaic_ess_check_update_state <- function(state, dirs, param_names_est, control) {
+.mosaic_gate_slope <- function(n, ess) {
+  n <- suppressWarnings(as.numeric(n)); ess <- suppressWarnings(as.numeric(ess))
+  ok <- is.finite(n) & is.finite(ess) & n > 0 & ess > 0
+  if (sum(ok) < 3L) return(NA_real_)
+  n_last <- max(3L, length(unique(n[ok & n >= max(n[ok]) / 4])))
+  .mosaic_ess_growth_slope(n[ok], ess[ok], n_last = n_last)
+}
 
-  # Load all simulation files fresh from disk
-  files <- list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
-  if (!length(files)) return(state)
+#' Weight health of a pool of draws as the adaptive gate scores it
+#'
+#' \code{calc_weight_health()} at the run's best-fit settings
+#' (\code{control$targets}): the coarsened posterior over every valid draw, the
+#' best-fit selection and its Monte Carlo error, and the status. With
+#' \code{members = TRUE} (the adaptive gate) the status is then re-derived on
+#' the members of the configured \code{posterior_weighting}
+#' (\code{.mosaic_scheme_members()}): the best-fit selection under
+#' \code{"bestfit"}, the systematic resample under \code{"coarsened"} and the
+#' tier-searched subset under \code{"saturated"} / \code{"tempered"} (whose
+#' ensemble ESS target is the run's \code{ESS_best}), so the stopping rule is
+#' met on the members the ensemble is built from (red team round 1, D11).
+#'
+#' @param results Results frame of every draw so far (\code{sim},
+#'   \code{likelihood}, parameters).
+#' @param param_names Sampled parameter names.
+#' @param n_obs Scored observation cells.
+#' @param control Merged control list.
+#' @param history Convergence history so far (list of entries with \code{n}
+#'   and \code{ess_all}); the slope is computed over it plus this pool, unless
+#'   \code{slope} is supplied.
+#' @param slope Optional growth slope (fixed mode: from the replay).
+#' @param budget_exhausted,fixed_mode Passed to \code{calc_weight_health()}.
+#' @param n_attempted Simulations attempted so far (valid or not); converts
+#'   projected valid draws to simulations. \code{NA} = every draw valid.
+#' @param members Logical; re-derive the status on the scheme's members.
+#' @param seed Resample seed of \code{"coarsened"} (\code{.mosaic_resample_seed()}).
+#' @param n_locations Locations in the run (\code{alpha_per_location}).
+#' @return The \code{calc_weight_health()} result (from
+#'   \code{.mosaic_members_health()} when the scheme's members differ from the
+#'   best-fit selection).
+#' @noRd
+.mosaic_gate_health <- function(results, param_names, n_obs, control, history = list(),
+                                slope = NULL, budget_exhausted = FALSE, fixed_mode = FALSE,
+                                n_attempted = NA_real_, members = FALSE, seed = NULL,
+                                n_locations = NULL) {
+  tg <- control$targets
+  ll <- results$likelihood
+  eta <- .mosaic_coarsened_eta(tg$coarsening_alpha, n_obs)
+  if (!is.finite(eta))
+    stop("the convergence status needs n_obs (scored observation cells) to define the posterior",
+         call. = FALSE)
+  if (is.null(slope)) {
+    ess_now <- calc_model_ess(.mosaic_tempered_weights(ll, eta), method = "kish")
+    hn <- c(vapply(history, function(e) as.numeric(e$n %||% NA), numeric(1)), sum(is.finite(ll)))
+    he <- c(vapply(history, function(e) as.numeric(e$ess_all %||% NA), numeric(1)), ess_now)
+    slope <- .mosaic_gate_slope(hn, he)
+  }
+  wh <- calc_weight_health(
+    log_lik = ll,
+    params = results[, intersect(param_names, names(results)), drop = FALSE],
+    n_obs = n_obs, sim = results$sim,
+    coarsening_alpha = tg$coarsening_alpha,
+    best_subset_ratio = tg$best_subset_ratio,
+    ess_best_target = tg$ESS_best,
+    min_members = tg$min_ensemble_members,
+    max_members = tg$max_ensemble_members,
+    thresholds = as.list(tg$status_thresholds %||% list()),
+    slope = slope, budget_exhausted = budget_exhausted, fixed_mode = fixed_mode,
+    n_attempted = if (length(n_attempted) == 1L && is.finite(n_attempted)) n_attempted else NULL,
+    n_locations = n_locations,
+    ess_all_target = .mosaic_scheme_ess_all_target(control),
+    max_simulations = if (isTRUE(fixed_mode)) NULL else control$calibration$max_simulations_total,
+    batch_size_min = control$calibration$batch_size_adaptive %||% 500L,
+    batch_size_max = control$calibration$max_batch_predictive %||% 10000L)
+  if (!isTRUE(members)) return(wh)
+  m <- .mosaic_scheme_members(results, control, n_obs, seed = seed)
+  if (is.null(m)) return(wh)
+  .mosaic_members_health(wh, results, param_names, m$idx, m$w, n_members = m$n_members,
+                         binding = m$binding)
+}
 
-  log_msg("Checking ESS convergence...")
-  load_start <- Sys.time()
+#' ESS_all target of the configured posterior_weighting
+#'
+#' The ESS_all the scheme's ensemble needs for its ESS target (red team round
+#' 2, TN3): under "bestfit" \code{ESS_best / best_subset_ratio} (the members
+#' hold that share of ESS_all); under "coarsened" \code{ESS_best}, because the
+#' resample's ensemble ESS is about ESS_all (K = round(ESS_all) draws), so the
+#' gate turns green near ESS_all = ESS_best. The legacy tier schemes keep the
+#' best-fit rule (their subset is sized by the tier search, not by ESS_all).
+#' Used by the batch projection, its \code{target_met} branch and the status
+#' reasons (\code{calc_weight_health(ess_all_target =)}).
+#' @param control Merged control list.
+#' @return Numeric scalar.
+#' @noRd
+.mosaic_scheme_ess_all_target <- function(control) {
+  tg <- control$targets
+  if (identical(tg$posterior_weighting, "coarsened")) as.numeric(tg$ESS_best)
+  else as.numeric(tg$ESS_best) / as.numeric(tg$best_subset_ratio)
+}
 
-  # Use efficient streaming method (same as final results loading)
-  # This is much faster and more memory-efficient than rbindlist for large datasets
-  ess_check_results <- tryCatch({
-    .mosaic_load_and_combine_results(
-      dir_params = dirs$cal_samples,
-      method = "streaming",
-      chunk_size = control$io$load_chunk_size %||% 5000L,
-      verbose = FALSE
-    )
-  }, error = function(e) NULL)
+#' The ensemble members of the configured posterior_weighting
+#'
+#' The member selection \code{run_MOSAIC()} applies after calibration, for the
+#' adaptive gate: \code{NULL} under \code{"bestfit"} (the members are
+#' \code{calc_weight_health()}'s best-fit selection); under \code{"coarsened"}
+#' the systematic resample of \code{.mosaic_coarsened_posterior()} with the
+#' run's seed; under \code{"saturated"} / \code{"tempered"} the Tukey lower
+#' fence, the tier search (\code{.mosaic_tier_best_subset()}) on the retained
+#' draws and the legacy weights (\code{.mosaic_best_subset_weights()}). The
+#' same primitives and arguments as the post-calibration block, so the gate
+#' and the final status score the same members on the same draws.
+#'
+#' @param results Results frame (\code{sim}, \code{likelihood}).
+#' @param control Merged control list.
+#' @param n_obs Scored observation cells.
+#' @param seed Resample seed (\code{.mosaic_resample_seed(config)}); 0-based
+#'   default when \code{NULL}.
+#' @return \code{NULL}, or \code{list(idx, w, n_members, binding)}.
+#' @noRd
+.mosaic_scheme_members <- function(results, control, n_obs, seed = NULL) {
+  tg <- control$targets
+  scheme <- tg$posterior_weighting %||% "bestfit"
+  if (identical(scheme, "bestfit")) return(NULL)
+  if (identical(scheme, "coarsened")) {
+    cp <- .mosaic_coarsened_posterior(
+      log_lik = results$likelihood, n_obs = n_obs, alpha = tg$coarsening_alpha,
+      min_K = tg$min_ensemble_members, max_K = tg$max_ensemble_members,
+      seed = seed %||% .mosaic_resample_seed(NULL))
+    idx <- which(cp$counts > 0L)
+    if (!length(idx)) return(NULL)
+    return(list(idx = idx, w = cp$member_weights[idx], n_members = cp$K,
+                binding = .mosaic_resample_binding(cp$ess_kish, tg$min_ensemble_members,
+                                                   tg$max_ensemble_members)))
+  }
+  res <- results
+  res$is_valid <- is.finite(res$likelihood)
+  res$is_outlier <- FALSE
+  if (any(res$is_valid)) {
+    fence <- .mosaic_lower_fence(res$likelihood[res$is_valid], control$weights$iqr_multiplier %||% 1.5)
+    res$is_outlier[res$is_valid] <- res$likelihood[res$is_valid] < fence
+  }
+  res$is_retained <- res$is_valid & !res$is_outlier
+  if (!any(res$is_retained)) return(NULL)
+  ts <- .mosaic_tier_best_subset(res, control, log = FALSE)
+  idx <- which(res$sim %in% ts$top_subset$sim)
+  if (length(idx) < 2L) return(NULL)
+  bsw <- .mosaic_best_subset_weights(res$likelihood[idx], scheme)
+  list(idx = idx, w = bsw$weights, n_members = length(idx),
+       binding = if (identical(ts$tier, "fallback")) "max_members" else "ratio")
+}
 
-  load_time <- difftime(Sys.time(), load_start, units = "secs")
+#' One convergence-history entry (run_state.json \code{convergence_history})
+#' @param wh A \code{calc_weight_health()} result.
+#' @param batch Batch number.
+#' @return \code{list(batch, n, ess_all, ess_best, mce_p90, khat, slope, status,
+#'   sampling_green)}; \code{sampling_green} is TRUE when the three sampling
+#'   checks (ESS, Monte Carlo error, k-hat) are green, which is what the
+#'   stopping rule reads (\code{.mosaic_stop_rule()}).
+#' @noRd
+.mosaic_history_entry <- function(wh, batch) {
+  num <- function(x) { x <- suppressWarnings(as.numeric(x)); if (length(x) == 1L && !is.na(x)) x else NA_real_ }
+  list(batch = as.integer(batch), n = as.integer(wh$n_valid),
+       ess_all = num(wh$coarsened$ess_kish), ess_best = num(wh$bestfit$ess_best),
+       mce_p90 = num(wh$mce$p90), khat = num(wh$coarsened$khat), slope = num(wh$slope),
+       status = as.character(wh$status), sampling_green = isTRUE(.mosaic_sampling_green(wh)))
+}
 
-  if (is.null(ess_check_results) || !nrow(ess_check_results)) {
+#' One run-log line summarising a convergence status
+#'
+#' Every check on one line, informativeness included, each with its colour.
+#' A value that meets its target reads "212 >= 200"; one that does not reads
+#' "150 of 200".
+#' @param wh A \code{calc_weight_health()} result.
+#' @return Character scalar.
+#' @noRd
+.mosaic_status_line <- function(wh) {
+  fmt_n <- function(x) if (length(x) == 1L && is.finite(x)) .mosaic_fmt_count(x) else "NA"
+  vs <- function(x, tgt) {
+    x <- suppressWarnings(as.numeric(x)); tgt <- suppressWarnings(as.numeric(tgt))
+    xs <- if (length(x) == 1L && is.finite(x)) .mosaic_fmt_thr(x, tgt, 0) else "NA"
+    if (length(x) == 1L && length(tgt) == 1L && is.finite(x) && is.finite(tgt) && x >= tgt)
+      sprintf("%s >= %s", xs, fmt_n(tgt))
+    else sprintf("%s of %s", xs, fmt_n(tgt))
+  }
+  ck <- wh$convergence$checks
+  col <- function(id) {
+    if (is.null(ck)) return("NA")
+    v <- if (is.data.frame(ck)) ck$colour[ck$check == id] else NA_character_
+    if (length(v) == 1L && !is.na(v)) toupper(v) else "NA"
+  }
+  khat <- suppressWarnings(as.numeric(wh$coarsened$khat))
+  mce <- suppressWarnings(as.numeric(wh$mce$p90))
+  slope <- suppressWarnings(as.numeric(wh$slope))
+  flat <- suppressWarnings(as.logical(unlist(wh$convergence$flat %||% wh$flat))[1])
+  inform <- if (is.na(flat)) "not assessed" else if (flat) "flat likelihood" else "data inform the posterior"
+  sprintf(paste0("%s%s | ensemble ESS %s [%s] (ESS_all %s, %s) | Monte Carlo error %s, 90th ",
+                 "percentile [%s] | k-hat %s [%s] | informativeness: %s [%s] | ESS growth slope %s"),
+          toupper(wh$status),
+          if (isTRUE(.mosaic_sampling_green(wh)) && !identical(wh$status, "green")) " (sampling checks green)" else "", vs(wh$bestfit$ess_best, wh$targets$ess_best_target), col("ess"),
+          vs(wh$coarsened$ess_kish, wh$targets$ess_all_target),
+          { nm <- suppressWarnings(as.numeric(wh$bestfit$n_members))
+            sprintf("%s member%s", fmt_n(nm), if (length(nm) == 1L && isTRUE(nm == 1)) "" else "s") },
+          if (length(mce) == 1L && is.finite(mce))
+            .mosaic_fmt_thr(mce, c(wh$targets$thresholds$mce_green, wh$targets$thresholds$mce_yellow), 1,
+                            scale = 100, suffix = "%")
+          else if (length(mce) == 1L && is.infinite(mce)) "not estimable" else "NA", col("mce"),
+          if (length(khat) == 1L && is.finite(khat))
+            .mosaic_fmt_thr(khat, c(wh$targets$thresholds$khat_green, wh$targets$thresholds$khat_yellow), 2,
+                            big.mark = "")
+          else .mosaic_weight_health_fields(wh)$khat_status %|NA|% "undefined", col("khat"),
+          inform, col("informativeness"),
+          if (length(slope) == 1L && is.finite(slope)) sprintf("%.2f", slope) else "NA (fewer than 3 checks)")
+}
+
+#' Running in-memory pool of the draws the adaptive gate scores
+#'
+#' The convergence status needs only each draw's simulation id,
+#' log-likelihood and sampled parameters. Rather than re-reading every shard at
+#' every check (whose cost grows with the run: about 25 ms per 100-draw shard,
+#' so ~40 s per check at 150,000 draws), the pool keeps those columns in memory
+#' and reads only the shard files it has not seen. A resume starts it from the
+#' shards on disk once (\code{.mosaic_reconstruct_state()}).
+#'
+#' @param pool \code{NULL} (empty) or a previous result.
+#' @param dir_cal_samples The shard directory.
+#' @param param_names Sampled parameter names.
+#' @return \code{list(data, files)}: \code{data} a data frame with \code{sim},
+#'   \code{likelihood} and the parameter columns, ordered by \code{sim};
+#'   \code{files} the shard paths already read.
+#' @noRd
+.mosaic_gate_pool_update <- function(pool, dir_cal_samples, param_names) {
+  if (is.null(pool)) pool <- list(data = NULL, files = character(0))
+  files <- list.files(dir_cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
+  new <- setdiff(files, pool$files)
+  if (!length(new)) return(pool)
+  cols <- c("sim", "likelihood", param_names)
+  parts <- lapply(new, function(f) tryCatch(
+    as.data.frame(arrow::read_parquet(f, col_select = dplyr::any_of(cols))),
+    error = function(e) NULL))
+  ok <- !vapply(parts, is.null, logical(1))
+  add <- as.data.frame(data.table::rbindlist(parts[ok], fill = TRUE))
+  data <- if (is.null(pool$data)) add else
+    as.data.frame(data.table::rbindlist(list(pool$data, add), fill = TRUE))
+  data <- data[!duplicated(data$sim), , drop = FALSE]
+  list(data = data[order(data$sim), , drop = FALSE], files = c(pool$files, new[ok]))
+}
+
+#' Convergence check after an adaptive batch, and the stop decision
+#'
+#' The auto-mode stopping rule. On every draw so far it computes the 1.4.0
+#' convergence status on the members of the configured
+#' \code{posterior_weighting} (\code{.mosaic_gate_health(members = TRUE)}),
+#' appends an entry to \code{state$convergence_history} and sets
+#' \code{state$converged} when the three sampling checks (ensemble ESS, Monte
+#' Carlo error, k-hat) are green at two consecutive checks and both minimum run
+#' lengths are met (\code{min_batches_adaptive} batches and \code{min_draws}
+#' valid draws) at the latest (\code{.mosaic_stop_rule()} on the entries'
+#' \code{sampling_green}; red team round 1, D5). Data informativeness is
+#' reported but never blocks the stop: more simulations cannot make a flat
+#' likelihood informative, so such a run stops YELLOW with the stopping rule
+#' met. Otherwise the run continues to \code{max_simulations_total}.
+#'
+#' @param state Calibration state (\code{state$resample_seed} is the
+#'   \code{"coarsened"} resample seed).
+#' @param dirs Directory list (shards are read from \code{dirs$cal_samples}).
+#' @param param_names_est Sampled parameter names.
+#' @param control Merged control list.
+#' @param n_obs Scored observation cells (\code{.mosaic_n_scored_obs()}).
+#' @param results Optional results frame of every draw so far; read from the
+#'   shards when \code{NULL}. Lets an offline replay drive the same rule.
+#' @param log Logical; write the status line to the run log.
+#' @return The updated state; \code{state$last_health} holds the
+#'   \code{calc_weight_health()} result of this check.
+#' @noRd
+.mosaic_convergence_check_update_state <- function(state, dirs, param_names_est, control,
+                                                   n_obs, results = NULL, log = TRUE) {
+  .log <- if (isTRUE(log)) log_msg else function(...) invisible(NULL)
+  if (is.null(results)) {
+    files <- list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
+    if (!length(files)) return(state)
+    results <- tryCatch(
+      .mosaic_load_and_combine_results(
+        dir_params = dirs$cal_samples, method = "streaming",
+        chunk_size = control$io$load_chunk_size %||% 5000L, verbose = FALSE),
+      error = function(e) NULL)
+  }
+  if (is.null(results) || !nrow(results)) return(state)
+  if (sum(is.finite(results$likelihood)) < 2L) {
+    .log("Convergence check skipped: fewer than two draws have a finite likelihood")
     return(state)
   }
 
-  # Skip ESS calculation if insufficient samples
-  # calc_model_ess_parameter requires at least 50 samples
-  if (nrow(ess_check_results) < 50) {
-    log_msg("  Skipping ESS check: %d simulations (need at least 50)", nrow(ess_check_results))
-    return(state)
+  cal <- control$calibration
+  exhausted <- state$total_sims_run >= cal$max_simulations_total
+  wh <- tryCatch(
+    .mosaic_gate_health(results, param_names_est, n_obs, control,
+                        history = state$convergence_history %||% list(),
+                        budget_exhausted = exhausted,
+                        n_attempted = as.numeric(state$total_sims_run %||% NA),
+                        members = TRUE, seed = state$resample_seed,
+                        n_locations = state$n_locations),
+    error = function(e) {
+      .log("Convergence check failed: %s", conditionMessage(e))
+      NULL
+    })
+  if (is.null(wh)) return(state)
+
+  state$convergence_history <- c(state$convergence_history %||% list(),
+                                 list(.mosaic_history_entry(wh, state$batch_number)))
+  state$last_health <- wh
+  min_batches <- as.integer(cal$min_batches_adaptive %||% 1L)
+  min_draws <- as.numeric(cal$min_draws %||% 0)
+  min_ok <- state$batch_number >= min_batches && wh$n_valid >= min_draws
+  state$converged <- .mosaic_stop_rule(state$convergence_history, min_ok)
+
+  .log("Convergence check (batch %d, %s valid draws): %s", state$batch_number,
+       .mosaic_fmt_count(wh$n_valid), .mosaic_status_line(wh))
+  # The stopping rule reads the three sampling checks (ESS, Monte Carlo error,
+  # k-hat); informativeness is reported but does not block the stop.
+  samp_green <- isTRUE(.mosaic_sampling_green(wh))
+  if (!identical(wh$status, "green"))
+    .log("  Not green: %s", paste(wh$convergence$reasons, collapse = "; "))
+  if (!samp_green) {
+    invisible(NULL)
+  } else if (!min_ok) {
+    .log(paste0("  Sampling checks green, but the minimum run length is not met (%d of %d batches, %s of %s ",
+                "draws): continuing"),
+         state$batch_number, min_batches, .mosaic_fmt_count(wh$n_valid), .mosaic_fmt_count(min_draws))
+  } else if (!isTRUE(state$converged)) {
+    .log("  Sampling checks green (1 of 2 consecutive checks needed): continuing")
+  } else {
+    .log("  Stopping rule met: sampling checks green at two consecutive checks (2 of 2), %s valid draws; status %s",
+         .mosaic_fmt_count(wh$n_valid), toupper(wh$status))
   }
-
-  # Calculate ESS using specified method from control.
-  # Use the same adaptive n_grid as the final post-hoc ESS calculation in
-  # run_MOSAIC (n_grid = 100 * (1 + log(ESS_param/100))). A coarser grid
-  # over-estimates ESS for tight posteriors, which caused the loop to declare
-  # convergence before the finer-grid post-hoc calculation could confirm it.
-  ess_target_val <- control$targets$ESS_param %||% 100
-  n_grid_adaptive <- as.integer(round(100 * (1 + log(max(ess_target_val, 100) / 100))))
-
-  ess_current <- tryCatch({
-    calc_model_ess_parameter(
-      results = ess_check_results,
-      param_names = param_names_est,
-      likelihood_col = "likelihood",
-      n_grid = n_grid_adaptive,
-      method = control$targets$ESS_method,
-      marginal_method = control$targets$ESS_marginal_method %||% "kde",
-      verbose = FALSE
-    )
-  }, error = function(e) {
-    log_msg("  ESS calculation failed: %s", e$message)
-    NULL
-  })
-
-  if (is.null(ess_current) || !"ess_marginal" %in% names(ess_current)) {
-    return(state)
-  }
-
-  # Store ESS history
-  state$ess_history[[length(state$ess_history) + 1L]] <- list(
-    batch = state$batch_number,
-    total_sims = nrow(ess_check_results),
-    ess_values = ess_current
-  )
-
-  # Calculate percentile-based threshold
-  percentile_cutoff <- 1 - control$targets$ESS_param_prop
-  threshold_ess <- as.numeric(stats::quantile(
-    ess_current$ess_marginal,
-    probs = percentile_cutoff,
-    na.rm = TRUE
-  ))
-
-  state$ess_tracking[[length(state$ess_tracking) + 1L]] <- list(
-    batch = state$batch_number,
-    total_sims = nrow(ess_check_results),
-    threshold_ess = threshold_ess,
-    min_ess = min(ess_current$ess_marginal, na.rm = TRUE),
-    median_ess = stats::median(ess_current$ess_marginal, na.rm = TRUE),
-    max_ess = max(ess_current$ess_marginal, na.rm = TRUE)
-  )
-
-  # Report current ESS status
-  log_msg("  ESS at %.0f%% percentile: %.1f (target: %d, min: %.1f)",
-          percentile_cutoff * 100,
-          threshold_ess,
-          control$targets$ESS_param,
-          min(ess_current$ess_marginal, na.rm = TRUE))
-
-  # Calibration R^2 check
-  # ESS is calculated for ALL batches (data accumulates from batch 1)
-  # But calibration model fitting only starts when we have min_batches data points
-  # This ensures the model uses data from ALL batches (1, 2, 3, ..., N)
-  if (identical(state$phase, "calibration") &&
-      !isTRUE(state$calibration_done) &&
-      state$batch_number >= control$calibration$min_batches_adaptive &&
-      length(state$ess_tracking) >= control$calibration$min_batches_adaptive) {
-
-    ess_df <- data.frame(
-      sims = vapply(state$ess_tracking, `[[`, numeric(1), "total_sims"),
-      threshold_ess = vapply(state$ess_tracking, `[[`, numeric(1), "threshold_ess")
-    )
-
-    # Fit sqrt-linear model: ESS ~ sqrt(n) is typical scaling for importance sampling
-    ess_df$sqrt_sims <- sqrt(ess_df$sims)
-    ess_lm <- stats::lm(threshold_ess ~ sqrt_sims, data = ess_df)
-    lm_summary <- summary(ess_lm)
-    r2 <- lm_summary$r.squared
-    coef <- stats::coef(ess_lm)
-    intercept <- coef[1]
-    slope <- coef[2]
-
-    state$calib_batches <- state$calib_batches + 1L
-    state$r2_ess <- r2
-
-    # Calculate estimated simulations to reach target ESS
-    # Model: ESS = intercept + slope x sqrt(n)
-    # Solving for n: n = ((target_ess - intercept) / slope)^2
-    target_ess <- control$targets$ESS_param
-    # Guard against NA/NaN coefficients (occurs when ess_df has only 1 row,
-    # making the 2-parameter lm underdetermined -- R sets slope=NA)
-    est_sims <- if (isTRUE(slope > 0) && isTRUE((target_ess - intercept) > 0)) {
-      ((target_ess - intercept) / slope)^2
-    } else {
-      NA_real_
-    }
-
-    # Print model fit diagnostics
-    # slope/r2 may be NA when ESS has plateaued (constant response -> rank-deficient lm)
-    slope_print <- if (is.finite(slope)) slope else 0
-    r2_print    <- if (is.finite(r2))    r2    else 0
-    log_msg("Calibration convergence check (batch %d):", state$batch_number)
-    if (!is.na(est_sims)) {
-      log_msg("  Model: ESS = %.2f + %.4f \u00D7 sqrt(n)  |  ESS regression R\u00B2 = %.4f (target %.2f) | Est. Sims: %.0f",
-              intercept, slope_print, r2_print, control$calibration$target_r2_adaptive, round(est_sims))
-    } else {
-      log_msg("  Model: ESS = %.2f + %.4f \u00D7 sqrt(n)  |  ESS regression R\u00B2 = %.4f (target %.2f) | Est. Sims: N/A%s",
-              intercept, slope_print, r2_print, control$calibration$target_r2_adaptive,
-              if (!is.finite(slope)) " [ESS plateau \u2014 slope undefined]" else "")
-    }
-    log_msg("  Data points: %d measurements (batches 1-%d) | Simulations: %d-%d",
-            nrow(ess_df), state$batch_number, min(ess_df$sims), max(ess_df$sims))
-
-    # Check if calibration should end.
-    # R^2 is only used as an exit signal when there are at least 5 data points
-    # (3 residual df). A 2-parameter model fit to exactly min_batches=3 points
-    # has only 1 residual df, making R^2 trivially near 1 for any monotone ESS
-    # trajectory. The max_batches hard limit is always honoured regardless.
-    min_r2_points <- 5L
-    r2_converged <- r2 >= control$calibration$target_r2_adaptive && nrow(ess_df) >= min_r2_points
-    if (r2_converged) {
-      log_msg("  ESS regression R\u00B2 criterion met with %d data points (min required: %d)",
-              nrow(ess_df), min_r2_points)
-    } else if (r2 >= control$calibration$target_r2_adaptive && nrow(ess_df) < min_r2_points) {
-      log_msg("  ESS regression R\u00B2 = %.4f >= target, but only %d data point(s) \u2014 need >= %d for reliable fit",
-              r2, nrow(ess_df), min_r2_points)
-    }
-
-    if (r2_converged || state$batch_number >= control$calibration$max_batches_adaptive) {
-
-      # Calculate remaining gap
-      current_n <- nrow(ess_check_results)
-      remaining_sims <- if (!is.na(est_sims) && est_sims > current_n) {
-        est_sims - current_n
-      } else {
-        0
-      }
-
-      # Decide whether to end calibration or continue
-      # Check max_batches FIRST to ensure hard limit is enforced
-      if (state$batch_number >= control$calibration$max_batches_adaptive) {
-        # Hit max batches limit - always exit regardless of R^2 or gap
-        state$calibration_done <- TRUE
-        if (r2 < control$calibration$target_r2_adaptive) {
-          log_msg("  \u2192 Calibration complete: reached max_batches (%d) before ESS regression R\u00B2 converged (%.4f < %.2f)",
-                  control$calibration$max_batches_adaptive, r2, control$calibration$target_r2_adaptive)
-        } else {
-          log_msg("  \u2192 Calibration complete: reached max_batches (%d)",
-                  control$calibration$max_batches_adaptive)
-        }
-        if (remaining_sims > 0) {
-          log_msg("    Estimated gap: %.0f sims \u2192 proceeding to predictive phase", ceiling(remaining_sims))
-        }
-
-      } else if (threshold_ess >= target_ess) {
-        # Already at or above target ESS
-        # Don't log here - convergence check will announce it
-        state$calibration_done <- TRUE
-
-      } else if (remaining_sims > 0 && remaining_sims < control$calibration$batch_size_adaptive) {
-        # Small gap remaining - continue calibration instead of transitioning
-        log_msg("  \u2192 Calibration R\u00B2 achieved, but gap is small")
-        log_msg("    Current: %d sims | Estimated need: %.0f sims | Gap: %.0f sims",
-                current_n, round(est_sims), ceiling(remaining_sims))
-        log_msg("    Continuing calibration (gap < batch_size_adaptive)")
-        # Don't set calibration_done, continue with one more batch
-
-      } else {
-        # R^2 converged and gap is large enough for predictive phase
-        state$calibration_done <- TRUE
-        log_msg("  \u2192 Calibration complete: R\u00B2 converged")
-        if (remaining_sims > 0) {
-          log_msg("    Estimated gap: %.0f sims \u2192 proceeding to predictive batch", ceiling(remaining_sims))
-        }
-      }
-    }
-
-  # Predictive phase: continue running capped batches until ESS gap closes
-  # or safety batch limit is reached. Each iteration re-evaluates via
-  # calc_bookend_batch_size() in .mosaic_decide_next_batch().
-  } else if (identical(state$phase, "predictive") &&
-             !is.null(state$phase_batch_count) &&
-             state$phase_batch_count >= 1) {
-
-    pred_gap <- NA_real_
-    if (length(state$ess_tracking)) {
-      cur_thresh <- tail(vapply(state$ess_tracking, `[[`, numeric(1), "threshold_ess"), 1)
-      pred_gap <- control$targets$ESS_param - cur_thresh
-    }
-
-    max_pred_batches <- control$calibration$max_batches_predictive %||% 10L
-
-    if (!is.na(pred_gap) && pred_gap <= 0) {
-      state$predictive_done <- TRUE
-      log_msg("  \u2192 Predictive phase complete: ESS gap closed (gap = %.1f)", pred_gap)
-
-    } else if (state$phase_batch_count >= max_pred_batches) {
-      state$predictive_done <- TRUE
-      log_msg("  \u2192 Predictive batch limit reached (%d/%d)",
-              state$phase_batch_count, max_pred_batches)
-
-    } else {
-      pred_gap_str <- if (is.na(pred_gap)) "N/A" else sprintf("%.1f", pred_gap)
-      log_msg("  \u2192 Predictive batch %d/%d complete, ESS gap = %s \u2014 continuing predictive phase",
-              state$phase_batch_count, max_pred_batches, pred_gap_str)
-    }
-  }
-
-  # Check convergence.
-  # Denominator is the total number of sampled parameters (not just those with
-  # a valid ESS estimate). Parameters whose KDE returned NA are counted as
-  # "not converged" -- otherwise silent KDE failures would shrink the
-  # denominator and falsely inflate prop_converged, causing the loop to exit
-  # before the post-hoc ESS calculation can confirm the 0.975 target.
-  n_total        <- length(param_names_est)
-  n_converged    <- sum(ess_current$ess_marginal >= control$targets$ESS_param, na.rm = TRUE)
-  n_ess_computed <- sum(!is.na(ess_current$ess_marginal))
-  prop_converged <- if (n_total > 0L) n_converged / n_total else 0
-
-  if (prop_converged >= control$targets$ESS_param_prop) {
-    # Only declare convergence after min_batches to ensure sufficient exploration.
-    # Early batches can spuriously meet ESS targets with small samples.
-    if (state$batch_number >= control$calibration$min_batches_adaptive) {
-      state$converged <- TRUE
-      log_msg("  \u2192 CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (%d/%d; %d ESS computed)",
-              prop_converged * 100, control$targets$ESS_param,
-              n_converged, n_total, n_ess_computed)
-    } else {
-      log_msg("  ESS criterion met (%.1f%% >= %.0f) but batch %d < min_batches %d \u2014 continuing",
-              prop_converged * 100, control$targets$ESS_param,
-              state$batch_number, control$calibration$min_batches_adaptive)
-    }
-  }
-
-  # Clean up and return
-  rm(ess_check_results)
+  if (length(wh$convergence$flags))
+    .log("  Flags: %s", paste(wh$convergence$flag_text, collapse = "; "))
+  rm(results)
   gc(verbose = FALSE)
-
   state
+}
+
+#' Size the next adaptive batch: the ESS projection, else geometric growth
+#'
+#' The posterior ESS over all draws (ESS_all) grows in proportion to the draws
+#' (a median log-log slope of 1.01 over the 28 national production runs of
+#' 2026-10), so the total needed for the target is
+#' \eqn{N_{needed} = N \times ESS_{all}^{target} / ESS_{all}}
+#' (\code{.mosaic_projected_draws()}). The next batch is
+#' \code{ceiling(safety_factor * N_needed) - N}, at least \code{batch_size_min}
+#' and at most \code{batch_size_max} and \code{remaining}.
+#'
+#' The projection is used only while the measured log-log growth slope is at
+#' least \code{slope_min} (an unknown slope, fewer than three checks, blocks
+#' it). The Pareto k-hat does not gate it (red team round 1, D3): with bounded
+#' weights k-hat falls as draws accumulate while ESS_all keeps growing in
+#' proportion to N, so the slope is the direct test of whether the projection
+#' holds. Otherwise, and when ESS_all already meets its target while another
+#' check is not green, the batch grows geometrically: \code{growth * N},
+#' clamped to \code{[batch_size_min, batch_size_max]}.
+#'
+#' Why \code{growth = 0.25}: each check costs a full status evaluation, so a
+#' fixed fallback batch makes the number of checks linear in the budget (290 at
+#' 150,000 draws in batches of 500). Growing N by a quarter per check makes it
+#' logarithmic until the \code{max_batch_predictive} cap binds: 5,000 to
+#' 40,000 draws in about 10 checks (log 8 / log 1.25), then batches of 10,000
+#' to 150,000 in 11 more, about 21 checks in all. A quarter is also small
+#' enough for the stop: the Monte Carlo error falls as 1/sqrt(N), so one
+#' growth step moves it by about 11 percent, and a run turning green
+#' overshoots its first green N by at most 25 percent.
+#'
+#' @param n_draws Valid draws so far.
+#' @param ess_all Kish ESS of the coarsened weights over those draws.
+#' @param ess_all_target Target ESS_all (\code{ESS_best / best_subset_ratio}).
+#' @param slope Log-log ESS growth slope over recent checks (\code{NA} = unknown).
+#' @param batch_size_min Smallest batch (\code{batch_size_adaptive}).
+#' @param batch_size_max Largest batch (\code{max_batch_predictive}).
+#' @param remaining Draws left under \code{max_simulations_total}.
+#' @param safety_factor Multiplier on the projected total (1.1: a small
+#'   overshoot so the status is green at the next check, not just short).
+#' @param slope_min Validity bound of the projection (\code{slope_stall}).
+#' @param growth Geometric growth fraction of the fallback (0.25).
+#' @return \code{list(batch_size, method, projected_total, reason)};
+#'   \code{method} is \code{"projection"}, \code{"geometric"} or
+#'   \code{"target_met"} (geometric growth while another check is not green).
+#' @noRd
+.mosaic_projected_batch_size <- function(n_draws, ess_all, ess_all_target, slope = NA_real_,
+                                         batch_size_min, batch_size_max = Inf, remaining = Inf,
+                                         safety_factor = 1.1, slope_min = 0.8, growth = 0.25) {
+  num1 <- function(x, nm) {
+    if (is.null(x)) x <- NA_real_
+    if (length(x) != 1L || !(is.numeric(x) || (is.logical(x) && is.na(x))))
+      stop("batch sizing: ", nm, " must be a single number (or NA).", call. = FALSE)
+    as.numeric(x)
+  }
+  n_draws <- num1(n_draws, "n_draws"); ess_all <- num1(ess_all, "ess_all")
+  ess_all_target <- num1(ess_all_target, "ess_all_target")
+  slope <- num1(slope, "slope")
+  batch_size_min <- num1(batch_size_min, "batch_size_min")
+  batch_size_max <- num1(batch_size_max, "batch_size_max")
+  remaining <- num1(remaining, "remaining")
+  if (!is.finite(batch_size_min) || batch_size_min < 1)
+    stop("batch sizing: batch_size_min must be a positive number.", call. = FALSE)
+  if (is.na(batch_size_max) || batch_size_max < batch_size_min)
+    stop("batch sizing: batch_size_max must be >= batch_size_min.", call. = FALSE)
+  if (is.na(remaining)) remaining <- Inf
+
+  out <- function(size, method, projected, reason)
+    list(batch_size = as.integer(max(0, min(size, remaining))), method = method,
+         projected_total = projected, reason = reason)
+  geometric <- function() {
+    n <- if (is.finite(n_draws) && n_draws > 0) n_draws else 0
+    min(max(ceiling(growth * n), batch_size_min), batch_size_max)
+  }
+
+  if (is.finite(ess_all) && is.finite(ess_all_target) && ess_all >= ess_all_target)
+    return(out(geometric(), "target_met", NA_real_,
+               sprintf("ESS_all %s meets its target %s; another check is not yet green (geometric growth)",
+                       .mosaic_fmt_count(ess_all), .mosaic_fmt_count(ess_all_target))))
+
+  blocked <- if (!is.finite(slope)) "growth slope unknown (fewer than three checks)"
+             else if (slope < slope_min) sprintf("growth slope %.2f < %g", slope, slope_min)
+  projected <- .mosaic_projected_draws(n_draws, ess_all, ess_all_target)
+  if (length(blocked) || !is.finite(projected))
+    return(out(geometric(), "geometric", projected,
+               sprintf("projection not used (%s): geometric growth",
+                       if (length(blocked)) blocked
+                       else "ESS_all or the draw count is not positive")))
+
+  size <- ceiling(safety_factor * projected) - n_draws
+  size <- min(max(size, batch_size_min), batch_size_max)
+  out(size, "projection", projected,
+      sprintf("projection: about %s valid draws in total for ESS_all %s (now %s at %s valid draws)",
+              .mosaic_fmt_count(projected), .mosaic_fmt_count(ess_all_target),
+              .mosaic_fmt_count(ess_all), .mosaic_fmt_count(n_draws)))
+}
+
+#' Round an adaptive batch up so it fills the cluster
+#'
+#' A batch of \code{size} simulations is dispatched in shards of
+#' \code{.mosaic_resolve_shard_batch()} simulations (at most the configured
+#' \code{shard_batch_size}, and small enough to give every worker at least four
+#' tasks). When \code{size} is not a multiple of \code{n_workers} x shard, the
+#' last wave of tasks leaves workers idle; on 168 workers a 10,000-simulation
+#' batch in shards of 14 is 4.3 waves, so the last wave runs on 26 percent of
+#' the cluster (P4). The batch is rounded up to the next multiple of
+#' \code{n_workers} x shard, and the shard is returned so the dispatcher uses
+#' the same one. Never more than \code{remaining}; sequential runs
+#' (\code{n_workers <= 1}) are unchanged.
+#'
+#' @param size Batch size before rounding.
+#' @param shard_batch_size \code{control$io$shard_batch_size}.
+#' @param n_workers Workers in the cluster (1 when sequential).
+#' @param remaining Simulations left under \code{max_simulations_total}.
+#' @param batch_size_max Largest batch (\code{max_batch_predictive}): a rounded
+#'   batch above it is rounded down to whole waves instead (unless that is
+#'   less than one wave, when the unrounded size, capped, is used).
+#' @return \code{list(batch_size, shard_batch)}; \code{shard_batch} is
+#'   \code{NULL} when the batch was not rounded (the dispatcher resolves it).
+#' @noRd
+.mosaic_round_batch_to_cluster <- function(size, shard_batch_size, n_workers, remaining = Inf,
+                                           batch_size_max = Inf) {
+  size <- as.integer(size)
+  nw <- suppressWarnings(as.integer(n_workers)[1])
+  if (is.na(nw) || nw <= 1L || is.na(size) || size <= 0L) return(list(batch_size = size, shard_batch = NULL))
+  shard <- .mosaic_resolve_shard_batch(shard_batch_size, n_sims = size, n_workers = nw)
+  unit <- as.numeric(nw) * shard
+  rounded <- ceiling(size / unit) * unit
+  # Never above max_batch_predictive (CN2): round down to a whole number of
+  # waves instead, unless that is less than one wave.
+  if (is.finite(batch_size_max) && rounded > batch_size_max) {
+    down <- floor(batch_size_max / unit) * unit
+    rounded <- if (down >= unit) down else min(size, batch_size_max)
+    if (down < unit) return(list(batch_size = as.integer(min(rounded, remaining)), shard_batch = NULL))
+  }
+  if (is.finite(remaining) && rounded > remaining)
+    return(list(batch_size = as.integer(min(size, remaining)), shard_batch = NULL))
+  list(batch_size = as.integer(rounded), shard_batch = as.integer(shard))
+}
+
+#' Size of the next adaptive batch
+#'
+#' \code{batch_size_adaptive} until the minimum run length
+#' (\code{min_batches_adaptive} batches and \code{min_draws} valid draws) is
+#' met; then \code{.mosaic_projected_batch_size()} on the latest convergence
+#' check: the projection \eqn{N \times ESS_{all}^{target} / ESS_{all}} while
+#' the growth slope is >= 0.8, else geometric growth (a quarter of the draws so
+#' far).
+#' Always bounded by \code{max_batch_predictive} (projected batches) and the
+#' budget left under \code{max_simulations_total}.
+#' In parallel the size is then rounded up to fill the cluster
+#' (\code{.mosaic_round_batch_to_cluster()}), never beyond the budget left.
+#'
+#' The projection works in valid draws (finite likelihood); a batch is a
+#' number of simulations. When some simulations fail, the projected draws are
+#' converted at the run's success rate so the batch reaches the projected
+#' number of valid draws.
+#'
+#' @param state Calibration state.
+#' @param control Merged control list.
+#' @param n_workers Workers in the cluster (1 when sequential).
+#' @return \code{list(batch_size, method, projected_total, reason, shard_batch)}.
+#' @noRd
+.mosaic_next_batch_size <- function(state, control, n_workers = 1L) {
+  cal <- control$calibration
+  remaining <- max(0, cal$max_simulations_total - state$total_sims_run)
+  floor_bs <- as.integer(cal$batch_size_adaptive)
+  hist <- state$convergence_history %||% list()
+  last <- if (length(hist)) hist[[length(hist)]] else NULL
+  min_ok <- !is.null(last) &&
+    state$batch_number >= as.integer(cal$min_batches_adaptive %||% 1L) &&
+    isTRUE(as.numeric(last$n) >= as.numeric(cal$min_draws %||% 0))
+  out <- if (!min_ok) {
+    list(batch_size = as.integer(min(floor_bs, remaining)), method = "minimum_run",
+         projected_total = NA_real_,
+         reason = "minimum run length not yet met (no stop or projection before it)")
+  } else {
+    tg <- control$targets
+    d <- .mosaic_projected_batch_size(
+      n_draws = as.numeric(last$n), ess_all = as.numeric(last$ess_all %||% NA),
+      ess_all_target = .mosaic_scheme_ess_all_target(control),
+      slope = as.numeric(last$slope %||% NA),
+      batch_size_min = floor_bs, batch_size_max = cal$max_batch_predictive,
+      remaining = Inf,
+      slope_min = as.numeric(tg$status_thresholds$slope_stall %||% 0.8))
+    # Valid draws -> simulations at the run's success rate (D7).
+    rate <- .mosaic_success_rate(as.numeric(last$n), state$total_sims_run)
+    if (is.finite(rate) && rate > 0 && rate < 1)
+      d$batch_size <- as.integer(min(ceiling(d$batch_size / rate), max(cal$max_batch_predictive, floor_bs)))
+    d$batch_size <- as.integer(min(d$batch_size, remaining))
+    d
+  }
+  rd <- .mosaic_round_batch_to_cluster(out$batch_size, control$io$shard_batch_size, n_workers, remaining,
+                                       batch_size_max = max(cal$max_batch_predictive, floor_bs))
+  if (!is.null(rd$shard_batch) && rd$batch_size != out$batch_size)
+    out$reason <- sprintf("%s; rounded %s from %s to %s to fill %d workers x %d per shard",
+                          out$reason, if (rd$batch_size > out$batch_size) "up" else "down",
+                          .mosaic_fmt_count(out$batch_size), .mosaic_fmt_count(rd$batch_size),
+                          as.integer(n_workers), rd$shard_batch)
+  out$batch_size <- rd$batch_size
+  out$shard_batch <- rd$shard_batch
+  out
+}
+
+#' Share of attempted simulations with a finite likelihood
+#'
+#' Valid draws (finite likelihood, \code{summary.json} \code{sims_used}) over
+#' simulations attempted; \code{NA} before any simulation. Converts projected
+#' valid draws into simulations (D7).
+#' @param n_valid Valid draws.
+#' @param n_attempted Simulations attempted.
+#' @return Numeric scalar in \code{[0, 1]} or \code{NA}.
+#' @noRd
+.mosaic_success_rate <- function(n_valid, n_attempted) {
+  run <- suppressWarnings(as.numeric(n_attempted %||% NA))
+  ok <- suppressWarnings(as.numeric(n_valid %||% NA))
+  if (length(run) != 1L || length(ok) != 1L || !is.finite(run) || run <= 0 || !is.finite(ok)) return(NA_real_)
+  min(1, max(0, ok / run))
+}
+
+#' Convergence status of the ensemble members actually built
+#'
+#' \code{calc_weight_health()} scores the best-fit selection. When the
+#' members are something else (the "coarsened" resample, the legacy tier
+#' subset, or the optimised subset), the ensemble ESS, the Monte Carlo error,
+#' the member counts and the posterior mass are recomputed on them and the
+#' status is re-derived through \code{calc_convergence_status()}, with the
+#' all-draws quantities (ESS_all, k-hat, eta*, slope) and flags unchanged.
+#'
+#' @param wh A \code{calc_weight_health()} result for the same draws.
+#' @param results Results frame (\code{sim}, \code{likelihood}, parameters).
+#' @param param_names Sampled parameter names.
+#' @param idx Row positions of the members.
+#' @param w Member weights aligned with \code{idx}.
+#' @param n_members Ensemble size reported (\code{K} for the resample, else
+#'   \code{length(idx)}).
+#' @param binding Which bound set the size: \code{"ratio"},
+#'   \code{"min_members"} or \code{"max_members"}.
+#' @return \code{wh} with \code{bestfit}, \code{mce}, \code{convergence},
+#'   \code{status} and \code{reasons} describing the members.
+#' @noRd
+.mosaic_members_health <- function(wh, results, param_names, idx, w, n_members = length(idx),
+                                   binding = "ratio") {
+  idx <- as.integer(idx)
+  w <- as.numeric(w); w <- w / sum(w)
+  valid <- is.finite(results$likelihood)
+  P <- .mosaic_health_param_matrix(results[, intersect(param_names, names(results)), drop = FALSE], valid)
+  n_batches <- as.integer(wh$targets$n_batches %||% 10L)
+  mce <- if (ncol(P)) .mosaic_member_mce(P, idx, w, results$sim, n_batches)
+         else list(per_parameter = numeric(0), median = NA_real_, p90 = NA_real_, max = NA_real_,
+                   n_parameters = 0L, n_batches = n_batches, n_batches_used = NA_integer_)
+  w_all <- .mosaic_tempered_weights(results$likelihood, wh$coarsened$eta)
+  ess_best <- calc_model_ess(w, method = "kish")
+  wh$bestfit <- utils::modifyList(wh$bestfit, list(
+    n_members = as.integer(n_members), n_unique = length(idx), ess_best = ess_best,
+    mass = sum(w_all[idx]), binding = binding, capped = !identical(binding, "ratio"),
+    capped_reason = if (identical(binding, "ratio")) NA_character_ else
+                      sprintf("ensemble size set by %s", binding),
+    ll_cut = min(results$likelihood[idx]), idx = idx, sim = results$sim[idx], weights = w))
+  wh$mce <- mce
+  # The one status rule, with every all-draws quantity (and the run context)
+  # from wh and the member quantities replaced.
+  wh$convergence <- .mosaic_health_status(wh, ess_best = ess_best, mce_p90 = mce$p90, size_bound = binding)
+  wh$flat <- wh$convergence$flat %||% wh$flat
+  wh$status <- wh$convergence$status
+  wh$reasons <- paste(wh$convergence$reasons, collapse = "; ")
+  wh
+}
+
+#' Convergence status of a run too degenerate for calc_weight_health()
+#'
+#' A run with fewer than two valid draws (or whose status computation failed)
+#' still gets a status, so summary.json, convergence_diagnostics.json,
+#' calibration_diagnostics.json and the report describe it rather than falling
+#' back to "no status" (red team round 1, C2): \code{calc_convergence_status()}
+#' with no ensemble ESS, which is RED, plus a leading reason naming the cause.
+#' The run-level quantities (alpha, eta, n_obs, the fixed-budget and
+#' budget-cap flags) are carried so summary.json still reports them.
+#'
+#' @param n_valid,n_total Valid draws and draws in samples.parquet.
+#' @param n_obs Scored observation cells.
+#' @param control Merged control list.
+#' @param fixed_mode,budget_exhausted As for \code{calc_weight_health()}.
+#' @param n_attempted Simulations attempted.
+#' @return A list shaped like a \code{calc_weight_health()} result, with
+#'   \code{degenerate = TRUE}.
+#' @noRd
+.mosaic_degenerate_health <- function(n_valid, n_total, n_obs, control, fixed_mode = FALSE,
+                                      budget_exhausted = FALSE, n_attempted = NA_real_) {
+  tg <- control$targets
+  th <- .mosaic_convergence_thresholds(as.list(tg$status_thresholds %||% list()))
+  eta <- .mosaic_coarsened_eta(tg$coarsening_alpha, n_obs)
+  ess_all_target <- .mosaic_scheme_ess_all_target(control)
+  conv <- calc_convergence_status(
+    ess_best = NA_real_, ess_best_target = tg$ESS_best, mce_p90 = NA_real_, khat = NA_real_,
+    flat = NA, ess_all = NA_real_, ess_all_target = ess_all_target, n_draws = n_valid,
+    budget_exhausted = budget_exhausted, fixed_mode = fixed_mode, thresholds = th,
+    n_attempted = if (length(n_attempted) == 1L && is.finite(n_attempted)) n_attempted else n_total)
+  # Fewer than two valid draws: calc_convergence_status() itself leads with
+  # "the run failed: ..." (n_draws < 2). A status that failed to compute on a
+  # larger pool gets its own leading reason here.
+  conv$status <- "red"
+  # A failed run is not "more simulations needed": a fourth label, for this
+  # case only (round 3; the three SCHEMA labels stay for every other run).
+  conv$label <- if (n_valid < 2L) "Run failed: no usable draws" else "Not converged: more simulations needed"
+  if (n_valid >= 2L)
+    conv$reasons <- c("the convergence status could not be computed (see the run log): treat the run as not converged",
+                      conv$reasons)
+  list(n_draws = n_total, n_valid = n_valid, degenerate = TRUE,
+       context = list(budget_exhausted = isTRUE(budget_exhausted), fixed_mode = isTRUE(fixed_mode),
+                      n_attempted = n_attempted),
+       targets = list(ess_best_target = tg$ESS_best, best_subset_ratio = tg$best_subset_ratio,
+                      ess_all_target = ess_all_target,
+                      min_members = as.integer(tg$min_ensemble_members),
+                      max_members = as.integer(tg$max_ensemble_members), n_batches = 10L,
+                      thresholds = th),
+       coarsened = list(alpha = tg$coarsening_alpha, n_obs = n_obs, eta = eta, ess_kish = NA_real_,
+                        ess_prop = NA_real_, khat = NA_real_, khat_status = NA_character_),
+       bestfit = list(n_members = NA_integer_, n_unique = NA_integer_, ess_best = NA_real_,
+                      ess_target = tg$ESS_best, mass = NA_real_, binding = NA_character_,
+                      idx = integer(0), sim = integer(0), weights = numeric(0)),
+       mce = list(per_parameter = numeric(0), median = NA_real_, p90 = NA_real_, max = NA_real_,
+                  n_parameters = 0L),
+       eta_star = list(eta = NA_real_, n_eff = NA_real_),
+       slope = NA_real_, flat = NA, convergence = conv,
+       status = "red", reasons = paste(conv$reasons, collapse = "; "))
+}
+
+#' Add the subset-optimiser note to a convergence status
+#'
+#' With \code{optimize_subset = TRUE} the status describes the optimised
+#' members, while an adaptive run's stopping rule was met on the members of
+#' \code{posterior_weighting}. When the optimised status is not green, a reason
+#' line says so, so a run can read "stopping rule met" beside a non-green
+#' status without contradicting itself (red team round 1, D11). A green status
+#' keeps no reasons (summary.json \code{convergence_reasons} is empty when
+#' green).
+#'
+#' @param wh A \code{calc_weight_health()} result describing the optimised members.
+#' @param scheme \code{posterior_weighting}.
+#' @param adaptive,stopping_rule_met The run's mode and stop.
+#' @return \code{wh} with the note appended to its reasons.
+#' @noRd
+.mosaic_note_optimised_status <- function(wh, scheme, adaptive, stopping_rule_met) {
+  if (is.null(wh$convergence) || identical(wh$status, "green")) return(wh)
+  note <- if (isTRUE(adaptive) && isTRUE(stopping_rule_met))
+    sprintf(paste0("the stopping rule was met on the \"%s\" ensemble members; the subset optimiser ",
+                   "(optimize_subset = TRUE) then changed the ensemble, and this status describes the ",
+                   "optimised members"), scheme)
+  else sprintf(paste0("this status describes the members chosen by the subset optimiser ",
+                      "(optimize_subset = TRUE), not the \"%s\" ensemble members"), scheme)
+  wh$convergence$reasons <- c(as.character(unlist(wh$convergence$reasons)), note)
+  wh$reasons <- paste(wh$convergence$reasons, collapse = "; ")
+  wh
+}
+
+#' Write a convergence status to the run log
+#' @param wh A \code{calc_weight_health()} result (possibly from
+#'   \code{.mosaic_members_health()}).
+#' @param fixed Logical; a fixed-budget run.
+#' @return Invisible NULL.
+#' @noRd
+.mosaic_log_status <- function(wh, fixed = FALSE) {
+  log_msg("Convergence status: %s%s", .mosaic_status_line(wh),
+          if (isTRUE(fixed)) " [fixed budget: assessed, not used to stop]" else "")
+  log_msg("  %s", wh$convergence$label)
+  if (length(wh$convergence$reasons))
+    log_msg("  Reasons: %s", paste(wh$convergence$reasons, collapse = "; "))
+  flags <- setdiff(as.character(unlist(wh$convergence$flags)), "fixed_budget")
+  if (length(flags))
+    log_msg("  Flags: %s", paste(wh$convergence$flag_text[wh$convergence$flags %in% flags],
+                                 collapse = "; "))
+  invisible(NULL)
+}
+
+#' Log-spaced replay of the posterior ESS and best fit over draws in sim order
+#'
+#' Recomputes, on at most \code{n_points} log-spaced prefixes of the valid
+#' draws taken in simulation order, the Kish ESS of the coarsened weights
+#' (ESS_all), the gap of the best log-likelihood found so far to the final
+#' best, and the gap of the 100th best. Cheap: one weight vector per point.
+#' Gives fixed-budget runs their ESS growth slope and every run the
+#' \code{ess_path} / \code{loglik_path} of calibration_diagnostics.json.
+#' @param log_lik Per-draw log-likelihoods.
+#' @param sim Simulation ids (draw order).
+#' @param eta Learning rate of the coarsened posterior.
+#' @param n_points Maximum number of points. Default 40.
+#' @return \code{data.frame(n, ess_all, best_gap, top100_gap)} (zero rows when
+#'   fewer than two valid draws).
+#' @noRd
+.mosaic_ess_replay <- function(log_lik, sim, eta, n_points = 40L) {
+  ok <- is.finite(log_lik)
+  ll <- as.numeric(log_lik[ok])[order(sim[ok])]
+  N <- length(ll)
+  empty <- data.frame(n = integer(0), ess_all = numeric(0), best_gap = numeric(0),
+                      top100_gap = numeric(0))
+  if (N < 2L || !is.finite(eta) || eta <= 0) return(empty)
+  lo <- max(2, min(100, N), N / 400)
+  ns <- unique(as.integer(round(exp(seq(log(lo), log(N), length.out = max(2L, n_points))))))
+  ns <- ns[ns >= 2L & ns <= N]
+  llmax <- max(ll)
+  rows <- lapply(ns, function(n) {
+    l <- ll[seq_len(n)]
+    data.frame(n = n,
+               ess_all = calc_model_ess(.mosaic_tempered_weights(l, eta), method = "kish"),
+               best_gap = max(l) - llmax,
+               top100_gap = if (n >= 100L) sort(l, decreasing = TRUE)[100L] - llmax else NA_real_)
+  })
+  do.call(rbind, rows)
 }
 
 # =============================================================================
 # WEIGHT CALCULATIONS
 # =============================================================================
 
-#' Best-subset posterior weights under control$targets$best_subset_weighting
+#' Tukey lower fence of the log-likelihoods
+#'
+#' Only the lower fence is applied. Log-likelihoods have a long left tail (many
+#' poor fits) but are bounded above near 0; an upper fence Q3 + k * IQR would
+#' discard the highest-likelihood simulations, exactly the models the posterior
+#' wants. Draws below the fence are flagged \code{is_outlier} and leave the
+#' retained set the legacy tier search works on.
+#' @param valid_ll Finite log-likelihoods.
+#' @param iqr_mult \code{control$weights$iqr_multiplier}.
+#' @return The fence, \code{Q1 - iqr_mult * IQR}.
+#' @noRd
+.mosaic_lower_fence <- function(valid_ll, iqr_mult) {
+  q1 <- stats::quantile(valid_ll, 0.25, na.rm = TRUE)
+  q3 <- stats::quantile(valid_ll, 0.75, na.rm = TRUE)
+  q1 - iqr_mult * (q3 - q1)
+}
+
+#' Tier-searched best subset of the legacy weighting schemes
+#'
+#' The best-subset selection of \code{posterior_weighting = "saturated"} /
+#' \code{"tempered"}: tries the tiers of \code{get_default_subset_tiers()} in
+#' order with \code{grid_search_best_subset()} on the retained draws and stops at
+#' the first that converges; when none does, falls back to the top
+#' \code{max_best_subset} draws by likelihood. \code{run_MOSAIC()} calls it once
+#' after calibration (logging each tier) and the auto-mode stopping rule calls it
+#' silently, so both see the same subset. Not used under \code{"coarsened"}.
+#'
+#' @param results Results frame with \code{likelihood}, \code{sim} and
+#'   \code{is_retained}.
+#' @param control Merged control list.
+#' @param log Logical; log the tier search.
+#' @return \code{list(top_subset, n, percentile, tier, optimal_subset_result)};
+#'   \code{tier} is \code{"fallback"} when no tier converged.
+#' @noRd
+.mosaic_tier_best_subset <- function(results, control, log = TRUE) {
+  .log  <- if (isTRUE(log)) log_msg  else function(...) invisible(NULL)
+  .warn <- if (isTRUE(log)) log_warn else function(...) invisible(NULL)
+  scheme <- control$targets$posterior_weighting %||% "saturated"
+
+  .log("Optimizing subset selection (testing up to 30 tiers with grid search)...")
+
+  subset_tiers <- get_default_subset_tiers(
+    target_ESS_best = control$targets$ESS_best,
+    target_A = control$targets$A_best,
+    target_CVw = control$targets$CVw_best
+  )
+
+  optimal_subset_result <- NULL
+  tier_used <- NULL
+  retained <- results[results$is_retained, ]
+
+  for (tier_name in names(subset_tiers)) {
+    tier <- subset_tiers[[tier_name]]
+
+    .log("  Testing tier '%s' (ESS_B=%.0f, A=%.2f, CVw=%.2f)...",
+         tier$name, tier$ESS_B, tier$A, tier$CVw)
+
+    tier_result <- grid_search_best_subset(
+      results = retained,
+      target_ESS = tier$ESS_B,
+      target_A = tier$A,
+      target_CVw = tier$CVw,
+      min_size = control$targets$min_best_subset,
+      max_size = control$targets$max_best_subset,
+      ess_method = control$targets$ESS_method,
+      # Search under the scheme weight_best and the final gate use, so a tier
+      # is only certified at a size where the posterior's own weights meet it.
+      weighting = scheme,
+      verbose = control$logging$verbose
+    )
+
+    if (tier_result$converged) {
+      # CRITICAL: Calculate percentile from absolute count
+      tier_percentile <- (tier_result$n / nrow(results)) * 100
+      .log("    \u2713 Tier '%s' converged at n=%d (%.1f%% of all draws)",
+           tier$name, tier_result$n, tier_percentile)
+      optimal_subset_result <- tier_result
+      tier_used <- tier$name
+      break
+    } else {
+      .log("    \u2717 Tier '%s' failed to converge", tier$name)
+    }
+  }
+
+  if (!is.null(optimal_subset_result)) {
+    # CRITICAL: Use $n (not $n_selected) and calculate percentile from count
+    top_subset <- optimal_subset_result$subset
+    n_top <- optimal_subset_result$n
+    tier_used_out <- tier_used
+  } else {
+    # Fallback: use max_best_subset directly (from retained only)
+    n_top <- min(control$targets$max_best_subset, nrow(retained))
+    top_subset <- retained[order(retained$likelihood, decreasing = TRUE), ][seq_len(n_top), ]
+    tier_used_out <- "fallback"
+
+    .log("  All tiers failed - using fallback (top %d simulations, %.1f%%)",
+         n_top, (n_top / nrow(results)) * 100)
+    if (!identical(scheme, "saturated")) {
+      .warn(paste0("Best-subset tier search ran under posterior_weighting = '%s'; ",
+                   "every tier failed, so the posterior is the top %d draws by ",
+                   "likelihood with posthoc_criteria_met = NO. '%s' weights are ",
+                   "sharper than 'saturated' and may not meet any tier at this ",
+                   "run size."),
+            scheme, n_top, scheme)
+    }
+
+    # Create minimal optimal_subset_result for consistency
+    optimal_subset_result <- list(
+      subset = top_subset,
+      n = n_top,
+      converged = FALSE,
+      metrics = list(ESS = NA_real_, A = NA_real_, CVw = NA_real_)
+    )
+  }
+
+  list(top_subset = top_subset, n = n_top,
+       percentile = (n_top / nrow(results)) * 100,
+       tier = tier_used_out, optimal_subset_result = optimal_subset_result)
+}
+
+#' Best-subset posterior weights under control$targets$posterior_weighting
 #'
 #' The best-subset weights used by the convergence gate (ESS_B, A, CVw) and by
 #' \code{results$weight_best} (which drives the posterior quantiles,
@@ -2180,14 +2951,14 @@
 #' @noRd
 .mosaic_best_subset_weights <- function(likelihood, scheme = "saturated", verbose = FALSE) {
   if (length(scheme) != 1L || !scheme %in% c("saturated", "tempered")) {
-    stop("control$targets$best_subset_weighting must be 'saturated' or 'tempered'; got '",
+    stop("control$targets$posterior_weighting must be 'saturated' or 'tempered'; got '",
          paste(scheme, collapse = ", "), "'.", call. = FALSE)
   }
   if (identical(scheme, "tempered")) {
     # Adaptive-eta Gibbs weights: eta is chosen so the worst retained draw
     # sits at `weight_floor`, rather than saturating delta at a fixed 4.
     # NOTE this is SHARPER than the saturated default, not softer -- see the
-    # warning on control$targets$best_subset_weighting.
+    # warning on control$targets$posterior_weighting.
     ad <- .mosaic_calc_adaptive_gibbs_weights(likelihood = likelihood, verbose = verbose)
     return(list(weights = ad$weights, temperature = ad$temperature,
                 effective_range = ad$effective_range))

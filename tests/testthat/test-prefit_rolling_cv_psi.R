@@ -158,12 +158,17 @@ test_that(".rcv_psi_cache_lookup hard-errors on a spec_hash mismatch (not silent
   list(run_dir = run_dir, n_t = n_t, ds = ds, de = de)
 }
 
-test_that(".rcv_read_ess_best extracts metrics$ess_best$value (NA when absent)", {
+test_that(".rcv_read_convergence reads summary.json schema 2, else the legacy diagnostics ESS", {
+  # pre-1.4.0 run: no status, ESS from convergence_diagnostics.json metrics$ess_best
   fx <- .make_fixture_run_dir(ess_value = 88.25)
-  expect_equal(MOSAIC:::.rcv_read_ess_best(fx$run_dir), 88.25)
-
+  expect_identical(MOSAIC:::.rcv_read_convergence(fx$run_dir), list(ess = 88.25, status = NA_character_))
   fx0 <- .make_fixture_run_dir(write_diag = FALSE)
-  expect_identical(MOSAIC:::.rcv_read_ess_best(fx0$run_dir), NA_real_)
+  expect_identical(MOSAIC:::.rcv_read_convergence(fx0$run_dir), list(ess = NA_real_, status = NA_character_))
+  # 1.4.0 run: ess_best and convergence_status from summary.json
+  dir.create(file.path(fx$run_dir, "3_results"), showWarnings = FALSE)
+  jsonlite::write_json(list(schema_version = "2", convergence_status = "yellow", ess_best = 151.5),
+                       file.path(fx$run_dir, "3_results", "summary.json"), auto_unbox = TRUE)
+  expect_identical(MOSAIC:::.rcv_read_convergence(fx$run_dir), list(ess = 151.5, status = "yellow"))
 })
 
 test_that(".rcv_compile_all_models attaches `ess` carrying ess_best$value on every row", {
@@ -182,6 +187,8 @@ test_that(".rcv_compile_all_models attaches `ess` carrying ess_best$value on eve
   expect_true("ess" %in% names(out))
   expect_true(all(out$ess == 123.5))
   expect_true(is.numeric(out$ess))
+  expect_true("convergence_status" %in% names(out))     # NA for a pre-1.4.0 run
+  expect_true(all(is.na(out$convergence_status)))
   # existing columns still present (contract preserved)
   expect_true(all(c("run_id","model","iso_code","date","metric","segment",
                     "observed","pred_central","pred_median") %in% names(out)))
