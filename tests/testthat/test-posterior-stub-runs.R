@@ -7,9 +7,12 @@
 # identical; doubles must agree to a relative 1e-8. The fixtures were made on
 # macOS arm64, and other platforms' libm differs in the last bits (CI: up to
 # ~1e-12 relative in the likelihoods, ~5e-12 in the weights), which no
-# methodology change could hide inside.
-.expect_golden <- function(actual, expected, info = NULL) {
-  expect_equal(actual, expected, tolerance = 1e-8, info = info)
+# methodology change could hide inside. posteriors.json holds distributions
+# fitted by an optimiser to the posterior quantiles, which magnifies those
+# differences (CI Ubuntu: 5e-8 relative in Beta shapes), so it is compared to a
+# relative 1e-6.
+.expect_golden <- function(actual, expected, info = NULL, tolerance = 1e-8) {
+  expect_equal(actual, expected, tolerance = tolerance, info = info)
   if (is.data.frame(expected) && "is_best_subset" %in% names(expected))
     expect_identical(actual$is_best_subset, expected$is_best_subset, info = info)
 }
@@ -30,7 +33,8 @@ test_that("posterior_weighting = 'saturated' reproduces v1.2.1: posterior, ensem
   .stub_run_mosaic(d, weighting = "saturated", mode = "fixed", optimize_subset = TRUE, assign_targets = assign)
   snap <- .stub_posterior_snapshot(d)
   for (k in c("samples", "posteriors", "ensemble_candidate", "ensemble_optimized", "medoid_seed"))
-    .expect_golden(snap[[k]], golden[[k]], info = paste(k, if (assign) "(assignment)" else "(targets =)"))
+    .expect_golden(snap[[k]], golden[[k]], info = paste(k, if (assign) "(assignment)" else "(targets =)"),
+                   tolerance = if (k == "posteriors") 1e-6 else 1e-8)
   # Quantiles and moments match; the KL column is a descriptive whose estimator
   # changed in 1.4.0 (percentile scale replaced the weighted KDE).
   keep <- setdiff(names(golden$quantiles), "kl")
@@ -54,7 +58,7 @@ test_that("posterior_weighting = 'coarsened' reproduces v1.3.0: posterior, ensem
                    targets_extra = list(min_ensemble_members = 10L, max_ensemble_members = 60L))
   snap <- .stub_posterior_snapshot(d)
   for (k in c("samples", "posteriors", "ensemble_candidate", "ensemble_optimized", "medoid_seed"))
-    .expect_golden(snap[[k]], golden[[k]], info = k)
+    .expect_golden(snap[[k]], golden[[k]], info = k, tolerance = if (k == "posteriors") 1e-6 else 1e-8)
   keep <- setdiff(names(golden$quantiles), "kl")
   .expect_golden(snap$quantiles[keep], golden$quantiles[keep])
   sm <- jsonlite::read_json(file.path(d, "3_results", "summary.json"))

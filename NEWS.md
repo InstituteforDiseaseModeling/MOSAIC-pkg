@@ -1,3 +1,7 @@
+# MOSAIC 1.4.2
+
+- **Golden tests across platforms, continued.** On CI's Ubuntu runner the optimiser that fits `posteriors.json`'s distributions to the posterior quantiles magnifies the last-bit libm differences to ~5e-8 relative (Beta shapes), so that object is compared to a relative 1e-6. `test-weight-health-wiring.R`'s v1.2.1 reproduction (weights, quantiles) moves from bit identity to a relative 1e-10; its member set stays exact. No package code changed.
+
 # MOSAIC 1.4.1
 
 - **Golden tests across platforms.** The 1.2.1 ("saturated") and 1.3.0 ("coarsened") reproduction tests compared bit for bit and failed on CI's macOS and Ubuntu runners, whose libm differs from the macOS arm64 machine that made the fixtures in the last bits (up to ~1e-12 relative in the likelihoods, ~5e-12 in the weights; the selected members were identical). They now require identical member sets, seeds and non-numeric values, and doubles equal to a relative 1e-8. No package code changed.

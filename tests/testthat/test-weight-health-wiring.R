@@ -4,7 +4,7 @@
 
 # ---- the posterior is bit-identical to v1.2.1 --------------------------------
 
-test_that("best-subset weights and posterior quantiles are bit-identical to v1.2.1 (ba71c4e7d)", {
+test_that("best-subset weights and posterior quantiles reproduce v1.2.1 (ba71c4e7d)", {
   # The golden file was produced by this exact fixture with MOSAIC at
   # ba71c4e7d (v1.2.1), before the weight-health change, via
   # claude/weights_investigation/scripts/13_golden_posterior.R.
@@ -39,12 +39,15 @@ test_that("best-subset weights and posterior quantiles are bit-identical to v1.2
   q <- calc_model_posterior_quantiles(df, output_dir = od, verbose = FALSE)
   expect_identical(tr$n, golden$n)
   expect_identical(df$is_best_subset, golden$is_best_subset)
-  expect_identical(df$weight_best, golden$weight_best)
-  # The posterior itself (weights, quantiles, moments) is bit-identical. The KL
-  # column is a descriptive whose estimator changed in 1.4.0 (percentile scale
-  # replaced the weighted KDE), so it is checked against the new estimator.
+  # The posterior itself (weights, quantiles, moments) matches v1.2.1 to a
+  # relative 1e-10: the fixture was made on macOS arm64, and other platforms'
+  # exp() differs in the last bits (CI Ubuntu: 7e-16 relative in the weights).
+  # The member set above is exact. The KL column is a descriptive whose
+  # estimator changed in 1.4.0 (percentile scale replaced the weighted KDE), so
+  # it is checked against the new estimator.
+  expect_equal(df$weight_best, golden$weight_best, tolerance = 1e-10)
   keep <- setdiff(names(golden$quantiles), "kl")
-  expect_identical(q[keep], golden$quantiles[keep])
+  expect_equal(q[keep], golden$quantiles[keep], tolerance = 1e-10)
   post <- q$type == "posterior"
   expect_true(all(q$kl[post] >= 0 & q$kl[post] <= log(20), na.rm = TRUE))
   fin <- df$is_finite
