@@ -83,6 +83,9 @@ test_that("dispatch failures are surfaced with their count and first error text"
 test_that("the calibration batch warns about task errors instead of dropping them", {
   src <- paste(deparse(MOSAIC:::.mosaic_run_batch), collapse = " ")
   expect_true(grepl(".mosaic_warn_dispatch_failures", src, fixed = TRUE))
-  src_e <- paste(deparse(calc_model_ensemble), collapse = " ")
+  # calc_model_ensemble() delegates to its body, .mosaic_calc_model_ensemble() (1.5.0).
+  expect_true(grepl(".mosaic_calc_model_ensemble(", paste(deparse(calc_model_ensemble), collapse = " "),
+                    fixed = TRUE))
+  src_e <- paste(deparse(MOSAIC:::.mosaic_calc_model_ensemble), collapse = " ")
   expect_true(grepl(".mosaic_warn_dispatch_failures", src_e, fixed = TRUE))
 })

@@ -671,11 +671,119 @@ calc_Reff <- function(ensemble,
        cc = cc, ssum = ssum, rsum = rsum, max_abs = mx)
 }
 
-#' Re-simulate one posterior member for the R_eff CI
+#' Route-incidence inputs of one simulated member for the R_eff CI
 #'
-#' One (param, stoch) member: rebuild its config from its seed, simulate, and
-#' return its per-location route-decomposed R series (with its OWN kernel,
-#' engine decay rates and initial stocks) plus the faithfulness diagnostics.
+#' Harvests from one engine run what the per-member R_eff needs -- the route
+#' incidences, the engine decay rates \code{delta_jt}, the initial stocks
+#' (\code{.mosaic_reff_init()}) -- and an exact checksum of its reported cases.
+#' \code{.mosaic_calc_model_ensemble(capture_reff = TRUE)} calls it in each ensemble
+#' task (capture-don't-replay) and \code{.mosaic_reff_resim_member()} on a
+#' re-simulated member, so both paths hand identical inputs to
+#' \code{.mosaic_reff_member_series()}.
+#'
+#' @param res \code{model$results} of one \code{run_simulation()}.
+#' @param nL,Tn Locations and time steps.
+#' @param p,s The member's parameter set and stochastic rerun (for messages).
+#' @param keep_cases Also return the reported cases matrix \code{rc} (the
+#'   re-simulation path compares it with the saved slice).
+#' @return List \code{inc_hum}, \code{inc_env}, \code{delta} (\code{nL x Tn}),
+#'   \code{init} (\code{nL x 3}), \code{cases_checksum}, optionally \code{rc};
+#'   or \code{list(error = )} when the route incidences do not add up.
+#' @keywords internal
+#' @noRd
+.mosaic_reff_capture_member <- function(res, nL, Tn, p, s, keep_cases = FALSE) {
+  mat <- function(ch) .mosaic_reff_to_mat(res[[ch]], nL, Tn)
+  inc_h <- mat("incidence_human"); inc_e <- mat("incidence_env")
+  delta <- mat("delta_jt"); E <- mat("E"); Is <- mat("Isym"); Ia <- mat("Iasym")
+  rc_m  <- mat("reported_cases")
+  inc_m <- mat("incidence")
+  if (any(abs(inc_m - inc_h - inc_e) > 0, na.rm = TRUE))
+    return(list(error = paste0("incidence != incidence_human + incidence_env for member (",
+                               p, ",", s, ")")))
+  init <- matrix(NA_real_, nL, 3L)
+  for (i in seq_len(nL))
+    init[i, ] <- .mosaic_reff_init(E[i, 1L], Is[i, 1L], Ia[i, 1L], inc_m[i, 1L])
+  out <- list(inc_hum = inc_h, inc_env = inc_e, delta = delta, init = init,
+              cases_checksum = .mosaic_reff_cases_checksum(rc_m))
+  if (isTRUE(keep_cases)) out$rc <- rc_m
+  out
+}
+
+#' Exact checksum of a member's reported cases
+#'
+#' Ties captured R_eff inputs to the saved engine-level cases slice they came
+#' from: the sum, the position-weighted sum and the NA count of the flattened
+#' series. Equal only when the two series agree (to overwhelming probability).
+#' @param x Numeric matrix or vector.
+#' @return Numeric length 3.
+#' @keywords internal
+#' @noRd
+.mosaic_reff_cases_checksum <- function(x) {
+  v <- as.numeric(x)
+  c(sum(v, na.rm = TRUE), sum(v * seq_along(v), na.rm = TRUE), sum(is.na(v)))
+}
+
+#' Per-member R kernel parameters (the CI's \code{kernel_params} attribute)
+#' @param cfg A member config.
+#' @return Named numeric length 6.
+#' @keywords internal
+#' @noRd
+.mosaic_reff_member_kernel_params <- function(cfg) {
+  vapply(c("iota", "gamma_1", "gamma_2", "sigma", "zeta_1", "zeta_2"),
+         function(nm) as.numeric(cfg[[nm]])[1L], numeric(1))
+}
+
+#' Route-decomposed R series of one member from its route-incidence inputs
+#'
+#' @param p,s The member.
+#' @param inp Output of \code{.mosaic_reff_capture_member()}.
+#' @param kern The member's route kernel.
+#' @param kp The member's kernel parameters.
+#' @param rv The member's reported cases to compare with \code{saved}.
+#' @param saved The saved engine-level reported cases slice (\code{nL x Tn}).
+#' @param ctx Shared context (\code{nL}, \code{Tn}, \code{floor},
+#'   \code{burn_in}, \code{peak_window}).
+#' @return The per-member record \code{.mosaic_reff_resim_ci()} assembles.
+#' @keywords internal
+#' @noRd
+.mosaic_reff_member_series <- function(p, s, inp, kern, kp, rv, saved, ctx) {
+  nL <- ctx$nL; Tn <- ctx$Tn
+  fd <- .mosaic_reff_faithfulness(as.numeric(rv), as.numeric(saved))
+  ests <- .MOSAIC_REFF_ESTIMANDS
+  reff <- stats::setNames(lapply(ests, function(e) vector("list", nL)), ests)
+  peak <- stats::setNames(lapply(ests, function(e) rep(NA_real_, nL)), ests)
+  burn <- if (ctx$burn_in >= 1L) seq_len(min(ctx$burn_in, Tn)) else integer(0)
+  for (i in seq_len(nL)) {
+    init <- inp$init[i, ]
+    rr <- .mosaic_reff_routes(inp$inc_hum[i, ], inp$inc_env[i, ], inp$delta[i, ],
+                              kern, ctx$floor, init = init)
+    rw <- .mosaic_reff_routes(inp$inc_hum[i, ], inp$inc_env[i, ], inp$delta[i, ],
+                              kern, ctx$floor, init = init,
+                              window = ctx$peak_window)
+    for (e in ests) {
+      reff[[e]][[i]] <- rr[[e]]
+      v <- rw[[e]]
+      if (length(burn)) v[burn] <- NA_real_
+      v <- v[is.finite(v)]
+      if (length(v)) peak[[e]][i] <- max(v)
+    }
+  }
+  list(p = p, s = s, reff = reff, peak = peak, re = fd$re, cc = fd$cc,
+       ssum = fd$ssum, rsum = fd$rsum, max_abs = fd$max_abs, kernel_params = kp)
+}
+
+#' One posterior member for the R_eff CI: captured or re-simulated
+#'
+#' One (param, stoch) member's per-location route-decomposed R series (with
+#' its OWN kernel, engine decay rates and initial stocks) plus the faithfulness
+#' diagnostics. When the task carries \code{captured} inputs -- harvested from
+#' the ensemble run itself by \code{.mosaic_calc_model_ensemble(capture_reff = TRUE)},
+#' MOSAIC 1.5.0 -- nothing is simulated: the inputs are verified against the
+#' saved cases slice by their exact checksum, and that slice is then the
+#' member's own reported cases. Otherwise the member's config is rebuilt from
+#' its seed and the member is re-simulated (an ensemble saved before 1.5.0).
+#' The engine is bitwise reproducible across processes, so both routes give
+#' identical series.
 #'
 #' Defined at FILE scope so the parallel dispatcher ships only the task, not the
 #' calling frame. The heavy inputs come from the worker's global environment,
@@ -683,7 +791,9 @@ calc_Reff <- function(ensemble,
 #' seed rather than broadcast.
 #'
 #' @param task List with \code{p}, \code{s} and \code{saved} (the saved
-#'   engine-level reported cases \code{[, , p, s]} slice for this member).
+#'   engine-level reported cases \code{[, , p, s]} slice for this member), and
+#'   optionally \code{captured} (the member's captured inputs, kernel and kernel
+#'   parameters, or a captured \code{error}).
 #' @param ctx The shared inputs. Passed explicitly on the serial route; on the
 #'   parallel route the caller exports it once per worker as \code{.rr_ctx} and
 #'   leaves this \code{NULL} so the worker reads it from its own global
@@ -697,6 +807,17 @@ calc_Reff <- function(ensemble,
     nL <- ctx$nL; Tn <- ctx$Tn
 
     p <- task$p; s <- task$s
+    saved <- matrix(as.numeric(task$saved), nrow = nL, ncol = Tn)
+    cap <- task$captured
+    if (!is.null(cap)) {
+      if (!is.null(cap$error)) stop(cap$error)
+      if (!identical(cap$cases_checksum, MOSAIC:::.mosaic_reff_cases_checksum(saved)))
+        stop("the captured R_eff inputs of member (", p, ",", s, ") do not match its ",
+             "saved engine-level cases")
+      return(MOSAIC:::.mosaic_reff_member_series(p, s, cap, cap$kernel, cap$kernel_params,
+                                                 rv = saved, saved = saved, ctx = ctx))
+    }
+
     cfg <- MOSAIC:::.mosaic_clamp_transmission_params(
       MOSAIC::sample_parameters(PATHS = ctx$paths, priors = ctx$priors,
                                 config = ctx$base_config, seed = ctx$seeds[p],
@@ -706,43 +827,11 @@ calc_Reff <- function(ensemble,
     run_cfg <- cfg
     run_cfg$seed <- (p * 1000L) + s
     model <- MOSAIC::run_simulation(config = run_cfg, seed = run_cfg$seed, quiet = TRUE)
-    res <- model$results
-    mat <- function(ch) MOSAIC:::.mosaic_reff_to_mat(res[[ch]], nL, Tn)
-    inc_h <- mat("incidence_human"); inc_e <- mat("incidence_env")
-    delta <- mat("delta_jt"); E <- mat("E"); Is <- mat("Isym"); Ia <- mat("Iasym")
-    rc_m  <- mat("reported_cases")
-    inc_m <- mat("incidence")
-    if (any(abs(inc_m - inc_h - inc_e) > 0, na.rm = TRUE))
-      stop("incidence != incidence_human + incidence_env for member (", p, ",", s, ")")
-
-    saved <- matrix(as.numeric(task$saved), nrow = nL, ncol = Tn)
-    fd <- MOSAIC:::.mosaic_reff_faithfulness(as.numeric(rc_m), as.numeric(saved))
-    re <- fd$re; cc <- fd$cc; ssum <- fd$ssum; rsum <- fd$rsum; mx <- fd$max_abs
-    ests <- MOSAIC:::.MOSAIC_REFF_ESTIMANDS
-    reff <- stats::setNames(lapply(ests, function(e) vector("list", nL)), ests)
-    peak <- stats::setNames(lapply(ests, function(e) rep(NA_real_, nL)), ests)
-    burn <- if (ctx$burn_in >= 1L) seq_len(min(ctx$burn_in, Tn)) else integer(0)
-    for (i in seq_len(nL)) {
-      init <- MOSAIC:::.mosaic_reff_init(E[i, 1L], Is[i, 1L], Ia[i, 1L],
-                                         inc_m[i, 1L])
-      rr <- MOSAIC:::.mosaic_reff_routes(inc_h[i, ], inc_e[i, ], delta[i, ],
-                                         kern, ctx$floor, init = init)
-      rw <- MOSAIC:::.mosaic_reff_routes(inc_h[i, ], inc_e[i, ], delta[i, ],
-                                         kern, ctx$floor, init = init,
-                                         window = ctx$peak_window)
-      for (e in ests) {
-        reff[[e]][[i]] <- rr[[e]]
-        v <- rw[[e]]
-        if (length(burn)) v[burn] <- NA_real_
-        v <- v[is.finite(v)]
-        if (length(v)) peak[[e]][i] <- max(v)
-      }
-    }
-    kp <- vapply(c("iota", "gamma_1", "gamma_2", "sigma", "zeta_1", "zeta_2"),
-                 function(nm) as.numeric(cfg[[nm]])[1L], numeric(1))
-
-    list(p = p, s = s, reff = reff, peak = peak, re = re, cc = cc,
-         ssum = ssum, rsum = rsum, max_abs = mx, kernel_params = kp)
+    inp <- MOSAIC:::.mosaic_reff_capture_member(model$results, nL, Tn, p, s, keep_cases = TRUE)
+    if (!is.null(inp$error)) stop(inp$error)
+    MOSAIC:::.mosaic_reff_member_series(p, s, inp, kern,
+                                        MOSAIC:::.mosaic_reff_member_kernel_params(cfg),
+                                        rv = inp$rc, saved = saved, ctx = ctx)
   }, error = function(e) list(p = task$p, s = task$s, error = conditionMessage(e)))
 }
 
@@ -894,6 +983,10 @@ calc_Reff <- function(ensemble,
   # 0 here too (it would otherwise enter the band although the published
   # ensemble excluded it), and is not re-run (a deterministic engine failure
   # would recur and abort the whole CI).
+  # A member captured by the ensemble run (.mosaic_calc_model_ensemble(capture_reff =
+  # TRUE), MOSAIC 1.5.0) carries its route-incidence inputs in the task and is
+  # not re-simulated.
+  cap <- .mosaic_reff_capture_usable(ensemble$reff_capture, nL, Tn, nP, nS)
   active <- logical(n_members)
   tasks <- vector("list", n_members)
   for (p in seq_len(nP)) for (s in seq_len(nS)) {
@@ -903,7 +996,8 @@ calc_Reff <- function(ensemble,
     if (active[m])
       tasks[[m]] <- list(p = p, s = s,
                          saved = matrix(as.numeric(ca[, , p, s, drop = FALSE]),
-                                        nrow = nL, ncol = Tn))
+                                        nrow = nL, ncol = Tn),
+                         captured = if (!is.null(cap)) .mosaic_reff_captured_task(cap, p, s, nL, Tn))
   }
   if (!any(active))
     stop(".mosaic_reff_resim_ci: no ensemble member has saved cases to re-simulate.")
@@ -914,7 +1008,9 @@ calc_Reff <- function(ensemble,
   active_idx <- which(active)
   tasks <- tasks[active_idx]
   n_active <- length(active_idx)
-  if (verbose) message("  Re-simulating ", n_active, " members (", sum(in_subset), " x ", nS,
+  if (verbose) message("  ", if (is.null(cap)) "Re-simulating " else
+                         "Computing from the ensemble's captured inputs (no re-simulation): ",
+                       n_active, " members (", sum(in_subset), " x ", nS,
                        " parameter sets x reruns", if (n_active < n_members)
                          paste0(", of ", n_members, " in the ensemble") else "", ")...")
 
@@ -929,6 +1025,14 @@ calc_Reff <- function(ensemble,
     assign(".rr_ctx", ctx, envir = .rr_env)
     parallel::clusterExport(cl, ".rr_ctx", envir = .rr_env)
     parallel::clusterEvalQ(cl, MOSAIC:::.mosaic_set_blas_threads(1L))
+    # The re-simulation rebuilds member configs with set.seed() on the workers:
+    # give them this session's RNG kind, as calc_model_ensemble()'s workers get.
+    .set_kind <- function(kind) {
+      RNGkind(kind[1L], kind[2L], kind[3L])
+      invisible(NULL)
+    }
+    environment(.set_kind) <- .GlobalEnv
+    parallel::clusterCall(cl, .set_kind, RNGkind())
     if (verbose) message("    on ", length(cl), " workers")
     # Reparent: a namespace binding serialises by REFERENCE, so a worker running
     # a different build would fail to resolve it (as in .mosaic_run_batch()).
@@ -1103,7 +1207,51 @@ calc_Reff <- function(ensemble,
        gate_cor_min = cor_min, gate_max_abs_diff = max_abs,
        gate_n_outliers = n_outliers, gate_frac = gate_frac,
        n_members = n_active,
+       captured = !is.null(cap),
        kernel_params = if (!is.na(m_medoid)) member_kp[[m_medoid]] else NULL)
+}
+
+#' The ensemble's captured R_eff inputs, when they cover this ensemble
+#'
+#' @param cap \code{ensemble$reff_capture} (or \code{NULL}).
+#' @param nL,Tn,nP,nS The ensemble's dimensions.
+#' @return \code{cap}, or \code{NULL} when absent or not matching the
+#'   dimensions (the caller then re-simulates).
+#' @keywords internal
+#' @noRd
+.mosaic_reff_capture_usable <- function(cap, nL, Tn, nP, nS) {
+  if (!is.list(cap) || !identical(cap$schema_version, 2L)) return(NULL)
+  d4 <- as.integer(c(nL, Tn, nP, nS))
+  ok <- all(vapply(c("inc_hum", "inc_env"), function(nm)
+    identical(as.integer(dim(cap[[nm]])), d4), logical(1))) &&
+    identical(as.integer(dim(cap$delta)), as.integer(c(nL, Tn, nP))) &&
+    identical(as.integer(dim(cap$init)), as.integer(c(nL, 3L, nP, nS))) &&
+    identical(as.integer(dim(cap$cases_checksum)), as.integer(c(3L, nP, nS))) &&
+    identical(as.integer(dim(cap$error)), as.integer(c(nP, nS))) &&
+    length(cap$kernels) == nP && identical(as.integer(dim(cap$kernel_params)), as.integer(c(nP, 6L)))
+  if (ok) cap else NULL
+}
+
+#' One member's captured inputs, as carried in its R_eff task
+#' @param cap A usable \code{reff_capture}.
+#' @param p,s The member.
+#' @param nL,Tn Dimensions.
+#' @return The \code{captured} element of a \code{.mosaic_reff_resim_member()}
+#'   task.
+#' @keywords internal
+#' @noRd
+.mosaic_reff_captured_task <- function(cap, p, s, nL, Tn) {
+  err <- cap$error[p, s]
+  kern <- cap$kernels[[p]]
+  if (is.na(err) && is.character(kern)) err <- kern   # the kernel could not be built
+  if (!is.na(err)) return(list(error = err))
+  list(inc_hum = matrix(as.numeric(cap$inc_hum[, , p, s]), nL, Tn),
+       inc_env = matrix(as.numeric(cap$inc_env[, , p, s]), nL, Tn),
+       delta   = matrix(cap$delta[, , p], nL, Tn),
+       init    = matrix(cap$init[, , p, s], nL, 3L),
+       cases_checksum = cap$cases_checksum[, p, s],
+       kernel = kern,
+       kernel_params = cap$kernel_params[p, ])
 }
 
 #' Select the medoid re-simulated member (run_MOSAIC criterion)

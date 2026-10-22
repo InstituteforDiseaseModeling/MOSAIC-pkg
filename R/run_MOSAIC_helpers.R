@@ -1516,6 +1516,283 @@
   })
 }
 
+# -----------------------------------------------------------------------------
+# Post-calibration resume (MOSAIC 1.5.0)
+# -----------------------------------------------------------------------------
+# Combining the shards into samples.parquet deletes them, so before 1.5.0 a run
+# that died in post-calibration (CFR pilot, ensemble, R_eff inputs, figures)
+# had to redo its sampling. The sampling marker closes that: it is written
+# atomically right after the combined samples.parquet and before the shards are
+# deleted, and records everything post-calibration reads from the sampling
+# phase -- the calibration state, the columns the shards carried, the draws'
+# ids and likelihoods (to verify samples.parquet against), and the global RNG
+# state -- so a resumed post-calibration starts exactly where an uninterrupted
+# run would. samples.parquet itself is rewritten during post-calibration with
+# the weight and member columns; the resume reads back only the shard columns
+# and recomputes the combine-time flags, which are a function of the
+# likelihoods alone.
+
+#' Path of the sampling-complete marker
+#' @param dirs Directory list from .mosaic_ensure_dir_tree().
+#' @noRd
+.mosaic_sampling_marker_file <- function(dirs) {
+  file.path(dirs$cal_state, "sampling_complete.rds")
+}
+
+#' Record that sampling finished and samples.parquet holds every draw
+#'
+#' @param dirs Directory list.
+#' @param results The combined draws, flagged as written to samples.parquet.
+#' @param state The calibration state at the end of sampling.
+#' @param shard_cols The columns the shards carried (before the combine-time
+#'   flags were added).
+#' @return Invisibly, the marker path.
+#' @noRd
+.mosaic_write_sampling_marker <- function(dirs, results, state, shard_cols) {
+  state$.gate_pool <- NULL
+  marker <- list(
+    schema_version = 1L,
+    mosaic_version = as.character(utils::packageVersion("MOSAIC")),
+    written_at     = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    n_rows         = nrow(results),
+    shard_cols     = shard_cols,
+    sim            = results$sim,
+    likelihood     = results$likelihood,
+    state          = state,
+    random_seed    = get0(".Random.seed", envir = globalenv(), inherits = FALSE)
+  )
+  path <- .mosaic_sampling_marker_file(dirs)
+  .mosaic_atomic_write(marker, path, saveRDS)
+  invisible(path)
+}
+
+#' Read the sampling marker of a run whose sampling finished
+#'
+#' Returns the marker when it is readable, carries the current schema and
+#' \code{2_calibration/samples.parquet} holds as many rows as it recorded;
+#' otherwise \code{NULL} (with a log line naming the reason when a marker
+#' exists), so the caller falls back to the shard-based resume and its guards.
+#' @param dirs Directory list.
+#' @return The marker list, or \code{NULL}.
+#' @noRd
+.mosaic_read_sampling_marker <- function(dirs) {
+  path <- .mosaic_sampling_marker_file(dirs)
+  if (!file.exists(path)) return(NULL)
+  reject <- function(why) {
+    log_warn("[RESUME] Sampling marker %s ignored: %s", file.path("2_calibration", "state",
+                                                                  basename(path)), why)
+    NULL
+  }
+  m <- tryCatch(readRDS(path), error = function(e) NULL)
+  if (!is.list(m) || !identical(m$schema_version, 1L) || is.null(m$state) ||
+      !length(m$shard_cols))
+    return(reject("unreadable or written by an incompatible MOSAIC version"))
+  samples_file <- file.path(dirs$calibration, "samples.parquet")
+  if (!file.exists(samples_file)) return(reject("2_calibration/samples.parquet is missing"))
+  n <- tryCatch(arrow::open_dataset(samples_file)$num_rows, error = function(e) NA_integer_)
+  if (!isTRUE(n == m$n_rows))
+    return(reject(sprintf("samples.parquet has %s rows, the marker recorded %d",
+                          format(n), as.integer(m$n_rows))))
+  m
+}
+
+#' Read the sampled draws back from samples.parquet for a post-calibration resume
+#'
+#' Selects the columns the shards carried (post-calibration adds weight and
+#' member columns to samples.parquet) and verifies that the draws' ids and
+#' likelihoods are exactly those the sampling marker recorded.
+#' @param samples_file Path to samples.parquet.
+#' @param marker Output of .mosaic_read_sampling_marker().
+#' @return A data.frame with the shard columns, in the combine's row order.
+#' @noRd
+.mosaic_load_sampled_results <- function(samples_file, marker) {
+  cols <- as.character(marker$shard_cols)
+  df <- as.data.frame(arrow::read_parquet(samples_file, col_select = dplyr::all_of(cols)))
+  df <- df[cols]
+  if (!identical(df$sim, marker$sim) || !identical(df$likelihood, marker$likelihood))
+    stop("2_calibration/samples.parquet does not hold the draws its sampling marker recorded ",
+         "(sim ids or likelihoods differ), so post-calibration cannot resume from it. Start a ",
+         "fresh run (resume = FALSE or a new dir_output).", call. = FALSE)
+  df
+}
+
+#' Restore the global RNG state recorded by the sampling marker
+#'
+#' Post-calibration draws on the global stream in places (cluster ports, the
+#' HSIC subsample when a renderer runs in-process), so a resumed
+#' post-calibration starts from the state an uninterrupted run had at the same
+#' point. \code{NULL} (the RNG had not been used) removes \code{.Random.seed}.
+#' @param seed The recorded \code{.Random.seed}, or \code{NULL}.
+#' @noRd
+.mosaic_restore_rng <- function(seed) {
+  if (is.null(seed)) {
+    if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
+      rm(".Random.seed", envir = globalenv())
+  } else {
+    assign(".Random.seed", seed, envir = globalenv())
+  }
+  invisible(NULL)
+}
+
+#' Key output files of a run (the \code{files} element run_MOSAIC() returns)
+#' @param dirs Directory list.
+#' @noRd
+.mosaic_run_files <- function(dirs) {
+  list(
+    simulations = file.path(dirs$calibration, "samples.parquet"),
+    ess_csv = file.path(dirs$cal_diag, "parameter_ess.csv"),
+    posterior_quantiles = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+    posteriors_json = file.path(dirs$cal_posterior, "posteriors.json")
+  )
+}
+
+#' run_MOSAIC()'s return value for a resume of a run that already completed
+#'
+#' Nothing is recomputed: the calibration counts come from the sampling marker
+#' and the convergence status from \code{3_results/summary.json}.
+#' @param dirs Directory list.
+#' @param state The calibration state recorded by the sampling marker.
+#' @noRd
+.mosaic_completed_run_result <- function(dirs, state) {
+  s <- tryCatch(jsonlite::read_json(file.path(dirs$results, "summary.json"),
+                                    simplifyVector = TRUE),
+                error = function(e) list())
+  one <- function(x, na) if (length(x) == 1L) x else na
+  list(
+    dirs = dirs,
+    files = .mosaic_run_files(dirs),
+    summary = list(
+      batches = state$batch_number,
+      sims_total = state$total_sims_run,
+      sims_success = state$total_sims_successful,
+      convergence_status = one(s$convergence_status, NA_character_),
+      stopping_rule_met = one(s$stopping_rule_met, NA),
+      converged = .mosaic_run_converged(state),
+      convergence_evaluated = .mosaic_convergence_evaluated(state),
+      resumed = TRUE,
+      sims_reused = state$total_sims_successful,
+      runtime_min = 0
+    )
+  )
+}
+
+#' Log run_MOSAIC()'s grep-friendly RUN_SUMMARY end-of-run sentinel
+#'
+#' A tailing operator (human or AI monitoring the log) can latch on
+#' the RUN_SUMMARY tag to know the pipeline finished AND extract headline metrics
+#' in one pass. status / mode: see .mosaic_run_status() (fixed mode never
+#' applies the stopping rule).
+#' @param summary_obj The summary list (.mosaic_write_summary_json(), or
+#'   summary.json read back: missing values may then be NULL).
+#' @param state The calibration state.
+#' @param runtime_min Runtime in minutes.
+#' @param dir_output The run directory.
+#' @noRd
+.mosaic_log_run_summary <- function(summary_obj, state, runtime_min, dir_output) {
+  one <- function(x) if (length(x) == 1L) x else NA
+  so <- lapply(summary_obj[intersect(c("convergence_status", "stopping_rule_met", "r2_cases_ensemble",
+                                       "r2_deaths_ensemble", "n_simulations_total", "sims_used",
+                                       "ensemble_members", "ess_best", "ess_all"), names(summary_obj))], one)
+  g <- function(k) if (is.null(so[[k]])) NA else so[[k]]
+  int_s <- function(x) if (length(x) == 1L && is.finite(x)) sprintf("%d", as.integer(round(x))) else "NA"
+  outputs_ok <- !is.na(g("r2_cases_ensemble"))
+  status_str <- .mosaic_run_status(state, outputs_ok)
+  log_msg(paste0(
+    "[RUN_SUMMARY] status=%s mode=%s convergence_status=%s stopping_rule_met=%s ",
+    "outputs_ok=%s runtime_min=%.2f r2_cases_ensemble=%s ",
+    "r2_deaths_ensemble=%s sims_total=%s sims_used=%s ensemble_members=%s ess_best=%s ",
+    "ess_all=%s resumed=%s dir_output=%s"),
+    status_str,
+    if (is.null(state$mode)) "NA" else state$mode,
+    if (is.na(g("convergence_status"))) "NA" else g("convergence_status"),
+    if (is.na(g("stopping_rule_met"))) "NA" else if (isTRUE(g("stopping_rule_met"))) "YES" else "NO",
+    if (outputs_ok) "YES" else "NO",
+    as.numeric(runtime_min),
+    if (is.na(g("r2_cases_ensemble")))  "NA" else sprintf("%.4f", g("r2_cases_ensemble")),
+    if (is.na(g("r2_deaths_ensemble"))) "NA" else sprintf("%.4f", g("r2_deaths_ensemble")),
+    # machine-read sentinel: plain integers, no thousands separators (PN2)
+    int_s(g("n_simulations_total")), int_s(g("sims_used")),
+    int_s(g("ensemble_members")),
+    if (is.finite(g("ess_best"))) sprintf("%.1f", g("ess_best")) else "NA",
+    if (is.finite(g("ess_all"))) sprintf("%.1f", g("ess_all")) else "NA",
+    if (isTRUE(state$resumed)) "YES" else "NO",
+    dir_output
+  )
+  invisible(status_str)
+}
+
+#' Finish the end-of-run bookkeeping of a completed run killed before it
+#'
+#' run_MOSAIC() writes summary.json, logs the RUN_SUMMARY line and then finalizes
+#' run_state.json (status "completed", _README.md). A run killed between the
+#' first and the last is complete but looks unfinished; a resume, which is
+#' otherwise a no-op on a completed run, finishes it from summary.json.
+#' @param dirs Directory list.
+#' @param state The calibration state recorded by the sampling marker.
+#' @param dir_output The run directory.
+#' @return Invisibly, TRUE when it finalized, FALSE when nothing was needed.
+#' @noRd
+.mosaic_finalize_if_unfinished <- function(dirs, state, dir_output) {
+  state_file <- file.path(dirs$cal_state, "run_state.json")
+  persisted <- tryCatch(jsonlite::read_json(state_file), error = function(e) NULL)
+  if (is.null(persisted) || identical(persisted$status, "completed")) return(invisible(FALSE))
+  s <- tryCatch(jsonlite::read_json(file.path(dirs$results, "summary.json"), simplifyVector = TRUE),
+                error = function(e) NULL)
+  if (is.null(s)) return(invisible(FALSE))
+  log_msg("[RESUME] run_state.json was not finalized (the run was interrupted after summary.json): finalizing it")
+  state$resumed <- TRUE
+  .mosaic_log_run_summary(s, state, 0, dir_output)
+  .mosaic_finalize_state(state_file, s)
+  invisible(TRUE)
+}
+
+#' Add the combine-time index columns to the combined draws
+#'
+#' \code{is_finite}/\code{is_valid}, the legacy schemes' Tukey lower fence
+#' (\code{is_outlier}), \code{is_retained}, and the \code{is_best_subset} /
+#' \code{is_best_model} flags, all functions of the likelihood alone. Shared by
+#' the combine step and the post-calibration resume, which recomputes them from
+#' the shard columns.
+#' @param results The combined draws.
+#' @param control Control list.
+#' @return \code{results} with the index columns.
+#' @noRd
+.mosaic_flag_results <- function(results, control) {
+  log_msg("Adding index columns to results matrix...")
+  results$is_finite <- is.finite(results$likelihood) & !is.na(results$likelihood)
+  results$is_valid <- results$is_finite
+  results$is_outlier <- FALSE
+
+  weighting_scheme <- control$targets$posterior_weighting
+  # The Tukey lower fence and the Akaike weights of the retained draws
+  # (weight_retained) belong to the legacy schemes: the "saturated" /
+  # "tempered" tier search works on the retained draws, and "coarsened" keeps
+  # them so a 1.3.0 run reproduces. Under "bestfit" every valid draw enters
+  # the posterior, so is_retained = is_valid.
+  if (!identical(weighting_scheme, "bestfit") && sum(results$is_valid) > 0) {
+    valid_ll <- results$likelihood[results$is_valid]
+    iqr_mult <- control$weights$iqr_multiplier
+    lower_threshold <- .mosaic_lower_fence(valid_ll, iqr_mult)
+    results$is_outlier[results$is_valid] <- valid_ll < lower_threshold
+
+    log_msg("  Outlier detection (Tukey lower fence only, multiplier = %.1f; legacy scheme '%s'):",
+            iqr_mult, weighting_scheme)
+    log_msg("    - Lower threshold: %.1f | Outliers: %d (%.1f%%)",
+            lower_threshold,
+            sum(results$is_outlier),
+            100 * sum(results$is_outlier) / sum(results$is_valid))
+  }
+
+  results$is_retained <- results$is_valid & !results$is_outlier
+  results$is_best_subset <- FALSE
+  results$is_best_model <- FALSE
+
+  if (any(results$is_valid)) {
+    results$is_best_model[which.max(results$likelihood)] <- TRUE
+  }
+  results
+}
+
 #' Reconstruct Calibration State From Disk for Resume
 #'
 #' Overlays the fresh-init `state` with state recovered from the shards on disk

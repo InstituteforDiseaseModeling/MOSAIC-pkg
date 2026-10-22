@@ -13,6 +13,22 @@
 #' the sensitivity table is produced independently of plotting, and the plot
 #' consumes the returned/loaded data.frame.
 #'
+#' The indices are computed a chunk of parameters at a time, so the Gram
+#' matrices held at once are bounded (1 GiB: 33 parameters at
+#' \code{n_samples = 2000}) instead of growing with the number of parameters
+#' (MOSAIC 1.5.0). On a synthetic 900-parameter run the peak memory fell from
+#' 51.6 GB to 3.7 GB (a 916-parameter Kenya run had held 67 GB). Each parameter's
+#' R2-HSIC and asymptotic p-value depend only on its own column and the
+#' log-likelihood, so the results equal a single call over every parameter.
+#' With \code{test_method = "Permutation"} each chunk draws its own
+#' permutations, so those p-values are a different Monte Carlo draw.
+#'
+#' \code{run_MOSAIC()} calls it in every run, whatever \code{plots} is, and
+#' writes \code{parameter_sensitivity.csv} (atomically: a temporary file
+#' renamed into place, so a killed run never leaves a truncated table);
+#' \code{\link{render_MOSAIC_figures}} plots that table and recomputes it only
+#' when it is missing.
+#'
 #' @param results_file Path to \code{samples.parquet} containing calibration results.
 #' @param priors_file Path to \code{priors.json} (used for parameter descriptions).
 #' @param output_dir Optional directory to write \code{parameter_sensitivity.csv} (the \code{sens_df} columns plus run-level \code{weighting} and \code{n_used}). When \code{NULL} (default) no file is written.
@@ -179,38 +195,50 @@ calc_model_parameter_sensitivity <- function(results_file,
   }
 
   # -----------------------------------------------------------------------
-  # Compute HSIC sensitivity indices
+  # Compute HSIC sensitivity indices, a chunk of parameters at a time
   # -----------------------------------------------------------------------
-  hsic_result <- tryCatch({
-    res <- sensitivity::sensiHSIC(
-      model          = NULL,
-      X              = params_df,
-      kernelX        = kernel,
-      kernelY        = "rbf",
-      paramX         = NA,
-      paramY         = NA,
-      estimator.type = estimator_type,
-      test.method    = "No"
-    )
-    res <- sensitivity::tell(res, y_vec)
-    res
-  }, error = function(e) {
-    warning("HSIC computation failed: ", e$message)
-    NULL
-  })
-
-  if (is.null(hsic_result)) return(invisible(NULL))
-
-  hsic_r2_vals <- stats::setNames(hsic_result$S[, "original"], param_cols_active)
-
-  p_vals <- tryCatch({
-    test_res <- sensitivity::testHSIC(hsic_result, test.method = test_method)
-    stats::setNames(test_res$pval[, 1], param_cols_active)
-  }, error = function(e) {
-    warning("HSIC significance test failed: ", e$message,
-            ". Proceeding without p-values.")
-    stats::setNames(rep(NA_real_, p), param_cols_active)
-  })
+  # sensiHSIC() keeps one n x n Gram matrix per input (save.GM, which
+  # testHSIC() reads), so one call over every parameter holds n^2 x p doubles:
+  # 29 GB at n = 2,000 and p = 916, the 67 GB master of the Kenya counties run.
+  # Each parameter's R2-HSIC and asymptotic p-value depend only on its own
+  # column and the log-likelihood (per-column bandwidths), so the chunked
+  # results equal the single call's exactly while the Gram matrices held at
+  # once are bounded by .mosaic_hsic_chunks().
+  hsic_r2_vals <- stats::setNames(rep(NA_real_, p), param_cols_active)
+  p_vals       <- stats::setNames(rep(NA_real_, p), param_cols_active)
+  test_errors  <- character(0)
+  n_untested   <- 0L
+  for (ix in .mosaic_hsic_chunks(p, nrow(params_df))) {
+    hsic_result <- tryCatch({
+      res <- sensitivity::sensiHSIC(
+        model          = NULL,
+        X              = params_df[, ix, drop = FALSE],
+        kernelX        = kernel,
+        kernelY        = "rbf",
+        paramX         = NA,
+        paramY         = NA,
+        estimator.type = estimator_type,
+        test.method    = "No"
+      )
+      sensitivity::tell(res, y_vec)
+    }, error = function(e) {
+      warning("HSIC computation failed: ", e$message)
+      NULL
+    })
+    if (is.null(hsic_result)) return(invisible(NULL))
+    hsic_r2_vals[ix] <- hsic_result$S[, "original"]
+    p_vals[ix] <- tryCatch(
+      sensitivity::testHSIC(hsic_result, test.method = test_method)$pval[, 1],
+      error = function(e) {
+        test_errors <<- c(test_errors, conditionMessage(e))
+        n_untested <<- n_untested + length(ix)
+        NA_real_
+      })
+    rm(hsic_result)
+  }
+  if (length(test_errors))
+    warning("HSIC significance test failed: ", test_errors[1],
+            ". Proceeding without p-values for ", n_untested, " of ", p, " parameters.")
 
   sig_stars <- ifelse(is.na(p_vals), "",
                ifelse(p_vals < 0.001, "***",
@@ -241,7 +269,8 @@ calc_model_parameter_sensitivity <- function(results_file,
     csv_df <- sens_df[, c("parameter", "hsic_r2", "p_value", "sig", "description")]
     csv_df$weighting <- rep(subset_label, nrow(csv_df))
     csv_df$n_used    <- rep(nrow(params_df), nrow(csv_df))
-    utils::write.csv(csv_df, csv_file, row.names = FALSE)
+    .mosaic_atomic_write(csv_df, csv_file, function(data, file)
+      utils::write.csv(data, file, row.names = FALSE))
     if (verbose) log_msg("Saved %s", csv_file)
   }
 
@@ -271,4 +300,26 @@ calc_model_parameter_sensitivity <- function(results_file,
     }
   }
   descriptions
+}
+
+
+#' Split the HSIC parameters into chunks bounded by Gram-matrix memory
+#'
+#' \code{sensitivity::sensiHSIC()} keeps one \code{n x n} double Gram matrix
+#' per input parameter. A chunk holds at most \code{budget_bytes} of them
+#' (1 GiB: 33 parameters at n = 2,000, 134 at n = 1,000), and at least one.
+#' Each chunk also pays a fixed cost (the output Gram matrix and the test), so
+#' a smaller budget is slower: measured at 900 parameters and n = 2,000, 256 MiB
+#' took 1.5x the single call's time at 1.9 GB and 1 GiB 1.13x at 3.7-4.0 GB.
+#'
+#' @param p Number of parameters.
+#' @param n Number of draws (rows of the HSIC input).
+#' @param budget_bytes Gram-matrix bytes a chunk may hold.
+#' @return A list of integer index vectors covering \code{seq_len(p)} in order.
+#' @keywords internal
+#' @noRd
+.mosaic_hsic_chunks <- function(p, n, budget_bytes = 1024^3) {
+  size <- max(1L, as.integer(floor(budget_bytes / (8 * as.numeric(n)^2))))
+  idx <- seq_len(p)
+  unname(split(idx, ceiling(idx / size)))
 }

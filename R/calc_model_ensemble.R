@@ -52,7 +52,9 @@
 #' -- the observation-level \code{cases_array}/\code{deaths_array} and the
 #' engine-level \code{cases_engine_array}/\code{deaths_engine_array} -- set to
 #' \code{NULL}, preserving the S3 class and every light field (central
-#' tendencies, envelopes, weights, seeds, obs, metadata). Idempotent: safe to
+#' tendencies, envelopes, weights, seeds, obs, metadata). The captured R_eff
+#' inputs (\code{reff_capture}, three arrays of the same size) go with them:
+#' the R_eff CI that reads them needs the arrays too. Idempotent: safe to
 #' call when the arrays are already \code{NULL}. Used at \code{run_MOSAIC()} save
 #' time so persisted ensemble RDS files are small; the in-memory object is never
 #' mutated.
@@ -65,6 +67,7 @@
   ens$deaths_array        <- NULL
   ens$cases_engine_array  <- NULL
   ens$deaths_engine_array <- NULL
+  ens$reff_capture        <- NULL
   ens
 }
 
@@ -109,10 +112,12 @@
 
 #' Projected RAM for broadcasting the sampled configs to PSOCK workers
 #'
-#' \code{calc_model_ensemble()} \code{clusterExport}s the whole
-#' \code{param_configs} list to every worker, so the cost is
-#' (size of one config) x n_param_sets x n_workers, and with local PSOCK every
-#' copy lives on this host.
+#' In direct mode (\code{configs} supplied) \code{calc_model_ensemble()}
+#' \code{clusterExport}s the whole \code{param_configs} list to every worker,
+#' so the cost is (size of one config) x n_param_sets x n_workers, and with
+#' local PSOCK every copy lives on this host. In seeds mode (MOSAIC 1.5.0) the
+#' workers rebuild each config from its seed and receive only the base config,
+#' so the caller passes a one-config list and the cost is one config per worker.
 #'
 #' Measured at 40 locations: one sampled config is \strong{10.15 MB}, so the
 #' broadcast is 1.13 GB per worker at 114 parameter sets and \strong{9.91 GB per
@@ -711,6 +716,73 @@ calc_model_ensemble <- function(config,
                                 deaths_integration = NULL,
                                 observation_model = NULL,
                                 verbose = TRUE) {
+  .mosaic_calc_model_ensemble(
+    config = config,
+    parameter_seeds = parameter_seeds,
+    configs = configs,
+    parameter_weights = parameter_weights,
+    n_simulations_per_config = n_simulations_per_config,
+    envelope_quantiles = envelope_quantiles,
+    PATHS = PATHS,
+    priors = priors,
+    sampling_args = sampling_args,
+    n_cases_warmup_mask = n_cases_warmup_mask,
+    mask_final_deaths_step = mask_final_deaths_step,
+    score_idx_cases = score_idx_cases,
+    score_idx_deaths = score_idx_deaths,
+    parallel = parallel,
+    n_cores = n_cores,
+    root_dir = root_dir,
+    capture_trajectories = capture_trajectories,
+    trajectory_channels = trajectory_channels,
+    trajectory_n_lines = trajectory_n_lines,
+    trajectory_scratch_dir = trajectory_scratch_dir,
+    reduce_trajectories = reduce_trajectories,
+    deaths_integration = deaths_integration,
+    observation_model = observation_model,
+    verbose = verbose)
+}
+
+#' The body of calc_model_ensemble(), with the run_MOSAIC()-only R_eff capture
+#'
+#' \code{calc_model_ensemble()} calls it with \code{capture_reff = FALSE};
+#' \code{run_MOSAIC()} calls it directly for the posterior ensemble.
+#' @inheritParams calc_model_ensemble
+#' @param capture_reff Logical. Harvest from each member the inputs of its
+#'   route-decomposed R_eff (route incidences, decay rates, initial stocks, an
+#'   exact checksum of its reported cases) and return them as
+#'   \code{$reff_capture}, so \code{add_reproductive_numbers(recompute_ci =
+#'   TRUE)} need not re-simulate the members (MOSAIC 1.5.0). When \code{FALSE}
+#'   the returned object has no \code{reff_capture} element, exactly as
+#'   before.
+#' @return As \code{calc_model_ensemble()}, plus \code{reff_capture} when
+#'   \code{capture_reff = TRUE}.
+#' @noRd
+.mosaic_calc_model_ensemble <- function(config,
+                                parameter_seeds = NULL,
+                                configs = NULL,
+                                parameter_weights = NULL,
+                                n_simulations_per_config = 10L,
+                                envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+                                PATHS = NULL,
+                                priors = NULL,
+                                sampling_args = list(),
+                                n_cases_warmup_mask = 2L,
+                                mask_final_deaths_step = FALSE,
+                                score_idx_cases = 1L,
+                                score_idx_deaths = 1L,
+                                parallel = FALSE,
+                                n_cores = NULL,
+                                root_dir = NULL,
+                                capture_trajectories = FALSE,
+                                trajectory_channels = .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT,
+                                trajectory_n_lines = 150L,
+                                trajectory_scratch_dir = NULL,
+                                reduce_trajectories = TRUE,
+                                deaths_integration = NULL,
+                                observation_model = NULL,
+                                capture_reff = FALSE,
+                                verbose = TRUE) {
 
   # ===========================================================================
   # Input validation and mode determination
@@ -782,13 +854,12 @@ calc_model_ensemble <- function(config,
       pb <- utils::txtProgressBar(min = 0, max = n_param_sets, style = 1,
                                   char = "\u2588")
     }
+    .cfg_src <- list(config = config, priors = priors, PATHS = PATHS,
+                     sampling_args = sampling_args, seeds = parameter_seeds)
     for (i in seq_along(parameter_seeds)) {
       if (verbose) utils::setTxtProgressBar(pb, i)
       param_configs[[i]] <- tryCatch(
-        .mosaic_clamp_transmission_params(
-          sample_parameters(PATHS = PATHS, priors = priors, config = config,
-                            seed = parameter_seeds[i], sample_args = sampling_args,
-                            verbose = FALSE)),
+        .mosaic_ensemble_member_config(.cfg_src, i),
         error = function(e) {
           warning("Failed to sample parameters with seed ", parameter_seeds[i],
                   ": ", e$message)
@@ -814,6 +885,8 @@ calc_model_ensemble <- function(config,
         "calc_model_ensemble: %d of %d parameter sets failed to sample; proceeding on the %d that succeeded",
         sum(!keep), length(keep), n_param_sets))
     }
+    # The workers rebuild configs by index into these seeds: the survivors'.
+    .cfg_src$seeds <- parameter_seeds
 
   } else {
     stop("Must provide either 'configs' or 'parameter_seeds' (with config + priors + PATHS)")
@@ -913,6 +986,10 @@ calc_model_ensemble <- function(config,
   # connection budget there). Project against the REQUESTED count: this is a
   # warning about risk, so the upper bound is the honest input, and a clamp can
   # only make the real figure smaller.
+  # Seeds mode: PSOCK workers rebuild each task's config from its seed
+  # (.mosaic_ensemble_member_config(), the recipe the configs above were built
+  # with) instead of receiving every config. Direct mode (`configs`) ships them.
+  .rebuild_on_worker <- is.null(configs) && !is.null(parameter_seeds)
   .ram_n_workers <- if (!parallel) 0L
                     else if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L)
                     else as.integer(n_cores)
@@ -924,10 +1001,16 @@ calc_model_ensemble <- function(config,
                              # Local PSOCK spills at sim time (flat), so nothing
                              # is ever held in a gather step.
                              capture_in_gather = FALSE,
+                             # Seeds mode exports the base config once per
+                             # worker (one config's size); direct mode
+                             # exports every config.
                              broadcast_gb = .mosaic_ensemble_broadcast_gb(
-                               param_configs, .ram_n_workers),
-                             n_obs_arrays   = as.integer(obs_cases_on) + as.integer(obs_deaths_on),
-                             n_record_extra = as.integer(obs_deaths_on))
+                               if (.rebuild_on_worker) param_configs[1L] else param_configs,
+                               .ram_n_workers),
+                             n_obs_arrays   = as.integer(obs_cases_on) + as.integer(obs_deaths_on) +
+                                              3L * as.integer(isTRUE(capture_reff)),
+                             n_record_extra = as.integer(obs_deaths_on) +
+                                              3L * as.integer(isTRUE(capture_reff)))
 
   # ===========================================================================
   # Run simulations (parallel or sequential)
@@ -975,6 +1058,7 @@ calc_model_ensemble <- function(config,
   .traj_scratch  <- traj_scratch   # NULL unless capturing (set above)
   .deaths_int    <- deaths_integration
   .ret_expected  <- obs_deaths_on  # carry expected deaths only when the deaths draw needs them
+  .capture_reff  <- isTRUE(capture_reff)
 
   # The per-task simulation worker is the package-level
   # .mosaic_ensemble_sim_task() (R/calc_model_ensemble_task.R). PSOCK workers
@@ -1031,16 +1115,39 @@ calc_model_ensemble <- function(config,
       parallel::clusterCall(cl, .set_root, root_dir)
     }
 
-    # Export the configs AND the worker function to each worker's global env
-    # so the per-task dispatch closure (below) carries no payload -- it resolves
-    # both from the worker side. This keeps the robust load-balanced dispatcher
-    # from re-serializing all param_configs on every task.
+    # Export what the tasks read, AND the worker function, to each worker's
+    # global env so the per-task dispatch closure (below) carries no payload --
+    # it resolves both from the worker side.
+    #
+    # Seeds mode exports the base config, priors and seeds (.cfg_src) and each
+    # worker rebuilds its task's config from its seed (MOSAIC 1.5.0). Exporting
+    # every sampled config instead serialised the whole list once per worker.
+    # Measured on dugong under production load at 42 workers, that took 62 s
+    # for 108 national configs (110 MB, 4.6 GB sent) and 581 s for 108
+    # continental ones (1.26 GB, 53 GB sent) -- paid in both the CFR pilot and
+    # the ensemble, with every worker holding the copy -- against a rebuild of
+    # 8-150 ms per task. The rebuilt config is the same object
+    # (sample_parameters() is a function of its seed). Direct mode
+    # (`configs`) ships the configs as before.
     # .ens_sim_task is bound here, inside the namespace, so the worker-side
     # closure needs neither a MOSAIC::: prefix nor a namespace lookup.
     .ens_sim_task <- .mosaic_ensemble_sim_task
-    parallel::clusterExport(cl, c("param_configs", ".ens_sim_task",
+    # sample_parameters() seeds with set.seed() under the caller's RNG kind, but
+    # a fresh PSOCK worker starts with the default kind: give the workers this
+    # session's, or a rebuilt config differs from the master's under any
+    # non-default RNGkind().
+    .set_kind <- function(kind) {
+      RNGkind(kind[1L], kind[2L], kind[3L])
+      invisible(NULL)
+    }
+    environment(.set_kind) <- .GlobalEnv
+    parallel::clusterCall(cl, .set_kind, RNGkind())
+    .ens_cfg_src  <- if (.rebuild_on_worker) .cfg_src else NULL
+    .ens_configs  <- if (.rebuild_on_worker) NULL else param_configs
+    parallel::clusterExport(cl, c(".ens_configs", ".ens_cfg_src", ".ens_sim_task",
                                    ".capture_traj", ".traj_channels",
-                                   ".traj_scratch", ".deaths_int", ".ret_expected"),
+                                   ".traj_scratch", ".deaths_int", ".ret_expected",
+                                   ".capture_reff"),
                             envir = environment())
 
     if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
@@ -1053,8 +1160,9 @@ calc_model_ensemble <- function(config,
     .ens_idle_timeout <- as.numeric(
       getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
     .ens_task_fun <- function(row) .ens_sim_task(
-      row, param_configs, .capture_traj, .traj_channels, .traj_scratch, .deaths_int,
-      return_expected_deaths = .ret_expected)
+      row, .ens_configs, .capture_traj, .traj_channels, .traj_scratch, .deaths_int,
+      return_expected_deaths = .ret_expected, capture_reff = .capture_reff,
+      config_source = .ens_cfg_src)
     environment(.ens_task_fun) <- .GlobalEnv  # resolve names worker-side
     results_list <- .mosaic_cluster_lapply_robust(
       cl = cl,
@@ -1078,7 +1186,8 @@ calc_model_ensemble <- function(config,
       function(row) .mosaic_ensemble_sim_task(row, param_configs,
                                               .capture_traj, .traj_channels,
                                               .traj_scratch, .deaths_int,
-                                              return_expected_deaths = .ret_expected)
+                                              return_expected_deaths = .ret_expected,
+                                              capture_reff = .capture_reff)
     )
   }
 
@@ -1092,6 +1201,29 @@ calc_model_ensemble <- function(config,
   # .mosaic_ensemble_sim_task() seeds the engine), hashed onto its own stream,
   # so it is reproducible whatever order the members are gathered in.
   .as_loc_mat <- function(x) if (is.null(x) || is.matrix(x)) x else matrix(x, nrow = 1L)
+  # Captured R_eff inputs (capture_reff = TRUE). A member that failed, or whose
+  # capture failed, keeps NA inputs and its error, as a re-simulation would.
+  reff_capture <- NULL
+  if (.capture_reff) {
+    # Kept compact for ensemble_candidate.rds: the decay rates delta_jt are a
+    # precomputed channel (a function of the config alone), so they are held
+    # once per parameter set and checked against every rerun; the route
+    # incidences, which are counts, are stored as integers (below).
+    reff_capture <- list(
+      schema_version = 2L,
+      inc_hum = array(NA_real_, dim = .ens_dim),
+      inc_env = array(NA_real_, dim = .ens_dim),
+      delta   = array(NA_real_, dim = c(n_locations, n_time_points, n_param_sets)),
+      init    = array(NA_real_, dim = c(n_locations, 3L, n_param_sets, n_simulations_per_config)),
+      cases_checksum = array(NA_real_, dim = c(3L, n_param_sets, n_simulations_per_config)),
+      error   = matrix(NA_character_, n_param_sets, n_simulations_per_config),
+      # Per parameter set: the route kernel (or the message of the error that
+      # stopped it being built) and the kernel parameters.
+      kernels = lapply(param_configs, function(cfg)
+        tryCatch(.mosaic_reff_config_kernel(cfg), error = function(e) conditionMessage(e))),
+      kernel_params = do.call(rbind, lapply(param_configs, .mosaic_reff_member_kernel_params))
+    )
+  }
   n_no_expected <- 0L
   n_with_expected <- 0L
   for (result in results_list) {
@@ -1104,6 +1236,27 @@ calc_model_ensemble <- function(config,
       } else {
         cases_engine_array[1L, , p, s]  <- result$reported_cases
         deaths_engine_array[1L, , p, s] <- result$reported_deaths
+      }
+      if (.capture_reff) {
+        rf <- result$reff
+        if (is.null(rf)) {
+          reff_capture$error[p, s] <- "the ensemble task returned no R_eff inputs"
+        } else if (!is.null(rf$error)) {
+          reff_capture$error[p, s] <- rf$error
+        } else {
+          d_p <- reff_capture$delta[, , p]
+          if (all(is.na(d_p))) {
+            reff_capture$delta[, , p] <- rf$delta
+          } else if (!identical(as.numeric(d_p), as.numeric(rf$delta))) {
+            reff_capture$error[p, s] <- "delta_jt differs between the reruns of one parameter set"
+          }
+          if (is.na(reff_capture$error[p, s])) {
+            reff_capture$inc_hum[, , p, s] <- rf$inc_hum
+            reff_capture$inc_env[, , p, s] <- rf$inc_env
+            reff_capture$init[, , p, s]    <- rf$init
+            reff_capture$cases_checksum[, p, s] <- rf$cases_checksum
+          }
+        }
       }
       if (obs_cases_on) {
         exp_d <- if (obs_deaths_on) .as_loc_mat(result$expected_deaths) else NULL
@@ -1122,6 +1275,15 @@ calc_model_ensemble <- function(config,
         cases_obs_array[, , p, s] <- ob$cases
         if (obs_deaths_on) deaths_obs_array[, , p, s] <- ob$deaths
       }
+    }
+  }
+  if (.capture_reff) {
+    # Integer storage halves the incidence arrays on disk; converting back to
+    # double is exact, so the R_eff they give is unchanged.
+    for (nm in c("inc_hum", "inc_env")) {
+      v <- reff_capture[[nm]]
+      f <- v[!is.na(v)]
+      if (all(f == round(f)) && all(abs(f) < .Machine$integer.max)) storage.mode(reff_capture[[nm]]) <- "integer"
     }
   }
   if (n_no_expected > 0L)
@@ -1361,7 +1523,7 @@ calc_model_ensemble <- function(config,
   # Return mosaic_ensemble object
   # ===========================================================================
 
-  structure(
+  out <- structure(
     list(
       cases_mean                = cases_stats$mean,
       cases_median              = cases_stats$median,
@@ -1413,6 +1575,10 @@ calc_model_ensemble <- function(config,
     ),
     class = "mosaic_ensemble"
   )
+  # Only an ensemble that captured carries the element, so a capture-off object
+  # is structurally the 1.4.2 object.
+  if (.capture_reff) out$reff_capture <- reff_capture
+  out
 }
 
 #' Build the compact trajectory summary from the per-sim SCRATCH spill
@@ -1749,4 +1915,26 @@ calc_model_ensemble <- function(config,
     obs_cases                = obs_cases,
     obs_deaths               = obs_deaths
   ), class = "mosaic_trajectories")
+}
+
+
+#' Build one ensemble member's config from its seed
+#'
+#' The recipe of every seeds-mode ensemble member:
+#' \code{sample_parameters()} at the member's seed, then
+#' \code{.mosaic_clamp_transmission_params()}. \code{calc_model_ensemble()}
+#' builds the configs with it on the master, and its PSOCK workers rebuild each
+#' task's config with it from \code{src} rather than receiving every config.
+#'
+#' @param src List with \code{config}, \code{priors}, \code{PATHS},
+#'   \code{sampling_args} and \code{seeds}.
+#' @param p Index of the member (into \code{src$seeds}).
+#' @return The member's config.
+#' @keywords internal
+#' @noRd
+.mosaic_ensemble_member_config <- function(src, p) {
+  .mosaic_clamp_transmission_params(
+    sample_parameters(PATHS = src$PATHS, priors = src$priors, config = src$config,
+                      seed = src$seeds[p], sample_args = src$sampling_args,
+                      verbose = FALSE))
 }

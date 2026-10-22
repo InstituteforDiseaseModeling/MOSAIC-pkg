@@ -48,7 +48,13 @@
 #'   route incidence, stock and decay-rate channels that the persisted
 #'   trajectory artifact does not retain at a daily grid. A faithfulness gate
 #'   confirms the re-sim reproduces the saved engine-level cases
-#'   (\code{cases_engine_array}) before any CI is written.
+#'   (\code{cases_engine_array}) before any CI is written. Since MOSAIC 1.5.0
+#'   \code{run_MOSAIC()} captures those channels from the ensemble's own
+#'   simulations and saves them in \code{ensemble_candidate.rds} (with
+#'   \code{control$io$persist_ensemble_arrays = TRUE}, which this path already
+#'   requires); when they are there, in this process or a later one, nothing is
+#'   re-simulated (each member's inputs are verified against its saved cases by
+#'   an exact checksum) and the values are identical to the re-simulation's.
 #'   When \code{FALSE} (default) the cheap point-estimate path is used (renewal on
 #'   the weighted-median route incidence from \code{trajectories_ensemble.rds};
 #'   CI columns are populated only if the artifact carries daily-consecutive
@@ -75,6 +81,9 @@
 #'   (~1,000 engine runs at \code{run_MOSAIC()} defaults). Greater than 1 builds
 #'   a PSOCK cluster and stops it before returning; \code{1L} (default) keeps
 #'   the historical serial behaviour. Ignored when \code{recompute_ci = FALSE}.
+#'   With captured inputs (no re-simulation) a cluster is built only for
+#'   large ensembles (at least 5,000 location-members), where the per-member
+#'   R computation outweighs starting the workers.
 #'
 #' @return Invisibly, a one-row \code{data.frame} status with columns:
 #'   \describe{
@@ -320,6 +329,11 @@ add_reproductive_numbers <- function(output_dir,
 # -----------------------------------------------------------------------------
 # Re-simulation driver: build a faithful posterior R_eff CI for ONE output dir.
 # -----------------------------------------------------------------------------
+
+# Location-members (n_locations x n_param_sets x n_stoch) from which the
+# captured-input R_eff CI is worth a PSOCK cluster: ~15-60 s of serial R work at
+# the measured 3-12 ms per location-member, against ~10-30 s to start workers.
+.MOSAIC_REFF_CAPTURE_PARALLEL_MIN <- 5000
 #' Re-simulate the saved posterior ensemble and assemble a R_eff CI table
 #'
 #' Loads \code{2_calibration/ensemble_candidate.rds} (re-simulated) and
@@ -408,11 +422,17 @@ add_reproductive_numbers <- function(output_dir,
   # recompute_ci re-simulates every posterior member, which is the whole cost of
   # this path: ~1,000 engine runs at run_MOSAIC()'s defaults. Build a cluster for
   # it when asked. This function is post-hoc and standalone, so nothing else
-  # holds sockets and there is no cluster to borrow.
+  # holds sockets and there is no cluster to borrow. When the ensemble carries
+  # its members' captured inputs (MOSAIC 1.5.0) nothing is simulated, and the
+  # per-member R computation (~3-12 ms per location) is cheaper serially than
+  # starting workers unless the ensemble is large.
   .reff_cl <- NULL
   n_cores <- suppressWarnings(as.integer(n_cores))
   if (length(n_cores) != 1L || is.na(n_cores)) n_cores <- 1L
-  if (n_cores > 1L) {
+  .ca_dim <- dim(.mosaic_engine_array(ens, "cases"))
+  .captured <- !is.null(.mosaic_reff_capture_usable(ens$reff_capture, .ca_dim[1L], .ca_dim[2L],
+                                                    .ca_dim[3L], .ca_dim[4L]))
+  if (n_cores > 1L && (!.captured || prod(.ca_dim[c(1L, 3L, 4L)]) >= .MOSAIC_REFF_CAPTURE_PARALLEL_MIN)) {
     .reff_cl <- tryCatch(
       make_mosaic_cluster(n_cores = n_cores, type = "PSOCK", require_root = FALSE),
       error = function(e) {
@@ -435,7 +455,10 @@ add_reproductive_numbers <- function(output_dir,
     medoid_cases_central = fin$central,
     verbose = verbose, cl = .reff_cl)
 
-  if (verbose)
+  if (verbose && isTRUE(res$captured))
+    message(sprintf("  Captured inputs verified against the saved engine-level cases for all %d members.",
+                    res$n_members))
+  if (verbose && !isTRUE(res$captured))
     message(sprintf(paste0("  Faithfulness gate PASSED (robust statistical ",
                           "equivalence): p%.0f rel_err = %.4f, ensemble-agg ",
                           "rel_err = %.4f, median cor = %.4f, %d/%d member ",
@@ -466,11 +489,14 @@ add_reproductive_numbers <- function(output_dir,
   attr(out, "central_matrix") <- central$R_eff
   attr(out, "route_central")  <- central[c("R_hum", "R_env")]
   attr(out, "kernel")         <- "route_instantaneous_per_member"
-  attr(out, "config_source")  <- "per-member (base config + priors, re-sampled by seed)"
+  attr(out, "config_source")  <- if (isTRUE(res$captured))
+    "per-member (the ensemble's sampled configs, captured at simulation)" else
+    "per-member (base config + priors, re-sampled by seed)"
   attr(out, "series")         <- "infection_incidence"
   attr(out, "kernel_params")  <- res$kernel_params
   attr(out, "probs")          <- probs
-  attr(out, "ci_source")      <- "weighted_quantiles_resimulated"
+  attr(out, "ci_source")      <- if (isTRUE(res$captured)) "weighted_quantiles_captured" else
+    "weighted_quantiles_resimulated"
   attr(out, "central_definition") <- res$central_definition
   attr(out, "band_definition")    <-
     "per_calendar_day_cross_member_weighted_quantiles"
@@ -488,8 +514,10 @@ add_reproductive_numbers <- function(output_dir,
   attr(out, "n_members")        <- res$n_members
   attr(out, "ensemble_source")  <- fin$source
   attr(out, "caveat")         <- paste0(
-    "Route-decomposed Cori R_eff (R_hum + R_env) computed on RE-SIMULATED ",
-    "posterior-member infection incidence; central = the medoid trajectory's ",
+    "Route-decomposed Cori R_eff (R_hum + R_env) computed on ",
+    if (isTRUE(res$captured)) "the posterior members' infection incidence captured from the ensemble run" else
+      "RE-SIMULATED posterior-member infection incidence",
+    "; central = the medoid trajectory's ",
     "R_t; q2.5/q50/q97.5 = per-calendar-day cross-member weighted quantiles. ",
     "Burn-in (", bid,
     " days) excluded. Descriptor of the model trajectory, not a ",
