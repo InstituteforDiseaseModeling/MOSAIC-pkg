@@ -21,7 +21,7 @@ machine, or repeatedly without re-running calibration."><meta property="og:image
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -140,6 +140,21 @@ corrupt, or schema-incompatible artifact causes the affected figure to be
 simulation on the client (<code><a href="calc_model_ensemble.html">calc_model_ensemble()</a></code> always simulates, via
 PSOCK or sequentially), which this function deliberately avoids. Every figure
 is wrapped in <code>tryCatch</code> so one failure never aborts the rest.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="calibration-diagnostics-written-before-">Calibration diagnostics written before 1.5.1<a class="anchor" aria-label="anchor" href="#calibration-diagnostics-written-before-"></a></h2>
+
+
+<p>The <code>"convergence"</code> group upgrades a
+<code>3_results/calibration_diagnostics.json</code> written before MOSAIC 1.5.1 to
+the 1.5.1 contract before drawing the report: the budget, member bounds and
+thresholds from <code>1_inputs/control.json</code>, the full-week weekly series
+from the prediction CSVs and the persisted ensemble (weekly-summed member
+trajectories when its arrays were persisted), and every display string. The
+upgraded file replaces the original, which is kept byte for byte as
+<code>calibration_diagnostics.pre151.json</code>; this is the one file the
+function writes outside <code>3_results/figures/</code>. A file already at 1.5.1
+is left untouched.</p>
     </div>
     <div class="section level2">
     <h2 id="parallel-rendering">Parallel rendering<a class="anchor" aria-label="anchor" href="#parallel-rendering"></a></h2>

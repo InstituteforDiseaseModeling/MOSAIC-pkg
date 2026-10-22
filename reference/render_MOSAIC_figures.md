@@ -90,6 +90,19 @@ always simulates, via PSOCK or sequentially), which this function
 deliberately avoids. Every figure is wrapped in `tryCatch` so one
 failure never aborts the rest.
 
+## Calibration diagnostics written before 1.5.1
+
+The `"convergence"` group upgrades a
+`3_results/calibration_diagnostics.json` written before MOSAIC 1.5.1 to
+the 1.5.1 contract before drawing the report: the budget, member bounds
+and thresholds from `1_inputs/control.json`, the full-week weekly series
+from the prediction CSVs and the persisted ensemble (weekly-summed
+member trajectories when its arrays were persisted), and every display
+string. The upgraded file replaces the original, which is kept byte for
+byte as `calibration_diagnostics.pre151.json`; this is the one file the
+function writes outside `3_results/figures/`. A file already at 1.5.1 is
+left untouched.
+
 ## Parallel rendering
 
 At 40 locations this stage is the largest single-threaded block in a
