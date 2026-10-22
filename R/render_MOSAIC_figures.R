@@ -199,6 +199,18 @@
 #' PSOCK or sequentially), which this function deliberately avoids. Every figure
 #' is wrapped in \code{tryCatch} so one failure never aborts the rest.
 #'
+#' @section Calibration diagnostics written before 1.5.1:
+#' The \code{"convergence"} group upgrades a
+#' \code{3_results/calibration_diagnostics.json} written before MOSAIC 1.5.1 to
+#' the 1.5.1 contract before drawing the report: the budget, member bounds and
+#' thresholds from \code{1_inputs/control.json}, the full-week weekly series
+#' from the prediction CSVs and the persisted ensemble (weekly-summed member
+#' trajectories when its arrays were persisted), and every display string. The
+#' upgraded file replaces the original, which is kept byte for byte as
+#' \code{calibration_diagnostics.pre151.json}; this is the one file the
+#' function writes outside \code{3_results/figures/}. A file already at 1.5.1
+#' is left untouched.
+#'
 #' @param dir_output Character. Path to a finished \code{run_MOSAIC()} output
 #'   directory (the one containing \code{1_inputs/}, \code{2_calibration/},
 #'   \code{3_results/}).
@@ -1204,15 +1216,115 @@ render_MOSAIC_figures <- function(dir_output,
 }
 
 
+#' Upgrade a run's calibration_diagnostics.json to the 1.5.1 contract
+#'
+#' A file written before MOSAIC 1.5.1 (no \code{schema_revision}) lacks the
+#' fields the 1.5.1 report and the dashboard read. They are derived
+#' deterministically from the run directory:
+#' \itemize{
+#'   \item \code{run.max_simulations_total}, \code{run.n_simulations_requested},
+#'     \code{run.min_ensemble_members}, \code{run.max_ensemble_members} and
+#'     \code{status.thresholds} from \code{1_inputs/control.json};
+#'     \code{run.central_method} from the prediction CSVs;
+#'   \item \code{fit.weekly} (every complete week, \code{scored}, nullable
+#'     \code{observed}) and \code{fit.weekly_meta} from
+#'     \code{3_results/predictions/predictions_ensemble_*.csv} and the persisted
+#'     ensemble (\code{2_calibration/ensemble_optimized.rds}, else
+#'     \code{ensemble_candidate.rds}): the weekly-summed member trajectories
+#'     when its arrays were persisted (\code{persist_ensemble_arrays = TRUE},
+#'     as in production), else the weekly sums of the daily table
+#'     (\code{weekly_meta$source = "daily_sums"}); with no prediction CSV the
+#'     file's own scored weeks are kept;
+#'   \item every display field, by \code{.mosaic_calrep_complete()}: the same
+#'     function the 1.5.1 writer uses, so the strings match a 1.5.1 run's.
+#' }
+#' The upgraded file replaces \code{calibration_diagnostics.json} (written
+#' atomically) so the dashboard reads old runs through the 1.5.1 contract; the
+#' original is kept, byte for byte, as \code{calibration_diagnostics.pre151.json}
+#' (never overwritten). \code{run.mosaic_version} stays the version that ran
+#' the calibration; an \code{upgrade} block records the upgrading version and
+#' the weekly source. A file already at 1.5.1 is returned untouched.
+#' @param dir_output Run directory.
+#' @param write Logical; write the upgraded file (and the backup). Default TRUE.
+#' @param verbose Logical.
+#' @return The upgraded diagnostics (parsed list), invisibly; NULL when the
+#'   run has no readable schema-2 file.
+#' @noRd
+.mosaic_upgrade_calibration_diagnostics <- function(dir_output, write = TRUE, verbose = FALSE) {
+  js <- file.path(dir_output, "3_results", "calibration_diagnostics.json")
+  if (!file.exists(js)) return(NULL)
+  j <- tryCatch(jsonlite::read_json(js, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.null(j) || !identical(as.character(unlist(j$schema_version)), "2")) return(NULL)
+  if (identical(.mosaic_cd_chr(j$schema_revision), .mosaic_cd_revision())) return(invisible(j))
+  num <- function(x) .mosaic_cd_num(x)
+
+  # control.json (nested under $control since v0.98)
+  cf <- file.path(dir_output, "1_inputs", "control.json")
+  ctl <- if (file.exists(cf)) tryCatch(jsonlite::read_json(cf, simplifyVector = TRUE), error = function(e) NULL)
+  ctl <- if (!is.null(ctl$control)) ctl$control else ctl
+  if (!is.null(ctl)) {
+    j$run$n_simulations_requested <- num(ctl$calibration$n_simulations)
+    j$run$max_simulations_total <- num(ctl$calibration$max_simulations_total)
+    j$run$min_ensemble_members <- num(ctl$targets$min_ensemble_members)
+    j$run$max_ensemble_members <- num(ctl$targets$max_ensemble_members)
+    th <- tryCatch(.mosaic_convergence_thresholds(ctl$targets$status_thresholds), error = function(e) NULL)
+    if (!is.null(th)) { j$status$thresholds <- th; j$status$thresholds_source <- "run control" }
+  }
+
+  # weekly series: prediction CSVs + persisted ensemble
+  pdir <- file.path(dir_output, "3_results", "predictions")
+  csvs <- list.files(pdir, pattern = "^predictions_ensemble_.*\\.csv$", full.names = TRUE)
+  csvs <- csvs[!grepl("_all\\.csv$", csvs)]
+  pt <- if (length(csvs)) tryCatch(do.call(rbind, lapply(csvs, utils::read.csv, stringsAsFactors = FALSE)),
+                                   error = function(e) NULL)
+  weekly_source <- "scored_weeks"
+  if (!is.null(pt) && nrow(pt)) {
+    cal <- file.path(dir_output, "2_calibration")
+    rds <- c(file.path(cal, "ensemble_optimized.rds"), file.path(cal, "ensemble_candidate.rds"))
+    rds <- rds[file.exists(rds)]
+    ens <- NULL
+    for (f in rds) {
+      e <- tryCatch(readRDS(f), error = function(e) NULL)
+      if (!is.null(e) && !is.null(e$cases_array)) { ens <- e; break }
+    }
+    wk <- .mosaic_calibration_weekly(pt, ensemble = ens)
+    j$fit$weekly <- wk$weekly
+    j$fit$weekly_meta <- wk$meta
+    j$run$central_method <- wk$meta$central_method
+    weekly_source <- wk$meta$source
+  }
+
+  j$run$mosaic_version <- j$run$mosaic_version %||% NA_character_
+  j <- .mosaic_calrep_complete(j, .mosaic_glossary())
+  j$upgrade <- list(from_schema_revision = NA_character_,
+                    by_mosaic_version = as.character(utils::packageVersion("MOSAIC")),
+                    weekly_source = weekly_source, control_read = !is.null(ctl))
+  if (isTRUE(write)) {
+    ok <- tryCatch({
+      bak <- file.path(dirname(js), "calibration_diagnostics.pre151.json")
+      if (!file.exists(bak)) file.copy(js, bak, overwrite = FALSE, copy.date = TRUE)
+      .mosaic_write_calibration_diagnostics(j, js)
+      TRUE
+    }, error = function(e) {
+      warning("calibration_diagnostics.json not upgraded on disk: ", conditionMessage(e), call. = FALSE)
+      FALSE
+    })
+    if (ok && isTRUE(verbose)) message("Upgraded calibration_diagnostics.json to ", .mosaic_cd_revision(), ": ", js)
+  }
+  invisible(j)
+}
+
 #' Render the calibration-diagnostics report of a run directory
 #'
 #' \code{plot_model_calibration_report()} on
 #' \code{3_results/calibration_diagnostics.json}, written to
-#' \code{3_results/figures/diagnostics/calibration_report.pdf}. A run made
-#' before MOSAIC 1.4.0 (decided from summary.json's \code{schema_version}) gets a
-#' single page carrying the shared legacy notice, and a 1.4.0 run whose
-#' diagnostics file is missing or unreadable gets a page saying so; either
-#' page has the report footer, and nothing fails.
+#' \code{3_results/figures/diagnostics/calibration_report.pdf}. A file from
+#' before MOSAIC 1.5.1 is first upgraded on disk
+#' (\code{.mosaic_upgrade_calibration_diagnostics()}). A run made before MOSAIC
+#' 1.4.0 (decided from summary.json's \code{schema_version}) gets a single page
+#' carrying the shared legacy notice, and a 1.4.0 run whose diagnostics file
+#' is missing or unreadable gets a page saying so; either page has the report
+#' footer, and nothing fails.
 #' @param dir_output Run directory.
 #' @param fig_dir Destination directory.
 #' @param verbose Logical.
@@ -1227,22 +1339,22 @@ render_MOSAIC_figures <- function(dir_output,
   # "made before 1.4.0".
   schema2 <- !is.null(sm) && .mosaic_calrep_is_schema2(sm)
   if (file.exists(js) && (schema2 || is.null(sm))) {
-    out <- tryCatch(plot_model_calibration_report(js, dir_output = fig_dir, verbose = verbose),
+    up <- tryCatch(.mosaic_upgrade_calibration_diagnostics(dir_output, write = TRUE, verbose = verbose),
+                   error = function(e) {
+                     warning("calibration_diagnostics.json upgrade failed: ", conditionMessage(e), call. = FALSE)
+                     NULL
+                   })
+    out <- tryCatch(plot_model_calibration_report(up %||% js, dir_output = fig_dir, verbose = verbose),
                     error = function(e) {
                       warning("calibration report: ", conditionMessage(e), call. = FALSE)
                       NULL
                     })
     if (!is.null(out)) return(out)
   }
+  gl <- .mosaic_glossary()
   what <- if (schema2) "missing" else "pre140"
-  notice <- .mosaic_calrep_legacy_text(what)
-  detail <- if (schema2)
-    paste("This run was made by MOSAIC 1.4.0 or later, but its calibration_diagnostics.json is missing",
-          "or unreadable,\nso the report cannot be drawn. Its convergence status is in 3_results/summary.json;",
-          "re-run render_MOSAIC_figures() after restoring the file.")
-  else paste("This run was made before MOSAIC 1.4.0, so it has no convergence status on the",
-             "1.4.0 scale and no calibration_diagnostics.json;\nits earlier diagnostics remain in",
-             "2_calibration/diagnostics/ and 3_results/summary.json.")
+  notice <- .mosaic_calrep_legacy_text(what, gl)
+  detail <- .mosaic_calrep_legacy_text(paste0(what, "_detail"), gl)
   # The version that made the run (environment.json R$MOSAIC), and the run's
   # location rather than the directory name (PN3).
   env_path <- file.path(dir_output, "1_inputs", "environment.json")
@@ -1253,8 +1365,8 @@ render_MOSAIC_figures <- function(dir_output,
     tryCatch(paste(unlist(jsonlite::read_json(cfg_path)$location_name), collapse = ", "), error = function(e) NULL)
   run_lab <- unlist(sm$location %||% NULL) %||% cfg_loc %||% basename(normalizePath(dir_output, mustWork = FALSE))
   if (length(run_lab) != 1L || !nzchar(run_lab)) run_lab <- basename(normalizePath(dir_output, mustWork = FALSE))
-  foot <- sprintf("%s  |  MOSAIC %s  |  generated %s  |  page 1 of 1", run_lab,
-                  if (length(ver) == 1L) ver else "?", format(Sys.Date()))
+  foot <- .mosaic_fill(.mosaic_gl_text(gl, "footer"), title = run_lab, version = if (length(ver) == 1L) ver else "?",
+                       date = format(Sys.Date()), page = 1L, pages = 1L)
   dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
   out <- file.path(fig_dir, "calibration_report.pdf")
   tmp <- tempfile(pattern = "calibration_report_", tmpdir = fig_dir, fileext = ".pdf")
@@ -1262,7 +1374,7 @@ render_MOSAIC_figures <- function(dir_output,
   dev <- grDevices::dev.cur()
   on.exit(if (dev %in% grDevices::dev.list()) grDevices::dev.off(dev), add = TRUE)
   grid::grid.newpage()
-  grid::grid.text("Calibration diagnostics", x = 0.06, y = 0.9, hjust = 0,
+  grid::grid.text(.mosaic_calrep_legacy_text("title", gl), x = 0.06, y = 0.9, hjust = 0,
                   gp = grid::gpar(fontsize = 18, fontface = "bold"))
   grid::grid.text(run_lab, x = 0.06, y = 0.85, hjust = 0, gp = grid::gpar(fontsize = 11, col = "grey40"))
   grid::grid.text(paste0(notice, "."), x = 0.06, y = 0.75, hjust = 0, gp = grid::gpar(fontsize = 13))

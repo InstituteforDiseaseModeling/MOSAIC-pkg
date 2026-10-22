@@ -251,7 +251,7 @@ calc_convergence_status <- function(ess_best, ess_best_target = 200, mce_p90, kh
      proj_note <- if (reliable) "" else if (stalled)
           sprintf(" (unreliable: ESS growth slope %.2f < %s)", slope, th$slope_stall)
           else " (indicative only: the ESS growth slope is not yet known)"
-     stall_txt <- "more simulations alone are inefficient; use a sharper sampler or review the priors"
+     stall_txt <- .mosaic_stall_remedy_text()
 
      # ---- colours ---------------------------------------------------------------
      ess_yellow <- th$ess_yellow_frac * ess_best_target
@@ -433,23 +433,10 @@ calc_convergence_status <- function(ess_best, ess_best_target = 200, mce_p90, kh
           reason = c(ess_reason, mce_reason, khat_reason, flat_reason),
           stringsAsFactors = FALSE)
 
-     flags <- stats::setNames(list(), character(0))
-     if (budget_exhausted)
-          flags[["budget_cap_reached"]] <- if (is.finite(n_attempted) || is.finite(n_draws))
-               sprintf("budget cap reached: %s simulations (max_simulations_total)",
-                       .mosaic_fmt_count(if (is.finite(n_attempted)) n_attempted else n_draws))
-          else "budget cap reached (max_simulations_total)"
-     if (stalled)
-          flags[["ess_growth_stalled"]] <- sprintf(
-               "stalled ESS growth: log-log slope %.2f < %s over the latter part of the run; %s",
-               slope, th$slope_stall, stall_txt)
-     if (!is.na(size_bound) && size_bound %in% c("min_members", "max_members", "bound"))
-          flags[["ensemble_size_bound"]] <- switch(size_bound,
-               min_members = "ensemble at the min_members bound",
-               max_members = "ensemble at the max_members bound (the ESS target is not reached within it)",
-               bound = "ensemble at a member bound")
-     if (fixed_mode)
-          flags[["fixed_budget"]] <- "fixed-budget run: the status is assessed, not used to stop"
+     flags <- .mosaic_convergence_flags(budget_exhausted = budget_exhausted, stalled = stalled,
+                                        size_bound = size_bound, fixed_mode = fixed_mode,
+                                        n_attempted = n_attempted, n_draws = n_draws, slope = slope,
+                                        slope_stall = th$slope_stall)
 
      list(status = status,
           label = switch(status, green = "Converged: enough simulations",
@@ -476,6 +463,49 @@ calc_convergence_status <- function(ess_best, ess_best_target = 200, mce_p90, kh
           thresholds = th)
 }
 
+
+# The remedy quoted by the stalled-growth reason and flag.
+.mosaic_stall_remedy_text <- function() {
+     "more simulations alone are inefficient; use a sharper sampler or review the priors"
+}
+
+#' Convergence flags and their plain-language text
+#'
+#' The flags of \code{calc_convergence_status()}, in their fixed order, each
+#' with its text. Shared by the status and by the 1.5.1 upgrade of an older
+#' calibration_diagnostics.json, which regenerates each flag's text from the
+#' numbers in the file (the file joined them into one string, and a flag's own
+#' text can contain "; ").
+#' @param budget_exhausted,stalled,fixed_mode Logical.
+#' @param size_bound \code{"min_members"}, \code{"max_members"}, \code{"bound"}
+#'   or \code{NA}.
+#' @param n_attempted,n_draws Simulations attempted and valid draws (the
+#'   budget flag quotes the first, else the second).
+#' @param slope,slope_stall ESS growth slope and its stall threshold.
+#' @return Named list, flag id -> text (empty when no flag is raised).
+#' @noRd
+.mosaic_convergence_flags <- function(budget_exhausted, stalled, size_bound, fixed_mode,
+                                      n_attempted = NA_real_, n_draws = NA_real_, slope = NA_real_,
+                                      slope_stall = 0.8) {
+     flags <- stats::setNames(list(), character(0))
+     if (isTRUE(budget_exhausted))
+          flags[["budget_cap_reached"]] <- if (is.finite(n_attempted) || is.finite(n_draws))
+               sprintf("budget cap reached: %s simulations (max_simulations_total)",
+                       .mosaic_fmt_count(if (is.finite(n_attempted)) n_attempted else n_draws))
+          else "budget cap reached (max_simulations_total)"
+     if (isTRUE(stalled))
+          flags[["ess_growth_stalled"]] <- sprintf(
+               "stalled ESS growth: log-log slope %.2f < %s over the latter part of the run; %s",
+               slope, slope_stall, .mosaic_stall_remedy_text())
+     if (length(size_bound) == 1L && !is.na(size_bound) && size_bound %in% c("min_members", "max_members", "bound"))
+          flags[["ensemble_size_bound"]] <- switch(size_bound,
+               min_members = "ensemble at the min_members bound",
+               max_members = "ensemble at the max_members bound (the ESS target is not reached within it)",
+               bound = "ensemble at a member bound")
+     if (isTRUE(fixed_mode))
+          flags[["fixed_budget"]] <- "fixed-budget run: the status is assessed, not used to stop"
+     flags
+}
 
 #' Is a draw projection reliable?
 #'
@@ -653,40 +683,87 @@ calc_convergence_status <- function(ess_best, ess_best_target = 200, mce_p90, kh
 #' Calibration metric glossary
 #'
 #' Reads \code{inst/extdata/metric_glossary.yml}, the single source of the
-#' metric definitions shown by the calibration report appendix, the docs and
-#' the dashboard.
+#' metric definitions, formulas, target templates and fixed wording shown by
+#' the calibration report, its appendix, the docs and the dashboard (schema at
+#' the top of the file). Every entry must carry the fields of
+#' \code{.mosaic_glossary_fields()}; a formula must parse as plotmath and every
+#' rich-text token it names must be defined.
 #' @param path Glossary file. Default: the installed package copy.
-#' @return A data frame, one row per metric, with columns \code{key},
-#'   \code{label}, \code{definition}, \code{formula}, \code{how_to_read},
-#'   \code{threshold} and \code{not_a_measure_of}; attribute \code{"version"}.
+#' @return A data frame, one row per metric, with the columns of
+#'   \code{.mosaic_glossary_fields()} (\code{formula_plotmath} and
+#'   \code{formula_katex} are \code{""} for a metric without a formula;
+#'   \code{target_template} and \code{target_note} are \code{NA} when absent);
+#'   attributes \code{"version"}, \code{"tokens"} (named list of
+#'   \code{text}/\code{ascii}/\code{plotmath}/\code{katex}), \code{"report"}
+#'   (the report's fixed wording) and \code{"retired"} (the retired-metrics
+#'   note).
 #' @noRd
 .mosaic_glossary <- function(path = system.file("extdata", "metric_glossary.yml", package = "MOSAIC")) {
      if (!nzchar(path) || !file.exists(path))
           stop("metric glossary not found: ", path, call. = FALSE)
      g <- yaml::read_yaml(path)
-     fields <- .mosaic_glossary_fields()
      if (!is.list(g$metrics) || !length(g$metrics))
           stop("metric glossary has no 'metrics' entries.", call. = FALSE)
+     req <- .mosaic_glossary_required()
+     may_empty <- c("formula_plotmath", "formula_katex")
+     optional <- c("target_template", "target_note")
+     is_str <- function(v) length(v) == 1L && is.character(v)
      rows <- lapply(seq_along(g$metrics), function(i) {
           e <- g$metrics[[i]]
-          miss <- fields[!vapply(fields, function(f) {
+          miss <- req[!vapply(req, function(f) {
                v <- e[[f]]
-               length(v) == 1L && is.character(v) && nzchar(trimws(v))
+               is_str(v) && (f %in% may_empty || nzchar(trimws(v)))
           }, logical(1))]
           if (length(miss))
                stop(sprintf("metric glossary entry %d (%s) lacks: %s", i, e$key %||% "?",
                             paste(miss, collapse = ", ")), call. = FALSE)
-          as.data.frame(e[fields], stringsAsFactors = FALSE)
+          for (f in optional) {
+               v <- e[[f]]
+               if (!is.null(v) && !is_str(v))
+                    stop(sprintf("metric glossary entry %d (%s): %s must be a string or null", i, e$key, f),
+                         call. = FALSE)
+               e[[f]] <- if (is.null(v)) NA_character_ else v
+          }
+          if (nzchar(e$formula_plotmath))
+               tryCatch(str2expression(e$formula_plotmath), error = function(err)
+                    stop(sprintf("metric glossary entry %s: formula_plotmath does not parse: %s", e$key,
+                                 conditionMessage(err)), call. = FALSE))
+          as.data.frame(e[.mosaic_glossary_fields()], stringsAsFactors = FALSE)
      })
      out <- do.call(rbind, rows)
      if (anyDuplicated(out$key))
           stop("metric glossary has duplicate keys: ",
                paste(unique(out$key[duplicated(out$key)]), collapse = ", "), call. = FALSE)
+     tokens <- g$tokens %||% list()
+     for (nm in names(tokens)) {
+          tk <- tokens[[nm]]
+          if (!all(vapply(c("text", "ascii", "plotmath", "katex"), function(f) is_str(tk[[f]]), logical(1))))
+               stop("metric glossary token '", nm, "' needs text, ascii, plotmath and katex.", call. = FALSE)
+          tryCatch(str2lang(tk$plotmath), error = function(err)
+               stop("metric glossary token '", nm, "': plotmath does not parse.", call. = FALSE))
+     }
+     used <- unlist(regmatches(c(out$short_label, out$what_it_tells_you, out$target_template),
+                               gregexpr("\\{[A-Za-z0-9_]+\\}", c(out$short_label, out$what_it_tells_you,
+                                                                  out$target_template))))
+     unknown <- setdiff(gsub("[{}]", "", used), c(names(tokens), .mosaic_glossary_placeholders()))
+     if (length(unknown))
+          stop("metric glossary uses undefined token(s): ", paste(unique(unknown), collapse = ", "), call. = FALSE)
      attr(out, "version") <- g$version
+     attr(out, "tokens") <- tokens
+     attr(out, "report") <- g$report %||% list()
+     attr(out, "retired") <- g$retired_metrics %||% list()
      out
 }
 
-# Required fields of every glossary entry.
+# Fields every glossary entry carries (the first seven are the 1.4.0 schema).
 .mosaic_glossary_fields <- function() {
-     c("key", "label", "definition", "formula", "how_to_read", "threshold", "not_a_measure_of")
+     c("key", "label", "definition", "formula", "how_to_read", "threshold", "not_a_measure_of",
+       "short_label", "what_it_tells_you", "formula_plotmath", "formula_katex", "target_template",
+       "target_note", "units")
 }
+
+# The fields an entry must define (target_template and target_note may be absent).
+.mosaic_glossary_required <- function() setdiff(.mosaic_glossary_fields(), c("target_template", "target_note"))
+
+# Placeholders filled from calibration_diagnostics.json (metric_glossary.yml header).
+.mosaic_glossary_placeholders <- function() c("op", "op_yellow", "green", "yellow", "target", "min", "max")

@@ -1,7 +1,8 @@
 {
   "schema_version": "2",
+  "schema_revision": "1.5.1",
   "run": {
-    "mosaic_version": "1.3.0",
+    "mosaic_version": "1.5.1",
     "locations": ["MOZ"],
     "n_locations": 1,
     "mode": "fixed",
@@ -14,7 +15,16 @@
     "n_iterations": 3,
     "n_iter_ensemble": 10,
     "date_start": "2024-01-01",
-    "date_stop": "2024-06-30"
+    "date_stop": "2024-06-30",
+    "n_simulations_requested": null,
+    "max_simulations_total": 150000,
+    "min_ensemble_members": 30,
+    "max_ensemble_members": 1000,
+    "central_method": {
+      "cases": "median",
+      "deaths": "mean"
+    },
+    "glossary_version": "1.5.1"
   },
   "status": {
     "convergence_status": "yellow",
@@ -22,6 +32,18 @@
     "reasons": ["the data carry little information: the posterior is close to the prior (flat likelihood: the untempered likelihood spreads its weight over 100% of the draws, >= 1%)"],
     "flags": ["ensemble_size_bound", "fixed_budget"],
     "flags_text": "ensemble at the max_members bound (the ESS target is not reached within it); fixed-budget run: the status is assessed, not used to stop",
+    "flags_detail": [
+      {
+        "id": "ensemble_size_bound",
+        "text": "ensemble at the max_members bound (the ESS target is not reached within it)",
+        "display": true
+      },
+      {
+        "id": "fixed_budget",
+        "text": "fixed-budget run: the status is assessed, not used to stop",
+        "display": false
+      }
+    ],
     "stopping_rule_met": null,
     "checks": [
       {
@@ -31,36 +53,89 @@
         "threshold_green": 200,
         "threshold_yellow": 100,
         "colour": "green",
-        "reason": "ensemble ESS 1,000 >= 200"
+        "reason": "ensemble ESS 1,000 >= 200",
+        "key": "ess_best",
+        "operator": "ge",
+        "operator_yellow": "ge",
+        "value_display": "1,000",
+        "threshold_green_display": "200",
+        "threshold_yellow_display": "100",
+        "target_display": "{ge} 200 / {ge} 100",
+        "target_note": null,
+        "status_display": "GREEN"
       },
       {
         "check": "mce",
-        "label": "Monte Carlo error (90th percentile)",
+        "label": "Monte Carlo error (p90)",
         "value": 0.0390715986397863,
         "threshold_green": 0.1,
         "threshold_yellow": 0.15,
         "colour": "green",
-        "reason": "Monte Carlo standard error of the posterior means 3.9% of the posterior SD (90th percentile over parameters) <= 10.0%"
+        "reason": "Monte Carlo standard error of the posterior means 3.9% of the posterior SD (90th percentile over parameters) <= 10.0%",
+        "key": "mce",
+        "operator": "le",
+        "operator_yellow": "le",
+        "value_display": "3.9%",
+        "threshold_green_display": "10%",
+        "threshold_yellow_display": "15%",
+        "target_display": "{le} 10% / {le} 15%",
+        "target_note": null,
+        "status_display": "GREEN"
       },
       {
         "check": "khat",
-        "label": "Validity guard (Pareto k-hat)",
+        "label": "Weight tail k̂",
         "value": -0.868196761769806,
         "threshold_green": 0.5,
         "threshold_yellow": 0.7,
         "colour": "green",
-        "reason": "Pareto k-hat of the tempered weights -0.87 < 0.5"
+        "reason": "Pareto k-hat of the tempered weights -0.87 < 0.5",
+        "key": "khat_tempered",
+        "operator": "lt",
+        "operator_yellow": "lt",
+        "value_display": "−0.87",
+        "threshold_green_display": "0.5",
+        "threshold_yellow_display": "0.7",
+        "target_display": "{lt} 0.5 / {lt} 0.7",
+        "target_note": null,
+        "status_display": "GREEN"
       },
       {
         "check": "informativeness",
-        "label": "Data informativeness",
+        "label": "Data informativeness f₁",
         "value": 0.99999991613859,
         "threshold_green": 0.01,
         "threshold_yellow": null,
         "colour": "yellow",
-        "reason": "the data carry little information: the posterior is close to the prior (flat likelihood: the untempered likelihood spreads its weight over 100% of the draws, >= 1%)"
+        "reason": "the data carry little information: the posterior is close to the prior (flat likelihood: the untempered likelihood spreads its weight over 100% of the draws, >= 1%)",
+        "key": "flat_likelihood",
+        "operator": "lt",
+        "operator_yellow": "ge",
+        "value_display": "100%",
+        "threshold_green_display": "1%",
+        "threshold_yellow_display": "1%",
+        "target_display": "{lt} 1% / {ge} 1%",
+        "target_note": "flat; no red",
+        "status_display": "YELLOW"
       }
-    ]
+    ],
+    "thresholds": {
+      "ess_yellow_frac": 0.5,
+      "mce_green": 0.1,
+      "mce_yellow": 0.15,
+      "khat_green": 0.5,
+      "khat_yellow": 0.7,
+      "slope_stall": 0.8,
+      "flat_ess_frac": 0.01
+    },
+    "thresholds_source": "run control",
+    "headline_display": "OVERALL: YELLOW — Usable with caution",
+    "palette": {
+      "green": "#228833",
+      "yellow": "#CCBB44",
+      "red": "#CC3311",
+      "grey": "grey60"
+    }
   },
   "sampling": {
     "n_locations": 1,
@@ -107,7 +182,70 @@
         "best_gap": 0,
         "top100_gap": -1.215e-05
       }
+    ],
+    "details_display": [
+      {
+        "key": "valid_draws",
+        "value": "9,200 of 9,200 attempted"
+      },
+      {
+        "key": "posterior",
+        "value": "coarsened, {alpha} = 10, {eta} = 0.0067"
+      },
+      {
+        "key": "ess_all",
+        "value": "9,200  (target 1,000)"
+      },
+      {
+        "key": "mass",
+        "value": "10.9%"
+      },
+      {
+        "key": "runs",
+        "value": "10"
+      },
+      {
+        "key": "scored",
+        "value": "1,500  (burn-in 21 days)"
+      }
     ]
+  },
+  "info": {
+    "ess_growth": {
+      "key": "ess_growth_slope",
+      "value": null,
+      "display": "n/a",
+      "target": 0.8,
+      "operator": "ge",
+      "target_value_display": "0.8",
+      "target_display": "{ge} 0.8",
+      "status": "na",
+      "status_display": "n/a"
+    },
+    "budget": {
+      "key": "budget",
+      "value": 9200,
+      "cap": 9200,
+      "display": "9,200",
+      "sub_display": "of 9,200",
+      "target": null,
+      "target_display": "n/a",
+      "target_note": "sampling checks green",
+      "status": "ok",
+      "status_display": "ok"
+    },
+    "ensemble_size": {
+      "key": "ensemble_members",
+      "value": 1000,
+      "min": 30,
+      "max": 1000,
+      "binding": "max_members",
+      "display": "1,000",
+      "sub_display": "at max",
+      "target_display": "30–1,000",
+      "status": "at_bound",
+      "status_display": "at bound"
+    }
   },
   "parameters": [
     {
@@ -192,6 +330,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-01-01",
+        "scored": true,
         "observed": 298,
         "predicted": 303.8,
         "lo50": 258,
@@ -203,6 +342,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-01-08",
+        "scored": true,
         "observed": 236,
         "predicted": 262.8,
         "lo50": 221,
@@ -214,6 +354,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-01-15",
+        "scored": true,
         "observed": 221,
         "predicted": 222.7,
         "lo50": 185,
@@ -225,6 +366,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-01-22",
+        "scored": true,
         "observed": 173,
         "predicted": 184.8,
         "lo50": 152,
@@ -236,6 +378,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-01-29",
+        "scored": true,
         "observed": 143,
         "predicted": 150.3,
         "lo50": 121,
@@ -247,6 +390,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-02-05",
+        "scored": true,
         "observed": 109,
         "predicted": 120.1,
         "lo50": 96,
@@ -258,6 +402,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-02-12",
+        "scored": true,
         "observed": 99,
         "predicted": 95.27,
         "lo50": 73,
@@ -269,6 +414,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-02-19",
+        "scored": true,
         "observed": 70,
         "predicted": 76.5,
         "lo50": 57,
@@ -280,6 +426,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-02-26",
+        "scored": true,
         "observed": 57,
         "predicted": 64.37,
         "lo50": 47,
@@ -291,6 +438,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-03-04",
+        "scored": true,
         "observed": 66,
         "predicted": 59.26,
         "lo50": 42,
@@ -302,6 +450,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-03-11",
+        "scored": true,
         "observed": 51,
         "predicted": 61.31,
         "lo50": 44,
@@ -313,6 +462,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-03-18",
+        "scored": true,
         "observed": 69,
         "predicted": 70.48,
         "lo50": 52,
@@ -324,6 +474,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-03-25",
+        "scored": true,
         "observed": 83,
         "predicted": 86.47,
         "lo50": 65,
@@ -335,6 +486,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-04-01",
+        "scored": true,
         "observed": 115,
         "predicted": 108.8,
         "lo50": 86,
@@ -346,6 +498,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-04-08",
+        "scored": true,
         "observed": 135,
         "predicted": 136.8,
         "lo50": 110,
@@ -357,6 +510,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-04-15",
+        "scored": true,
         "observed": 175,
         "predicted": 169.6,
         "lo50": 138,
@@ -368,6 +522,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-04-22",
+        "scored": true,
         "observed": 184,
         "predicted": 206.2,
         "lo50": 170,
@@ -379,6 +534,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-04-29",
+        "scored": true,
         "observed": 229,
         "predicted": 245.4,
         "lo50": 206,
@@ -390,6 +546,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-05-06",
+        "scored": true,
         "observed": 264,
         "predicted": 286.2,
         "lo50": 242,
@@ -401,6 +558,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-05-13",
+        "scored": true,
         "observed": 274,
         "predicted": 327.2,
         "lo50": 279,
@@ -412,6 +570,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-05-20",
+        "scored": true,
         "observed": 391,
         "predicted": 367.2,
         "lo50": 316,
@@ -423,6 +582,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-05-27",
+        "scored": true,
         "observed": 380,
         "predicted": 404.9,
         "lo50": 350,
@@ -434,6 +594,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-06-03",
+        "scored": true,
         "observed": 421,
         "predicted": 439.3,
         "lo50": 381,
@@ -445,6 +606,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-06-10",
+        "scored": true,
         "observed": 467,
         "predicted": 469.2,
         "lo50": 408,
@@ -456,6 +618,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-06-17",
+        "scored": true,
         "observed": 429,
         "predicted": 493.8,
         "lo50": 431,
@@ -467,6 +630,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-06-24",
+        "scored": true,
         "observed": 469,
         "predicted": 512.2,
         "lo50": 448,
@@ -478,6 +642,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-07-01",
+        "scored": true,
         "observed": 529,
         "predicted": 524,
         "lo50": 459,
@@ -489,6 +654,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-07-08",
+        "scored": true,
         "observed": 520,
         "predicted": 528.8,
         "lo50": 462,
@@ -500,6 +666,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-07-15",
+        "scored": true,
         "observed": 456,
         "predicted": 526.4,
         "lo50": 461,
@@ -511,6 +678,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-07-22",
+        "scored": true,
         "observed": 489,
         "predicted": 516.9,
         "lo50": 452,
@@ -522,6 +690,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-07-29",
+        "scored": true,
         "observed": 463,
         "predicted": 500.6,
         "lo50": 437,
@@ -533,6 +702,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-08-05",
+        "scored": true,
         "observed": 422,
         "predicted": 478,
         "lo50": 417,
@@ -544,6 +714,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-08-12",
+        "scored": true,
         "observed": 418,
         "predicted": 449.7,
         "lo50": 391,
@@ -555,6 +726,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-08-19",
+        "scored": true,
         "observed": 394,
         "predicted": 416.7,
         "lo50": 361,
@@ -566,6 +738,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-08-26",
+        "scored": true,
         "observed": 374,
         "predicted": 380,
         "lo50": 327,
@@ -577,6 +750,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-09-02",
+        "scored": true,
         "observed": 343,
         "predicted": 340.6,
         "lo50": 291,
@@ -588,6 +762,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-09-09",
+        "scored": true,
         "observed": 273,
         "predicted": 299.8,
         "lo50": 255,
@@ -599,6 +774,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-09-16",
+        "scored": true,
         "observed": 257,
         "predicted": 258.8,
         "lo50": 218,
@@ -610,6 +786,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-09-23",
+        "scored": true,
         "observed": 213,
         "predicted": 218.9,
         "lo50": 182,
@@ -621,6 +798,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-09-30",
+        "scored": true,
         "observed": 178,
         "predicted": 181.3,
         "lo50": 149,
@@ -632,6 +810,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-10-07",
+        "scored": true,
         "observed": 159,
         "predicted": 147.2,
         "lo50": 118,
@@ -643,6 +822,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-10-14",
+        "scored": true,
         "observed": 95,
         "predicted": 117.5,
         "lo50": 93,
@@ -654,6 +834,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-10-21",
+        "scored": true,
         "observed": 91,
         "predicted": 93.2,
         "lo50": 71,
@@ -665,6 +846,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-10-28",
+        "scored": true,
         "observed": 76,
         "predicted": 75.04,
         "lo50": 55,
@@ -676,6 +858,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-11-04",
+        "scored": true,
         "observed": 76,
         "predicted": 63.57,
         "lo50": 46,
@@ -687,6 +870,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-11-11",
+        "scored": true,
         "observed": 60,
         "predicted": 59.14,
         "lo50": 42,
@@ -698,6 +882,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-11-18",
+        "scored": true,
         "observed": 54,
         "predicted": 61.89,
         "lo50": 44,
@@ -709,6 +894,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-11-25",
+        "scored": true,
         "observed": 62,
         "predicted": 71.73,
         "lo50": 53,
@@ -720,6 +906,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-12-02",
+        "scored": true,
         "observed": 72,
         "predicted": 88.35,
         "lo50": 68,
@@ -731,6 +918,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-12-09",
+        "scored": true,
         "observed": 112,
         "predicted": 111.3,
         "lo50": 87,
@@ -742,6 +930,7 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-12-16",
+        "scored": true,
         "observed": 156,
         "predicted": 139.7,
         "lo50": 112,
@@ -753,12 +942,44 @@
         "location": "MOZ",
         "metric": "cases",
         "week": "2024-12-23",
+        "scored": true,
         "observed": 177,
         "predicted": 173,
         "lo50": 141,
         "hi50": 187,
         "lo95": 102,
         "hi95": 234
+      }
+    ],
+    "weekly_meta": {
+      "source": "daily_sums",
+      "central_method": {
+        "cases": "median",
+        "deaths": "mean"
+      },
+      "intervals": {
+        "cases": null,
+        "deaths": null
+      },
+      "quantiles": [0.025, 0.25, 0.75, 0.975],
+      "week_start": "Monday + week_offset",
+      "week_offset": {
+        "MOZ": 0
+      },
+      "all_locations_id": null,
+      "all_locations_week_offset": null
+    },
+    "table_display": [
+      {
+        "metric": "cases",
+        "subset": "scored",
+        "label": "Cases",
+        "r2": "0.93",
+        "bias": "1.05",
+        "cov50": "60%",
+        "cov95": "97%",
+        "wis": "2.47",
+        "n_scored": "366"
       }
     ]
   },

@@ -3298,16 +3298,19 @@ run_MOSAIC <- function(config,
   # from parameter_estimates.csv + config.json + the suitability inputs.)
 
   # Calibration diagnostics (3_results/calibration_diagnostics.json, schema 2):
-  # every number of the calibration-diagnostics report, written whatever
-  # `plots` is (CLAUDE.md lesson #10), and before the render below, which
-  # draws the report (3_results/figures/diagnostics/calibration_report.pdf)
-  # from it.
+  # every number and display string of the calibration-diagnostics report,
+  # written whatever `plots` is (CLAUDE.md lesson #10), and before the render
+  # below, which draws the report
+  # (3_results/figures/diagnostics/calibration_report.pdf) from it. The weekly
+  # fit series sums the canonical ensemble's member trajectories to weeks
+  # (.mosaic_calibration_weekly()), so it needs the in-memory arrays here.
   tryCatch({
     cal_diag <- .mosaic_calibration_diagnostics(
       conv_health = conv_health, state = state, config = config, control = control,
       n_obs_scored = n_obs_scored, ess_replay = ess_replay,
       quantiles_file = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
-      prediction_table = ensemble_table, is_diag_all = is_diag_all)
+      prediction_table = ensemble_table, is_diag_all = is_diag_all,
+      ensemble = ensemble, central_method = central_method)
     .mosaic_write_calibration_diagnostics(cal_diag, file.path(dirs$results, "calibration_diagnostics.json"))
     log_msg("  Saved 3_results/calibration_diagnostics.json")
   }, error = function(e) log_warn("calibration_diagnostics.json not written: %s", conditionMessage(e)))

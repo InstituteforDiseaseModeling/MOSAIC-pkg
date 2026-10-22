@@ -15,15 +15,16 @@
                              n_sims = 150L, optimize_subset = NULL, targets_extra = list(),
                              plots = FALSE, ll_mode = c("normal", "onegood"),
                              calib_extra = list(), predictions_extra = list(), keep_tier = FALSE,
-                             assign_targets = FALSE, resume = FALSE, clean_output = NULL) {
+                             assign_targets = FALSE, resume = FALSE, clean_output = NULL,
+                             io_extra = list(), iso = "MOZ") {
   mode <- match.arg(mode)
   ll_mode <- match.arg(ll_mode)
-  config <- get_location_config(iso = "MOZ", config = MOSAIC::config_default)
+  config <- get_location_config(iso = iso, config = MOSAIC::config_default)
   drop <- c("metadata", "zeta_ratio", "decay_days_spread", "reported_cases_weight",
             "reported_deaths_weight", "reported_tier", "output_file_path")
   if (isTRUE(keep_tier)) drop <- setdiff(drop, "reported_tier")
   for (f in drop) config[[f]] <- NULL
-  priors <- get_location_priors(iso = "MOZ", priors = MOSAIC::priors_default)
+  priors <- get_location_priors(iso = iso, priors = MOSAIC::priors_default)
   n_loc <- length(config$location_name)
   n_t <- as.integer(as.Date(config$date_stop) - as.Date(config$date_start)) + 1L
   oc <- matrix(as.numeric(config$reported_cases), nrow = n_loc)
@@ -64,6 +65,7 @@
     parallel = list(enable = FALSE, n_cores = 1L, progress = FALSE),
     paths = list(plots = plots, clean_output = clean_output %||% !isTRUE(resume)),
     logging = list(verbose = FALSE))
+  control$io[names(io_extra)] <- io_extra
   if (isTRUE(assign_targets)) for (k in names(targets)) control$targets[[k]] <- targets[[k]]
   res <- testthat::with_mocked_bindings(
     suppressWarnings(suppressMessages(run_MOSAIC(config = config, priors = priors,

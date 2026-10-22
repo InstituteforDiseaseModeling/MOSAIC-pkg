@@ -1,26 +1,307 @@
-# MOSAIC calibration metric glossary (MOSAIC 1.4.0).
+# MOSAIC calibration metric glossary (MOSAIC 1.5.1).
 #
-# One entry per metric shown in the calibration-diagnostics report, summary.json
-# and the dashboard. Single source for the report appendix, the docs
-# (MOSAIC-docs/05-model-calibration.Rmd) and the dashboard; read it with
-# MOSAIC:::.mosaic_glossary().
+# Single source of every word, formula and target template shown by the
+# calibration-diagnostics report (plot_model_calibration_report()), the report
+# appendix, the docs (MOSAIC-docs/05-model-calibration.Rmd) and the dashboard.
+# Read it with MOSAIC:::.mosaic_glossary(). The report reads nothing but this
+# file and 3_results/calibration_diagnostics.json.
 #
-# Fields (all required):
-#   key               identifier; matches the summary.json field where one exists
-#   label             display name
-#   definition        what the number is, in plain language
-#   formula           how it is computed
-#   how_to_read       what high / low values mean
-#   threshold         bands used by MOSAIC, always marked as a convention, or "none"
-#   not_a_measure_of  what the number does not tell you
+# Schema (version 1.5.1; every 1.4.0 field is unchanged, so a 1.4.0 reader
+# still finds `version` and `metrics[]` with its seven fields):
 #
-# Design: claude/reporting_audit/SPEC_CONVERGENCE.md (sections 2 and 5).
+#   version          glossary version; written to calibration_diagnostics.json
+#                    as run.glossary_version
+#   tokens           rich-text tokens. Any text field below, and every *_display
+#                    string in calibration_diagnostics.json, may contain {name}
+#                    for a token defined here. Render a token as `text` (Unicode),
+#                    `ascii` (plain-text fallback; what the PDF uses outside
+#                    formulas), `plotmath` (R plotmath, the PDF) or `katex`.
+#   placeholders     {name} slots that are NOT tokens: they are filled from the
+#                    diagnostics file before the text is shown (listed below).
+#   report           the report's fixed wording: section titles, captions,
+#                    column headings, dividers, status words, the legacy notice.
+#   retired_metrics  metrics removed in 1.4.0, with the reason (shown in the
+#                    report appendix).
+#   metrics[]        one entry per metric:
+#     key                identifier; matches the summary.json /
+#                        calibration_diagnostics.json field where one exists
+#     label              display name (appendix heading)
+#     short_label        table name; rich text (tokens allowed)
+#     what_it_tells_you  one line for the report's "What it tells you" column;
+#                        rich text, placeholders allowed
+#     formula_plotmath   the formula as R plotmath; each line is one expression
+#                        (parsed with str2expression()); "" when the metric is a
+#                        category or a figure and has no formula
+#     formula_katex      the same formula for KaTeX ("" when none)
+#     target_template    how its target is written, from placeholders and tokens,
+#                        or null when it has none
+#     target_note        optional small print under the target
+#     units              what the value is measured in
+#     definition         what the number is, in plain language
+#     formula            how it is computed, in words
+#     how_to_read        what high / low values mean
+#     threshold          bands used by MOSAIC, always marked as a convention, or "none"
+#     not_a_measure_of   what the number does not tell you
+#
+# Placeholders: in a status check, {op} / {op_yellow} are the operator tokens
+# of status.checks[].operator / operator_yellow and {green} / {yellow} the
+# threshold_green_display / threshold_yellow_display strings; {target} is an
+# info row's target_value_display; {min} / {max} are run.min_ensemble_members /
+# run.max_ensemble_members. The report strings name their own placeholders.
+#
+# Design: claude/reporting_audit/SPEC_CONVERGENCE.md (sections 2 and 5);
+# output contract (versioned with the package):
+# inst/extdata/calibration_diagnostics_schema.md.
 
-version: "1.4.0"
+version: "1.5.1"
+
+tokens:
+  ge: {text: "≥", ascii: ">=", plotmath: "phantom() >= phantom()", katex: "\\ge"}
+  le: {text: "≤", ascii: "<=", plotmath: "phantom() <= phantom()", katex: "\\le"}
+  lt: {text: "<", ascii: "<", plotmath: "phantom() < phantom()", katex: "<"}
+  khat: {text: "k̂", ascii: "k-hat", plotmath: "widehat(k)", katex: "\\hat{k}"}
+  alpha: {text: "α", ascii: "alpha", plotmath: "alpha", katex: "\\alpha"}
+  eta: {text: "η", ascii: "eta", plotmath: "eta", katex: "\\eta"}
+  f1: {text: "f₁", ascii: "f1", plotmath: "f[1]", katex: "f_1"}
+  ESSall: {text: "ESS_all", ascii: "ESS_all", plotmath: "ESS[all]", katex: "\\mathrm{ESS}_{\\mathrm{all}}"}
+  ESSE: {text: "ESS_E", ascii: "ESS_E", plotmath: "ESS[E]", katex: "\\mathrm{ESS}_E"}
+  E: {text: "|E|", ascii: "|E|", plotmath: "'|' * E * '|'", katex: "|E|"}
+
+report:
+  title: "Calibration diagnostics: {title}"
+  title_many: "{first} ... {last} ({n} locations)"
+  title_none: "calibration"
+  footer: "{title}  |  MOSAIC {version}  |  generated {date}  |  page {page} of {pages}"
+  run_line:
+    separator: "  |  "
+    locations_one: "{n} location"
+    locations_many: "{n} locations"
+    mode_fixed: "fixed budget"
+    mode_auto: "adaptive"
+    mode_unknown: "mode n/a"
+    draws: "{n} draws"
+    draws_valid: "{valid} valid of {attempted} simulated"
+    window: "{start} to {stop}"
+    scheme: "{scheme} ensemble"
+  sections:
+    sampling: "1. Enough simulations? Convergence status and ensemble ESS"
+    reasons: "1. Enough simulations? Why not green (continued from the previous page)"
+    parameters: "2. How informative? Parameter sampling precision and movement from the priors"
+    fit: "3. Does it fit? Fit metrics and weekly series"
+    scatter: "4. Does it fit? Weekly predicted vs observed"
+  overall: "OVERALL: {status} — {label}"
+  status_unavailable: "status unavailable"
+  status_words: {green: "GREEN", yellow: "YELLOW", red: "RED", grey: "N/A"}
+  status_table:
+    metric: "Metric"
+    what: "What it tells you"
+    value: "Value"
+    target: "Target"
+    target_sub: "green / yellow"
+    status: "Status"
+    divider: "not part of the status"
+    no_checks: "No check results in the diagnostics file."
+  values:
+    undefined: "undefined"
+    na: "n/a"
+  info:
+    ok: "ok"
+    stalled: "stalled"
+    at_cap: "at cap"
+    at_bound: "at bound"
+    na: "n/a"
+    failed: "run failed"
+    already_green: "already green"
+    sampling_green: "n/a"
+    sampling_green_note: "sampling checks green"
+    projected: "green: ~{n}"
+    indicative: "(indicative)"
+    of_cap: "of {cap}"
+    cap_na: "cap n/a"
+    binding_ratio: "by ratio"
+    binding_min_members: "at min"
+    binding_max_members: "at max"
+  fit_table:
+    caption: "Fit to data"
+    caption_note: "(not part of the convergence status; details on page 3)"
+    channel_cases: "Cases"
+    channel_deaths: "Deaths"
+    tier12: "{channel}, tier 1–2"
+    columns:
+      - {head: "Channel", sub: ""}
+      - {head: "R²", sub: ""}
+      - {head: "Bias", sub: "pred./obs."}
+      - {head: "50%", sub: "coverage"}
+      - {head: "95%", sub: "coverage"}
+      - {head: "WIS", sub: "per day"}
+      - {head: "Scored", sub: "days"}
+  reasons:
+    heading: "Why not green:"
+    continued: "... continued on the next page"
+  flags:
+    heading: "Flags:"
+  sampling_details:
+    heading: "Sampling details"
+    valid_draws: "Valid draws"
+    valid_draws_value: "{valid} of {attempted} attempted"
+    posterior: "Posterior"
+    posterior_value: "coarsened, {alpha} = {a}, {eta} = {e}"
+    posterior_value_per_location: "; {alpha} {apl} per location"
+    ess_all: "{ESSall}"
+    ess_all_value: "{ess}  (target {target})"
+    mass: "Mass in ensemble"
+    runs: "Runs per member"
+    scored: "Scored cells"
+    scored_value: "{n}  (burn-in {days} days)"
+  ess_plot:
+    title: "Posterior ESS as draws accumulate"
+    subtitle_slope: "log-log slope {slope} (1 = grows in proportion to draws);"
+    subtitle_no_slope: "log-log slope not available (too few points);"
+    guides: "dotted guides = 0.1%, 1%, 10% of draws"
+    y: "Kish ESS, all draws (log)"
+    target: "target {n}"
+    empty: "No ESS path in the diagnostics file."
+  loglik_plot:
+    title: "Best log-likelihood found so far (vs final best)"
+    subtitle: "signed log scale; a jump concentrates the weights (a dip in the ESS above)."
+    eta_note: "A draw {units} units below the best gets weight 1/e."
+    x: "simulations (draws), log scale"
+    y: "log-likelihood\nbelow final best"
+    best: "best draw so far"
+    top100: "100th best draw so far"
+    empty: "No log-likelihood path in the diagnostics file."
+  fit_page:
+    table_title: "Fit metrics (central line vs observed, after the burn-in)"
+    table_title_short: "Fit metrics (central line vs observed)"
+    table_missing_title: "Fit metrics"
+    table_missing: "No fit table in the diagnostics file."
+    note: "Scored days count each channel's location-days with an observation after the burn-in; page 1's scored observation cells count location-days with a cases or a deaths observation. "
+    note_tier: "Tier 1–2 = observed and reconstructed weeks (imputed weeks left out). "
+    note_end: "Bias = predicted / observed total; WIS in reported counts per location-day."
+    worst_title: "Worst-fitting locations, cases ({n} of {total}, {rank})"
+    worst_rank_r2: "lowest R²"
+    worst_rank_bias: "largest |log bias|; R² unavailable"
+    worst_columns: ["Location", "Observed cases", "R²", "Bias (pred./obs.)", "95% cov."]
+    missing_channel: "{channels}: not scored in this run (no {names} in the fit block)."
+    series_title: "Weekly {metric}: observed and ensemble"
+    series_title_any: "Weekly observed and ensemble"
+    series_y: "{metric} per week"
+    series_empty: "No weekly {metric} in the diagnostics file."
+    series_empty_any: "No weekly series in the diagnostics file."
+    subtitle_many: "All locations: each trajectory summed over the locations, then to the week. "
+    series_no_all: "No all-locations weekly {metric} in the diagnostics file (written before 1.5.1); re-render with render_MOSAIC_figures() to add it."
+    subtitle_main: "Every complete week. Points = observed; line = ensemble central line"
+    subtitle_scored_only: "Scored weeks only (a file without the full-week series). Points = observed; line = ensemble central line"
+    subtitle_bands: "; bands = 50% / 95% predictive intervals"
+    subtitle_unscored: ". Light grey = not scored ({n} weeks)"
+    subtitle_burn_in: "; dark grey = {days}-day burn-in."
+    subtitle_end: "."
+    subtitle_daily_sums: " Line and bands are sums of daily values (this run did not persist its ensemble arrays), so they differ slightly from what the run itself would have written."
+  parameters_page:
+    mce_title: "Sampling precision of each posterior mean"
+    mce_empty: "No per-parameter Monte Carlo error in the diagnostics file."
+    mce_subtitle: "Monte Carlo standard error of each posterior mean, as % of its posterior SD (10 seed batches):\nthe typical change a rerun with new seeds would make."
+    mce_subtitle_limits: "\nDashed / dotted = green / yellow limit of the 90th percentile ({green} / {yellow})."
+    mce_subtitle_p90: "\n90th percentile over parameters: {p90}."
+    mce_subtitle_many: " Point = worst location, bar = range."
+    mce_x: "Monte Carlo error / posterior SD"
+    label_many: "{name} (n={n})"
+    kl_title: "Movement from the prior (KL divergence)"
+    kl_empty: "No per-parameter KL divergence in the diagnostics file."
+    kl_bands: ["largely prior", "partly informed", "data-informed"]
+    kl_withheld: "band withheld (ensemble ESS < 100)"
+    kl_label: "{name} ({family})"
+    kl_label_many: "{name} ({family}, n={n})"
+    kl_subtitle: "Prior to posterior, nats (log scale). Prior family in brackets."
+    kl_subtitle_edges: "\nDashed = band edges {lo} and {hi} nats."
+    kl_subtitle_many: "\nPoint = median over locations, bar = range."
+    kl_x: "KL divergence (nats)"
+    no_parameters: "No parameters in the diagnostics file."
+    note_left: "Left: sampling precision only. Median {median}, 90th percentile {p90}, maximum {max} of posterior SD over {n} parameters."
+    note_largest: " Largest: {list}."
+    note_right_withheld: "   Right: descriptive only, feeds no status; bands withheld for all {n} parameters (ensemble ESS < 100, where the estimator's bias would misclassify them). "
+    note_right: "   Right: descriptive only, feeds no status ({prior} largely prior, {partly} partly informed, {data} data-informed parameters{withheld}). "
+    note_right_withheld_part: "; {n} withheld"
+    note_end: "Some priors are informative by design, so a parameter that stays near its prior is not a failure."
+  scatter_page:
+    panel: "Weekly {channel}"
+    scatter_title: "Weekly {metric}: predicted vs observed"
+    scatter_subtitle: "Scored weekly totals{all}, log(1 + count). Dashed = agreement; above = over-predicted."
+    scatter_subtitle_all: ", every location"
+    scatter_y: "predicted per week + 1"
+    not_scored: "{channel} not scored in this run."
+    dist_title: "Weekly {metric}: distribution of counts"
+    dist_subtitle: "Same x-axis as above. Overlap = the model reproduces how often each level occurs."
+    dist_x: "count per week + 1 (log scale)"
+    dist_y: "density (square-root scale)"
+    observed: "observed"
+    predicted: "predicted"
+  unavailable: "Unavailable: {message}"
+  failed_page: "Page {page} could not be drawn"
+  appendix:
+    title: "Appendix {i} of {n}: what each metric means"
+    intro: "From inst/extdata/metric_glossary.yml (version {version}); the metrics in this report only.\nThresholds are conventions, not properties of the model: \"This run\" is what this run applied, \"default\" the package default."
+    formula: "Formula:"
+    how_to_read: "How to read:"
+    this_run: "This run:"
+    default: "Default:"
+    default_only: "Threshold (default):"
+    not_a_measure_of: "Not a measure of:"
+  legacy:
+    title: "Calibration diagnostics"
+    pre140: "Calibrated with an earlier selection rule; simulation convergence was not assessed on the 1.4.0 scale"
+    missing: "MOSAIC 1.4.0 run without a readable calibration_diagnostics.json: see 3_results/summary.json for its convergence status"
+    pre140_detail: "This run was made before MOSAIC 1.4.0, so it has no convergence status on the 1.4.0 scale and no calibration_diagnostics.json;\nits earlier diagnostics remain in 2_calibration/diagnostics/ and 3_results/summary.json."
+    missing_detail: "This run was made by MOSAIC 1.4.0 or later, but its calibration_diagnostics.json is missing or unreadable,\nso the report cannot be drawn. Its convergence status is in 3_results/summary.json; re-run render_MOSAIC_figures() after restoring the file."
+
+retired_metrics:
+  heading: "Retired metrics"
+  note: >-
+    Removed in MOSAIC 1.4.0. They are not computed under the default best-fit
+    ensemble and appear in no current report; the legacy "saturated" scheme
+    still computes the first three, for reproducing old runs.
+  items:
+    - key: A_best
+      label: Agreement index (A)
+      why: >-
+        Measured how evenly the members of the saturated best subset shared the
+        weight. The tier search capped that subset (max_best_subset) and floored
+        the weights, so on production runs A sat near 1 whether or not the run had
+        enough simulations: it could not tell a converged run from an
+        unconverged one. The ensemble ESS and the Monte Carlo error replace it.
+    - key: CVw_best
+      label: Coefficient of variation of the weights (CV_w)
+      why: >-
+        The same subset's weight dispersion, saturated by the same cap and floor
+        (near 0 on production runs), so it carried no information about
+        convergence. Replaced by the ensemble ESS and the Monte Carlo error.
+    - key: max_best_subset
+      label: Best-subset size
+      why: >-
+        The tier search returned the largest subset its cap allowed, so the size,
+        and an ESS that cannot exceed it (about 108 members, Kish ESS 81), were
+        artefacts of the cap rather than of the posterior. The best-fit ensemble is
+        sized by a share of the posterior ESS (best_subset_ratio), with the member
+        bounds as resource limits only.
+    - key: ESS_param
+      label: Per-parameter ESS as a gate
+      why: >-
+        The per-parameter ESS gated the adaptive stop in 1.3.0. It is computed
+        from the parameter marginals and is blind to how concentrated the
+        importance weights are, so it could pass a run whose weight sat on a few
+        draws. It remains a diagnostic (param_ess_min, param_ess_median); the
+        ensemble ESS, the Monte Carlo error and k-hat decide the status.
+
 metrics:
 
   - key: draws
     label: Draws
+    short_label: 'Draws'
+    what_it_tells_you: 'Parameter sets sampled from the priors and simulated'
+    formula_plotmath: 'N'
+    formula_katex: 'N'
+    target_template: null
+    units: 'draws'
     definition: >-
       One parameter set sampled from the priors and simulated (several stochastic
       runs per draw, combined into one log-likelihood). Every draw is a prior draw;
@@ -38,6 +319,12 @@ metrics:
 
   - key: mode
     label: Run mode (fixed budget or adaptive)
+    short_label: 'Run mode'
+    what_it_tells_you: 'Fixed budget, or adaptive: stops at green or at the budget cap'
+    formula_plotmath: ''
+    formula_katex: ''
+    target_template: null
+    units: 'category'
     definition: >-
       How the number of draws was decided. A fixed-budget run simulates a set
       number of draws and then assesses the convergence status; an adaptive run
@@ -58,6 +345,12 @@ metrics:
 
   - key: coarsening_alpha
     label: Coarsened posterior (alpha, eta, scored cells)
+    short_label: 'Coarsened posterior'
+    what_it_tells_you: 'How strongly the data weigh against the prior'
+    formula_plotmath: 'w[i] %prop% L[i]^eta * '','' ~~ eta == alpha / n[obs]'
+    formula_katex: 'w_i \propto L_i^{\eta},\ \eta = \alpha / n_{\mathrm{obs}}'
+    target_template: null
+    units: 'effective observations (alpha); per scored cell (eta)'
     definition: >-
       The posterior weights every draw by its likelihood, tempered so that the data
       count as alpha effectively independent observations. A smaller alpha gives a
@@ -75,6 +368,12 @@ metrics:
 
   - key: posterior_weighting
     label: Posterior weighting scheme
+    short_label: 'Ensemble scheme'
+    what_it_tells_you: 'How the ensemble members are chosen from the draws'
+    formula_plotmath: ''
+    formula_katex: ''
+    target_template: null
+    units: 'category'
     definition: >-
       Which ensemble the run reports: "bestfit" (default) keeps the best-fitting
       draws up to a share of the posterior ESS; "coarsened" resamples members
@@ -87,6 +386,12 @@ metrics:
 
   - key: n_obs_scored
     label: Scored observation cells
+    short_label: 'Scored cells'
+    what_it_tells_you: 'Location-days the likelihood scores'
+    formula_plotmath: 'n[obs]'
+    formula_katex: 'n_{\mathrm{obs}}'
+    target_template: null
+    units: 'location-days'
     definition: >-
       The number of location-time cells the likelihood scores (after the burn-in,
       finite observations only). It sets the learning rate of the coarsened
@@ -98,6 +403,12 @@ metrics:
 
   - key: ess_all
     label: Posterior ESS (all draws)
+    short_label: 'Posterior ESS'
+    what_it_tells_you: 'Independent draws the whole posterior is worth'
+    formula_plotmath: 'ESS[all] == (Sigma[i] * w[i])^2 / Sigma[i] * w[i]^2'
+    formula_katex: '\mathrm{ESS}_{\mathrm{all}} = \left(\sum_i w_i\right)^2 / \sum_i w_i^2'
+    target_template: null
+    units: 'draws'
     definition: >-
       Effective sample size of the posterior weights over every draw: the number of
       independent posterior draws the weighted draws are worth.
@@ -112,6 +423,12 @@ metrics:
 
   - key: ess_prop
     label: ESS as % of draws
+    short_label: 'ESS share of draws'
+    what_it_tells_you: 'Effective draws per draw simulated'
+    formula_plotmath: 'ESS[all] / N'
+    formula_katex: '\mathrm{ESS}_{\mathrm{all}} / N'
+    target_template: null
+    units: 'fraction'
     definition: >-
       Posterior ESS divided by the draws. Roughly constant for a given model and
       data, so it fixes the draws needed for a target.
@@ -124,6 +441,12 @@ metrics:
 
   - key: best_fit_ensemble
     label: Best-fit ensemble (ensemble members)
+    short_label: 'Best-fit ensemble'
+    what_it_tells_you: 'The best-fitting draws, up to a share of the posterior ESS'
+    formula_plotmath: 'ESS[E] >= r %.% ESS[all]'
+    formula_katex: '\mathrm{ESS}_E \ge r \cdot \mathrm{ESS}_{\mathrm{all}}'
+    target_template: null
+    units: 'draws'
     definition: >-
       The draws taken in descending log-likelihood until their subset ESS reaches a
       stated share of ESS_all, carrying their posterior weights renormalised within
@@ -143,6 +466,12 @@ metrics:
 
   - key: ensemble_members
     label: Ensemble members (count)
+    short_label: 'Ensemble size'
+    what_it_tells_you: 'Members ({min}–{max}), and what set the size'
+    formula_plotmath: 'group(''|'', E, ''|'')'
+    formula_katex: '|E|'
+    target_template: '{min}–{max}'
+    units: 'members'
     definition: Number of draws in the best-fit ensemble.
     formula: n = size of the best-fit selection after the member bounds.
     how_to_read: >-
@@ -151,8 +480,38 @@ metrics:
     threshold: Bounded to [30, 1,000] national (convention).
     not_a_measure_of: Precision; ESS_best is the precision measure.
 
+  - key: budget
+    label: Simulation budget
+    short_label: 'Budget'
+    what_it_tells_you: 'Simulations run of the cap, and the total projected for green'
+    formula_plotmath: 'N / N[cap]'
+    formula_katex: 'N / N_{\mathrm{cap}}'
+    target_template: null
+    units: 'simulations'
+    definition: >-
+      The simulations run (valid or not) against the run's budget: the
+      max_simulations_total cap of an adaptive run, or the n_simulations a
+      fixed-budget run asked for. Beside it, the simulations projected for a green
+      status (sims_projected_for_green).
+    formula: >-
+      N = simulations attempted; N_cap = max_simulations_total (adaptive) or
+      n_simulations (fixed budget).
+    how_to_read: >-
+      "at cap" means an adaptive run stopped because it reached its budget, not
+      because the status was green; the projection, when shown, says how many
+      simulations in total would be needed, marked indicative when the ESS growth
+      has stalled.
+    threshold: Cap max_simulations_total = 150,000 national (convention).
+    not_a_measure_of: Convergence on its own; read the convergence status.
+
   - key: n_iter_ensemble
     label: Stochastic runs per member
+    short_label: 'Runs per member'
+    what_it_tells_you: 'Stochastic re-simulations of each member for the predictions'
+    formula_plotmath: 'S'
+    formula_katex: 'S'
+    target_template: null
+    units: 'runs'
     definition: >-
       How many times each ensemble member is re-simulated with new seeds to build
       the predictions.
@@ -165,6 +524,12 @@ metrics:
 
   - key: ess_best
     label: Ensemble ESS (ESS_best)
+    short_label: 'Ensemble ESS'
+    what_it_tells_you: 'Independent draws the ensemble is worth'
+    formula_plotmath: 'ESS[E] == (Sigma[i %in% E] * w[i])^2 / Sigma[i %in% E] * w[i]^2'
+    formula_katex: '\mathrm{ESS}_E = \left(\sum_{i \in E} w_i\right)^2 / \sum_{i \in E} w_i^2'
+    target_template: '{op} {green} / {op_yellow} {yellow}'
+    units: 'draws'
     definition: >-
       Effective sample size of the best-fit ensemble. The Monte Carlo error of a
       posterior mean is about SD / sqrt(ESS), so about 7% of the posterior SD at
@@ -182,6 +547,12 @@ metrics:
 
   - key: best_subset_mass
     label: Posterior mass kept (m)
+    short_label: 'Mass in ensemble'
+    what_it_tells_you: 'Share of the posterior weight the ensemble keeps'
+    formula_plotmath: 'm == Sigma[i %in% E] * w[i] / Sigma[i] * w[i]'
+    formula_katex: 'm = \sum_{i \in E} w_i / \sum_i w_i'
+    target_template: null
+    units: 'fraction'
     definition: Share of the posterior weight held by the best-fit ensemble.
     formula: m = sum of member weights / sum of all weights; KL(ensemble || posterior) = -ln m exactly.
     how_to_read: >-
@@ -192,6 +563,12 @@ metrics:
 
   - key: mce
     label: Monte Carlo error of posterior means
+    short_label: 'Monte Carlo error (p90)'
+    what_it_tells_you: 'Shift in posterior means on a rerun, as % of the posterior SD'
+    formula_plotmath: 'MCE[theta] == sd[b](bar(theta)[b]) / (s[theta] * sqrt(B * minute))'
+    formula_katex: '\mathrm{MCE}_\theta = \mathrm{sd}_b(\bar\theta_b) / \left(s_\theta \sqrt{B''}\right)'
+    target_template: '{op} {green} / {op_yellow} {yellow}'
+    units: 'fraction of the posterior SD'
     definition: >-
       The Monte Carlo standard error of each parameter's ensemble posterior mean
       (the part of it due to simulation noise), as a share of its posterior SD.
@@ -219,6 +596,14 @@ metrics:
 
   - key: khat_tempered
     label: Validity guard (Pareto k-hat)
+    short_label: 'Weight tail {khat}'
+    what_it_tells_you: 'Do a few draws hold a heavy tail of the weight? ({khat} {ge} {green}: the ESS overstates precision)'
+    formula_plotmath: |-
+      'GPD shape of the top'
+      group(lceil, 3 * sqrt(N), rceil) ~ 'weights'
+    formula_katex: '\hat{k} = \text{GPD shape of the top } \lceil 3\sqrt{N} \rceil \text{ weights}'
+    target_template: '{op} {green} / {op_yellow} {yellow}'
+    units: 'tail shape (dimensionless)'
     definition: >-
       Shape of the upper tail of the tempered importance weights (Vehtari et al.
       2024). A heavy tail means a few draws carry much of the weight, so the ESS and
@@ -253,6 +638,12 @@ metrics:
 
   - key: eta_star
     label: Supported resolution (eta*)
+    short_label: 'Supported resolution {eta}*'
+    what_it_tells_you: 'Sharpest posterior the draws support at the ESS target'
+    formula_plotmath: 'eta^''*'' == max ~ eta ~ ''with'' ~ (ESS[Kish](w^eta) >= ESS[all]^target)'
+    formula_katex: '\eta^* = \max\{\eta \le 1 : \mathrm{ESS}_{\mathrm{Kish}}(w^{\eta}) \ge \mathrm{ESS}_{\mathrm{all}}^{\mathrm{target}}\}'
+    target_template: null
+    units: 'per scored cell'
     definition: >-
       The sharpest posterior (largest eta, at most 1) the draws can support at the
       ESS_all target, quoted also as effective observations (eta* x scored cells).
@@ -269,6 +660,15 @@ metrics:
 
   - key: flat_likelihood
     label: Data informativeness (flat likelihood)
+    short_label: 'Data informativeness {f1}'
+    what_it_tells_you: 'Effective share of draws equally good under the full likelihood'
+    formula_plotmath: |-
+      paste(f[1], '  =  ', ESS[Kish](w^{(1)}) / N, ',')
+      w[i]^{(1)} %prop% L[i] / L[max]
+    formula_katex: 'f_1 = \mathrm{ESS}_{\mathrm{Kish}}(w^{(1)}) / N,\quad w_i^{(1)} \propto L_i / L_{\max}'
+    target_template: '{op} {green} / {op_yellow} {green}'
+    target_note: 'flat; no red'
+    units: 'fraction of draws'
     definition: >-
       Whether the likelihood is flat: the posterior is close to the prior and the
       data barely constrain the model. Sampling can be adequate while the result is
@@ -293,6 +693,12 @@ metrics:
 
   - key: ess_untempered_frac
     label: Untempered-likelihood ESS share
+    short_label: 'Untempered ESS share {f1}'
+    what_it_tells_you: 'Effective share of draws equally good under the full likelihood'
+    formula_plotmath: 'f[1] == ESS[Kish](w^{(1)}) / N'
+    formula_katex: 'f_1 = \mathrm{ESS}_{\mathrm{Kish}}(w^{(1)}) / N'
+    target_template: null
+    units: 'fraction of draws'
     definition: >-
       The effective sample size of the untempered (eta = 1) likelihood weights as a
       share of the valid draws: the part of the prior the raw likelihood leaves
@@ -310,6 +716,12 @@ metrics:
 
   - key: ess_growth_slope
     label: ESS growth (log-log slope)
+    short_label: 'ESS growth'
+    what_it_tells_you: 'Is more simulation still paying off?'
+    formula_plotmath: 'd ~ log ~ ESS[all] / d ~ log ~ N'
+    formula_katex: 'd \log \mathrm{ESS}_{\mathrm{all}} / d \log N'
+    target_template: '{op} {target}'
+    units: 'log-log slope'
     definition: >-
       How fast the posterior ESS grows as draws accumulate: from the per-check
       history of an adaptive run, or, for a fixed-budget run and a backfill, from a
@@ -328,6 +740,12 @@ metrics:
 
   - key: best_loglik_path
     label: Best log-likelihood found so far
+    short_label: 'Best log-likelihood so far'
+    what_it_tells_you: 'Whether better fits were still being found'
+    formula_plotmath: 'max[i <= n] ~ log ~ L[i] - max[i] ~ log ~ L[i]'
+    formula_katex: '\max_{i \le n} \log L_i - \max_i \log L_i'
+    target_template: null
+    units: 'log-likelihood units'
     definition: >-
       The log-likelihood of the best draw (and the 100th best) among the first n
       draws, relative to the final best.
@@ -340,6 +758,12 @@ metrics:
 
   - key: convergence_status
     label: Simulation convergence status
+    short_label: 'Convergence status'
+    what_it_tells_you: 'Enough simulations to represent the best-fit ensemble?'
+    formula_plotmath: '''worst of the four checks'''
+    formula_katex: '\text{worst of the four checks}'
+    target_template: null
+    units: 'green / yellow / red'
     definition: >-
       Are there enough simulations to represent the best-fitting ensemble
       reliably? green "Converged: enough simulations"; yellow "Usable with
@@ -359,6 +783,12 @@ metrics:
 
   - key: convergence_flags
     label: Convergence flags
+    short_label: 'Flags'
+    what_it_tells_you: 'Notes beside the status that never change its colour'
+    formula_plotmath: ''
+    formula_katex: ''
+    target_template: null
+    units: 'category'
     definition: >-
       Notes shown beside the status that never change its colour:
       budget_cap_reached, ess_growth_stalled, ensemble_size_bound and
@@ -376,6 +806,12 @@ metrics:
 
   - key: ensemble_binding
     label: Ensemble size binding
+    short_label: 'Size set by'
+    what_it_tells_you: 'Which rule set the ensemble size: the ratio or a member bound'
+    formula_plotmath: ''
+    formula_katex: ''
+    target_template: null
+    units: 'category'
     definition: Which rule set the number of ensemble members.
     formula: >-
       "ratio" when the ESS share target set it, "min_members" or "max_members"
@@ -389,6 +825,12 @@ metrics:
 
   - key: sims_projected_for_target
     label: Valid draws projected for the ESS target
+    short_label: 'Draws projected for the ESS target'
+    what_it_tells_you: 'Valid draws needed for the posterior ESS target'
+    formula_plotmath: 'N %.% ESS[all]^target / ESS[all]'
+    formula_katex: 'N \cdot \mathrm{ESS}_{\mathrm{all}}^{\mathrm{target}} / \mathrm{ESS}_{\mathrm{all}}'
+    target_template: null
+    units: 'valid draws'
     definition: >-
       Total valid draws (finite log-likelihood) needed for the ESS_all target only,
       assuming the ESS keeps growing in proportion to the draws. Covers the ESS
@@ -403,6 +845,12 @@ metrics:
 
   - key: sims_projected_for_green
     label: Simulations projected for green
+    short_label: 'Simulations projected for green'
+    what_it_tells_you: 'Total simulations projected for a green status'
+    formula_plotmath: 'T == max(N %.% ESS[all]^target / ESS[all], N %.% (MCE[p90] / MCE[green])^2) / r[valid] + B[confirm]'
+    formula_katex: 'T = \max\!\left(N \frac{\mathrm{ESS}_{\mathrm{all}}^{\mathrm{target}}}{\mathrm{ESS}_{\mathrm{all}}},\ N \left(\frac{\mathrm{MCE}_{p90}}{\mathrm{MCE}_{\mathrm{green}}}\right)^2\right) / r_{\mathrm{valid}} + B_{\mathrm{confirm}}'
+    target_template: null
+    units: 'simulations'
     definition: >-
       Total simulations projected for a GREEN status, plus, in adaptive mode, one
       confirming batch (the second green check the stopping rule needs; a
@@ -411,9 +859,10 @@ metrics:
       draws to simulations at the run's success rate (valid / attempted). Units:
       simulations.
     formula: >-
-      T = max(N x ESS_all target / ESS_all, N x (mce_p90 / 0.10)^2) / (valid /
-      attempted), over the checks that are not green and that more draws can fix;
-      in adaptive mode plus a confirming batch of 0.25 x T within
+      T = max(N x ESS_all target / ESS_all, N x (mce_p90 / mce_green)^2) / (valid /
+      attempted), with mce_green the run's green Monte Carlo error threshold
+      (status_thresholds, default 0.10), over the checks that are not green and that
+      more draws can fix; in adaptive mode plus a confirming batch B_confirm of 0.25 x T within
       [batch_size_adaptive, max_batch_predictive] (fixed mode: T alone). Null when the three sampling checks (ESS, MCE, k-hat)
       are green (an informativeness-only yellow needs no more simulations), and
       when only k-hat is behind (no projection exists for it).
@@ -426,6 +875,12 @@ metrics:
 
   - key: projection_reliable
     label: Projection reliable
+    short_label: 'Projection reliable'
+    what_it_tells_you: 'Whether the draw projections can be trusted'
+    formula_plotmath: 'd ~ log ~ ESS[all] / d ~ log ~ N >= s[stall]'
+    formula_katex: 'd \log \mathrm{ESS}_{\mathrm{all}} / d \log N \ge s_{\mathrm{stall}}'
+    target_template: null
+    units: 'logical'
     definition: Whether the draw projections can be trusted.
     formula: TRUE when the ESS growth slope is known and >= 0.8; k-hat does not enter.
     how_to_read: >-
@@ -436,6 +891,12 @@ metrics:
 
   - key: alpha_per_location
     label: Alpha per location
+    short_label: 'Alpha per location'
+    what_it_tells_you: 'Effective observations each location''s data count as'
+    formula_plotmath: 'alpha / J'
+    formula_katex: '\alpha / J'
+    target_template: null
+    units: 'effective observations'
     definition: >-
       The coarsening alpha divided by the number of locations. eta = alpha / n_obs
       pools the scored cells over every location, so in a run with J locations
@@ -450,6 +911,12 @@ metrics:
 
   - key: posterior_members
     label: Parameter posterior (ensemble members)
+    short_label: 'Parameter posterior'
+    what_it_tells_you: 'Posterior over the ensemble members, the same draws as the predictions'
+    formula_plotmath: 'p(theta) %prop% Sigma[i %in% E] * w[i] * delta[theta[i]]'
+    formula_katex: 'p(\theta) \propto \sum_{i \in E} w_i \, \delta_{\theta_i}'
+    target_template: null
+    units: 'distribution'
     definition: >-
       The parameter posterior (posteriors.json, posterior quantiles, KL) is the
       posterior over the best-fit ensemble members, the same draws and weights as
@@ -468,6 +935,12 @@ metrics:
 
   - key: kl_divergence
     label: KL divergence, prior to posterior
+    short_label: 'KL from the prior'
+    what_it_tells_you: 'How far each parameter moved from its prior'
+    formula_plotmath: 'KL == Sigma[b] * p[b] * log(20 * p[b]) - (20 - 1) / (2 * ESS)'
+    formula_katex: '\mathrm{KL} = \sum_b p_b \log(20\,p_b) - \frac{20 - 1}{2\,\mathrm{ESS}}'
+    target_template: null
+    units: 'nats'
     definition: >-
       How far a parameter's posterior moved from its prior, in nats. Computed on
       the prior's own percentile scale (each draw mapped to its prior percentile,
@@ -488,6 +961,12 @@ metrics:
 
   - key: scored_days
     label: Scored days
+    short_label: 'Scored days'
+    what_it_tells_you: 'Days with an observation after the burn-in'
+    formula_plotmath: 'n[scored]'
+    formula_katex: 'n_{\mathrm{scored}}'
+    target_template: null
+    units: 'location-days'
     definition: >-
       The days the likelihood scores: after the burn-in, every day with a finite
       observation, whatever its surveillance tier. The fit metrics in summary.json
@@ -503,6 +982,12 @@ metrics:
 
   - key: burn_in_days
     label: Burn-in (unscored)
+    short_label: 'Burn-in'
+    what_it_tells_you: 'Days at the start left out of the likelihood'
+    formula_plotmath: 'b'
+    formula_katex: 'b'
+    target_template: null
+    units: 'days'
     definition: >-
       The first days of the simulation, excluded from the likelihood and the fit
       metrics while the model settles from its initial conditions.
@@ -513,6 +998,12 @@ metrics:
 
   - key: r2
     label: R2
+    short_label: 'R²'
+    what_it_tells_you: 'Agreement in timing and shape'
+    formula_plotmath: 'R^2 == cor(y, hat(y))^2'
+    formula_katex: 'R^2 = \mathrm{cor}(y, \hat{y})^2'
+    target_template: null
+    units: 'dimensionless'
     definition: >-
       Squared correlation between observed and the ensemble central line (cases
       median, deaths mean) over scored days.
@@ -523,6 +1014,12 @@ metrics:
 
   - key: bias
     label: Bias
+    short_label: 'Bias'
+    what_it_tells_you: 'Level: predicted over observed total'
+    formula_plotmath: 'Sigma[t] * hat(y)[t] / Sigma[t] * y[t]'
+    formula_katex: '\sum_t \hat{y}_t / \sum_t y_t'
+    target_template: null
+    units: 'ratio'
     definition: Sum of predicted over sum of observed over scored days.
     formula: sum(central) / sum(observed).
     how_to_read: 1 = right level; above 1 = over-prediction; below 1 = under-prediction.
@@ -531,16 +1028,30 @@ metrics:
 
   - key: coverage
     label: Interval coverage
+    short_label: 'Coverage'
+    what_it_tells_you: 'Share of observations inside the 50% and 95% intervals'
+    formula_plotmath: '''share of'' ~ y[t] %in% group(''['', list(l[t], u[t]), '']'')'
+    formula_katex: '\frac{1}{n} \sum_t \mathbf{1}[l_t \le y_t \le u_t]'
+    target_template: null
+    units: 'fraction'
     definition: Share of scored days inside the 50% and 95% predictive intervals.
     formula: mean(lower <= observed <= upper) for each interval.
     how_to_read: >-
       Near nominal = honest uncertainty; well above = intervals too wide; well
-      below = overconfident.
+      below = overconfident. In sample, and on a sparse series, coverage is
+      dominated by the days with no reported cases, which almost any interval
+      covers, so a high coverage there says little about the epidemic weeks.
     threshold: none (nominal 50% and 95%)
     not_a_measure_of: Accuracy of the central line.
 
   - key: wis
     label: WIS
+    short_label: 'WIS'
+    what_it_tells_you: 'Accuracy and honest interval width, per day'
+    formula_plotmath: 'WIS == (0.5 * abs(y - m) + Sigma[k] * frac(alpha[k], 2) * IS[alpha[k]]) / (K + 0.5)'
+    formula_katex: '\mathrm{WIS} = \left(0.5\,|y - m| + \sum_k \frac{\alpha_k}{2} \mathrm{IS}_{\alpha_k}\right) / (K + 0.5)'
+    target_template: null
+    units: 'reported counts per location-day'
     definition: >-
       Weighted interval score (Bracher et al. 2021) from the median and the 50% and
       95% intervals, in counts per day. It rewards both accuracy and honest
@@ -555,22 +1066,56 @@ metrics:
 
   - key: fit_time_series
     label: Weekly observed and ensemble series
+    short_label: 'Weekly series'
+    what_it_tells_you: 'When the model is early, late, too high or too low'
+    formula_plotmath: 'X[list(r, w)] == Sigma[t %in% w] * x[list(r, t)]'
+    formula_katex: 'X_{r,w} = \sum_{t \in w} x_{r,t}'
+    target_template: null
+    units: 'counts per week'
     definition: >-
-      Observed weekly totals (points) and the ensemble central line over the
-      scored weeks; summed over locations in a multi-location run.
-    formula: Weekly sums of the daily observed and central-line values on scored days.
+      Every complete Monday-to-Sunday week of the window: the observed weekly
+      total (points) on the scored weeks, and the ensemble central line with its
+      50% and 95% predictive intervals; summed over locations (without
+      intervals) in a multi-location run.
+    formula: >-
+      Each ensemble trajectory (member x stochastic run) is summed to the week,
+      X_rw = sum of its daily values x_rt over the week, and weighted by its
+      member's weight shared equally by the member's runs. The central line is
+      the weighted median (cases) or weighted mean (deaths) of the engine-level
+      weekly totals; the intervals are weighted 2.5, 25, 75 and 97.5% quantiles
+      of the observation-level weekly totals. A week is scored when all seven
+      of its days are; only then is its observed total shown. Summing daily
+      medians or daily interval bounds instead would make the line hug zero on
+      sparse series.
     how_to_read: >-
-      Shows when the model is early, late, too high or too low; gaps are weeks
-      that were not scored.
+      Shows when the model is early, late, too high or too low. Light grey weeks
+      were not scored (an observation is missing on at least one day); the
+      darker band at the start is the burn-in, where the model is not drawn. The
+      cases bands are the weekly negative binomial at the fitted dispersion k,
+      so they are wider than the per-day likelihood implies; since k is fitted
+      on weekly totals they are the right weekly predictive. With one member and
+      S stochastic runs the 95% band is just the range of the S draws. In a
+      multi-location run the line and bands are of the all-locations total:
+      each trajectory is summed over the locations before the week is
+      summarised, never the per-location lines added up. Weeks start on Monday
+      plus each location's reporting-week offset (0, Monday, in production).
     threshold: none
     not_a_measure_of: Uncertainty when no predictive intervals are drawn.
 
   - key: weekly_scatter
     label: Weekly predicted vs observed (log-log)
+    short_label: 'Weekly scatter'
+    what_it_tells_you: 'Predicted against observed weekly totals'
+    formula_plotmath: 'log(1 + hat(y)[w]) ~ ''vs'' ~ log(1 + y[w])'
+    formula_katex: '\log(1 + \hat{y}_w) \text{ vs } \log(1 + y_w)'
+    target_template: null
+    units: 'counts per week'
     definition: >-
-      Weekly totals of the central line against observed, on log(1 + count) axes,
-      so low counts and peaks are both visible.
-    formula: Sum of daily values per reporting week; both axes log(1 + count).
+      The weekly central line against the observed weekly total, on the scored
+      weeks, on log(1 + count) axes, so low counts and peaks are both visible.
+    formula: >-
+      The weekly series of fit_time_series (central line from weekly-summed
+      trajectories); both axes log(1 + count).
     how_to_read: >-
       Points on the dashed line agree; above it is over-prediction. A column at
       observed = 1 marks weeks with no reported cases.
@@ -579,6 +1124,12 @@ metrics:
 
   - key: weekly_distribution
     label: Distribution of weekly counts
+    short_label: 'Weekly distribution'
+    what_it_tells_you: 'How often each level of incidence occurs'
+    formula_plotmath: '''histogram of'' ~ log(1 + y[w])'
+    formula_katex: '\text{histogram of } \log(1 + y_w)'
+    target_template: null
+    units: 'counts per week'
     definition: >-
       Histograms of the observed and the predicted weekly totals on the same log
       axis as the scatter.
@@ -592,6 +1143,12 @@ metrics:
 
   - key: likelihood_concentration
     label: Likelihood concentration (eta = 1)
+    short_label: 'Likelihood concentration'
+    what_it_tells_you: 'How sharply the raw likelihood ranks the draws'
+    formula_plotmath: 'ESS[Kish](w^{(1)})'
+    formula_katex: '\mathrm{ESS}_{\mathrm{Kish}}(w^{(1)})'
+    target_template: null
+    units: 'draws'
     definition: >-
       ESS and k-hat of the untempered likelihood ratios. With thousands of scored
       cells and a stochastic likelihood they are about 1 and huge whatever the fit.

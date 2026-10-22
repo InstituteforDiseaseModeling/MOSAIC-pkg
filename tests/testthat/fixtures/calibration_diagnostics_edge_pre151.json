@@ -1,0 +1,769 @@
+{
+  "schema_version": "2",
+  "run": {
+    "mosaic_version": "1.3.0",
+    "locations": ["MOZ"],
+    "n_locations": 1,
+    "mode": "fixed",
+    "posterior_weighting": "bestfit",
+    "coarsening_alpha": 10,
+    "eta": 0.00666666666666667,
+    "n_obs_scored": 1500,
+    "n_simulations": null,
+    "burn_in_days": 21,
+    "n_iterations": 3,
+    "n_iter_ensemble": 10,
+    "date_start": "2024-01-01",
+    "date_stop": "2024-06-30"
+  },
+  "status": {
+    "convergence_status": "yellow",
+    "convergence_label": "Usable with caution",
+    "reasons": ["the data carry little information: the posterior is close to the prior (flat likelihood: the untempered likelihood spreads its weight over 100% of the draws, >= 1%)"],
+    "flags": ["ensemble_size_bound", "fixed_budget"],
+    "flags_text": "ensemble at the max_members bound (the ESS target is not reached within it); fixed-budget run: the status is assessed, not used to stop",
+    "stopping_rule_met": null,
+    "checks": [
+      {
+        "check": "ess",
+        "label": "Ensemble ESS",
+        "value": 999.999999999956,
+        "threshold_green": 200,
+        "threshold_yellow": 100,
+        "colour": "green",
+        "reason": "ensemble ESS 1,000 >= 200"
+      },
+      {
+        "check": "mce",
+        "label": "Monte Carlo error (90th percentile)",
+        "value": 0.0390715986397863,
+        "threshold_green": 0.1,
+        "threshold_yellow": 0.15,
+        "colour": "green",
+        "reason": "Monte Carlo standard error of the posterior means 3.9% of the posterior SD (90th percentile over parameters) <= 10.0%"
+      },
+      {
+        "check": "khat",
+        "label": "Validity guard (Pareto k-hat)",
+        "value": -0.868196761769806,
+        "threshold_green": 0.5,
+        "threshold_yellow": 0.7,
+        "colour": "green",
+        "reason": "Pareto k-hat of the tempered weights -0.87 < 0.5"
+      },
+      {
+        "check": "informativeness",
+        "label": "Data informativeness",
+        "value": 0.99999991613859,
+        "threshold_green": 0.01,
+        "threshold_yellow": null,
+        "colour": "yellow",
+        "reason": "the data carry little information: the posterior is close to the prior (flat likelihood: the untempered likelihood spreads its weight over 100% of the draws, >= 1%)"
+      }
+    ]
+  },
+  "sampling": {
+    "n_locations": 1,
+    "alpha_per_location": 10,
+    "ess_untempered_frac": 0.99999991613859,
+    "sims_projected_for_green": null,
+    "projection_reliable": false,
+    "ess_all": 9199.99999996564,
+    "ess_all_target": 1000,
+    "ess_best": 999.999999999956,
+    "ess_best_target": 200,
+    "best_subset_ratio": 0.2,
+    "best_subset_mass": 0.108695977812008,
+    "ensemble_members": 1000,
+    "ensemble_members_unique": 1000,
+    "ensemble_binding": "max_members",
+    "khat_tempered": -0.868196761769806,
+    "khat_status": "-0.87 (good)",
+    "eta_star": 1,
+    "eta_star_n_eff": 1500,
+    "flat_likelihood": true,
+    "ess_growth_slope": null,
+    "sims_used": 9200,
+    "sims_projected_for_target": null,
+    "budget_exhausted": false,
+    "ess_path": [
+      {
+        "n": 100,
+        "ess_all": 100
+      },
+      {
+        "n": 9200,
+        "ess_all": 9200
+      }
+    ],
+    "loglik_path": [
+      {
+        "n": 100,
+        "best_gap": -1.602e-05,
+        "top100_gap": -0.0009916
+      },
+      {
+        "n": 9200,
+        "best_gap": 0,
+        "top100_gap": -1.215e-05
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "parameter": "beta_j0_tot_MOZ",
+      "base": "beta_j0_tot",
+      "location": "MOZ",
+      "prior_family": "lognormal",
+      "mce": 0.0393360412108258,
+      "kl": 0.227563630546185,
+      "kl_band": "partly informed"
+    },
+    {
+      "parameter": "gamma_1",
+      "base": "gamma_1",
+      "location": null,
+      "prior_family": "beta",
+      "mce": 0.0278255027677889,
+      "kl": 0.263509234270239,
+      "kl_band": "partly informed"
+    },
+    {
+      "parameter": "rho",
+      "base": "rho",
+      "location": null,
+      "prior_family": "lognormal",
+      "mce": 0.0380138283556281,
+      "kl": 0.171615516184829,
+      "kl_band": "partly informed"
+    }
+  ],
+  "mce_summary": {
+    "median": 0.0380138283556281,
+    "p90": 0.0390715986397863,
+    "max": 0.0393360412108258,
+    "worst": [
+      {
+        "parameter": "beta_j0_tot_MOZ",
+        "mce": 0.0393360412108258
+      },
+      {
+        "parameter": "rho",
+        "mce": 0.0380138283556281
+      },
+      {
+        "parameter": "gamma_1",
+        "mce": 0.0278255027677889
+      }
+    ]
+  },
+  "kl_summary": {
+    "largely_prior": 0,
+    "partly_informed": 3,
+    "data_informed": 0,
+    "withheld": 0,
+    "band_edges": [0.05, 0.5]
+  },
+  "fit": {
+    "table": [
+      {
+        "metric": "cases",
+        "subset": "scored",
+        "r2": 0.932982064151875,
+        "bias": 1.05186045606421,
+        "cov50": 0.595628415300546,
+        "cov95": 0.969945355191257,
+        "wis": 2.47260397761799,
+        "n_scored": 366
+      }
+    ],
+    "per_location": [
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "r2": 0.933,
+        "bias": 1.052,
+        "cov95": 0.9699,
+        "observed_total": 12172
+      }
+    ],
+    "weekly": [
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-01-01",
+        "observed": 298,
+        "predicted": 303.8,
+        "lo50": 258,
+        "hi50": 319,
+        "lo95": 205,
+        "hi95": 380
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-01-08",
+        "observed": 236,
+        "predicted": 262.8,
+        "lo50": 221,
+        "hi50": 278,
+        "lo95": 173,
+        "hi95": 336
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-01-15",
+        "observed": 221,
+        "predicted": 222.7,
+        "lo50": 185,
+        "hi50": 238,
+        "lo95": 140,
+        "hi95": 291
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-01-22",
+        "observed": 173,
+        "predicted": 184.8,
+        "lo50": 152,
+        "hi50": 199,
+        "lo95": 111,
+        "hi95": 248
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-01-29",
+        "observed": 143,
+        "predicted": 150.3,
+        "lo50": 121,
+        "hi50": 163,
+        "lo95": 86,
+        "hi95": 207
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-02-05",
+        "observed": 109,
+        "predicted": 120.1,
+        "lo50": 96,
+        "hi50": 133,
+        "lo95": 63,
+        "hi95": 173
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-02-12",
+        "observed": 99,
+        "predicted": 95.27,
+        "lo50": 73,
+        "hi50": 107,
+        "lo95": 45,
+        "hi95": 143
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-02-19",
+        "observed": 70,
+        "predicted": 76.5,
+        "lo50": 57,
+        "hi50": 88,
+        "lo95": 32,
+        "hi95": 120
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-02-26",
+        "observed": 57,
+        "predicted": 64.37,
+        "lo50": 47,
+        "hi50": 74,
+        "lo95": 24,
+        "hi95": 105
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-03-04",
+        "observed": 66,
+        "predicted": 59.26,
+        "lo50": 42,
+        "hi50": 70,
+        "lo95": 21,
+        "hi95": 98
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-03-11",
+        "observed": 51,
+        "predicted": 61.31,
+        "lo50": 44,
+        "hi50": 71,
+        "lo95": 21,
+        "hi95": 101
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-03-18",
+        "observed": 69,
+        "predicted": 70.48,
+        "lo50": 52,
+        "hi50": 81,
+        "lo95": 29,
+        "hi95": 112
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-03-25",
+        "observed": 83,
+        "predicted": 86.47,
+        "lo50": 65,
+        "hi50": 98,
+        "lo95": 39,
+        "hi95": 132
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-04-01",
+        "observed": 115,
+        "predicted": 108.8,
+        "lo50": 86,
+        "hi50": 121,
+        "lo95": 55,
+        "hi95": 160
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-04-08",
+        "observed": 135,
+        "predicted": 136.8,
+        "lo50": 110,
+        "hi50": 150,
+        "lo95": 75,
+        "hi95": 192
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-04-15",
+        "observed": 175,
+        "predicted": 169.6,
+        "lo50": 138,
+        "hi50": 183,
+        "lo95": 100,
+        "hi95": 231
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-04-22",
+        "observed": 184,
+        "predicted": 206.2,
+        "lo50": 170,
+        "hi50": 221,
+        "lo95": 127,
+        "hi95": 273
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-04-29",
+        "observed": 229,
+        "predicted": 245.4,
+        "lo50": 206,
+        "hi50": 261,
+        "lo95": 159,
+        "hi95": 315
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-05-06",
+        "observed": 264,
+        "predicted": 286.2,
+        "lo50": 242,
+        "hi50": 302,
+        "lo95": 191,
+        "hi95": 362
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-05-13",
+        "observed": 274,
+        "predicted": 327.2,
+        "lo50": 279,
+        "hi50": 342,
+        "lo95": 224,
+        "hi95": 406
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-05-20",
+        "observed": 391,
+        "predicted": 367.2,
+        "lo50": 316,
+        "hi50": 382,
+        "lo95": 257,
+        "hi95": 450
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-05-27",
+        "observed": 380,
+        "predicted": 404.9,
+        "lo50": 350,
+        "hi50": 420,
+        "lo95": 287,
+        "hi95": 490
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-06-03",
+        "observed": 421,
+        "predicted": 439.3,
+        "lo50": 381,
+        "hi50": 455,
+        "lo95": 316,
+        "hi95": 527
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-06-10",
+        "observed": 467,
+        "predicted": 469.2,
+        "lo50": 408,
+        "hi50": 484,
+        "lo95": 341,
+        "hi95": 560
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-06-17",
+        "observed": 429,
+        "predicted": 493.8,
+        "lo50": 431,
+        "hi50": 508,
+        "lo95": 361,
+        "hi95": 586
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-06-24",
+        "observed": 469,
+        "predicted": 512.2,
+        "lo50": 448,
+        "hi50": 527,
+        "lo95": 377,
+        "hi95": 605
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-07-01",
+        "observed": 529,
+        "predicted": 524,
+        "lo50": 459,
+        "hi50": 538,
+        "lo95": 387,
+        "hi95": 619
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-07-08",
+        "observed": 520,
+        "predicted": 528.8,
+        "lo50": 462,
+        "hi50": 545,
+        "lo95": 392,
+        "hi95": 623
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-07-15",
+        "observed": 456,
+        "predicted": 526.4,
+        "lo50": 461,
+        "hi50": 540,
+        "lo95": 389,
+        "hi95": 621
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-07-22",
+        "observed": 489,
+        "predicted": 516.9,
+        "lo50": 452,
+        "hi50": 531,
+        "lo95": 381,
+        "hi95": 611
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-07-29",
+        "observed": 463,
+        "predicted": 500.6,
+        "lo50": 437,
+        "hi50": 515,
+        "lo95": 366,
+        "hi95": 593
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-08-05",
+        "observed": 422,
+        "predicted": 478,
+        "lo50": 417,
+        "hi50": 492,
+        "lo95": 348,
+        "hi95": 569
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-08-12",
+        "observed": 418,
+        "predicted": 449.7,
+        "lo50": 391,
+        "hi50": 464,
+        "lo95": 324,
+        "hi95": 539
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-08-19",
+        "observed": 394,
+        "predicted": 416.7,
+        "lo50": 361,
+        "hi50": 432,
+        "lo95": 297,
+        "hi95": 503
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-08-26",
+        "observed": 374,
+        "predicted": 380,
+        "lo50": 327,
+        "hi50": 395,
+        "lo95": 266,
+        "hi95": 464
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-09-02",
+        "observed": 343,
+        "predicted": 340.6,
+        "lo50": 291,
+        "hi50": 355,
+        "lo95": 235,
+        "hi95": 420
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-09-09",
+        "observed": 273,
+        "predicted": 299.8,
+        "lo50": 255,
+        "hi50": 315,
+        "lo95": 201,
+        "hi95": 378
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-09-16",
+        "observed": 257,
+        "predicted": 258.8,
+        "lo50": 218,
+        "hi50": 274,
+        "lo95": 168,
+        "hi95": 330
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-09-23",
+        "observed": 213,
+        "predicted": 218.9,
+        "lo50": 182,
+        "hi50": 234,
+        "lo95": 137,
+        "hi95": 287
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-09-30",
+        "observed": 178,
+        "predicted": 181.3,
+        "lo50": 149,
+        "hi50": 195,
+        "lo95": 108,
+        "hi95": 244
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-10-07",
+        "observed": 159,
+        "predicted": 147.2,
+        "lo50": 118,
+        "hi50": 161,
+        "lo95": 82,
+        "hi95": 205
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-10-14",
+        "observed": 95,
+        "predicted": 117.5,
+        "lo50": 93,
+        "hi50": 130,
+        "lo95": 61,
+        "hi95": 170
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-10-21",
+        "observed": 91,
+        "predicted": 93.2,
+        "lo50": 71,
+        "hi50": 105,
+        "lo95": 44,
+        "hi95": 142
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-10-28",
+        "observed": 76,
+        "predicted": 75.04,
+        "lo50": 55,
+        "hi50": 86,
+        "lo95": 31,
+        "hi95": 118
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-11-04",
+        "observed": 76,
+        "predicted": 63.57,
+        "lo50": 46,
+        "hi50": 73,
+        "lo95": 24,
+        "hi95": 104
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-11-11",
+        "observed": 60,
+        "predicted": 59.14,
+        "lo50": 42,
+        "hi50": 70,
+        "lo95": 21,
+        "hi95": 98
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-11-18",
+        "observed": 54,
+        "predicted": 61.89,
+        "lo50": 44,
+        "hi50": 72,
+        "lo95": 22,
+        "hi95": 101
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-11-25",
+        "observed": 62,
+        "predicted": 71.73,
+        "lo50": 53,
+        "hi50": 82,
+        "lo95": 30,
+        "hi95": 114
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-12-02",
+        "observed": 72,
+        "predicted": 88.35,
+        "lo50": 68,
+        "hi50": 100,
+        "lo95": 40,
+        "hi95": 135
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-12-09",
+        "observed": 112,
+        "predicted": 111.3,
+        "lo50": 87,
+        "hi50": 124,
+        "lo95": 56,
+        "hi95": 162
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-12-16",
+        "observed": 156,
+        "predicted": 139.7,
+        "lo50": 112,
+        "hi50": 153,
+        "lo95": 77,
+        "hi95": 196
+      },
+      {
+        "location": "MOZ",
+        "metric": "cases",
+        "week": "2024-12-23",
+        "observed": 177,
+        "predicted": 173,
+        "lo50": 141,
+        "hi50": 187,
+        "lo95": 102,
+        "hi95": 234
+      }
+    ]
+  },
+  "likelihood_concentration": {
+    "ess_is_all": 412.3,
+    "note": "eta = 1 likelihood concentration: the importance weights the untempered likelihood would give the prior draws. With thousands of scored cells and a stochastic likelihood they are expected to collapse to an ESS of about 1 whatever the fit, so these numbers measure how sharply the raw likelihood ranks the draws. They are not a fit or convergence diagnostic, and no posterior is built from them."
+  }
+}
