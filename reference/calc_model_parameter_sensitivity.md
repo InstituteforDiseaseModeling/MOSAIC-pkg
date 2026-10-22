@@ -83,6 +83,23 @@ the computation (and the `parameter_sensitivity.csv` write) live here so
 the sensitivity table is produced independently of plotting, and the
 plot consumes the returned/loaded data.frame.
 
+The indices are computed a chunk of parameters at a time, so the Gram
+matrices held at once are bounded (1 GiB: 33 parameters at
+`n_samples = 2000`) instead of growing with the number of parameters
+(MOSAIC 1.5.0). On a synthetic 900-parameter run the peak memory fell
+from 51.6 GB to 3.7 GB (a 916-parameter Kenya run had held 67 GB). Each
+parameter's R2-HSIC and asymptotic p-value depend only on its own column
+and the log-likelihood, so the results equal a single call over every
+parameter. With `test_method = "Permutation"` each chunk draws its own
+permutations, so those p-values are a different Monte Carlo draw.
+
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+calls it in every run, whatever `plots` is, and writes
+`parameter_sensitivity.csv` (atomically: a temporary file renamed into
+place, so a killed run never leaves a truncated table);
+[`render_MOSAIC_figures`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
+plots that table and recomputes it only when it is missing.
+
 ## References
 
 Da Veiga S (2015). Global sensitivity analysis with dependence measures.

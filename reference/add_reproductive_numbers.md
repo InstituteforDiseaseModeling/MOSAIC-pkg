@@ -55,11 +55,18 @@ add_reproductive_numbers(
   stock and decay-rate channels that the persisted trajectory artifact
   does not retain at a daily grid. A faithfulness gate confirms the
   re-sim reproduces the saved engine-level cases (`cases_engine_array`)
-  before any CI is written. When `FALSE` (default) the cheap
-  point-estimate path is used (renewal on the weighted-median route
-  incidence from `trajectories_ensemble.rds`; CI columns are populated
-  only if the artifact carries daily-consecutive per-member lines,
-  otherwise NA).
+  before any CI is written. Since MOSAIC 1.5.0
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  captures those channels from the ensemble's own simulations and saves
+  them in `ensemble_candidate.rds` (with
+  `control$io$persist_ensemble_arrays = TRUE`, which this path already
+  requires); when they are there, in this process or a later one,
+  nothing is re-simulated (each member's inputs are verified against its
+  saved cases by an exact checksum) and the values are identical to the
+  re-simulation's. When `FALSE` (default) the cheap point-estimate path
+  is used (renewal on the weighted-median route incidence from
+  `trajectories_ensemble.rds`; CI columns are populated only if the
+  artifact carries daily-consecutive per-member lines, otherwise NA).
 
 - burn_in_days:
 
@@ -103,7 +110,10 @@ add_reproductive_numbers(
   [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   defaults). Greater than 1 builds a PSOCK cluster and stops it before
   returning; `1L` (default) keeps the historical serial behaviour.
-  Ignored when `recompute_ci = FALSE`.
+  Ignored when `recompute_ci = FALSE`. With captured inputs (no
+  re-simulation) a cluster is built only for large ensembles (at least
+  5,000 location-members), where the per-member R computation outweighs
+  starting the workers.
 
 ## Value
 

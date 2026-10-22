@@ -29,7 +29,7 @@ optionally renders plot_Reff to
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -115,7 +115,13 @@ trajectory artifact. This captures the daily
 route incidence, stock and decay-rate channels that the persisted
 trajectory artifact does not retain at a daily grid. A faithfulness gate
 confirms the re-sim reproduces the saved engine-level cases
-(<code>cases_engine_array</code>) before any CI is written.
+(<code>cases_engine_array</code>) before any CI is written. Since MOSAIC 1.5.0
+<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> captures those channels from the ensemble's own
+simulations and saves them in <code>ensemble_candidate.rds</code> (with
+<code>control$io$persist_ensemble_arrays = TRUE</code>, which this path already
+requires); when they are there, in this process or a later one, nothing is
+re-simulated (each member's inputs are verified against its saved cases by
+an exact checksum) and the values are identical to the re-simulation's.
 When <code>FALSE</code> (default) the cheap point-estimate path is used (renewal on
 the weighted-median route incidence from <code>trajectories_ensemble.rds</code>;
 CI columns are populated only if the artifact carries daily-consecutive
@@ -159,7 +165,10 @@ status (an older total-only CSV is always recomputed). Default <code>TRUE</code>
 re-simulation, which is the only expensive part of this function
 (~1,000 engine runs at <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> defaults). Greater than 1 builds
 a PSOCK cluster and stops it before returning; <code>1L</code> (default) keeps
-the historical serial behaviour. Ignored when <code>recompute_ci = FALSE</code>.</p></dd>
+the historical serial behaviour. Ignored when <code>recompute_ci = FALSE</code>.
+With captured inputs (no re-simulation) a cluster is built only for
+large ensembles (at least 5,000 location-members), where the per-member
+R computation outweighs starting the workers.</p></dd>
 
 </dl></div>
     <div class="section level2">

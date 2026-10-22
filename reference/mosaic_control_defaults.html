@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -300,9 +300,12 @@ strips the arrays at save time so the on-disk artifacts are small
 weights, seeds, obs, metadata) is preserved and all standard consumers
 (plotting, OCV, rolling CV) work unchanged. Set <code>TRUE</code> for a
 re-analysable raw archive (e.g. re-running subset optimization or the
-R_eff posterior-resimulation CI path from the saved file). The
-in-memory object used during the run is never affected (default:
-<code>FALSE</code>).</p></li>
+R_eff posterior CI from the saved file). With <code>TRUE</code> the candidate
+ensemble also captures its members' R_eff inputs (three more arrays of
+the same size, <code>reff_capture</code>; MOSAIC 1.5.0), so
+<code>add_reproductive_numbers(recompute_ci = TRUE)</code> does not
+re-simulate them. The in-memory object used during the run is never
+affected (default: <code>FALSE</code>).</p></li>
 </ul><p><code>verbose_weights</code> is deprecated (1.4.0; it had no effect).</p></dd>
 
 

@@ -320,9 +320,13 @@ mosaic_control_defaults(
     tendencies, envelopes, weights, seeds, obs, metadata) is preserved
     and all standard consumers (plotting, OCV, rolling CV) work
     unchanged. Set `TRUE` for a re-analysable raw archive (e.g.
-    re-running subset optimization or the R_eff posterior-resimulation
-    CI path from the saved file). The in-memory object used during the
-    run is never affected (default: `FALSE`).
+    re-running subset optimization or the R_eff posterior CI from the
+    saved file). With `TRUE` the candidate ensemble also captures its
+    members' R_eff inputs (three more arrays of the same size,
+    `reff_capture`; MOSAIC 1.5.0), so
+    `add_reproductive_numbers(recompute_ci = TRUE)` does not re-simulate
+    them. The in-memory object used during the run is never affected
+    (default: `FALSE`).
 
   `verbose_weights` is deprecated (1.4.0; it had no effect).
 

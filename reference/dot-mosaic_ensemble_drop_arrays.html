@@ -3,14 +3,18 @@
 – the observation-level cases_array/deaths_array and the
 engine-level cases_engine_array/deaths_engine_array – set to
 NULL, preserving the S3 class and every light field (central
-tendencies, envelopes, weights, seeds, obs, metadata). Idempotent: safe to
+tendencies, envelopes, weights, seeds, obs, metadata). The captured R_eff
+inputs (reff_capture, three arrays of the same size) go with them:
+the R_eff CI that reads them needs the arrays too. Idempotent: safe to
 call when the arrays are already NULL. Used at run_MOSAIC() save
 time so persisted ensemble RDS files are small; the in-memory object is never
 mutated."><meta property="og:description" content="Returns a copy of a mosaic_ensemble object with the dense 4-D arrays
 – the observation-level cases_array/deaths_array and the
 engine-level cases_engine_array/deaths_engine_array – set to
 NULL, preserving the S3 class and every light field (central
-tendencies, envelopes, weights, seeds, obs, metadata). Idempotent: safe to
+tendencies, envelopes, weights, seeds, obs, metadata). The captured R_eff
+inputs (reff_capture, three arrays of the same size) go with them:
+the R_eff CI that reads them needs the arrays too. Idempotent: safe to
 call when the arrays are already NULL. Used at run_MOSAIC() save
 time so persisted ensemble RDS files are small; the in-memory object is never
 mutated."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
@@ -21,7 +25,7 @@ mutated."><meta property="og:image" content="https://institutefordiseasemodeling
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +62,9 @@ mutated."><meta property="og:image" content="https://institutefordiseasemodeling
 – the observation-level <code>cases_array</code>/<code>deaths_array</code> and the
 engine-level <code>cases_engine_array</code>/<code>deaths_engine_array</code> – set to
 <code>NULL</code>, preserving the S3 class and every light field (central
-tendencies, envelopes, weights, seeds, obs, metadata). Idempotent: safe to
+tendencies, envelopes, weights, seeds, obs, metadata). The captured R_eff
+inputs (<code>reff_capture</code>, three arrays of the same size) go with them:
+the R_eff CI that reads them needs the arrays too. Idempotent: safe to
 call when the arrays are already <code>NULL</code>. Used at <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> save
 time so persisted ensemble RDS files are small; the in-memory object is never
 mutated.</p>

@@ -111,20 +111,29 @@ run_mosaic(
   (never pooled), and the post-calibration artifacts of an earlier run
   into the same directory are removed before they are rebuilt.
 
+  **Post-calibration resume (MOSAIC 1.5.0).** Once sampling has
+  finished, the shards are combined into `2_calibration/samples.parquet`
+  and a marker, `2_calibration/state/sampling_complete.rds`, records the
+  calibration state, the draws and the global RNG state before the
+  shards are deleted. A run killed after that point – in the CFR pilot,
+  the ensembles, the trajectory reduction or the in-run figures –
+  resumes with `resume = TRUE`: sampling is skipped and post-calibration
+  restarts from `samples.parquet`, giving the same posteriors, ensembles
+  and medoid as an uninterrupted run with the same control. Resuming a
+  *completed* run (`3_results/summary.json` present) is a no-op that
+  logs a message, leaves the directory untouched and returns the
+  recorded counts and status.
+
   Resume is **rejected** (hard error) when:
 
   - `control$paths$clean_output = TRUE` (the wipe would delete the
     shards);
 
-  - the shards were already combined – a consolidated
+  - the shards were already combined by a MOSAIC release before 1.5.0
+    (no sampling marker) – a consolidated
     `2_calibration/samples.parquet` exists that the on-disk shards would
-    shrink (start fresh, or remove it to recompute). Combining deletes
-    the shards and the resume checkpoint, so this covers not only a
-    finished run but also one that **died after combining shards and
-    before writing `3_results/summary.json`** (e.g. in the ensemble or
-    figure steps). Such a run cannot be resumed and must be restarted
-    with `resume = FALSE`. `3_results/summary.json` is written last and
-    is the marker of a completed run;
+    shrink. Such a run, finished or killed in post-calibration, must be
+    restarted with `resume = FALSE`;
 
   - the supplied `config`, `priors`, `control$likelihood`,
     `control$sampling`, `control$calibration$n_iterations`, or the
@@ -301,9 +310,8 @@ run_MOSAIC(custom_config, custom_priors, "./output")
 # If a calibration is killed mid-run, re-call with resume = TRUE and the same
 # config/priors/output directory. Completed simulations on disk are reused and
 # the run continues from the next sim_id (bit-identical to an uninterrupted run).
-# This works only while the per-sim shards exist: a run that died after they
-# were combined into samples.parquet (no 3_results/summary.json) must be rerun
-# with resume = FALSE.
+# A run killed after sampling finished (in post-calibration) skips sampling
+# and redoes only post-calibration; a completed run is left as it is.
 run_MOSAIC(config, priors, "./output", resume = TRUE)
 } # }
 ```
