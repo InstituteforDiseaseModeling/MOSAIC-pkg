@@ -41,6 +41,14 @@
 #'   deaths (\code{expected_deaths}) to the record, for the observation-level
 #'   deaths draw. Only meaningful with \code{deaths_integration}; off by default
 #'   because it adds one \code{[n_loc x n_time]} matrix to every gathered record.
+#' @param capture_reff Logical. Attach the member's R_eff inputs
+#'   (\code{.mosaic_reff_capture_member()}) as \code{reff}, so the posterior
+#'   R_eff need not re-simulate it. Off by default: three
+#'   \code{[n_loc x n_time]} matrices per gathered record.
+#' @param config_source \code{NULL} (default; the config is
+#'   \code{param_configs_list[[param_idx]]}), or the seeds-mode source from
+#'   which the task rebuilds its config (\code{.mosaic_ensemble_member_config()}),
+#'   so PSOCK workers need not receive every config.
 #'
 #' @return A list with \code{param_idx}, \code{stoch_idx}, \code{success},
 #'   and on success \code{reported_cases}, \code{reported_deaths},
@@ -58,11 +66,14 @@
                                   traj_channels = character(0),
                                   traj_scratch = NULL,
                                   deaths_integration = NULL,
-                                  return_expected_deaths = FALSE) {
+                                  return_expected_deaths = FALSE,
+                                  capture_reff = FALSE,
+                                  config_source = NULL) {
   param_idx <- task_info$param_idx
   stoch_idx <- task_info$stoch_idx
   tryCatch({
-    param_config <- param_configs_list[[param_idx]]
+    param_config <- if (is.null(config_source)) param_configs_list[[param_idx]] else
+      .mosaic_ensemble_member_config(config_source, param_idx)
     param_config$seed <- (param_idx * 1000L) + stoch_idx
     model <- run_simulation(config = param_config,
                             seed   = param_config$seed,
@@ -96,6 +107,21 @@
     # pipeline subset without DerivedValues simply yields NULL (warn+skip
     # downstream) -- run_simulation() omits both channels rather than returning
     # their zero-filled allocation when that component did not run.
+    # R_eff inputs, harvested from this run rather than re-simulated later
+    # (add_reproductive_numbers(recompute_ci = TRUE)). The route incidences,
+    # decay rates and stocks are untouched by the deaths redraw above.
+    reff_inputs <- NULL
+    if (isTRUE(capture_reff)) {
+      # The ensemble's dimensions (calc_model_ensemble() reads them from the
+      # config the same way), which the R_eff CI reads its slices with.
+      oc <- param_config$reported_cases
+      reff_inputs <- tryCatch(
+        .mosaic_reff_capture_member(model$results,
+                                    nL = if (is.matrix(oc)) nrow(oc) else 1L,
+                                    Tn = if (is.matrix(oc)) ncol(oc) else length(oc),
+                                    p = param_idx, s = stoch_idx),
+        error = function(e) list(error = conditionMessage(e)))
+    }
     sh  <- tryCatch(model$results$spatial_hazard, error = function(e) NULL)
     cpl <- tryCatch(model$results$coupling,       error = function(e) NULL)
     pij <- tryCatch(model$results$pi_ij,          error = function(e) NULL)
@@ -109,6 +135,7 @@
                    cfr_infeasible = cfr_infeasible,
                    anchor_dev     = anchor_dev,
                    expected_deaths = expected_deaths,
+                   reff           = reff_inputs,
                    success = TRUE)
     # Trajectory channels (comprehensive internal-state capture). Harvested
     # here, where model$results is in hand, at zero marginal sim cost --

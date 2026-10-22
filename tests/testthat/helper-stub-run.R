@@ -15,7 +15,7 @@
                              n_sims = 150L, optimize_subset = NULL, targets_extra = list(),
                              plots = FALSE, ll_mode = c("normal", "onegood"),
                              calib_extra = list(), predictions_extra = list(), keep_tier = FALSE,
-                             assign_targets = FALSE) {
+                             assign_targets = FALSE, resume = FALSE, clean_output = NULL) {
   mode <- match.arg(mode)
   ll_mode <- match.arg(ll_mode)
   config <- get_location_config(iso = "MOZ", config = MOSAIC::config_default)
@@ -62,14 +62,16 @@
     calibration = calib, targets = if (isTRUE(assign_targets)) NULL else targets,
     predictions = predictions,
     parallel = list(enable = FALSE, n_cores = 1L, progress = FALSE),
-    paths = list(plots = plots, clean_output = TRUE), logging = list(verbose = FALSE))
+    paths = list(plots = plots, clean_output = clean_output %||% !isTRUE(resume)),
+    logging = list(verbose = FALSE))
   if (isTRUE(assign_targets)) for (k in names(targets)) control$targets[[k]] <- targets[[k]]
-  testthat::with_mocked_bindings(
+  res <- testthat::with_mocked_bindings(
     suppressWarnings(suppressMessages(run_MOSAIC(config = config, priors = priors,
                                                  dir_output = dir_output, control = control,
-                                                 resume = FALSE))),
+                                                 resume = resume))),
     run_simulation = fake_engine, .package = "MOSAIC")
-  invisible(dir_output)
+  # run_MOSAIC()'s return value rides along as an attribute.
+  invisible(structure(dir_output, result = res))
 }
 
 # The pieces of a finished run the posterior regression compares.

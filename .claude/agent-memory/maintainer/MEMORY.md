@@ -57,3 +57,4 @@
 - [Coarsened posterior v1.3.0 review](project_coarsened_posterior_v130_review.md) — optimizer cost ~K x grid (10 h continental at K=1000); batch ratio ~1.5*sqrt(10/ESS); saturated bit-identity excludes weight_all; fixture regen recipe
 - [v1.3.0 reporting audit](project_v130_reporting_audit.md) — reporting sibling set + 3 downstream readers; 3 disagreeing verdicts; PASS≠fit; weight_retained still load-bearing
 - [v1.4.0 code red team](project_v140_code_redteam.md) — rolling-CV all-red trap, n_valid<2 no-status/no-JSON, eta*-NA false green, gate-vs-members split; rt_stub.R harness
+- [Deploy chain review checklist](deploy_chain_review_checklist.md) — deploy_v0103 traps: exit-0 post steps, live unpinned handoff, env knob leaks, stale RUNBOOK tags

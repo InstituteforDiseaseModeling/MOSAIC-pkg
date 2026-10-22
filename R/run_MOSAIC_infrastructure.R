@@ -281,10 +281,10 @@
     paths <- c(paths, list.files(dirs$res_predictions,
                                  pattern = "^(predictions_(ensemble|medoid)|trajectories)_.*\\.csv$",
                                  full.names = TRUE))
-  # parameter_sensitivity.csv is written inside a non-fatal block (and skipped
-  # with < 10 finite sims or < 2 sampled parameters); render_MOSAIC_figures()
-  # plots any existing copy instead of recomputing, so a stale one would be
-  # rendered as this run's HSIC table.
+  # parameter_sensitivity.csv is written by the "sensitivity" render group
+  # (skipped with < 10 finite sims or < 2 sampled parameters), which plots any
+  # existing copy instead of recomputing, so a stale one would be rendered as
+  # this run's HSIC table.
   if (!is.null(dirs$res_fig_diag))
     paths <- c(paths, file.path(dirs$res_fig_diag,
                                 c("model_fit_windows.csv", "optimization_diagnostics.csv",

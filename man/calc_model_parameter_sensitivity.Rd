@@ -62,6 +62,22 @@ This is the data-layer companion to \code{\link{plot_model_parameter_sensitivity
 the computation (and the \code{parameter_sensitivity.csv} write) live here so
 the sensitivity table is produced independently of plotting, and the plot
 consumes the returned/loaded data.frame.
+
+The indices are computed a chunk of parameters at a time, so the Gram
+matrices held at once are bounded (1 GiB: 33 parameters at
+\code{n_samples = 2000}) instead of growing with the number of parameters
+(MOSAIC 1.5.0). On a synthetic 900-parameter run the peak memory fell from
+51.6 GB to 3.7 GB (a 916-parameter Kenya run had held 67 GB). Each parameter's
+R2-HSIC and asymptotic p-value depend only on its own column and the
+log-likelihood, so the results equal a single call over every parameter.
+With \code{test_method = "Permutation"} each chunk draws its own
+permutations, so those p-values are a different Monte Carlo draw.
+
+Since MOSAIC 1.5.0 \code{run_MOSAIC()} no longer calls this function: the
+figure group \code{"sensitivity"} of \code{\link{render_MOSAIC_figures}}
+computes it (when \code{parameter_sensitivity.csv} is absent) and draws its
+figure, so \code{run_MOSAIC(plots = TRUE)} writes the table in the same run
+and \code{plots = FALSE} defers it to a later \code{render_MOSAIC_figures()}.
 }
 \references{
 Da Veiga S (2015). Global sensitivity analysis with dependence measures.

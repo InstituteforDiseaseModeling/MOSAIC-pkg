@@ -28,6 +28,7 @@ calc_model_ensemble(
   reduce_trajectories = TRUE,
   deaths_integration = NULL,
   observation_model = NULL,
+  capture_reff = FALSE,
   verbose = TRUE
 )
 }
@@ -155,6 +156,17 @@ match it. The deaths dispersion is read from
 \code{deaths_integration}. When \code{NULL} (default) no observation noise
 is drawn and \code{cases_array}/\code{deaths_array} are the engine draws.}
 
+\item{capture_reff}{Logical. When \code{TRUE}, harvest from each member the
+inputs of its route-decomposed R_eff -- route incidences, engine decay rates,
+initial stocks, with an exact checksum of its reported cases -- and return
+them as \code{$reff_capture}, so \code{\link{add_reproductive_numbers}}
+(\code{recompute_ci = TRUE}) computes the posterior R_eff without
+re-simulating the members (capture-don't-replay; identical values). Adds
+three dense arrays the size of \code{cases_engine_array}. Default
+\code{FALSE}; \code{run_MOSAIC()} enables it for the posterior ensemble
+when \code{control$io$persist_ensemble_arrays = TRUE}, the setting the R_eff
+CI already requires.}
+
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }
 \value{
@@ -243,6 +255,12 @@ per location, the weighted mean over members of the posterior-mode logit
 CFR deviation for the location's latest observed year (\code{NA} for a
 location with no forecast years). \code{run_MOSAIC()} centres forecast
 years on it. \code{NULL} otherwise.}
+\item{reff_capture}{When \code{capture_reff = TRUE}: the members' R_eff
+inputs (\code{inc_hum}, \code{inc_env}, \code{delta} arrays shaped like
+\code{cases_engine_array}; \code{init} \code{[n_locations x 3 x
+    n_param_sets x n_stoch]}; \code{cases_checksum}; \code{error}; per
+parameter set \code{kernels} and \code{kernel_params}). \code{NULL}
+otherwise.}
 }
 }
 \description{

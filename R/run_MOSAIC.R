@@ -653,18 +653,27 @@
 #'   post-calibration artifacts of an earlier run into the same directory are
 #'   removed before they are rebuilt.
 #'
+#'   \strong{Post-calibration resume (MOSAIC 1.5.0).} Once sampling has
+#'   finished, the shards are combined into \code{2_calibration/samples.parquet}
+#'   and a marker, \code{2_calibration/state/sampling_complete.rds}, records the
+#'   calibration state, the draws and the global RNG state before the shards are
+#'   deleted. A run killed after that point -- in the CFR pilot, the ensembles,
+#'   the trajectory reduction or the in-run figures -- resumes with
+#'   \code{resume = TRUE}: sampling is skipped and post-calibration restarts
+#'   from \code{samples.parquet}, giving the same posteriors, ensembles and
+#'   medoid as an uninterrupted run with the same control. Resuming a
+#'   \emph{completed} run (\code{3_results/summary.json} present) is a no-op that
+#'   logs a message, leaves the directory untouched and returns the recorded
+#'   counts and status.
+#'
 #'   Resume is \strong{rejected} (hard error) when:
 #'   \itemize{
 #'     \item \code{control$paths$clean_output = TRUE} (the wipe would delete the shards);
-#'     \item the shards were already combined -- a consolidated
+#'     \item the shards were already combined by a MOSAIC release before 1.5.0
+#'       (no sampling marker) -- a consolidated
 #'       \code{2_calibration/samples.parquet} exists that the on-disk shards would
-#'       shrink (start fresh, or remove it to recompute). Combining deletes the
-#'       shards and the resume checkpoint, so this covers not only a finished run
-#'       but also one that \strong{died after combining shards and before writing
-#'       \code{3_results/summary.json}} (e.g. in the ensemble or figure
-#'       steps). Such a run cannot be resumed and must be restarted with
-#'       \code{resume = FALSE}. \code{3_results/summary.json} is written last and
-#'       is the marker of a completed run;
+#'       shrink. Such a run, finished or killed in post-calibration, must be
+#'       restarted with \code{resume = FALSE};
 #'     \item the supplied \code{config}, \code{priors}, \code{control$likelihood},
 #'       \code{control$sampling}, \code{control$calibration$n_iterations}, or the
 #'       calibration mode (auto vs fixed) differ from those persisted in
@@ -786,9 +795,8 @@
 #' # If a calibration is killed mid-run, re-call with resume = TRUE and the same
 #' # config/priors/output directory. Completed simulations on disk are reused and
 #' # the run continues from the next sim_id (bit-identical to an uninterrupted run).
-#' # This works only while the per-sim shards exist: a run that died after they
-#' # were combined into samples.parquet (no 3_results/summary.json) must be rerun
-#' # with resume = FALSE.
+#' # A run killed after sampling finished (in post-calibration) skips sampling
+#' # and redoes only post-calibration; a completed run is left as it is.
 #' run_MOSAIC(config, priors, "./output", resume = TRUE)
 #' }
 #'
@@ -986,9 +994,28 @@ run_MOSAIC <- function(config,
   # On resume, verify the supplied config/priors/likelihood match those
   # persisted by the interrupted run BEFORE the setup files below overwrite
   # them. A mismatch changes the sampling/likelihood target and is a hard error.
+  # Post-calibration resume: a run whose sampling finished (the sampling marker
+  # written after samples.parquet, see .mosaic_write_sampling_marker()) resumes
+  # at post-calibration instead of re-sampling. NULL = sample as usual.
+  postcal <- NULL
   if (isTRUE(resume)) {
     .mosaic_resume_check_inputs(dirs, config, priors, control)
-
+    postcal <- .mosaic_read_sampling_marker(dirs)
+  }
+  if (!is.null(postcal) && file.exists(file.path(dirs$results, "summary.json"))) {
+    # A completed run: nothing to resume. Return before the setup files below
+    # are rewritten, so the run directory is left exactly as it was.
+    log_msg(paste0("[RESUME] %s is a completed run (3_results/summary.json present): nothing to resume. ",
+                   "Start a fresh run (resume = FALSE, or a new dir_output) to recompute it."),
+            dir_output)
+    run_completed <- TRUE
+    return(invisible(.mosaic_completed_run_result(dirs, postcal$state)))
+  }
+  if (!is.null(postcal)) {
+    log_msg(paste0("[RESUME] Sampling finished in an earlier session (%s draws in 2_calibration/samples.parquet): ",
+                   "skipping sampling and restarting post-calibration"),
+            format(postcal$n_rows, big.mark = ","))
+  } else if (isTRUE(resume)) {
     # Refuse to resume into an existing consolidated samples.parquet when the
     # shards on disk would produce a SMALLER pool: combining + overwriting would
     # silently shrink/destroy the finished posterior. This covers both a fully
@@ -1001,6 +1028,13 @@ run_MOSAIC <- function(config,
       n_consolidated <- tryCatch(arrow::open_dataset(samples_file)$num_rows,
                                  error = function(e) NA_integer_)
       n_valid_shards <- .mosaic_resume_scan(dirs$cal_samples)$n
+      if (!is.na(n_consolidated) && n_valid_shards == 0L &&
+          file.exists(file.path(dirs$results, "summary.json"))) {
+        stop(sprintf(paste0(
+          "resume = TRUE but %s holds a completed run (3_results/summary.json present): nothing to ",
+          "resume. Start a fresh run in a new directory, or with resume = FALSE, to recompute it."),
+          dir_output), call. = FALSE)
+      }
       if (!is.na(n_consolidated) && n_valid_shards < n_consolidated) {
         stop(sprintf(paste0(
           "resume = TRUE but %s already holds a consolidated posterior (%d rows) and only %d ",
@@ -1017,6 +1051,9 @@ run_MOSAIC <- function(config,
     # earlier interrupted run would be pooled into this posterior unchecked
     # (possibly from other priors or another config). Move them aside.
     .mosaic_quarantine_stale_shards(dirs, log_warn)
+    # A fresh run has not finished sampling: an earlier run's marker must not
+    # let a later resume skip this run's sampling.
+    unlink(.mosaic_sampling_marker_file(dirs), force = TRUE)
   }
 
   # Capture full environment snapshot (versions, system, git, data)
@@ -1384,7 +1421,11 @@ run_MOSAIC <- function(config,
   #   owns_cluster = FALSE -> caller provided it, caller tears it down
   owns_cluster <- FALSE
 
-  if (!is.null(cluster)) {
+  if (!is.null(postcal)) {
+    # Sampling is complete: no calibration cluster is needed. The
+    # post-calibration ensembles size their own clusters (ens_plan below).
+    cl <- NULL
+  } else if (!is.null(cluster)) {
     # User provided a pre-built cluster (e.g. from make_mosaic_cluster)
     cl <- cluster
     owns_cluster <- FALSE
@@ -1463,7 +1504,11 @@ run_MOSAIC <- function(config,
   # each check appends only the new shards (.mosaic_gate_pool_update()); a
   # resume seeds it from the shards on disk.
   gate_pool <- NULL
-  if (isTRUE(resume) && identical(state$mode, "auto")) {
+  if (!is.null(postcal)) {
+    # The state the sampling phase ended with, as recorded by the marker.
+    state <- postcal$state
+    resumed_n_reused <- length(unique(postcal$sim))
+  } else if (isTRUE(resume) && identical(state$mode, "auto")) {
     state <- .mosaic_reconstruct_state(state, dirs, control, param_names_sampled, n_obs_scored)
     gate_pool <- state$.gate_pool
     state$.gate_pool <- NULL
@@ -1477,7 +1522,10 @@ run_MOSAIC <- function(config,
   state$resumed       <- isTRUE(resume)
   state$n_sims_reused <- if (isTRUE(resume)) resumed_n_reused else 0L
 
-  if (isTRUE(resume) && identical(state$mode, "auto") && isTRUE(state$converged)) {
+  if (!is.null(postcal)) {
+    log_msg("[RESUME] Calibration state restored: mode %s, %d batch(es), %s simulations",
+            state$mode, as.integer(state$batch_number), format(state$total_sims_run, big.mark = ","))
+  } else if (isTRUE(resume) && identical(state$mode, "auto") && isTRUE(state$converged)) {
     # Already converged on the reconstructed pool: skip simulation entirely and
     # go straight to post-processing (the loop below breaks immediately).
     log_msg("[RESUME] Reconstructed state already converged \u2014 skipping simulation, proceeding to post-processing")
@@ -1494,7 +1542,11 @@ run_MOSAIC <- function(config,
   # SIMULATION: FIXED MODE
   # ===========================================================================
 
-  if (identical(state$mode, "fixed")) {
+  if (!is.null(postcal)) {
+
+    # Sampling finished in the earlier session; nothing to simulate.
+
+  } else if (identical(state$mode, "fixed")) {
 
     target <- state$fixed_target
 
@@ -1766,6 +1818,7 @@ run_MOSAIC <- function(config,
                                                       n_obs_scored, results = gate_pool$data)
       .mosaic_save_state(state, state_file)
       .mosaic_save_checkpoint(state, checkpoint_file)
+      .mosaic_test_kill_point(sprintf("batch_%d", state$batch_number))
     }
     if (!isTRUE(state$converged)) {
       last <- utils::tail(state$convergence_history, 1L)
@@ -1800,69 +1853,56 @@ run_MOSAIC <- function(config,
 
   # ===========================================================================
   # COMBINE RESULTS AND ADD FLAGS
-  log_msg("Combining simulation files")
-
-  # Get list of simulation files
+  # ===========================================================================
+  # The shards are combined into samples.parquet, the sampling marker is
+  # written, and only then are the shards deleted: from that point a crash in
+  # post-calibration resumes from samples.parquet (resume = TRUE) rather than
+  # redoing the sampling. A post-calibration resume reads the draws back
+  # instead of combining.
   parquet_files <- list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
-
-  # Load and combine all simulation files
-  # Default: streaming (memory-safe for large runs)
-  # Override via control$io$load_method if needed
-  load_method <- if (!is.null(control$io$load_method)) {
-    control$io$load_method
-  } else {
-    "streaming"  # Safe default
-  }
-
-  load_chunk_size <- control$io$load_chunk_size %||% 5000L
-
-  results <- .mosaic_load_and_combine_results(
-    dir_params = dirs$cal_samples,
-    method = load_method,
-    chunk_size = load_chunk_size,
-    verbose = TRUE
-  )
-
-  # Add index columns
-  log_msg("Adding index columns to results matrix...")
-  results$is_finite <- is.finite(results$likelihood) & !is.na(results$likelihood)
-  results$is_valid <- results$is_finite
-  results$is_outlier <- FALSE
-
-  weighting_scheme <- control$targets$posterior_weighting
-  # The Tukey lower fence and the Akaike weights of the retained draws
-  # (weight_retained) belong to the legacy schemes: the "saturated" /
-  # "tempered" tier search works on the retained draws, and "coarsened" keeps
-  # them so a 1.3.0 run reproduces. Under "bestfit" every valid draw enters
-  # the posterior, so is_retained = is_valid.
-  legacy_scheme <- !identical(weighting_scheme, "bestfit")
-  if (legacy_scheme && sum(results$is_valid) > 0) {
-    valid_ll <- results$likelihood[results$is_valid]
-    iqr_mult <- control$weights$iqr_multiplier
-    lower_threshold <- .mosaic_lower_fence(valid_ll, iqr_mult)
-    results$is_outlier[results$is_valid] <- valid_ll < lower_threshold
-
-    log_msg("  Outlier detection (Tukey lower fence only, multiplier = %.1f; legacy scheme '%s'):",
-            iqr_mult, weighting_scheme)
-    log_msg("    - Lower threshold: %.1f | Outliers: %d (%.1f%%)",
-            lower_threshold,
-            sum(results$is_outlier),
-            100 * sum(results$is_outlier) / sum(results$is_valid))
-  }
-
-  results$is_retained <- results$is_valid & !results$is_outlier
-  results$is_best_subset <- FALSE
-  results$is_best_model <- FALSE
-
-  if (any(results$is_valid)) {
-    results$is_best_model[which.max(results$likelihood)] <- TRUE
-  }
-
-  # Write combined simulations and clean up shards
   simulations_file <- file.path(dirs$calibration, "samples.parquet")
-  .mosaic_write_parquet(results, simulations_file, control$io)
 
-  # Delete individual simulation files after combining
+  if (is.null(postcal)) {
+    log_msg("Combining simulation files")
+
+    # Load and combine all simulation files
+    # Default: streaming (memory-safe for large runs)
+    # Override via control$io$load_method if needed
+    load_method <- if (!is.null(control$io$load_method)) {
+      control$io$load_method
+    } else {
+      "streaming"  # Safe default
+    }
+
+    load_chunk_size <- control$io$load_chunk_size %||% 5000L
+
+    results <- .mosaic_load_and_combine_results(
+      dir_params = dirs$cal_samples,
+      method = load_method,
+      chunk_size = load_chunk_size,
+      verbose = TRUE
+    )
+    shard_cols <- names(results)
+  } else {
+    log_msg("[RESUME] Reading the sampled draws from %s", file.path("2_calibration", "samples.parquet"))
+    results <- .mosaic_load_sampled_results(simulations_file, postcal)
+    # The global RNG state an uninterrupted run had at this point.
+    .mosaic_restore_rng(postcal$random_seed)
+  }
+
+  results <- .mosaic_flag_results(results, control)
+  weighting_scheme <- control$targets$posterior_weighting
+  legacy_scheme <- !identical(weighting_scheme, "bestfit")
+
+  if (is.null(postcal)) {
+    # Write combined simulations, then the marker that sampling is complete.
+    .mosaic_write_parquet(results, simulations_file, control$io)
+    .mosaic_write_sampling_marker(dirs, results, state, shard_cols)
+  }
+
+  # Delete the shards: they are in samples.parquet (on a post-calibration
+  # resume, any left are shards a killed session had combined but not yet
+  # deleted).
   if (length(parquet_files) > 0) {
     unlink(parquet_files)
     log_msg("  Cleaned up %d individual simulation files", length(parquet_files))
@@ -1872,7 +1912,7 @@ run_MOSAIC <- function(config,
   # Remove it so the directory carries no dangling resume state.
   unlink(checkpoint_file, force = TRUE)
 
-  log_msg("  Combined simulations saved: %s", basename(simulations_file))
+  if (is.null(postcal)) log_msg("  Combined simulations saved: %s", basename(simulations_file))
 
   # ===========================================================================
   # POSTERIOR WEIGHTS, ENSEMBLE MEMBERS AND THE CONVERGENCE STATUS
@@ -2296,8 +2336,12 @@ run_MOSAIC <- function(config,
     # error or interrupt fires anywhere in the candidate -> optimize -> reduce
     # window (RUN_FATAL on.exit only LOGS, it does not unlink). The explicit
     # unlink in the unified reduce block below then becomes idempotent.
-    if (.traj_enabled)
+    if (.traj_enabled) {
+      # A session killed in post-calibration leaves its scratch behind; a
+      # resumed post-calibration starts from an empty one.
+      unlink(traj_scratch_dir, recursive = TRUE, force = TRUE)
       on.exit(unlink(traj_scratch_dir, recursive = TRUE, force = TRUE), add = TRUE)
+    }
 
     ensemble <- tryCatch(
       calc_model_ensemble(
@@ -2321,6 +2365,11 @@ run_MOSAIC <- function(config,
         reduce_trajectories      = FALSE,
         deaths_integration       = control$likelihood$.deaths_integration,
         observation_model        = obs_model_run,
+        # The posterior R_eff CI (add_reproductive_numbers(recompute_ci = TRUE))
+        # reads the members from ensemble_candidate.rds; with the arrays
+        # persisted it also finds their R_eff inputs there and re-simulates
+        # nothing.
+        capture_reff             = .persist_arrays,
         verbose                  = control$logging$verbose
       ),
       error = function(e) {
@@ -2356,6 +2405,7 @@ run_MOSAIC <- function(config,
       # config order with location_name attached. Absent arrays (engine without
       # DerivedValues) are silently skipped.
       .mosaic_persist_spatial_artifacts(ensemble, dirs, log_msg, log_warn)
+      .mosaic_test_kill_point("ensemble")
 
       # Trajectory channels were spilled to scratch during this candidate run
       # (reduce deferred). Capture the scratch handle + the candidate per-member
@@ -2862,22 +2912,11 @@ run_MOSAIC <- function(config,
   )
   log_msg("Saved %s", file.path(dirs$cal_posterior, "posteriors.json"))
 
-  # ===========================================================================
-  # PARAMETER SENSITIVITY (data layer)
-  # ===========================================================================
-  # Compute HSIC sensitivity + write parameter_sensitivity.csv unconditionally
-  # so the table exists regardless of plots. The figure (and the correlation
-  # figure) are rendered later by render_MOSAIC_figures().
-  tryCatch(
-    calc_model_parameter_sensitivity(
-      results_file = file.path(dirs$calibration, "samples.parquet"),
-      priors_file  = file.path(dirs$inputs, "priors.json"),
-      output_dir   = dirs$res_fig_diag,
-      subset_col   = active_cols$sample_col,
-      verbose      = control$logging$verbose
-    ),
-    error = function(e) log_warn("parameter sensitivity computation failed: %s", e$message)
-  )
+  # (Parameter sensitivity -- HSIC and parameter_sensitivity.csv -- is computed
+  # by the "sensitivity" group of render_MOSAIC_figures() since 1.5.0, not here:
+  # nothing in this function or summary.json reads it, so it is a diagnostic of
+  # its figure, and moving it took a 67 GB, 16-minute step on a 916-parameter
+  # run off the post-calibration path. plots = TRUE renders it below.)
 
   # ===========================================================================
   # POSTERIOR PREDICTIVE CHECKS (medoid representative model)
@@ -3403,12 +3442,7 @@ run_MOSAIC <- function(config,
   # Return invisibly
   invisible(list(
     dirs = dirs,
-    files = list(
-      simulations = file.path(dirs$calibration, "samples.parquet"),
-      ess_csv = file.path(dirs$cal_diag, "parameter_ess.csv"),
-      posterior_quantiles = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
-      posteriors_json = file.path(dirs$cal_posterior, "posteriors.json")
-    ),
+    files = .mosaic_run_files(dirs),
     summary = list(
       batches = state$batch_number,
       sims_total = state$total_sims_run,
@@ -3655,9 +3689,12 @@ run_mosaic <- run_MOSAIC
 #'       weights, seeds, obs, metadata) is preserved and all standard consumers
 #'       (plotting, OCV, rolling CV) work unchanged. Set \code{TRUE} for a
 #'       re-analysable raw archive (e.g. re-running subset optimization or the
-#'       R_eff posterior-resimulation CI path from the saved file). The
-#'       in-memory object used during the run is never affected (default:
-#'       \code{FALSE}).
+#'       R_eff posterior CI from the saved file). With \code{TRUE} the candidate
+#'       ensemble also captures its members' R_eff inputs (three more arrays of
+#'       the same size, \code{reff_capture}; MOSAIC 1.5.0), so
+#'       \code{add_reproductive_numbers(recompute_ci = TRUE)} does not
+#'       re-simulate them. The in-memory object used during the run is never
+#'       affected (default: \code{FALSE}).
 #'   }
 #'   \code{verbose_weights} is deprecated (1.4.0; it had no effect).
 #'

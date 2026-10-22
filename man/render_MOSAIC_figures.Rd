@@ -71,6 +71,20 @@ PSOCK or sequentially), which this function deliberately avoids. Every figure
 is wrapped in \code{tryCatch} so one failure never aborts the rest.
 }
 
+\section{Parameter sensitivity (computed here)}{
+
+The \code{"sensitivity"} group is the one place render computes a table: it
+runs \code{\link{calc_model_parameter_sensitivity}} (HSIC, on a fixed seed so
+repeated renders agree) and writes
+\code{3_results/figures/diagnostics/parameter_sensitivity.csv} with its
+figure, unless the directory already has that CSV, which is then plotted as
+is. Since MOSAIC 1.5.0 \code{run_MOSAIC()} no longer computes it in the
+post-calibration path: the table is a diagnostic read only by its figure (and
+by the dashboard from the run directory), so \code{run_MOSAIC(plots = TRUE)}
+writes it in the same run and \code{plots = FALSE} defers it to this
+function. It reads \code{samples.parquet} and simulates nothing.
+}
+
 \section{Parallel rendering}{
 
 At 40 locations this stage is the largest single-threaded block in a

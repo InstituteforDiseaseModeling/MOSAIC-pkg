@@ -34,7 +34,12 @@ trajectory artifact. This captures the daily
 route incidence, stock and decay-rate channels that the persisted
 trajectory artifact does not retain at a daily grid. A faithfulness gate
 confirms the re-sim reproduces the saved engine-level cases
-(\code{cases_engine_array}) before any CI is written.
+(\code{cases_engine_array}) before any CI is written. Since MOSAIC 1.5.0
+\code{run_MOSAIC()} captures those channels from the ensemble's own
+simulations (\code{calc_model_ensemble(capture_reff = TRUE)}) and saves them
+in \code{ensemble_candidate.rds}; when they are there, nothing is
+re-simulated (each member's inputs are verified against its saved cases by
+an exact checksum) and the values are identical to the re-simulation's.
 When \code{FALSE} (default) the cheap point-estimate path is used (renewal on
 the weighted-median route incidence from \code{trajectories_ensemble.rds};
 CI columns are populated only if the artifact carries daily-consecutive
@@ -66,7 +71,10 @@ status (an older total-only CSV is always recomputed). Default \code{TRUE}.}
 re-simulation, which is the only expensive part of this function
 (~1,000 engine runs at \code{run_MOSAIC()} defaults). Greater than 1 builds
 a PSOCK cluster and stops it before returning; \code{1L} (default) keeps
-the historical serial behaviour. Ignored when \code{recompute_ci = FALSE}.}
+the historical serial behaviour. Ignored when \code{recompute_ci = FALSE}.
+With captured inputs (no re-simulation) a cluster is built only for
+large ensembles (at least 5,000 location-members), where the per-member
+R computation outweighs starting the workers.}
 }
 \value{
 Invisibly, a one-row \code{data.frame} status with columns:

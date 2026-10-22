@@ -7,8 +7,10 @@
 # production cluster would otherwise want ~96 GB for the detail pages alone.
 .MOSAIC_DETAIL_MAX_WORKERS <- 8L
 
-# Seed for the renderer's HSIC recompute, used only when a run directory has no
-# parameter_sensitivity.csv, so repeated renders of that directory agree.
+# Seed for the renderer's HSIC computation (the "sensitivity" group), used when
+# a run directory has no parameter_sensitivity.csv -- every run since 1.5.0,
+# whose run_MOSAIC() leaves the table to the render -- so repeated renders of a
+# directory agree.
 .MOSAIC_RENDER_SENSITIVITY_SEED <- 20240101L
 
 #' Unnest single-element lists produced by jsonlite
@@ -198,6 +200,18 @@
 #' simulation on the client (\code{calc_model_ensemble()} always simulates, via
 #' PSOCK or sequentially), which this function deliberately avoids. Every figure
 #' is wrapped in \code{tryCatch} so one failure never aborts the rest.
+#'
+#' @section Parameter sensitivity (computed here):
+#' The \code{"sensitivity"} group is the one place render computes a table: it
+#' runs \code{\link{calc_model_parameter_sensitivity}} (HSIC, on a fixed seed so
+#' repeated renders agree) and writes
+#' \code{3_results/figures/diagnostics/parameter_sensitivity.csv} with its
+#' figure, unless the directory already has that CSV, which is then plotted as
+#' is. Since MOSAIC 1.5.0 \code{run_MOSAIC()} no longer computes it in the
+#' post-calibration path: the table is a diagnostic read only by its figure (and
+#' by the dashboard from the run directory), so \code{run_MOSAIC(plots = TRUE)}
+#' writes it in the same run and \code{plots = FALSE} defers it to this
+#' function. It reads \code{samples.parquet} and simulates nothing.
 #'
 #' @param dir_output Character. Path to a finished \code{run_MOSAIC()} output
 #'   directory (the one containing \code{1_inputs/}, \code{2_calibration/},
@@ -607,11 +621,12 @@ render_MOSAIC_figures <- function(dir_output,
     .vmsg("Rendering parameter sensitivity / correlation figures...")
 
     if (file.exists(files$samples)) {
-      # run_MOSAIC() already wrote parameter_sensitivity.csv in its data layer.
-      # Render from that artifact rather than re-running HSIC, which would
-      # overwrite it with a fresh Monte Carlo resample on every render. Only a
-      # directory without the CSV is recomputed, on a fixed seed so re-renders
-      # agree, and the caller's RNG stream is restored afterwards.
+      # The HSIC table is computed here (run_MOSAIC() stopped computing it in
+      # 1.5.0: it is a diagnostic read only by this figure), on a fixed seed so
+      # re-renders agree, and the caller's RNG stream is restored afterwards.
+      # A directory that already has parameter_sensitivity.csv (an earlier
+      # render, or a run before 1.5.0) is plotted from it rather than
+      # recomputed, which would overwrite it with a fresh Monte Carlo resample.
       sens_csv <- file.path(dirs$res_fig_diag, "parameter_sensitivity.csv")
       sens_pre <- .mosaic_read_sensitivity_csv(sens_csv)
       .plot_sens <- function() plot_model_parameter_sensitivity(
