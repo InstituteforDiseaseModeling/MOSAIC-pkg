@@ -348,7 +348,8 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
                                                                     "observed_total"),
                                                   chr = c("location", "metric")),
                  weekly = weekly[!is.na(weekly$date), , drop = FALSE],
-                 weekly_source = if (!full_weeks) "scored_weeks" else ch(wm$source) %|NA|% "trajectories")
+                 weekly_source = if (!full_weeks) "scored_weeks" else ch(wm$source) %|NA|% "trajectories",
+                 all_locations_id = ch(wm$all_locations_id))
      list(run = run, status = status, sampling = sampling, info = info, parameters = params,
           mce_summary = list(median = n(ms$median), p90 = n(ms$p90), max = n(ms$max),
                              worst = .mosaic_calrep_df(ms$worst, c("parameter", "mce"), chr = "parameter")),
@@ -594,6 +595,8 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 #' @noRd
 .mosaic_calrep_rich <- function(txt, gl) {
      if (is.language(txt) || is.expression(txt)) return(txt)
+     # the JSON's real minus sign is the WinAnsi minus of "-" on this device
+     txt <- gsub("\u2212", "-", txt, fixed = TRUE)
      tk <- attr(gl, "tokens")
      if (!length(tk) || !grepl("\\{[A-Za-z0-9_]+\\}", txt)) return(txt)
      pat <- paste0("(", paste(sprintf("\\{%s\\}", names(tk)), collapse = "|"), ")")
@@ -706,15 +709,16 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 
 #' Draw the page-1 left column (grid makeContent method)
 #'
-#' Lays out page 1's left column of \code{\link{plot_model_calibration_report}}
+#' Lays out page 1's left column of \code{plot_model_calibration_report()}
 #' (status table, info rows, fit table, reasons, flags, sampling details) at
-#' draw time, when its size is known. Internal: grid calls it.
+#' draw time, when its size is known. Registered in NAMESPACE as the
+#' \code{grid::makeContent} method of class \code{mosaic_calrep_left}
+#' (\code{S3method(grid::makeContent, mosaic_calrep_left,
+#' .mosaic_calrep_left_content)}), so it is not exported.
 #' @param x The \code{mosaic_calrep_left} gTree.
-#' @method makeContent mosaic_calrep_left
-#' @return The gTree with its children. Registered in NAMESPACE
-#'   (\code{S3method(grid::makeContent, mosaic_calrep_left)}).
-#' @keywords internal
-makeContent.mosaic_calrep_left <- function(x) {
+#' @return The gTree with its children.
+#' @noRd
+.mosaic_calrep_left_content <- function(x) {
      m <- x$model; gl <- x$gl
      ST <- .mosaic_calrep_p1_style()
      rich <- function(t) .mosaic_calrep_rich(t, gl)
@@ -865,11 +869,13 @@ makeContent.mosaic_calrep_left <- function(x) {
 
      # reasons, flags and sampling details are measured first, so the fit table
      # takes its tier 1-2 rows only when everything still fits
-     bullets <- function(txts, fs) unlist(lapply(txts, function(r) {
+     bullet_groups <- function(txts, fs) lapply(txts, function(r) {
           w <- wrap_pt(r, W - 14, fs)
           paste0(c("\u2022 ", rep("   ", length(w) - 1L)), w)
-     }))
-     reasons <- bullets(m$reasons, ST$fs_text - 0.3)
+     })
+     bullets <- function(txts, fs) unlist(bullet_groups(txts, fs))
+     reason_groups <- bullet_groups(m$reasons, ST$fs_text - 0.3)
+     reasons <- unlist(reason_groups)
      flag_l <- bullets(m$flags, ST$fs_text - 0.5)
      lh_r <- ST$lh_r
      det <- m$details
@@ -930,9 +936,13 @@ makeContent.mosaic_calrep_left <- function(x) {
           max_lines <- max(2L, floor((room - 13 - ST$gap) / lh_r))
           cont <- rep(FALSE, length(reasons))
           if (length(reasons) > max_lines) {
-               overflow <- reasons[-seq_len(max_lines - 1L)]
-               reasons <- c(reasons[seq_len(max_lines - 1L)], paste0("   ", rs$continued))
-               cont <- c(rep(FALSE, max_lines - 1L), TRUE)
+               # Whole reasons only: the ones that fit stay, the rest continue on
+               # the next page. Only a single reason longer than the room is cut.
+               fits <- sum(cumsum(lengths(reason_groups)) <= max_lines - 1L)
+               keep_n <- if (fits > 0L) sum(lengths(reason_groups)[seq_len(fits)]) else max_lines - 1L
+               overflow <- reasons[-seq_len(keep_n)]
+               reasons <- c(reasons[seq_len(keep_n)], paste0("   ", rs$continued))
+               cont <- c(rep(FALSE, keep_n), TRUE)
           }
           add(tg(rs$heading, px(0), at(y + 4.5), ST$fs_section, face = 2))
           y <- y + 13
@@ -1121,15 +1131,16 @@ makeContent.mosaic_calrep_left <- function(x) {
 
 .mosaic_calrep_label_size <- function(n) if (n > 55) 6 else if (n > 40) 7 else 8.5
 
-.mosaic_calrep_mce_plot <- function(d, g, many) {
-     title <- "Sampling precision of each posterior mean"
+.mosaic_calrep_mce_plot <- function(d, gl, g, many) {
+     tx <- .mosaic_gl_text(gl, "parameters_page")
      g <- g[is.finite(g$mce), , drop = FALSE]
-     if (!nrow(g)) return(.mosaic_calrep_unavailable(title, "No per-parameter Monte Carlo error in the diagnostics file."))
+     if (!nrow(g)) return(.mosaic_calrep_unavailable(tx$mce_title, tx$mce_empty))
      ck <- .mosaic_calrep_check(d, "mce")
      thr_g <- ck$threshold_green; thr_y <- ck$threshold_yellow
      g$band <- if (is.finite(thr_g) && is.finite(thr_y))
           ifelse(g$mce <= thr_g, "green", ifelse(g$mce <= thr_y, "yellow", "red")) else "grey"
-     g$lab <- if (many) sprintf("%s (n=%d)", g$g, g$n) else g$g
+     g$lab <- if (many) vapply(seq_len(nrow(g)), function(i) .mosaic_fill(tx$label_many, name = g$g[i], n = g$n[i]), "")
+              else g$g
      g$lab <- factor(g$lab, levels = unique(g$lab[order(g$mce)]))
      vl <- c(thr_g, thr_y); vl <- vl[is.finite(vl)]
      p <- ggplot2::ggplot(g, ggplot2::aes(.data$mce, .data$lab, colour = .data$band))
@@ -1138,35 +1149,35 @@ makeContent.mosaic_calrep_left <- function(x) {
      p <- p + (if (many) ggplot2::geom_segment(ggplot2::aes(x = .data$mce_lo, xend = .data$mce, yend = .data$lab),
                                                linewidth = 0.8, alpha = 0.35)
                else ggplot2::geom_segment(ggplot2::aes(x = 0, xend = .data$mce, yend = .data$lab), linewidth = 0.3, alpha = 0.5))
-     p90 <- d$mce_summary$p90
-     sub <- paste0("Monte Carlo standard error of each posterior mean, as % of its posterior SD (10 seed batches):\n",
-                   "the typical change a rerun with new seeds would make.",
-                   if (length(vl)) sprintf("\nDashed / dotted = green / yellow limit of the 90th percentile (%s / %s).",
-                                           .mosaic_calrep_pct_thr(thr_g), .mosaic_calrep_pct_thr(thr_y)) else "",
-                   sprintf("\n90th percentile over parameters: %s.", .mosaic_calrep_pct(p90)),
-                   if (many) " Point = worst location, bar = range." else "")
+     sub <- paste0(tx$mce_subtitle,
+                   if (length(vl)) .mosaic_fill(tx$mce_subtitle_limits, green = .mosaic_calrep_pct_thr(thr_g),
+                                                yellow = .mosaic_calrep_pct_thr(thr_y)) else "",
+                   .mosaic_fill(tx$mce_subtitle_p90, p90 = .mosaic_calrep_pct(d$mce_summary$p90)),
+                   if (many) tx$mce_subtitle_many else "")
      p + ggplot2::geom_point(size = 1.4) +
           ggplot2::scale_colour_manual(values = .mosaic_calrep_rag(), guide = "none") +
           ggplot2::scale_x_continuous(labels = scales::label_percent(accuracy = 0.1),
                                       limits = c(0, max(c(g$mce, vl), na.rm = TRUE) * 1.04),
                                       expand = ggplot2::expansion(mult = c(0.01, 0.02))) +
-          ggplot2::labs(title = title, subtitle = sub, x = "Monte Carlo error / posterior SD", y = NULL) +
+          ggplot2::labs(title = tx$mce_title, subtitle = sub, x = tx$mce_x, y = NULL) +
           .mosaic_calrep_theme(8.5) +
           ggplot2::theme(axis.text.y = ggplot2::element_text(size = .mosaic_calrep_label_size(nrow(g))))
 }
 
-.mosaic_calrep_kl_plot <- function(d, g, many) {
-     title <- "Movement from the prior (KL divergence)"
+.mosaic_calrep_kl_plot <- function(d, gl, g, many) {
+     tx <- .mosaic_gl_text(gl, "parameters_page")
      g <- g[is.finite(g$kl), , drop = FALSE]
-     if (!nrow(g)) return(.mosaic_calrep_unavailable(title, "No per-parameter KL divergence in the diagnostics file."))
+     if (!nrow(g)) return(.mosaic_calrep_unavailable(tx$kl_title, tx$kl_empty))
      edges <- .mosaic_calrep_kl_edges(d)
-     levs <- c("largely prior", "partly informed", "data-informed")
-     withheld_lab <- "band withheld (ensemble ESS < 100)"
+     levs <- unlist(tx$kl_bands)
+     withheld_lab <- tx$kl_withheld
      # A KL without a band was withheld (ensemble ESS below 100: the null bias
      # would put prior-only parameters in "partly informed"); drawn in grey (RN3).
      g$kl_band <- factor(ifelse(g$kl_band %in% levs, g$kl_band, withheld_lab), levels = c(levs, withheld_lab))
      fam <- ifelse(is.na(g$prior_family), "", g$prior_family)
-     g$lab <- if (many) sprintf("%s (%s, n=%d)", g$g, fam, g$n) else ifelse(nzchar(fam), sprintf("%s (%s)", g$g, fam), g$g)
+     g$lab <- vapply(seq_len(nrow(g)), function(i)
+          if (many) .mosaic_fill(tx$kl_label_many, name = g$g[i], family = fam[i], n = g$n[i])
+          else if (nzchar(fam[i])) .mosaic_fill(tx$kl_label, name = g$g[i], family = fam[i]) else g$g[i], "")
      g$lab <- factor(g$lab, levels = unique(g$lab[order(g$kl)]))
      p <- ggplot2::ggplot(g, ggplot2::aes(.data$kl, .data$lab, colour = .data$kl_band)) +
           ggplot2::geom_vline(xintercept = edges, colour = .mosaic_calrep_tgt(), linewidth = 0.3, linetype = "dashed")
@@ -1180,11 +1191,10 @@ makeContent.mosaic_calrep_left <- function(x) {
                                        name = NULL, drop = TRUE, na.translate = FALSE) +
           ggplot2::scale_x_continuous(trans = scales::pseudo_log_trans(sigma = 0.01, base = 10), breaks = brk,
                                       limits = c(0, max(c(g$kl, g$kl_hi, edges[2]), na.rm = TRUE) * 1.5)) +
-          ggplot2::labs(title = title,
-                        subtitle = paste0("Prior to posterior, nats (log scale). Prior family in brackets.",
-                                          sprintf("\nDashed = band edges %s and %s nats.", edges[1], edges[2]),
-                                          if (many) "\nPoint = median over locations, bar = range." else ""),
-                        x = "KL divergence (nats)", y = NULL) +
+          ggplot2::labs(title = tx$kl_title,
+                        subtitle = paste0(tx$kl_subtitle, .mosaic_fill(tx$kl_subtitle_edges, lo = edges[1], hi = edges[2]),
+                                          if (many) tx$kl_subtitle_many else ""),
+                        x = tx$kl_x, y = NULL) +
           .mosaic_calrep_theme(8.5) +
           ggplot2::theme(legend.position = "bottom",
                          axis.text.y = ggplot2::element_text(size = .mosaic_calrep_label_size(nrow(g)))) +
@@ -1192,31 +1202,30 @@ makeContent.mosaic_calrep_left <- function(x) {
 }
 
 .mosaic_calrep_page_parameters <- function(d, gl, foot) {
+     tx <- .mosaic_gl_text(gl, "parameters_page")
      pp <- d$parameters
      many <- nrow(pp) > 60L
      g <- if (nrow(pp)) .mosaic_calrep_group_params(pp, many) else NULL
-     pm <- if (is.null(g)) .mosaic_calrep_unavailable("Sampling precision of each posterior mean",
-                                                      "No parameters in the diagnostics file.")
-           else .mosaic_calrep_safe(gl, "Sampling precision of each posterior mean", .mosaic_calrep_mce_plot(d, g, many))
-     pk <- if (is.null(g)) .mosaic_calrep_unavailable("Movement from the prior (KL divergence)",
-                                                      "No parameters in the diagnostics file.")
-           else .mosaic_calrep_safe(gl, "Movement from the prior (KL divergence)", .mosaic_calrep_kl_plot(d, g, many))
+     pm <- if (is.null(g)) .mosaic_calrep_unavailable(tx$mce_title, tx$no_parameters)
+           else .mosaic_calrep_safe(gl, tx$mce_title, .mosaic_calrep_mce_plot(d, gl, g, many))
+     pk <- if (is.null(g)) .mosaic_calrep_unavailable(tx$kl_title, tx$no_parameters)
+           else .mosaic_calrep_safe(gl, tx$kl_title, .mosaic_calrep_kl_plot(d, gl, g, many))
      ms <- d$mce_summary; ks <- d$kl_summary
      worst <- ms$worst[is.finite(ms$worst$mce), , drop = FALSE]
-     worst_txt <- if (nrow(worst)) sprintf(" Largest: %s.", paste(sprintf("%s %s", utils::head(worst$parameter, 3),
-                                                                          .mosaic_calrep_pct(utils::head(worst$mce, 3))),
-                                                                  collapse = ", ")) else ""
-     cnt <- function(x) if (is.finite(x)) .mosaic_calrep_fmt(x) else "n/a"
-     txt <- paste0(sprintf("Left: sampling precision only. Median %s, 90th percentile %s, maximum %s of posterior SD over %s parameters.",
-                           .mosaic_calrep_pct(ms$median), .mosaic_calrep_pct(ms$p90), .mosaic_calrep_pct(ms$max),
-                           .mosaic_calrep_fmt(sum(is.finite(pp$mce)))), worst_txt,
+     worst_txt <- if (nrow(worst)) .mosaic_fill(tx$note_largest, list = paste(
+          sprintf("%s %s", utils::head(worst$parameter, 3), .mosaic_calrep_pct(utils::head(worst$mce, 3))),
+          collapse = ", ")) else ""
+     cnt <- function(x) if (is.finite(x)) .mosaic_calrep_fmt(x) else .mosaic_gl_text(gl, "values", "na")
+     txt <- paste0(.mosaic_fill(tx$note_left, median = .mosaic_calrep_pct(ms$median), p90 = .mosaic_calrep_pct(ms$p90),
+                                max = .mosaic_calrep_pct(ms$max), n = .mosaic_calrep_fmt(sum(is.finite(pp$mce)))),
+                   worst_txt,
                    if (isTRUE(ks$withheld > 0) && !isTRUE(ks$largely_prior + ks$partly_informed + ks$data_informed > 0))
-                        sprintf("   Right: descriptive only, feeds no status; bands withheld for all %s parameters (ensemble ESS < 100, where the estimator's bias would misclassify them). ",
-                                cnt(ks$withheld))
-                   else sprintf("   Right: descriptive only, feeds no status (%s largely prior, %s partly informed, %s data-informed parameters%s). ",
-                                cnt(ks$largely_prior), cnt(ks$partly_informed), cnt(ks$data_informed),
-                                if (isTRUE(ks$withheld > 0)) sprintf("; %s withheld", cnt(ks$withheld)) else ""),
-                   "Some priors are informative by design, so a parameter that stays near its prior is not a failure.")
+                        .mosaic_fill(tx$note_right_withheld, n = cnt(ks$withheld))
+                   else .mosaic_fill(tx$note_right, prior = cnt(ks$largely_prior), partly = cnt(ks$partly_informed),
+                                     data = cnt(ks$data_informed),
+                                     withheld = if (isTRUE(ks$withheld > 0))
+                                          .mosaic_fill(tx$note_right_withheld_part, n = cnt(ks$withheld)) else ""),
+                   tx$note_end)
      txt <- paste(strwrap(txt, width = 165), collapse = "\n")
      # A free grob, so patchwork does not align it to the plots' panel area
      # (which indented it under the left plot's axis labels).
@@ -1255,16 +1264,18 @@ makeContent.mosaic_calrep_left <- function(x) {
      w <- d$fit$weekly
      w <- w[w$metric == m, , drop = FALSE]
      if (!nrow(w)) return(.mosaic_calrep_unavailable(title, .mosaic_fill(tx$series_empty, metric = m)))
-     many <- length(unique(w$location)) > 1L
+     # A multi-location run draws the all-locations row the writer built from
+     # trajectories summed over locations; per-location rows are never summed.
+     all_id <- d$fit$all_locations_id
+     many <- length(setdiff(unique(w$location), all_id)) > 1L
+     if (many) {
+          if (is.na(all_id) || !any(w$location == all_id))
+               return(.mosaic_calrep_unavailable(title, .mosaic_fill(tx$series_no_all, metric = m)))
+          w <- w[w$location == all_id, , drop = FALSE]
+     }
      band_cols <- c("lo50", "hi50", "lo95", "hi95")
-     has_bands <- !many && all(vapply(band_cols, function(cl) any(is.finite(w[[cl]])), logical(1)))
-     x <- if (many) {
-          s <- function(v) if (all(!is.finite(v))) NA_real_ else sum(v, na.rm = TRUE)
-          a <- stats::aggregate(cbind(observed = w$observed, predicted = w$predicted), list(date = w$date), s,
-                                na.action = stats::na.pass)
-          a$scored <- stats::aggregate(list(s = w$scored), list(date = w$date), any)$s
-          a
-     } else w[, c("date", "scored", "observed", "predicted", band_cols)]
+     has_bands <- all(vapply(band_cols, function(cl) any(is.finite(w[[cl]])), logical(1)))
+     x <- w[, c("date", "scored", "observed", "predicted", band_cols)]
      x <- x[order(x$date), , drop = FALSE]
      # a gap in the weekly rows (a file holding scored weeks only) breaks the line
      gap <- c(FALSE, diff(as.numeric(x$date)) > 7)
@@ -1298,14 +1309,16 @@ makeContent.mosaic_calrep_left <- function(x) {
           ggplot2::scale_x_date(limits = xl, expand = ggplot2::expansion(mult = 0.01)) +
           ggplot2::scale_y_continuous(labels = scales::label_comma()) +
           ggplot2::labs(title = title,
-                        subtitle = paste0(if (many) tx$subtitle_many else "",
-                                          if (identical(src, "scored_weeks")) tx$subtitle_scored_only else tx$subtitle_main,
-                                          if (has_bands) tx$subtitle_bands else "",
-                                          if (n_uns) .mosaic_fill(tx$subtitle_unscored, n = n_uns) else "",
-                                          if (is.finite(burn) && burn > 0)
-                                               .mosaic_fill(tx$subtitle_burn_in, days = .mosaic_calrep_fmt(burn))
-                                          else tx$subtitle_end,
-                                          if (identical(src, "daily_sums")) tx$subtitle_daily_sums else ""),
+                        subtitle = paste(strwrap(paste0(
+                             if (many) tx$subtitle_many else "",
+                             if (identical(src, "scored_weeks")) tx$subtitle_scored_only else tx$subtitle_main,
+                             if (has_bands) tx$subtitle_bands else "",
+                             if (n_uns) .mosaic_fill(tx$subtitle_unscored, n = n_uns) else "",
+                             if (is.finite(burn) && burn > 0)
+                                  .mosaic_fill(tx$subtitle_burn_in, days = .mosaic_calrep_fmt(burn))
+                             else tx$subtitle_end,
+                             if (identical(src, "daily_sums")) tx$subtitle_daily_sums else ""), width = 190),
+                             collapse = "\n"),
                         x = NULL, y = .mosaic_fill(tx$series_y, metric = m)) +
           .mosaic_calrep_theme(8.5)
 }
@@ -1388,7 +1401,11 @@ makeContent.mosaic_calrep_left <- function(x) {
 # ---------------------------------------------------------------------------
 
 .mosaic_calrep_page_scatter <- function(d, gl, foot) {
+     tx <- .mosaic_gl_text(gl, "scatter_page")
+     chan <- function(m) .mosaic_gl_text(gl, "fit_table", paste0("channel_", m))
+     # per-location weekly totals (the all-locations row is a sum of them)
      w <- d$fit$weekly
+     if (!is.na(d$fit$all_locations_id)) w <- w[w$location != d$fit$all_locations_id, , drop = FALSE]
      w <- w[is.finite(w$observed) & is.finite(w$predicted), , drop = FALSE]
      many <- length(unique(w$location)) > 1L
      lims <- lapply(c(cases = "cases", deaths = "deaths"), function(m) {
@@ -1398,41 +1415,39 @@ makeContent.mosaic_calrep_left <- function(x) {
           c(r[1] / 1.6, r[2] * 1.6)
      })
      sp <- function(m) {
-          title <- sprintf("Weekly %s: predicted vs observed", m)
+          title <- .mosaic_fill(tx$scatter_title, metric = m)
           x <- w[w$metric == m, , drop = FALSE]
-          if (!nrow(x)) return(.mosaic_calrep_unavailable(title, sprintf("%s not scored in this run.", .mosaic_calrep_title_case(m))))
+          if (!nrow(x)) return(.mosaic_calrep_unavailable(title, .mosaic_fill(tx$not_scored, channel = chan(m))))
           ggplot2::ggplot(x, ggplot2::aes(.data$observed + 1, .data$predicted + 1)) +
                ggplot2::geom_abline(slope = 1, intercept = 0, colour = .mosaic_calrep_tgt(), linetype = "dashed") +
                ggplot2::geom_point(colour = .mosaic_calrep_metric_colour(m), alpha = if (many) 0.25 else 0.55, size = 1.1) +
                ggplot2::scale_x_log10(labels = scales::label_comma(), limits = lims[[m]]) +
                ggplot2::scale_y_log10(labels = scales::label_comma(), limits = lims[[m]]) +
                ggplot2::labs(title = title,
-                             subtitle = paste0("Scored weekly totals", if (many) ", all locations" else "",
-                                               ", log(1 + count). Dashed = agreement; above = over-predicted."),
-                             x = NULL, y = "predicted per week + 1") +
+                             subtitle = .mosaic_fill(tx$scatter_subtitle, all = if (many) tx$scatter_subtitle_all else ""),
+                             x = NULL, y = tx$scatter_y) +
                .mosaic_calrep_theme(8.5)
      }
      dp <- function(m) {
-          title <- sprintf("Weekly %s: distribution of counts", m)
+          title <- .mosaic_fill(tx$dist_title, metric = m)
           x <- w[w$metric == m, , drop = FALSE]
-          if (!nrow(x)) return(.mosaic_calrep_unavailable(title, sprintf("%s not scored in this run.", .mosaic_calrep_title_case(m))))
+          if (!nrow(x)) return(.mosaic_calrep_unavailable(title, .mosaic_fill(tx$not_scored, channel = chan(m))))
           col <- .mosaic_calrep_metric_colour(m)
-          dd <- rbind(data.frame(v = x$observed + 1, what = "observed"), data.frame(v = x$predicted + 1, what = "predicted"))
+          dd <- rbind(data.frame(v = x$observed + 1, what = tx$observed), data.frame(v = x$predicted + 1, what = tx$predicted))
+          vals <- stats::setNames(c("grey40", col), c(tx$observed, tx$predicted))
           ggplot2::ggplot(dd, ggplot2::aes(.data$v, fill = .data$what, colour = .data$what)) +
                ggplot2::geom_histogram(ggplot2::aes(y = ggplot2::after_stat(density)), position = "identity",
                                        alpha = 0.35, bins = 30, linewidth = 0.2, na.rm = TRUE) +
-               ggplot2::scale_fill_manual(values = c(observed = "grey40", predicted = col), name = NULL) +
-               ggplot2::scale_colour_manual(values = c(observed = "grey40", predicted = col), name = NULL) +
+               ggplot2::scale_fill_manual(values = vals, name = NULL) +
+               ggplot2::scale_colour_manual(values = vals, name = NULL) +
                ggplot2::scale_x_log10(labels = scales::label_comma(), limits = lims[[m]]) +
                ggplot2::scale_y_sqrt() +
-               ggplot2::labs(title = title,
-                             subtitle = "Same x-axis as above. Overlap = the model reproduces how often each level occurs.",
-                             x = "count per week + 1 (log scale)", y = "density (square-root scale)") +
+               ggplot2::labs(title = title, subtitle = tx$dist_subtitle, x = tx$dist_x, y = tx$dist_y) +
                .mosaic_calrep_theme(8.5) + ggplot2::theme(legend.position = "bottom")
      }
-     s <- function(title, expr) .mosaic_calrep_safe(gl, title, expr)
-     p <- ((s("Weekly cases", sp("cases")) | s("Weekly deaths", sp("deaths"))) /
-           (s("Weekly cases", dp("cases")) | s("Weekly deaths", dp("deaths")))) +
+     s <- function(m, expr) .mosaic_calrep_safe(gl, .mosaic_fill(tx$panel, channel = chan(m)), expr)
+     p <- ((s("cases", sp("cases")) | s("deaths", sp("deaths"))) /
+           (s("cases", dp("cases")) | s("deaths", dp("deaths")))) +
           patchwork::plot_layout(heights = c(1.4, 1)) +
           .mosaic_calrep_header(d, gl, "scatter", foot)
      patchwork::patchworkGrob(p)

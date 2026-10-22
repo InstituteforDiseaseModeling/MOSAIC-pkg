@@ -7,7 +7,8 @@
 # with their text, the info rows (ESS growth, budget, ensemble size), the fit
 # table and the sampling details as the report shows them. A display string is
 # rich text: {name} names a glossary token (metric_glossary.yml `tokens`).
-# Contract: claude/plan_convergence/SCHEMA_v2.md section 2.
+# Contract: inst/extdata/calibration_diagnostics_schema.md (tracked copy of
+# claude/plan_convergence/SCHEMA_v2.md sections 1-2).
 
 # Revision of the 1.5.1 additions to schema 2; a file without it is completed
 # (in memory by the report, on disk by render_MOSAIC_figures()).
@@ -51,6 +52,7 @@
 #' @noRd
 .mosaic_rich_plain <- function(x, gl, to = c("text", "ascii", "katex")) {
      to <- match.arg(to)
+     if (to == "ascii") x <- gsub("\u2212", "-", x, fixed = TRUE)
      tk <- attr(gl, "tokens")
      for (nm in names(tk)) x <- gsub(paste0("{", nm, "}"), tk[[nm]][[to]], x, fixed = TRUE)
      x
@@ -71,6 +73,10 @@
                 operator_yellow = c("ge", "le", "lt", "ge"),
                 stringsAsFactors = FALSE)
 }
+
+# A real minus sign in a displayed number (U+2212); the PDF prints it as the
+# WinAnsi minus.
+.mosaic_cd_minus <- function(x) sub("^-", "\u2212", x)
 
 # A JSON array of records (list of lists or a data frame) as a data frame
 # holding every key; JSON nulls become NA.
@@ -166,7 +172,13 @@
                                                                 green = gd[i], yellow = yd[i])
                tnote[i] <- if (!is.null(e) && !is.na(e$target_note)) e$target_note else NA_character_
           }
-          ck$value_display <- vd
+          ck$value_display <- .mosaic_cd_minus(vd)
+          # One label: the glossary's short label (as text), the name the PDF prints.
+          ck$label <- vapply(seq_len(n), function(i) {
+               k <- ck$key[i]
+               if (!is.na(k) && k %in% gl$key) .mosaic_rich_plain(gl$short_label[gl$key == k], gl, "text")
+               else ck$label[i]
+          }, character(1))
           ck$threshold_green_display <- gd
           ck$threshold_yellow_display <- yd
           ck$target_display <- tdisp
@@ -225,7 +237,7 @@
      growth_state <- if (!is.finite(slope)) "na"
                      else if ("ess_growth_stalled" %in% ids || slope < stall) "stalled" else "ok"
      ess_growth <- list(key = "ess_growth_slope", value = slope,
-                        display = if (is.finite(slope)) sprintf("%.2f", slope) else words_i$na,
+                        display = if (is.finite(slope)) .mosaic_cd_minus(sprintf("%.2f", slope)) else words_i$na,
                         target = stall, operator = "ge", target_value_display = format(stall),
                         target_display = if (nrow(g_slope) && !is.na(g_slope$target_template))
                              .mosaic_fill(g_slope$target_template, op = tok[["ge"]], target = format(stall)) else "",
@@ -241,11 +253,14 @@
                                            n = if (length(reliable) == 1L && isFALSE(reliable)) words_i$indicative else NA_character_)
             else list(d = words_i$na, n = NA_character_)
      at_cap <- isTRUE(suppressWarnings(as.logical(unlist(s$budget_exhausted)))) || "budget_cap_reached" %in% ids
+     # A run with fewer than two valid draws has failed (calc_convergence_status()):
+     # neither its budget nor its ensemble size is "ok".
+     failed <- is.finite(num(s$sims_used)) && num(s$sims_used) < 2
+     b_state <- if (failed) "failed" else if (at_cap) "at_cap" else "ok"
      budget <- list(key = "budget", value = N, cap = cap, display = fmt(N),
                     sub_display = if (is.finite(cap)) .mosaic_fill(words_i$of_cap, cap = fmt(cap)) else words_i$cap_na,
                     target = proj, target_display = tgt$d, target_note = tgt$n,
-                    status = if (at_cap) "at_cap" else "ok",
-                    status_display = if (at_cap) words_i$at_cap else words_i$ok)
+                    status = b_state, status_display = words_i[[b_state]])
      bind <- chr(s$ensemble_binding)
      mn <- num(r$min_ensemble_members); mx <- num(r$max_ensemble_members)
      g_size <- gl[gl$key == "ensemble_members", , drop = FALSE]
@@ -255,8 +270,8 @@
                   sub_display = if (is.na(bind)) words_i$na else (words_i[[paste0("binding_", bind)]] %||% bind),
                   target_display = if (is.finite(mn) && is.finite(mx) && nrow(g_size) && !is.na(g_size$target_template))
                        .mosaic_fill(g_size$target_template, min = fmt(mn), max = fmt(mx)) else words_i$na,
-                  status = if (at_bound) "at_bound" else "ok",
-                  status_display = if (at_bound) words_i$at_bound else words_i$ok)
+                  status = if (failed) "failed" else if (at_bound) "at_bound" else "ok",
+                  status_display = if (failed) words_i$failed else if (at_bound) words_i$at_bound else words_i$ok)
      j$info <- list(ess_growth = ess_growth, budget = budget, ensemble_size = size)
 
      # fit table as shown ---------------------------------------------------------
@@ -290,8 +305,13 @@
      j$sampling$details_display <- data.frame(
           key = c("valid_draws", "posterior", "ess_all", "mass", "runs", "scored"),
           value = c(.mosaic_fill(sd_txt$valid_draws_value, valid = fmt(sims_used), attempted = fmt(N %|NA|% sims_used)),
-                    .mosaic_fill(sd_txt$posterior_value, a = if (is.finite(alpha)) format(alpha) else words_i$na,
-                                 e = if (is.finite(eta)) formatC(eta, format = "g", digits = 2) else words_i$na),
+                    paste0(.mosaic_fill(sd_txt$posterior_value, a = if (is.finite(alpha)) format(alpha) else words_i$na,
+                                        e = if (is.finite(eta)) format(signif(eta, 2), trim = TRUE, scientific = FALSE) else words_i$na),
+                           # eta pools the locations: alpha per location (red team round 1, D2)
+                           if (isTRUE(num(r$n_locations) > 1) && is.finite(num(s$alpha_per_location)))
+                                .mosaic_fill(sd_txt$posterior_value_per_location,
+                                             apl = format(signif(num(s$alpha_per_location), 2), trim = TRUE))
+                           else ""),
                     .mosaic_fill(sd_txt$ess_all_value, ess = fmt(num(s$ess_all)), target = fmt(num(s$ess_all_target))),
                     .mosaic_calrep_pct(num(s$best_subset_mass), 1),
                     fmt(num(r$n_iter_ensemble)),

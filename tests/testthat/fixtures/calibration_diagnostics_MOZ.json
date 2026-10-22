@@ -61,7 +61,7 @@
       },
       {
         "check": "mce",
-        "label": "Monte Carlo error (90th percentile)",
+        "label": "Monte Carlo error (p90)",
         "value": 0.223366499107115,
         "threshold_green": 0.1,
         "threshold_yellow": 0.15,
@@ -79,7 +79,7 @@
       },
       {
         "check": "khat",
-        "label": "Validity guard (Pareto k-hat)",
+        "label": "Weight tail k̂",
         "value": -1.52378741533762,
         "threshold_green": 0.5,
         "threshold_yellow": 0.7,
@@ -88,7 +88,7 @@
         "key": "khat_tempered",
         "operator": "lt",
         "operator_yellow": "lt",
-        "value_display": "-1.52",
+        "value_display": "−1.52",
         "threshold_green_display": "0.5",
         "threshold_yellow_display": "0.7",
         "target_display": "{lt} 0.5 / {lt} 0.7",
@@ -97,7 +97,7 @@
       },
       {
         "check": "informativeness",
-        "label": "Data informativeness",
+        "label": "Data informativeness f₁",
         "value": 0.0781846240259043,
         "threshold_green": 0.01,
         "threshold_yellow": null,
@@ -12718,7 +12718,12 @@
         "deaths": "observation"
       },
       "quantiles": [0.025, 0.25, 0.75, 0.975],
-      "week_start": "Monday"
+      "week_start": "Monday + week_offset",
+      "week_offset": {
+        "MOZ": 0
+      },
+      "all_locations_id": null,
+      "all_locations_week_offset": null
     },
     "table_display": [
       {

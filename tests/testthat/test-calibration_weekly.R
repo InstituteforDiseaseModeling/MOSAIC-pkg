@@ -123,3 +123,81 @@ test_that("the weekly mean of trajectories equals the sum of the daily ensemble 
   expect_equal(out$weekly$predicted, as.vector(tapply(daily_mean, rep(1:4, each = 7), sum)), tolerance = 1e-12)
   expect_identical(out$meta$intervals, list(cases = "engine", deaths = "engine"))
 })
+
+# Two locations, 21 days from Monday 2024-01-01, 3 members x 2 runs, random
+# integer trajectories; location BBB misses one observation in week 2.
+two_location_fixture <- function(week_offset = c(0L, 0L)) {
+  set.seed(42)
+  n_t <- 21; P <- 3; S <- 2
+  dates <- seq(as.Date("2024-01-01"), by = "day", length.out = n_t)
+  mk <- function(lambda) array(stats::rpois(2 * n_t * P * S, lambda), c(2, n_t, P, S))
+  ens <- list(cases_engine_array = mk(5), cases_array = mk(5), deaths_engine_array = mk(0.5), deaths_array = mk(0.5),
+              parameter_weights = c(0.5, 0.3, 0.2), location_names = c("AAA", "BBB"),
+              date_start = "2024-01-01", date_stop = as.character(dates[n_t]), n_time_points = n_t,
+              observation_model = list(cases = TRUE, deaths = TRUE, week_offset = week_offset))
+  pt <- do.call(rbind, lapply(c("AAA", "BBB"), function(l) do.call(rbind, lapply(c("Suspected Cases", "Deaths"), function(m) {
+    obs <- rep(1, n_t); if (l == "BBB" && m == "Deaths") obs[10] <- NA
+    data.frame(location = l, date = dates, metric = m, observed = obs, predicted_central = 1,
+               central_method = if (m == "Deaths") "mean" else "median",
+               ci_1_lower = 0, ci_1_upper = 4, ci_2_lower = 0.5, ci_2_upper = 2)
+  }))))
+  list(pt = pt, ens = ens, dates = dates, sw = rep(ens$parameter_weights, times = S) / S)
+}
+
+test_that("the all-locations row sums trajectories over locations (brute force)", {
+  fx <- two_location_fixture()
+  w <- MOSAIC:::.mosaic_calibration_weekly(fx$pt, fx$ens)
+  expect_identical(w$meta$all_locations_id, "ALL")
+  expect_identical(w$meta$all_locations_week_offset, 0L)
+  all_rows <- w$weekly[w$weekly$location == "ALL", ]
+  expect_identical(nrow(all_rows), 6L)   # 3 complete weeks x 2 channels
+  for (ch in c("cases", "deaths")) {
+    eng <- fx$ens[[paste0(ch, "_engine_array")]]; obs <- fx$ens[[paste0(ch, "_array")]]
+    for (k in 1:3) {
+      t <- (k - 1) * 7 + 1:7
+      E <- as.vector(apply(eng[, t, , , drop = FALSE], c(3, 4), sum))   # per trajectory, both locations
+      O <- as.vector(apply(obs[, t, , , drop = FALSE], c(3, 4), sum))
+      row <- all_rows[all_rows$metric == ch & all_rows$week == format(fx$dates[t[1]]), ]
+      central <- if (ch == "deaths") sum(E * fx$sw) else MOSAIC::weighted_quantiles(E, fx$sw, 0.5)
+      expect_equal(row$predicted, central, tolerance = 1e-12)
+      expect_equal(c(row$lo95, row$lo50, row$hi50, row$hi95),
+                   MOSAIC::weighted_quantiles(O, fx$sw, c(0.025, 0.25, 0.75, 0.975)), tolerance = 1e-12)
+      # never the sum of the per-location central lines (for the median)
+      if (ch == "cases") {
+        per_loc <- w$weekly[w$weekly$location != "ALL" & w$weekly$metric == ch & w$weekly$week == row$week, ]
+        expect_equal(nrow(per_loc), 2L)
+      }
+    }
+  }
+  # scored only when every location is scored; observed only then
+  d2 <- all_rows[all_rows$metric == "deaths" & all_rows$week == "2024-01-08", ]
+  expect_false(d2$scored)
+  expect_true(is.na(d2$observed))
+  c2 <- all_rows[all_rows$metric == "cases" & all_rows$week == "2024-01-08", ]
+  expect_true(c2$scored)
+  expect_equal(c2$observed, 14)
+  # without arrays: the central line only (summed daily table), no bands
+  s <- MOSAIC:::.mosaic_calibration_weekly(fx$pt, NULL)$weekly
+  s <- s[s$location == "ALL" & s$metric == "cases", ]
+  expect_equal(s$predicted, rep(14, 3))
+  expect_true(all(is.na(s$hi95)))
+  # one location: no all-locations row
+  one <- MOSAIC:::.mosaic_calibration_weekly(fx$pt[fx$pt$location == "AAA", ], NULL)
+  expect_null(one$meta$all_locations_id)
+  expect_false(any(one$weekly$location == "ALL"))
+})
+
+test_that("weeks follow each location's reporting-week offset", {
+  fx <- two_location_fixture(week_offset = c(0L, 2L))
+  w <- MOSAIC:::.mosaic_calibration_weekly(fx$pt, fx$ens)
+  expect_identical(w$meta$week_offset, list(AAA = 0L, BBB = 2L))
+  b <- w$weekly[w$weekly$location == "BBB" & w$weekly$metric == "cases", ]
+  # Wednesday-start weeks: 2024-01-03 and 2024-01-10 are complete, the partial edges dropped
+  expect_identical(b$week, c("2024-01-03", "2024-01-10"))
+  expect_true(all(format(as.Date(b$week), "%u") == "3"))
+  E <- as.vector(apply(fx$ens$cases_engine_array[2, 3:9, , , drop = FALSE], c(3, 4), sum))
+  expect_equal(b$predicted[1], MOSAIC::weighted_quantiles(E, fx$sw, 0.5), tolerance = 1e-12)
+  # the locations' weeks differ, so the all-locations row uses Monday weeks
+  expect_identical(w$meta$all_locations_week_offset, 0L)
+  expect_true(all(format(as.Date(w$weekly$week[w$weekly$location == "ALL"]), "%u") == "1"))
+})

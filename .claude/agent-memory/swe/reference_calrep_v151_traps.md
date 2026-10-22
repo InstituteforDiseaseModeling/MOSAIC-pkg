@@ -7,9 +7,10 @@ metadata:
 
 Learned building MOSAIC 1.5.1 (report reads only calibration_diagnostics.json + metric_glossary.yml).
 
-- **NAMESPACE is hand-maintained** (`devtools::document()` skips it). A grid `makeContent.<cls>` method
-  (draw-time layout, e.g. the page-1 left column `mosaic_calrep_left`) must be registered by hand:
-  `S3method(grid::makeContent, mosaic_calrep_left)`. `@exportS3Method` does nothing here.
+- **NAMESPACE is hand-maintained** (`devtools::document()` skips it) with `exportPattern("^[[:alpha:]]+")`,
+  so a method named `makeContent.cls` is EXPORTED (R CMD check: undocumented object; review: leaks into the
+  API). Name it `.something` and register with the 3-argument form
+  `S3method(grid::makeContent, mosaic_calrep_left, .mosaic_calrep_left_content)` — not exported, no Rd.
 - **jsonlite writes `"_row"`** for a data.frame whose rownames are not the default integers — e.g. built
   from `unlist(named_list)`. `unname()` / `rownames(df) <- NULL` before `write_json(dataframe = "rows")`,
   else an upgraded file differs from the in-run one.

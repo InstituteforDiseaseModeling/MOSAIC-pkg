@@ -1177,151 +1177,231 @@
 
 #' Weekly series of the ensemble: every complete week, from weekly-summed trajectories
 #'
-#' One row per complete Monday-to-Sunday week of each location-channel series
-#' of the prediction table (a week is complete when all seven of its days are
-#' in the table, so the partial weeks at either end of the window are left
-#' out). Per week:
+#' One row per complete reporting week of each location-channel series of the
+#' prediction table and, in a multi-location run, of the all-locations total
+#' (\code{location} = \code{meta$all_locations_id}). A reporting week is the
+#' seven days from Monday plus the location's \code{week_offset} (the blocks the
+#' observation model and the weekly dispersion use, \code{.mosaic_week_blocks()};
+#' 0 for every production location, so Monday to Sunday); it is complete when
+#' all seven of its days are in the table, so the partial weeks at either end of
+#' the window are left out. Per week:
 #' \itemize{
 #'   \item \code{scored}: all seven days are scored (a finite observation and a
 #'     finite central line, the days the fit table scores), and
 #'     \code{observed} is their total; otherwise \code{observed} is null, so an
-#'     observed total is never compared over a short week.
+#'     observed total is never compared over a short week. For the
+#'     all-locations row a day counts as scored only when every location is
+#'     scored on it.
 #'   \item \code{predicted}, \code{lo50}, \code{hi50}, \code{lo95},
 #'     \code{hi95}: null when any of the seven days is in the channel's
 #'     unscored head (the burn-in, where the table's central line is
 #'     \code{NA}). Otherwise, from the member trajectories: each member x
-#'     stochastic run's daily series \eqn{x_{r,t}} is summed to the week,
-#'     \eqn{X_{r,w} = \sum_{t \in w} x_{r,t}}, and the trajectories are
-#'     weighted \eqn{v_r = w_p / S} (member \eqn{p}'s normalised weight shared
-#'     by its \eqn{S} runs; a trajectory with a missing day that week is left
-#'     out and the rest renormalised, as for the daily summaries). The central
-#'     line is the weighted median (\code{central_method = "median"}) or
-#'     weighted mean (\code{"mean"}) of the ENGINE-level weekly totals, the
-#'     daily central-line convention; the bounds are the weighted 2.5, 25, 75
-#'     and 97.5 percent quantiles (\code{weighted_quantiles()}) of the
-#'     OBSERVATION-level weekly totals (\code{cases_array} /
-#'     \code{deaths_array}), the draws the daily intervals come from.
+#'     stochastic run's daily series \eqn{x_{r,t}} (for the all-locations row,
+#'     its sum over the locations, so the locations of one trajectory stay
+#'     together) is summed to the week, \eqn{X_{r,w} = \sum_{t \in w} x_{r,t}},
+#'     and the trajectories are weighted \eqn{v_r = w_p / S} (member \eqn{p}'s
+#'     normalised weight shared by its \eqn{S} runs; a trajectory with a missing
+#'     day that week is left out and the rest renormalised, as for the daily
+#'     summaries). The central line is the weighted median
+#'     (\code{central_method = "median"}) or weighted mean (\code{"mean"}) of
+#'     the ENGINE-level weekly totals, the daily central-line convention; the
+#'     bounds are the weighted 2.5, 25, 75 and 97.5 percent quantiles
+#'     (\code{weighted_quantiles()}) of the OBSERVATION-level weekly totals
+#'     (\code{cases_array} / \code{deaths_array}), the draws the daily intervals
+#'     come from.
 #' }
 #' Summing daily medians or daily quantile bounds instead makes the line hug
 #' zero (the daily median is 0 on most days of a sparse series) and the bands
-#' blocky; the trajectory sums do neither.
+#' blocky; the trajectory sums do neither. The all-locations row is built the
+#' same way, never by summing per-location medians. When the locations'
+#' reporting weeks differ, the all-locations row uses Monday weeks
+#' (\code{meta$all_locations_week_offset}).
 #'
 #' When \code{ensemble} lacks its arrays (a run that did not persist them,
 #' re-rendered later), the model values are the weekly sums of the table's
-#' daily central line and bounds, and \code{meta$source} says so
-#' (\code{"daily_sums"}).
+#' daily central line and bounds (the all-locations row: the central line
+#' only, no bounds), and \code{meta$source} says so (\code{"daily_sums"}).
 #' @param pt Prediction table, or NULL.
 #' @param ensemble \code{mosaic_ensemble} with \code{cases_array},
 #'   \code{deaths_array} and the engine arrays, or NULL.
 #' @param central_method Per-channel central method; NULL reads the table's
 #'   \code{central_method} column (else the package default).
 #' @return \code{list(weekly, meta)}: \code{weekly} with columns
-#'   \code{location, metric, week} (ISO date of the Monday), \code{scored,
-#'   observed, predicted, lo50, hi50, lo95, hi95}; \code{meta} with
-#'   \code{source} (\code{"trajectories"}, \code{"daily_sums"} or
-#'   \code{"none"}), \code{central_method}, \code{intervals} per channel
-#'   (\code{"observation"} or \code{"engine"}), \code{quantiles} and
-#'   \code{week_start}.
+#'   \code{location, metric, week} (ISO date of the first day of the reporting
+#'   week), \code{scored, observed, predicted, lo50, hi50, lo95, hi95};
+#'   \code{meta} with \code{source} (\code{"trajectories"},
+#'   \code{"daily_sums"} or \code{"none"}), \code{central_method},
+#'   \code{intervals} per channel (\code{"observation"} or \code{"engine"}),
+#'   \code{quantiles}, \code{week_start}, \code{week_offset} (per location),
+#'   \code{all_locations_id} and \code{all_locations_week_offset} (NULL in a
+#'   one-location run).
 #' @noRd
 .mosaic_calibration_weekly <- function(pt, ensemble = NULL, central_method = NULL) {
   probs <- c(0.025, 0.25, 0.75, 0.975)
   empty <- data.frame(location = character(0), metric = character(0), week = character(0), scored = logical(0),
                       observed = numeric(0), predicted = numeric(0), lo50 = numeric(0), hi50 = numeric(0),
                       lo95 = numeric(0), hi95 = numeric(0), stringsAsFactors = FALSE)
-  meta <- function(source, cm = .mosaic_resolve_central_method(NULL), intervals = c(cases = NA, deaths = NA))
+  meta <- function(source, cm = .mosaic_resolve_central_method(NULL), intervals = c(cases = NA, deaths = NA),
+                   offsets = list(), all_id = NULL, all_off = NULL)
     list(source = source, central_method = as.list(cm), intervals = as.list(intervals),
-         quantiles = probs, week_start = "Monday")
+         quantiles = probs, week_start = "Monday + week_offset", week_offset = offsets,
+         all_locations_id = all_id, all_locations_week_offset = all_off)
   if (is.null(pt) || !nrow(pt)) return(list(weekly = empty, meta = meta("none")))
   pt <- as.data.frame(pt)
+  pt$location <- as.character(pt$location)
   pt$date <- as.Date(pt$date)
   pt$metric <- ifelse(grepl("death", as.character(pt$metric), ignore.case = TRUE), "deaths", "cases")
-  if (is.null(central_method)) {
-    cm_col <- if ("central_method" %in% names(pt)) {
-      v <- vapply(c("cases", "deaths"), function(m) {
-        x <- unique(as.character(pt$central_method[pt$metric == m]))
-        x <- x[!is.na(x) & x %in% c("mean", "median")]
-        if (length(x)) x[1] else NA_character_
-      }, character(1))
-      as.list(v[!is.na(v)])
-    } else NULL
-    central_method <- if (length(cm_col)) unlist(cm_col) else NULL
+  if (is.null(central_method) && "central_method" %in% names(pt)) {
+    v <- vapply(c("cases", "deaths"), function(m) {
+      x <- unique(as.character(pt$central_method[pt$metric == m]))
+      x <- x[!is.na(x) & x %in% c("mean", "median")]
+      if (length(x)) x[1] else NA_character_
+    }, character(1))
+    if (any(!is.na(v))) central_method <- v[!is.na(v)]
   }
   cm <- .mosaic_resolve_central_method(central_method)
   bands <- .mosaic_prediction_bands(pt)
   pt[names(bands)] <- bands
   pt <- pt[order(pt$location, pt$metric, pt$date), , drop = FALSE]
-  pt$week <- pt$date - (as.integer(format(pt$date, "%u")) - 1L)
-  has_model <- is.finite(pt$predicted_central)
-  scored_day <- has_model & is.finite(pt$observed)
-  key <- paste(pt$location, pt$metric, format(pt$week), sep = "\r")
-  g <- match(key, unique(key))
-  first <- !duplicated(g)
-  n_days <- tabulate(g)
-  sumg <- function(x) as.vector(rowsum(as.numeric(x), g, reorder = FALSE))
-  n_model <- sumg(has_model); n_scored <- sumg(scored_day)
-  obs_sum <- sumg(ifelse(scored_day, pt$observed, 0))
-  wk <- data.frame(location = as.character(pt$location[first]), metric = pt$metric[first], week = pt$week[first],
-                   scored = n_scored == 7L, observed = ifelse(n_scored == 7L, obs_sum, NA_real_),
-                   predicted = NA_real_, lo50 = NA_real_, hi50 = NA_real_, lo95 = NA_real_, hi95 = NA_real_,
-                   stringsAsFactors = FALSE)
-  model_wk <- n_model == 7L
-  complete <- n_days == 7L
-  # Is every channel's ensemble array there (engine and observation level)?
+  locs <- unique(pt$location)
+
+  # reporting-week offset of each location (the observation model's blocks)
+  off <- stats::setNames(rep(0L, length(locs)), locs)
+  wo <- suppressWarnings(as.integer(unlist(ensemble$observation_model$week_offset)))
+  en <- as.character(ensemble$location_names %||% character(0))
+  if (length(wo) && length(en)) {
+    wo <- rep_len(wo, length(en))
+    hit <- match(locs, en)
+    ok <- !is.na(hit) & !is.na(wo[hit]) & wo[hit] >= 0L & wo[hit] <= 6L
+    off[ok] <- wo[hit[ok]]
+  }
+  week_of <- function(d, o) d - ((as.integer(format(d, "%u")) - 1L - o) %% 7L)
+
+  # trajectories: engine and observation arrays of both channels, weights
   arrays <- !is.null(ensemble) && all(vapply(c("cases", "deaths"), function(ch) {
     e <- .mosaic_engine_array(ensemble, ch); o <- ensemble[[paste0(ch, "_array")]]
     !is.null(e) && !is.null(o) && length(dim(e)) == 4L && identical(dim(e), dim(o))
   }, logical(1)))
   if (arrays) {
     dims <- dim(ensemble$cases_array)
-    n_t <- dims[2]; S <- dims[4]
     w <- as.numeric(ensemble$parameter_weights)
-    if (length(w) != dims[3] || !any(is.finite(w) & w > 0)) arrays <- FALSE
+    arrays <- length(w) == dims[3] && any(is.finite(w) & w > 0)
   }
   if (arrays) {
+    n_t <- dims[2]; S <- dims[4]
     w <- w / sum(w[is.finite(w)])
     sw <- rep(w, times = S) / S        # param-fastest, as as.vector(arr[l, t, , ])
     ens_dates <- seq(as.Date(ensemble$date_start), as.Date(ensemble$date_stop), length.out = ensemble$n_time_points)
-    t_of <- match(pt$date, ens_dates)
-    l_of <- match(as.character(pt$location), as.character(ensemble$location_names))
-    rows_of <- split(seq_len(nrow(pt)), g)
-    for (grp in split(which(model_wk & complete), paste(wk$location, wk$metric)[model_wk & complete])) {
-      ch <- wk$metric[grp[1]]
-      l <- l_of[rows_of[[grp[1]]][1]]
-      if (is.na(l)) next
-      days <- unlist(rows_of[grp], use.names = FALSE)
-      t_idx <- t_of[days]
-      if (anyNA(t_idx)) next
-      grp_id <- rep(seq_along(grp), each = 7L)
-      flat <- function(arr) { m <- arr[l, , , , drop = FALSE]; dim(m) <- c(n_t, dims[3] * S); m }
-      tot_e <- rowsum(flat(.mosaic_engine_array(ensemble, ch))[t_idx, , drop = FALSE], grp_id, reorder = FALSE)
-      tot_o <- rowsum(flat(ensemble[[paste0(ch, "_array")]])[t_idx, , drop = FALSE], grp_id, reorder = FALSE)
-      for (k in seq_along(grp)) {
-        ve <- tot_e[k, ]
-        wk$predicted[grp[k]] <- if (cm[[ch]] == "mean") {
-          ok <- is.finite(ve) & sw > 0
-          if (any(ok)) sum(ve[ok] * sw[ok]) / sum(sw[ok]) else NA_real_
-        } else weighted_quantiles(ve, sw, 0.5)
-        q <- weighted_quantiles(tot_o[k, ], sw, probs)
-        wk[grp[k], c("lo95", "lo50", "hi50", "hi95")] <- as.list(q)
+    l_index <- match(locs, en)
+    flat <- function(arr, l) { m <- arr[l, , , , drop = FALSE]; dim(m) <- c(n_t, dims[3] * S); m }
+  }
+  series <- function(days, week, eng = NULL, obs = NULL, method = "median", bands = TRUE) {
+    g <- match(week, unique(week))
+    n_days <- tabulate(g)
+    sumg <- function(x) as.vector(rowsum(as.numeric(x), g, reorder = FALSE))
+    n_model <- sumg(days$has_model); n_sc <- sumg(days$scored)
+    first <- !duplicated(g)
+    out <- data.frame(week = week[first], scored = n_sc == 7L,
+                      observed = ifelse(n_sc == 7L, sumg(ifelse(days$scored, days$observed, 0)), NA_real_),
+                      predicted = NA_real_, lo50 = NA_real_, hi50 = NA_real_, lo95 = NA_real_, hi95 = NA_real_)
+    keep <- n_days == 7L & n_model == 7L
+    if (!is.null(eng)) {
+      kk <- which(keep)
+      if (length(kk)) {
+        rows <- which(g %in% kk)
+        grp <- match(g[rows], kk)
+        te <- rowsum(eng[rows, , drop = FALSE], grp, reorder = FALSE)
+        to <- rowsum(obs[rows, , drop = FALSE], grp, reorder = FALSE)
+        for (k in seq_along(kk)) {
+          ve <- te[k, ]
+          out$predicted[kk[k]] <- if (method == "mean") {
+            okv <- is.finite(ve) & sw > 0
+            if (any(okv)) sum(ve[okv] * sw[okv]) / sum(sw[okv]) else NA_real_
+          } else weighted_quantiles(ve, sw, 0.5)
+          out[kk[k], c("lo95", "lo50", "hi50", "hi95")] <- as.list(weighted_quantiles(to[k, ], sw, probs))
+        }
+      }
+    } else {
+      fin <- function(x) ifelse(is.finite(x), x, NA_real_)
+      out$predicted <- ifelse(keep, sumg(fin(days$central)), NA_real_)
+      for (cl in c("lo50", "hi50", "lo95", "hi95"))
+        out[[cl]] <- if (bands) ifelse(keep, sumg(fin(days[[cl]])), NA_real_) else NA_real_
+    }
+    out[n_days == 7L, , drop = FALSE]
+  }
+  day_frame <- function(x) data.frame(date = x$date, has_model = is.finite(x$predicted_central),
+                                      scored = is.finite(x$predicted_central) & is.finite(x$observed),
+                                      observed = x$observed, central = x$predicted_central,
+                                      lo50 = x$lo50, hi50 = x$hi50, lo95 = x$lo95, hi95 = x$hi95)
+  t_rows <- function(d) match(d, ens_dates)
+
+  rows <- list()
+  for (loc in locs) for (ch in c("cases", "deaths")) {
+    x <- pt[pt$location == loc & pt$metric == ch, , drop = FALSE]
+    if (!nrow(x)) next
+    days <- day_frame(x)
+    eng <- obs <- NULL
+    if (arrays && !is.na(l_index[match(loc, locs)])) {
+      tr <- t_rows(days$date)
+      if (!anyNA(tr)) {
+        l <- l_index[match(loc, locs)]
+        eng <- flat(.mosaic_engine_array(ensemble, ch), l)[tr, , drop = FALSE]
+        obs <- flat(ensemble[[paste0(ch, "_array")]], l)[tr, , drop = FALSE]
       }
     }
+    s <- series(days, week_of(days$date, off[[loc]]), eng, obs, cm[[ch]])
+    if (nrow(s)) rows[[length(rows) + 1L]] <- cbind(location = loc, metric = ch, s, stringsAsFactors = FALSE)
+  }
+
+  all_id <- all_off <- NULL
+  if (length(locs) > 1L) {
+    all_id <- "ALL"
+    while (all_id %in% locs) all_id <- paste0(all_id, "_")
+    all_off <- if (length(unique(off)) == 1L) unname(off[1]) else 0L
+    for (ch in c("cases", "deaths")) {
+      x <- pt[pt$metric == ch, , drop = FALSE]
+      dates <- sort(unique(x$date))
+      # a day enters only when every location has it
+      n_loc_day <- tabulate(match(x$date, dates), nbins = length(dates))
+      dates <- dates[n_loc_day == length(locs)]
+      x <- x[x$date %in% dates, , drop = FALSE]
+      if (!length(dates)) next
+      di <- match(x$date, dates)
+      agg_all <- function(v) as.vector(tapply(v, factor(di, levels = seq_along(dates)), all))
+      agg_sum <- function(v) as.vector(rowsum(as.numeric(v), di, reorder = TRUE))
+      has_model <- agg_all(is.finite(x$predicted_central))
+      sc <- agg_all(is.finite(x$predicted_central) & is.finite(x$observed))
+      days <- data.frame(date = dates, has_model = has_model, scored = sc,
+                         observed = agg_sum(ifelse(is.finite(x$observed), x$observed, 0)),
+                         central = ifelse(has_model, agg_sum(ifelse(is.finite(x$predicted_central),
+                                                                    x$predicted_central, 0)), NA_real_),
+                         lo50 = NA_real_, hi50 = NA_real_, lo95 = NA_real_, hi95 = NA_real_)
+      eng <- obs <- NULL
+      if (arrays && !anyNA(l_index)) {
+        tr <- t_rows(dates)
+        if (!anyNA(tr)) {
+          for (l in l_index) {
+            fe <- flat(.mosaic_engine_array(ensemble, ch), l)[tr, , drop = FALSE]
+            fo <- flat(ensemble[[paste0(ch, "_array")]], l)[tr, , drop = FALSE]
+            eng <- if (is.null(eng)) fe else eng + fe
+            obs <- if (is.null(obs)) fo else obs + fo
+          }
+        }
+      }
+      s <- series(days, week_of(dates, all_off), eng, obs, cm[[ch]], bands = FALSE)
+      if (nrow(s)) rows[[length(rows) + 1L]] <- cbind(location = all_id, metric = ch, s, stringsAsFactors = FALSE)
+    }
+  }
+  wk <- if (length(rows)) do.call(rbind, rows) else empty
+  wk <- wk[order(wk$location, wk$metric, wk$week), names(empty), drop = FALSE]
+  wk$week <- format(as.Date(wk$week), "%Y-%m-%d")
+  rownames(wk) <- NULL
+  offsets <- as.list(off)
+  if (arrays) {
     intervals <- vapply(c("cases", "deaths"), function(ch)
       if (isTRUE(ensemble$observation_model[[ch]])) "observation" else "engine", character(1))
-    out_meta <- meta("trajectories", cm, intervals)
-  } else {
-    wsum <- function(x) { s <- sumg(x); s }
-    for (cl in c("predicted", "lo50", "hi50", "lo95", "hi95")) {
-      src <- if (cl == "predicted") pt$predicted_central else pt[[cl]]
-      v <- wsum(ifelse(is.finite(src), src, NA_real_))
-      wk[[cl]] <- ifelse(model_wk, v, NA_real_)
-    }
-    out_meta <- meta("daily_sums", cm, c(cases = NA, deaths = NA))
-  }
-  wk <- wk[complete, , drop = FALSE]
-  wk <- wk[order(wk$location, wk$metric, wk$week), , drop = FALSE]
-  wk$week <- format(wk$week, "%Y-%m-%d")
-  rownames(wk) <- NULL
-  list(weekly = wk, meta = out_meta)
+    list(weekly = wk, meta = meta("trajectories", cm, intervals, offsets, all_id, all_off))
+  } else list(weekly = wk, meta = meta("daily_sums", cm, c(cases = NA, deaths = NA), offsets, all_id, all_off))
 }
 
 #' Round the non-integer numbers of a JSON-bound object to significant digits

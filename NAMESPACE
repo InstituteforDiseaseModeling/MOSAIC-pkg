@@ -4,7 +4,7 @@ exportPattern("^[[:alpha:]]+")
 S3method(print, mosaic_initial_conditions_S)
 S3method(print, mosaic_priors)
 # The calibration report's page-1 column is laid out at draw time.
-S3method(grid::makeContent, mosaic_calrep_left)
+S3method(grid::makeContent, mosaic_calrep_left, .mosaic_calrep_left_content)
 importFrom("grDevices", "dev.off", "png")
 importFrom("methods", "as")
 importFrom("stats", "ave", "df", "predict", "reorder", 

@@ -50,7 +50,8 @@
 # run.max_ensemble_members. The report strings name their own placeholders.
 #
 # Design: claude/reporting_audit/SPEC_CONVERGENCE.md (sections 2 and 5);
-# output contract: claude/plan_convergence/SCHEMA_v2.md section 2.
+# output contract (versioned with the package):
+# inst/extdata/calibration_diagnostics_schema.md.
 
 version: "1.5.1"
 
@@ -109,6 +110,7 @@ report:
     at_cap: "at cap"
     at_bound: "at bound"
     na: "n/a"
+    failed: "run failed"
     already_green: "already green"
     sampling_green: "n/a"
     sampling_green_note: "sampling checks green"
@@ -144,6 +146,7 @@ report:
     valid_draws_value: "{valid} of {attempted} attempted"
     posterior: "Posterior"
     posterior_value: "coarsened, {alpha} = {a}, {eta} = {e}"
+    posterior_value_per_location: "; {alpha} {apl} per location"
     ess_all: "{ESSall}"
     ess_all_value: "{ess}  (target {target})"
     mass: "Mass in ensemble"
@@ -185,14 +188,54 @@ report:
     series_y: "{metric} per week"
     series_empty: "No weekly {metric} in the diagnostics file."
     series_empty_any: "No weekly series in the diagnostics file."
-    subtitle_many: "Summed over all locations. "
+    subtitle_many: "All locations: each trajectory summed over the locations, then to the week. "
+    series_no_all: "No all-locations weekly {metric} in the diagnostics file (written before 1.5.1); re-render with render_MOSAIC_figures() to add it."
     subtitle_main: "Every complete week. Points = observed; line = ensemble central line"
     subtitle_scored_only: "Scored weeks only (a file without the full-week series). Points = observed; line = ensemble central line"
     subtitle_bands: "; bands = 50% / 95% predictive intervals"
     subtitle_unscored: ". Light grey = not scored ({n} weeks)"
     subtitle_burn_in: "; dark grey = {days}-day burn-in."
     subtitle_end: "."
-    subtitle_daily_sums: " Line and bands are sums of daily values: this run did not persist its ensemble arrays."
+    subtitle_daily_sums: " Line and bands are sums of daily values (this run did not persist its ensemble arrays), so they differ slightly from what the run itself would have written."
+  parameters_page:
+    mce_title: "Sampling precision of each posterior mean"
+    mce_empty: "No per-parameter Monte Carlo error in the diagnostics file."
+    mce_subtitle: "Monte Carlo standard error of each posterior mean, as % of its posterior SD (10 seed batches):\nthe typical change a rerun with new seeds would make."
+    mce_subtitle_limits: "\nDashed / dotted = green / yellow limit of the 90th percentile ({green} / {yellow})."
+    mce_subtitle_p90: "\n90th percentile over parameters: {p90}."
+    mce_subtitle_many: " Point = worst location, bar = range."
+    mce_x: "Monte Carlo error / posterior SD"
+    label_many: "{name} (n={n})"
+    kl_title: "Movement from the prior (KL divergence)"
+    kl_empty: "No per-parameter KL divergence in the diagnostics file."
+    kl_bands: ["largely prior", "partly informed", "data-informed"]
+    kl_withheld: "band withheld (ensemble ESS < 100)"
+    kl_label: "{name} ({family})"
+    kl_label_many: "{name} ({family}, n={n})"
+    kl_subtitle: "Prior to posterior, nats (log scale). Prior family in brackets."
+    kl_subtitle_edges: "\nDashed = band edges {lo} and {hi} nats."
+    kl_subtitle_many: "\nPoint = median over locations, bar = range."
+    kl_x: "KL divergence (nats)"
+    no_parameters: "No parameters in the diagnostics file."
+    note_left: "Left: sampling precision only. Median {median}, 90th percentile {p90}, maximum {max} of posterior SD over {n} parameters."
+    note_largest: " Largest: {list}."
+    note_right_withheld: "   Right: descriptive only, feeds no status; bands withheld for all {n} parameters (ensemble ESS < 100, where the estimator's bias would misclassify them). "
+    note_right: "   Right: descriptive only, feeds no status ({prior} largely prior, {partly} partly informed, {data} data-informed parameters{withheld}). "
+    note_right_withheld_part: "; {n} withheld"
+    note_end: "Some priors are informative by design, so a parameter that stays near its prior is not a failure."
+  scatter_page:
+    panel: "Weekly {channel}"
+    scatter_title: "Weekly {metric}: predicted vs observed"
+    scatter_subtitle: "Scored weekly totals{all}, log(1 + count). Dashed = agreement; above = over-predicted."
+    scatter_subtitle_all: ", every location"
+    scatter_y: "predicted per week + 1"
+    not_scored: "{channel} not scored in this run."
+    dist_title: "Weekly {metric}: distribution of counts"
+    dist_subtitle: "Same x-axis as above. Overlap = the model reproduces how often each level occurs."
+    dist_x: "count per week + 1 (log scale)"
+    dist_y: "density (square-root scale)"
+    observed: "observed"
+    predicted: "predicted"
   unavailable: "Unavailable: {message}"
   failed_page: "Page {page} could not be drawn"
   appendix:
@@ -618,7 +661,7 @@ metrics:
   - key: flat_likelihood
     label: Data informativeness (flat likelihood)
     short_label: 'Data informativeness {f1}'
-    what_it_tells_you: 'Share of draws tied for best under the full likelihood'
+    what_it_tells_you: 'Effective share of draws equally good under the full likelihood'
     formula_plotmath: |-
       paste(f[1], '  =  ', ESS[Kish](w^{(1)}) / N, ',')
       w[i]^{(1)} %prop% L[i] / L[max]
@@ -651,7 +694,7 @@ metrics:
   - key: ess_untempered_frac
     label: Untempered-likelihood ESS share
     short_label: 'Untempered ESS share {f1}'
-    what_it_tells_you: 'Part of the prior the raw likelihood leaves plausible'
+    what_it_tells_you: 'Effective share of draws equally good under the full likelihood'
     formula_plotmath: 'f[1] == ESS[Kish](w^{(1)}) / N'
     formula_katex: 'f_1 = \mathrm{ESS}_{\mathrm{Kish}}(w^{(1)}) / N'
     target_template: null
@@ -804,8 +847,8 @@ metrics:
     label: Simulations projected for green
     short_label: 'Simulations projected for green'
     what_it_tells_you: 'Total simulations projected for a green status'
-    formula_plotmath: 'T == max(N %.% ESS[all]^target / ESS[all], N %.% (MCE[p90] / MCE[green])^2) / r[valid]'
-    formula_katex: 'T = \max\!\left(N \frac{\mathrm{ESS}_{\mathrm{all}}^{\mathrm{target}}}{\mathrm{ESS}_{\mathrm{all}}},\ N \left(\frac{\mathrm{MCE}_{p90}}{\mathrm{MCE}_{\mathrm{green}}}\right)^2\right) / r_{\mathrm{valid}}'
+    formula_plotmath: 'T == max(N %.% ESS[all]^target / ESS[all], N %.% (MCE[p90] / MCE[green])^2) / r[valid] + B[confirm]'
+    formula_katex: 'T = \max\!\left(N \frac{\mathrm{ESS}_{\mathrm{all}}^{\mathrm{target}}}{\mathrm{ESS}_{\mathrm{all}}},\ N \left(\frac{\mathrm{MCE}_{p90}}{\mathrm{MCE}_{\mathrm{green}}}\right)^2\right) / r_{\mathrm{valid}} + B_{\mathrm{confirm}}'
     target_template: null
     units: 'simulations'
     definition: >-
@@ -816,9 +859,10 @@ metrics:
       draws to simulations at the run's success rate (valid / attempted). Units:
       simulations.
     formula: >-
-      T = max(N x ESS_all target / ESS_all, N x (mce_p90 / 0.10)^2) / (valid /
-      attempted), over the checks that are not green and that more draws can fix;
-      in adaptive mode plus a confirming batch of 0.25 x T within
+      T = max(N x ESS_all target / ESS_all, N x (mce_p90 / mce_green)^2) / (valid /
+      attempted), with mce_green the run's green Monte Carlo error threshold
+      (status_thresholds, default 0.10), over the checks that are not green and that
+      more draws can fix; in adaptive mode plus a confirming batch B_confirm of 0.25 x T within
       [batch_size_adaptive, max_batch_predictive] (fixed mode: T alone). Null when the three sampling checks (ESS, MCE, k-hat)
       are green (an informativeness-only yellow needs no more simulations), and
       when only k-hat is behind (no projection exists for it).
@@ -994,7 +1038,9 @@ metrics:
     formula: mean(lower <= observed <= upper) for each interval.
     how_to_read: >-
       Near nominal = honest uncertainty; well above = intervals too wide; well
-      below = overconfident.
+      below = overconfident. In sample, and on a sparse series, coverage is
+      dominated by the days with no reported cases, which almost any interval
+      covers, so a high coverage there says little about the epidemic weeks.
     threshold: none (nominal 50% and 95%)
     not_a_measure_of: Accuracy of the central line.
 
@@ -1044,7 +1090,15 @@ metrics:
     how_to_read: >-
       Shows when the model is early, late, too high or too low. Light grey weeks
       were not scored (an observation is missing on at least one day); the
-      darker band at the start is the burn-in, where the model is not drawn.
+      darker band at the start is the burn-in, where the model is not drawn. The
+      cases bands are the weekly negative binomial at the fitted dispersion k,
+      so they are wider than the per-day likelihood implies; since k is fitted
+      on weekly totals they are the right weekly predictive. With one member and
+      S stochastic runs the 95% band is just the range of the S draws. In a
+      multi-location run the line and bands are of the all-locations total:
+      each trajectory is summed over the locations before the week is
+      summarised, never the per-location lines added up. Weeks start on Monday
+      plus each location's reporting-week offset (0, Monday, in production).
     threshold: none
     not_a_measure_of: Uncertainty when no predictive intervals are drawn.
 

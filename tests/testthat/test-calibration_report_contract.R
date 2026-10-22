@@ -37,7 +37,10 @@ test_that("calibration_diagnostics.json carries the 1.5.1 fields with their type
   expect_setequal(names(th), names(MOSAIC:::.mosaic_convergence_defaults()$thresholds))
   expect_true(is.numeric(th$slope_stall))
   expect_identical(j$status$thresholds_source, "run control")
+  gl <- MOSAIC:::.mosaic_glossary()
   for (ck in j$status$checks) {
+    # one label: the glossary short label the PDF prints
+    expect_identical(ck$label, MOSAIC:::.mosaic_rich_plain(gl$short_label[gl$key == ck$key], gl, "text"))
     for (f in c("key", "operator", "operator_yellow", "value_display", "threshold_green_display",
                 "threshold_yellow_display", "target_display", "status_display"))
       expect_true(is.character(ck[[f]]) && length(ck[[f]]) == 1L, info = paste(ck$check, f))
@@ -55,7 +58,7 @@ test_that("calibration_diagnostics.json carries the 1.5.1 fields with their type
     r <- j$info[[nm]]
     for (f in c("key", "display", "status", "status_display")) expect_true(is.character(r[[f]]), info = paste(nm, f))
     expect_true("value" %in% names(r) && "target_display" %in% names(r), info = nm)
-    expect_true(r$status %in% c("ok", "stalled", "at_cap", "at_bound", "na"))
+    expect_true(r$status %in% c("ok", "stalled", "at_cap", "at_bound", "na", "failed"))
   }
   expect_identical(j$info$ess_growth$target, j$status$thresholds$slope_stall)
   expect_identical(j$info$budget$cap, j$run$n_simulations_requested)   # fixed budget: the requested draws
@@ -102,7 +105,9 @@ test_that("the renderer holds no metric wording, formula or target: they are glo
   # the strings the 1.5.0 renderer hard-coded on pages 1 and 3 are gone
   for (old in c("What it tells you", "not part of the status", "Why not green:", "Sampling details",
                 "Posterior ESS as draws accumulate", "Weekly %s: observed and ensemble", "OVERALL:",
-                "Fit metrics (central line", "Every complete week"))
+                "Fit metrics (central line", "Every complete week", "Sampling precision of each",
+                "Movement from the prior", "No parameters in the", "predicted vs observed", "distribution of counts",
+                "Dashed = agreement", "not scored in this run", "band withheld", "Some priors are informative"))
     expect_false(any(grepl(old, lits, fixed = TRUE)), info = old)
   expect_false("green / yellow" %in% lits)
 })
@@ -259,4 +264,88 @@ test_that("without persisted arrays the upgrade falls back to the daily table, a
   expect_false(file.exists(file.path(d, "3_results", "calibration_diagnostics.pre151.json")))
   dd <- MOSAIC:::.mosaic_calrep_read(up)
   expect_identical(dd$fit$weekly_source, "daily_sums")
+  # the default (non-persisted) re-render path end to end: written, backed up, drawn
+  suppressWarnings(suppressMessages(render_MOSAIC_figures(d, which = "convergence", verbose = FALSE)))
+  on_disk <- jsonlite::read_json(js)
+  expect_identical(on_disk$fit$weekly_meta$source, "daily_sums")
+  expect_identical(on_disk$upgrade$weekly_source, "daily_sums")
+  expect_true(file.exists(file.path(d, "3_results", "calibration_diagnostics.pre151.json")))
+  expect_true(file.exists(file.path(d, "3_results", "figures", "diagnostics", "calibration_report.pdf")))
+  # the model values differ slightly from the in-run trajectories (disclosed under the series)
+  rows_df <- function(x) do.call(rbind, lapply(x, function(r) as.data.frame(lapply(r, function(v) v %||% NA))))
+  w_in <- rows_df(written$fit$weekly)
+  w_up <- rows_df(on_disk$fit$weekly)
+  expect_identical(nrow(w_in), nrow(w_up))
+  expect_identical(w_up$scored, w_in$scored)
+})
+
+
+test_that("the tracked output contract names every field of a real calibration_diagnostics.json", {
+  f <- system.file("extdata", "calibration_diagnostics_schema.md", package = "MOSAIC")
+  expect_true(nzchar(f) && file.exists(f))
+  doc <- paste(readLines(f, encoding = "UTF-8"), collapse = "\n")
+  j <- cd_list("multi")
+  fields <- c(names(j), names(j$run), names(j$status), names(j$status$checks[[1]]), names(j$sampling),
+              names(j$info), names(j$info$budget), names(j$info$ensemble_size), names(j$info$ess_growth),
+              names(j$fit), names(j$fit$weekly[[1]]), names(j$fit$weekly_meta), names(j$fit$table_display[[1]]),
+              names(j$status$flags_detail[[1]]))
+  missing <- unique(fields[!vapply(fields, function(k) grepl(k, doc, fixed = TRUE), logical(1))])
+  expect_identical(missing, character(0))
+  expect_true(grepl("calibration_diagnostics_schema.md", paste(readLines(
+    system.file("extdata", "metric_glossary.yml", package = "MOSAIC"), n = 70), collapse = "\n"), fixed = TRUE))
+})
+
+test_that("display details: failed runs, real minus signs, alpha per location", {
+  gl <- MOSAIC:::.mosaic_glossary()
+  j <- cd_list("edge")
+  j$sampling$sims_used <- 1; j$schema_revision <- NULL
+  k <- MOSAIC:::.mosaic_calrep_complete(j, gl)
+  expect_identical(k$info$budget$status, "failed")
+  expect_identical(k$info$ensemble_size$status, "failed")
+  expect_identical(k$info$budget$status_display, attr(gl, "report")$info$failed)
+  j <- cd_list("MOZ")
+  j$status$checks[[3]]$value <- -1.1; j$sampling$ess_growth_slope <- -0.25
+  k <- MOSAIC:::.mosaic_calrep_complete(j, gl)
+  expect_identical(k$status$checks$value_display[3], "−1.10")
+  expect_identical(k$info$ess_growth$display, "−0.25")
+  # the PDF prints the WinAnsi minus of "-"
+  expect_identical(MOSAIC:::.mosaic_calrep_rich("−1.10", gl), "-1.10")
+  expect_identical(MOSAIC:::.mosaic_rich_plain("−1.10", gl, "ascii"), "-1.10")
+  d <- MOSAIC:::.mosaic_calrep_read(cd_fixture("multi"))
+  expect_match(d$sampling$details$value[d$sampling$details$key == "posterior"], "per location", fixed = TRUE)
+  expect_false(grepl("per location", MOSAIC:::.mosaic_calrep_read(cd_fixture("MOZ"))$sampling$details$value[2]))
+})
+
+test_that("a multi-location stub run: the all-locations row is summed trajectories and page 3 draws it", {
+  skip_on_cran()
+  skip_if_not_installed("arrow")
+  local_test_root()
+  d <- withr::local_tempdir()
+  .stub_run_mosaic(d, mode = "fixed", iso = c("MOZ", "MWI", "ZMB"), io_extra = list(persist_ensemble_arrays = TRUE))
+  j <- jsonlite::read_json(file.path(d, "3_results", "calibration_diagnostics.json"), simplifyVector = TRUE)
+  wk <- j$fit$weekly
+  expect_identical(j$fit$weekly_meta$all_locations_id, "ALL")
+  expect_setequal(unique(wk$location), c("MOZ", "MWI", "ZMB", "ALL"))
+  e <- readRDS(file.path(d, "2_calibration", "ensemble_optimized.rds"))
+  S <- dim(e$cases_array)[4]
+  sw <- rep(e$parameter_weights / sum(e$parameter_weights), times = S) / S
+  dates <- seq(as.Date(e$date_start), as.Date(e$date_stop), by = "day")
+  all_c <- wk[wk$location == "ALL" & wk$metric == "cases" & !is.na(wk$predicted), ]
+  for (i in c(1, round(nrow(all_c) / 2), nrow(all_c))) {
+    t <- match(as.Date(all_c$week[i]) + 0:6, dates)
+    E <- as.vector(apply(e$cases_engine_array[, t, , , drop = FALSE], c(3, 4), sum))
+    O <- as.vector(apply(e$cases_array[, t, , , drop = FALSE], c(3, 4), sum))
+    expect_equal(all_c$predicted[i], signif(MOSAIC::weighted_quantiles(E, sw, 0.5), 4), tolerance = 1e-9)
+    expect_equal(all_c$hi95[i], signif(MOSAIC::weighted_quantiles(O, sw, 0.975), 4), tolerance = 1e-9)
+  }
+  # scored only when every location is scored
+  per <- wk[wk$location != "ALL" & wk$metric == "cases", ]
+  all_sc <- tapply(per$scored, per$week, all)
+  expect_identical(unname(all_c$scored), as.vector(all_sc[all_c$week]))
+  # page 3 draws the all-locations series: no panel is replaced by a note
+  dd <- MOSAIC:::.mosaic_calrep_read(file.path(d, "3_results", "calibration_diagnostics.json"))
+  expect_true(inherits(MOSAIC:::.mosaic_calrep_ts_plot(dd, MOSAIC:::.mosaic_glossary(), "cases"), "ggplot"))
+  p <- MOSAIC:::.mosaic_calrep_ts_plot(dd, MOSAIC:::.mosaic_glossary(), "cases")
+  expect_false(grepl("Unavailable", p$labels$title %||% ""))
+  expect_true("lo95" %in% names(p$data) && any(is.finite(p$data$lo95)))
 })

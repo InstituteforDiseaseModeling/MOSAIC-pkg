@@ -251,9 +251,50 @@ test_that("every reason is printed: those that do not fit page 1 continue on a p
      d <- MOSAIC:::.mosaic_calrep_read(j)
      drawn <- page1_drawn(d)
      expect_gt(length(drawn$overflow), 0L)
+     # whole reasons only: the continuation starts at a reason, not mid-sentence
+     expect_identical(substr(drawn$overflow[1], 1, 1), "\u2022")
      cont <- attr(gl_pkg(), "report")$reasons$continued
      expect_true(any(grepl(cont, drawn$labels, fixed = TRUE)))
      dir <- withr::local_tempdir()
      out <- plot_model_calibration_report(j, dir_output = dir, verbose = FALSE)
      expect_identical(pdf_pages(out), expected_pages(j))
+})
+
+
+test_that("a multi-location report draws its series: no panel says Unavailable", {
+  skip_on_cran()
+  gl <- gl_pkg()
+  for (id in c("multi", "MOZ")) {
+    d <- MOSAIC:::.mosaic_calrep_read(cd_fixture(id))
+    grDevices::pdf(NULL, width = 11, height = 8.5, encoding = "WinAnsi.enc")
+    grid::grid.newpage()
+    for (pg in list(MOSAIC:::.mosaic_calrep_page_fit(d, gl, "foot"), MOSAIC:::.mosaic_calrep_page_scatter(d, gl, "foot"),
+                    MOSAIC:::.mosaic_calrep_page_parameters(d, gl, "foot"))) {
+      grid::grid.newpage(); grid::grid.draw(pg)
+    }
+    grid::grid.force()
+    labels <- character(0)
+    walk <- function(g) {
+      if (inherits(g, "text") && is.character(g$label)) labels <<- c(labels, g$label)
+      if (inherits(g, "gTree")) for (k in g$children) walk(k)
+    }
+    walk(grid::grid.grab(wrap.grobs = FALSE))
+    grDevices::dev.off()
+    expect_false(any(grepl("Unavailable", labels)), info = id)
+    for (m in c("cases", "deaths")) {
+      p <- MOSAIC:::.mosaic_calrep_ts_plot(d, gl, m)
+      expect_identical(p$labels$title, MOSAIC:::.mosaic_fill(attr(gl, "report")$fit_page$series_title, metric = m), info = id)
+    }
+  }
+  # the multi series is the all-locations row, never a sum of per-location rows
+  d <- MOSAIC:::.mosaic_calrep_read(cd_fixture("multi"))
+  p <- MOSAIC:::.mosaic_calrep_ts_plot(d, gl, "cases")
+  allw <- d$fit$weekly[d$fit$weekly$location == "ALL" & d$fit$weekly$metric == "cases", ]
+  expect_equal(sort(p$data$predicted[is.finite(p$data$predicted)]), sort(allw$predicted[is.finite(allw$predicted)]))
+  # an older multi-location file without the row says so instead of summing
+  j <- cd_list("multi")
+  j$fit$weekly <- Filter(function(r) r$location != "ALL", j$fit$weekly)
+  p2 <- MOSAIC:::.mosaic_calrep_ts_plot(MOSAIC:::.mosaic_calrep_read(j), gl, "cases")
+  note <- paste(unlist(lapply(p2$layers, function(l) l$aes_params$label)), collapse = " ")
+  expect_match(gsub("\\s+", " ", note), "No all-locations weekly cases", fixed = TRUE)
 })
