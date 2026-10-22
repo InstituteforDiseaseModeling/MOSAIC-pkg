@@ -1008,6 +1008,10 @@ run_MOSAIC <- function(config,
     log_msg(paste0("[RESUME] %s is a completed run (3_results/summary.json present): nothing to resume. ",
                    "Start a fresh run (resume = FALSE, or a new dir_output) to recompute it."),
             dir_output)
+    # Killed after summary.json but before run_state.json was finalized: finish
+    # the end-of-run bookkeeping now (the [RUN_SUMMARY] line and the completed
+    # run_state.json / _README.md) instead of leaving the run looking unfinished.
+    .mosaic_finalize_if_unfinished(dirs, postcal$state, dir_output)
     run_completed <- TRUE
     return(invisible(.mosaic_completed_run_result(dirs, postcal$state)))
   }
@@ -1818,7 +1822,6 @@ run_MOSAIC <- function(config,
                                                       n_obs_scored, results = gate_pool$data)
       .mosaic_save_state(state, state_file)
       .mosaic_save_checkpoint(state, checkpoint_file)
-      .mosaic_test_kill_point(sprintf("batch_%d", state$batch_number))
     }
     if (!isTRUE(state$converged)) {
       last <- utils::tail(state$convergence_history, 1L)
@@ -2344,7 +2347,7 @@ run_MOSAIC <- function(config,
     }
 
     ensemble <- tryCatch(
-      calc_model_ensemble(
+      .mosaic_calc_model_ensemble(
         config                   = config,
         parameter_seeds          = param_seeds,
         parameter_weights        = param_weights,
@@ -2384,6 +2387,10 @@ run_MOSAIC <- function(config,
                 if (.persist_arrays) ensemble else .mosaic_ensemble_drop_arrays(ensemble)),
               ensemble_rds)
       log_msg("Saved 2_calibration/ensemble_candidate.rds")
+      # The captured R_eff inputs live only in ensemble_candidate.rds (the R_eff
+      # CI reads the candidate); drop them from the live object so neither the
+      # ensemble_optimized.rds copy nor the rest of post-calibration carries them.
+      ensemble$reff_capture <- NULL
       # Posterior reported CFR by location and year (from the members' post-hoc
       # CFR draws; covers forecast years past the last observation too).
       if (!is.null(ensemble$cfr_posterior)) {
@@ -2405,7 +2412,6 @@ run_MOSAIC <- function(config,
       # config order with location_name attached. Absent arrays (engine without
       # DerivedValues) are silently skipped.
       .mosaic_persist_spatial_artifacts(ensemble, dirs, log_msg, log_warn)
-      .mosaic_test_kill_point("ensemble")
 
       # Trajectory channels were spilled to scratch during this candidate run
       # (reduce deferred). Capture the scratch handle + the candidate per-member
@@ -2912,11 +2918,24 @@ run_MOSAIC <- function(config,
   )
   log_msg("Saved %s", file.path(dirs$cal_posterior, "posteriors.json"))
 
-  # (Parameter sensitivity -- HSIC and parameter_sensitivity.csv -- is computed
-  # by the "sensitivity" group of render_MOSAIC_figures() since 1.5.0, not here:
-  # nothing in this function or summary.json reads it, so it is a diagnostic of
-  # its figure, and moving it took a 67 GB, 16-minute step on a 916-parameter
-  # run off the post-calibration path. plots = TRUE renders it below.)
+  # ===========================================================================
+  # PARAMETER SENSITIVITY (data layer)
+  # ===========================================================================
+  # Compute HSIC sensitivity + write parameter_sensitivity.csv unconditionally
+  # (the dashboard reads it; CLAUDE.md lesson #10). Since 1.5.0 it works a chunk
+  # of parameters at a time, so a 900-parameter run holds ~4 GB instead of
+  # ~52 GB. The figure (and the correlation figure) are rendered later by
+  # render_MOSAIC_figures().
+  tryCatch(
+    calc_model_parameter_sensitivity(
+      results_file = file.path(dirs$calibration, "samples.parquet"),
+      priors_file  = file.path(dirs$inputs, "priors.json"),
+      output_dir   = dirs$res_fig_diag,
+      subset_col   = active_cols$sample_col,
+      verbose      = control$logging$verbose
+    ),
+    error = function(e) log_warn("parameter sensitivity computation failed: %s", e$message)
+  )
 
   # ===========================================================================
   # POSTERIOR PREDICTIVE CHECKS (medoid representative model)
@@ -3408,30 +3427,7 @@ run_MOSAIC <- function(config,
   # monitoring the log) can latch on '\[RUN_SUMMARY\]' to know the pipeline
   # finished AND extract headline metrics in one pass. status / mode: see
   # .mosaic_run_status() (fixed mode never applies the stopping rule).
-  int_s <- function(x) if (length(x) == 1L && is.finite(x)) sprintf("%d", as.integer(round(x))) else "NA"
-  outputs_ok <- !is.na(summary_obj$r2_cases_ensemble)
-  status_str <- .mosaic_run_status(state, outputs_ok)
-  log_msg(paste0(
-    "[RUN_SUMMARY] status=%s mode=%s convergence_status=%s stopping_rule_met=%s ",
-    "outputs_ok=%s runtime_min=%.2f r2_cases_ensemble=%s ",
-    "r2_deaths_ensemble=%s sims_total=%s sims_used=%s ensemble_members=%s ess_best=%s ",
-    "ess_all=%s resumed=%s dir_output=%s"),
-    status_str,
-    if (is.null(state$mode)) "NA" else state$mode,
-    if (is.na(summary_obj$convergence_status)) "NA" else summary_obj$convergence_status,
-    if (is.na(summary_obj$stopping_rule_met)) "NA" else if (summary_obj$stopping_rule_met) "YES" else "NO",
-    if (outputs_ok) "YES" else "NO",
-    as.numeric(runtime),
-    if (is.na(summary_obj$r2_cases_ensemble))  "NA" else sprintf("%.4f", summary_obj$r2_cases_ensemble),
-    if (is.na(summary_obj$r2_deaths_ensemble)) "NA" else sprintf("%.4f", summary_obj$r2_deaths_ensemble),
-    # machine-read sentinel: plain integers, no thousands separators (PN2)
-    int_s(summary_obj$n_simulations_total), int_s(summary_obj$sims_used),
-    int_s(summary_obj$ensemble_members),
-    if (is.finite(summary_obj$ess_best %||% NA)) sprintf("%.1f", summary_obj$ess_best) else "NA",
-    if (is.finite(summary_obj$ess_all %||% NA)) sprintf("%.1f", summary_obj$ess_all) else "NA",
-    if (isTRUE(state$resumed)) "YES" else "NO",
-    dir_output
-  )
+  .mosaic_log_run_summary(summary_obj, state, as.numeric(runtime), dir_output)
 
   # Reached normal end-of-run -- suppress the on.exit [RUN_FATAL] sentinel.
   run_completed <- TRUE

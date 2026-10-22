@@ -1676,21 +1676,74 @@
   )
 }
 
-#' Test-only interruption point
+#' Log run_MOSAIC()'s grep-friendly RUN_SUMMARY end-of-run sentinel
 #'
-#' When the environment variable \code{MOSAIC_TEST_KILL_AT} equals
-#' \code{where}, signals a condition of class \code{"mosaic_test_kill"}. It is
-#' not an error, so no \code{tryCatch(error = )} in the pipeline absorbs it:
-#' run_MOSAIC() unwinds as if the process had been killed there (its
-#' \code{on.exit} handlers do run). The resume tests use it; unset, it costs one
-#' \code{Sys.getenv()}.
-#' @param where Label of the interruption point.
+#' A tailing operator (human or AI monitoring the log) can latch on
+#' the RUN_SUMMARY tag to know the pipeline finished AND extract headline metrics
+#' in one pass. status / mode: see .mosaic_run_status() (fixed mode never
+#' applies the stopping rule).
+#' @param summary_obj The summary list (.mosaic_write_summary_json(), or
+#'   summary.json read back: missing values may then be NULL).
+#' @param state The calibration state.
+#' @param runtime_min Runtime in minutes.
+#' @param dir_output The run directory.
 #' @noRd
-.mosaic_test_kill_point <- function(where) {
-  if (identical(Sys.getenv("MOSAIC_TEST_KILL_AT"), where))
-    stop(structure(class = c("mosaic_test_kill", "condition"),
-                   list(message = paste0("test interruption at ", where), call = NULL)))
-  invisible(NULL)
+.mosaic_log_run_summary <- function(summary_obj, state, runtime_min, dir_output) {
+  one <- function(x) if (length(x) == 1L) x else NA
+  so <- lapply(summary_obj[intersect(c("convergence_status", "stopping_rule_met", "r2_cases_ensemble",
+                                       "r2_deaths_ensemble", "n_simulations_total", "sims_used",
+                                       "ensemble_members", "ess_best", "ess_all"), names(summary_obj))], one)
+  g <- function(k) if (is.null(so[[k]])) NA else so[[k]]
+  int_s <- function(x) if (length(x) == 1L && is.finite(x)) sprintf("%d", as.integer(round(x))) else "NA"
+  outputs_ok <- !is.na(g("r2_cases_ensemble"))
+  status_str <- .mosaic_run_status(state, outputs_ok)
+  log_msg(paste0(
+    "[RUN_SUMMARY] status=%s mode=%s convergence_status=%s stopping_rule_met=%s ",
+    "outputs_ok=%s runtime_min=%.2f r2_cases_ensemble=%s ",
+    "r2_deaths_ensemble=%s sims_total=%s sims_used=%s ensemble_members=%s ess_best=%s ",
+    "ess_all=%s resumed=%s dir_output=%s"),
+    status_str,
+    if (is.null(state$mode)) "NA" else state$mode,
+    if (is.na(g("convergence_status"))) "NA" else g("convergence_status"),
+    if (is.na(g("stopping_rule_met"))) "NA" else if (isTRUE(g("stopping_rule_met"))) "YES" else "NO",
+    if (outputs_ok) "YES" else "NO",
+    as.numeric(runtime_min),
+    if (is.na(g("r2_cases_ensemble")))  "NA" else sprintf("%.4f", g("r2_cases_ensemble")),
+    if (is.na(g("r2_deaths_ensemble"))) "NA" else sprintf("%.4f", g("r2_deaths_ensemble")),
+    # machine-read sentinel: plain integers, no thousands separators (PN2)
+    int_s(g("n_simulations_total")), int_s(g("sims_used")),
+    int_s(g("ensemble_members")),
+    if (is.finite(g("ess_best"))) sprintf("%.1f", g("ess_best")) else "NA",
+    if (is.finite(g("ess_all"))) sprintf("%.1f", g("ess_all")) else "NA",
+    if (isTRUE(state$resumed)) "YES" else "NO",
+    dir_output
+  )
+  invisible(status_str)
+}
+
+#' Finish the end-of-run bookkeeping of a completed run killed before it
+#'
+#' run_MOSAIC() writes summary.json, logs the RUN_SUMMARY line and then finalizes
+#' run_state.json (status "completed", _README.md). A run killed between the
+#' first and the last is complete but looks unfinished; a resume, which is
+#' otherwise a no-op on a completed run, finishes it from summary.json.
+#' @param dirs Directory list.
+#' @param state The calibration state recorded by the sampling marker.
+#' @param dir_output The run directory.
+#' @return Invisibly, TRUE when it finalized, FALSE when nothing was needed.
+#' @noRd
+.mosaic_finalize_if_unfinished <- function(dirs, state, dir_output) {
+  state_file <- file.path(dirs$cal_state, "run_state.json")
+  persisted <- tryCatch(jsonlite::read_json(state_file), error = function(e) NULL)
+  if (is.null(persisted) || identical(persisted$status, "completed")) return(invisible(FALSE))
+  s <- tryCatch(jsonlite::read_json(file.path(dirs$results, "summary.json"), simplifyVector = TRUE),
+                error = function(e) NULL)
+  if (is.null(s)) return(invisible(FALSE))
+  log_msg("[RESUME] run_state.json was not finalized (the run was interrupted after summary.json): finalizing it")
+  state$resumed <- TRUE
+  .mosaic_log_run_summary(s, state, 0, dir_output)
+  .mosaic_finalize_state(state_file, s)
+  invisible(TRUE)
 }
 
 #' Add the combine-time index columns to the combined draws

@@ -676,7 +676,7 @@ calc_Reff <- function(ensemble,
 #' Harvests from one engine run what the per-member R_eff needs -- the route
 #' incidences, the engine decay rates \code{delta_jt}, the initial stocks
 #' (\code{.mosaic_reff_init()}) -- and an exact checksum of its reported cases.
-#' \code{calc_model_ensemble(capture_reff = TRUE)} calls it in each ensemble
+#' \code{.mosaic_calc_model_ensemble(capture_reff = TRUE)} calls it in each ensemble
 #' task (capture-don't-replay) and \code{.mosaic_reff_resim_member()} on a
 #' re-simulated member, so both paths hand identical inputs to
 #' \code{.mosaic_reff_member_series()}.
@@ -777,7 +777,7 @@ calc_Reff <- function(ensemble,
 #' One (param, stoch) member's per-location route-decomposed R series (with
 #' its OWN kernel, engine decay rates and initial stocks) plus the faithfulness
 #' diagnostics. When the task carries \code{captured} inputs -- harvested from
-#' the ensemble run itself by \code{calc_model_ensemble(capture_reff = TRUE)},
+#' the ensemble run itself by \code{.mosaic_calc_model_ensemble(capture_reff = TRUE)},
 #' MOSAIC 1.5.0 -- nothing is simulated: the inputs are verified against the
 #' saved cases slice by their exact checksum, and that slice is then the
 #' member's own reported cases. Otherwise the member's config is rebuilt from
@@ -983,7 +983,7 @@ calc_Reff <- function(ensemble,
   # 0 here too (it would otherwise enter the band although the published
   # ensemble excluded it), and is not re-run (a deterministic engine failure
   # would recur and abort the whole CI).
-  # A member captured by the ensemble run (calc_model_ensemble(capture_reff =
+  # A member captured by the ensemble run (.mosaic_calc_model_ensemble(capture_reff =
   # TRUE), MOSAIC 1.5.0) carries its route-incidence inputs in the task and is
   # not re-simulated.
   cap <- .mosaic_reff_capture_usable(ensemble$reff_capture, nL, Tn, nP, nS)
@@ -1025,6 +1025,14 @@ calc_Reff <- function(ensemble,
     assign(".rr_ctx", ctx, envir = .rr_env)
     parallel::clusterExport(cl, ".rr_ctx", envir = .rr_env)
     parallel::clusterEvalQ(cl, MOSAIC:::.mosaic_set_blas_threads(1L))
+    # The re-simulation rebuilds member configs with set.seed() on the workers:
+    # give them this session's RNG kind, as calc_model_ensemble()'s workers get.
+    .set_kind <- function(kind) {
+      RNGkind(kind[1L], kind[2L], kind[3L])
+      invisible(NULL)
+    }
+    environment(.set_kind) <- .GlobalEnv
+    parallel::clusterCall(cl, .set_kind, RNGkind())
     if (verbose) message("    on ", length(cl), " workers")
     # Reparent: a namespace binding serialises by REFERENCE, so a worker running
     # a different build would fail to resolve it (as in .mosaic_run_batch()).
@@ -1212,10 +1220,11 @@ calc_Reff <- function(ensemble,
 #' @keywords internal
 #' @noRd
 .mosaic_reff_capture_usable <- function(cap, nL, Tn, nP, nS) {
-  if (!is.list(cap) || !identical(cap$schema_version, 1L)) return(NULL)
+  if (!is.list(cap) || !identical(cap$schema_version, 2L)) return(NULL)
   d4 <- as.integer(c(nL, Tn, nP, nS))
-  ok <- all(vapply(c("inc_hum", "inc_env", "delta"), function(nm)
+  ok <- all(vapply(c("inc_hum", "inc_env"), function(nm)
     identical(as.integer(dim(cap[[nm]])), d4), logical(1))) &&
+    identical(as.integer(dim(cap$delta)), as.integer(c(nL, Tn, nP))) &&
     identical(as.integer(dim(cap$init)), as.integer(c(nL, 3L, nP, nS))) &&
     identical(as.integer(dim(cap$cases_checksum)), as.integer(c(3L, nP, nS))) &&
     identical(as.integer(dim(cap$error)), as.integer(c(nP, nS))) &&
@@ -1236,9 +1245,9 @@ calc_Reff <- function(ensemble,
   kern <- cap$kernels[[p]]
   if (is.na(err) && is.character(kern)) err <- kern   # the kernel could not be built
   if (!is.na(err)) return(list(error = err))
-  list(inc_hum = matrix(cap$inc_hum[, , p, s], nL, Tn),
-       inc_env = matrix(cap$inc_env[, , p, s], nL, Tn),
-       delta   = matrix(cap$delta[, , p, s], nL, Tn),
+  list(inc_hum = matrix(as.numeric(cap$inc_hum[, , p, s]), nL, Tn),
+       inc_env = matrix(as.numeric(cap$inc_env[, , p, s]), nL, Tn),
+       delta   = matrix(cap$delta[, , p], nL, Tn),
        init    = matrix(cap$init[, , p, s], nL, 3L),
        cases_checksum = cap$cases_checksum[, p, s],
        kernel = kern,

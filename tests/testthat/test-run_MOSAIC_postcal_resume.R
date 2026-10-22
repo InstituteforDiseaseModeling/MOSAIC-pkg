@@ -4,16 +4,37 @@
 # trajectory reduction or the figures -- resumes from samples.parquet and the
 # sampling marker (2_calibration/state/sampling_complete.rds) instead of redoing
 # the sampling, and gives the posteriors, ensembles and medoid of an
-# uninterrupted run. The kill is .mosaic_test_kill_point(), driven by the
-# MOSAIC_TEST_KILL_AT environment variable: it signals a non-error condition,
-# so none of the pipeline's tryCatch(error = ) blocks absorbs it.
+# uninterrupted run. A kill is simulated by mocking an internal function that
+# run_MOSAIC() calls at the chosen point so that it signals a non-error
+# condition, which none of the pipeline's tryCatch(error = ) blocks absorbs.
+# (Real SIGKILLs at the same points are exercised by the review harness,
+# claude/redteam/v150/real_run.R.)
 #
 # The runs are the stubbed single-location calibration of helper-stub-run.R
 # (sequential, ~10 s each in fixed mode).
 
+.kill <- function() stop(structure(class = c("mosaic_test_kill", "condition"),
+                                   list(message = "test kill", call = NULL)))
+
+# where = "ensemble": right after ensemble_candidate.rds is saved (the spatial
+# artifacts are persisted next). where = "batch_<n>": after the n-th adaptive
+# batch's resume checkpoint is written.
 .kill_run <- function(where, ...) {
-  tryCatch(withr::with_envvar(c(MOSAIC_TEST_KILL_AT = where), .stub_run_mosaic(...)),
-           mosaic_test_kill = function(c) c)
+  if (identical(where, "ensemble")) {
+    testthat::local_mocked_bindings(.mosaic_persist_spatial_artifacts = function(...) .kill(),
+                                    .package = "MOSAIC")
+  } else {
+    n_kill <- as.integer(sub("^batch_", "", where))
+    orig <- MOSAIC:::.mosaic_save_checkpoint
+    calls <- 0L
+    testthat::local_mocked_bindings(.mosaic_save_checkpoint = function(state, checkpoint_file) {
+      orig(state, checkpoint_file)
+      calls <<- calls + 1L
+      if (calls == n_kill) .kill()
+      invisible(checkpoint_file)
+    }, .package = "MOSAIC")
+  }
+  tryCatch(.stub_run_mosaic(...), mosaic_test_kill = function(c) c)
 }
 
 .expect_same_run <- function(a_dir, b_dir) {
@@ -169,23 +190,53 @@ test_that("plots = TRUE writes parameter_sensitivity.csv and its figure in the s
   expect_true(file.exists(file.path(diag, "parameter_sensitivity.png")))
 })
 
-test_that("plots = FALSE defers parameter_sensitivity.csv to render_MOSAIC_figures()", {
+test_that("parameter_sensitivity.csv is written whatever plots is, and render only plots it", {
   skip_on_cran()
   skip_if_not_installed("arrow")
   skip_if_not_installed("sensitivity")
   skip_if_not_installed("ggplot2")
   local_test_root()
   a <- withr::local_tempdir()
-  # run_MOSAIC() no longer computes it: calc_model_parameter_sensitivity() is
-  # not reached during the run.
-  testthat::with_mocked_bindings(
-    .stub_run_mosaic(a),
-    calc_model_parameter_sensitivity = function(...) stop("HSIC ran inside run_MOSAIC()"),
-    .package = "MOSAIC")
+  .stub_run_mosaic(a)      # plots = FALSE
   csv <- file.path(a, "3_results", "figures", "diagnostics", "parameter_sensitivity.csv")
-  expect_false(file.exists(csv))
-  expect_true(file.exists(file.path(a, "3_results", "summary.json")))
-  suppressWarnings(render_MOSAIC_figures(a, which = "sensitivity", verbose = FALSE))
   expect_true(file.exists(csv))
   expect_gt(nrow(utils::read.csv(csv)), 0L)
+  # Written atomically: no temporary file left beside it.
+  expect_length(list.files(dirname(csv), pattern = "^\\.mosaic_tmp_", all.files = TRUE), 0L)
+  before <- tools::md5sum(csv)
+  testthat::with_mocked_bindings(
+    suppressWarnings(render_MOSAIC_figures(a, which = "sensitivity", verbose = FALSE)),
+    calc_model_parameter_sensitivity = function(...) stop("HSIC recomputed by the render"),
+    .package = "MOSAIC")
+  expect_identical(tools::md5sum(csv), before)
+  expect_true(file.exists(file.path(dirname(csv), "parameter_sensitivity.png")))
+})
+
+test_that("a resume finalizes a run killed after summary.json but before run_state.json", {
+  skip_on_cran()
+  skip_if_not_installed("arrow")
+  local_test_root()
+  a <- withr::local_tempdir()
+  .stub_run_mosaic(a)
+  sf <- file.path(a, "2_calibration", "state", "run_state.json")
+  st <- jsonlite::read_json(sf)
+  expect_identical(st$status, "completed")
+  # The state a kill between summary.json and .mosaic_finalize_state() leaves.
+  st$status <- "running"
+  jsonlite::write_json(st, sf, auto_unbox = TRUE, null = "null")
+  unlink(file.path(a, "_README.md"))
+  summ <- tools::md5sum(file.path(a, "3_results", "summary.json"))
+  .stub_run_mosaic(a, resume = TRUE)
+  expect_identical(jsonlite::read_json(sf)$status, "completed")
+  expect_true(file.exists(file.path(a, "_README.md")))
+  expect_identical(tools::md5sum(file.path(a, "3_results", "summary.json")), summ)
+  log <- readLines(file.path(a, "run.log"))
+  tail_log <- log[seq(max(grep("is a completed run", log, fixed = TRUE)), length(log))]
+  expect_true(any(grepl("[RUN_SUMMARY] status=completed_fixed", tail_log, fixed = TRUE)))
+  expect_false(any(grepl("RUN_FATAL", tail_log, fixed = TRUE)))
+  # A second resume finds it finalized and logs no second [RUN_SUMMARY].
+  .stub_run_mosaic(a, resume = TRUE)
+  log2 <- readLines(file.path(a, "run.log"))
+  expect_identical(sum(grepl("[RUN_SUMMARY]", log2, fixed = TRUE)),
+                   sum(grepl("[RUN_SUMMARY]", log, fixed = TRUE)))
 })

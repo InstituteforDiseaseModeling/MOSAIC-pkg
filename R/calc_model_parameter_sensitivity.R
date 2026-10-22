@@ -23,11 +23,11 @@
 #' With \code{test_method = "Permutation"} each chunk draws its own
 #' permutations, so those p-values are a different Monte Carlo draw.
 #'
-#' Since MOSAIC 1.5.0 \code{run_MOSAIC()} no longer calls this function: the
-#' figure group \code{"sensitivity"} of \code{\link{render_MOSAIC_figures}}
-#' computes it (when \code{parameter_sensitivity.csv} is absent) and draws its
-#' figure, so \code{run_MOSAIC(plots = TRUE)} writes the table in the same run
-#' and \code{plots = FALSE} defers it to a later \code{render_MOSAIC_figures()}.
+#' \code{run_MOSAIC()} calls it in every run, whatever \code{plots} is, and
+#' writes \code{parameter_sensitivity.csv} (atomically: a temporary file
+#' renamed into place, so a killed run never leaves a truncated table);
+#' \code{\link{render_MOSAIC_figures}} plots that table and recomputes it only
+#' when it is missing.
 #'
 #' @param results_file Path to \code{samples.parquet} containing calibration results.
 #' @param priors_file Path to \code{priors.json} (used for parameter descriptions).
@@ -269,7 +269,8 @@ calc_model_parameter_sensitivity <- function(results_file,
     csv_df <- sens_df[, c("parameter", "hsic_r2", "p_value", "sig", "description")]
     csv_df$weighting <- rep(subset_label, nrow(csv_df))
     csv_df$n_used    <- rep(nrow(params_df), nrow(csv_df))
-    utils::write.csv(csv_df, csv_file, row.names = FALSE)
+    .mosaic_atomic_write(csv_df, csv_file, function(data, file)
+      utils::write.csv(data, file, row.names = FALSE))
     if (verbose) log_msg("Saved %s", csv_file)
   }
 

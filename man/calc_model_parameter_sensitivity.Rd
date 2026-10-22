@@ -73,11 +73,11 @@ log-likelihood, so the results equal a single call over every parameter.
 With \code{test_method = "Permutation"} each chunk draws its own
 permutations, so those p-values are a different Monte Carlo draw.
 
-Since MOSAIC 1.5.0 \code{run_MOSAIC()} no longer calls this function: the
-figure group \code{"sensitivity"} of \code{\link{render_MOSAIC_figures}}
-computes it (when \code{parameter_sensitivity.csv} is absent) and draws its
-figure, so \code{run_MOSAIC(plots = TRUE)} writes the table in the same run
-and \code{plots = FALSE} defers it to a later \code{render_MOSAIC_figures()}.
+\code{run_MOSAIC()} calls it in every run, whatever \code{plots} is, and
+writes \code{parameter_sensitivity.csv} (atomically: a temporary file
+renamed into place, so a killed run never leaves a truncated table);
+\code{\link{render_MOSAIC_figures}} plots that table and recomputes it only
+when it is missing.
 }
 \references{
 Da Veiga S (2015). Global sensitivity analysis with dependence measures.

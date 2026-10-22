@@ -36,8 +36,9 @@ trajectory artifact does not retain at a daily grid. A faithfulness gate
 confirms the re-sim reproduces the saved engine-level cases
 (\code{cases_engine_array}) before any CI is written. Since MOSAIC 1.5.0
 \code{run_MOSAIC()} captures those channels from the ensemble's own
-simulations (\code{calc_model_ensemble(capture_reff = TRUE)}) and saves them
-in \code{ensemble_candidate.rds}; when they are there, nothing is
+simulations and saves them in \code{ensemble_candidate.rds} (with
+\code{control$io$persist_ensemble_arrays = TRUE}, which this path already
+requires); when they are there, in this process or a later one, nothing is
 re-simulated (each member's inputs are verified against its saved cases by
 an exact checksum) and the values are identical to the re-simulation's.
 When \code{FALSE} (default) the cheap point-estimate path is used (renewal on

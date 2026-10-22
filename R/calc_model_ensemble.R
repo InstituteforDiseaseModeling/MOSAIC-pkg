@@ -600,16 +600,6 @@
 #'   match it. The deaths dispersion is read from
 #'   \code{deaths_integration}. When \code{NULL} (default) no observation noise
 #'   is drawn and \code{cases_array}/\code{deaths_array} are the engine draws.
-#' @param capture_reff Logical. When \code{TRUE}, harvest from each member the
-#'   inputs of its route-decomposed R_eff -- route incidences, engine decay rates,
-#'   initial stocks, with an exact checksum of its reported cases -- and return
-#'   them as \code{$reff_capture}, so \code{\link{add_reproductive_numbers}}
-#'   (\code{recompute_ci = TRUE}) computes the posterior R_eff without
-#'   re-simulating the members (capture-don't-replay; identical values). Adds
-#'   three dense arrays the size of \code{cases_engine_array}. Default
-#'   \code{FALSE}; \code{run_MOSAIC()} enables it for the posterior ensemble
-#'   when \code{control$io$persist_ensemble_arrays = TRUE}, the setting the R_eff
-#'   CI already requires.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return S3 object of class \code{"mosaic_ensemble"} containing:
@@ -697,18 +687,78 @@
 #'     CFR deviation for the location's latest observed year (\code{NA} for a
 #'     location with no forecast years). \code{run_MOSAIC()} centres forecast
 #'     years on it. \code{NULL} otherwise.}
-#'   \item{reff_capture}{When \code{capture_reff = TRUE}: the members' R_eff
-#'     inputs (\code{inc_hum}, \code{inc_env}, \code{delta} arrays shaped like
-#'     \code{cases_engine_array}; \code{init} \code{[n_locations x 3 x
-#'     n_param_sets x n_stoch]}; \code{cases_checksum}; \code{error}; per
-#'     parameter set \code{kernels} and \code{kernel_params}). \code{NULL}
-#'     otherwise.}
 #' }
 #'
 #' @seealso \code{\link{plot_model_ensemble}} to render plots from this object.
 #'
 #' @export
 calc_model_ensemble <- function(config,
+                                parameter_seeds = NULL,
+                                configs = NULL,
+                                parameter_weights = NULL,
+                                n_simulations_per_config = 10L,
+                                envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+                                PATHS = NULL,
+                                priors = NULL,
+                                sampling_args = list(),
+                                n_cases_warmup_mask = 2L,
+                                mask_final_deaths_step = FALSE,
+                                score_idx_cases = 1L,
+                                score_idx_deaths = 1L,
+                                parallel = FALSE,
+                                n_cores = NULL,
+                                root_dir = NULL,
+                                capture_trajectories = FALSE,
+                                trajectory_channels = .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT,
+                                trajectory_n_lines = 150L,
+                                trajectory_scratch_dir = NULL,
+                                reduce_trajectories = TRUE,
+                                deaths_integration = NULL,
+                                observation_model = NULL,
+                                verbose = TRUE) {
+  .mosaic_calc_model_ensemble(
+    config = config,
+    parameter_seeds = parameter_seeds,
+    configs = configs,
+    parameter_weights = parameter_weights,
+    n_simulations_per_config = n_simulations_per_config,
+    envelope_quantiles = envelope_quantiles,
+    PATHS = PATHS,
+    priors = priors,
+    sampling_args = sampling_args,
+    n_cases_warmup_mask = n_cases_warmup_mask,
+    mask_final_deaths_step = mask_final_deaths_step,
+    score_idx_cases = score_idx_cases,
+    score_idx_deaths = score_idx_deaths,
+    parallel = parallel,
+    n_cores = n_cores,
+    root_dir = root_dir,
+    capture_trajectories = capture_trajectories,
+    trajectory_channels = trajectory_channels,
+    trajectory_n_lines = trajectory_n_lines,
+    trajectory_scratch_dir = trajectory_scratch_dir,
+    reduce_trajectories = reduce_trajectories,
+    deaths_integration = deaths_integration,
+    observation_model = observation_model,
+    verbose = verbose)
+}
+
+#' The body of calc_model_ensemble(), with the run_MOSAIC()-only R_eff capture
+#'
+#' \code{calc_model_ensemble()} calls it with \code{capture_reff = FALSE};
+#' \code{run_MOSAIC()} calls it directly for the posterior ensemble.
+#' @inheritParams calc_model_ensemble
+#' @param capture_reff Logical. Harvest from each member the inputs of its
+#'   route-decomposed R_eff (route incidences, decay rates, initial stocks, an
+#'   exact checksum of its reported cases) and return them as
+#'   \code{$reff_capture}, so \code{add_reproductive_numbers(recompute_ci =
+#'   TRUE)} need not re-simulate the members (MOSAIC 1.5.0). When \code{FALSE}
+#'   the returned object has no \code{reff_capture} element, exactly as
+#'   before.
+#' @return As \code{calc_model_ensemble()}, plus \code{reff_capture} when
+#'   \code{capture_reff = TRUE}.
+#' @noRd
+.mosaic_calc_model_ensemble <- function(config,
                                 parameter_seeds = NULL,
                                 configs = NULL,
                                 parameter_weights = NULL,
@@ -1071,16 +1121,27 @@ calc_model_ensemble <- function(config,
     #
     # Seeds mode exports the base config, priors and seeds (.cfg_src) and each
     # worker rebuilds its task's config from its seed (MOSAIC 1.5.0). Exporting
-    # every sampled config instead serialised the whole list once per worker:
-    # 110 MB x 42 workers (4.6 GB) for a national 108-member ensemble, and
-    # 1.1 GB x 168 workers (~185 GB) for a continental one -- most of the
-    # post-calibration time and memory of those runs, against a rebuild of
-    # 4-80 ms per task. The rebuilt config is the same object
+    # every sampled config instead serialised the whole list once per worker.
+    # Measured on dugong under production load at 42 workers, that took 62 s
+    # for 108 national configs (110 MB, 4.6 GB sent) and 581 s for 108
+    # continental ones (1.26 GB, 53 GB sent) -- paid in both the CFR pilot and
+    # the ensemble, with every worker holding the copy -- against a rebuild of
+    # 8-150 ms per task. The rebuilt config is the same object
     # (sample_parameters() is a function of its seed). Direct mode
     # (`configs`) ships the configs as before.
     # .ens_sim_task is bound here, inside the namespace, so the worker-side
     # closure needs neither a MOSAIC::: prefix nor a namespace lookup.
     .ens_sim_task <- .mosaic_ensemble_sim_task
+    # sample_parameters() seeds with set.seed() under the caller's RNG kind, but
+    # a fresh PSOCK worker starts with the default kind: give the workers this
+    # session's, or a rebuilt config differs from the master's under any
+    # non-default RNGkind().
+    .set_kind <- function(kind) {
+      RNGkind(kind[1L], kind[2L], kind[3L])
+      invisible(NULL)
+    }
+    environment(.set_kind) <- .GlobalEnv
+    parallel::clusterCall(cl, .set_kind, RNGkind())
     .ens_cfg_src  <- if (.rebuild_on_worker) .cfg_src else NULL
     .ens_configs  <- if (.rebuild_on_worker) NULL else param_configs
     parallel::clusterExport(cl, c(".ens_configs", ".ens_cfg_src", ".ens_sim_task",
@@ -1144,11 +1205,15 @@ calc_model_ensemble <- function(config,
   # capture failed, keeps NA inputs and its error, as a re-simulation would.
   reff_capture <- NULL
   if (.capture_reff) {
+    # Kept compact for ensemble_candidate.rds: the decay rates delta_jt are a
+    # precomputed channel (a function of the config alone), so they are held
+    # once per parameter set and checked against every rerun; the route
+    # incidences, which are counts, are stored as integers (below).
     reff_capture <- list(
-      schema_version = 1L,
+      schema_version = 2L,
       inc_hum = array(NA_real_, dim = .ens_dim),
       inc_env = array(NA_real_, dim = .ens_dim),
-      delta   = array(NA_real_, dim = .ens_dim),
+      delta   = array(NA_real_, dim = c(n_locations, n_time_points, n_param_sets)),
       init    = array(NA_real_, dim = c(n_locations, 3L, n_param_sets, n_simulations_per_config)),
       cases_checksum = array(NA_real_, dim = c(3L, n_param_sets, n_simulations_per_config)),
       error   = matrix(NA_character_, n_param_sets, n_simulations_per_config),
@@ -1179,11 +1244,18 @@ calc_model_ensemble <- function(config,
         } else if (!is.null(rf$error)) {
           reff_capture$error[p, s] <- rf$error
         } else {
-          reff_capture$inc_hum[, , p, s] <- rf$inc_hum
-          reff_capture$inc_env[, , p, s] <- rf$inc_env
-          reff_capture$delta[, , p, s]   <- rf$delta
-          reff_capture$init[, , p, s]    <- rf$init
-          reff_capture$cases_checksum[, p, s] <- rf$cases_checksum
+          d_p <- reff_capture$delta[, , p]
+          if (all(is.na(d_p))) {
+            reff_capture$delta[, , p] <- rf$delta
+          } else if (!identical(as.numeric(d_p), as.numeric(rf$delta))) {
+            reff_capture$error[p, s] <- "delta_jt differs between the reruns of one parameter set"
+          }
+          if (is.na(reff_capture$error[p, s])) {
+            reff_capture$inc_hum[, , p, s] <- rf$inc_hum
+            reff_capture$inc_env[, , p, s] <- rf$inc_env
+            reff_capture$init[, , p, s]    <- rf$init
+            reff_capture$cases_checksum[, p, s] <- rf$cases_checksum
+          }
         }
       }
       if (obs_cases_on) {
@@ -1203,6 +1275,15 @@ calc_model_ensemble <- function(config,
         cases_obs_array[, , p, s] <- ob$cases
         if (obs_deaths_on) deaths_obs_array[, , p, s] <- ob$deaths
       }
+    }
+  }
+  if (.capture_reff) {
+    # Integer storage halves the incidence arrays on disk; converting back to
+    # double is exact, so the R_eff they give is unchanged.
+    for (nm in c("inc_hum", "inc_env")) {
+      v <- reff_capture[[nm]]
+      f <- v[!is.na(v)]
+      if (all(f == round(f)) && all(abs(f) < .Machine$integer.max)) storage.mode(reff_capture[[nm]]) <- "integer"
     }
   }
   if (n_no_expected > 0L)
@@ -1442,7 +1523,7 @@ calc_model_ensemble <- function(config,
   # Return mosaic_ensemble object
   # ===========================================================================
 
-  structure(
+  out <- structure(
     list(
       cases_mean                = cases_stats$mean,
       cases_median              = cases_stats$median,
@@ -1484,7 +1565,6 @@ calc_model_ensemble <- function(config,
                                        deaths = deaths_stats$predictive_median),
       cases_engine_array        = cases_engine_array,
       deaths_engine_array       = deaths_engine_array,
-      reff_capture              = reff_capture,
       observation_model         = list(
         cases       = obs_cases_on,
         deaths      = obs_deaths_on && n_with_expected > 0L,
@@ -1495,6 +1575,10 @@ calc_model_ensemble <- function(config,
     ),
     class = "mosaic_ensemble"
   )
+  # Only an ensemble that captured carries the element, so a capture-off object
+  # is structurally the 1.4.2 object.
+  if (.capture_reff) out$reff_capture <- reff_capture
+  out
 }
 
 #' Build the compact trajectory summary from the per-sim SCRATCH spill

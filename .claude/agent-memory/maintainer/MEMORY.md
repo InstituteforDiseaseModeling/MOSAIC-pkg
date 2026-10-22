@@ -58,3 +58,4 @@
 - [v1.3.0 reporting audit](project_v130_reporting_audit.md) — reporting sibling set + 3 downstream readers; 3 disagreeing verdicts; PASS≠fit; weight_retained still load-bearing
 - [v1.4.0 code red team](project_v140_code_redteam.md) — rolling-CV all-red trap, n_valid<2 no-status/no-JSON, eta*-NA false green, gate-vs-members split; rt_stub.R harness
 - [Deploy chain review checklist](deploy_chain_review_checklist.md) — deploy_v0103 traps: exit-0 post steps, live unpinned handoff, env knob leaks, stale RUNBOOK tags
+- [v1.5.0 post-cal review](project_v150_postcal_review.md) — SIGKILL resume harness, RNGkind worker-rebuild trap, reff_capture 3x RDS, HSIC behind plots (dashboard reads it)

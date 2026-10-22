@@ -99,51 +99,20 @@ test_that(".mosaic_restore_rng puts back the recorded stream, or none", {
   set.seed(1)
 })
 
-test_that("the test kill point escapes tryCatch(error = ) and is inert when unset", {
-  withr::local_envvar(MOSAIC_TEST_KILL_AT = "")
-  expect_null(MOSAIC:::.mosaic_test_kill_point("ensemble"))
-  withr::local_envvar(MOSAIC_TEST_KILL_AT = "ensemble")
-  expect_null(MOSAIC:::.mosaic_test_kill_point("batch_1"))
-  caught <- tryCatch(
-    tryCatch(MOSAIC:::.mosaic_test_kill_point("ensemble"), error = function(e) "absorbed"),
-    mosaic_test_kill = function(c) "killed")
-  expect_identical(caught, "killed")
-})
-
 # ---- captured R_eff inputs ---------------------------------------------------------
-
-# A deterministic two-location engine whose route incidences, decay rates and
-# stocks depend on the seed and on beta_j0_tot, so members differ.
-.reff_fake_engine <- function(config, seed = NULL, quiet = TRUE, ...) {
-  nL <- 2L; Tn <- 60L
-  s <- as.numeric(seed); b <- as.numeric(config$beta_j0_tot)[1]
-  tt <- matrix(rep(seq_len(Tn), each = nL), nL)
-  inc_h <- round(20 * (1 + sin(tt / 9 + s / 7 + b)) + 5)
-  inc_e <- round(10 * (1 + cos(tt / 11 + s / 5)) + 3)
-  rc <- round(0.3 * (inc_h + inc_e))
-  list(results = list(
-    incidence_human = inc_h, incidence_env = inc_e, incidence = inc_h + inc_e,
-    delta_jt = matrix(0.05 + 0.01 * (tt %% 7), nL), E = 2 * (inc_h + inc_e),
-    Isym = inc_h + 1, Iasym = inc_e + 1, reported_cases = rc,
-    reported_deaths = round(0.02 * rc), new_symptomatic = rc))
-}
-.reff_cfg <- function(seed) {
-  list(location_name = c("AAA", "BBB"), date_start = "2020-01-01", date_stop = "2020-02-29",
-       reported_cases = matrix(1, 2, 60), reported_deaths = matrix(0, 2, 60),
-       beta_j0_tot = (seed %% 13) / 10, iota = 1.4, gamma_1 = 0.2, gamma_2 = 0.5,
-       sigma = 0.25, zeta_1 = 1e6, zeta_2 = 1e5, seed = seed)
-}
 
 test_that("captured R_eff inputs give exactly the re-simulated R_eff", {
   testthat::local_mocked_bindings(
     run_simulation = .reff_fake_engine,
     sample_parameters = function(PATHS, priors, config, seed, ...) .reff_cfg(seed),
     .package = "MOSAIC")
-  ens <- calc_model_ensemble(config = .reff_cfg(1), parameter_seeds = c(11, 12, 13),
-                             parameter_weights = c(0.5, 0.3, 0.2), n_simulations_per_config = 2L,
-                             PATHS = list(), priors = list(), capture_reff = TRUE, verbose = FALSE)
+  ens <- MOSAIC:::.mosaic_calc_model_ensemble(
+    config = .reff_cfg(1), parameter_seeds = c(11, 12, 13), parameter_weights = c(0.5, 0.3, 0.2),
+    n_simulations_per_config = 2L, PATHS = list(), priors = list(), capture_reff = TRUE, verbose = FALSE)
   cap <- ens$reff_capture
   expect_identical(dim(cap$inc_hum), c(2L, 60L, 3L, 2L))
+  expect_identical(storage.mode(cap$inc_hum), "integer")      # counts, stored compactly
+  expect_identical(dim(cap$delta), c(2L, 60L, 3L))            # once per parameter set
   expect_true(all(is.na(cap$error)))
   expect_identical(colnames(cap$kernel_params), c("iota", "gamma_1", "gamma_2", "sigma", "zeta_1", "zeta_2"))
 
@@ -162,7 +131,29 @@ test_that("captured R_eff inputs give exactly the re-simulated R_eff", {
   bad <- ens; bad$reff_capture$cases_checksum[1, 2, 1] <- -1
   expect_error(run(bad), "do not match its saved engine-level cases")
   # The arrays go with the dense arrays when they are stripped for persistence.
-  expect_null(MOSAIC:::.mosaic_ensemble_drop_arrays(ens)$reff_capture)
+  expect_false("reff_capture" %in% names(MOSAIC:::.mosaic_ensemble_drop_arrays(ens)))
+})
+
+test_that("calc_model_ensemble() keeps the 1.4.2 signature and returns the 1.4.2 object", {
+  expect_identical(names(formals(calc_model_ensemble)), c(
+    "config", "parameter_seeds", "configs", "parameter_weights", "n_simulations_per_config",
+    "envelope_quantiles", "PATHS", "priors", "sampling_args", "n_cases_warmup_mask",
+    "mask_final_deaths_step", "score_idx_cases", "score_idx_deaths", "parallel", "n_cores",
+    "root_dir", "capture_trajectories", "trajectory_channels", "trajectory_n_lines",
+    "trajectory_scratch_dir", "reduce_trajectories", "deaths_integration", "observation_model",
+    "verbose"))
+  testthat::local_mocked_bindings(
+    run_simulation = .reff_fake_engine,
+    sample_parameters = function(PATHS, priors, config, seed, ...) .reff_cfg(seed),
+    .package = "MOSAIC")
+  # Made by MOSAIC 1.4.2 with the same call: claude/v150/fixture/make_ens_v142.R.
+  golden <- readRDS(test_path("fixtures", "ensemble_v142_mock.rds"))
+  ens <- calc_model_ensemble(config = .reff_cfg(1), parameter_seeds = c(11, 12, 13),
+                             parameter_weights = c(0.5, 0.3, 0.2), n_simulations_per_config = 2L,
+                             PATHS = list(), priors = list(), observation_model = list(k_cases = c(2, 5)),
+                             verbose = FALSE)
+  expect_identical(ens, golden)
+  expect_false("reff_capture" %in% names(ens))
 })
 
 test_that("a seeds-mode task rebuilt from its seed equals the task given its config", {
@@ -195,10 +186,10 @@ test_that("on the real engine the captured R_eff equals the re-simulated R_eff",
               "set MOSAIC_RUN_INTEGRATION=1 to run the real-engine R_eff capture check")
   local_test_root()
   inp <- .real_ensemble_inputs()
-  ens <- calc_model_ensemble(config = inp$config, parameter_seeds = c(101, 202, 303),
-                             parameter_weights = c(0.5, 0.3, 0.2), n_simulations_per_config = 2L,
-                             PATHS = inp$PATHS, priors = inp$priors, sampling_args = inp$sampling_args,
-                             capture_reff = TRUE, verbose = FALSE)
+  ens <- MOSAIC:::.mosaic_calc_model_ensemble(
+    config = inp$config, parameter_seeds = c(101, 202, 303), parameter_weights = c(0.5, 0.3, 0.2),
+    n_simulations_per_config = 2L, PATHS = inp$PATHS, priors = inp$priors,
+    sampling_args = inp$sampling_args, capture_reff = TRUE, verbose = FALSE)
   run <- function(e) MOSAIC:::.mosaic_reff_resim_ci(
     e, base_config = inp$config, priors = inp$priors, sampling_args = inp$sampling_args,
     PATHS = inp$PATHS, burn_in_days = 30L, verbose = FALSE)
@@ -226,10 +217,17 @@ test_that("a parallel seeds-mode ensemble (configs rebuilt on the workers) equal
   args <- list(config = inp$config, parameter_seeds = c(101, 202, 303), parameter_weights = c(0.5, 0.3, 0.2),
                n_simulations_per_config = 2L, PATHS = inp$PATHS, priors = inp$priors,
                sampling_args = inp$sampling_args, capture_reff = TRUE, verbose = FALSE)
-  seq_e <- do.call(calc_model_ensemble, args)
-  par_e <- do.call(calc_model_ensemble, c(args, list(parallel = TRUE, n_cores = 2L,
-                                                     root_dir = getOption("root_directory"))))
-  for (k in c("cases_engine_array", "deaths_engine_array", "cases_median", "deaths_mean", "seeds",
-              "reff_capture", "spatial_hazard_ensemble"))
-    expect_identical(par_e[[k]], seq_e[[k]], info = k)
+  keys <- c("cases_engine_array", "deaths_engine_array", "cases_median", "deaths_mean", "seeds",
+            "reff_capture", "spatial_hazard_ensemble")
+  # Under the default RNG kind and under a non-default one: sample_parameters()
+  # seeds with the session's kind, which the workers must share.
+  for (kind in c("Mersenne-Twister", "L'Ecuyer-CMRG")) {
+    old <- RNGkind(kind)
+    on.exit(RNGkind(old[1], old[2], old[3]), add = TRUE)
+    seq_e <- do.call(MOSAIC:::.mosaic_calc_model_ensemble, args)
+    par_e <- do.call(MOSAIC:::.mosaic_calc_model_ensemble,
+                     c(args, list(parallel = TRUE, n_cores = 2L, root_dir = getOption("root_directory"))))
+    for (k in keys) expect_identical(par_e[[k]], seq_e[[k]], info = paste(kind, k))
+    RNGkind(old[1], old[2], old[3])
+  }
 })

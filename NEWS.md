@@ -1,33 +1,35 @@
 # MOSAIC 1.5.0
 
-Post-calibration robustness and speed. Posteriors, ensembles, medoids and R_eff values are unchanged (bit-identical in the stub, real-engine and golden tests).
+Post-calibration robustness and speed. Posteriors, ensembles, medoids and R_eff values are unchanged (bit-identical in the stub, real-engine and golden tests), and the exported API keeps its 1.4.2 signatures.
 
-- **Post-calibration resume.** After sampling, `run_MOSAIC()` combines the shards into `2_calibration/samples.parquet`, then writes `2_calibration/state/sampling_complete.rds`, and only then deletes the shards. The marker records the calibration state, the shard columns, the draws' ids and likelihoods, and the global RNG state.
-  - A run killed later (CFR pilot, ensembles, trajectories, in-run figures) resumes with `resume = TRUE`. Sampling is skipped and no calibration cluster is started. Post-calibration restarts from `samples.parquet`, verified against the marker, with the combine-time flags recomputed and the RNG state restored. The posteriors, ensembles and medoid equal an uninterrupted run's, given the same control.
+- **Post-calibration resume.** After sampling, `run_MOSAIC()` combines the shards into `2_calibration/samples.parquet`, then writes `2_calibration/state/sampling_complete.rds` (atomically), and only then deletes the shards. The marker records the calibration state, the shard columns, the draws' ids and likelihoods, and the global RNG state.
+  - A run killed later (CFR pilot, ensembles, trajectories, in-run figures) resumes with `resume = TRUE`. Sampling is skipped and no calibration cluster is started. Post-calibration restarts from `samples.parquet`, verified against the marker, with the combine-time flags recomputed and the RNG state restored. The posteriors, ensembles and medoid equal an uninterrupted run's, given the same control. This was verified with real SIGKILLs at the CFR pilot, the candidate ensemble, the medoid and before the marker.
   - Before 1.5.0 such a run had to resample: 20.6 h of continental sampling was lost twice in v2026-10.04.
-  - Resuming a completed run (`3_results/summary.json` present) is a no-op. It logs a message, leaves the directory untouched and returns the recorded counts and status. A directory without a marker (pre-1.5.0) keeps the old refusal, now with a clear message when the run is complete.
-  - A fresh run (`resume = FALSE`) deletes any earlier marker before it samples. A resumed post-calibration also clears trajectory scratch that a killed session left behind.
-  - The resume needs no extra disk: the shards are deleted as before.
+  - Resuming a completed run (`3_results/summary.json` present) is a no-op. It logs a message, leaves the directory untouched and returns the recorded counts and status. If the run was killed after `summary.json` but before `run_state.json` was finalized, the resume finalizes it (the `[RUN_SUMMARY]` line, `run_state.json` and `_README.md`).
+  - A directory without a marker (pre-1.5.0) keeps the old refusal, now with a clear message when the run is complete. A fresh run (`resume = FALSE`) deletes any earlier marker before it samples. The resume needs no extra disk.
   - Deploy runners must call `run_MOSAIC(resume = TRUE)` without `clean_output` when `samples.parquet` exists but `summary.json` does not, instead of exiting.
-  - Tests interrupt a run with the environment variable `MOSAIC_TEST_KILL_AT` (`.mosaic_test_kill_point()`, points `"ensemble"` and `"batch_<n>"`). It signals a non-error condition that no `tryCatch(error = )` absorbs.
-- **Parameter sensitivity moved to the figure layer, and chunked.**
-  - `run_MOSAIC()` no longer computes HSIC. The `"sensitivity"` group of `render_MOSAIC_figures()` computes it (on its fixed seed) and writes `parameter_sensitivity.csv` with the figure. Nothing in `run_MOSAIC()`, `summary.json` or `calibration_diagnostics.json` read the table. Its readers are its figure and, from the run directory, the dashboard.
-  - `plots = TRUE` still writes the CSV and the plot in the same run. With `plots = FALSE` they come from a later `render_MOSAIC_figures()` call, for example the deploy chain's post pass.
+- **Parameter sensitivity: chunked, still in every run.**
   - `calc_model_parameter_sensitivity()` works a chunk of parameters at a time, with at most 1 GiB of Gram matrices (`.mosaic_hsic_chunks()`). The indices and asymptotic p-values are identical to the single call's. Permutation p-values become a different Monte Carlo draw per chunk.
-  - Synthetic test, 900 parameters at n = 2,000: peak memory fell from 51.6 GB to 3.7 GB and the table is identical. In interleaved timing at 300 parameters the chunked call took 1.13x as long (117 s against 103 s). A 256 MiB budget held 1.9 GB but took 1.5x as long.
-- **No R_eff replay.** With `control$io$persist_ensemble_arrays = TRUE`, the candidate ensemble captures each member's R_eff inputs from its own simulation: route incidences, decay rates, initial stocks, and an exact checksum of its reported cases.
-  - The new `calc_model_ensemble(capture_reff = )` argument does this, returning `$reff_capture`. The inputs are saved in `ensemble_candidate.rds` and stripped with the arrays otherwise.
-  - `add_reproductive_numbers(recompute_ci = TRUE)` then computes the CI from them, in this process or a later one, with no re-simulation. Each member's inputs are verified against its saved cases by the checksum. It builds a cluster only for at least 5,000 location-members.
-  - The values are bit-identical to the re-simulation's, on the real engine for MOZ, 108 x 5 members. Only the provenance attributes (`ci_source = "weighted_quantiles_captured"`, `config_source`, `caveat`) differ.
+  - Synthetic test on dugong, 900 parameters at n = 2,000: peak memory fell from 51.6 GB to 3.7 GB and the table is identical. In interleaved timing at 300 parameters the chunked call took 1.13x as long (117 s against 103 s). A 256 MiB budget held 1.9 GB but took 1.5x as long.
+  - `run_MOSAIC()` still computes it whatever `plots` is, because the dashboard reads the table. `parameter_sensitivity.csv` is now written atomically. `render_MOSAIC_figures()` plots it and recomputes it only when the CSV is missing (directories made before the table existed).
+- **No R_eff replay.** With `control$io$persist_ensemble_arrays = TRUE`, `run_MOSAIC()`'s posterior ensemble captures each member's R_eff inputs from its own simulation: route incidences, decay rates, initial stocks, and an exact checksum of its reported cases.
+  - The capture runs through the internal `.mosaic_calc_model_ensemble(capture_reff = TRUE)`, which `run_MOSAIC()` alone calls. The exported `calc_model_ensemble()` keeps the 1.4.2 signature, and its object is `identical()` to 1.4.2's (test against a 1.4.2 fixture).
+  - The inputs are stored only in `ensemble_candidate.rds`. They are stripped from `ensemble_optimized.rds` and from the live object after that save. They are kept compact: incidences as integers, and the decay rates once per parameter set.
+  - Size cost: on a 2-location real run (80 draws, 2 reruns per member), `ensemble_candidate.rds` is 3.6 MB against 1.4.2's 1.6 MB (2.3x; the first 1.5.0 draft was 3.1x and also doubled `ensemble_optimized.rds`). `ensemble_optimized.rds` is unchanged. The cost is paid only with `persist_ensemble_arrays = TRUE`.
+  - `add_reproductive_numbers(recompute_ci = TRUE)` then computes the CI from them, in this process or a later one (the deploy chain's deferred `SKIP_REFF` post pass), with no re-simulation. Each member's inputs are verified against its saved cases by the checksum. It builds a cluster only for at least 5,000 location-members.
+  - The values are bit-identical to the re-simulation's (real engine). Only the provenance attributes (`ci_source = "weighted_quantiles_captured"`, `config_source`, `caveat`) differ.
   - An ensemble saved without the capture (any run before 1.5.0) is re-simulated as before.
 - **No config broadcast.** In seeds mode `calc_model_ensemble()`'s PSOCK workers rebuild each task's config from its seed (`.mosaic_ensemble_member_config()`, the master's recipe) instead of receiving every sampled config.
-  - The old `clusterExport` serialised the whole list once per worker. Measured on dugong under production load, that took 62 s to send 108 national configs to 42 workers and 581 s to send 108 continental configs (11.7 MB each) to 42 workers. It was paid once in the CFR pilot and again in the ensemble, and every worker held the copy.
-  - The rebuild costs 8 ms per national task and 150 ms per continental task. Direct mode (`configs = `, the medoid) is unchanged.
+  - The old `clusterExport` serialised the whole list once per worker. Measured on dugong under production load at 42 workers, that took 62 s for 108 national configs and 581 s for 108 continental configs (11.7 MB each). It was paid once in the CFR pilot and again in the ensemble.
+  - The rebuild costs 8 ms per national task and 150 ms per continental task.
+  - Workers are given the session's `RNGkind()`, which `sample_parameters()`' `set.seed()` uses. Under `L'Ecuyer-CMRG` the parallel ensemble equals the sequential one and 1.4.2's. The R_eff re-simulation fallback's workers get it too.
+  - Direct mode (`configs = `, the medoid) is unchanged.
 - **Measured** on the laptop with interleaved paired runs: MOZ national, 300 draws, 108 members x 5 reruns, 8 workers, 5 clean blocks.
   - Post-calibration inside `run_MOSAIC()`: median -1 s (range -15 to +5).
   - R_eff step: 53-59 s down to 7.4 s, median -49 s.
   - Post-calibration + R_eff together: 0.68x (0.61-0.74).
-  - From these per-member costs, a production national job saves about 2.5 min (the two 62 s broadcasts and about 0.45 min of R_eff). A continental job saves most of the 49 min CFR pilot + ensemble, which is broadcast-bound, and about 7 of the 8.6 R_eff minutes. Its HSIC step (about 16 min, 67 GB at Kenya scale) moves to the figure step at about 4 GB.
+  - From these per-member costs, a production national job saves about 2.5 min (the two 62 s broadcasts and about 0.45 min of R_eff). A continental job saves most of the 49 min CFR pilot + ensemble, which is broadcast-bound, and about 7 of the 8.6 R_eff minutes. These job-level savings are projections, not end-to-end measurements.
+- R CMD check on a clean export: 1 NOTE, the same as main (`:::` calls to the package's own namespace).
 
 # MOSAIC 1.4.2
 
