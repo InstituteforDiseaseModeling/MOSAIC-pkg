@@ -123,12 +123,17 @@ test_that("a fixed run's outputs are consistent and pruned (D7, D13, P10, P13, R
   expect_true("priors_metadata" %in% names(post$metadata))
   expect_null(post$metadata$version)
   expect_false(is.null(post$metadata$priors_metadata$version))
-  # C12: no partial edge week in fit.weekly
-  wk <- do.call(rbind, lapply(cd$fit$weekly, function(r) data.frame(loc = r$location, met = r$metric,
-                                                                    week = as.Date(r$week))))
-  first <- tapply(wk$week, paste(wk$loc, wk$met), min)
+  # C12: no partial week in fit.weekly. Since 1.5.1 it holds every complete week
+  # of the window; weeks touching the burn-in carry no model values and are
+  # not scored.
+  wk <- do.call(rbind, lapply(cd$fit$weekly, function(r) data.frame(
+    loc = r$location, met = r$metric, week = as.Date(r$week), scored = isTRUE(r$scored),
+    modelled = !is.null(r$predicted))))
+  expect_true(all(wk$week >= as.Date(cd$run$date_start) & wk$week + 6 <= as.Date(cd$run$date_stop)))
   start_scored <- as.Date(cd$run$date_start) + cd$run$burn_in_days
+  first <- tapply(wk$week[wk$modelled | wk$scored], paste(wk$loc, wk$met)[wk$modelled | wk$scored], min)
   expect_true(all(as.Date(first, origin = "1970-01-01") >= start_scored))
+  expect_false(any(wk$scored & wk$week < start_scored))
   # R9: run log
   log <- readLines(file.path(d, "run.log"))
   rs_line <- grep("[RUN_SUMMARY]", log, fixed = TRUE, value = TRUE)

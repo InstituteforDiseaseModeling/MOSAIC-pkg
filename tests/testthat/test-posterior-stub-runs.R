@@ -165,26 +165,32 @@ test_that("the default best-fit ensemble runs end to end, coherent, schema 2 (fi
 
   # calibration_diagnostics.json (written with plots = FALSE), SCHEMA_v2 section 2
   cd <- jsonlite::read_json(file.path(d, "3_results", "calibration_diagnostics.json"))
-  expect_identical(names(cd), c("schema_version", "run", "status", "sampling", "parameters",
-                                "mce_summary", "kl_summary", "fit", "likelihood_concentration"))
+  expect_identical(names(cd), c("schema_version", "schema_revision", "run", "status", "sampling", "info",
+                                "parameters", "mce_summary", "kl_summary", "fit", "likelihood_concentration"))
+  expect_identical(cd$schema_revision, "1.5.1")
   expect_true(all(c("mosaic_version", "locations", "n_locations", "mode", "posterior_weighting",
                     "coarsening_alpha", "eta", "n_obs_scored", "burn_in_days", "n_iterations",
                     "n_iter_ensemble", "date_start", "date_stop") %in% names(cd$run)))
   expect_identical(unlist(cd$run$locations), "MOZ")
   expect_true(all(c("convergence_status", "convergence_label", "reasons", "flags", "flags_text",
-                    "stopping_rule_met", "checks") %in% names(cd$status)))
+                    "flags_detail", "stopping_rule_met", "checks", "thresholds", "headline_display",
+                    "palette") %in% names(cd$status)))
+  expect_true(all(c("max_simulations_total", "min_ensemble_members", "max_ensemble_members",
+                    "central_method", "glossary_version") %in% names(cd$run)))
   expect_identical(cd$status$convergence_status, sm$convergence_status)
   expect_identical(cd$status$flags_text, sm$convergence_flags_text)
   expect_null(cd$status$stopping_rule_met)
   expect_identical(vapply(cd$status$checks, function(x) x$check, ""), c("ess", "mce", "khat", "informativeness"))
   expect_identical(names(cd$status$checks[[1]]),
-                   c("check", "label", "value", "threshold_green", "threshold_yellow", "colour", "reason"))
+                   c("check", "label", "value", "threshold_green", "threshold_yellow", "colour", "reason",
+                     "key", "operator", "operator_yellow", "value_display", "threshold_green_display",
+                     "threshold_yellow_display", "target_display", "target_note", "status_display"))
   samp <- c("n_locations", "alpha_per_location", "ess_untempered_frac", "sims_projected_for_green",
             "projection_reliable", "ess_all", "ess_all_target", "ess_best", "ess_best_target", "best_subset_ratio",
             "best_subset_mass", "ensemble_members", "ensemble_members_unique", "ensemble_binding",
             "khat_tempered", "khat_status", "eta_star", "eta_star_n_eff", "flat_likelihood",
             "ess_growth_slope", "sims_used", "sims_projected_for_target", "budget_exhausted",
-            "ess_path", "loglik_path")
+            "ess_path", "loglik_path", "details_display")
   expect_identical(names(cd$sampling), samp)
   expect_lte(length(cd$sampling$ess_path), 60L)
   expect_identical(names(cd$sampling$ess_path[[1]]), c("n", "ess_all"))
@@ -196,7 +202,9 @@ test_that("the default best-fit ensemble runs end to end, coherent, schema 2 (fi
                     c("largely prior", "partly informed", "data-informed", NA)))
   expect_equal(cd$mce_summary$p90, sm$mce_p90, tolerance = 1e-3)   # 4 significant digits in the JSON
   expect_identical(unlist(cd$kl_summary$band_edges), c(0.05, 0.5))
-  expect_identical(names(cd$fit), c("table", "per_location", "weekly"))
+  expect_identical(names(cd$fit), c("table", "per_location", "weekly", "weekly_meta", "table_display"))
+  expect_identical(cd$fit$weekly_meta$source, "trajectories")
+  expect_identical(names(cd$info), c("ess_growth", "budget", "ensemble_size"))
   expect_identical(vapply(cd$fit$table, function(x) x$metric, ""), c("cases", "deaths"))
   # D8: the primary rows use every scored day, as summary.json does (the stub
   # config carries no tier, so there is no tier 1-2 row)
@@ -205,7 +213,7 @@ test_that("the default best-fit ensemble runs end to end, coherent, schema 2 (fi
   expect_equal(cd$fit$table[[1]]$bias, sm$bias_ratio_cases_ensemble, tolerance = 1e-3)
   expect_equal(cd$fit$table[[2]]$bias, sm$bias_ratio_deaths_ensemble, tolerance = 1e-3)
   expect_identical(names(cd$fit$weekly[[1]]),
-                   c("location", "metric", "week", "observed", "predicted", "lo50", "hi50", "lo95", "hi95"))
+                   c("location", "metric", "week", "scored", "observed", "predicted", "lo50", "hi50", "lo95", "hi95"))
   expect_identical(weekdays(as.Date(cd$fit$weekly[[1]]$week)), weekdays(as.Date("2026-10-19")))  # Monday
 
   # the report re-renders from the JSON of this real run (plots = FALSE wrote none)

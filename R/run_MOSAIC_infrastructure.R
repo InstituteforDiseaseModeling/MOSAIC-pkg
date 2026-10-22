@@ -1070,37 +1070,36 @@
 #' central line, the 50 and 95 percent interval coverage and the weighted
 #' interval score (Bracher et al. 2021, median and the two intervals; in
 #' reported counts per location-day); per location and channel, R-squared,
-#' bias, 95 percent coverage and the observed total; and the weekly
-#' (Monday-start) totals over the scored days of the observations, the
-#' engine-level central line and the observation-level 50 and 95 percent
-#' interval bounds.
+#' bias, 95 percent coverage and the observed total; and the weekly series of
+#' \code{.mosaic_calibration_weekly()}.
 #'
 #' The primary table rows (\code{subset = "scored"}) use every scored day, the
 #' definition of summary.json's \code{r2_*_ensemble} / \code{bias_ratio_*} fields,
 #' so the report and the summary agree (red team round 1, D8). When the config
 #' carries a surveillance tier (\code{config$reported_tier}: 1 observed, 2
 #' reconstructed, 3 imputed), a second row per channel (\code{subset =
-#' "tier12"}) restricts them to tier-1/2 days. A week whose scored days at the
-#' start or end of a series are fewer than seven (a partial edge week) is left
-#' out of \code{weekly}, so a total is never compared over a short week (C12).
+#' "tier12"}) restricts them to tier-1/2 days.
 #'
 #' @param pt Prediction table (\code{location}, \code{date}, \code{metric},
 #'   \code{observed}, \code{predicted_central}, \code{predicted_median},
 #'   \code{ci_<k>_lower/upper}), or NULL.
 #' @param config Model config (\code{reported_tier}, \code{location_name},
 #'   \code{date_start}).
-#' @return \code{list(table, per_location, weekly)} of data frames (zero rows
-#'   when there is nothing to score).
+#' @param ensemble The \code{mosaic_ensemble} the table was assembled from, or
+#'   NULL (see \code{.mosaic_calibration_weekly()}).
+#' @param central_method Per-channel central method, or NULL to read it from
+#'   the table.
+#' @return \code{list(table, per_location, weekly, weekly_meta)} (data frames
+#'   with zero rows when there is nothing to score).
 #' @noRd
-.mosaic_calibration_fit <- function(pt, config) {
+.mosaic_calibration_fit <- function(pt, config, ensemble = NULL, central_method = NULL) {
+  wk <- .mosaic_calibration_weekly(pt, ensemble = ensemble, central_method = central_method)
   empty <- list(
     table = data.frame(metric = character(0), subset = character(0), r2 = numeric(0), bias = numeric(0),
                        cov50 = numeric(0), cov95 = numeric(0), wis = numeric(0), n_scored = integer(0)),
     per_location = data.frame(location = character(0), metric = character(0), r2 = numeric(0),
                               bias = numeric(0), cov95 = numeric(0), observed_total = numeric(0)),
-    weekly = data.frame(location = character(0), metric = character(0), week = character(0),
-                        observed = numeric(0), predicted = numeric(0), lo50 = numeric(0),
-                        hi50 = numeric(0), lo95 = numeric(0), hi95 = numeric(0)))
+    weekly = wk$weekly, weekly_meta = wk$meta)
   if (is.null(pt) || !nrow(pt)) return(empty)
   pt <- as.data.frame(pt)
   pt$date <- as.Date(pt$date)
@@ -1120,14 +1119,8 @@
     pt$tier[ok] <- as.integer(tier[cbind(l_idx[ok], t_idx[ok])])
   }
 
-  ci <- grep("^ci_[0-9]+_lower$", names(pt), value = TRUE)
-  k <- sub("^ci_([0-9]+)_lower$", "\\1", ci)
-  width <- vapply(k, function(i) mean(pt[[paste0("ci_", i, "_upper")]] - pt[[paste0("ci_", i, "_lower")]],
-                                      na.rm = TRUE), numeric(1))
-  ord <- k[order(-width)]
-  pick <- function(pos, side) if (length(ord) >= pos) pt[[paste0("ci_", ord[pos], "_", side)]] else rep(NA_real_, nrow(pt))
-  pt$lo95 <- pick(1L, "lower"); pt$hi95 <- pick(1L, "upper")
-  pt$lo50 <- pick(2L, "lower"); pt$hi50 <- pick(2L, "upper")
+  bands <- .mosaic_prediction_bands(pt)
+  pt[names(bands)] <- bands
 
   sc <- pt[is.finite(pt$observed) & is.finite(pt$predicted_central), , drop = FALSE]
   if (!nrow(sc)) return(empty)
@@ -1157,25 +1150,178 @@
     data.frame(location = x$location[1], metric = x$metric[1], r2 = r2(x$observed, x$predicted_central),
                bias = bias(x$observed, x$predicted_central), cov95 = cover(x$observed, x$lo95, x$hi95),
                observed_total = sum(x$observed))))
-  # Weekly totals over the scored days; an interval bound is summed only when
-  # it is finite on every scored day of the week (else null). Partial weeks at
-  # either edge of a location-channel series are dropped.
-  sc$week <- sc$date - (as.integer(format(sc$date, "%u")) - 1L)
-  wsum <- function(x) if (all(is.finite(x))) sum(x) else NA_real_
-  by <- list(location = sc$location, metric = sc$metric, week = sc$week)
-  wk <- stats::aggregate(cbind(observed = sc$observed, predicted = sc$predicted_central,
-                               lo50 = sc$lo50, hi50 = sc$hi50, lo95 = sc$lo95, hi95 = sc$hi95),
-                         by = by, FUN = wsum)
-  nd <- stats::aggregate(list(n_days = rep(1L, nrow(sc))), by = by, FUN = sum)
-  wk <- merge(wk, nd, by = c("location", "metric", "week"))
-  wk <- wk[order(wk$location, wk$metric, wk$week), , drop = FALSE]
-  grp <- paste(wk$location, wk$metric)
-  first <- !duplicated(grp); last <- !duplicated(grp, fromLast = TRUE)
-  wk <- wk[!((first | last) & wk$n_days < 7L), setdiff(names(wk), "n_days"), drop = FALSE]
-  wk$week <- format(wk$week, "%Y-%m-%d")
-  rownames(tab) <- rownames(per_loc) <- rownames(wk) <- NULL
+  rownames(tab) <- rownames(per_loc) <- NULL
   list(table = tab %||% empty$table, per_location = per_loc[order(per_loc$location, per_loc$metric), , drop = FALSE],
-       weekly = wk)
+       weekly = wk$weekly, weekly_meta = wk$meta)
+}
+
+#' The 95 and 50 percent interval bounds of a prediction table
+#'
+#' The widest \code{ci_<k>} pair is the 95 percent interval and the next the 50
+#' percent interval (the run's envelope \code{c(0.025, 0.25, 0.75, 0.975)}).
+#' @param pt Prediction table.
+#' @return \code{list(lo95, hi95, lo50, hi50)}, \code{NA} where absent.
+#' @noRd
+.mosaic_prediction_bands <- function(pt) {
+  ci <- grep("^ci_[0-9]+_lower$", names(pt), value = TRUE)
+  k <- sub("^ci_([0-9]+)_lower$", "\\1", ci)
+  width <- vapply(k, function(i) {
+    w <- suppressWarnings(mean(pt[[paste0("ci_", i, "_upper")]] - pt[[paste0("ci_", i, "_lower")]], na.rm = TRUE))
+    if (is.finite(w)) w else -Inf
+  }, numeric(1))
+  ord <- k[order(-width)]
+  pick <- function(pos, side) if (length(ord) >= pos) as.numeric(pt[[paste0("ci_", ord[pos], "_", side)]])
+                              else rep(NA_real_, nrow(pt))
+  list(lo95 = pick(1L, "lower"), hi95 = pick(1L, "upper"), lo50 = pick(2L, "lower"), hi50 = pick(2L, "upper"))
+}
+
+#' Weekly series of the ensemble: every complete week, from weekly-summed trajectories
+#'
+#' One row per complete Monday-to-Sunday week of each location-channel series
+#' of the prediction table (a week is complete when all seven of its days are
+#' in the table, so the partial weeks at either end of the window are left
+#' out). Per week:
+#' \itemize{
+#'   \item \code{scored}: all seven days are scored (a finite observation and a
+#'     finite central line, the days the fit table scores), and
+#'     \code{observed} is their total; otherwise \code{observed} is null, so an
+#'     observed total is never compared over a short week.
+#'   \item \code{predicted}, \code{lo50}, \code{hi50}, \code{lo95},
+#'     \code{hi95}: null when any of the seven days is in the channel's
+#'     unscored head (the burn-in, where the table's central line is
+#'     \code{NA}). Otherwise, from the member trajectories: each member x
+#'     stochastic run's daily series \eqn{x_{r,t}} is summed to the week,
+#'     \eqn{X_{r,w} = \sum_{t \in w} x_{r,t}}, and the trajectories are
+#'     weighted \eqn{v_r = w_p / S} (member \eqn{p}'s normalised weight shared
+#'     by its \eqn{S} runs; a trajectory with a missing day that week is left
+#'     out and the rest renormalised, as for the daily summaries). The central
+#'     line is the weighted median (\code{central_method = "median"}) or
+#'     weighted mean (\code{"mean"}) of the ENGINE-level weekly totals, the
+#'     daily central-line convention; the bounds are the weighted 2.5, 25, 75
+#'     and 97.5 percent quantiles (\code{weighted_quantiles()}) of the
+#'     OBSERVATION-level weekly totals (\code{cases_array} /
+#'     \code{deaths_array}), the draws the daily intervals come from.
+#' }
+#' Summing daily medians or daily quantile bounds instead makes the line hug
+#' zero (the daily median is 0 on most days of a sparse series) and the bands
+#' blocky; the trajectory sums do neither.
+#'
+#' When \code{ensemble} lacks its arrays (a run that did not persist them,
+#' re-rendered later), the model values are the weekly sums of the table's
+#' daily central line and bounds, and \code{meta$source} says so
+#' (\code{"daily_sums"}).
+#' @param pt Prediction table, or NULL.
+#' @param ensemble \code{mosaic_ensemble} with \code{cases_array},
+#'   \code{deaths_array} and the engine arrays, or NULL.
+#' @param central_method Per-channel central method; NULL reads the table's
+#'   \code{central_method} column (else the package default).
+#' @return \code{list(weekly, meta)}: \code{weekly} with columns
+#'   \code{location, metric, week} (ISO date of the Monday), \code{scored,
+#'   observed, predicted, lo50, hi50, lo95, hi95}; \code{meta} with
+#'   \code{source} (\code{"trajectories"}, \code{"daily_sums"} or
+#'   \code{"none"}), \code{central_method}, \code{intervals} per channel
+#'   (\code{"observation"} or \code{"engine"}), \code{quantiles} and
+#'   \code{week_start}.
+#' @noRd
+.mosaic_calibration_weekly <- function(pt, ensemble = NULL, central_method = NULL) {
+  probs <- c(0.025, 0.25, 0.75, 0.975)
+  empty <- data.frame(location = character(0), metric = character(0), week = character(0), scored = logical(0),
+                      observed = numeric(0), predicted = numeric(0), lo50 = numeric(0), hi50 = numeric(0),
+                      lo95 = numeric(0), hi95 = numeric(0), stringsAsFactors = FALSE)
+  meta <- function(source, cm = .mosaic_resolve_central_method(NULL), intervals = c(cases = NA, deaths = NA))
+    list(source = source, central_method = as.list(cm), intervals = as.list(intervals),
+         quantiles = probs, week_start = "Monday")
+  if (is.null(pt) || !nrow(pt)) return(list(weekly = empty, meta = meta("none")))
+  pt <- as.data.frame(pt)
+  pt$date <- as.Date(pt$date)
+  pt$metric <- ifelse(grepl("death", as.character(pt$metric), ignore.case = TRUE), "deaths", "cases")
+  if (is.null(central_method)) {
+    cm_col <- if ("central_method" %in% names(pt)) {
+      v <- vapply(c("cases", "deaths"), function(m) {
+        x <- unique(as.character(pt$central_method[pt$metric == m]))
+        x <- x[!is.na(x) & x %in% c("mean", "median")]
+        if (length(x)) x[1] else NA_character_
+      }, character(1))
+      as.list(v[!is.na(v)])
+    } else NULL
+    central_method <- if (length(cm_col)) unlist(cm_col) else NULL
+  }
+  cm <- .mosaic_resolve_central_method(central_method)
+  bands <- .mosaic_prediction_bands(pt)
+  pt[names(bands)] <- bands
+  pt <- pt[order(pt$location, pt$metric, pt$date), , drop = FALSE]
+  pt$week <- pt$date - (as.integer(format(pt$date, "%u")) - 1L)
+  has_model <- is.finite(pt$predicted_central)
+  scored_day <- has_model & is.finite(pt$observed)
+  key <- paste(pt$location, pt$metric, format(pt$week), sep = "\r")
+  g <- match(key, unique(key))
+  first <- !duplicated(g)
+  n_days <- tabulate(g)
+  sumg <- function(x) as.vector(rowsum(as.numeric(x), g, reorder = FALSE))
+  n_model <- sumg(has_model); n_scored <- sumg(scored_day)
+  obs_sum <- sumg(ifelse(scored_day, pt$observed, 0))
+  wk <- data.frame(location = as.character(pt$location[first]), metric = pt$metric[first], week = pt$week[first],
+                   scored = n_scored == 7L, observed = ifelse(n_scored == 7L, obs_sum, NA_real_),
+                   predicted = NA_real_, lo50 = NA_real_, hi50 = NA_real_, lo95 = NA_real_, hi95 = NA_real_,
+                   stringsAsFactors = FALSE)
+  model_wk <- n_model == 7L
+  complete <- n_days == 7L
+  # Is every channel's ensemble array there (engine and observation level)?
+  arrays <- !is.null(ensemble) && all(vapply(c("cases", "deaths"), function(ch) {
+    e <- .mosaic_engine_array(ensemble, ch); o <- ensemble[[paste0(ch, "_array")]]
+    !is.null(e) && !is.null(o) && length(dim(e)) == 4L && identical(dim(e), dim(o))
+  }, logical(1)))
+  if (arrays) {
+    dims <- dim(ensemble$cases_array)
+    n_t <- dims[2]; S <- dims[4]
+    w <- as.numeric(ensemble$parameter_weights)
+    if (length(w) != dims[3] || !any(is.finite(w) & w > 0)) arrays <- FALSE
+  }
+  if (arrays) {
+    w <- w / sum(w[is.finite(w)])
+    sw <- rep(w, times = S) / S        # param-fastest, as as.vector(arr[l, t, , ])
+    ens_dates <- seq(as.Date(ensemble$date_start), as.Date(ensemble$date_stop), length.out = ensemble$n_time_points)
+    t_of <- match(pt$date, ens_dates)
+    l_of <- match(as.character(pt$location), as.character(ensemble$location_names))
+    rows_of <- split(seq_len(nrow(pt)), g)
+    for (grp in split(which(model_wk & complete), paste(wk$location, wk$metric)[model_wk & complete])) {
+      ch <- wk$metric[grp[1]]
+      l <- l_of[rows_of[[grp[1]]][1]]
+      if (is.na(l)) next
+      days <- unlist(rows_of[grp], use.names = FALSE)
+      t_idx <- t_of[days]
+      if (anyNA(t_idx)) next
+      grp_id <- rep(seq_along(grp), each = 7L)
+      flat <- function(arr) { m <- arr[l, , , , drop = FALSE]; dim(m) <- c(n_t, dims[3] * S); m }
+      tot_e <- rowsum(flat(.mosaic_engine_array(ensemble, ch))[t_idx, , drop = FALSE], grp_id, reorder = FALSE)
+      tot_o <- rowsum(flat(ensemble[[paste0(ch, "_array")]])[t_idx, , drop = FALSE], grp_id, reorder = FALSE)
+      for (k in seq_along(grp)) {
+        ve <- tot_e[k, ]
+        wk$predicted[grp[k]] <- if (cm[[ch]] == "mean") {
+          ok <- is.finite(ve) & sw > 0
+          if (any(ok)) sum(ve[ok] * sw[ok]) / sum(sw[ok]) else NA_real_
+        } else weighted_quantiles(ve, sw, 0.5)
+        q <- weighted_quantiles(tot_o[k, ], sw, probs)
+        wk[grp[k], c("lo95", "lo50", "hi50", "hi95")] <- as.list(q)
+      }
+    }
+    intervals <- vapply(c("cases", "deaths"), function(ch)
+      if (isTRUE(ensemble$observation_model[[ch]])) "observation" else "engine", character(1))
+    out_meta <- meta("trajectories", cm, intervals)
+  } else {
+    wsum <- function(x) { s <- sumg(x); s }
+    for (cl in c("predicted", "lo50", "hi50", "lo95", "hi95")) {
+      src <- if (cl == "predicted") pt$predicted_central else pt[[cl]]
+      v <- wsum(ifelse(is.finite(src), src, NA_real_))
+      wk[[cl]] <- ifelse(model_wk, v, NA_real_)
+    }
+    out_meta <- meta("daily_sums", cm, c(cases = NA, deaths = NA))
+  }
+  wk <- wk[complete, , drop = FALSE]
+  wk <- wk[order(wk$location, wk$metric, wk$week), , drop = FALSE]
+  wk$week <- format(wk$week, "%Y-%m-%d")
+  rownames(wk) <- NULL
+  list(weekly = wk, meta = out_meta)
 }
 
 #' Round the non-integer numbers of a JSON-bound object to significant digits
@@ -1230,6 +1376,20 @@
   f
 }
 
+#' Each convergence flag with its own text
+#' @param conv The \code{calc_convergence_status()} result (or NULL).
+#' @return Data frame \code{id, text}; zero rows when there are no flags or
+#'   their texts are not parallel to them (the 1.5.1 completion then
+#'   regenerates them, \code{.mosaic_calrep_complete()}).
+#' @noRd
+.mosaic_flags_detail <- function(conv) {
+  ids <- as.character(unlist(conv$flags) %||% character(0))
+  txt <- as.character(unlist(conv$flag_text) %||% character(0))
+  if (!length(ids) || length(txt) != length(ids))
+    return(data.frame(id = character(0), text = character(0), stringsAsFactors = FALSE))
+  data.frame(id = ids, text = txt, stringsAsFactors = FALSE)
+}
+
 #' Assemble calibration_diagnostics.json (schema 2)
 #'
 #' Every number the calibration-diagnostics report and the dashboard show,
@@ -1249,11 +1409,17 @@
 #' @param quantiles_file posterior_quantiles.csv of the run.
 #' @param prediction_table The ensemble prediction table, or NULL.
 #' @param is_diag_all eta = 1 diagnostics over all draws (\code{calc_is_diagnostics()}).
+#' @param ensemble The canonical \code{mosaic_ensemble} (its member arrays give
+#'   \code{fit.weekly}, \code{.mosaic_calibration_weekly()}), or NULL.
+#' @param central_method The run's per-channel central method, or NULL.
+#' @param glossary \code{.mosaic_glossary()} result (the display fields of
+#'   \code{.mosaic_calrep_complete()}).
 #' @return A list ready for JSON.
 #' @noRd
 .mosaic_calibration_diagnostics <- function(conv_health, state, config, control, n_obs_scored,
                                             ess_replay, quantiles_file, prediction_table = NULL,
-                                            is_diag_all = NULL) {
+                                            is_diag_all = NULL, ensemble = NULL, central_method = NULL,
+                                            glossary = .mosaic_glossary()) {
   f <- .mosaic_weight_health_fields(conv_health)
   num <- function(x) { x <- suppressWarnings(as.numeric(unlist(x))); if (length(x) == 1L) x else NA_real_ }
   thin <- function(df, n = 60L) if (nrow(df) > n) df[unique(round(seq(1, nrow(df), length.out = n))), , drop = FALSE] else df
@@ -1275,7 +1441,13 @@
     n_iterations = as.integer(control$calibration$n_iterations),
     n_iter_ensemble = as.integer(control$predictions$n_iter_ensemble %||% NA_integer_),
     date_start = as.character(config$date_start),
-    date_stop = as.character(config$date_stop))
+    date_stop = as.character(config$date_stop),
+    # 1.5.1: the budget and member bounds the report's info rows compare against
+    n_simulations_requested = num(control$calibration$n_simulations),
+    max_simulations_total = num(control$calibration$max_simulations_total),
+    min_ensemble_members = num(control$targets$min_ensemble_members),
+    max_ensemble_members = num(control$targets$max_ensemble_members),
+    central_method = as.list(.mosaic_resolve_central_method(central_method %||% control$predictions$central_method)))
 
   checks <- if (!is.null(conv$checks)) {
     ck <- conv$checks
@@ -1288,8 +1460,12 @@
                  reasons = I(as.character(unlist(conv$reasons) %||% character(0))),
                  flags = I(as.character(unlist(conv$flags) %||% character(0))),
                  flags_text = f$convergence_flags_text,
+                 # 1.5.1: each flag with its own text (flags_text joins them)
+                 flags_detail = .mosaic_flags_detail(conv),
                  stopping_rule_met = if (identical(state$mode, "fixed")) NA else isTRUE(state$converged),
-                 checks = checks)
+                 checks = checks,
+                 thresholds = .mosaic_convergence_thresholds(control$targets$status_thresholds),
+                 thresholds_source = "run control")
 
   rp <- if (is.null(ess_replay)) data.frame(n = integer(0), ess_all = numeric(0), best_gap = numeric(0),
                                              top100_gap = numeric(0)) else thin(ess_replay)
@@ -1328,10 +1504,11 @@
   worst <- params[o[seq_len(min(5L, sum(!is.na(params$mce))))], c("parameter", "mce"), drop = FALSE]
   rownames(params) <- rownames(worst) <- NULL
 
-  fit <- tryCatch(.mosaic_calibration_fit(prediction_table, config),
+  fit <- tryCatch(.mosaic_calibration_fit(prediction_table, config, ensemble = ensemble,
+                                          central_method = run$central_method),
                   error = function(e) .mosaic_calibration_fit(NULL, config))
 
-  list(
+  out <- list(
     schema_version = "2",
     run = run,
     status = status,
@@ -1347,6 +1524,7 @@
     fit = fit,
     likelihood_concentration = list(ess_is_all = num(is_diag_all$ess_is),
                                     note = .mosaic_likelihood_concentration_note()))
+  .mosaic_calrep_complete(out, glossary)
 }
 
 #' Write calibration_diagnostics.json atomically (NA and Inf as JSON null)

@@ -8,7 +8,7 @@
 - [dugong PSOCK LD_PRELOAD gap](project_dugong_psock_ldpreload_gap.md) — PSOCK workers don't inherit the r-mosaic-Rscript preload (false-alarm gather crash); per-model dugong fan-out = independent nohup-per-model via wrapper, not a PSOCK master; models FLAT under full_metapop_nmme/<ISO>
 - [dugong VM](reference_dugong_vm.md) — 2nd run host (176c/1.5TiB, Ubuntu 24.04, persistent IP 52.183.44.192); libexpat-wrapper trap (not GLIBCXX); skill .claude/skills/dugong-run, doc vm/DUGONG.md, setup claude/dugong_setup/
 - [Coiled w/ dugong client validated](project_coiled_dugong_client_validated.md) — dugong-as-Dask-client fixes the 2026.3.0↔2026.6.0 skew that stalled laptop (sims_done=0); GO for prod Coiled fits; +OpenSSL-3.3.0 LD_PRELOAD trap (libcrypto/libssl, not just libexpat)
-- [cairo_pdf glyph trap](cairo_pdf_glyph_trap.md) — capabilities("cairo") lies on this box; probe a real cairo_pdf device + fall back to ASCII labels for PDF Unicode glyphs
+- [cairo_pdf glyph trap](cairo_pdf_glyph_trap.md) — cairo lies here; base pdf(): plotmath glyphs ok but no ℓ, WinAnsi.enc for dashes, pdftoppm hides bold (use qlmanage)
 - [optimize_subset levers](project_optimize_subset_levers.md) — optimize_ensemble_subset() A/B/C speedups; the ci=(i-1)*n_times+j scatter contract + byrow=TRUE parity trap; PSOCK-not-FORK; install-before-parallel-test
 - [PSOCK blocking-gather worker-death deadlock](psock_blocking_gather_worker_death_deadlock.md) — parLapply/pblapply(cl=) unserialize() hangs master FOREVER on Linux when a worker PROCESS crashes; fix=.mosaic_cluster_lapply_robust socketSelect-timeout gather (v0.49.1); was misdiagnosed as B2/CFR_target-specific
 - [single-location psi_jt nameless](project_single_location_psi_jt_nameless.md) — get_location_config psi_jt has NO colnames + date_start/stop are strings; align psi swaps positionally via seq.Date(), LOCF a bounded tail gap
@@ -46,3 +46,4 @@
 - [1.4.0 WS2 pipeline traps](reference_v140_ws2_pipeline_traps.md) — digits=I(17) writes NA as "NA" (use na="null"); legacy-control fixtures; scheme-dependent ESS_best; in-memory gate pool + geometric fallback
 - [1.4.0 WS6 validation](project_v140_ws6_validation.md) — real stops = replay (same draws); measured ensemble memory model (config 65 B/cell, worker = base + |B|xconfig); HSIC 67 GB at p=916
 - [remote process-mgmt traps](reference_remote_process_mgmt_traps.md) — pkill -f matches your own ssh shell; pgrep -af field 0 is the PID; scheduler launch spacing
+- [calrep 1.5.1 traps](reference_calrep_v151_traps.md) — hand NAMESPACE S3method(grid::makeContent); jsonlite "_row"; test draw-time gTrees via grid.force+grab; key-sorted JSON compare

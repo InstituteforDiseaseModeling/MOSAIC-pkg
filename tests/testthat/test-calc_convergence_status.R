@@ -454,8 +454,9 @@ test_that("the metric glossary parses and every entry has the required fields", 
   expect_s3_class(g, "data.frame")
   expect_identical(names(g), MOSAIC:::.mosaic_glossary_fields())
   expect_false(anyDuplicated(g$key) > 0)
-  expect_true(all(vapply(g, function(x) all(nzchar(trimws(x))), logical(1))))
-  expect_identical(attr(g, "version"), "1.4.0")
+  req <- setdiff(MOSAIC:::.mosaic_glossary_required(), c("formula_plotmath", "formula_katex"))
+  expect_true(all(vapply(g[req], function(x) all(nzchar(trimws(x))), logical(1))))
+  expect_identical(attr(g, "version"), "1.5.1")
   # every SPEC section 2/5 metric and every 1.4.0 summary field shown is defined
   need <- c("draws", "coarsening_alpha", "ess_all", "best_fit_ensemble", "ess_best",
             "best_subset_mass", "mce", "khat_tempered", "eta_star", "flat_likelihood",

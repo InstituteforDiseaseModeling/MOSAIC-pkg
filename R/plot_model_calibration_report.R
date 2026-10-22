@@ -4,35 +4,42 @@
 #' \code{3_results/calibration_diagnostics.json} (summary.json schema 2
 #' companion). The report answers the three calibration questions, each on
 #' its own page, and reads nothing but that file and the metric glossary
-#' (\code{inst/extdata/metric_glossary.yml}): no samples, predictions or
-#' configs are opened, so it can be re-rendered from a finished run.
+#' (\code{inst/extdata/metric_glossary.yml}): every number and display string
+#' comes from the file, every word, formula and target template from the
+#' glossary. No samples, predictions or configs are opened, so it can be
+#' re-rendered from a finished run.
 #'
 #' @description
 #' Pages:
 #' \enumerate{
-#'   \item \strong{Simulations and ensemble ESS.} The simulation-convergence
-#'     status (green / yellow / red, from \code{status}) with its four checks,
-#'     reasons and flags; tables for all draws (the posterior) and for the
-#'     best-fit ensemble; the posterior ESS against the draws (log-log) stacked
-#'     on the best log-likelihood found so far, on a shared x axis.
+#'   \item \strong{Enough simulations?} The overall convergence status
+#'     (green / yellow / red) over a table of its four checks (metric and
+#'     formula, what it tells you, value, green / yellow target, status), then,
+#'     below a "not part of the status" divider, the ESS growth, the budget and
+#'     the ensemble size; the fit to data (cases and deaths, every scored day
+#'     and, when they fit, tier 1-2 days); the reasons a check is not green, the
+#'     flags (the fixed-budget flag is not shown: the run line says so) and the
+#'     sampling details. On the right, the posterior ESS against the draws
+#'     (log-log) over the best log-likelihood found so far.
 #'   \item \strong{Parameters.} Monte Carlo error of each posterior mean
 #'     (left) and prior-to-posterior KL divergence (right). Above 60 parameters
-#'     the location-specific parameters are grouped by base name (point =
-#'     worst or median location, bar = range over locations).
+#'     the location-specific parameters are grouped by base name.
 #'   \item \strong{Fit.} The fit table (and the worst-fitting locations of a
-#'     multi-location run) over weekly time series of observed and predicted
-#'     counts on the scored weeks.
+#'     multi-location run) over the weekly series: every complete week, the
+#'     ensemble central line and its 50 and 95 percent predictive intervals
+#'     from weekly-summed member trajectories, observed weekly totals on the
+#'     scored weeks; unscored weeks shaded light grey, the burn-in darker.
 #'   \item \strong{Predicted vs observed.} Weekly log-log scatter over the
 #'     square-root-scale distributions of weekly counts, cases and deaths.
-#'   \item \strong{Appendix.} What each metric means, generated from the
-#'     glossary.
+#'   \item \strong{Appendix.} What each metric shown means, generated from the
+#'     glossary, and the metrics retired in 1.4.0.
 #' }
 #'
-#' Every threshold drawn comes from \code{status$checks[]$threshold_green} /
-#' \code{threshold_yellow}; the status, labels, reasons and flags are shown
-#' exactly as written by \code{\link{calc_convergence_status}}. A panel whose
-#' inputs are missing (deaths not scored, a path with no points, an empty fit
-#' block) is replaced by a note rather than failing the report.
+#' A file written before MOSAIC 1.5.1 lacks the display fields; they are
+#' completed in memory from its numbers and the glossary
+#' (\code{render_MOSAIC_figures()} also writes the completed file, with the
+#' full-week series rebuilt from the run's ensemble). A panel whose inputs are
+#' missing is replaced by a note rather than failing the report.
 #'
 #' @param diagnostics Path to \code{calibration_diagnostics.json}, or the list
 #'   it parses to. Must carry \code{schema_version} \code{"2"}.
@@ -44,9 +51,12 @@
 #'
 #' @return The path of the PDF, invisibly.
 #'
-#' @details The PDF is vector (base \code{pdf()} device, 11 x 8.5 in) and is
+#' @details The PDF is vector (base \code{pdf()} device, 11 x 8.5 in, WinAnsi
+#'   encoding for the dashes; formulas and Greek letters in plotmath) and is
 #'   written to a temporary file then renamed, so an interrupted render never
-#'   leaves a truncated report. A run made before MOSAIC 1.4.0 has no
+#'   leaves a truncated report. The notation writes the likelihood of draw
+#'   \eqn{i} as \eqn{L_i} (no script l: the PDF fonts have no glyph for it).
+#'   A run made before MOSAIC 1.4.0 has no
 #'   \code{calibration_diagnostics.json}; its figures carry the notice from
 #'   \code{.mosaic_calibration_report_legacy_notice()} in place of a status.
 #'
@@ -62,7 +72,8 @@
 plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
                                           file = "calibration_report.pdf", verbose = TRUE) {
 
-     d <- .mosaic_calrep_read(diagnostics)
+     gl <- .mosaic_glossary()
+     d <- .mosaic_calrep_read(diagnostics, gl)
      if (is.null(dir_output)) {
           if (!is.character(diagnostics))
                stop("plot_model_calibration_report(): dir_output is required when diagnostics is a list.",
@@ -74,18 +85,24 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
      dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
      out <- file.path(dir_output, file)
 
-     gl <- .mosaic_glossary()
-     # Reasons that do not fit page 1 continue on a page of their own. Measured
-     # on a throw-away device of the report's size (measuring on the report
-     # device would start a blank page), so the page count is known up front.
+     # Reasons that do not fit page 1 continue on a page of their own. Page 1 is
+     # laid out once on a throw-away device of the report's size and encoding
+     # (drawing on the report device would start a page), so the page count is
+     # known up front.
      dev_keep <- grDevices::dev.cur()
-     grDevices::pdf(NULL, width = 11, height = 8.5)
-     overflow <- tryCatch(.mosaic_calrep_page1_layout(d, gl)$overflow, error = function(e) character(0))
+     grDevices::pdf(NULL, width = 11, height = 8.5, encoding = .mosaic_calrep_encoding())
+     overflow <- tryCatch({
+          grid::grid.newpage()
+          st <- new.env()
+          grid::grid.draw(.mosaic_calrep_page_sampling(d, gl, "", st))
+          st$overflow %||% character(0)
+     }, error = function(e) character(0))
      grDevices::dev.off()
      if (dev_keep > 1L && dev_keep %in% grDevices::dev.list()) grDevices::dev.set(dev_keep)
      tmp <- tempfile(pattern = "calibration_report_", tmpdir = dir_output, fileext = ".pdf")
      dev_before <- grDevices::dev.cur()
-     grDevices::pdf(tmp, width = 11, height = 8.5, onefile = TRUE, useDingbats = FALSE)
+     grDevices::pdf(tmp, width = 11, height = 8.5, onefile = TRUE, useDingbats = FALSE,
+                    encoding = .mosaic_calrep_encoding())
      dev_report <- grDevices::dev.cur()
      ok <- FALSE
      on.exit({
@@ -94,21 +111,21 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
           if (!ok && file.exists(tmp)) unlink(tmp)
      }, add = TRUE)
      pages <- c(list(function(foot) .mosaic_calrep_page_sampling(d, gl, foot)),
-                if (length(overflow)) list(function(foot) .mosaic_calrep_page_reasons(d, overflow, foot)),
-                list(function(foot) .mosaic_calrep_page_parameters(d, foot),
-                     function(foot) .mosaic_calrep_page_fit(d, foot),
-                     function(foot) .mosaic_calrep_page_scatter(d, foot)),
+                if (length(overflow)) list(function(foot) .mosaic_calrep_page_reasons(d, gl, overflow, foot)),
+                list(function(foot) .mosaic_calrep_page_parameters(d, gl, foot),
+                     function(foot) .mosaic_calrep_page_fit(d, gl, foot),
+                     function(foot) .mosaic_calrep_page_scatter(d, gl, foot)),
                 .mosaic_calrep_appendix(gl, d))
      n_pages <- length(pages)
-     foot_of <- function(i) sprintf("%s  |  MOSAIC %s  |  generated %s  |  page %d of %d",
-                                    .mosaic_calrep_title(d), d$run$mosaic_version %|NA|% "?",
-                                    format(Sys.Date()), i, n_pages)
+     foot_of <- function(i) .mosaic_fill(.mosaic_gl_text(gl, "footer"), title = .mosaic_calrep_title(d, gl),
+                                         version = d$run$mosaic_version %|NA|% "?", date = format(Sys.Date()),
+                                         page = i, pages = n_pages)
      for (i in seq_len(n_pages)) {
           # Open the page before building: measuring text while building the
           # grob would otherwise start a page on a fresh device.
           grid::grid.newpage()
           g <- tryCatch(suppressWarnings(suppressMessages(pages[[i]](foot_of(i)))),
-                        error = function(e) .mosaic_calrep_failed_page(i, conditionMessage(e), foot_of(i)))
+                        error = function(e) .mosaic_calrep_failed_page(gl, i, conditionMessage(e), foot_of(i)))
           grid::grid.draw(g)
      }
      grDevices::dev.off(dev_report)
@@ -121,6 +138,10 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
      if (isTRUE(verbose)) message("Calibration report (", n_pages, " pages): ", out)
      invisible(out)
 }
+
+# The PDF encoding: WinAnsi carries the en and em dashes (the default
+# ISOLatin1 prints them as hyphens); everything outside it is plotmath.
+.mosaic_calrep_encoding <- function() "WinAnsi.enc"
 
 
 # ---------------------------------------------------------------------------
@@ -167,17 +188,15 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 
 #' The single legacy wording (report, render notice, dashboard, docs)
 #'
-#' \code{what = "pre140"}: a run made before MOSAIC 1.4.0 (no
-#' \code{convergence_status} in summary.json, or a schema older than 2).
-#' \code{what = "missing"}: a 1.4.0 run whose
-#' \code{calibration_diagnostics.json} is missing or unreadable.
+#' From the glossary's \code{report$legacy} (shared word for word with the
+#' dashboard resolver's LEGACY_SAMPLING_NOTE). \code{what = "pre140"}: a run
+#' made before MOSAIC 1.4.0; \code{"missing"}: a 1.4.0 run whose
+#' \code{calibration_diagnostics.json} is missing or unreadable. The
+#' \code{*_detail} variants are the explanatory lines under it.
 #' @noRd
-.mosaic_calrep_legacy_text <- function(what = c("pre140", "missing")) {
-     switch(match.arg(what),
-            # Shared word for word with the dashboard (resolver LEGACY_SAMPLING_NOTE).
-            pre140 = "Calibrated with an earlier selection rule; simulation convergence was not assessed on the 1.4.0 scale",
-            missing = paste0("MOSAIC 1.4.0 run without a readable calibration_diagnostics.json: see ",
-                             "3_results/summary.json for its convergence status"))
+.mosaic_calrep_legacy_text <- function(what = c("pre140", "missing", "pre140_detail", "missing_detail", "title"),
+                                       gl = .mosaic_glossary()) {
+     .mosaic_gl_text(gl, "legacy", match.arg(what))
 }
 
 
@@ -185,7 +204,7 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 # Reading and normalising calibration_diagnostics.json
 # ---------------------------------------------------------------------------
 
-.mosaic_calrep_read <- function(diagnostics) {
+.mosaic_calrep_read <- function(diagnostics, gl = .mosaic_glossary()) {
      src <- "diagnostics"
      if (is.character(diagnostics)) {
           if (length(diagnostics) != 1L || !file.exists(diagnostics))
@@ -203,8 +222,11 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
           stop(sprintf(paste0("plot_model_calibration_report(): %s is not a schema 2 calibration_diagnostics.json ",
                               "(schema_version = %s). The report needs a MOSAIC >= 1.4.0 run; a pre-1.4.0 run is ",
                               "reported as: \"%s\"."),
-                       src, if (is.na(sv)) "missing" else sprintf("\"%s\"", sv), .mosaic_calrep_legacy_text()),
+                       src, if (is.na(sv)) "missing" else sprintf("\"%s\"", sv), .mosaic_calrep_legacy_text(gl = gl)),
                call. = FALSE)
+     # A file from before 1.5.1 gets its display fields in memory.
+     if (!identical(.mosaic_calrep_chr(diagnostics$schema_revision), .mosaic_cd_revision()))
+          diagnostics <- .mosaic_calrep_complete(diagnostics, gl)
      .mosaic_calrep_normalise(diagnostics)
 }
 
@@ -227,10 +249,12 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 }
 
 # Array of records (list of lists, or a data frame) -> data frame with `cols`;
-# missing columns and JSON nulls become NA.
-.mosaic_calrep_df <- function(x, cols, chr = character(0)) {
-     empty <- as.data.frame(stats::setNames(lapply(cols, function(cl)
-          if (cl %in% chr) character(0) else numeric(0)), cols), stringsAsFactors = FALSE)
+# missing columns and JSON nulls become NA. `lgl` columns are logical.
+.mosaic_calrep_df <- function(x, cols, chr = character(0), lgl = character(0)) {
+     typed <- function(cl, v) if (cl %in% chr) as.character(v) else if (cl %in% lgl) as.logical(v)
+                              else suppressWarnings(as.numeric(v))
+     empty <- as.data.frame(stats::setNames(lapply(cols, function(cl) typed(cl, character(0))), cols),
+                            stringsAsFactors = FALSE)
      if (is.null(x) || !length(x)) return(empty)
      if (!is.data.frame(x)) {
           if (!is.list(x) || !all(vapply(x, is.list, logical(1)))) return(empty)
@@ -244,7 +268,7 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
      }
      for (cl in cols) {
           if (is.null(x[[cl]])) x[[cl]] <- NA
-          x[[cl]] <- if (cl %in% chr) as.character(x[[cl]]) else suppressWarnings(as.numeric(x[[cl]]))
+          x[[cl]] <- typed(cl, x[[cl]])
      }
      x[, cols, drop = FALSE]
 }
@@ -260,14 +284,22 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
                  coarsening_alpha = n(r$coarsening_alpha), eta = n(r$eta), n_obs_scored = n(r$n_obs_scored),
                  burn_in_days = n(r$burn_in_days), n_iterations = n(r$n_iterations),
                  n_iter_ensemble = n(r$n_iter_ensemble), n_simulations = n(r$n_simulations),
+                 min_ensemble_members = n(r$min_ensemble_members), max_ensemble_members = n(r$max_ensemble_members),
                  date_start = .mosaic_calrep_date1(r$date_start), date_stop = .mosaic_calrep_date1(r$date_stop))
-     checks <- .mosaic_calrep_df(st$checks, c("check", "label", "value", "threshold_green", "threshold_yellow",
-                                              "colour", "reason"),
-                                 chr = c("check", "label", "colour", "reason"))
+     checks <- .mosaic_calrep_df(st$checks, c("check", "key", "label", "value", "threshold_green", "threshold_yellow",
+                                              "colour", "reason", "operator", "operator_yellow", "value_display",
+                                              "threshold_green_display", "threshold_yellow_display",
+                                              "target_display", "target_note", "status_display"),
+                                 chr = c("check", "key", "label", "colour", "reason", "operator", "operator_yellow",
+                                         "value_display", "threshold_green_display", "threshold_yellow_display",
+                                         "target_display", "target_note", "status_display"))
      status <- list(status = ch(st$convergence_status), label = ch(st$convergence_label),
+                    headline = ch(st$headline_display),
                     reasons = .mosaic_calrep_chrv(st$reasons), flags = .mosaic_calrep_chrv(st$flags),
-                    flags_text = .mosaic_calrep_chrv(st$flags_text), checks = checks,
-                    stopping_rule_met = lg(st$stopping_rule_met))
+                    flags_text = .mosaic_calrep_chrv(st$flags_text),
+                    flags_detail = .mosaic_calrep_df(st$flags_detail, c("id", "text", "display"),
+                                                     chr = c("id", "text"), lgl = "display"),
+                    checks = checks, stopping_rule_met = lg(st$stopping_rule_met))
      sampling <- list(
           ess_all = n(s$ess_all), ess_all_target = n(s$ess_all_target), ess_best = n(s$ess_best),
           ess_best_target = n(s$ess_best_target), best_subset_ratio = n(s$best_subset_ratio),
@@ -281,22 +313,43 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
           ess_untempered_frac = n(s$ess_untempered_frac), n_locations = n(s$n_locations),
           alpha_per_location = n(s$alpha_per_location),
           ess_path = .mosaic_calrep_df(s$ess_path, c("n", "ess_all")),
-          loglik_path = .mosaic_calrep_df(s$loglik_path, c("n", "best_gap", "top100_gap")))
+          loglik_path = .mosaic_calrep_df(s$loglik_path, c("n", "best_gap", "top100_gap")),
+          details = .mosaic_calrep_df(s$details_display, c("key", "value"), chr = c("key", "value")))
+     info_row <- function(x) {
+          x <- x %||% list()
+          list(key = ch(x$key), display = ch(x$display), sub_display = ch(x$sub_display),
+               operator = ch(x$operator), target_value_display = ch(x$target_value_display),
+               target_display = ch(x$target_display), target_note = ch(x$target_note),
+               status = ch(x$status), status_display = ch(x$status_display))
+     }
+     info <- list(ess_growth = info_row(j$info$ess_growth), budget = info_row(j$info$budget),
+                  ensemble_size = info_row(j$info$ensemble_size))
      params <- .mosaic_calrep_df(j$parameters, c("parameter", "base", "location", "prior_family", "mce", "kl",
                                                  "kl_band"),
                                  chr = c("parameter", "base", "location", "prior_family", "kl_band"))
-     weekly_cols <- c("location", "metric", "week", "observed", "predicted", "lo50", "hi50", "lo95", "hi95")
-     weekly <- .mosaic_calrep_df(f$weekly, weekly_cols, chr = c("location", "metric", "week"))
+     weekly_cols <- c("location", "metric", "week", "scored", "observed", "predicted", "lo50", "hi50", "lo95", "hi95")
+     full_weeks <- length(f$weekly) && {
+          w1 <- if (is.data.frame(f$weekly)) f$weekly[1, , drop = FALSE] else f$weekly[[1]]
+          "scored" %in% names(w1)
+     }
+     weekly <- .mosaic_calrep_df(f$weekly, weekly_cols, chr = c("location", "metric", "week"), lgl = "scored")
+     # A file without the full-week series (before 1.5.1) holds scored weeks only.
+     if (!full_weeks) weekly$scored <- rep(TRUE, nrow(weekly))
      weekly$date <- .mosaic_calrep_date(weekly$week)
      tab <- .mosaic_calrep_df(f$table, c("metric", "subset", "r2", "bias", "cov50", "cov95", "wis", "n_scored"),
                               chr = c("metric", "subset"))
      tab$subset[is.na(tab$subset)] <- "scored"   # a file without the column has one row per channel
-     fit <- list(table = tab,
+     tdisp <- .mosaic_calrep_df(f$table_display, c("metric", "subset", "label", "r2", "bias", "cov50", "cov95", "wis",
+                                                   "n_scored"),
+                                chr = c("metric", "subset", "label", "r2", "bias", "cov50", "cov95", "wis", "n_scored"))
+     wm <- f$weekly_meta %||% list()
+     fit <- list(table = tab, table_display = tdisp,
                  per_location = .mosaic_calrep_df(f$per_location, c("location", "metric", "r2", "bias", "cov95",
                                                                     "observed_total"),
                                                   chr = c("location", "metric")),
-                 weekly = weekly[!is.na(weekly$date), , drop = FALSE])
-     list(run = run, status = status, sampling = sampling, parameters = params,
+                 weekly = weekly[!is.na(weekly$date), , drop = FALSE],
+                 weekly_source = if (!full_weeks) "scored_weeks" else ch(wm$source) %|NA|% "trajectories")
+     list(run = run, status = status, sampling = sampling, info = info, parameters = params,
           mce_summary = list(median = n(ms$median), p90 = n(ms$p90), max = n(ms$max),
                              worst = .mosaic_calrep_df(ms$worst, c("parameter", "mce"), chr = "parameter")),
           kl_summary = list(largely_prior = n(ks$largely_prior), partly_informed = n(ks$partly_informed),
@@ -322,25 +375,25 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 # Constants, formatting and shared building blocks
 # ---------------------------------------------------------------------------
 
-# Glossary keys of the panels (tables carry theirs in a `key` column).
-.mosaic_calrep_panel_keys <- function() {
-     c("convergence_status", "convergence_flags", "ess_all", "ess_growth_slope", "best_loglik_path", "mce",
-       "kl_divergence", "r2", "bias", "coverage", "wis", "scored_days", "fit_time_series", "weekly_scatter",
-       "weekly_distribution")
-}
-
-# Glossary key of each status check (labels come from the glossary unless the
-# JSON carries one).
-.mosaic_calrep_check_keys <- function() {
-     c(ess = "ess_best", mce = "mce", khat = "khat_tempered", informativeness = "flat_likelihood")
-}
-
-# Every glossary key the report uses for this run.
+#' Glossary keys of the metrics this report shows, in the order of the pages
+#'
+#' The appendix explains exactly these (and the retired metrics). Page 1: the
+#' status, its checks (the keys in \code{status.checks[].key}), the flags when
+#' one is displayed, the info rows (\code{info.*.key}) with what decides them,
+#' the fit table and the sampling details; the plots; page 2 Monte Carlo error
+#' and KL; page 3 the weekly series; page 4 the scatter and distribution.
+#' @param d Normalised diagnostics.
+#' @return Character vector of glossary keys.
+#' @noRd
 .mosaic_calrep_metric_keys <- function(d) {
-     t <- .mosaic_calrep_sampling_tables(d)
-     keys <- c(unlist(strsplit(c(t$all$key, t$ensemble$key), ",")), .mosaic_calrep_panel_keys(),
-               unname(.mosaic_calrep_check_keys()))
-     sort(unique(trimws(keys)))
+     ck <- d$status$checks$key
+     info <- vapply(d$info, function(x) x$key %|NA|% NA_character_, character(1))
+     flags <- if (any(d$status$flags_detail$display %in% TRUE)) "convergence_flags"
+     keys <- c("convergence_status", ck, flags, info, "ensemble_binding", "sims_projected_for_green",
+               "projection_reliable", "r2", "bias", "coverage", "wis", "scored_days", "draws", "coarsening_alpha",
+               "ess_all", "best_subset_mass", "n_iter_ensemble", "n_obs_scored", "burn_in_days", "best_loglik_path",
+               "mce", "kl_divergence", "fit_time_series", "weekly_scatter", "weekly_distribution")
+     unique(keys[!is.na(keys)])
 }
 
 # KL band edges (nats). The JSON's kl_summary$band_edges when present;
@@ -418,11 +471,11 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
      }, character(1))
 }
 
-.mosaic_calrep_title <- function(d) {
+.mosaic_calrep_title <- function(d, gl) {
      L <- d$run$locations
-     if (!length(L)) return("calibration")
+     if (!length(L)) return(.mosaic_gl_text(gl, "title_none"))
      if (length(L) <= 4L) return(paste(L, collapse = ", "))
-     sprintf("%s ... %s (%d locations)", L[1], L[length(L)], length(L))
+     .mosaic_fill(.mosaic_gl_text(gl, "title_many"), first = L[1], last = L[length(L)], n = length(L))
 }
 
 .mosaic_calrep_theme <- function(base = 9) {
@@ -438,25 +491,29 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
                plot.title.position = "plot")
 }
 
-.mosaic_calrep_header <- function(d, section, foot) {
+# The run line under the title (locations, mode, draws, window, scheme).
+.mosaic_calrep_run_line <- function(d, gl) {
      r <- d$run
-     mode <- switch(r$mode %|NA|% "", fixed = "fixed budget", auto = "adaptive", r$mode %|NA|% "mode n/a")
+     rl <- .mosaic_gl_text(gl, "run_line")
+     fmt <- .mosaic_calrep_fmt
+     mode <- switch(r$mode %|NA|% "", fixed = rl$mode_fixed, auto = rl$mode_auto, rl$mode_unknown)
      n_loc <- r$n_locations
-     info <- paste(c(sprintf("%s location%s", .mosaic_calrep_fmt(n_loc), if (isTRUE(n_loc == 1)) "" else "s"),
-                     mode,
-                     # "1 valid of 40 simulated" when simulations failed (RN5)
-                     if (is.finite(r$n_simulations) && is.finite(d$sampling$sims_used) &&
-                         r$n_simulations > d$sampling$sims_used)
-                          sprintf("%s valid of %s simulated", .mosaic_calrep_fmt(d$sampling$sims_used),
-                                  .mosaic_calrep_fmt(r$n_simulations))
-                     else sprintf("%s draws", .mosaic_calrep_fmt(d$sampling$sims_used)),
-                     if (!is.na(r$date_start) && !is.na(r$date_stop))
-                          sprintf("%s to %s", format(r$date_start), format(r$date_stop)),
-                     if (!is.na(r$posterior_weighting)) sprintf("%s ensemble", r$posterior_weighting)),
-                   collapse = "  |  ")
+     paste(c(.mosaic_fill(if (isTRUE(n_loc == 1)) rl$locations_one else rl$locations_many, n = fmt(n_loc)),
+             mode,
+             # "1 valid of 40 simulated" when simulations failed (RN5)
+             if (is.finite(r$n_simulations) && is.finite(d$sampling$sims_used) && r$n_simulations > d$sampling$sims_used)
+                  .mosaic_fill(rl$draws_valid, valid = fmt(d$sampling$sims_used), attempted = fmt(r$n_simulations))
+             else .mosaic_fill(rl$draws, n = fmt(d$sampling$sims_used)),
+             if (!is.na(r$date_start) && !is.na(r$date_stop))
+                  .mosaic_fill(rl$window, start = format(r$date_start), stop = format(r$date_stop)),
+             if (!is.na(r$posterior_weighting)) .mosaic_fill(rl$scheme, scheme = r$posterior_weighting)),
+           collapse = rl$separator)
+}
+
+.mosaic_calrep_header <- function(d, gl, section, foot) {
      patchwork::plot_annotation(
-          title = sprintf("Calibration diagnostics: %s", .mosaic_calrep_title(d)),
-          subtitle = paste0(section, "\n", info),
+          title = .mosaic_fill(.mosaic_gl_text(gl, "title"), title = .mosaic_calrep_title(d, gl)),
+          subtitle = paste0(.mosaic_gl_text(gl, "sections", section), "\n", .mosaic_calrep_run_line(d, gl)),
           caption = foot,
           theme = ggplot2::theme(
                plot.title = ggplot2::element_text(face = "bold", size = 15, margin = ggplot2::margin(b = 2)),
@@ -480,14 +537,15 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 }
 
 # Build a panel; on error, a note naming the error.
-.mosaic_calrep_safe <- function(title, expr) {
+.mosaic_calrep_safe <- function(gl, title, expr) {
      tryCatch(expr, error = function(e)
-          .mosaic_calrep_unavailable(title, paste("Unavailable:", conditionMessage(e))))
+          .mosaic_calrep_unavailable(title, .mosaic_fill(.mosaic_gl_text(gl, "unavailable"),
+                                                         message = conditionMessage(e))))
 }
 
-.mosaic_calrep_failed_page <- function(i, msg, foot) {
+.mosaic_calrep_failed_page <- function(gl, i, msg, foot) {
      grid::gTree(children = grid::gList(
-          grid::textGrob(sprintf("Page %d could not be drawn", i), x = 0.04, y = 0.95, hjust = 0,
+          grid::textGrob(.mosaic_fill(.mosaic_gl_text(gl, "failed_page"), page = i), x = 0.04, y = 0.95, hjust = 0,
                          gp = grid::gpar(fontface = "bold", fontsize = 15)),
           grid::textGrob(paste(strwrap(msg, 150), collapse = "\n"), x = 0.04, y = 0.88, hjust = 0, vjust = 1,
                          gp = grid::gpar(fontsize = 9, col = "grey30")),
@@ -526,6 +584,38 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 
 
 # ---------------------------------------------------------------------------
+# Rich text: glossary tokens -> plotmath
+# ---------------------------------------------------------------------------
+
+#' Rich text (glossary tokens in braces) as a plotmath expression
+#' @param txt A string, or a language object (returned as is).
+#' @param gl Glossary.
+#' @return The string when it has no token, else an expression.
+#' @noRd
+.mosaic_calrep_rich <- function(txt, gl) {
+     if (is.language(txt) || is.expression(txt)) return(txt)
+     tk <- attr(gl, "tokens")
+     if (!length(tk) || !grepl("\\{[A-Za-z0-9_]+\\}", txt)) return(txt)
+     pat <- paste0("(", paste(sprintf("\\{%s\\}", names(tk)), collapse = "|"), ")")
+     parts <- regmatches(txt, gregexpr(pat, txt), invert = NA)[[1]]
+     parts <- parts[nzchar(parts)]
+     if (!length(parts)) return(txt)
+     pieces <- lapply(parts, function(p) {
+          nm <- sub("^\\{(.*)\\}$", "\\1", p)
+          if (grepl("^\\{.*\\}$", p) && nm %in% names(tk)) str2lang(tk[[nm]]$plotmath) else p
+     })
+     if (length(pieces) == 1L && is.character(pieces[[1]])) return(pieces[[1]])
+     as.expression(Reduce(function(a, b) call("*", a, b), pieces))
+}
+
+# Formula lines of a glossary entry (one expression per line; none when "").
+.mosaic_calrep_formula <- function(gl, key) {
+     e <- gl[gl$key %in% key, , drop = FALSE]
+     if (!nrow(e) || !nzchar(e$formula_plotmath[1])) return(list())
+     as.list(str2expression(e$formula_plotmath[1]))
+}
+
+# ---------------------------------------------------------------------------
 # Page 1: simulations and ensemble ESS
 # ---------------------------------------------------------------------------
 
@@ -534,243 +624,370 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
      ck[ck$check %in% id, , drop = FALSE][1, , drop = FALSE]
 }
 
-# Threshold text of one check, from its threshold_green / threshold_yellow.
-.mosaic_calrep_threshold_text <- function(ck) {
-     g <- ck$threshold_green; y <- ck$threshold_yellow
-     if (!nrow(ck) || is.na(ck$check)) return("")
-     fm <- switch(ck$check,
-                  ess = function(v) .mosaic_calrep_fmt(v),
-                  mce = function(v) .mosaic_calrep_pct_thr(v),
-                  function(v) .mosaic_calrep_sig(v, 3))
-     op <- switch(ck$check, ess = c(">=", ">="), mce = c("<=", "<="), khat = c("<", "<"), c("", ""))
-     if (identical(ck$check, "informativeness"))
-          return(if (is.finite(g) && g < 1) sprintf("yellow >= %s", .mosaic_calrep_pct_thr(g))
-                 else "yellow if eta* = 1")
-     parts <- c(if (is.finite(g)) sprintf("green %s %s", op[1], fm(g)),
-                if (is.finite(y)) sprintf("yellow %s %s", op[2], fm(y)))
-     paste(parts, collapse = ", ")
+# A target display "A / B" as its green and yellow halves (the report aligns
+# them on the slash).
+.mosaic_calrep_split_target <- function(x) {
+     if (is.na(x) || !nzchar(x)) return(list(green = "", yellow = NULL))
+     p <- strsplit(x, " / ", fixed = TRUE)[[1]]
+     list(green = p[1], yellow = if (length(p) > 1L) paste(p[-1], collapse = " / ") else NULL)
 }
 
-.mosaic_calrep_check_value <- function(d, ck) {
-     v <- ck$value
-     thr <- c(ck$threshold_green, ck$threshold_yellow)
-     switch(ck$check,
-            ess = .mosaic_fmt_thr(v, thr, 0),
-            mce = .mosaic_fmt_thr(v, thr, 1, scale = 100, suffix = "%"),
-            khat = if (is.finite(v)) .mosaic_fmt_thr(v, thr, 2, big.mark = "") else "undefined",
-            informativeness = {
-                 frac <- is.finite(ck$threshold_green) && ck$threshold_green < 1
-                 val <- if (!is.finite(v)) "" else if (frac)
-                      sprintf(" (untempered ESS %s)",
-                              if (abs(v - ck$threshold_green) / ck$threshold_green < 0.05)
-                                   .mosaic_fmt_thr(v, ck$threshold_green, 2, scale = 100, suffix = "%")
-                              else .mosaic_calrep_sig_pct(v))
-                      else sprintf(" (eta* = %s)", .mosaic_calrep_sig(v, 2))
-                 if (identical(ck$colour, "green")) paste0("informative", val)
-                 else if (isTRUE(d$sampling$flat_likelihood)) paste0("flat", val)
-                 else paste0("not assessed", val)
-            },
-            .mosaic_calrep_sig(v, 3))
+#' What page 1 shows, as data
+#'
+#' Every string comes from the diagnostics (display fields) or the glossary;
+#' nothing here is worded. The page-1 grob draws exactly this.
+#' @param d Normalised diagnostics.
+#' @param gl Glossary.
+#' @return List: \code{headline}, \code{colour}, \code{status_rows},
+#'   \code{info_rows}, \code{fit_rows}, \code{reasons}, \code{flags},
+#'   \code{details}.
+#' @noRd
+.mosaic_calrep_page1_model <- function(d, gl) {
+     ge <- function(key, f) { e <- gl[gl$key %in% key, , drop = FALSE]; if (nrow(e)) e[[f]][1] else NA_character_ }
+     ck <- d$status$checks
+     status_rows <- lapply(seq_len(nrow(ck)), function(i) {
+          c1 <- ck[i, , drop = FALSE]
+          k <- c1$key
+          tg <- .mosaic_calrep_split_target(c1$target_display)
+          list(name = ge(k, "short_label") %|NA|% (c1$label %|NA|% c1$check),
+               formula = .mosaic_calrep_formula(gl, k),
+               desc = .mosaic_fill(ge(k, "what_it_tells_you") %|NA|% "", green = c1$threshold_green_display %|NA|% "",
+                                   yellow = c1$threshold_yellow_display %|NA|% ""),
+               value = list(main = c1$value_display %|NA|% .mosaic_gl_text(gl, "values", "na")),
+               target = list(type = "split", green = tg$green, yellow = tg$yellow,
+                             note = if (is.na(c1$target_note)) NULL else c1$target_note),
+               colour = c1$colour, status = c1$status_display)
+     })
+     info_rows <- lapply(d$info, function(x) {
+          k <- x$key
+          if (is.na(k)) return(NULL)
+          target <- if (!is.na(x$operator)) {
+               tg <- .mosaic_calrep_split_target(x$target_display)
+               list(type = "split", green = tg$green, yellow = tg$yellow,
+                    note = if (is.na(x$target_note)) NULL else x$target_note)
+          } else list(type = "text", main = x$target_display %|NA|% "",
+                      note = if (is.na(x$target_note)) NULL else x$target_note)
+          list(name = ge(k, "short_label") %|NA|% k, formula = .mosaic_calrep_formula(gl, k),
+               desc = .mosaic_fill(ge(k, "what_it_tells_you") %|NA|% "",
+                                   min = .mosaic_calrep_fmt(d$run$min_ensemble_members),
+                                   max = .mosaic_calrep_fmt(d$run$max_ensemble_members)),
+               value = list(main = x$display %|NA|% "", sub = if (is.na(x$sub_display)) NULL else x$sub_display),
+               target = target, flag = x$status_display %|NA|% "")
+     })
+     info_rows <- Filter(Negate(is.null), info_rows)
+     fd <- d$status$flags_detail
+     fl <- fd$text[fd$display %in% TRUE & !is.na(fd$text)]
+     fl <- if (length(fl)) paste0(toupper(substr(fl, 1, 1)), substr(fl, 2, nchar(fl))) else character(0)
+     sd_txt <- .mosaic_gl_text(gl, "sampling_details")
+     det <- d$sampling$details
+     details <- lapply(seq_len(nrow(det)), function(i)
+          list(label = sd_txt[[det$key[i]]] %||% det$key[i], value = det$value[i]))
+     list(headline = d$status$headline %|NA|% .mosaic_gl_text(gl, "status_unavailable"),
+          colour = d$status$status, status_rows = status_rows, info_rows = info_rows,
+          fit_rows = d$fit$table_display, reasons = d$status$reasons, flags = fl, details = details)
 }
 
-# The tables of page 1, with the glossary key of every row.
-.mosaic_calrep_sampling_tables <- function(d) {
-     s <- d$sampling; r <- d$run; st <- d$status
-     fmt <- .mosaic_calrep_fmt; pct <- .mosaic_calrep_pct
-     tgt <- function(v, t) if (nzchar(t)) paste0(v, "   (", t, ")") else v
-     ck_mce <- .mosaic_calrep_check(d, "mce")
-     n_iter <- r$n_iterations
-     mode <- if (identical(r$mode, "fixed")) "fixed budget"
-             else if (identical(r$mode, "auto")) {
-                  if (isTRUE(s$budget_exhausted)) "adaptive: stopped at the budget cap"
-                  else if (isTRUE(st$stopping_rule_met))
-                       if (identical(st$status, "green")) "adaptive: stopped at green"
-                       else "adaptive: stopped, sampling checks green"
-                  else "adaptive"
-             } else r$mode %|NA|% "n/a"
-     if (is.finite(n_iter)) mode <- sprintf("%s; %s run%s per draw", mode, fmt(n_iter),
-                                            if (n_iter == 1) "" else "s")
-     # The all-draws posterior is the coarsened posterior under every scheme;
-     # posterior_weighting names how the ensemble members are chosen (R13).
-     posterior <- paste0("coarsened",
-                         if (is.finite(r$coarsening_alpha)) sprintf(" (alpha = %s", .mosaic_calrep_sig(r$coarsening_alpha, 3)) else " (",
-                         if (is.finite(r$eta)) sprintf(", eta = %s)", .mosaic_calrep_sig(r$eta, 2)) else ")",
-                         if (isTRUE(r$n_locations > 1) && is.finite(s$alpha_per_location))
-                              sprintf("; alpha %s per location", .mosaic_calrep_sig(s$alpha_per_location, 2)) else "")
-     slope <- s$ess_growth_slope
-     slope_txt <- if (is.finite(slope)) {
-          paste0(sprintf("%.2f", slope), if ("ess_growth_stalled" %in% st$flags) ", stalled (flag)" else "")
-     } else "n/a (too few points)"
-     ck_k <- .mosaic_calrep_check(d, "khat")
-     khat_txt <- if (is.finite(s$khat_tempered) && nrow(ck_k) && !is.na(ck_k$check))
-          sprintf("%s (%s)", .mosaic_fmt_thr(s$khat_tempered, c(ck_k$threshold_green, ck_k$threshold_yellow), 2,
-                                             big.mark = ""),
-                  switch(ck_k$colour %|NA|% "", green = "good", yellow = "marginal", red = "unreliable", "n/a"))
-          else s$khat_status %|NA|% (if (is.finite(s$khat_tempered)) sprintf("%.2f", s$khat_tempered)
-                                     else "undefined (weights nearly flat)")
-     ck_inf <- .mosaic_calrep_check(d, "informativeness")
-     info <- if (nrow(ck_inf) && !is.na(ck_inf$check)) .mosaic_calrep_check_value(d, ck_inf)
-             else if (isTRUE(s$flat_likelihood)) "flat likelihood" else "not assessed"
-     # Simulations projected for GREEN (the larger of the ESS and Monte Carlo
-     # error projections, in simulations); indicative when the ESS growth
-     # slope is below the stall threshold or not yet known (R3, R5, R6).
-     proj <- s$sims_projected_for_green
-     proj_txt <- if (identical(st$status, "green")) {
-          "none: the status is green"
-     } else if (isTRUE(st$stopping_rule_met) ||
-                (nrow(st$checks) && all(st$checks$colour[st$checks$check %in% c("ess", "mce", "khat")] %in% "green"))) {
-          "none: the sampling checks are green (more simulations would not change the rest)"
-     } else if (is.finite(proj)) {
-          paste0("about ", fmt(signif(proj, 2)), " in total",
-                 if (identical(r$mode, "auto")) " (incl. one confirming batch)" else "",
-                 if (is.finite(s$sims_used)) sprintf(" (now %s valid draws)", fmt(s$sims_used)) else "",
-                 if (isFALSE(s$projection_reliable))
-                      if (is.finite(s$ess_growth_slope)) " (indicative: ESS growth stalled)"
-                      else " (indicative: ESS growth slope not yet known)" else "")
-     } else "n/a: no check that more simulations would fix"
-     if (isTRUE(s$budget_exhausted)) proj_txt <- paste0(proj_txt, "; budget cap reached")
-     prop <- if (is.finite(s$ess_all) && is.finite(s$sims_used) && s$sims_used > 0) s$ess_all / s$sims_used else NA_real_
-
-     all <- data.frame(
-          Measure = c("Draws simulated (valid)", "Run mode", "Posterior (all draws)", "Posterior ESS (all draws)",
-                      "ESS as % of draws", "ESS growth (log-log slope)", "Validity guard (Pareto k-hat)",
-                      "Data informativeness", "Simulations projected for green"),
-          Value = c(if (is.finite(r$n_simulations) && is.finite(s$sims_used) && r$n_simulations > s$sims_used)
-                         sprintf("%s of %s simulated", fmt(s$sims_used), fmt(r$n_simulations)) else fmt(s$sims_used),
-                    mode, posterior,
-                    tgt(.mosaic_fmt_thr(s$ess_all, s$ess_all_target, 0),
-                        if (is.finite(s$ess_all_target)) paste("target", fmt(s$ess_all_target)) else ""),
-                    pct(prop, 2), slope_txt, khat_txt, info, proj_txt),
-          key = c("draws", "mode", "coarsening_alpha,alpha_per_location", "ess_all", "ess_prop", "ess_growth_slope",
-                  "khat_tempered", "flat_likelihood,ess_untempered_frac",
-                  "sims_projected_for_green,projection_reliable"),
-          stringsAsFactors = FALSE)
-
-     binding <- s$ensemble_binding
-     members <- paste0(fmt(s$ensemble_members),
-                       if (is.finite(s$ensemble_members_unique)) sprintf(" (%s unique)", fmt(s$ensemble_members_unique)) else "",
-                       if (!is.na(binding)) sprintf("; size set by %s", binding) else "")
-     mass <- paste0(pct(s$best_subset_mass, 1),
-                    if (is.finite(s$best_subset_ratio)) sprintf("   (ESS ratio %s)", .mosaic_calrep_sig(s$best_subset_ratio, 2)) else "")
-     ms <- d$mce_summary
-     mce_thr <- if (nrow(ck_mce) && !is.na(ck_mce$check)) c(ck_mce$threshold_green, ck_mce$threshold_yellow) else numeric(0)
-     mce_txt <- tgt(sprintf("%s, %s, %s", pct(ms$median),
-                            .mosaic_fmt_thr(ms$p90, mce_thr, 1, scale = 100, suffix = "%"), pct(ms$max)),
-                    if (nrow(ck_mce) && !is.na(ck_mce$check) && is.finite(ck_mce$threshold_green))
-                         sprintf("90th target <= %s", .mosaic_calrep_pct_thr(ck_mce$threshold_green)) else "")
-     scheme <- switch(r$posterior_weighting %|NA|% "",
-                      bestfit = "bestfit (best-fitting draws)",
-                      coarsened = "coarsened (resample of the posterior)",
-                      saturated = , tempered = sprintf("%s (legacy tier search)", r$posterior_weighting),
-                      r$posterior_weighting %|NA|% "n/a")
-     ens <- data.frame(
-          Measure = c("Ensemble (posterior_weighting)", "Ensemble members", "Ensemble ESS", "Posterior mass kept",
-                      "Monte Carlo error (median/90th/max)",
-                      "Stochastic runs per member", "Scored observation cells", "Burn-in (unscored)"),
-          Value = c(scheme, members,
-                    tgt(.mosaic_fmt_thr(s$ess_best, c(s$ess_best_target, .mosaic_calrep_check(d, "ess")$threshold_yellow), 0),
-                        if (is.finite(s$ess_best_target)) paste("target", fmt(s$ess_best_target)) else ""),
-                    mass, mce_txt,
-                    fmt(r$n_iter_ensemble), fmt(r$n_obs_scored),
-                    if (is.finite(r$burn_in_days)) sprintf("%s days", fmt(r$burn_in_days)) else "n/a"),
-          key = c("posterior_weighting,posterior_members", "ensemble_members,ensemble_binding", "ess_best",
-                  "best_subset_mass,best_fit_ensemble", "mce", "n_iter_ensemble", "n_obs_scored", "burn_in_days"),
-          stringsAsFactors = FALSE)
-     list(all = all, ensemble = ens)
+# Layout constants of the page-1 left column (points).
+.mosaic_calrep_p1_style <- function() {
+     list(ink = "grey15", muted = "grey45", faint = "grey60", formula = "grey30",
+          head_bg = "#2C3E50", head_fg = "white", zebra = "#F3F5F7", rule = "#D5DAE0",
+          fs_band = 10, fs_head = 7.2, fs_name = 7.4, fs_formula = 6.8, fs_body = 6.9,
+          fs_value = 7.6, fs_small = 6.2, fs_text = 7.4, fs_section = 8, chip_w = 32, chip_h = 12,
+          gap = 8, pad_x = 3.5, pad_y = 3.5, name_lh = 10, f_lh = 9, desc_lh = 8.6, sub_lh = 8, band_h = 21,
+          head_h = 21, div_h = 16, fit_rh = 12.5, lh_r = 8.9, details_lh = 9.3,
+          cw = c(metric = 86, desc = 112, value = 38, target = 54))
 }
 
-# Status badge, checks, reasons and flags, as one grid grob. Positions are in
-# points from the top so text, bullets and the badge stay aligned at any size.
-# The reasons as wrapped bullet lines (badge and its continuation page).
-.mosaic_calrep_reason_lines <- function(reasons, wrap = 76L) {
-     unlist(lapply(reasons, function(rsn) {
-          w <- strwrap(rsn, wrap)
-          paste0(c("- ", rep("  ", length(w) - 1L)), w)
-     }))
+# The left column as a grob laid out at draw time (it then knows its size).
+# `state` (an environment) receives the reason lines that did not fit.
+.mosaic_calrep_left_column <- function(model, gl, state = NULL) {
+     grid::gTree(model = model, gl = gl, state = state, cl = "mosaic_calrep_left")
 }
 
-.mosaic_calrep_badge <- function(d, gl, max_reason_lines = 16L) {
-     st <- d$status
-     col <- .mosaic_calrep_col(st$status)
-     txt_col <- if (identical(st$status, "yellow")) "grey10" else "white"
-     label <- st$label %|NA|% "Convergence status unavailable"
-     ink <- .mosaic_calrep_ink()
-     wrap <- 80L
-     x0 <- grid::unit(4, "mm")
+#' Draw the page-1 left column (grid makeContent method)
+#'
+#' Lays out page 1's left column of \code{\link{plot_model_calibration_report}}
+#' (status table, info rows, fit table, reasons, flags, sampling details) at
+#' draw time, when its size is known. Internal: grid calls it.
+#' @param x The \code{mosaic_calrep_left} gTree.
+#' @method makeContent mosaic_calrep_left
+#' @return The gTree with its children. Registered in NAMESPACE
+#'   (\code{S3method(grid::makeContent, mosaic_calrep_left)}).
+#' @keywords internal
+makeContent.mosaic_calrep_left <- function(x) {
+     m <- x$model; gl <- x$gl
+     ST <- .mosaic_calrep_p1_style()
+     rich <- function(t) .mosaic_calrep_rich(t, gl)
+     tg <- function(label, xx, yy, fs, col = ST$ink, face = 1, hjust = 0)
+          grid::textGrob(rich(label), x = xx, y = yy, hjust = hjust, vjust = 0.5,
+                         gp = grid::gpar(fontsize = fs, col = col, fontface = face))
+     w_pt <- function(label, fs, face = 1)
+          grid::convertWidth(grid::grobWidth(grid::textGrob(rich(label), gp = grid::gpar(fontsize = fs, fontface = face))),
+                             "pt", TRUE)
+     wrap_pt <- function(txt, width, fs, face = 1) {
+          words <- strsplit(txt, " ", fixed = TRUE)[[1]]
+          out <- character(0); cur <- ""
+          for (w in words) {
+               cand <- if (nzchar(cur)) paste(cur, w) else w
+               if (!nzchar(cur) || w_pt(cand, fs, face) <= width) cur <- cand
+               else { out <- c(out, cur); cur <- w }
+          }
+          c(out, cur)
+     }
+     # same line count as a greedy wrap, at the narrowest width keeping it
+     wrap_balanced <- function(txt, width, fs) {
+          n <- length(wrap_pt(txt, width, fs))
+          if (n < 2L) return(wrap_pt(txt, width, fs))
+          lo <- width * 0.5; hi <- width
+          for (k in 1:10) {
+               mid <- (lo + hi) / 2
+               if (length(wrap_pt(txt, mid, fs)) > n) lo <- mid else hi <- mid
+          }
+          wrap_pt(txt, hi, fs)
+     }
+     on_col <- function(colour) if (identical(colour, "yellow")) "grey10" else "white"
+     W <- grid::convertWidth(grid::unit(1, "npc"), "pt", TRUE)
+     H <- grid::convertHeight(grid::unit(1, "npc"), "pt", TRUE)
+     X0 <- 2; W <- W - 16
      kids <- list()
-     y <- 0                                            # points from the top
+     add <- function(g) kids[[length(kids) + 1L]] <<- g
      at <- function(yy) grid::unit(1, "npc") - grid::unit(yy, "pt")
-     add_text <- function(txt, indent = 0, fontsize = 8, face = "plain", colour = ink, step = 1.4) {
-          y <<- y + fontsize * step / 2
-          kids[[length(kids) + 1L]] <<- grid::textGrob(
-               txt, x = x0 + grid::unit(indent, "mm"), y = at(y), hjust = 0, vjust = 0.5,
-               gp = grid::gpar(fontsize = fontsize, fontface = face, col = colour))
-          y <<- y + fontsize * step / 2
+     px <- function(xx) grid::unit(X0 + xx, "pt")
+     ex <- function(v) if (is.language(v)) as.expression(v) else v
+     y <- 2
+
+     # overall band
+     add(grid::rectGrob(px(0), at(y), width = grid::unit(W, "pt"), height = grid::unit(ST$band_h, "pt"),
+                        just = c("left", "top"), gp = grid::gpar(fill = .mosaic_calrep_col(m$colour), col = NA)))
+     fs_b <- ST$fs_band
+     while (fs_b > 7.5 && w_pt(m$headline, fs_b, 2) > W - 14) fs_b <- fs_b - 0.25
+     add(tg(m$headline, px(7), at(y + ST$band_h / 2), fs_b, col = on_col(m$colour), face = 2))
+     y <- y + ST$band_h + ST$gap
+
+     # status table
+     tt <- .mosaic_gl_text(gl, "status_table")
+     cw <- c(ST$cw, status = 0)
+     cw[["status"]] <- W - sum(ST$cw)
+     cx <- c(0, cumsum(cw))[1:5]; names(cx) <- names(cw)
+     pxp <- ST$pad_x
+     x_val <- cx[["value"]] + cw[["value"]] - pxp - 2
+     x_slash <- cx[["target"]] + cw[["target"]] * 0.5
+     x_stat <- cx[["status"]] + cw[["status"]] / 2
+     hh <- ST$head_h
+     add(grid::rectGrob(px(0), at(y), width = grid::unit(W, "pt"), height = grid::unit(hh, "pt"),
+                        just = c("left", "top"), gp = grid::gpar(fill = ST$head_bg, col = NA)))
+     hy <- y + hh / 2
+     add(tg(tt$metric, px(cx[["metric"]] + pxp), at(hy), ST$fs_head, col = ST$head_fg, face = 2))
+     add(tg(tt$what, px(cx[["desc"]] + pxp), at(hy), ST$fs_head, col = ST$head_fg, face = 2))
+     add(tg(tt$value, px(x_val), at(hy), ST$fs_head, col = ST$head_fg, face = 2, hjust = 1))
+     add(tg(tt$target, px(x_slash), at(hy - 3.8), ST$fs_head, col = ST$head_fg, face = 2, hjust = 0.5))
+     add(tg(tt$target_sub, px(x_slash), at(hy + 4.6), ST$fs_small, col = "grey80", hjust = 0.5))
+     add(tg(tt$status, px(x_stat), at(hy), ST$fs_head, col = ST$head_fg, face = 2, hjust = 0.5))
+     y <- y + hh
+
+     prep <- function(r) {
+          r$desc_l <- if (nzchar(r$desc)) wrap_balanced(r$desc, cw[["desc"]] - 2 * pxp, ST$fs_body) else character(0)
+          r$h_metric <- ST$name_lh + ST$f_lh * length(r$formula)
+          r$h_desc <- ST$desc_lh * length(r$desc_l)
+          r$h_val <- ST$name_lh + if (!is.null(r$value$sub)) ST$sub_lh else 0
+          r$h_tgt <- ST$name_lh + if (!is.null(r$target$note)) ST$sub_lh else 0
+          r$h <- max(r$h_metric, r$h_desc, r$h_val, r$h_tgt, ST$chip_h)
+          r
      }
-     # badge
-     kids[[length(kids) + 1L]] <- grid::roundrectGrob(
-          x = x0, y = at(4), width = grid::unit(1, "strwidth", label) * (13 / 12) * 1.08 + grid::unit(7, "mm"),
-          height = grid::unit(25, "pt"), just = c("left", "top"), r = grid::unit(1.2, "mm"),
-          gp = grid::gpar(fill = col, col = NA))
-     kids[[length(kids) + 1L]] <- grid::textGrob(
-          label, x = x0 + grid::unit(3.5, "mm"), y = at(16.5), hjust = 0, vjust = 0.5,
-          gp = grid::gpar(fontsize = 13, fontface = "bold", col = txt_col))
-     y <- 36
-     ck <- st$checks
-     keys <- .mosaic_calrep_check_keys()
-     if (nrow(ck)) {
-          for (i in seq_len(nrow(ck))) {
-               c1 <- ck[i, , drop = FALSE]
-               lab <- c1$label %|NA|% {
-                    k <- keys[c1$check]
-                    if (!is.na(k) && k %in% gl$key) gl$label[gl$key == k] else c1$check
+     rows <- lapply(m$status_rows, prep)
+     irows <- lapply(m$info_rows, prep)
+     rh_s <- if (length(rows)) max(vapply(rows, `[[`, 0, "h")) + 2 * ST$pad_y else 0
+     rh_i <- if (length(irows)) max(vapply(irows, `[[`, 0, "h")) + 2 * ST$pad_y else 0
+
+     draw_row <- function(r, i, rh, info = FALSE) {
+          if (i %% 2 == 0) add(grid::rectGrob(px(0), at(y), width = grid::unit(W, "pt"), height = grid::unit(rh, "pt"),
+                                              just = c("left", "top"), gp = grid::gpar(fill = ST$zebra, col = NA)))
+          mid <- y + rh / 2
+          yy <- mid - r$h_metric / 2
+          add(tg(r$name, px(cx[["metric"]] + pxp), at(yy + ST$name_lh / 2), ST$fs_name, face = 2))
+          yy <- yy + ST$name_lh
+          for (fl in r$formula) {
+               fs_f <- ST$fs_formula
+               while (fs_f > 5.6 && w_pt(as.expression(fl), fs_f) > cw[["metric"]] - 2 * pxp) fs_f <- fs_f - 0.2
+               add(tg(as.expression(fl), px(cx[["metric"]] + pxp), at(yy + ST$f_lh / 2), fs_f, col = ST$formula))
+               yy <- yy + ST$f_lh
+          }
+          yy <- mid - r$h_desc / 2
+          for (l in r$desc_l) {
+               add(tg(l, px(cx[["desc"]] + pxp), at(yy + ST$desc_lh / 2), ST$fs_body, col = "grey25"))
+               yy <- yy + ST$desc_lh
+          }
+          yy <- mid - r$h_val / 2
+          add(tg(r$value$main, px(x_val), at(yy + ST$name_lh / 2), ST$fs_value, face = 2, hjust = 1))
+          if (!is.null(r$value$sub))
+               add(tg(r$value$sub, px(x_val), at(yy + ST$name_lh + ST$sub_lh / 2), ST$fs_small, col = ST$muted, hjust = 1))
+          yy <- mid - r$h_tgt / 2
+          ty <- yy + ST$name_lh / 2
+          t <- r$target
+          if (identical(t$type, "split")) {
+               if (is.null(t$yellow)) {
+                    add(tg(t$green, px(x_slash), at(ty), ST$fs_body, hjust = 0.5))
+               } else {
+                    add(tg(t$green, px(x_slash - 4), at(ty), ST$fs_body, hjust = 1))
+                    add(tg("/", px(x_slash), at(ty), ST$fs_body, col = ST$faint, hjust = 0.5))
+                    add(tg(t$yellow, px(x_slash + 2), at(ty), ST$fs_body, hjust = 0))
                }
-               thr <- .mosaic_calrep_threshold_text(c1)
-               add_text(sprintf("%s: %s%s", lab, .mosaic_calrep_check_value(d, c1),
-                                if (nzchar(thr)) sprintf("   (%s)", thr) else ""), indent = 4.2)
-               kids[[length(kids) + 1L]] <- grid::pointsGrob(
-                    x = x0 + grid::unit(1.4, "mm"), y = at(y - 8 * 1.4 / 2), pch = 16,
-                    size = grid::unit(2.6, "mm"), gp = grid::gpar(col = .mosaic_calrep_col(c1$colour)))
+          } else add(tg(t$main, px(x_slash), at(ty), ST$fs_body, hjust = 0.5))
+          if (!is.null(t$note))
+               add(tg(t$note, px(x_slash), at(yy + ST$name_lh + ST$sub_lh / 2), ST$fs_small, col = ST$muted, hjust = 0.5))
+          if (!info) {
+               add(grid::roundrectGrob(px(x_stat), at(mid), width = grid::unit(ST$chip_w, "pt"),
+                                       height = grid::unit(ST$chip_h, "pt"), r = grid::unit(2, "pt"),
+                                       gp = grid::gpar(fill = .mosaic_calrep_col(r$colour), col = NA)))
+               add(tg(r$status %|NA|% "", px(x_stat), at(mid), 6.3, col = on_col(r$colour), face = 2, hjust = 0.5))
+          } else add(tg(r$flag, px(x_stat), at(mid), ST$fs_body, col = "grey40", hjust = 0.5))
+          add(grid::segmentsGrob(px(0), at(y + rh), px(W), at(y + rh), gp = grid::gpar(col = ST$rule, lwd = 0.5)))
+          y <<- y + rh
+     }
+     if (!length(rows)) {
+          add(tg(tt$no_checks, px(4), at(y + 9), ST$fs_body, col = ST$muted, face = 3))
+          y <- y + 18
+     }
+     for (i in seq_along(rows)) draw_row(rows[[i]], i, rh_s)
+     if (length(irows)) {
+          dv <- ST$div_h
+          lw <- w_pt(tt$divider, ST$fs_small, 3) + 10
+          for (seg in list(c(0, W / 2 - lw / 2), c(W / 2 + lw / 2, W)))
+               add(grid::segmentsGrob(px(seg[1]), at(y + dv / 2), px(seg[2]), at(y + dv / 2),
+                                      gp = grid::gpar(col = "grey60", lty = "11", lwd = 0.8)))
+          add(tg(tt$divider, px(W / 2), at(y + dv / 2), ST$fs_small, col = ST$muted, face = 3, hjust = 0.5))
+          add(grid::segmentsGrob(px(0), at(y + dv), px(W), at(y + dv), gp = grid::gpar(col = ST$rule, lwd = 0.5)))
+          y <- y + dv
+          for (i in seq_along(irows)) draw_row(irows[[i]], i, rh_i, info = TRUE)
+     }
+     add(grid::segmentsGrob(px(0), at(y), px(W), at(y), gp = grid::gpar(col = "grey40", lwd = 0.8)))
+     y <- y + ST$gap
+
+     # reasons, flags and sampling details are measured first, so the fit table
+     # takes its tier 1-2 rows only when everything still fits
+     bullets <- function(txts, fs) unlist(lapply(txts, function(r) {
+          w <- wrap_pt(r, W - 14, fs)
+          paste0(c("\u2022 ", rep("   ", length(w) - 1L)), w)
+     }))
+     reasons <- bullets(m$reasons, ST$fs_text - 0.3)
+     flag_l <- bullets(m$flags, ST$fs_text - 0.5)
+     lh_r <- ST$lh_r
+     det <- m$details
+     det_h <- if (length(det)) 14 + ceiling(length(det) / 2) * ST$details_lh + 2 else 0
+     flag_block_h <- if (length(flag_l)) 12 + length(flag_l) * (lh_r - 0.4) + ST$gap else 0
+     reasons_h <- if (length(reasons)) 13 + length(reasons) * lh_r + ST$gap else 0
+
+     ft <- m$fit_rows
+     fit_h <- function(n) 13 + ST$head_h + n * ST$fit_rh + ST$gap
+     if (any(ft$subset == "tier12") &&
+         H - y - fit_h(nrow(ft)) - reasons_h - flag_block_h - det_h - 4 < 0)
+          ft <- ft[ft$subset != "tier12", , drop = FALSE]
+     if (nrow(ft)) {
+          fx_txt <- .mosaic_gl_text(gl, "fit_table")
+          add(tg(fx_txt$caption, px(0), at(y + 4.5), ST$fs_section, face = 2))
+          add(tg(fx_txt$caption_note, px(w_pt(fx_txt$caption, ST$fs_section, 2) + 4), at(y + 4.5),
+                 ST$fs_small + 0.6, col = ST$muted))
+          y <- y + 13
+          fcols <- fx_txt$columns
+          fw <- c(W * 0.235, rep((W - W * 0.235) / 6, 6))
+          fx <- c(0, cumsum(fw))
+          xr <- fx[-1] - pxp - 4
+          add(grid::rectGrob(px(0), at(y), width = grid::unit(W, "pt"), height = grid::unit(ST$head_h, "pt"),
+                             just = c("left", "top"), gp = grid::gpar(fill = ST$head_bg, col = NA)))
+          hy <- y + ST$head_h / 2
+          for (ci in seq_along(fcols)) {
+               hx <- if (ci == 1) fx[1] + pxp else xr[ci]
+               hj <- if (ci == 1) 0 else 1
+               if (!nzchar(fcols[[ci]]$sub %||% "")) add(tg(fcols[[ci]]$head, px(hx), at(hy), ST$fs_head,
+                                                            col = ST$head_fg, face = 2, hjust = hj))
+               else {
+                    add(tg(fcols[[ci]]$head, px(hx), at(hy - 3.8), ST$fs_head, col = ST$head_fg, face = 2, hjust = hj))
+                    add(tg(fcols[[ci]]$sub, px(hx), at(hy + 4.6), ST$fs_small, col = "grey80", hjust = hj))
+               }
           }
-     } else {
-          add_text("No check results in the diagnostics file.", colour = .mosaic_calrep_muted())
-     }
-     y <- y + 4
-     if (length(st$reasons)) {
-          add_text("Why not green:", face = "bold")
-          rl <- .mosaic_calrep_reason_lines(st$reasons, wrap - 4L)
-          # Every reason is printed: lines that do not fit here continue on the
-          # next page (.mosaic_calrep_page1_layout(), round 3).
-          if (length(rl) > max_reason_lines)
-               rl <- c(rl[seq_len(max_reason_lines - 1L)], "  ... continued on the next page")
-          for (l in rl) add_text(l, indent = 1, fontsize = 7.6, step = 1.3)
-     } else {
-          if (nrow(ck) || is.na(st$status))
-               add_text(if (!is.na(st$status)) "All checks are green." else "No status in the diagnostics file.",
-                        colour = .mosaic_calrep_muted())
-     }
-     y <- y + 2
-     # Flags in words (convergence_flags_text), never the raw identifiers (R13).
-     if (length(st$flags_text)) {
-          add_text("Flags:", face = "bold")
-          for (ft in st$flags_text) {
-               w <- strwrap(ft, wrap - 4L)
-               for (l in paste0(c("- ", rep("  ", length(w) - 1L)), w))
-                    add_text(l, indent = 1, fontsize = 7.6, colour = "grey30", step = 1.3)
+          y <- y + ST$head_h
+          for (i in seq_len(nrow(ft))) {
+               if (i %% 2 == 0) add(grid::rectGrob(px(0), at(y), width = grid::unit(W, "pt"),
+                                                   height = grid::unit(ST$fit_rh, "pt"), just = c("left", "top"),
+                                                   gp = grid::gpar(fill = ST$zebra, col = NA)))
+               my <- y + ST$fit_rh / 2
+               vals <- unlist(ft[i, c("label", "r2", "bias", "cov50", "cov95", "wis", "n_scored")])
+               for (ci in seq_along(vals))
+                    add(tg(vals[[ci]], px(if (ci == 1) fx[1] + pxp else xr[ci]), at(my), ST$fs_body + 0.2,
+                           face = if (ci == 1) 2 else 1, hjust = if (ci == 1) 0 else 1))
+               last <- i == nrow(ft)
+               add(grid::segmentsGrob(px(0), at(y + ST$fit_rh), px(W), at(y + ST$fit_rh),
+                                      gp = grid::gpar(col = if (last) "grey40" else ST$rule, lwd = if (last) 0.8 else 0.5)))
+               y <- y + ST$fit_rh
           }
-     } else if (length(st$flags)) {
-          add_text(paste("Flags:", gsub("_", " ", paste(st$flags, collapse = "; "))), face = "bold")
-     } else {
-          add_text("Flags: none", colour = .mosaic_calrep_muted())
+          y <- y + ST$gap
      }
-     list(grob = grid::gTree(children = do.call(grid::gList, kids)), height_pt = y + 8)
+
+     overflow <- character(0)
+     if (length(reasons)) {
+          rs <- .mosaic_gl_text(gl, "reasons")
+          room <- H - y - det_h - flag_block_h - 4
+          max_lines <- max(2L, floor((room - 13 - ST$gap) / lh_r))
+          cont <- rep(FALSE, length(reasons))
+          if (length(reasons) > max_lines) {
+               overflow <- reasons[-seq_len(max_lines - 1L)]
+               reasons <- c(reasons[seq_len(max_lines - 1L)], paste0("   ", rs$continued))
+               cont <- c(rep(FALSE, max_lines - 1L), TRUE)
+          }
+          add(tg(rs$heading, px(0), at(y + 4.5), ST$fs_section, face = 2))
+          y <- y + 13
+          for (k in seq_along(reasons)) {
+               add(tg(reasons[k], px(4), at(y + lh_r / 2), ST$fs_text - 0.3, col = if (cont[k]) ST$muted else ST$ink,
+                      face = if (cont[k]) 3 else 1))
+               y <- y + lh_r
+          }
+          y <- y + ST$gap
+     }
+     if (!is.null(x$state)) assign("overflow", overflow, envir = x$state)
+     if (length(flag_l)) {
+          add(tg(.mosaic_gl_text(gl, "flags", "heading"), px(0), at(y + 4.5), ST$fs_section, face = 2))
+          y <- y + 12
+          for (l in flag_l) {
+               add(tg(l, px(4), at(y + (lh_r - 0.4) / 2), ST$fs_text - 0.5, col = "grey30"))
+               y <- y + lh_r - 0.4
+          }
+          y <- y + ST$gap
+     }
+     if (length(det)) {
+          add(tg(.mosaic_gl_text(gl, "sampling_details", "heading"), px(0), at(y + 5), ST$fs_section, face = 2))
+          add(grid::segmentsGrob(px(0), at(y + 11), px(W), at(y + 11), gp = grid::gpar(col = ST$rule, lwd = 0.5)))
+          half <- ceiling(length(det) / 2)
+          cols <- list(det[seq_len(half)], det[-seq_len(half)])
+          cols <- cols[lengths(cols) > 0]
+          lab_w <- vapply(cols, function(cl) max(vapply(cl, function(it) w_pt(it$label, ST$fs_body), 0)), 0)
+          val_w <- vapply(cols, function(cl) max(vapply(cl, function(it) w_pt(it$value, ST$fs_body), 0)), 0)
+          gap <- 6
+          xs <- c(0, if (length(cols) > 1L) max(lab_w[1] + gap + val_w[1] + 14, W - (lab_w[2] + gap + val_w[2])))
+          for (ci in seq_along(cols)) for (ri in seq_along(cols[[ci]])) {
+               it <- cols[[ci]][[ri]]
+               yy <- y + 14 + (ri - 1) * ST$details_lh + ST$details_lh / 2
+               add(tg(it$label, px(xs[ci]), at(yy), ST$fs_body, col = ST$muted))
+               add(tg(it$value, px(xs[ci] + lab_w[ci] + gap), at(yy), ST$fs_body))
+          }
+     }
+     grid::setChildren(x, do.call(grid::gList, kids))
 }
 
-.mosaic_calrep_ess_plot <- function(d) {
-     title <- "Posterior ESS as draws accumulate"
+# ESS and log-likelihood plots share their x axis.
+.mosaic_calrep_path_xlim <- function(d) {
+     n <- c(d$sampling$ess_path$n, d$sampling$loglik_path$n)
+     n <- n[is.finite(n) & n > 0]
+     if (!length(n)) return(c(1, 10))
+     r <- range(n)
+     if (r[1] == r[2]) r <- r * c(0.7, 1.4)
+     r
+}
+
+.mosaic_calrep_ess_plot <- function(d, gl) {
+     tx <- .mosaic_gl_text(gl, "ess_plot")
      p <- d$sampling$ess_path
      p <- p[is.finite(p$n) & is.finite(p$ess_all) & p$n > 0 & p$ess_all > 0, , drop = FALSE]
-     if (!nrow(p)) return(.mosaic_calrep_unavailable(title, "No ESS path in the diagnostics file."))
+     if (!nrow(p)) return(.mosaic_calrep_unavailable(tx$title, tx$empty))
      xl <- .mosaic_calrep_path_xlim(d)
      tgt <- d$sampling$ess_all_target
      col <- .mosaic_calrep_col(.mosaic_calrep_check(d, "ess")$colour)
@@ -784,7 +1001,7 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
      }
      if (is.finite(tgt)) {
           g <- g + ggplot2::geom_hline(yintercept = tgt, linetype = "dashed", colour = .mosaic_calrep_tgt(), linewidth = 0.4) +
-               ggplot2::annotate("text", x = xl[1], y = tgt, label = paste0("target ", .mosaic_calrep_fmt(tgt)),
+               ggplot2::annotate("text", x = xl[1], y = tgt, label = .mosaic_fill(tx$target, n = .mosaic_calrep_fmt(tgt)),
                                  hjust = 0, vjust = -0.5, size = 2.7, colour = .mosaic_calrep_tgt())
      }
      if (nrow(p) > 1L) g <- g + ggplot2::geom_line(colour = col, linewidth = 0.8)
@@ -792,82 +1009,68 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
           ggplot2::scale_x_log10(labels = scales::label_comma(), limits = xl) +
           ggplot2::scale_y_log10(labels = scales::label_comma(accuracy = 1), breaks = 10^(0:7)) +
           ggplot2::coord_cartesian(ylim = c(min(1, yr[1]), yr[2] * 1.6)) +
-          ggplot2::labs(title = title, x = NULL, y = "Kish ESS, all draws (log)",
-                        subtitle = paste0(if (is.finite(slope)) sprintf("log-log slope %.2f (1 = grows in proportion to draws)", slope)
-                                          else "log-log slope not available (too few points)",
-                                          ";\ndotted guides = 0.1%, 1%, 10% of draws")) +
+          ggplot2::labs(title = tx$title, x = NULL, y = tx$y,
+                        subtitle = paste0(if (is.finite(slope)) .mosaic_fill(tx$subtitle_slope, slope = sprintf("%.2f", slope))
+                                          else tx$subtitle_no_slope, "\n", tx$guides)) +
           .mosaic_calrep_theme(9) + ggplot2::theme(axis.text.x = ggplot2::element_blank())
 }
 
-.mosaic_calrep_path_xlim <- function(d) {
-     n <- c(d$sampling$ess_path$n, d$sampling$loglik_path$n)
-     n <- n[is.finite(n) & n > 0]
-     if (!length(n)) return(c(1, 10))
-     r <- range(n)
-     if (r[1] == r[2]) r <- r * c(0.7, 1.4)
-     r
+#' Breaks of the signed-log (pseudo-log) log-likelihood axis
+#'
+#' Below 100 units, the 1-2-5 steps of every decade (no crowding next to 0);
+#' beyond, every decade and its 3x step while there are at most six decades,
+#' else every decade, so no long stretch of the axis is unlabelled.
+#' @param lo The lowest gap (negative).
+#' @return Breaks, 0 first.
+#' @noRd
+.mosaic_calrep_signed_log_breaks <- function(lo) {
+     if (-lo < 100) {
+          dec <- 10^(-1:max(0, ceiling(log10(-lo))))
+          brk <- -c(0, sort(unique(as.vector(outer(c(1, 2, 5), dec)))))
+          brk <- brk[brk >= 1.5 * lo | brk == max(brk[brk < lo], na.rm = TRUE)]
+          return(brk[brk == 0 | abs(brk) >= abs(lo) / 10])
+     }
+     nd <- ceiling(log10(-lo))
+     steps <- if (nd <= 6) c(1, 3) else 1
+     brk <- -c(0, sort(unique(as.vector(outer(steps, 10^(1:nd))))))
+     brk[brk >= lo | brk == max(brk[brk < lo])]
 }
 
-.mosaic_calrep_loglik_plot <- function(d) {
-     title <- "Best log-likelihood found so far (vs final best)"
+.mosaic_calrep_loglik_plot <- function(d, gl) {
+     tx <- .mosaic_gl_text(gl, "loglik_plot")
      p <- d$sampling$loglik_path
-     if (!nrow(p)) return(.mosaic_calrep_unavailable(title, "No log-likelihood path in the diagnostics file."))
-     ll <- rbind(data.frame(n = p$n, gap = p$best_gap, what = "best draw so far"),
-                 data.frame(n = p$n, gap = p$top100_gap, what = "100th best draw so far"))
+     if (!nrow(p)) return(.mosaic_calrep_unavailable(tx$title, tx$empty))
+     ll <- rbind(data.frame(n = p$n, gap = p$best_gap, what = tx$best),
+                 data.frame(n = p$n, gap = p$top100_gap, what = tx$top100))
      ll <- ll[is.finite(ll$n) & ll$n > 0 & is.finite(ll$gap), , drop = FALSE]
-     if (!nrow(ll)) return(.mosaic_calrep_unavailable(title, "No log-likelihood path in the diagnostics file."))
-     ll$what <- factor(ll$what, levels = c("best draw so far", "100th best draw so far"))
+     if (!nrow(ll)) return(.mosaic_calrep_unavailable(tx$title, tx$empty))
+     ll$what <- factor(ll$what, levels = c(tx$best, tx$top100))
      eta <- d$run$eta
      lo <- min(ll$gap, -1)
-     # every decade down to the lowest gap, so the whole axis is labelled; a
-     # shallow range (under two decades) adds the 0.2 / 0.5 / 2 / 5 steps (R14)
-     dec <- 10^(-1:max(0, ceiling(log10(-lo))))
-     brk <- if (-lo < 100) -c(0, sort(unique(as.vector(outer(c(1, 2, 5), dec))))) else -c(0, 10^(0:max(0, ceiling(log10(-lo)))))
-     brk <- brk[brk >= 1.5 * lo | brk == max(brk[brk < lo], na.rm = TRUE)]
-     brk <- brk[brk == 0 | abs(brk) >= abs(lo) / 10]   # no crowding next to 0
      g <- ggplot2::ggplot(ll, ggplot2::aes(.data$n, .data$gap, colour = .data$what)) +
           ggplot2::geom_hline(yintercept = 0, colour = .mosaic_calrep_tgt(), linewidth = 0.3)
      g <- g + (if (nrow(p) > 1L) ggplot2::geom_line(linewidth = 0.7) else ggplot2::geom_point(size = 1.8))
      g + ggplot2::expand_limits(y = c(0, min(-1, lo))) +
-          ggplot2::scale_colour_manual(values = c(`best draw so far` = "grey20", `100th best draw so far` = "grey60"),
-                                      name = NULL, drop = TRUE) +
+          ggplot2::scale_colour_manual(values = stats::setNames(c("grey20", "grey60"), c(tx$best, tx$top100)),
+                                       name = NULL, drop = TRUE) +
           ggplot2::scale_x_log10(labels = scales::label_comma(), limits = .mosaic_calrep_path_xlim(d)) +
           ggplot2::scale_y_continuous(trans = scales::pseudo_log_trans(sigma = 1, base = 10),
-                                      breaks = brk, labels = scales::label_comma()) +
-          ggplot2::labs(title = title,
-                        subtitle = paste0("signed log scale; a jump concentrates the weights (a dip in the ESS above).",
+                                      breaks = .mosaic_calrep_signed_log_breaks(lo), labels = scales::label_comma()) +
+          ggplot2::labs(title = tx$title,
+                        subtitle = paste0(tx$subtitle,
                                           if (is.finite(eta) && eta > 0)
-                                               sprintf("\nA draw %s units below the best gets weight 1/e.",
-                                                       .mosaic_calrep_fmt(1 / eta)) else ""),
-                        x = "simulations (draws), log scale", y = "log-likelihood\nbelow final best") +
+                                               paste0("\n", .mosaic_fill(tx$eta_note, units = .mosaic_calrep_fmt(1 / eta)))
+                                          else ""),
+                        x = tx$x, y = tx$y) +
           .mosaic_calrep_theme(9) + ggplot2::theme(legend.position = "bottom")
 }
 
-# Page 1's left column: the badge with as many reason lines as fit beside both
-# tables at their natural size; \code{overflow} holds the reason lines that
-# continue on a page of their own (none are dropped, round 3).
-.mosaic_calrep_page1_layout <- function(d, gl) {
-     tabs <- .mosaic_calrep_sampling_tables(d)
-     wrap <- c(Measure = 34, Value = 52)
-     t1 <- .mosaic_calrep_table_grob(tabs$all[, c("Measure", "Value")], "All draws: the posterior", wrap)
-     t2 <- .mosaic_calrep_table_grob(tabs$ensemble[, c("Measure", "Value")], "The ensemble: best-fitting draws", wrap)
-     rl <- .mosaic_calrep_reason_lines(d$status$reasons, 76L)
-     L_used <- length(rl)
-     for (L in c(max(16L, length(rl)), 16L, 13L, 10L, 8L, 6L, 4L)) {
-          badge <- .mosaic_calrep_badge(d, gl, max_reason_lines = L)
-          L_used <- L
-          if (badge$height_pt + 8 + attr(t1, "height_pt") + 18 + attr(t2, "height_pt") + 6 <= 515) break
-     }
-     overflow <- if (length(rl) > L_used) rl[-seq_len(L_used - 1L)] else character(0)
-     list(badge = badge, t1 = t1, t2 = t2, overflow = overflow)
-}
-
 # The reasons that did not fit page 1, in full.
-.mosaic_calrep_page_reasons <- function(d, lines, foot) {
+.mosaic_calrep_page_reasons <- function(d, gl, lines, foot) {
      kids <- list(
-          grid::textGrob(sprintf("Calibration diagnostics: %s", .mosaic_calrep_title(d)), x = 0.04, y = 0.955,
-                         hjust = 0, gp = grid::gpar(fontface = "bold", fontsize = 15)),
-          grid::textGrob("1. Enough simulations? Why not green (continued from the previous page)", x = 0.04, y = 0.915,
+          grid::textGrob(.mosaic_fill(.mosaic_gl_text(gl, "title"), title = .mosaic_calrep_title(d, gl)),
+                         x = 0.04, y = 0.955, hjust = 0, gp = grid::gpar(fontface = "bold", fontsize = 15)),
+          grid::textGrob(.mosaic_gl_text(gl, "sections", "reasons"), x = 0.04, y = 0.915,
                          hjust = 0, gp = grid::gpar(fontsize = 9, col = "grey35")),
           grid::textGrob(foot, x = 0.965, y = 0.025, hjust = 1,
                          gp = grid::gpar(fontsize = 7.5, col = .mosaic_calrep_muted())))
@@ -880,22 +1083,14 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
      grid::gTree(children = do.call(grid::gList, kids))
 }
 
-.mosaic_calrep_page_sampling <- function(d, gl, foot) {
-     lay <- .mosaic_calrep_page1_layout(d, gl)
-     badge <- lay$badge; t1 <- lay$t1; t2 <- lay$t2
-     # One grob for the column: blocks at their natural heights stacked from the
-     # top, the rest blank. If they would not fit the ~520 pt column, relative
-     # heights instead, so nothing overflows into the page header.
-     h <- c(badge$height_pt + 8, attr(t1, "height_pt") + 18, attr(t2, "height_pt") + 6)
-     h <- if (sum(h) <= 515) grid::unit(c(h, 1), c("pt", "pt", "pt", "null")) else grid::unit(h, "null")
-     left_grobs <- list(badge$grob, t1, t2, grid::nullGrob())[seq_along(h)]
-     left <- patchwork::wrap_elements(full = do.call(gridExtra::arrangeGrob,
-                                                     c(left_grobs, list(ncol = 1, heights = h))))
-     pe <- .mosaic_calrep_safe("Posterior ESS as draws accumulate", .mosaic_calrep_ess_plot(d))
-     pl <- .mosaic_calrep_safe("Best log-likelihood found so far", .mosaic_calrep_loglik_plot(d))
+# Page 1: the left column (1.14) beside the two plots (1.18).
+.mosaic_calrep_page_sampling <- function(d, gl, foot, state = NULL) {
+     left <- patchwork::wrap_elements(full = .mosaic_calrep_left_column(.mosaic_calrep_page1_model(d, gl), gl, state))
+     pe <- .mosaic_calrep_safe(gl, .mosaic_gl_text(gl, "ess_plot", "title"), .mosaic_calrep_ess_plot(d, gl))
+     pl <- .mosaic_calrep_safe(gl, .mosaic_gl_text(gl, "loglik_plot", "title"), .mosaic_calrep_loglik_plot(d, gl))
      right <- (pe / pl) + patchwork::plot_layout(heights = c(1.25, 1))
-     p <- (left | right) + patchwork::plot_layout(widths = c(1.02, 1.3)) +
-          .mosaic_calrep_header(d, "1. Enough simulations? Convergence status and ensemble ESS", foot)
+     p <- (left | right) + patchwork::plot_layout(widths = c(1.14, 1.18)) +
+          .mosaic_calrep_header(d, gl, "sampling", foot)
      patchwork::patchworkGrob(p)
 }
 
@@ -996,16 +1191,16 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
           ggplot2::guides(colour = ggplot2::guide_legend(override.aes = list(size = 2.2)))
 }
 
-.mosaic_calrep_page_parameters <- function(d, foot) {
+.mosaic_calrep_page_parameters <- function(d, gl, foot) {
      pp <- d$parameters
      many <- nrow(pp) > 60L
      g <- if (nrow(pp)) .mosaic_calrep_group_params(pp, many) else NULL
      pm <- if (is.null(g)) .mosaic_calrep_unavailable("Sampling precision of each posterior mean",
                                                       "No parameters in the diagnostics file.")
-           else .mosaic_calrep_safe("Sampling precision of each posterior mean", .mosaic_calrep_mce_plot(d, g, many))
+           else .mosaic_calrep_safe(gl, "Sampling precision of each posterior mean", .mosaic_calrep_mce_plot(d, g, many))
      pk <- if (is.null(g)) .mosaic_calrep_unavailable("Movement from the prior (KL divergence)",
                                                       "No parameters in the diagnostics file.")
-           else .mosaic_calrep_safe("Movement from the prior (KL divergence)", .mosaic_calrep_kl_plot(d, g, many))
+           else .mosaic_calrep_safe(gl, "Movement from the prior (KL divergence)", .mosaic_calrep_kl_plot(d, g, many))
      ms <- d$mce_summary; ks <- d$kl_summary
      worst <- ms$worst[is.finite(ms$worst$mce), , drop = FALSE]
      worst_txt <- if (nrow(worst)) sprintf(" Largest: %s.", paste(sprintf("%s %s", utils::head(worst$parameter, 3),
@@ -1029,10 +1224,9 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
           txt, x = grid::unit(2, "mm"), y = grid::unit(1, "npc"), hjust = 0, vjust = 1,
           gp = grid::gpar(fontsize = 7.7, col = .mosaic_calrep_ink(), lineheight = 1.2)))
      p <- ((pm | pk) / note) + patchwork::plot_layout(heights = c(6, 0.55)) +
-          .mosaic_calrep_header(d, "2. How informative? Parameter sampling precision and movement from the priors", foot)
+          .mosaic_calrep_header(d, gl, "parameters", foot)
      patchwork::patchworkGrob(p)
 }
-
 
 # ---------------------------------------------------------------------------
 # Page 3: fit table and time series
@@ -1048,128 +1242,118 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
      intersect(c("cases", "deaths"), m)
 }
 
-.mosaic_calrep_ts_plot <- function(d, m) {
-     title <- sprintf("Weekly %s: observed and ensemble", m)
+# Runs of consecutive TRUE in `flag` over weekly dates, as rectangles.
+.mosaic_calrep_week_runs <- function(date, flag) {
+     if (!length(flag) || !any(flag)) return(data.frame(xmin = as.Date(character(0)), xmax = as.Date(character(0))))
+     r <- rle(flag); end <- cumsum(r$lengths); start <- end - r$lengths + 1L
+     data.frame(xmin = date[start[r$values]], xmax = date[end[r$values]] + 7)
+}
+
+.mosaic_calrep_ts_plot <- function(d, gl, m) {
+     tx <- .mosaic_gl_text(gl, "fit_page")
+     title <- .mosaic_fill(tx$series_title, metric = m)
      w <- d$fit$weekly
      w <- w[w$metric == m, , drop = FALSE]
-     if (!nrow(w)) return(.mosaic_calrep_unavailable(title, sprintf("No scored weekly %s in the diagnostics file.", m)))
+     if (!nrow(w)) return(.mosaic_calrep_unavailable(title, .mosaic_fill(tx$series_empty, metric = m)))
      many <- length(unique(w$location)) > 1L
      band_cols <- c("lo50", "hi50", "lo95", "hi95")
      has_bands <- !many && all(vapply(band_cols, function(cl) any(is.finite(w[[cl]])), logical(1)))
      x <- if (many) {
-          a <- stats::aggregate(cbind(observed = w$observed, predicted = w$predicted), list(date = w$date),
-                                function(v) if (all(!is.finite(v))) NA_real_ else sum(v, na.rm = TRUE))
+          s <- function(v) if (all(!is.finite(v))) NA_real_ else sum(v, na.rm = TRUE)
+          a <- stats::aggregate(cbind(observed = w$observed, predicted = w$predicted), list(date = w$date), s,
+                                na.action = stats::na.pass)
+          a$scored <- stats::aggregate(list(s = w$scored), list(date = w$date), any)$s
           a
-     } else w[, c("date", "observed", "predicted", band_cols)]
+     } else w[, c("date", "scored", "observed", "predicted", band_cols)]
      x <- x[order(x$date), , drop = FALSE]
-     # unscored weeks are absent: break the line across gaps longer than a week
+     # a gap in the weekly rows (a file holding scored weeks only) breaks the line
      gap <- c(FALSE, diff(as.numeric(x$date)) > 7)
      if (any(gap)) {
           brk <- x[gap, , drop = FALSE]; brk$date <- brk$date - 1
-          brk[, setdiff(names(brk), "date")] <- NA
+          brk[, setdiff(names(brk), c("date", "scored"))] <- NA
           x <- rbind(x, brk); x <- x[order(x$date), , drop = FALSE]
      }
      col <- .mosaic_calrep_metric_colour(m)
      r <- d$run
      xl <- c(if (!is.na(r$date_start)) r$date_start else min(x$date), if (!is.na(r$date_stop)) r$date_stop else max(x$date) + 6)
-     # Runs of consecutive scored weeks: a ribbon over a single isolated week is
-     # a sliver, so such weeks get interval bars instead (WS6).
-     obs_rows <- !is.na(x$observed) | !is.na(x$predicted)
-     seg <- cumsum(c(TRUE, diff(as.numeric(x$date)) > 7))
-     seg_n <- stats::ave(as.numeric(obs_rows), seg, FUN = sum)
-     ribbon_x <- x[seg_n >= 2 | !obs_rows, , drop = FALSE]
-     lone_x <- x[seg_n < 2 & obs_rows, , drop = FALSE]
+     modelled <- is.finite(x$predicted)
+     uns <- .mosaic_calrep_week_runs(x$date[modelled], !(x$scored[modelled] %in% TRUE))
      p <- ggplot2::ggplot(x, ggplot2::aes(.data$date))
      burn <- r$burn_in_days
      if (is.finite(burn) && burn > 0 && !is.na(r$date_start))
           p <- p + ggplot2::annotate("rect", xmin = r$date_start, xmax = r$date_start + burn, ymin = -Inf, ymax = Inf,
-                                     fill = "grey93")
-     if (has_bands) {
-          p <- p + ggplot2::geom_ribbon(data = ribbon_x, ggplot2::aes(ymin = .data$lo95, ymax = .data$hi95), fill = col,
-                                        alpha = 0.15, na.rm = TRUE) +
-               ggplot2::geom_ribbon(data = ribbon_x, ggplot2::aes(ymin = .data$lo50, ymax = .data$hi50), fill = col,
-                                    alpha = 0.25, na.rm = TRUE)
-          if (nrow(lone_x))
-               p <- p + ggplot2::geom_linerange(data = lone_x, ggplot2::aes(ymin = .data$lo95, ymax = .data$hi95),
-                                                colour = col, alpha = 0.35, linewidth = 0.6, na.rm = TRUE) +
-                    ggplot2::geom_linerange(data = lone_x, ggplot2::aes(ymin = .data$lo50, ymax = .data$hi50),
-                                            colour = col, alpha = 0.6, linewidth = 1.2, na.rm = TRUE)
-     }
-     p <- p + ggplot2::geom_point(ggplot2::aes(y = .data$observed), size = 0.6, colour = "grey30", alpha = 0.7, na.rm = TRUE) +
-          ggplot2::geom_line(ggplot2::aes(y = .data$predicted), colour = col, linewidth = 0.5, na.rm = TRUE)
-     if (nrow(lone_x))
-          p <- p + ggplot2::geom_point(data = lone_x, ggplot2::aes(y = .data$predicted), colour = col, size = 1, na.rm = TRUE)
-     p +
+                                     fill = "grey88")
+     if (nrow(uns))
+          p <- p + ggplot2::geom_rect(data = uns, ggplot2::aes(xmin = .data$xmin, xmax = .data$xmax),
+                                      ymin = -Inf, ymax = Inf, fill = "grey95", inherit.aes = FALSE)
+     if (has_bands)
+          p <- p + ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$lo95, ymax = .data$hi95), fill = col, alpha = 0.15,
+                                        na.rm = TRUE) +
+               ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$lo50, ymax = .data$hi50), fill = col, alpha = 0.25,
+                                    na.rm = TRUE)
+     n_uns <- sum(modelled & !(x$scored %in% TRUE))
+     src <- d$fit$weekly_source
+     p + ggplot2::geom_line(ggplot2::aes(y = .data$predicted), colour = col, linewidth = 0.5, na.rm = TRUE) +
+          ggplot2::geom_point(ggplot2::aes(y = .data$observed), size = 0.6, colour = "grey20", alpha = 0.75, na.rm = TRUE) +
           ggplot2::scale_x_date(limits = xl, expand = ggplot2::expansion(mult = 0.01)) +
           ggplot2::scale_y_continuous(labels = scales::label_comma()) +
           ggplot2::labs(title = title,
-                        subtitle = paste0(if (many) "Summed over all locations. " else "",
-                                          "Weekly totals on scored weeks (partial edge weeks left out). Points = observed; line = ensemble central line",
-                                          if (has_bands) "; bands = 50% and 95% predictive intervals" else "",
-                                          if (any(gap)) ". Gaps = weeks not scored" else "",
-                                          if (has_bands && nrow(lone_x)) "; isolated weeks as interval bars" else "",
-                                          if (is.finite(burn) && burn > 0) sprintf(". Shaded = %s-day burn-in, not scored.", .mosaic_calrep_fmt(burn)) else "."),
-                        x = NULL, y = paste(m, "per week")) +
+                        subtitle = paste0(if (many) tx$subtitle_many else "",
+                                          if (identical(src, "scored_weeks")) tx$subtitle_scored_only else tx$subtitle_main,
+                                          if (has_bands) tx$subtitle_bands else "",
+                                          if (n_uns) .mosaic_fill(tx$subtitle_unscored, n = n_uns) else "",
+                                          if (is.finite(burn) && burn > 0)
+                                               .mosaic_fill(tx$subtitle_burn_in, days = .mosaic_calrep_fmt(burn))
+                                          else tx$subtitle_end,
+                                          if (identical(src, "daily_sums")) tx$subtitle_daily_sums else ""),
+                        x = NULL, y = .mosaic_fill(tx$series_y, metric = m)) +
           .mosaic_calrep_theme(8.5)
 }
 
-.mosaic_calrep_page_fit <- function(d, foot) {
-     tb <- d$fit$table
+.mosaic_calrep_page_fit <- function(d, gl, foot) {
+     tx <- .mosaic_gl_text(gl, "fit_page")
+     fxt <- .mosaic_gl_text(gl, "fit_table")
      fmt <- .mosaic_calrep_fmt; pct <- .mosaic_calrep_pct
-     # One row per channel on every scored day (the definition of summary.json's
-     # r2_*_ensemble / bias_ratio_*), then, when the run has surveillance
-     # tiers, the same on tier 1-2 days only (D8).
-     tb <- tb[order(match(tb$metric, c("cases", "deaths")), match(tb$subset, c("scored", "tier12"))), , drop = FALSE]
+     tb <- d$fit$table_display
      has_tier12 <- any(tb$subset == "tier12")
-     fit_df <- function(short) {
-          chan <- .mosaic_calrep_title_case(tb$metric)
-          days <- ifelse(tb$subset == "tier12", "tier 1-2 days", "all scored days")
-          data.frame(Channel = if (has_tier12) sprintf("%s, %s", chan, days) else chan,
-                     R2 = fmt(tb$r2, 2), Bias = fmt(tb$bias, 2),
-                     a = pct(tb$cov50, 0), b = pct(tb$cov95, 0), WIS = .mosaic_calrep_sig(tb$wis, 3),
-                     `Scored days` = fmt(tb$n_scored), check.names = FALSE) |>
-               stats::setNames(c("Channel", "R\u00b2", "Bias (pred./obs.)",
-                                 if (short) c("50% cov.", "95% cov.") else c("50% coverage", "95% coverage"),
-                                 "WIS (per day)", "Scored days"))
-     }
-     fit_note <- paste0("Scored days count each channel's location-days with an observation after the burn-in; ",
-                        "page 1's scored observation cells count location-days with a cases or a deaths observation. ",
-                        if (has_tier12) "Tier 1-2 = observed and reconstructed weeks (imputed weeks left out). " else "",
-                        "Bias = predicted / observed total; WIS in reported counts per location-day.")
+     heads <- vapply(fxt$columns, function(cl) trimws(paste(cl$head, cl$sub %||% "")), character(1))
+     fit_df <- stats::setNames(tb[, c("label", "r2", "bias", "cov50", "cov95", "wis", "n_scored")], heads)
+     fit_note <- paste0(tx$note, if (has_tier12) tx$note_tier else "", tx$note_end)
      pl <- d$fit$per_location
      multi <- isTRUE(d$run$n_locations > 1) || length(unique(pl$location)) > 1L
      worst <- if (multi && nrow(pl))
           pl[pl$metric == "cases" & is.finite(pl$observed_total) & pl$observed_total > 0, , drop = FALSE] else pl[0, ]
-     rank_note <- "lowest R\u00b2"
+     rank_note <- tx$worst_rank_r2
      if (nrow(worst)) {
           # Rank by R²; when no location has one (flat series, e.g. 47 Kenya
           # counties), by |log bias| instead, never alphabetically (WS6).
           if (all(!is.finite(worst$r2))) {
                lb <- abs(log(worst$bias)); lb[!is.finite(lb) & !is.na(worst$bias)] <- Inf
                worst <- worst[order(-ifelse(is.na(lb), -Inf, lb)), , drop = FALSE]
-               rank_note <- "largest |log bias|; R\u00b2 unavailable"
+               rank_note <- tx$worst_rank_bias
           } else worst <- worst[order(worst$r2, na.last = FALSE), , drop = FALSE]
           worst <- worst[seq_len(min(8L, nrow(worst))), , drop = FALSE]
           wt <- .mosaic_calrep_table(
                stats::setNames(data.frame(worst$location, fmt(worst$observed_total), fmt(worst$r2, 2),
                                           fmt(worst$bias, 2), pct(worst$cov95, 0), stringsAsFactors = FALSE),
-                               c("Location", "Observed cases", "R\u00b2", "Bias (pred./obs.)", "95% cov.")),
-               sprintf("Worst-fitting locations, cases (%d of %d, %s)", nrow(worst), sum(pl$metric == "cases"), rank_note))
-          ft <- if (nrow(tb)) .mosaic_calrep_table(fit_df(TRUE), "Fit metrics (central line vs observed)")
-                else .mosaic_calrep_unavailable("Fit metrics", "No fit table in the diagnostics file.")
+                               unlist(tx$worst_columns)),
+               .mosaic_fill(tx$worst_title, n = nrow(worst), total = sum(pl$metric == "cases"), rank = rank_note))
+          ft <- if (nrow(tb)) .mosaic_calrep_table(fit_df, tx$table_title_short)
+                else .mosaic_calrep_unavailable(tx$table_missing_title, tx$table_missing)
           h_top <- max(attr(wt, "height_pt"), attr(ft, "height_pt") %||% 60)
           top <- ft | wt
      } else if (nrow(tb)) {
-          top <- .mosaic_calrep_table(fit_df(FALSE), "Fit metrics (central line vs observed, after the burn-in)")
+          top <- .mosaic_calrep_table(fit_df, tx$table_title)
           h_top <- attr(top, "height_pt")
      } else {
-          top <- .mosaic_calrep_unavailable("Fit metrics", "No fit table in the diagnostics file.")
+          top <- .mosaic_calrep_unavailable(tx$table_missing_title, tx$table_missing)
           h_top <- 60
      }
      mets <- .mosaic_calrep_metrics_present(d)
-     ts <- lapply(mets, function(m) .mosaic_calrep_safe(sprintf("Weekly %s", m), .mosaic_calrep_ts_plot(d, m)))
+     ts <- lapply(mets, function(m) .mosaic_calrep_safe(gl, .mosaic_fill(tx$series_title, metric = m),
+                                                         .mosaic_calrep_ts_plot(d, gl, m)))
      if (!length(ts))
-          ts <- list(.mosaic_calrep_unavailable("Weekly observed and ensemble", "No scored weekly series in the diagnostics file."))
+          ts <- list(.mosaic_calrep_unavailable(tx$series_title_any, tx$series_empty_any))
      missing <- setdiff(c("cases", "deaths"), mets)
      # heights in points of the ~470 pt panel area: tables and the note at their
      # natural size, the series share the rest
@@ -1179,13 +1363,13 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
      heights <- c(h_top + 16, if (fn_pt) fn_pt, rep(max(120, 470 - fixed) / length(ts), length(ts)))
      panels <- c(list(top), if (fn_pt) list(.mosaic_calrep_note(paste(strwrap(fit_note, 190), collapse = "\n"))), ts)
      if (note_pt > 0) {
-          panels <- c(panels, list(.mosaic_calrep_note(sprintf("%s: not scored in this run (no %s in the fit block).",
-                                                               paste(.mosaic_calrep_title_case(missing), collapse = ", "),
-                                                               paste(missing, collapse = " or ")))))
+          chan <- vapply(missing, function(m) fxt[[paste0("channel_", m)]], character(1))
+          panels <- c(panels, list(.mosaic_calrep_note(.mosaic_fill(tx$missing_channel, channels = paste(chan, collapse = ", "),
+                                                                    names = paste(missing, collapse = " or ")))))
           heights <- c(heights, note_pt)
      }
      p <- patchwork::wrap_plots(panels, ncol = 1, heights = heights) +
-          .mosaic_calrep_header(d, "3. Does it fit? Fit metrics and weekly series", foot)
+          .mosaic_calrep_header(d, gl, "fit", foot)
      patchwork::patchworkGrob(p)
 }
 
@@ -1203,7 +1387,7 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 # Page 4: weekly predicted vs observed, 2 x 2
 # ---------------------------------------------------------------------------
 
-.mosaic_calrep_page_scatter <- function(d, foot) {
+.mosaic_calrep_page_scatter <- function(d, gl, foot) {
      w <- d$fit$weekly
      w <- w[is.finite(w$observed) & is.finite(w$predicted), , drop = FALSE]
      many <- length(unique(w$location)) > 1L
@@ -1246,14 +1430,13 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
                              x = "count per week + 1 (log scale)", y = "density (square-root scale)") +
                .mosaic_calrep_theme(8.5) + ggplot2::theme(legend.position = "bottom")
      }
-     s <- function(title, expr) .mosaic_calrep_safe(title, expr)
+     s <- function(title, expr) .mosaic_calrep_safe(gl, title, expr)
      p <- ((s("Weekly cases", sp("cases")) | s("Weekly deaths", sp("deaths"))) /
            (s("Weekly cases", dp("cases")) | s("Weekly deaths", dp("deaths")))) +
           patchwork::plot_layout(heights = c(1.4, 1)) +
-          .mosaic_calrep_header(d, "4. Does it fit? Weekly predicted vs observed", foot)
+          .mosaic_calrep_header(d, gl, "scatter", foot)
      patchwork::patchworkGrob(p)
 }
-
 
 # ---------------------------------------------------------------------------
 # Appendix: the glossary
@@ -1261,20 +1444,23 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
 
 .mosaic_calrep_appendix <- function(gl, d = NULL) {
      wrap <- 92L
+     ap <- .mosaic_gl_text(gl, "appendix")
+     plain <- function(x) .mosaic_rich_plain(x, gl, "ascii")
      # Only the metrics this report shows (R17), in glossary order.
      if (!is.null(d)) {
           keys <- .mosaic_calrep_metric_keys(d)
           if (any(gl$key %in% keys)) gl <- gl[gl$key %in% keys, , drop = FALSE]
      }
-     # A check's threshold as this run applied it (status.checks[]), with the
-     # glossary's text labelled as the default (R11).
-     ck_of_key <- stats::setNames(names(.mosaic_calrep_check_keys()), .mosaic_calrep_check_keys())
+     # A target as this run applied it (the check's or info row's target
+     # display), with the glossary's text labelled as the default (R11).
      run_thr <- function(key) {
-          if (is.null(d) || !key %in% names(ck_of_key)) return(NULL)
-          ck <- .mosaic_calrep_check(d, ck_of_key[[key]])
-          if (!nrow(ck) || is.na(ck$check)) return(NULL)
-          t <- .mosaic_calrep_threshold_text(ck)
-          if (nzchar(t)) paste("This run:", t) else NULL
+          if (is.null(d)) return(NULL)
+          ck <- d$status$checks
+          t <- ck$target_display[ck$key %in% key]
+          if (!length(t)) t <- unlist(lapply(d$info, function(x) if (identical(x$key, key) && !is.na(x$operator))
+               x$target_display))
+          t <- t[!is.na(t) & nzchar(t)]
+          if (length(t)) paste(ap$this_run, plain(t[1])) else NULL
      }
      lines <- list()
      for (i in seq_len(nrow(gl))) {
@@ -1282,14 +1468,24 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
           ent <- list(list(txt = e$label, kind = "head"))
           has_thr <- !grepl("^none\\b", tolower(trimws(e$threshold)))
           rt <- run_thr(e$key)
-          body <- c(e$definition, paste("Formula:", e$formula), paste("How to read:", e$how_to_read),
+          body <- c(e$definition, paste(ap$formula, e$formula), paste(ap$how_to_read, e$how_to_read),
                     rt,
-                    if (has_thr) paste(if (is.null(rt)) "Threshold (default):" else "Default:", e$threshold),
-                    paste("Not a measure of:", e$not_a_measure_of))
+                    if (has_thr) paste(if (is.null(rt)) ap$default_only else ap$default, e$threshold),
+                    paste(ap$not_a_measure_of, e$not_a_measure_of))
           for (b in body) for (l in strwrap(b, width = wrap, exdent = 3))
                ent[[length(ent) + 1L]] <- list(txt = l, kind = "body")
           ent[[length(ent) + 1L]] <- list(txt = "", kind = "gap")
           lines <- c(lines, ent)
+     }
+     # The metrics retired in 1.4.0, and why.
+     rt <- attr(gl, "retired")
+     if (length(rt$items)) {
+          lines <- c(lines, list(list(txt = rt$heading, kind = "head")))
+          for (l in strwrap(rt$note, width = wrap)) lines <- c(lines, list(list(txt = l, kind = "body")))
+          for (it in rt$items) {
+               lines <- c(lines, list(list(txt = "", kind = "gap"), list(txt = it$label, kind = "sub")))
+               for (l in strwrap(it$why, width = wrap, exdent = 3)) lines <- c(lines, list(list(txt = l, kind = "body")))
+          }
      }
      # two columns per page; an entry may continue in the next column, but a
      # heading never ends a column. Columns are balanced so the last page is
@@ -1301,23 +1497,20 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
           l <- lines[[k]]
           if (!length(cur) && l$kind == "gap") next
           full <- length(cur) >= per_col ||
-               (l$kind == "head" && length(cur) >= per_col - 3L)
+               (l$kind %in% c("head", "sub") && length(cur) >= per_col - 3L)
           if (full) { cols[[length(cols) + 1L]] <- cur; cur <- list() }
           cur[[length(cur) + 1L]] <- l
      }
      if (length(cur)) cols[[length(cols) + 1L]] <- cur
      pages <- split(cols, ceiling(seq_along(cols) / 2))
-     ver <- attr(gl, "version")
+     ver <- attr(gl, "version") %||% "?"
      lapply(seq_along(pages), function(i) {
           pg <- pages[[i]]
           function(foot) {
                kids <- list(
-                    grid::textGrob(sprintf("Appendix %d of %d: what each metric means", i, length(pages)),
+                    grid::textGrob(.mosaic_fill(ap$title, i = i, n = length(pages)),
                                    x = 0.04, y = 0.955, hjust = 0, gp = grid::gpar(fontface = "bold", fontsize = 15)),
-                    grid::textGrob(sprintf(paste0("From inst/extdata/metric_glossary.yml%s; the metrics in this report only.\n",
-                                                  "Thresholds are conventions, not properties of the model: \"This run\" ",
-                                                  "is what this run applied, \"default\" the package default."),
-                                           if (!is.null(ver)) sprintf(" (version %s)", ver) else ""),
+                    grid::textGrob(.mosaic_fill(ap$intro, version = ver),
                                    x = 0.04, y = 0.93, hjust = 0, vjust = 1, gp = grid::gpar(fontsize = 8.5, col = "grey35")),
                     grid::textGrob(foot, x = 0.965, y = 0.025, hjust = 1,
                                    gp = grid::gpar(fontsize = 7.5, col = .mosaic_calrep_muted())))
@@ -1328,9 +1521,9 @@ plot_model_calibration_report <- function(diagnostics, dir_output = NULL,
                          if (nzchar(l$txt))
                               kids[[length(kids) + 1L]] <- grid::textGrob(
                                    l$txt, x = x, y = yy, hjust = 0,
-                                   gp = grid::gpar(fontsize = if (l$kind == "head") 9 else 7.8,
-                                                   fontface = if (l$kind == "head") "bold" else "plain",
-                                                   col = if (l$kind == "head") .mosaic_calrep_ink() else "grey25"))
+                                   gp = grid::gpar(fontsize = switch(l$kind, head = 9, sub = 8.2, 7.8),
+                                                   fontface = switch(l$kind, head = "bold", sub = "bold", "plain"),
+                                                   col = if (l$kind %in% c("head", "sub")) .mosaic_calrep_ink() else "grey25"))
                          yy <- yy - if (l$kind == "gap") 0.009 else 0.0163
                     }
                }

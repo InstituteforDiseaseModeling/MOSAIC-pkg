@@ -15,7 +15,8 @@
                              n_sims = 150L, optimize_subset = NULL, targets_extra = list(),
                              plots = FALSE, ll_mode = c("normal", "onegood"),
                              calib_extra = list(), predictions_extra = list(), keep_tier = FALSE,
-                             assign_targets = FALSE, resume = FALSE, clean_output = NULL) {
+                             assign_targets = FALSE, resume = FALSE, clean_output = NULL,
+                             io_extra = list()) {
   mode <- match.arg(mode)
   ll_mode <- match.arg(ll_mode)
   config <- get_location_config(iso = "MOZ", config = MOSAIC::config_default)
@@ -64,6 +65,7 @@
     parallel = list(enable = FALSE, n_cores = 1L, progress = FALSE),
     paths = list(plots = plots, clean_output = clean_output %||% !isTRUE(resume)),
     logging = list(verbose = FALSE))
+  control$io[names(io_extra)] <- io_extra
   if (isTRUE(assign_targets)) for (k in names(targets)) control$targets[[k]] <- targets[[k]]
   res <- testthat::with_mocked_bindings(
     suppressWarnings(suppressMessages(run_MOSAIC(config = config, priors = priors,

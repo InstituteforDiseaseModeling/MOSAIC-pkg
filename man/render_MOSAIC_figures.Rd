@@ -71,6 +71,20 @@ PSOCK or sequentially), which this function deliberately avoids. Every figure
 is wrapped in \code{tryCatch} so one failure never aborts the rest.
 }
 
+\section{Calibration diagnostics written before 1.5.1}{
+
+The \code{"convergence"} group upgrades a
+\code{3_results/calibration_diagnostics.json} written before MOSAIC 1.5.1 to
+the 1.5.1 contract before drawing the report: the budget, member bounds and
+thresholds from \code{1_inputs/control.json}, the full-week weekly series
+from the prediction CSVs and the persisted ensemble (weekly-summed member
+trajectories when its arrays were persisted), and every display string. The
+upgraded file replaces the original, which is kept byte for byte as
+\code{calibration_diagnostics.pre151.json}; this is the one file the
+function writes outside \code{3_results/figures/}. A file already at 1.5.1
+is left untouched.
+}
+
 \section{Parallel rendering}{
 
 At 40 locations this stage is the largest single-threaded block in a
