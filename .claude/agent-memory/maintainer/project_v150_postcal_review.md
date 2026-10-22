@@ -30,3 +30,15 @@ adds one. Concurrent runs need a distinct R_PARALLEL_PORT, or serverSocket colli
 **Why:** these are the reusable verification recipes and the traps that self-tests missed.
 **How to apply:** re-run the harness on any change to resume or post-cal. Check RNGkind
 whenever work moves between master and workers.
+
+**Round 2 (c5978b0ee, 2026-10-21): all fixed and APPROVED.**
+- HSIC is back in the run and written atomically.
+- `capture_reff` moved to the internal `.mosaic_calc_model_ensemble()`, so the exported
+  function's object is identical to 1.4.2's.
+- Workers inherit `RNGkind()`.
+- The candidate RDS is 2.3x 1.4.2's, and `ensemble_optimized.rds` is unchanged.
+
+Kill traces must now target `.mosaic_calc_model_ensemble`: call 1 is the pilot (through the
+wrapper), 2 the candidate, 3 the medoid. The in-run HSIC subsample (global RNG) only happens
+when the posterior ESS is >= 100. Use the stub with 1200 sims
+(claude/redteam/v150/stub_hsic_resume.R) to exercise it.

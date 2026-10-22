@@ -152,7 +152,12 @@ test_that("calc_model_ensemble() keeps the 1.4.2 signature and returns the 1.4.2
                              parameter_weights = c(0.5, 0.3, 0.2), n_simulations_per_config = 2L,
                              PATHS = list(), priors = list(), observation_model = list(k_cases = c(2, 5)),
                              verbose = FALSE)
-  expect_identical(ens, golden)
+  # Structure is exact (same elements in the same order, no reff_capture); values
+  # agree to a relative 1e-10. The fixture was made on macOS arm64, and CI's
+  # Ubuntu libm differs in the last bit of the weighted means (~2e-16).
+  expect_identical(names(ens), names(golden))
+  expect_identical(lapply(ens, class), lapply(golden, class))
+  expect_equal(ens, golden, tolerance = 1e-10)
   expect_false("reff_capture" %in% names(ens))
 })
 
