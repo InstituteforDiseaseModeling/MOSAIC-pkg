@@ -1,3 +1,38 @@
+# MOSAIC 1.6.0
+
+Outbreak onset detection, for the OCV counterfactuals (an onset week anchors preventive and pre-emptive campaigns; a detection week anchors 7-1-7 and reactive ones). Nothing else changes.
+
+- **`calc_outbreak_onset()`** finds every outbreak in a weekly series of suspected cases, analysed from its first to its last reported week. It returns onset, end and (in real time) detection week, peak (reported and smoothed), size, threshold and a `left_censored` flag (onset at the first week or just after an unreported week), plus the weekly series it was found on. Two rules, each in two modes:
+  - `method = "growth"` (default): a growth-rate rule on a quasi-Poisson P-spline smooth.
+    - The smooth uses cubic B-splines on 7.5-week segments, a second-order penalty, and a smoothing parameter chosen by GCV with gamma = 1.4.
+    - The level threshold is max(the mean of the smooth outside outbreaks, iterated, 0.05 cases per 100,000 a week).
+    - An outbreak starts at three growth weeks (at least 5% a week, with a lower 80% bound above zero) at or above the threshold.
+    - It counts only once its smoothed peak reaches 1.5 x the threshold.
+    - It ends at the second of six low weeks (unreported, or below the threshold or half the running peak).
+    - A start within 5 weeks of an end continues that outbreak.
+  - `method = "zheng"`: the Zheng et al. (2022) definition as implemented in OutbreakExtractR (8-week zero padding, mean weekly incidence threshold, two count increases, six-week tail).
+  - `mode = "retrospective"` uses the full series. `mode = "realtime"` refits every week on the data known by then and records the detection week. With fixed-width segments a real-time fit uses only the data up to that week (tested: cutting the series leaves every earlier detection unchanged).
+- **`est_outbreak_onsets()`** runs `calc_outbreak_onset()` for every location of a MOSAIC config:
+  - Weeks are complete Monday-to-Sunday weeks of `reported_cases`.
+  - Population comes from `param_N_population_size.csv`, or a data frame you supply.
+  - Each onset carries the imputed share of its cases (`imputed_share`).
+  - Imputed days (`reported_tier` 3: Fourier reconstructions and inferred zeros) are unreported by default (`imputed = "unreported"`), as in `est_epidemic_peaks()`; `imputed = "keep"` counts them.
+- **Origin and parity.** The rules port the onset-detection handoff of 18 November 2026 (Python). Given the handoff's knots (`segment_weeks` = analysed weeks / 60, the handoff's 60 segments per series) and its inputs, they reproduce its outbreak tables week for week in all 40 countries:
+  - growth full series: 96/96 outbreaks;
+  - growth real time: 89/89, onset, detection and end;
+  - Zheng full series: 71/71, with the threshold to 2e-15 (the handoff had itself checked this table against OutbreakExtractR's R code);
+  - Zheng real time: 70/70.
+
+  The smoother selects the same smoothing parameter as the Python in every real-time vintage checked (5 countries), and its fitted mean and growth rate agree to about 1e-5. A five-country fixture pins this in the tests, the growth real-time part in the slow tier.
+- **Departures from the handoff**, after an independent review:
+  - Fixed-width segments, so real time does not see the future length of the series.
+  - Analysis starts at the first reported week, so leading unreported weeks are no longer zeros that dilute the real-time thresholds.
+  - A smoothing parameter whose GCV denominator is not positive (gamma x edf >= n, possible in short series) is no longer selected.
+
+  The fixed width moves growth-rule onsets. On the handoff's own 40-country series (imputed days kept), the defaults reproduce 45 of the handoff's 96 full-series onsets exactly and 75 within two weeks (real time: 53 and 68 of 89). Zheng is unchanged. The cause: GCV usually selects the smallest lambda, so the knot positions do most of the smoothing, and 7.5-week segments shift them by up to about five weeks against 60 per series. The handoff's knots remain available through `segment_weeks`. Whether to keep 7.5-week segments, or move to a denser grid where the penalty sets the smoothness (which would need the growth settings retuned), is an open decision.
+
+  The documentation lists the remaining caveats: the two modes use different thresholds, merges behave differently in the two modes, real-time growth intervals under-cover at the newest week, and the dispersion collapses in very sparse series.
+
 # MOSAIC 1.5.1
 
 The redesigned calibration report is the report of every `run_MOSAIC()` calibration, and it is fully determined by two versioned files: `3_results/calibration_diagnostics.json` carries every number and display string, `inst/extdata/metric_glossary.yml` every word, formula and target template. The renderer reads nothing else and words nothing itself, so the dashboard can show the same page from the same two files. Posteriors, ensembles, summary.json and the convergence status are unchanged.
