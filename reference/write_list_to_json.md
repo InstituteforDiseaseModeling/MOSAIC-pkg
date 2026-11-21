@@ -32,7 +32,7 @@ that the file was successfully written.
 ## Details
 
 The function converts the R list to JSON text using
-[`jsonlite::toJSON()`](https://jeroen.r-universe.dev/jsonlite/reference/fromJSON.html)
+[`jsonlite::toJSON()`](https://rdrr.io/pkg/jsonlite/man/fromJSON.html)
 (with pretty printing enabled) and then writes it out either to a plain
 text file or to a gzipped file if `compress = TRUE`. The gzipped file is
 created using a connection opened with

@@ -102,6 +102,8 @@ Estimation and fitting functions
   : Fit Mobility Model Using Flight Data and Distance Matrices
 - [`est_nb_dispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md)
   : Estimate negative-binomial dispersion from surveillance observations
+- [`est_outbreak_onsets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_outbreak_onsets.md)
+  : Detect outbreak onsets for every location of a MOSAIC config
 - [`est_overland_tau_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_overland_tau_prior.md)
   : Build a per-country overland departure-rate prior for MOSAIC
   calibration
@@ -227,6 +229,8 @@ Calculation functions
   : Calculate Prior and Posterior Quantiles with KL Divergence
 - [`calc_model_weights_gibbs()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_weights_gibbs.md)
   : Gibbs-Posterior Model Weights
+- [`calc_outbreak_onset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_outbreak_onset.md)
+  : Detect cholera outbreak onsets in a weekly case series
 - [`calc_psi_star()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_psi_star.md)
   : Calibrate Daily Suitability on the Logit Scale (vector; optional
   causal EWMA + time offset + NA filling)
@@ -747,6 +751,9 @@ Other exported functions and internal helpers
 - [`calc_model_weights_gibbs()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_weights_gibbs.md)
   : Gibbs-Posterior Model Weights
 
+- [`calc_outbreak_onset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_outbreak_onset.md)
+  : Detect cholera outbreak onsets in a weekly case series
+
 - [`calc_psi_star()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_psi_star.md)
   : Calibrate Daily Suitability on the Logit Scale (vector; optional
   causal EWMA + time offset + NA filling)
@@ -930,6 +937,9 @@ Other exported functions and internal helpers
 
 - [`est_nb_dispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_nb_dispersion.md)
   : Estimate negative-binomial dispersion from surveillance observations
+
+- [`est_outbreak_onsets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_outbreak_onsets.md)
+  : Detect outbreak onsets for every location of a MOSAIC config
 
 - [`est_overland_tau_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_overland_tau_prior.md)
   : Build a per-country overland departure-rate prior for MOSAIC

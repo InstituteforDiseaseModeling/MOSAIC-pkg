@@ -26,7 +26,7 @@ The function first verifies that the specified file exists. If the file
 name ends with ".gz" (ignoring case), it is assumed to be gzipped and is
 read using a gzfile connection. Otherwise, the file is read directly.
 The JSON text is then parsed with
-[`jsonlite::fromJSON()`](https://jeroen.r-universe.dev/jsonlite/reference/fromJSON.html)
+[`jsonlite::fromJSON()`](https://rdrr.io/pkg/jsonlite/man/fromJSON.html)
 into an R list.
 
 ## Examples

@@ -45,7 +45,7 @@ The base `file_path` (invisibly).
 ## Details
 
 Both files come from a single
-[`jsonlite::toJSON()`](https://jeroen.r-universe.dev/jsonlite/reference/fromJSON.html)
+[`jsonlite::toJSON()`](https://rdrr.io/pkg/jsonlite/man/fromJSON.html)
 call. There is no parallel serialisation, no patch-and-rewrite loop, and
 no possibility for the `.json` and `.json.gz` to diverge.
 

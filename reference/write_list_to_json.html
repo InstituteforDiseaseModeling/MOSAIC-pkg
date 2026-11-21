@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,7 +71,7 @@ Default is FALSE.</p></dd>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function converts the R list to JSON text using <code><a href="https://jeroen.r-universe.dev/jsonlite/reference/fromJSON.html" class="external-link">jsonlite::toJSON()</a></code> (with pretty printing enabled) and then writes it out either to a
+    <p>The function converts the R list to JSON text using <code><a href="https://rdrr.io/pkg/jsonlite/man/fromJSON.html" class="external-link">jsonlite::toJSON()</a></code> (with pretty printing enabled) and then writes it out either to a
 plain text file or to a gzipped file if <code>compress = TRUE</code>. The gzipped file is created using a connection
 opened with <code><a href="https://rdrr.io/r/base/connections.html" class="external-link">gzfile()</a></code>. Numbers are written with 17 significant digits, enough to round-trip every double
 exactly, so a config read back from the file reproduces a simulation bit for bit. The text is written to a
@@ -102,7 +102,7 @@ leaves a truncated file behind.</p>
 <span class="r-in"><span>  <span class="fu">write_list_to_json</span><span class="op">(</span>data_list <span class="op">=</span> <span class="va">sample_data</span>, file_path <span class="op">=</span> <span class="va">output_file_gz</span>, compress <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span>  <span class="co"># Load the plain JSON file to inspect its contents.</span></span></span>
-<span class="r-in"><span>  <span class="va">json_data</span> <span class="op">&lt;-</span> <span class="fu">jsonlite</span><span class="fu">::</span><span class="fu"><a href="https://jeroen.r-universe.dev/jsonlite/reference/read_json.html" class="external-link">read_json</a></span><span class="op">(</span><span class="va">output_file</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="va">json_data</span> <span class="op">&lt;-</span> <span class="fu">jsonlite</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/jsonlite/man/read_json.html" class="external-link">read_json</a></span><span class="op">(</span><span class="va">output_file</span><span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">json_data</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
