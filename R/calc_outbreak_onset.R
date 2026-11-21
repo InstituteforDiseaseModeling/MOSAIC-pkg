@@ -1,9 +1,10 @@
 #' Detect cholera outbreak onsets in a weekly case series
 #'
 #' Finds every outbreak in a weekly series of suspected cases and returns its
-#' onset, end and (in real time) detection week, by one of two rules: a
-#' growth-rate rule on a quasi-Poisson smooth (\code{method = "growth"}) or the
-#' Zheng et al. outbreak definition (\code{method = "zheng"}). Each rule runs
+#' onset, end and (in real time) detection week, by a growth-rate rule on a
+#' quasi-Poisson smooth (\code{method = "growth"}), the same rule with a lower
+#' bar for small outbreaks (\code{method = "growth_sensitive"}), or the Zheng
+#' et al. outbreak definition (\code{method = "zheng"}). Each rule runs
 #' either on the full series (\code{mode = "retrospective"}) or one week at a
 #' time on the data known by that week (\code{mode = "realtime"}), which records
 #' the week an outbreak would have been declared.
@@ -40,12 +41,23 @@
 #' smoothed level is at or above the threshold, and the growth condition holds at
 #' T - 1 and T in fit T and at T - 2 and T - 1 in fit T - 1; this three-week
 #' condition replaces \code{growth_weeks}. The candidate is declared at the first
-#' week its newest smoothed estimate reaches \code{min_size} x the threshold (the
-#' detection week), and dropped if it ends first. The real-time threshold is a
+#' reported week whose newest smoothed estimate reaches \code{min_size} x the
+#' threshold (the detection week), and dropped if it ends first. The real-time threshold is a
 #' different statistic from the retrospective one: max(mean of the counts to
 #' date outside declared outbreaks, unreported weeks counted as zero, floor). An
 #' outbreak ends as in the full series, but its running peak restarts at an end,
 #' so a merged continuation is judged against its own peak.
+#'
+#' \strong{Sensitive growth rule} (\code{method = "growth_sensitive"}). The growth
+#' rule, in both modes, with two defaults changed, for small outbreaks in large
+#' populations: \code{floor_per100k = 0.02}, so the threshold can fall to the
+#' series' own baseline (a 0.05 floor is about 29 cases a week in Kenya, above its
+#' baseline of about 15), and \code{growth_z = 0.84}, so a growth week needs the
+#' lower 60% bound of r above zero instead of the lower 80% bound. Arguments given
+#' explicitly override these defaults. On the 40 MOSAIC countries it finds every
+#' outbreak of the growth rule plus smaller ones, such as Kenya's 2024-2025 waves
+#' of 46-70 cases a week, and dates some shared onsets earlier; it also raises
+#' more outbreaks in sparse or blocky noise.
 #'
 #' \strong{Zheng rule} (Zheng et al. 2022, Int J Infect Dis 122:215-221; as
 #' implemented in OutbreakExtractR, HopkinsIDD, main @ 4fcdc21). Eight zero weeks
@@ -81,12 +93,14 @@
 #' @param population Population, one value or one per week (used for the per-capita
 #'   floor and the Zheng incidence).
 #' @param observed Logical vector, \code{TRUE} for reported weeks (default: non-missing \code{cases}).
-#' @param method \code{"growth"} (default) or \code{"zheng"}.
+#' @param method \code{"growth"} (default), \code{"growth_sensitive"} or \code{"zheng"}.
 #' @param mode \code{"retrospective"} (default, full series) or \code{"realtime"} (weekly step forward).
 #' @param growth_min Minimum weekly growth of a growth week, as a proportion (0.05 = 5% a week).
-#' @param growth_z Multiple of the growth standard error that r must exceed (1.28: lower 80% bound > 0); 0 drops the check.
+#' @param growth_z Multiple of the growth standard error that r must exceed (1.28: lower 80% bound > 0;
+#'   0.84 for \code{"growth_sensitive"}); 0 drops the check.
 #' @param growth_weeks Consecutive growth weeks that start an outbreak in the full series (real time uses its own three-week rule).
-#' @param floor_per100k Floor on the threshold, in suspected cases per 100,000 per week.
+#' @param floor_per100k Floor on the threshold, in suspected cases per 100,000 per week
+#'   (0.05; 0.02 for \code{"growth_sensitive"}).
 #' @param min_size An outbreak's smoothed peak must reach this multiple of the threshold.
 #' @param end_frac_peak A week below this fraction of the outbreak's running peak is low.
 #' @param end_run_weeks Number of consecutive low weeks that end an outbreak (growth rule).
@@ -118,6 +132,8 @@
 #'   \code{cases}, \code{observed}, \code{mu} (smoothed mean; in real time the newest estimate at each
 #'   week), \code{r}, \code{r_lo}, \code{r_hi} (growth rate and its 95% interval), \code{threshold}
 #'   (cases per week) and \code{in_outbreak}. The smooth columns are \code{NA} for the Zheng rule.
+#'   Over unreported weeks they interpolate or extrapolate the spline with no data there and can be far
+#'   off over a long gap; the rules use them only at reported weeks, so plot them on reported weeks only.
 #'
 #' @seealso \code{\link{est_outbreak_onsets}} to run every location of a MOSAIC config.
 #'
@@ -131,7 +147,7 @@
 #' @export
 calc_outbreak_onset <- function(cases, week_start, population,
                                 observed = !is.na(cases),
-                                method = c("growth", "zheng"),
+                                method = c("growth", "growth_sensitive", "zheng"),
                                 mode = c("retrospective", "realtime"),
                                 growth_min = 0.05, growth_z = 1.28, growth_weeks = 3L,
                                 floor_per100k = 0.05, min_size = 1.5, end_frac_peak = 0.5,
@@ -141,6 +157,11 @@ calc_outbreak_onset <- function(cases, week_start, population,
 
      method <- match.arg(method)
      mode <- match.arg(mode)
+     if (method == "growth_sensitive") {
+          if (missing(floor_per100k)) floor_per100k <- 0.02
+          if (missing(growth_z)) growth_z <- 0.84
+     }
+     rule <- if (method == "zheng") "zheng" else "growth"
      if (is.logical(cases) && all(is.na(cases))) cases <- as.numeric(cases)
      n_in <- length(cases)
      if (!is.numeric(cases) || n_in < 1L) stop("cases must be a non-empty numeric vector.", call. = FALSE)
@@ -194,7 +215,7 @@ calc_outbreak_onset <- function(cases, week_start, population,
      ob <- list(onset = integer(0), end = integer(0), closed = logical(0), detect = integer(0))
      thr_at <- numeric(n)
      if (n > 0L && sum(yz) > 0) {
-          if (method == "growth" && mode == "retrospective") {
+          if (rule == "growth" && mode == "retrospective") {
                basis <- .onset_basis(n, s$segment_weeks)
                fit <- .onset_qp_fit(yz[obs], which(obs), basis, lambda, s$gcv_gamma)
                if (is.null(fit)) stop("The smoother failed at every lambda.", call. = FALSE)
@@ -206,7 +227,7 @@ calc_outbreak_onset <- function(cases, week_start, population,
                series$threshold <- res$threshold
                series$in_outbreak <- .onset_mask(n, res$outbreaks)
                thr_at <- res$threshold
-          } else if (method == "growth") {
+          } else if (rule == "growth") {
                v <- .onset_growth_vintages(yz, obs, s, lambda)
                res <- .onset_growth_realtime(v, yz, obs, floor_cases, s, s$realtime_start)
                ob <- .onset_unpack_events(res$events)

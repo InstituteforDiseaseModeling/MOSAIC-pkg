@@ -110,8 +110,9 @@
 # fit was made). Week T-2 becomes a candidate at T when weeks T-2..T are
 # reported, mu(T-2) >= threshold, and the growth condition holds at T-1 and T
 # in fit T and at T-2 and T-1 in fit T-1. A candidate is declared (detection
-# week) once the newest estimate reaches min_size x threshold, and dropped if
-# it ends first. The threshold is max(mean of the zero-filled counts to date
+# week) at the first reported week whose newest estimate reaches min_size x
+# threshold (never on an estimate projected over an unreported week), and
+# dropped if it ends first. The threshold is max(mean of the zero-filled counts to date
 # outside declared outbreaks, floor). The growth condition is always this
 # three-week, two-vintage one (growth_weeks applies to the full series only).
 # End as in the full series; unlike it, the running peak restarts at an end,
@@ -140,7 +141,7 @@
           }
           if (state != "idle") {
                if (observed[Tt]) peak <- max(peak, v$mu_0[Tt])
-               if (state == "cand" && v$mu_0[Tt] >= s$min_size * thr) {
+               if (state == "cand" && observed[Tt] && v$mu_0[Tt] >= s$min_size * thr) {
                     k <- length(ev)
                     if (k && !is.na(ev[[k]]$end) && cand - ev[[k]]$end <= s$merge_gap_weeks) {
                          ev[[k]]$end <- NA_integer_

@@ -6,7 +6,7 @@
 \usage{
 est_outbreak_onsets(
   config,
-  method = c("growth", "zheng"),
+  method = c("growth", "growth_sensitive", "zheng"),
   mode = c("retrospective", "realtime"),
   imputed = c("unreported", "keep"),
   population = NULL,
@@ -18,7 +18,8 @@ est_outbreak_onsets(
 \item{config}{A MOSAIC config (e.g. \code{config_default}) with \code{date_start}, \code{date_stop},
 \code{location_name}, \code{reported_cases} and, optionally, \code{reported_tier}.}
 
-\item{method}{\code{"growth"} (default) or \code{"zheng"}; see \code{\link{calc_outbreak_onset}}.}
+\item{method}{\code{"growth"} (default), \code{"growth_sensitive"} or \code{"zheng"}; see
+\code{\link{calc_outbreak_onset}}.}
 
 \item{mode}{\code{"retrospective"} (default) or \code{"realtime"}.}
 

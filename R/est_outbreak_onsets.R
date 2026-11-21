@@ -17,7 +17,8 @@
 #'
 #' @param config A MOSAIC config (e.g. \code{config_default}) with \code{date_start}, \code{date_stop},
 #'   \code{location_name}, \code{reported_cases} and, optionally, \code{reported_tier}.
-#' @param method \code{"growth"} (default) or \code{"zheng"}; see \code{\link{calc_outbreak_onset}}.
+#' @param method \code{"growth"} (default), \code{"growth_sensitive"} or \code{"zheng"}; see
+#'   \code{\link{calc_outbreak_onset}}.
 #' @param mode \code{"retrospective"} (default) or \code{"realtime"}.
 #' @param imputed \code{"unreported"} (default) treats tier-3 days as unreported; \code{"keep"} counts them.
 #' @param population \code{NULL} (default) reads \code{param_N_population_size.csv} from
@@ -42,7 +43,7 @@
 #' @seealso \code{\link{calc_outbreak_onset}}
 #' @export
 est_outbreak_onsets <- function(config,
-                                method = c("growth", "zheng"),
+                                method = c("growth", "growth_sensitive", "zheng"),
                                 mode = c("retrospective", "realtime"),
                                 imputed = c("unreported", "keep"),
                                 population = NULL,

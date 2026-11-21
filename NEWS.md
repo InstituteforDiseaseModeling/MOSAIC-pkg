@@ -1,3 +1,25 @@
+# MOSAIC 1.6.1
+
+- **`method = "growth_sensitive"`** in `calc_outbreak_onset()` and `est_outbreak_onsets()`: the growth rule with a lower bar, for small outbreaks in large populations. It changes two defaults, in both modes:
+  - `floor_per100k = 0.02` (0.05 for `"growth"`), so the threshold can fall to the series' own baseline;
+  - `growth_z = 0.84` (1.28), so a growth week needs the lower 60% bound of the growth rate above zero (the lower 80% bound for `"growth"`).
+
+  Arguments given explicitly override both. Nothing else changes, and `"growth"` is unchanged.
+
+  **How the settings were chosen.** A grid of floor (0.05, 0.02, 0.01), `growth_z` (1.28, 0.84, 0.52, 0), `growth_weeks` (3, 2) and `min_size` (1.5, 1.25, 1) was run on the 40 config_default series (full series, imputed days unreported). The chosen setting changes the fewest settings while still finding all four recent small waves in Kenya: 2023-12, 2024-07, 2025-04 and 2025-10, with peaks of 46-70 cases a week. The growth rule finds only the first. Kenya's 0.05 floor is about 29 cases a week, above its non-outbreak mean of about 15.
+
+  **Result on the 40 countries.**
+  - Every one of the growth rule's 85 outbreaks is kept, plus 14 smaller ones: KEN 3, RWA 3, COG 2, TZA 2, BEN, NER, TGO, UGA.
+  - 27 shared onsets move one to four weeks earlier. Two (BEN 2021, KEN 2019) move 13 weeks, where an earlier small wave joins a larger one.
+  - 58 of Zheng's 62 outbreaks are matched, against 57 for `"growth"`.
+
+  **The cost.** On synthetic outbreak-free series it raises more outbreaks where counts are sparse or blocky. With 2 x 10^7 people, for example, it raises 2.7 against 0.1 per 10 years in a series that is zero in 85% of weeks, and 11.4 against 0.5 in monthly totals spread over their weeks. On smooth iid noise neither rule raises any.
+
+  **In real time** the gain is smaller, because the real-time threshold (the mean of the raw counts to date) does not use the floor in Kenya. It detects Kenya's 2023-12 and 2024-07 waves, but not those of 2025.
+
+- **Real-time growth outbreaks are declared only at a reported week.** Before, a week with no report could be the detection week, on the strength of the smooth projected past the last report, while the same week counted as low towards the outbreak's end. A candidate now waits for the next reported week. No detection changes on MOSAIC's data: none of the 662 real-time detections (official and AI-enhanced series, imputed days unreported or kept, `"growth"` and `"growth_sensitive"`) was in an unreported week, so parity with the handoff, whose rule has the same gap, is unchanged.
+- **Documented:** over unreported weeks the smooth columns of the `"series"` attribute (`mu`, `r`, `r_lo`, `r_hi`) interpolate or extrapolate the spline with no data there, and over a long gap they can be far off (Kenya's full-series `mu` reaches about 10 million in a 2022 gap). The rules use them only at reported weeks; plot them on reported weeks only.
+
 # MOSAIC 1.6.0
 
 Outbreak onset detection, for the OCV counterfactuals (an onset week anchors preventive and pre-emptive campaigns; a detection week anchors 7-1-7 and reactive ones). Nothing else changes.

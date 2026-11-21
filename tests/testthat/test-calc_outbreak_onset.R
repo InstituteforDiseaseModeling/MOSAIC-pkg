@@ -168,6 +168,37 @@ test_that("the per-capita floor suppresses a small rise in a large population", 
      expect_gte(small$threshold_per100k, 0.05)
 })
 
+test_that("growth_sensitive is the growth rule at floor 0.02 and growth_z 0.84, and explicit settings override it", {
+     x <- .wave_series(150L, peak_at = 100L, height = 60, base = 2)
+     set.seed(7)
+     y <- rpois(150, x$cases)
+     drop_method <- function(d) d[setdiff(names(d), "method")]
+     for (md in c("retrospective", "realtime")) {
+          s <- calc_outbreak_onset(y, x$week_start, 1e7, method = "growth_sensitive", mode = md)
+          g <- calc_outbreak_onset(y, x$week_start, 1e7, mode = md, floor_per100k = 0.02, growth_z = 0.84)
+          expect_gte(nrow(s), 1L)
+          expect_equal(drop_method(s), drop_method(g), info = md)
+          expect_equal(attr(s, "series"), attr(g, "series"), info = md)
+          expect_true(all(s$method == "growth_sensitive"))
+          o <- calc_outbreak_onset(y, x$week_start, 1e7, method = "growth_sensitive", mode = md,
+                                   floor_per100k = 0.05, growth_z = 1.28)
+          d <- calc_outbreak_onset(y, x$week_start, 1e7, mode = md)
+          expect_equal(drop_method(o), drop_method(d), info = md)
+     }
+})
+
+test_that("growth_sensitive finds a small outbreak in a large population that the growth rule misses", {
+     weeks <- seq(as.Date("2020-01-06"), by = 7, length.out = 160)
+     set.seed(2)
+     y <- rpois(160, 3 + 30 * exp(-((seq_len(160) - 110) / 4)^2))   # peak ~33 a week; 0.05 floor = 25 a week
+     for (md in c("retrospective", "realtime")) {
+          expect_equal(nrow(calc_outbreak_onset(y, weeks, 5e7, mode = md)), 0L, info = md)
+          s <- calc_outbreak_onset(y, weeks, 5e7, method = "growth_sensitive", mode = md)
+          expect_equal(nrow(s), 1L, info = md)
+          expect_true(s$onset_week >= weeks[100] && s$onset_week < weeks[110], info = md)
+     }
+})
+
 test_that("Zheng retrospective matches a hand-computed outbreak", {
      cases <- c(1, 4, 9, 16, 9, 4, 1, 0, 0, 0, 0, 0, 0, 0, 2)
      weeks <- seq(as.Date("2021-01-04"), by = 7, length.out = length(cases))
@@ -253,6 +284,11 @@ test_that("the real-time growth rule declares, ends, merges and drops candidates
      # a week without a fit (NA) gives no decision
      v_na <- v; v_na[11, ] <- NA
      expect_length(rt(v_na)$events, 0L)
+     # a candidate is declared only at a reported week: week 12 unreported, so at week 13
+     obs_gap <- obs; obs_gap[12] <- FALSE
+     yz_gap <- yz; yz_gap[12] <- 0
+     r_gap <- MOSAIC:::.onset_growth_realtime(v, yz_gap, obs_gap, fl, s, 3L)
+     expect_equal(r_gap$events, list(list(onset = 9L, detect = 13L, end = 17L)))
 })
 
 test_that("growth weeks need every one of growth_weeks consecutive weeks", {

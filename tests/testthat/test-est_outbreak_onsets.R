@@ -54,7 +54,7 @@ test_that("imputed days are unreported by default and counted with imputed = 'ke
 
 test_that("each location's result equals calc_outbreak_onset() on its weekly series", {
      cfg <- .onset_config()
-     for (m in c("growth", "zheng")) {
+     for (m in c("growth", "growth_sensitive", "zheng")) {
           x <- est_outbreak_onsets(cfg, method = m, population = .onset_pop, imputed = "keep")
           s <- attr(x, "series")
           for (iso in c("AAA", "BBB")) {

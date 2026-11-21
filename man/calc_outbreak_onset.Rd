@@ -9,7 +9,7 @@ calc_outbreak_onset(
   week_start,
   population,
   observed = !is.na(cases),
-  method = c("growth", "zheng"),
+  method = c("growth", "growth_sensitive", "zheng"),
   mode = c("retrospective", "realtime"),
   growth_min = 0.05,
   growth_z = 1.28,
@@ -36,17 +36,19 @@ floor and the Zheng incidence).}
 
 \item{observed}{Logical vector, \code{TRUE} for reported weeks (default: non-missing \code{cases}).}
 
-\item{method}{\code{"growth"} (default) or \code{"zheng"}.}
+\item{method}{\code{"growth"} (default), \code{"growth_sensitive"} or \code{"zheng"}.}
 
 \item{mode}{\code{"retrospective"} (default, full series) or \code{"realtime"} (weekly step forward).}
 
 \item{growth_min}{Minimum weekly growth of a growth week, as a proportion (0.05 = 5\% a week).}
 
-\item{growth_z}{Multiple of the growth standard error that r must exceed (1.28: lower 80\% bound > 0); 0 drops the check.}
+\item{growth_z}{Multiple of the growth standard error that r must exceed (1.28: lower 80\% bound > 0;
+0.84 for \code{"growth_sensitive"}); 0 drops the check.}
 
 \item{growth_weeks}{Consecutive growth weeks that start an outbreak in the full series (real time uses its own three-week rule).}
 
-\item{floor_per100k}{Floor on the threshold, in suspected cases per 100,000 per week.}
+\item{floor_per100k}{Floor on the threshold, in suspected cases per 100,000 per week
+(0.05; 0.02 for \code{"growth_sensitive"}).}
 
 \item{min_size}{An outbreak's smoothed peak must reach this multiple of the threshold.}
 
@@ -87,12 +89,15 @@ The attribute \code{"series"} is a data frame with one row per analysed week: \c
 \code{cases}, \code{observed}, \code{mu} (smoothed mean; in real time the newest estimate at each
 week), \code{r}, \code{r_lo}, \code{r_hi} (growth rate and its 95\% interval), \code{threshold}
 (cases per week) and \code{in_outbreak}. The smooth columns are \code{NA} for the Zheng rule.
+Over unreported weeks they interpolate or extrapolate the spline with no data there and can be far
+off over a long gap; the rules use them only at reported weeks, so plot them on reported weeks only.
 }
 \description{
 Finds every outbreak in a weekly series of suspected cases and returns its
-onset, end and (in real time) detection week, by one of two rules: a
-growth-rate rule on a quasi-Poisson smooth (\code{method = "growth"}) or the
-Zheng et al. outbreak definition (\code{method = "zheng"}). Each rule runs
+onset, end and (in real time) detection week, by a growth-rate rule on a
+quasi-Poisson smooth (\code{method = "growth"}), the same rule with a lower
+bar for small outbreaks (\code{method = "growth_sensitive"}), or the Zheng
+et al. outbreak definition (\code{method = "zheng"}). Each rule runs
 either on the full series (\code{mode = "retrospective"}) or one week at a
 time on the data known by that week (\code{mode = "realtime"}), which records
 the week an outbreak would have been declared.
@@ -130,12 +135,23 @@ is at week \code{realtime_start} + 1) when weeks T - 2 to T are reported, its
 smoothed level is at or above the threshold, and the growth condition holds at
 T - 1 and T in fit T and at T - 2 and T - 1 in fit T - 1; this three-week
 condition replaces \code{growth_weeks}. The candidate is declared at the first
-week its newest smoothed estimate reaches \code{min_size} x the threshold (the
-detection week), and dropped if it ends first. The real-time threshold is a
+reported week whose newest smoothed estimate reaches \code{min_size} x the
+threshold (the detection week), and dropped if it ends first. The real-time threshold is a
 different statistic from the retrospective one: max(mean of the counts to
 date outside declared outbreaks, unreported weeks counted as zero, floor). An
 outbreak ends as in the full series, but its running peak restarts at an end,
 so a merged continuation is judged against its own peak.
+
+\strong{Sensitive growth rule} (\code{method = "growth_sensitive"}). The growth
+rule, in both modes, with two defaults changed, for small outbreaks in large
+populations: \code{floor_per100k = 0.02}, so the threshold can fall to the
+series' own baseline (a 0.05 floor is about 29 cases a week in Kenya, above its
+baseline of about 15), and \code{growth_z = 0.84}, so a growth week needs the
+lower 60\% bound of r above zero instead of the lower 80\% bound. Arguments given
+explicitly override these defaults. On the 40 MOSAIC countries it finds every
+outbreak of the growth rule plus smaller ones, such as Kenya's 2024-2025 waves
+of 46-70 cases a week, and dates some shared onsets earlier; it also raises
+more outbreaks in sparse or blocky noise.
 
 \strong{Zheng rule} (Zheng et al. 2022, Int J Infect Dis 122:215-221; as
 implemented in OutbreakExtractR, HopkinsIDD, main @ 4fcdc21). Eight zero weeks
