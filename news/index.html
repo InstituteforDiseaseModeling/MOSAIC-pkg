@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,18 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.6.2" id="mosaic-162">MOSAIC 1.6.2<a class="anchor" aria-label="anchor" href="#mosaic-162"></a></h2>
+<ul><li>
+<strong><code>est_outbreak_onsets(n_cores = )</code></strong> runs locations in parallel, in forked worker processes (<code><a href="https://rdrr.io/r/parallel/mclapply.html" class="external-link">parallel::mclapply</a></code>, one location per worker at a time, single-threaded BLAS). The default <code>n_cores = 1</code> runs them one after another as before. It is capped at the number of locations and of cores. Windows cannot fork, so there it runs serially with a warning.
+<ul><li>
+<strong>Speed:</strong> real time is where it pays: the growth rules refit the smooth every week, about 40 s per country on a laptop, so the 40 countries of <code>config_default</code> take about 24 minutes in sequence (the sum of the per-country times). With <code>n_cores = 8</code> they took 3.3 minutes (196 s) and gave the same 81 outbreaks, week for week, as the per-country serial runs. The full-series rules take about 2 s for all 40 countries on 8 cores, against about 10 s serially.</li>
+<li>
+<strong>Same output:</strong> the result is identical to a serial run.</li>
+<li>
+<strong>Warnings and errors:</strong> in both serial and parallel runs, a location’s warnings are raised with its ISO code in front, and the first location (in <code>locations</code> order) that fails stops the call with its ISO code. Before, they came without the location.</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.6.1" id="mosaic-161">MOSAIC 1.6.1<a class="anchor" aria-label="anchor" href="#mosaic-161"></a></h2>
 <ul><li>
