@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,57 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.6.3" id="mosaic-163">MOSAIC 1.6.3<a class="anchor" aria-label="anchor" href="#mosaic-163"></a></h2>
+<ul><li>
+<p><strong><code>source = "smooth"</code> / <code>"raw"</code></strong> in <code><a href="../reference/calc_outbreak_onset.html">calc_outbreak_onset()</a></code> and <code><a href="../reference/est_outbreak_onsets.html">est_outbreak_onsets()</a></code>: the growth rules (<code>"growth"</code>, <code>"growth_sensitive"</code>) run on the quasi-Poisson smooth (default, unchanged) or directly on the reported counts.</p>
+<ul><li>
+<strong>How raw works:</strong> with k = <code>raw_weeks</code> (default 2):
+<ul><li>the level is the mean of the reported counts among the k weeks ending at each week;</li>
+<li>the growth rate is log((S_t + 0.5) / (S_t-k + 0.5)) / k, from consecutive k-week totals;</li>
+<li>the standard error is Poisson’s;</li>
+<li>every other setting and step of the rule is the same.</li>
+</ul></li>
+<li>
+<strong>Real time:</strong> with nothing to refit, raw real time takes about as long as the full series (40 countries in under a second), and a candidate needs three consecutive raw growth weeks. The Zheng rule always uses the counts.</li>
+<li>
+<strong>New output column:</strong> the outbreak table gains a <code>source</code> column. With <code>source = "raw"</code>, the series columns <code>mu</code> and <code>r</code> are <code>NA</code> at unreported weeks.</li>
+</ul></li>
+<li>
+<p><strong>Measured</strong> (40 <code>config_default</code> countries, imputed days unreported; outbreak-free series as for 1.6.1, 2 x 10^7 people, 60 replicates):</p>
+<table class="table"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><thead><tr><th></th>
+<th>Full series: outbreaks (matched to the smooth’s 85 within 4 weeks)</th>
+<th>Real time: outbreaks (matched to 81)</th>
+<th>False alarms per 10 years, NB noise of 10-50 cases a week</th>
+</tr></thead><tbody><tr><td>smooth</td>
+<td>85</td>
+<td>81</td>
+<td>0</td>
+</tr><tr><td>raw, <code>raw_weeks = 1</code>
+</td>
+<td>37 (20)</td>
+<td>33 (23)</td>
+<td>0.02-0.8</td>
+</tr><tr><td>raw, <code>raw_weeks = 2</code>
+</td>
+<td>90 (53)</td>
+<td>82 (50)</td>
+<td>3.8-10.0</td>
+</tr><tr><td>raw, <code>raw_weeks = 3</code>
+</td>
+<td>109 (63)</td>
+<td>97 (62)</td>
+<td>9.4-17.4</td>
+</tr></tbody></table><ul><li>
+<strong>Why it differs:</strong> week-on-week raw growth rarely holds for three weeks in a row, so it misses most outbreaks. Two- and three-week totals find about as many outbreaks as the smooth, but a third to a half of them differ.</li>
+<li>
+<strong>False alarms come from over-dispersion:</strong> the Poisson standard error is about ten times too small for over-dispersed counts. In Poisson noise the raw rule raises almost none, and <code>growth_z = 3</code> only lowers the rate from 9.6 to 6.0 per 10 years.</li>
+<li>
+<strong>Sparse and monthly-blocky series:</strong> the raw rule (<code>raw_weeks = 2</code>) raises about as many false outbreaks as the smooth in sparse series (0-3.4 against 0-4.2 per 10 years), and somewhat more in monthly-blocky ones (1.5-18.8 against 0.5-13.9).</li>
+<li>
+<strong>The settings were chosen on the smooth</strong> and are not retuned for raw counts.</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.6.2" id="mosaic-162">MOSAIC 1.6.2<a class="anchor" aria-label="anchor" href="#mosaic-162"></a></h2>
 <ul><li>

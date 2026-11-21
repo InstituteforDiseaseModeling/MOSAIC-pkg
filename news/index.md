@@ -1,5 +1,55 @@
 # Changelog
 
+## MOSAIC 1.6.3
+
+- **`source = "smooth"` / `"raw"`** in
+  [`calc_outbreak_onset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_outbreak_onset.md)
+  and
+  [`est_outbreak_onsets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_outbreak_onsets.md):
+  the growth rules (`"growth"`, `"growth_sensitive"`) run on the
+  quasi-Poisson smooth (default, unchanged) or directly on the reported
+  counts.
+
+  - **How raw works:** with k = `raw_weeks` (default 2):
+    - the level is the mean of the reported counts among the k weeks
+      ending at each week;
+    - the growth rate is log((S_t + 0.5) / (S_t-k + 0.5)) / k, from
+      consecutive k-week totals;
+    - the standard error is Poisson’s;
+    - every other setting and step of the rule is the same.
+  - **Real time:** with nothing to refit, raw real time takes about as
+    long as the full series (40 countries in under a second), and a
+    candidate needs three consecutive raw growth weeks. The Zheng rule
+    always uses the counts.
+  - **New output column:** the outbreak table gains a `source` column.
+    With `source = "raw"`, the series columns `mu` and `r` are `NA` at
+    unreported weeks.
+
+- **Measured** (40 `config_default` countries, imputed days unreported;
+  outbreak-free series as for 1.6.1, 2 x 10^7 people, 60 replicates):
+
+  |  | Full series: outbreaks (matched to the smooth’s 85 within 4 weeks) | Real time: outbreaks (matched to 81) | False alarms per 10 years, NB noise of 10-50 cases a week |
+  |----|----|----|----|
+  | smooth | 85 | 81 | 0 |
+  | raw, `raw_weeks = 1` | 37 (20) | 33 (23) | 0.02-0.8 |
+  | raw, `raw_weeks = 2` | 90 (53) | 82 (50) | 3.8-10.0 |
+  | raw, `raw_weeks = 3` | 109 (63) | 97 (62) | 9.4-17.4 |
+
+  - **Why it differs:** week-on-week raw growth rarely holds for three
+    weeks in a row, so it misses most outbreaks. Two- and three-week
+    totals find about as many outbreaks as the smooth, but a third to a
+    half of them differ.
+  - **False alarms come from over-dispersion:** the Poisson standard
+    error is about ten times too small for over-dispersed counts. In
+    Poisson noise the raw rule raises almost none, and `growth_z = 3`
+    only lowers the rate from 9.6 to 6.0 per 10 years.
+  - **Sparse and monthly-blocky series:** the raw rule (`raw_weeks = 2`)
+    raises about as many false outbreaks as the smooth in sparse series
+    (0-3.4 against 0-4.2 per 10 years), and somewhat more in
+    monthly-blocky ones (1.5-18.8 against 0.5-13.9).
+  - **The settings were chosen on the smooth** and are not retuned for
+    raw counts.
+
 ## MOSAIC 1.6.2
 
 - **`est_outbreak_onsets(n_cores = )`** runs locations in parallel, in

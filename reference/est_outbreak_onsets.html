@@ -15,7 +15,7 @@ its count is their sum."><meta property="og:image" content="https://institutefor
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,6 +61,7 @@ its count is their sum.</p>
 <span>  <span class="va">config</span>,</span>
 <span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"growth"</span>, <span class="st">"growth_sensitive"</span>, <span class="st">"zheng"</span><span class="op">)</span>,</span>
 <span>  mode <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"retrospective"</span>, <span class="st">"realtime"</span><span class="op">)</span>,</span>
+<span>  source <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"smooth"</span>, <span class="st">"raw"</span><span class="op">)</span>,</span>
 <span>  imputed <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"unreported"</span>, <span class="st">"keep"</span><span class="op">)</span>,</span>
 <span>  population <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  locations <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -85,6 +86,11 @@ its count is their sum.</p>
 
 <dt id="arg-mode">mode<a class="anchor" aria-label="anchor" href="#arg-mode"></a></dt>
 <dd><p><code>"retrospective"</code> (default) or <code>"realtime"</code>.</p></dd>
+
+
+<dt id="arg-source">source<a class="anchor" aria-label="anchor" href="#arg-source"></a></dt>
+<dd><p>What the growth rules work on: <code>"smooth"</code> (default) or <code>"raw"</code> (the reported
+counts); see <code><a href="calc_outbreak_onset.html">calc_outbreak_onset</a></code>.</p></dd>
 
 
 <dt id="arg-imputed">imputed<a class="anchor" aria-label="anchor" href="#arg-imputed"></a></dt>
@@ -153,6 +159,7 @@ locations run one after another, with a warning.</p>
 <span class="r-in"><span><span class="va">onsets</span> <span class="op">&lt;-</span> <span class="fu">est_outbreak_onsets</span><span class="op">(</span><span class="va">config_default</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">onsets_rt</span> <span class="op">&lt;-</span> <span class="fu">est_outbreak_onsets</span><span class="op">(</span><span class="va">config_default</span>, mode <span class="op">=</span> <span class="st">"realtime"</span>, locations <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"MOZ"</span>, <span class="st">"ETH"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">onsets_rt_all</span> <span class="op">&lt;-</span> <span class="fu">est_outbreak_onsets</span><span class="op">(</span><span class="va">config_default</span>, mode <span class="op">=</span> <span class="st">"realtime"</span>, n_cores <span class="op">=</span> <span class="fl">8</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">onsets_raw</span> <span class="op">&lt;-</span> <span class="fu">est_outbreak_onsets</span><span class="op">(</span><span class="va">config_default</span>, mode <span class="op">=</span> <span class="st">"realtime"</span>, source <span class="op">=</span> <span class="st">"raw"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

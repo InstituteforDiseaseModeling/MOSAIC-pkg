@@ -14,6 +14,7 @@ est_outbreak_onsets(
   config,
   method = c("growth", "growth_sensitive", "zheng"),
   mode = c("retrospective", "realtime"),
+  source = c("smooth", "raw"),
   imputed = c("unreported", "keep"),
   population = NULL,
   locations = NULL,
@@ -38,6 +39,12 @@ est_outbreak_onsets(
 - mode:
 
   `"retrospective"` (default) or `"realtime"`.
+
+- source:
+
+  What the growth rules work on: `"smooth"` (default) or `"raw"` (the
+  reported counts); see
+  [`calc_outbreak_onset`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_outbreak_onset.md).
 
 - imputed:
 
@@ -112,5 +119,6 @@ set_root_directory("~/MOSAIC")
 onsets <- est_outbreak_onsets(config_default)
 onsets_rt <- est_outbreak_onsets(config_default, mode = "realtime", locations = c("MOZ", "ETH"))
 onsets_rt_all <- est_outbreak_onsets(config_default, mode = "realtime", n_cores = 8)
+onsets_raw <- est_outbreak_onsets(config_default, mode = "realtime", source = "raw")
 } # }
 ```

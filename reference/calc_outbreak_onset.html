@@ -6,14 +6,18 @@ bar for small outbreaks (method = &quot;growth_sensitive&quot;), or the Zheng
 et al. outbreak definition (method = &quot;zheng&quot;). Each rule runs
 either on the full series (mode = &quot;retrospective&quot;) or one week at a
 time on the data known by that week (mode = &quot;realtime&quot;), which records
-the week an outbreak would have been declared."><meta property="og:description" content="Finds every outbreak in a weekly series of suspected cases and returns its
+the week an outbreak would have been declared. The growth rules work on the
+smooth by default (source = &quot;smooth&quot;) or on growth rates and levels
+computed directly from the reported counts (source = &quot;raw&quot;)."><meta property="og:description" content="Finds every outbreak in a weekly series of suspected cases and returns its
 onset, end and (in real time) detection week, by a growth-rate rule on a
 quasi-Poisson smooth (method = &quot;growth&quot;), the same rule with a lower
 bar for small outbreaks (method = &quot;growth_sensitive&quot;), or the Zheng
 et al. outbreak definition (method = &quot;zheng&quot;). Each rule runs
 either on the full series (mode = &quot;retrospective&quot;) or one week at a
 time on the data known by that week (mode = &quot;realtime&quot;), which records
-the week an outbreak would have been declared."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
+the week an outbreak would have been declared. The growth rules work on the
+smooth by default (source = &quot;smooth&quot;) or on growth rates and levels
+computed directly from the reported counts (source = &quot;raw&quot;)."><meta property="og:image" content="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -21,7 +25,7 @@ the week an outbreak would have been declared."><meta property="og:image" conten
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,7 +65,9 @@ bar for small outbreaks (<code>method = "growth_sensitive"</code>), or the Zheng
 et al. outbreak definition (<code>method = "zheng"</code>). Each rule runs
 either on the full series (<code>mode = "retrospective"</code>) or one week at a
 time on the data known by that week (<code>mode = "realtime"</code>), which records
-the week an outbreak would have been declared.</p>
+the week an outbreak would have been declared. The growth rules work on the
+smooth by default (<code>source = "smooth"</code>) or on growth rates and levels
+computed directly from the reported counts (<code>source = "raw"</code>).</p>
     </div>
 
     <div class="section level2">
@@ -73,6 +79,7 @@ the week an outbreak would have been declared.</p>
 <span>  observed <span class="op">=</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">cases</span><span class="op">)</span>,</span>
 <span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"growth"</span>, <span class="st">"growth_sensitive"</span>, <span class="st">"zheng"</span><span class="op">)</span>,</span>
 <span>  mode <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"retrospective"</span>, <span class="st">"realtime"</span><span class="op">)</span>,</span>
+<span>  source <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"smooth"</span>, <span class="st">"raw"</span><span class="op">)</span>,</span>
 <span>  growth_min <span class="op">=</span> <span class="fl">0.05</span>,</span>
 <span>  growth_z <span class="op">=</span> <span class="fl">1.28</span>,</span>
 <span>  growth_weeks <span class="op">=</span> <span class="fl">3L</span>,</span>
@@ -82,6 +89,7 @@ the week an outbreak would have been declared.</p>
 <span>  end_run_weeks <span class="op">=</span> <span class="fl">6L</span>,</span>
 <span>  merge_gap_weeks <span class="op">=</span> <span class="fl">5L</span>,</span>
 <span>  realtime_start <span class="op">=</span> <span class="fl">53L</span>,</span>
+<span>  raw_weeks <span class="op">=</span> <span class="fl">2L</span>,</span>
 <span>  segment_weeks <span class="op">=</span> <span class="fl">7.5</span>,</span>
 <span>  gcv_gamma <span class="op">=</span> <span class="fl">1.4</span>,</span>
 <span>  lambda <span class="op">=</span> <span class="fl">10</span><span class="op">^</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">2</span>, <span class="fl">5</span>, by <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
@@ -116,6 +124,11 @@ floor and the Zheng incidence).</p></dd>
 
 <dt id="arg-mode">mode<a class="anchor" aria-label="anchor" href="#arg-mode"></a></dt>
 <dd><p><code>"retrospective"</code> (default, full series) or <code>"realtime"</code> (weekly step forward).</p></dd>
+
+
+<dt id="arg-source">source<a class="anchor" aria-label="anchor" href="#arg-source"></a></dt>
+<dd><p>What the growth rules work on: <code>"smooth"</code> (default, the quasi-Poisson smooth) or
+<code>"raw"</code> (the reported counts; see Raw source). The Zheng rule always works on the counts.</p></dd>
 
 
 <dt id="arg-growth-min">growth_min<a class="anchor" aria-label="anchor" href="#arg-growth-min"></a></dt>
@@ -156,6 +169,11 @@ floor and the Zheng incidence).</p></dd>
 <dd><p>Week number, from the first reported week, of the first real-time estimate.</p></dd>
 
 
+<dt id="arg-raw-weeks">raw_weeks<a class="anchor" aria-label="anchor" href="#arg-raw-weeks"></a></dt>
+<dd><p>With <code>source = "raw"</code>: weeks in each of the two consecutive totals whose ratio
+gives the growth rate, and in the trailing mean that gives the level.</p></dd>
+
+
 <dt id="arg-segment-weeks">segment_weeks<a class="anchor" aria-label="anchor" href="#arg-segment-weeks"></a></dt>
 <dd><p>Width of a B-spline segment, in weeks.</p></dd>
 
@@ -184,7 +202,7 @@ floor and the Zheng incidence).</p></dd>
 
 <dt>peak_smoothed</dt>
 <dd><p>Largest smoothed mean over the outbreak's reported weeks (in real time, of the
-newest estimates); <code>NA</code> for the Zheng rule.</p></dd>
+newest estimates; with <code>source = "raw"</code>, the largest level); <code>NA</code> for the Zheng rule.</p></dd>
 
 <dt>end_week</dt>
 <dd><p>Last week of the outbreak; <code>NA</code> while it is still open at the end of the series.</p></dd>
@@ -207,13 +225,20 @@ detection week), in cases per week and per 100,000 per week.</p></dd>
 <dt>method, mode</dt>
 <dd><p>As called.</p></dd>
 
+<dt>source</dt>
+<dd><p>What the rule worked on: <code>"smooth"</code> or <code>"raw"</code> (always <code>"raw"</code> for the Zheng
+rule).</p></dd>
+
 
 </dl><p>The attribute <code>"series"</code> is a data frame with one row per analysed week: <code>week_start</code>,
 <code>cases</code>, <code>observed</code>, <code>mu</code> (smoothed mean; in real time the newest estimate at each
 week), <code>r</code>, <code>r_lo</code>, <code>r_hi</code> (growth rate and its 95% interval), <code>threshold</code>
 (cases per week) and <code>in_outbreak</code>. The smooth columns are <code>NA</code> for the Zheng rule.
 Over unreported weeks they interpolate or extrapolate the spline with no data there and can be far
-off over a long gap; the rules use them only at reported weeks, so plot them on reported weeks only.</p>
+off over a long gap; the rules use them only at reported weeks, so plot them on reported weeks only.
+With <code>source = "raw"</code>, <code>mu</code> is the level and <code>r</code> the raw growth rate (see Raw source),
+<code>NA</code> at unreported weeks and, for <code>r</code>, wherever its 2 x <code>raw_weeks</code> weeks are not all
+reported.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -263,6 +288,25 @@ explicitly override these defaults. On the 40 MOSAIC countries it finds every
 outbreak of the growth rule plus smaller ones, such as Kenya's 2024-2025 waves
 of 46-70 cases a week, and dates some shared onsets earlier; it also raises
 more outbreaks in sparse or blocky noise.</p>
+<p><strong>Raw source</strong> (<code>source = "raw"</code>). The growth rules, in both modes
+and with the same settings, on quantities computed from the reported counts
+instead of the smooth, with k = <code>raw_weeks</code>: the level at week t is the
+mean of the reported counts among the k weeks ending at t; the growth rate r
+is log((S_t + 0.5) / (S_t-k + 0.5)) / k, where S_t is the total of the k
+weeks ending at t; and its standard error is the Poisson one, sqrt(1 / (S_t +
+0.5) + 1 / (S_t-k + 0.5)) / k. A week has no growth rate unless all 2k weeks
+are reported. The windows trail, so a rise registers about (k - 1) / 2 weeks
+later than in the smooth. Nothing is refitted, so real time takes no longer
+than the full series, and in real time a candidate needs three consecutive
+growth weeks (T - 2, T - 1 and T). <code>segment_weeks</code>, <code>gcv_gamma</code> and
+<code>lambda</code> do not apply. On the 40 MOSAIC countries (imputed days
+unreported) the raw growth rule with <code>raw_weeks = 2</code> finds 90 outbreaks
+in the full series against the smooth's 85, 53 of them within 4 weeks of a
+smooth onset; in real time 82 against 81 (50 matched, detected a median of one
+week later). With <code>raw_weeks = 1</code> it finds only 37 (20 matched): a single
+dip breaks a run of rising weeks. In outbreak-free series it raises false
+outbreaks where the counts are over-dispersed, because its Poisson standard
+error ignores that (see Caveats).</p>
 <p><strong>Zheng rule</strong> (Zheng et al. 2022, Int J Infect Dis 122:215-221; as
 implemented in OutbreakExtractR, HopkinsIDD, main @ 4fcdc21). Eight zero weeks
 pad the series before its first and after its last reported week, and
@@ -282,6 +326,11 @@ onsets: 7.5-week segments reproduce 45 of the handoff's 96 onsets exactly and
 75 within two weeks.</p></li>
 <li><p>The dispersion estimate collapses in very sparse series (mostly zeros), which
 shrinks the growth standard error; there only the floor guards against small rises.</p></li>
+<li><p>With <code>source = "raw"</code>, the growth standard error is Poisson's, which ignores the
+over-dispersion of reported counts. In outbreak-free negative binomial series of 10-50 cases a
+week it raises 4-10 false outbreaks per 10 years with <code>raw_weeks = 2</code> (17 with 3), where the
+smooth raises none; raising <code>growth_z</code> barely helps (6 at <code>growth_z = 3</code>). In Poisson
+noise it raises almost none. The settings were chosen on the smooth.</p></li>
 <li><p>The real-time 95% growth intervals at the newest week under-cover.</p></li>
 <li><p>A reporting gap of seven or more weeks always ends an outbreak.</p></li>
 <li><p>An onset at the first analysed week or just after an unreported week
