@@ -33,6 +33,8 @@
 #' @param method \code{"growth"} (default), \code{"growth_sensitive"} or \code{"zheng"}; see
 #'   \code{\link{calc_outbreak_onset}}.
 #' @param mode \code{"retrospective"} (default) or \code{"realtime"}.
+#' @param source What the growth rules work on: \code{"smooth"} (default) or \code{"raw"} (the reported
+#'   counts); see \code{\link{calc_outbreak_onset}}.
 #' @param imputed \code{"unreported"} (default) treats tier-3 days as unreported; \code{"keep"} counts them.
 #' @param population \code{NULL} (default) reads \code{param_N_population_size.csv} from
 #'   \code{get_paths()$MODEL_INPUT}; or a data frame with columns \code{iso_code}, \code{date},
@@ -54,6 +56,7 @@
 #' onsets <- est_outbreak_onsets(config_default)
 #' onsets_rt <- est_outbreak_onsets(config_default, mode = "realtime", locations = c("MOZ", "ETH"))
 #' onsets_rt_all <- est_outbreak_onsets(config_default, mode = "realtime", n_cores = 8)
+#' onsets_raw <- est_outbreak_onsets(config_default, mode = "realtime", source = "raw")
 #' }
 #'
 #' @seealso \code{\link{calc_outbreak_onset}}
@@ -61,6 +64,7 @@
 est_outbreak_onsets <- function(config,
                                 method = c("growth", "growth_sensitive", "zheng"),
                                 mode = c("retrospective", "realtime"),
+                                source = c("smooth", "raw"),
                                 imputed = c("unreported", "keep"),
                                 population = NULL,
                                 locations = NULL,
@@ -69,6 +73,7 @@ est_outbreak_onsets <- function(config,
 
      method <- match.arg(method)
      mode <- match.arg(mode)
+     source <- match.arg(source)
      imputed <- match.arg(imputed)
      if (!is.numeric(n_cores) || length(n_cores) != 1L || !is.finite(n_cores) || n_cores < 1 ||
          n_cores != round(n_cores)) {
@@ -117,7 +122,8 @@ est_outbreak_onsets <- function(config,
                raw_imp <- week_sum(ifelse(is.na(y) | !imp, 0, y))
 
                res <- calc_outbreak_onset(ifelse(observed, weekly, NA_real_), week_start, pop[[locations[k]]],
-                                          observed = observed, method = method, mode = mode, ...)
+                                          observed = observed, method = method, mode = mode,
+                                          source = source, ...)
                w <- match(res$onset_week, week_start)
                share <- vapply(w, function(i) {
                     win <- max(1L, i - 2L):min(length(week_start), i + 2L)

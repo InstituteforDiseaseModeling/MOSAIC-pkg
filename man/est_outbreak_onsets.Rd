@@ -8,6 +8,7 @@ est_outbreak_onsets(
   config,
   method = c("growth", "growth_sensitive", "zheng"),
   mode = c("retrospective", "realtime"),
+  source = c("smooth", "raw"),
   imputed = c("unreported", "keep"),
   population = NULL,
   locations = NULL,
@@ -23,6 +24,9 @@ est_outbreak_onsets(
 \code{\link{calc_outbreak_onset}}.}
 
 \item{mode}{\code{"retrospective"} (default) or \code{"realtime"}.}
+
+\item{source}{What the growth rules work on: \code{"smooth"} (default) or \code{"raw"} (the reported
+counts); see \code{\link{calc_outbreak_onset}}.}
 
 \item{imputed}{\code{"unreported"} (default) treats tier-3 days as unreported; \code{"keep"} counts them.}
 
@@ -80,6 +84,7 @@ set_root_directory("~/MOSAIC")
 onsets <- est_outbreak_onsets(config_default)
 onsets_rt <- est_outbreak_onsets(config_default, mode = "realtime", locations = c("MOZ", "ETH"))
 onsets_rt_all <- est_outbreak_onsets(config_default, mode = "realtime", n_cores = 8)
+onsets_raw <- est_outbreak_onsets(config_default, mode = "realtime", source = "raw")
 }
 
 }

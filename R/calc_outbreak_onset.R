@@ -7,7 +7,9 @@
 #' et al. outbreak definition (\code{method = "zheng"}). Each rule runs
 #' either on the full series (\code{mode = "retrospective"}) or one week at a
 #' time on the data known by that week (\code{mode = "realtime"}), which records
-#' the week an outbreak would have been declared.
+#' the week an outbreak would have been declared. The growth rules work on the
+#' smooth by default (\code{source = "smooth"}) or on growth rates and levels
+#' computed directly from the reported counts (\code{source = "raw"}).
 #'
 #' The series is analysed from its first to its last reported week; week
 #' numbers below count from the first reported week.
@@ -59,6 +61,26 @@
 #' of 46-70 cases a week, and dates some shared onsets earlier; it also raises
 #' more outbreaks in sparse or blocky noise.
 #'
+#' \strong{Raw source} (\code{source = "raw"}). The growth rules, in both modes
+#' and with the same settings, on quantities computed from the reported counts
+#' instead of the smooth, with k = \code{raw_weeks}: the level at week t is the
+#' mean of the reported counts among the k weeks ending at t; the growth rate r
+#' is log((S_t + 0.5) / (S_t-k + 0.5)) / k, where S_t is the total of the k
+#' weeks ending at t; and its standard error is the Poisson one, sqrt(1 / (S_t +
+#' 0.5) + 1 / (S_t-k + 0.5)) / k. A week has no growth rate unless all 2k weeks
+#' are reported. The windows trail, so a rise registers about (k - 1) / 2 weeks
+#' later than in the smooth. Nothing is refitted, so real time takes no longer
+#' than the full series, and in real time a candidate needs three consecutive
+#' growth weeks (T - 2, T - 1 and T). \code{segment_weeks}, \code{gcv_gamma} and
+#' \code{lambda} do not apply. On the 40 MOSAIC countries (imputed days
+#' unreported) the raw growth rule with \code{raw_weeks = 2} finds 90 outbreaks
+#' in the full series against the smooth's 85, 53 of them within 4 weeks of a
+#' smooth onset; in real time 82 against 81 (50 matched, detected a median of one
+#' week later). With \code{raw_weeks = 1} it finds only 37 (20 matched): a single
+#' dip breaks a run of rising weeks. In outbreak-free series it raises false
+#' outbreaks where the counts are over-dispersed, because its Poisson standard
+#' error ignores that (see Caveats).
+#'
 #' \strong{Zheng rule} (Zheng et al. 2022, Int J Infect Dis 122:215-221; as
 #' implemented in OutbreakExtractR, HopkinsIDD, main @ 4fcdc21). Eight zero weeks
 #' pad the series before its first and after its last reported week, and
@@ -81,6 +103,11 @@
 #'     75 within two weeks.
 #'   \item The dispersion estimate collapses in very sparse series (mostly zeros), which
 #'     shrinks the growth standard error; there only the floor guards against small rises.
+#'   \item With \code{source = "raw"}, the growth standard error is Poisson's, which ignores the
+#'     over-dispersion of reported counts. In outbreak-free negative binomial series of 10-50 cases a
+#'     week it raises 4-10 false outbreaks per 10 years with \code{raw_weeks = 2} (17 with 3), where the
+#'     smooth raises none; raising \code{growth_z} barely helps (6 at \code{growth_z = 3}). In Poisson
+#'     noise it raises almost none. The settings were chosen on the smooth.
 #'   \item The real-time 95% growth intervals at the newest week under-cover.
 #'   \item A reporting gap of seven or more weeks always ends an outbreak.
 #'   \item An onset at the first analysed week or just after an unreported week
@@ -95,6 +122,8 @@
 #' @param observed Logical vector, \code{TRUE} for reported weeks (default: non-missing \code{cases}).
 #' @param method \code{"growth"} (default), \code{"growth_sensitive"} or \code{"zheng"}.
 #' @param mode \code{"retrospective"} (default, full series) or \code{"realtime"} (weekly step forward).
+#' @param source What the growth rules work on: \code{"smooth"} (default, the quasi-Poisson smooth) or
+#'   \code{"raw"} (the reported counts; see Raw source). The Zheng rule always works on the counts.
 #' @param growth_min Minimum weekly growth of a growth week, as a proportion (0.05 = 5% a week).
 #' @param growth_z Multiple of the growth standard error that r must exceed (1.28: lower 80% bound > 0;
 #'   0.84 for \code{"growth_sensitive"}); 0 drops the check.
@@ -106,6 +135,8 @@
 #' @param end_run_weeks Number of consecutive low weeks that end an outbreak (growth rule).
 #' @param merge_gap_weeks A start within this many weeks of the previous end continues that outbreak.
 #' @param realtime_start Week number, from the first reported week, of the first real-time estimate.
+#' @param raw_weeks With \code{source = "raw"}: weeks in each of the two consecutive totals whose ratio
+#'   gives the growth rate, and in the trailing mean that gives the level.
 #' @param segment_weeks Width of a B-spline segment, in weeks.
 #' @param gcv_gamma Inflation of the effective degrees of freedom in the GCV score.
 #' @param lambda Grid of smoothing parameters searched by GCV.
@@ -117,7 +148,7 @@
 #'     \item{detection_week}{Week the outbreak was declared (real time); \code{NA} retrospectively.}
 #'     \item{peak_week, peak_cases}{Week and count of the largest reported weekly count in the outbreak.}
 #'     \item{peak_smoothed}{Largest smoothed mean over the outbreak's reported weeks (in real time, of the
-#'       newest estimates); \code{NA} for the Zheng rule.}
+#'       newest estimates; with \code{source = "raw"}, the largest level); \code{NA} for the Zheng rule.}
 #'     \item{end_week}{Last week of the outbreak; \code{NA} while it is still open at the end of the series.}
 #'     \item{complete}{\code{FALSE} when the outbreak is still open at the last reported week (for the Zheng
 #'       rule, also when it closes only inside the trailing padding).}
@@ -127,6 +158,8 @@
 #'     \item{threshold_cases, threshold_per100k}{The level threshold at the onset week (real time: at the
 #'       detection week), in cases per week and per 100,000 per week.}
 #'     \item{method, mode}{As called.}
+#'     \item{source}{What the rule worked on: \code{"smooth"} or \code{"raw"} (always \code{"raw"} for the Zheng
+#'       rule).}
 #'   }
 #'   The attribute \code{"series"} is a data frame with one row per analysed week: \code{week_start},
 #'   \code{cases}, \code{observed}, \code{mu} (smoothed mean; in real time the newest estimate at each
@@ -134,6 +167,9 @@
 #'   (cases per week) and \code{in_outbreak}. The smooth columns are \code{NA} for the Zheng rule.
 #'   Over unreported weeks they interpolate or extrapolate the spline with no data there and can be far
 #'   off over a long gap; the rules use them only at reported weeks, so plot them on reported weeks only.
+#'   With \code{source = "raw"}, \code{mu} is the level and \code{r} the raw growth rate (see Raw source),
+#'   \code{NA} at unreported weeks and, for \code{r}, wherever its 2 x \code{raw_weeks} weeks are not all
+#'   reported.
 #'
 #' @seealso \code{\link{est_outbreak_onsets}} to run every location of a MOSAIC config.
 #'
@@ -149,19 +185,22 @@ calc_outbreak_onset <- function(cases, week_start, population,
                                 observed = !is.na(cases),
                                 method = c("growth", "growth_sensitive", "zheng"),
                                 mode = c("retrospective", "realtime"),
+                                source = c("smooth", "raw"),
                                 growth_min = 0.05, growth_z = 1.28, growth_weeks = 3L,
                                 floor_per100k = 0.05, min_size = 1.5, end_frac_peak = 0.5,
                                 end_run_weeks = 6L, merge_gap_weeks = 5L,
-                                realtime_start = 53L, segment_weeks = 7.5, gcv_gamma = 1.4,
+                                realtime_start = 53L, raw_weeks = 2L, segment_weeks = 7.5, gcv_gamma = 1.4,
                                 lambda = 10^seq(-2, 5, by = 0.5)) {
 
      method <- match.arg(method)
      mode <- match.arg(mode)
+     source <- match.arg(source)
      if (method == "growth_sensitive") {
           if (missing(floor_per100k)) floor_per100k <- 0.02
           if (missing(growth_z)) growth_z <- 0.84
      }
      rule <- if (method == "zheng") "zheng" else "growth"
+     used <- if (rule == "zheng") "raw" else source
      if (is.logical(cases) && all(is.na(cases))) cases <- as.numeric(cases)
      n_in <- length(cases)
      if (!is.numeric(cases) || n_in < 1L) stop("cases must be a non-empty numeric vector.", call. = FALSE)
@@ -193,6 +232,7 @@ calc_outbreak_onset <- function(cases, week_start, population,
           end_run_weeks = .onset_count(end_run_weeks, "end_run_weeks", 2L),
           merge_gap_weeks = .onset_count(merge_gap_weeks, "merge_gap_weeks", 0L),
           realtime_start = .onset_count(realtime_start, "realtime_start", 3L),
+          raw_weeks = .onset_count(raw_weeks, "raw_weeks", 1L),
           segment_weeks = .onset_number(segment_weeks, "segment_weeks", 0, strict = TRUE),
           gcv_gamma = .onset_number(gcv_gamma, "gcv_gamma", 0, strict = TRUE))
      if (!is.numeric(lambda) || !length(lambda) || any(!is.finite(lambda) | lambda <= 0)) {
@@ -215,7 +255,23 @@ calc_outbreak_onset <- function(cases, week_start, population,
      ob <- list(onset = integer(0), end = integer(0), closed = logical(0), detect = integer(0))
      thr_at <- numeric(n)
      if (n > 0L && sum(yz) > 0) {
-          if (rule == "growth" && mode == "retrospective") {
+          if (rule == "growth" && source == "raw") {
+               sig <- .onset_raw_signal(yz, obs, s$raw_weeks)
+               if (mode == "retrospective") {
+                    res <- .onset_growth_retro(sig$mu, sig$se, sig$r, obs, floor_cases, s)
+                    ob <- .onset_unpack(res$outbreaks)
+                    series$in_outbreak <- .onset_mask(n, res$outbreaks)
+               } else {
+                    res <- .onset_growth_realtime(.onset_raw_vintages(sig, s$realtime_start), yz, obs,
+                                                  floor_cases, s, s$realtime_start)
+                    ob <- .onset_unpack_events(res$events)
+                    series$in_outbreak <- res$in_outbreak
+               }
+               series$mu <- ifelse(obs, sig$mu, NA_real_); series$r <- sig$r
+               series$r_lo <- sig$r - 1.96 * sig$se; series$r_hi <- sig$r + 1.96 * sig$se
+               series$threshold <- res$threshold
+               thr_at <- res$threshold
+          } else if (rule == "growth" && mode == "retrospective") {
                basis <- .onset_basis(n, s$segment_weeks)
                fit <- .onset_qp_fit(yz[obs], which(obs), basis, lambda, s$gcv_gamma)
                if (is.null(fit)) stop("The smoother failed at every lambda.", call. = FALSE)
@@ -282,6 +338,7 @@ calc_outbreak_onset <- function(cases, week_start, population,
           threshold_per100k = thr_at[at] / pop[at] * 1e5,
           method = rep(method, k),
           mode = rep(mode, k),
+          source = rep(used, k),
           stringsAsFactors = FALSE)
      attr(out, "series") <- series
      out
@@ -317,6 +374,43 @@ calc_outbreak_onset <- function(cases, week_start, population,
           warning(sprintf("calc_outbreak_onset: the smoother failed at every lambda in %d real-time week(s); those weeks were skipped.",
                           failed), call. = FALSE)
      }
+     v
+}
+
+
+# Growth-rule inputs from the counts (source = "raw"), over the analysed weeks with unreported weeks
+# zero, k = raw_weeks: mu = mean of the reported counts among the k weeks ending at t (0 at an unreported
+# week, where the rules never use it); r = log((S_t + 0.5) / (S_t-k + 0.5)) / k with S_t the total of the
+# k weeks ending at t; se = its Poisson delta-method standard error. r and se are NA unless all 2k weeks
+# ending at t are reported.
+.onset_raw_signal <- function(yz, obs, k) {
+     n <- length(yz)
+     t <- seq_len(n)
+     window_sum <- function(x, w) {
+          cs <- c(0, cumsum(x))
+          function(end) cs[end + 1L] - cs[pmax(end - w, 0L) + 1L]
+     }
+     tot_y <- window_sum(yz, k)
+     n_rep <- window_sum(as.numeric(obs), k)(t)
+     mu <- ifelse(obs, tot_y(t) / pmax(n_rep, 1), 0)
+     s1 <- tot_y(t)
+     s0 <- tot_y(pmax(t - k, 0L))
+     full <- window_sum(as.numeric(obs), 2L * k)(t) == 2L * k
+     r <- ifelse(full, log((s1 + 0.5) / (s0 + 0.5)) / k, NA_real_)
+     se <- ifelse(full, sqrt(1 / (s1 + 0.5) + 1 / (s0 + 0.5)) / k, NA_real_)
+     list(mu = mu, r = r, se = se)
+}
+
+
+# The raw signal as the vintage table of .onset_growth_realtime(): raw values do not revise, so the
+# "fit at T" holds mu at T - 2 and T and r, se at T - 1 and T of the one raw series; rows before
+# `first` are NA (no decision there, as with the smooth).
+.onset_raw_vintages <- function(sig, first) {
+     n <- length(sig$mu)
+     back <- function(x, j) c(rep(NA_real_, min(j, n)), x[seq_len(max(0L, n - j))])
+     v <- data.frame(mu_m2 = back(sig$mu, 2L), mu_0 = sig$mu, r_m1 = back(sig$r, 1L), se_m1 = back(sig$se, 1L),
+                     r_0 = sig$r, se_0 = sig$se)
+     v[seq_len(min(first - 1L, n)), ] <- NA
      v
 }
 

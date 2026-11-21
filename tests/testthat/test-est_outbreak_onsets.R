@@ -54,18 +54,23 @@ test_that("imputed days are unreported by default and counted with imputed = 'ke
 
 test_that("each location's result equals calc_outbreak_onset() on its weekly series", {
      cfg <- .onset_config()
-     for (m in c("growth", "growth_sensitive", "zheng")) {
-          x <- est_outbreak_onsets(cfg, method = m, population = .onset_pop, imputed = "keep")
+     for (m in c("growth", "growth_sensitive", "zheng")) for (src in c("smooth", "raw")) {
+          x <- est_outbreak_onsets(cfg, method = m, source = src, population = .onset_pop, imputed = "keep")
           s <- attr(x, "series")
           for (iso in c("AAA", "BBB")) {
                si <- s[s$iso_code == iso, ]
                pop <- if (iso == "BBB") 5e5 else ifelse(si$week_start >= as.Date("2021-06-07"), 2e6, 1e6)
-               direct <- calc_outbreak_onset(si$cases, si$week_start, pop, observed = si$observed, method = m)
+               direct <- calc_outbreak_onset(si$cases, si$week_start, pop, observed = si$observed, method = m,
+                                             source = src)
                got <- x[x$iso_code == iso, setdiff(names(x), c("iso_code", "imputed_share"))]
                rownames(got) <- NULL
-               expect_equal(got, direct, ignore_attr = TRUE, info = paste(m, iso))
+               expect_equal(got, direct, ignore_attr = TRUE, info = paste(m, src, iso))
           }
      }
+     # raw_weeks reaches calc_outbreak_onset() through ...
+     r3 <- est_outbreak_onsets(cfg, source = "raw", raw_weeks = 3, population = .onset_pop, locations = "AAA")
+     r2 <- est_outbreak_onsets(cfg, source = "raw", population = .onset_pop, locations = "AAA")
+     expect_false(identical(attr(r3, "series")$r, attr(r2, "series")$r))
 })
 
 test_that("population is the latest value on or before each week, else the earliest", {

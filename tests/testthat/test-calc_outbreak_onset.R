@@ -60,14 +60,14 @@ test_that("a series with no cases or no reported week gives an empty table of th
      x <- .wave_series(80L)
      cols <- c("outbreak_id", "onset_week", "detection_week", "peak_week", "end_week", "complete",
                "left_censored", "duration_weeks", "total_cases", "peak_cases", "peak_smoothed",
-               "threshold_cases", "threshold_per100k", "method", "mode")
-     for (m in c("growth", "zheng")) for (md in c("retrospective", "realtime")) {
-          z <- calc_outbreak_onset(rep(0, 80), x$week_start, 1e6, method = m, mode = md)
+               "threshold_cases", "threshold_per100k", "method", "mode", "source")
+     for (m in c("growth", "zheng")) for (md in c("retrospective", "realtime")) for (src in c("smooth", "raw")) {
+          z <- calc_outbreak_onset(rep(0, 80), x$week_start, 1e6, method = m, mode = md, source = src)
           expect_identical(names(z), cols)
           expect_equal(nrow(z), 0L)
           expect_s3_class(z$onset_week, "Date")
           expect_equal(nrow(attr(z, "series")), 80L)
-          u <- calc_outbreak_onset(rep(NA, 80), x$week_start, 1e6, method = m, mode = md)  # all-NA logical
+          u <- calc_outbreak_onset(rep(NA, 80), x$week_start, 1e6, method = m, mode = md, source = src)  # all-NA
           expect_equal(nrow(u), 0L)
           expect_equal(nrow(attr(u, "series")), 0L)
      }
@@ -111,11 +111,11 @@ test_that("leading and trailing unreported weeks do not change the result", {
      y <- rpois(130, x$cases)
      pre <- seq(min(x$week_start) - 7 * 50, by = 7, length.out = 50)
      post <- max(x$week_start) + 7 * 1:10
-     for (m in c("growth", "zheng")) for (md in c("retrospective", "realtime")) {
+     for (m in c("growth", "zheng")) for (md in c("retrospective", "realtime")) for (src in c("smooth", "raw")) {
           padded <- calc_outbreak_onset(c(rep(NA, 50), y, rep(NA, 10)), c(pre, x$week_start, post), 1e6,
-                                        method = m, mode = md)
-          plain <- calc_outbreak_onset(y, x$week_start, 1e6, method = m, mode = md)
-          expect_equal(padded, plain, ignore_attr = TRUE, info = paste(m, md))
+                                        method = m, mode = md, source = src)
+          plain <- calc_outbreak_onset(y, x$week_start, 1e6, method = m, mode = md, source = src)
+          expect_equal(padded, plain, ignore_attr = TRUE, info = paste(m, md, src))
           expect_equal(nrow(attr(padded, "series")), 130L)
      }
 })
@@ -196,6 +196,86 @@ test_that("growth_sensitive finds a small outbreak in a large population that th
           s <- calc_outbreak_onset(y, weeks, 5e7, method = "growth_sensitive", mode = md)
           expect_equal(nrow(s), 1L, info = md)
           expect_true(s$onset_week >= weeks[100] && s$onset_week < weeks[110], info = md)
+     }
+})
+
+test_that("the raw source's level, growth rate and standard error are those documented", {
+     yz <- c(1, 2, 4, 8, 0, 16, 32)
+     obs <- c(TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE)
+     sg <- MOSAIC:::.onset_raw_signal(yz, obs, 2L)
+     expect_equal(sg$mu, c(1, 1.5, 3, 6, 0, 16, 24))                    # mean of the reported weeks of each 2
+     expect_equal(sg$r[4], log((4 + 8 + 0.5) / (1 + 2 + 0.5)) / 2)
+     expect_equal(sg$se[4], sqrt(1 / 12.5 + 1 / 3.5) / 2)
+     expect_true(all(is.na(sg$r[-4])))                                 # 4 reported weeks only at week 4
+     s1 <- MOSAIC:::.onset_raw_signal(yz, obs, 1L)
+     expect_equal(s1$mu, ifelse(obs, yz, 0))
+     expect_equal(s1$r[3], log(4.5 / 2.5))
+     expect_true(is.na(s1$r[5]) && is.na(s1$r[6]) && !is.na(s1$r[7]))
+     # real time: the vintage table is the one raw series, lagged
+     v <- MOSAIC:::.onset_raw_vintages(sg, 3L)
+     expect_true(all(is.na(v[1:2, ])))
+     expect_equal(v$mu_m2[7], sg$mu[5]); expect_equal(v$mu_0[7], sg$mu[7])
+     expect_equal(v$r_m1[5], sg$r[4]); expect_equal(v$se_m1[5], sg$se[4])
+})
+
+test_that("the growth rules on the raw source find a clean wave in both modes and record the source", {
+     x <- .wave_series()
+     for (m in c("growth", "growth_sensitive")) for (md in c("retrospective", "realtime")) {
+          g <- calc_outbreak_onset(x$cases, x$week_start, 1e6, method = m, mode = md, source = "raw")
+          info <- paste(m, md)
+          expect_equal(nrow(g), 1L, info = info)
+          expect_true(g$onset_week < x$week_start[100] && g$onset_week >= x$week_start[80], info = info)
+          expect_equal(g$source, "raw", info = info)
+          s <- attr(g, "series")
+          i0 <- match(g$onset_week, x$week_start)
+          i1 <- if (is.na(g$end_week)) 160L else match(g$end_week, x$week_start)
+          expect_equal(g$peak_smoothed, max(s$mu[i0:i1]), info = info)
+          if (md == "realtime") expect_true(g$detection_week >= g$onset_week + 14, info = info)   # 3 growth weeks
+     }
+     expect_equal(calc_outbreak_onset(x$cases, x$week_start, 1e6)$source, "smooth")
+     expect_equal(calc_outbreak_onset(x$cases, x$week_start, 1e6, method = "zheng", source = "smooth")$source, "raw")
+     expect_error(calc_outbreak_onset(x$cases, x$week_start, 1e6, source = "counts"), "should be one of")
+     expect_error(calc_outbreak_onset(x$cases, x$week_start, 1e6, source = "raw", raw_weeks = 0), "raw_weeks")
+})
+
+test_that("the raw source leaves unreported weeks empty and ends an outbreak across a long gap", {
+     x <- .wave_series(150L, peak_at = 60L, height = 300)
+     y <- x$cases
+     y[70:80] <- NA                                                   # an 11-week gap after the peak
+     for (md in c("retrospective", "realtime")) {
+          g <- calc_outbreak_onset(y, x$week_start, 1e6, mode = md, source = "raw")
+          s <- attr(g, "series")
+          expect_true(all(is.na(s$mu[70:80])) && all(is.na(s$r[70:80])), info = md)
+          expect_true(all(!is.na(s$mu[!is.na(y)])), info = md)
+          expect_true(all(g$end_week <= x$week_start[72]), info = md)
+     }
+})
+
+test_that("real-time growth on the raw source uses only the data known at each week", {
+     x <- .wave_series(130L, peak_at = 75L, height = 300)
+     set.seed(3)
+     y <- rpois(130, x$cases + 80 * exp(-((seq_len(130) - 115) / 5)^2))
+     full <- calc_outbreak_onset(y, x$week_start, 1e6, mode = "realtime", source = "raw")
+     expect_gte(nrow(full), 1L)
+     for (cut_at in c(90L, 118L)) {
+          cut <- calc_outbreak_onset(y[1:cut_at], x$week_start[1:cut_at], 1e6, mode = "realtime", source = "raw")
+          known <- full[full$detection_week <= x$week_start[cut_at], ]
+          expect_equal(cut$onset_week, known$onset_week, info = cut_at)
+          expect_equal(cut$detection_week, known$detection_week, info = cut_at)
+          expect_equal(attr(cut, "series")$mu, attr(full, "series")$mu[1:cut_at], info = cut_at)
+     }
+})
+
+test_that("growth_sensitive on the raw source is the raw growth rule at floor 0.02 and growth_z 0.84", {
+     x <- .wave_series(150L, peak_at = 100L, height = 60, base = 2)
+     set.seed(7)
+     y <- rpois(150, x$cases)
+     drop_method <- function(d) d[setdiff(names(d), "method")]
+     for (md in c("retrospective", "realtime")) {
+          s <- calc_outbreak_onset(y, x$week_start, 1e7, method = "growth_sensitive", mode = md, source = "raw")
+          g <- calc_outbreak_onset(y, x$week_start, 1e7, mode = md, source = "raw", floor_per100k = 0.02,
+                                   growth_z = 0.84)
+          expect_equal(drop_method(s), drop_method(g), info = md)
      }
 })
 

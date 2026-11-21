@@ -11,6 +11,7 @@ calc_outbreak_onset(
   observed = !is.na(cases),
   method = c("growth", "growth_sensitive", "zheng"),
   mode = c("retrospective", "realtime"),
+  source = c("smooth", "raw"),
   growth_min = 0.05,
   growth_z = 1.28,
   growth_weeks = 3L,
@@ -20,6 +21,7 @@ calc_outbreak_onset(
   end_run_weeks = 6L,
   merge_gap_weeks = 5L,
   realtime_start = 53L,
+  raw_weeks = 2L,
   segment_weeks = 7.5,
   gcv_gamma = 1.4,
   lambda = 10^seq(-2, 5, by = 0.5)
@@ -39,6 +41,9 @@ floor and the Zheng incidence).}
 \item{method}{\code{"growth"} (default), \code{"growth_sensitive"} or \code{"zheng"}.}
 
 \item{mode}{\code{"retrospective"} (default, full series) or \code{"realtime"} (weekly step forward).}
+
+\item{source}{What the growth rules work on: \code{"smooth"} (default, the quasi-Poisson smooth) or
+\code{"raw"} (the reported counts; see Raw source). The Zheng rule always works on the counts.}
 
 \item{growth_min}{Minimum weekly growth of a growth week, as a proportion (0.05 = 5\% a week).}
 
@@ -60,6 +65,9 @@ floor and the Zheng incidence).}
 
 \item{realtime_start}{Week number, from the first reported week, of the first real-time estimate.}
 
+\item{raw_weeks}{With \code{source = "raw"}: weeks in each of the two consecutive totals whose ratio
+gives the growth rate, and in the trailing mean that gives the level.}
+
 \item{segment_weeks}{Width of a B-spline segment, in weeks.}
 
 \item{gcv_gamma}{Inflation of the effective degrees of freedom in the GCV score.}
@@ -74,7 +82,7 @@ A data frame with one row per outbreak (zero rows when there is none):
 \item{detection_week}{Week the outbreak was declared (real time); \code{NA} retrospectively.}
 \item{peak_week, peak_cases}{Week and count of the largest reported weekly count in the outbreak.}
 \item{peak_smoothed}{Largest smoothed mean over the outbreak's reported weeks (in real time, of the
-newest estimates); \code{NA} for the Zheng rule.}
+newest estimates; with \code{source = "raw"}, the largest level); \code{NA} for the Zheng rule.}
 \item{end_week}{Last week of the outbreak; \code{NA} while it is still open at the end of the series.}
 \item{complete}{\code{FALSE} when the outbreak is still open at the last reported week (for the Zheng
 rule, also when it closes only inside the trailing padding).}
@@ -84,6 +92,8 @@ week, so the outbreak may have begun earlier.}
 \item{threshold_cases, threshold_per100k}{The level threshold at the onset week (real time: at the
 detection week), in cases per week and per 100,000 per week.}
 \item{method, mode}{As called.}
+\item{source}{What the rule worked on: \code{"smooth"} or \code{"raw"} (always \code{"raw"} for the Zheng
+rule).}
 }
 The attribute \code{"series"} is a data frame with one row per analysed week: \code{week_start},
 \code{cases}, \code{observed}, \code{mu} (smoothed mean; in real time the newest estimate at each
@@ -91,6 +101,9 @@ week), \code{r}, \code{r_lo}, \code{r_hi} (growth rate and its 95\% interval), \
 (cases per week) and \code{in_outbreak}. The smooth columns are \code{NA} for the Zheng rule.
 Over unreported weeks they interpolate or extrapolate the spline with no data there and can be far
 off over a long gap; the rules use them only at reported weeks, so plot them on reported weeks only.
+With \code{source = "raw"}, \code{mu} is the level and \code{r} the raw growth rate (see Raw source),
+\code{NA} at unreported weeks and, for \code{r}, wherever its 2 x \code{raw_weeks} weeks are not all
+reported.
 }
 \description{
 Finds every outbreak in a weekly series of suspected cases and returns its
@@ -100,7 +113,9 @@ bar for small outbreaks (\code{method = "growth_sensitive"}), or the Zheng
 et al. outbreak definition (\code{method = "zheng"}). Each rule runs
 either on the full series (\code{mode = "retrospective"}) or one week at a
 time on the data known by that week (\code{mode = "realtime"}), which records
-the week an outbreak would have been declared.
+the week an outbreak would have been declared. The growth rules work on the
+smooth by default (\code{source = "smooth"}) or on growth rates and levels
+computed directly from the reported counts (\code{source = "raw"}).
 }
 \details{
 The series is analysed from its first to its last reported week; week
@@ -153,6 +168,26 @@ outbreak of the growth rule plus smaller ones, such as Kenya's 2024-2025 waves
 of 46-70 cases a week, and dates some shared onsets earlier; it also raises
 more outbreaks in sparse or blocky noise.
 
+\strong{Raw source} (\code{source = "raw"}). The growth rules, in both modes
+and with the same settings, on quantities computed from the reported counts
+instead of the smooth, with k = \code{raw_weeks}: the level at week t is the
+mean of the reported counts among the k weeks ending at t; the growth rate r
+is log((S_t + 0.5) / (S_t-k + 0.5)) / k, where S_t is the total of the k
+weeks ending at t; and its standard error is the Poisson one, sqrt(1 / (S_t +
+0.5) + 1 / (S_t-k + 0.5)) / k. A week has no growth rate unless all 2k weeks
+are reported. The windows trail, so a rise registers about (k - 1) / 2 weeks
+later than in the smooth. Nothing is refitted, so real time takes no longer
+than the full series, and in real time a candidate needs three consecutive
+growth weeks (T - 2, T - 1 and T). \code{segment_weeks}, \code{gcv_gamma} and
+\code{lambda} do not apply. On the 40 MOSAIC countries (imputed days
+unreported) the raw growth rule with \code{raw_weeks = 2} finds 90 outbreaks
+in the full series against the smooth's 85, 53 of them within 4 weeks of a
+smooth onset; in real time 82 against 81 (50 matched, detected a median of one
+week later). With \code{raw_weeks = 1} it finds only 37 (20 matched): a single
+dip breaks a run of rising weeks. In outbreak-free series it raises false
+outbreaks where the counts are over-dispersed, because its Poisson standard
+error ignores that (see Caveats).
+
 \strong{Zheng rule} (Zheng et al. 2022, Int J Infect Dis 122:215-221; as
 implemented in OutbreakExtractR, HopkinsIDD, main @ 4fcdc21). Eight zero weeks
 pad the series before its first and after its last reported week, and
@@ -175,6 +210,11 @@ onsets: 7.5-week segments reproduce 45 of the handoff's 96 onsets exactly and
 75 within two weeks.
 \item The dispersion estimate collapses in very sparse series (mostly zeros), which
 shrinks the growth standard error; there only the floor guards against small rises.
+\item With \code{source = "raw"}, the growth standard error is Poisson's, which ignores the
+over-dispersion of reported counts. In outbreak-free negative binomial series of 10-50 cases a
+week it raises 4-10 false outbreaks per 10 years with \code{raw_weeks = 2} (17 with 3), where the
+smooth raises none; raising \code{growth_z} barely helps (6 at \code{growth_z = 3}). In Poisson
+noise it raises almost none. The settings were chosen on the smooth.
 \item The real-time 95\% growth intervals at the newest week under-cover.
 \item A reporting gap of seven or more weeks always ends an outbreak.
 \item An onset at the first analysed week or just after an unreported week
