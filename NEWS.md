@@ -1,3 +1,10 @@
+# MOSAIC 1.6.2
+
+- **`est_outbreak_onsets(n_cores = )`** runs locations in parallel, in forked worker processes (`parallel::mclapply`, one location per worker at a time, single-threaded BLAS). The default `n_cores = 1` runs them one after another as before. It is capped at the number of locations and of cores. Windows cannot fork, so there it runs serially with a warning.
+  - **Speed:** real time is where it pays: the growth rules refit the smooth every week, about 40 s per country on a laptop, so the 40 countries of `config_default` take about 24 minutes in sequence (the sum of the per-country times). With `n_cores = 8` they took 3.3 minutes (196 s) and gave the same 81 outbreaks, week for week, as the per-country serial runs. The full-series rules take about 2 s for all 40 countries on 8 cores, against about 10 s serially.
+  - **Same output:** the result is identical to a serial run.
+  - **Warnings and errors:** in both serial and parallel runs, a location's warnings are raised with its ISO code in front, and the first location (in `locations` order) that fails stops the call with its ISO code. Before, they came without the location.
+
 # MOSAIC 1.6.1
 
 - **`method = "growth_sensitive"`** in `calc_outbreak_onset()` and `est_outbreak_onsets()`: the growth rule with a lower bar, for small outbreaks in large populations. It changes two defaults, in both modes:

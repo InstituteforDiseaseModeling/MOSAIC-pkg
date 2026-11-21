@@ -11,6 +11,7 @@ est_outbreak_onsets(
   imputed = c("unreported", "keep"),
   population = NULL,
   locations = NULL,
+  n_cores = 1L,
   ...
 )
 }
@@ -31,6 +32,9 @@ est_outbreak_onsets(
 value for weeks before the first date).}
 
 \item{locations}{ISO codes to run (default: every location of the config).}
+
+\item{n_cores}{Number of locations to run at once (default 1: one after another); capped at the
+number of locations and of cores. See Parallel runs.}
 
 \item{...}{Rule settings passed to \code{\link{calc_outbreak_onset}}.}
 }
@@ -56,12 +60,26 @@ reconstruction has a seasonal peak every year by construction. With
 \code{imputed = "keep"} they count as reported, which reproduces the series
 the onset handoff was tuned on. WHO multi-week reports spread over their
 weeks (tier 2) count as reported either way.
+
+\strong{Parallel runs.} Locations are independent, so \code{n_cores > 1}
+runs them in forked worker processes (\code{parallel::mclapply}, each worker
+taking the next location when it finishes one, with single-threaded BLAS).
+This pays off in real time, where the growth rules refit the smooth every
+week: on a laptop a country takes about 40 seconds (up to 75), so the 40
+countries of \code{config_default} take about 24 minutes one after another
+and under 4 minutes on 8 cores. The full-series rules and the Zheng rule
+take under a second per country. The result is identical to a serial run,
+and so are warnings and errors: a location's warnings are raised with its
+ISO code in front, and the first location (in \code{locations} order) that
+fails stops the call with its ISO code. Windows cannot fork, so there the
+locations run one after another, with a warning.
 }
 \examples{
 \dontrun{
 set_root_directory("~/MOSAIC")
 onsets <- est_outbreak_onsets(config_default)
 onsets_rt <- est_outbreak_onsets(config_default, mode = "realtime", locations = c("MOZ", "ETH"))
+onsets_rt_all <- est_outbreak_onsets(config_default, mode = "realtime", n_cores = 8)
 }
 
 }

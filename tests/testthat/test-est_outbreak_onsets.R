@@ -125,3 +125,63 @@ test_that("a config without reported_tier treats every reported day as observed"
      expect_equal(a[, names(a) != "imputed_share"], b[, names(b) != "imputed_share"], ignore_attr = TRUE)
      expect_true(all(a$imputed_share == 0 | is.na(a$imputed_share)))
 })
+
+test_that("n_cores must be a single whole number >= 1", {
+     cfg <- .onset_config()
+     for (bad in list(0, -1, 1.5, NA_real_, Inf, "2", c(1, 2), NULL)) {
+          expect_error(est_outbreak_onsets(cfg, population = .onset_pop, n_cores = bad), "n_cores", info = format(bad))
+     }
+})
+
+test_that("a parallel run returns exactly the serial result, in both modes", {
+     skip_on_os("windows")
+     skip_if_testthat_parallel()
+     cfg <- .onset_config()
+     for (md in c("retrospective", "realtime")) {
+          a <- est_outbreak_onsets(cfg, mode = md, population = .onset_pop, imputed = "keep", min_size = 1.2)
+          b <- est_outbreak_onsets(cfg, mode = md, population = .onset_pop, imputed = "keep", min_size = 1.2,
+                                   n_cores = 2)
+          expect_gte(nrow(a), 2L)
+          expect_identical(b, a)
+     }
+     # more cores than locations
+     expect_identical(est_outbreak_onsets(cfg, population = .onset_pop, n_cores = 64),
+                      est_outbreak_onsets(cfg, population = .onset_pop))
+})
+
+test_that("warnings and errors carry their location, the same in serial and parallel runs", {
+     skip_on_os("windows")
+     skip_if_testthat_parallel()
+     cfg <- .onset_config()
+     real <- calc_outbreak_onset
+     # AAA (population 1e6 at the start) warns and then runs; BBB (5e5) fails
+     local_mocked_bindings(calc_outbreak_onset = function(cases, week_start, population, ...) {
+          if (population[1] == 5e5) stop("broken smoother")
+          warning("smoother warning")
+          real(cases, week_start, population, ...)
+     })
+     for (nc in c(1L, 2L)) {
+          expect_warning(expect_error(est_outbreak_onsets(cfg, population = .onset_pop, n_cores = nc),
+                                      "^BBB: broken smoother$"),
+                         "^AAA: smoother warning$")
+          expect_warning(x <- est_outbreak_onsets(cfg, population = .onset_pop, locations = "AAA", n_cores = nc),
+                         "^AAA: smoother warning$")
+          expect_true(all(x$iso_code == "AAA"))
+     }
+})
+
+test_that("without forking the locations run one after another, with a warning", {
+     cfg <- .onset_config()
+     serial <- est_outbreak_onsets(cfg, population = .onset_pop)
+     local_mocked_bindings(.onset_can_fork = function() FALSE)
+     expect_warning(x <- est_outbreak_onsets(cfg, population = .onset_pop, n_cores = 2), "forking")
+     expect_identical(x, serial)
+     expect_no_warning(est_outbreak_onsets(cfg, population = .onset_pop, n_cores = 1))
+})
+
+test_that("a worker that returns nothing or a try-error stops the call with its location", {
+     expect_error(MOSAIC:::.onset_collect(list(NULL), "CCC"), "^CCC: the worker process returned no result")
+     r <- try(stop("lost worker"), silent = TRUE)
+     expect_error(MOSAIC:::.onset_collect(list(r), "CCC"), "^CCC: lost worker$")
+     expect_silent(MOSAIC:::.onset_collect(list(list(warnings = character(0))), "CCC"))
+})
