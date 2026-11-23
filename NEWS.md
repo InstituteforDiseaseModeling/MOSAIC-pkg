@@ -1,3 +1,13 @@
+# MOSAIC 1.6.4
+
+- **Starting and stopping dugong.** The Starsim selfserve site that started and stopped the dugong Azure VM is gone, so dugong is now deallocated when idle and driven from the command line:
+  - `vm/dugong_power.sh status | up | down [--force]` runs the admin server's `./dugongup` (`az vm start`) and `./dugongdown` (`az vm deallocate`) over SSH;
+  - `up` waits until dugong answers SSH, and does nothing if it already does;
+  - `down` refuses while any R process runs or anyone is logged in, then waits until dugong stops answering.
+  - It holds no hosts or credentials (SSH aliases `dugong` and `dugong-admin`, key login only). It was tested live on 2026-11-23: start about 2.3 minutes, stop about 1.6 minutes, IP unchanged.
+- The `dugong-run` skill (§0, new §0b, §5, §8), `vm/DUGONG.md` and the agent roster describe this workflow. Package code is unchanged.
+- **Cost rule:** dugong is billed for every hour it runs, so the skill now requires an agent that starts it to stop it (`vm/dugong_power.sh down`) as soon as its job is done or it is not needed. A run that will outlive the session must be handed over to the user explicitly, and a dugong someone else started is never stopped without asking.
+
 # MOSAIC 1.6.3
 
 - **`source = "smooth"` / `"raw"`** in `calc_outbreak_onset()` and `est_outbreak_onsets()`: the growth rules (`"growth"`, `"growth_sensitive"`) run on the quasi-Poisson smooth (default, unchanged) or directly on the reported counts.

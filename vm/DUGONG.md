@@ -1,9 +1,10 @@
 # dugong — Azure compute VM access
 
-`dugong` is a large, **persistently-allocated** Azure VM for MOSAIC calibration runs. This file
-documents how to reach it and move results. **No secrets here** — keys live in `~/.ssh/`.
+`dugong` is a large Azure VM for MOSAIC calibration runs, **deallocated when idle** and started for
+a run (see "Start and stop" below). This file documents how to reach it and move results. **No
+secrets here** — keys live in `~/.ssh/`.
 
-Unlike `hedgehog` (see `vm/HEDGEHOG.md`), dugong stays allocated (not deallocated between runs) and
+Unlike `hedgehog` (see `vm/HEDGEHOG.md`), dugong
 runs **Ubuntu 24.04** — so the *GLIBCXX* problem does not apply. BUT a **libexpat** mismatch still
 requires the `r-mosaic-*` LD_PRELOAD wrapper (see "Running R on dugong" below): always run MOSAIC via
 `~/bin/r-mosaic-Rscript`, not bare `Rscript`.
@@ -18,7 +19,7 @@ requires the `r-mosaic-*` LD_PRELOAD wrapper (see "Running R on dugong" below): 
 |-------|-------|
 | SSH alias | `dugong` (defined in `~/.ssh/config`) |
 | User | `jgiles` |
-| Public IP | `52.183.44.192` (stable — VM stays allocated; no FQDN/PTR resolves) |
+| Public IP | `52.183.44.192` (no FQDN/PTR resolves; unchanged over 3 deallocate/start cycles, 2026-11-23) |
 | Key | `~/.ssh/id_ed25519` |
 
 ```bash
@@ -27,8 +28,9 @@ ssh jgiles@52.183.44.192
 ```
 
 No DNS name resolves for dugong (the `*.cloudapp.azure.com` guess is NXDOMAIN and there is no PTR),
-so the SSH config is keyed on the **IP**. Because the VM stays allocated the IP is stable; if a DNS
-name is later assigned, prefer it over the raw IP.
+so the SSH config is keyed on the **IP**. It has survived deallocation so far; if it ever changes,
+`vm/dugong_power.sh up` will start dugong but SSH will not answer — update `HostName` below. If a
+DNS name is later assigned, prefer it over the raw IP.
 
 `~/.ssh/config` block:
 ```sshconfig
@@ -40,6 +42,24 @@ Host dugong
   ServerAliveInterval 60
   ServerAliveCountMax 3
 ```
+
+## Start and stop
+dugong is started and deallocated through an admin server that holds the Azure login, by its scripts
+`./dugongup` (`az vm start`) and `./dugongdown` (`az vm deallocate`) in your home directory there.
+Use the tracked wrapper, which checks every step:
+```bash
+vm/dugong_power.sh status          # exit 0 up, 1 not reachable
+vm/dugong_power.sh up              # ~2.3 min to start, then waits for SSH
+vm/dugong_power.sh down            # refuses (exit 2) while any R process runs or anyone is logged in
+```
+**dugong is billed for every hour it runs, busy or idle: stop it as soon as your work is done**
+(after pulling results), and never leave it running unused. Whoever starts it, person or agent, stops
+it, or hands that on explicitly.
+
+It needs a second alias, `dugong-admin`, in `~/.ssh/config` with key login. The admin server's
+address and your user there come from the team and are kept out of this public repo. Details,
+failure modes and the troubleshooting table: `.claude/skills/dugong-run/SKILL.md` §0b and §8. Do not
+use the `dugongup` / `dugongdown` on the admin server's PATH: they are a broken earlier install.
 
 ## Running R on dugong — use the `r-mosaic-*` wrapper
 dugong is Ubuntu 24.04 with a modern `libstdc++`, so the **GLIBCXX** problem hedgehog has does NOT
@@ -108,6 +128,7 @@ Use **local PSOCK** (omit `dask_spec`); `control$parallel$n_cores` is the sim pa
 invalid (issue #113); use local PSOCK.
 
 ## Troubleshooting
+- **`ssh dugong` times out** → dugong is deallocated (normal when idle): `vm/dugong_power.sh up`.
 - **`Permission denied (publickey)` after it worked** → VM redeployed (fresh host key + wiped
   `authorized_keys`). Re-register the key **from your Mac**: `ssh-copy-id -i ~/.ssh/id_ed25519.pub dugong`.
 - **`check_dependencies()` reports a Python problem** → rebuild the env via the wrapper:
