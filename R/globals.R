@@ -41,7 +41,7 @@ utils::globalVariables(c(
      "iso_a3", "iso_codes_mosaic", "kl", "label", "likelihood",
      "location", "log_cases", "loss", "mae", "method",
      "metric", "mosaic_status", "n_nonzero", "n_peaks", "note2",
-     "observed", "origin_lat", "origin_lon", "output_file", "param_base",
+     "observed", "origin_lat", "origin_lon", "output_file", "param_base", "param_location",
      "param_type", "parameter", "parameter_clean", "parameter_name", "peak_value",
      "pop_density", "population_density", "poverty_ratio", "precip_anom", "precip_clim_mean",
      "precip_clim_sd", "precip_p90_threshold", "precip_scaled", "precipitation_sum", "pred",

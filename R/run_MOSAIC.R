@@ -125,26 +125,32 @@
 #' overhead of convert_config_to_matrix().
 #'
 #' @param param_names_all Character vector of parameter names (from setup)
-#' @param location_names Character vector of location ISO codes
+#' @param location_names The config's location names (any names, not only ISO codes)
 #' @return A list of lists, each with \code{key} (config key) and \code{idx}
 #'   (integer location index, or NULL for global params)
 #' @noRd
 .mosaic_build_param_lookup <- function(param_names_all, location_names) {
-  n <- length(param_names_all)
-  lookup <- vector("list", n)
-  for (i in seq_len(n)) {
-    nm <- param_names_all[i]
-    # Check if name ends with _ISO (3-letter uppercase suffix matching a location)
-    suffix <- sub("^.*_([A-Z]{3})$", "\\1", nm)
-    if (nchar(suffix) == 3L && suffix %in% location_names) {
-      base_key <- sub("_[A-Z]{3}$", "", nm)
-      loc_idx <- match(suffix, location_names)
-      lookup[[i]] <- list(key = base_key, idx = loc_idx)
-    } else {
-      lookup[[i]] <- list(key = nm, idx = NULL)
-    }
+  sp <- .mosaic_split_param_names(param_names_all, location_names)
+  lapply(seq_along(param_names_all), function(i) {
+    if (is.na(sp$location[i])) list(key = sp$parameter[i], idx = NULL)
+    else list(key = sp$base[i], idx = match(sp$location[i], location_names))
+  })
+}
+
+# Stop when a parameter of the config does not map to a config field: run_MOSAIC() would record its
+# samples.parquet column as all NA. Called before run_MOSAIC() touches the output directory.
+.mosaic_check_param_lookup <- function(config) {
+  nm <- names(convert_config_to_matrix(config))
+  nm <- nm[nm != "seed"]
+  lookup <- .mosaic_build_param_lookup(nm, config$location_name)
+  unresolved <- nm[!vapply(lookup, function(e) e$key %in% names(config), logical(1))]
+  if (length(unresolved)) {
+    stop("Cannot map these parameters to the config (their samples would be NA): ",
+         paste(utils::head(unresolved, 10), collapse = ", "),
+         if (length(unresolved) > 10) sprintf(" and %d more", length(unresolved) - 10) else "",
+         call. = FALSE)
   }
-  lookup
+  invisible(TRUE)
 }
 
 #' Extract Parameter Row from Config Using Precomputed Lookup
@@ -829,6 +835,11 @@ run_MOSAIC <- function(config,
   if (!"location_name" %in% names(config)) {
     stop("config must contain 'location_name' field", call. = FALSE)
   }
+  # Location names: any names work (not only ISO codes), but they must be ones a calibration can
+  # carry, and every parameter must map to a config field (else its samples column would be all NA).
+  # Checked here, before the output directory is created, cleaned or written to.
+  .mosaic_check_location_names(config$location_name)
+  .mosaic_check_param_lookup(config)
 
   # Extract iso_code from config for logging
   iso_code <- config$location_name
@@ -1113,7 +1124,8 @@ run_MOSAIC <- function(config,
   param_names_all <- names(tmp)
   rm(tmp)
 
-  # Precompute lookup for fast parameter extraction in worker hot loop
+  # Precompute lookup for fast parameter extraction in worker hot loop (every parameter maps to a
+  # config field: .mosaic_check_param_lookup() at the start of run_MOSAIC()).
   param_lookup <- .mosaic_build_param_lookup(param_names_all, config$location_name)
 
   # Filter to estimated parameters for ESS tracking using metadata table.
@@ -1127,15 +1139,9 @@ run_MOSAIC <- function(config,
   estimable_global   <- est_params_df$parameter_name[est_params_df$scale == "global"]
   estimable_location <- est_params_df$parameter_name[est_params_df$scale == "location"]
 
-  # Derive base name for each param: direct match for globals,
-  # strip known location suffixes (_ISO) for location-specific params
+  # Base name of each param: the name for globals, the name without its location suffix otherwise
   location_names <- config$location_name
-  location_suffixes <- paste0("_", location_names)
-  param_base <- param_names_all
-  for (sfx in location_suffixes) {
-    hits <- endsWith(param_names_all, sfx)
-    param_base[hits] <- sub(paste0(sfx, "$"), "", param_names_all[hits])
-  }
+  param_base <- .mosaic_param_base(param_names_all, location_names)
 
   is_estimable <- param_base %in% c(estimable_global, estimable_location)
   param_names_estimated <- param_names_all[is_estimable]
@@ -1167,7 +1173,7 @@ run_MOSAIC <- function(config,
   }
 
   param_names_sampled <- param_names_estimated[
-    !(gsub("_[A-Z]{3}$", "", param_names_estimated) %in% disabled_base_params)
+    !(.mosaic_param_base(param_names_estimated, location_names) %in% disabled_base_params)
   ]
 
   log_msg("Parameters: %d sampled (of %d estimable, %d total) | Locations: %s",

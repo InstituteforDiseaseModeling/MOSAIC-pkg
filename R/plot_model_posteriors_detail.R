@@ -185,6 +185,18 @@ plot_model_posteriors_detail <- function(quantiles_file,
   # Store all created files
   created_files <- c()
 
+  # Base parameter and location of every column ("<base>_<location>"; any location names)
+  param_split <- .mosaic_split_param_names(names(results_best))
+  split_base <- function(nm) {
+    i <- match(nm, param_split$parameter)
+    if (is.na(i)) nm else param_split$base[i]
+  }
+  split_location <- function(nm) {
+    i <- match(nm, param_split$parameter)
+    if (is.na(i)) NA_character_ else param_split$location[i]
+  }
+  split_location_all <- function(nm) param_split$location[match(nm, param_split$parameter)]
+
   # =========================================================================
   # HELPER FUNCTIONS
   # =========================================================================
@@ -332,7 +344,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     # Try location-specific parameters (with and without location suffix)
     if (is.null(prior_obj_raw)) {
-      base_param <- gsub("_[A-Z]{3}$", "", param_name)
+      base_param <- split_base(param_name)
 
       # Generate variants for base parameter
       base_variants <- c(base_param)
@@ -734,7 +746,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
         posterior_obj_raw <- posteriors_obj$parameters_global[[param_name]]
       } else {
         # For location parameters, check base name without suffix
-        base_param <- gsub("_[A-Z]{3}$", "", param_name)
+        base_param <- split_base(param_name)
         if (!is.null(posteriors_obj$parameters_location) && base_param %in% names(posteriors_obj$parameters_location)) {
           posterior_obj_raw <- posteriors_obj$parameters_location[[base_param]]
         }
@@ -748,13 +760,10 @@ plot_model_posteriors_detail <- function(quantiles_file,
     # For location parameters, extract the specific location's distribution
     if (!is.null(prior_obj_raw)) {
       if (!is.null(prior_obj_raw$location)) {
-        # Extract location code from parameter name
-        location_match <- regexec("_([A-Z]{3})$", param_name)
-        if (location_match[[1]][1] != -1) {
-          location_code <- regmatches(param_name, location_match)[[1]][2]
-          if (location_code %in% names(prior_obj_raw$location)) {
-            prior_dist_obj <- extract_distribution(prior_obj_raw$location[[location_code]])
-          }
+        # Location of this parameter
+        location_code <- split_location(param_name)
+        if (!is.na(location_code) && location_code %in% names(prior_obj_raw$location)) {
+          prior_dist_obj <- extract_distribution(prior_obj_raw$location[[location_code]])
         }
       } else {
         # Global parameter - use directly
@@ -764,14 +773,11 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     if (!is.null(posterior_obj_raw)) {
       if (!is.null(posterior_obj_raw$location)) {
-        # Extract location code from parameter name
-        location_match <- regexec("_([A-Z]{3})$", param_name)
-        if (location_match[[1]][1] != -1) {
-          location_code <- regmatches(param_name, location_match)[[1]][2]
-          if (location_code %in% names(posterior_obj_raw$location)) {
-            # Posteriors don't need unwrapping
-            posterior_dist_obj <- posterior_obj_raw$location[[location_code]]
-          }
+        # Location of this parameter
+        location_code <- split_location(param_name)
+        if (!is.na(location_code) && location_code %in% names(posterior_obj_raw$location)) {
+          # Posteriors don't need unwrapping
+          posterior_dist_obj <- posterior_obj_raw$location[[location_code]]
         }
       } else {
         # Global parameter - posteriors don't need unwrapping
@@ -1018,9 +1024,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
   # Get locations
   locations <- unique(quantiles_df$location[!is.na(quantiles_df$location) & quantiles_df$location != ""])
-  location_pattern <- "_([A-Z]{3})$"
-  locations_from_params <- unique(gsub(".*_([A-Z]{3})$", "\\1",
-                                       params_with_posteriors[grepl(location_pattern, params_with_posteriors)]))
+  locs_of_params <- param_split$location[match(params_with_posteriors, param_split$parameter)]
+  locations_from_params <- unique(locs_of_params[!is.na(locs_of_params)])
   locations <- unique(c(locations, locations_from_params))
 
   # `locations` argument splits this function's outputs so a caller can render
@@ -1042,7 +1047,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     # Find parameters for this location
     location_params <- params_with_posteriors[
-      grepl(paste0("_", iso, "$"), params_with_posteriors) |
+      split_location_all(params_with_posteriors) %in% iso |
       (params_with_posteriors %in% location_params_info$parameter_name &
        paste0(params_with_posteriors, "_", iso) %in% names(results_best))
     ]
@@ -1074,7 +1079,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
           cat_panels <- list()
           for (param_name in cat_params) {
             # Get parameter info
-            base_name <- gsub(paste0("_", iso, "$"), "", param_name)
+            base_name <- .mosaic_strip_location(param_name, iso)
             param_info <- location_params_info %>%
               dplyr::filter(parameter_name == base_name) %>%
               dplyr::slice(1)

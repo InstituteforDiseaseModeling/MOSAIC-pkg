@@ -1570,7 +1570,7 @@
   qi <- if (!is.null(q)) match(pnames, q$parameter) else rep(NA_integer_, length(pnames))
   loc <- if (!is.null(q) && "location" %in% names(q)) as.character(q$location[qi]) else rep(NA_character_, length(pnames))
   loc[is.na(loc) | !nzchar(loc)] <- NA_character_
-  base <- ifelse(is.na(loc), pnames, sub(paste0("_", "(", paste(locs, collapse = "|"), ")$"), "", pnames))
+  base <- .mosaic_strip_location(pnames, loc)
   kl <- if (!is.null(q) && "kl" %in% names(q)) suppressWarnings(as.numeric(q$kl[qi])) else rep(NA_real_, length(pnames))
   band_edges <- c(0.05, 0.5)
   # Bands are suppressed below an ensemble ESS of about 100, where the null

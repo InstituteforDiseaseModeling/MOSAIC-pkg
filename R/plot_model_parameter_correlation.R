@@ -98,7 +98,7 @@ plot_model_parameter_correlation <- function(results_file,
 
   # Clean labels
   clean_label <- function(x) {
-    x <- gsub("_([A-Z]{3})$", " (\\1)", x)
+    x <- .mosaic_param_label(x)
     x <- gsub("_", " ", x)
     x
   }

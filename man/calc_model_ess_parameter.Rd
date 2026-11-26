@@ -35,7 +35,7 @@ Data frame with columns:
 \itemize{
 \item parameter: Parameter name
 \item type: Parameter type ('global' or 'location')
-\item iso_code: ISO code for location parameters (NA for global)
+\item iso_code: location name for location parameters (the config's location_name; an ISO code for national runs; NA for global)
 \item ess_marginal: Function-specific ESS of the parameter's posterior mean
 }
 }

@@ -157,6 +157,9 @@ plot_model_parameters <- function(results,
           dplyr::select_if(is.numeric) %>%
           dplyr::select(likelihood, dplyr::everything())
 
+     # Base parameter and location of each column ("<base>_<location>"; any location names)
+     param_split <- .mosaic_split_param_names(setdiff(names(params_to_plot), "likelihood"))
+
      # Pivot longer for faceting
      results_long <- params_to_plot %>%
           tidyr::pivot_longer(cols = -likelihood,
@@ -165,13 +168,14 @@ plot_model_parameters <- function(results,
           dplyr::filter(!is.na(likelihood)) %>%  # Remove failed simulations
           # Add parameter categories and type (global vs location-specific)
           dplyr::mutate(
-               # Clean parameter names (remove ANY 3-letter ISO code suffix)
-               param_base = gsub("_[A-Z]{3}$", "", parameter),
+               # Base name and location of each parameter
+               param_base = param_split$base[match(parameter, param_split$parameter)],
+               param_location = param_split$location[match(parameter, param_split$parameter)],
                # Determine if global or location-specific
                param_type = dplyr::case_when(
                     parameter %in% global_params ~ "Global",
                     param_base %in% location_params_base ~ "Location-Specific",
-                    grepl("_[A-Z]{3}$", parameter) ~ "Location-Specific",
+                    !is.na(param_location) ~ "Location-Specific",
                     TRUE ~ "Global"  # Default to global for unmatched
                ),
                category = dplyr::case_when(
@@ -187,24 +191,13 @@ plot_model_parameters <- function(results,
                # Create ordered factor for proper facet ordering
                parameter = factor(parameter,
                                   levels = unique(parameter[order(category, parameter)]))
-          ) %>%
-          dplyr::select(-param_base)  # Remove temporary column
+          )
 
      # Split into global and location-specific
      results_global <- results_long %>% dplyr::filter(param_type == "Global")
      results_location <- results_long %>% dplyr::filter(param_type == "Location-Specific")
 
-     # ============================================================================
-     # Helper function to extract ISO codes
-     # ============================================================================
-
-     extract_iso <- function(param_names) {
-          iso_codes <- unique(gsub(".*_([A-Z]{3})$", "\\1",
-                                   param_names[grepl("_[A-Z]{3}$", param_names)]))
-          return(iso_codes)
-     }
-
-     unique_locations <- extract_iso(results_location$parameter)
+     unique_locations <- unique(results_location$param_location[!is.na(results_location$param_location)])
 
      # Debug messages
      if (verbose) {
@@ -319,11 +312,11 @@ plot_model_parameters <- function(results,
           for (loc in unique_locations) {
                # Filter data for this location
                results_loc <- results_location %>%
-                    dplyr::filter(grepl(paste0("_", loc, "$"), parameter))
+                    dplyr::filter(param_location == loc)
 
-               # Remove the location suffix for cleaner facet labels
+               # The base name, without the location suffix, for cleaner facet labels
                results_loc <- results_loc %>%
-                    dplyr::mutate(parameter_clean = gsub(paste0("_", loc, "$"), "", parameter))
+                    dplyr::mutate(parameter_clean = param_base)
 
                # Find best points for this location
                best_points_loc <- results_loc %>%

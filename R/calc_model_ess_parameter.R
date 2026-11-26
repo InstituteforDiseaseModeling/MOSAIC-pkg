@@ -60,7 +60,7 @@
 #' @return Data frame with columns:
 #'   - parameter: Parameter name
 #'   - type: Parameter type ('global' or 'location')
-#'   - iso_code: ISO code for location parameters (NA for global)
+#'   - iso_code: location name for location parameters (the config's location_name; an ISO code for national runs; NA for global)
 #'   - ess_marginal: Function-specific ESS of the parameter's posterior mean
 #'
 #' @references
@@ -178,7 +178,7 @@ calc_model_ess_parameter <- function(
     # Only parameters estimated by the MOSAIC framework; compartment counts
     # (N_j_initial, S_j_initial, ...) are derived from the sampled proportions.
     est_params <- get("estimated_parameters", envir = asNamespace("MOSAIC"))
-    base_of <- gsub("_[A-Z]{3}$", "", param_names)
+    base_of <- .mosaic_param_base(param_names)
     param_names_filtered <- param_names[base_of %in% est_params$parameter_name]
     param_names_filtered <- param_names_filtered[!grepl("^[NSEIRV][12]?_j_initial", param_names_filtered)]
 
@@ -209,13 +209,14 @@ calc_model_ess_parameter <- function(
     # ==========================================================================
 
     loc_params <- est_params$parameter_name[est_params$scale == "location"]
-    ess_list <- lapply(param_names, function(param_name) {
-        has_iso <- grepl("_[A-Z]{3}$", param_name)
-        base_param <- gsub("_[A-Z]{3}$", "", param_name)
+    split <- .mosaic_split_param_names(param_names)
+    ess_list <- lapply(seq_along(param_names), function(k) {
+        param_name <- param_names[k]
+        has_location <- !is.na(split$location[k])
         data.frame(
             parameter = param_name,
-            type = if (has_iso && base_param %in% loc_params) "location" else "global",
-            iso_code = if (has_iso) gsub(".*_([A-Z]{3})$", "\\1", param_name) else NA_character_,
+            type = if (has_location && split$base[k] %in% loc_params) "location" else "global",
+            iso_code = split$location[k],
             ess_marginal = .mosaic_function_specific_ess(results_valid[[param_name]], weights),
             stringsAsFactors = FALSE
         )

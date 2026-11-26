@@ -256,7 +256,7 @@ calc_model_posterior_distributions <- function(
 
         # Get the base parameter name (without location suffix)
         if (!is.null(location) && nchar(location) > 0) {
-            param_base <- sub(paste0("_", location, "$"), "", param_name)
+            param_base <- .mosaic_strip_location(param_name, location)
         } else {
             param_base <- param_name
         }

@@ -98,7 +98,7 @@ plot_model_parameter_sensitivity <- function(results_file,
   # Build labels
   # -----------------------------------------------------------------------
   clean_label <- function(x) {
-    x <- gsub("_([A-Z]{3})$", " (\\1)", x)
+    x <- .mosaic_param_label(x)
     x <- gsub("_", " ", x)
     x
   }

@@ -375,8 +375,9 @@
 # seed and the key alone, so the stream a unit gets does not depend on the
 # order units are processed in or on whether they run in a forked worker.
 # The key is hashed with a polynomial rolling hash (base 131) modulo the prime
-# 2147483629, which is injective for ISO-3 codes (code points < 131), and the
-# base seed is mixed in multiplicatively. All arithmetic stays below 2^53, so
+# 2147483629, which is injective for ISO-3 codes (code points < 131; other keys,
+# e.g. non-ASCII location names, are hashed but no longer provably collision-free),
+# and the base seed is mixed in multiplicatively. All arithmetic stays below 2^53, so
 # it is exact in doubles on every platform.
 .mosaic_derive_seed <- function(seed, key) {
   p <- 2147483629

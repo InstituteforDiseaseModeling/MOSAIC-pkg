@@ -105,6 +105,8 @@ convert_matrix_to_config <- function(param_vector, config_base, col_params = NUL
     # Get location names for handling location-specific parameters
     location_names <- config_base$location_name
     n_locations <- length(location_names)
+    # Base and location of each name ("<base>_<location>", longest location first)
+    name_split <- if (!is.null(location_names)) .mosaic_split_param_names(param_names, location_names) else NULL
     
     # ============================================================================
     # Helper function to check if parameter should be updated
@@ -121,13 +123,10 @@ convert_matrix_to_config <- function(param_vector, config_base, col_params = NUL
         
         # For location-specific parameters, check base parameter name
         # e.g., "beta_j0_hum_ETH" -> check "beta_j0_hum"
-        for (j in seq_along(location_names)) {
-            loc_suffix <- paste0("_", location_names[j])
-            if (endsWith(param_name, loc_suffix)) {
-                base_param <- substr(param_name, 1, nchar(param_name) - nchar(loc_suffix))
-                if (base_param %in% names(sampling_flags)) {
-                    return(isTRUE(sampling_flags[[base_param]]))
-                }
+        if (!is.null(name_split)) {
+            k <- match(param_name, name_split$parameter)
+            if (!is.na(k) && !is.na(name_split$location[k]) && name_split$base[k] %in% names(sampling_flags)) {
+                return(isTRUE(sampling_flags[[name_split$base[k]]]))
             }
         }
         
@@ -167,16 +166,10 @@ convert_matrix_to_config <- function(param_vector, config_base, col_params = NUL
         base_param_name <- param_name
         location_idx <- NULL
         
-        if (!is.null(location_names)) {
-            for (j in seq_along(location_names)) {
-                loc_suffix <- paste0("_", location_names[j])
-                if (endsWith(param_name, loc_suffix)) {
-                    is_location_param <- TRUE
-                    base_param_name <- substr(param_name, 1, nchar(param_name) - nchar(loc_suffix))
-                    location_idx <- j
-                    break
-                }
-            }
+        if (!is.null(name_split) && !is.na(name_split$location[i])) {
+            is_location_param <- TRUE
+            base_param_name <- name_split$base[i]
+            location_idx <- match(name_split$location[i], location_names)
         }
         
         # Check for indexed parameters (end with "_1", "_2", etc.)

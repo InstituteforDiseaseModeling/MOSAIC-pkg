@@ -118,7 +118,7 @@ A test checks that every field of a real calibration_diagnostics.json is named h
 Arrays of numbers are plain JSON numbers. Paths have ≤ 60 points. `fit.weekly`, `fit.per_location` and the paths are rounded to 4 significant digits; every other number keeps full precision.
 
 Field notes (added 2026-10-20 from the WS3 renderer):
-- `run.locations` is always an array of ISO codes, even for one location.
+- `run.locations` is always an array of the config's location names (ISO codes for national runs; any names since MOSAIC 1.7.0), even for one location.
 - `status.checks[].label` is the human-readable check name (e.g. "Ensemble ESS"); `check` is the id (`ess`, `mce`, `khat`, `informativeness`).
 - `status.flags_text` and `status.stopping_rule_met` mirror the summary.json fields of the same names (`stopping_rule_met` null in fixed mode).
 - `run.n_simulations` is the simulations attempted (valid draws are `sampling.sims_used`); round 2.
