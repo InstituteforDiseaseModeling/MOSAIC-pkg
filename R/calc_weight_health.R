@@ -654,7 +654,7 @@ calc_run_weight_health <- function(dir_output, write = TRUE, coarsening_alpha = 
 # without the compartment counts that are derived from the sampled proportions.
 .mosaic_weight_health_param_cols <- function(nms) {
      est <- get("estimated_parameters", envir = asNamespace("MOSAIC"))$parameter_name
-     base <- gsub("_[A-Z]{3}$", "", nms)
+     base <- .mosaic_param_base(nms)
      nms[base %in% est & !grepl("^[NSEIRV][12]?_j_initial", nms)]
 }
 

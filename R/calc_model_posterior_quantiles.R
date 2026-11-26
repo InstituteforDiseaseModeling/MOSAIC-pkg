@@ -183,9 +183,11 @@ calc_model_posterior_quantiles <- function(results,
             message("Converting initial condition counts to proportions for ", length(initial_cols), " variables")
         }
 
+        init_loc <- stats::setNames(.mosaic_split_param_names(initial_cols, .mosaic_infer_locations(all_cols))$location,
+                                    initial_cols)
         for (col in initial_cols) {
-            # Extract location suffix (e.g., "_ETH" from "S_j_initial_ETH")
-            location_suffix <- gsub(".*(_[A-Z]{3})$", "\\1", col)
+            # Location suffix (e.g. "_ETH" from "S_j_initial_ETH", "_MOZ_Gaza" from "S_j_initial_MOZ_Gaza")
+            location_suffix <- if (is.na(init_loc[[col]])) "" else paste0("_", init_loc[[col]])
             n_col <- paste0("N_j_initial", location_suffix)
 
             if (n_col %in% all_cols) {
@@ -219,7 +221,8 @@ calc_model_posterior_quantiles <- function(results,
     }
 
     # Identify location patterns for multi-location handling
-    location_suffixes <- unique(gsub(".*_([A-Z]{3})$", "\\1", param_cols[grepl("_[A-Z]{3}$", param_cols)]))
+    param_locations <- .mosaic_split_param_names(param_cols)$location
+    location_suffixes <- unique(param_locations[!is.na(param_locations)])
 
     if (verbose) {
         message("Parameter columns identified: ", length(param_cols))

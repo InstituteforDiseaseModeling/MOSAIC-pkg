@@ -1,3 +1,27 @@
+# MOSAIC 1.7.0
+
+- **Location names no longer have to be three-letter codes.** `config$location_name` can hold any unique names that start with a letter and contain only letters (any script), digits, `_`, `.` or `-`, for example `"MOZ_Cabo_Delgado"`, `"MOZ_Zambézia"`, `"Lusaka-1"` or `"KAA"`. ISO-coded runs behave exactly as before.
+- **The bug this fixes.** The calibration recognised a location-specific parameter only by a three-capital-letter suffix (`_[A-Z]{3}$`), in 10 places. With any other names, `run_MOSAIC()` recorded every location-specific parameter in `samples.parquet` as `NA`, without an error. The simulations, likelihoods and fits were unaffected, but the location posteriors, per-parameter ESS, weight health, sensitivity and posterior plots were empty for those parameters. The Mozambique subnational sandbox runs (`"MOZ_Cabo_Delgado"`, ...) hit this: 350 location columns, all `NA` over 40,000 draws. Re-run any calibration whose location names were not three capital letters. MOSAIC-Kenya avoided it by inventing codes (`KAA`...); the package no longer needs them, though `MOSAIC-Kenya/model/R/analysis-mosaic-signal.R` still parses three-letter suffixes itself, and MOSAIC-dashboard still finds models by ISO path.
+- **How names are split now.** One internal helper (`R/param_location_names.R`) splits `"<base>_<location>"` by the exact location names, longest first, so names containing underscores work and `"Gaza"` never captures `"MOZ_Gaza"`. Without the location names (reading a `samples.parquet` or a quantiles table), it finds them from the parameters that are always per location. Every former suffix pattern now uses it:
+  - `run_MOSAIC()`, `get_param_names()` and `calc_model_posterior_quantiles()`;
+  - `calc_model_ess_parameter()`, the weight health and the sensitivity descriptions;
+  - `plot_model_parameters()`, `plot_model_posteriors_detail()` and the correlation and sensitivity plot labels;
+  - `convert_matrix_to_config()`, whose own parser took the first location in config order, so with `Gaza` and `MOZ_Gaza` both present the `MOZ_Gaza` value was dropped;
+  - for code that already knows a parameter's location (the calibration-diagnostics parameter table, `calc_model_posterior_distributions()`, the per-location posterior pages), a literal suffix strip replaces a regex built from the name, in which a `.` would have matched any character.
+
+  On `config_default`'s 1,187 parameter columns, the Kenya and Mozambique configs and production samples files, it splits exactly as the old rule did for ISO names. It loops over locations, not names: 0.04 s for Kenya's 290 sub-counties (8,437 names).
+- **Protected names.** The `samples.parquet` bookkeeping columns (`sim`, `iter`, `seed_sim`, `likelihood`, `is_*`, `weight_*`) are never split, so a location called `best` or `sim` cannot turn `weight_best` or `seed_sim` into a parameter.
+- **Checks.** `run_MOSAIC()` validates `location_name` and stops on any of these, before it creates, cleans or writes to the output directory:
+  - names that are empty, duplicated (also ignoring case: their figure files would collide on macOS) or contain other characters;
+  - names that clash with a parameter or samples column;
+  - a set that would make parameter names ambiguous, such as `X` with `tot_X`, where `beta_j0_tot_X` could read as `beta_j0` at `tot_X`;
+  - a parameter that cannot be traced to a config field, so a column can no longer be recorded as `NA` silently.
+
+  All 15 Kenya and Mozambique subnational configs and `config_default` pass.
+- **Tests.**
+  - Fast (run in R CMD check, about 1.5 s): the helpers; the name check; `convert_matrix_to_config()` with overlapping names; a renamed two-location draw recorded identically to its ISO-named twin; and `run_MOSAIC()` rejecting a bad name while leaving an existing output directory untouched, with `clean_output` TRUE or FALSE.
+  - Integration tier (`MOSAIC_RUN_INTEGRATION=1`): a full stubbed calibration with the overlapping names `MOZ_Gaza` and `Gaza` reproduces the ISO-named run value for value, including posteriors, `calibration_diagnostics.json` and per-location figures.
+- **Reviewed** by two independent red-team passes. ISO-named stubbed runs were byte-identical before and after (`samples.parquet`, `posterior_quantiles.csv`, ESS, medoid config), and post-processing old output directories still works.
 # MOSAIC 1.6.5
 
 - **Site build fixed.** It had failed on every pull request since `rjags` 5-5 (needs JAGS 5; the runner has 4.3.2). Package code is unchanged.

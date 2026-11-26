@@ -284,16 +284,17 @@ calc_model_parameter_sensitivity <- function(results_file,
 
 
 # Parameter descriptions for sensitivity output. Global parameters are looked
-# up by name; location-scale columns ("<base>_<ISO>") use the single
+# up by name; location-scale columns ("<base>_<location>") use the single
 # description stored per base parameter at parameters_location[[base]].
 # @keywords internal
 .mosaic_sensitivity_descriptions <- function(priors, param_cols) {
   descriptions <- stats::setNames(rep("", length(param_cols)), param_cols)
+  bases <- stats::setNames(.mosaic_param_base(param_cols), param_cols)
   for (nm in param_cols) {
     if (!is.null(priors$parameters_global[[nm]]$description)) {
       descriptions[nm] <- priors$parameters_global[[nm]]$description
     }
-    base_nm <- sub("_[A-Z]{3}$", "", nm)
+    base_nm <- bases[[nm]]
     if (!identical(base_nm, nm) &&
         !is.null(priors$parameters_location[[base_nm]]$description)) {
       descriptions[nm] <- priors$parameters_location[[base_nm]]$description

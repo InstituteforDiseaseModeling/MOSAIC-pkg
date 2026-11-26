@@ -16,12 +16,13 @@ A list with three elements:
 \item{all}{Character vector of all parameter names found in the object}
 \item{global}{Character vector of global (scalar) parameter names}
 \item{location}{Named list where each element is a character vector of
-location-specific parameter names for that ISO code}
+location-specific parameter names for that location (an ISO code for national
+configs, or any location name)}
 }
 }
 \description{
 Extracts parameter names from MOSAIC model configuration objects or results matrices,
-organizing them into global parameters and location-specific parameters by ISO code.
+organizing them into global parameters and location-specific parameters by location.
 This function is useful for organizing and categorizing parameters for analysis and
 visualization workflows.
 }
@@ -31,12 +32,13 @@ The function distinguishes between:
 \item \strong{Global parameters}: Scalar parameters that apply to all locations
 (e.g., "phi_1", "omega_2", "epsilon")
 \item \strong{Location-specific parameters}: Parameters that vary by location,
-either stored as vectors (in config objects) or with ISO suffixes (in results matrices)
+either stored as vectors (in config objects) or with location suffixes (in results matrices)
 }
 
 For config objects, location-specific parameters are identified by their base names
 and the presence of location names. For results matrices, location-specific parameters
-are identified by their "_ISO" suffix pattern (e.g., "S_j_initial_ETH").
+are identified by their location suffix (e.g., "S_j_initial_ETH" or
+"S_j_initial_MOZ_Cabo_Delgado"); location names need not be ISO codes.
 }
 \examples{
 \dontrun{

@@ -1,7 +1,7 @@
 #' Get Parameter Names from MOSAIC Objects
 #'
 #' Extracts parameter names from MOSAIC model configuration objects or results matrices,
-#' organizing them into global parameters and location-specific parameters by ISO code.
+#' organizing them into global parameters and location-specific parameters by location.
 #' This function is useful for organizing and categorizing parameters for analysis and
 #' visualization workflows.
 #'
@@ -13,7 +13,8 @@
 #'   \item{all}{Character vector of all parameter names found in the object}
 #'   \item{global}{Character vector of global (scalar) parameter names}
 #'   \item{location}{Named list where each element is a character vector of
-#'     location-specific parameter names for that ISO code}
+#'     location-specific parameter names for that location (an ISO code for national
+#'     configs, or any location name)}
 #' }
 #'
 #' @details
@@ -22,12 +23,13 @@
 #'   \item \strong{Global parameters}: Scalar parameters that apply to all locations
 #'     (e.g., "phi_1", "omega_2", "epsilon")
 #'   \item \strong{Location-specific parameters}: Parameters that vary by location,
-#'     either stored as vectors (in config objects) or with ISO suffixes (in results matrices)
+#'     either stored as vectors (in config objects) or with location suffixes (in results matrices)
 #' }
 #'
 #' For config objects, location-specific parameters are identified by their base names
 #' and the presence of location names. For results matrices, location-specific parameters
-#' are identified by their "_ISO" suffix pattern (e.g., "S_j_initial_ETH").
+#' are identified by their location suffix (e.g., "S_j_initial_ETH" or
+#' "S_j_initial_MOZ_Cabo_Delgado"); location names need not be ISO codes.
 #'
 #' @examples
 #' \dontrun{
@@ -159,27 +161,21 @@ get_param_names <- function(object) {
         global_names <- character()
         location_list <- list()
 
-        # Extract location codes from parameter names
-        iso_pattern <- "_([A-Z]{3})$"
-        location_params_with_iso <- all_names[grepl(iso_pattern, all_names)]
-        location_isos <- unique(gsub(".*_([A-Z]{3})$", "\\1", location_params_with_iso))
+        # Location of each parameter name ("<base>_<location>"; NA for global ones)
+        split <- .mosaic_split_param_names(all_names)
 
         # Initialize location lists
-        for (iso in location_isos) {
-            location_list[[iso]] <- character()
+        for (loc in unique(split$location[!is.na(split$location)])) {
+            location_list[[loc]] <- character()
         }
 
         # Categorize parameters
-        for (param_name in all_names) {
-
-            if (grepl(iso_pattern, param_name)) {
-                # Location-specific parameter with ISO suffix
-                iso_code <- gsub(".*_([A-Z]{3})$", "\\1", param_name)
-                base_name <- gsub("_[A-Z]{3}$", "", param_name)
-                location_list[[iso_code]] <- c(location_list[[iso_code]], param_name)
+        for (k in seq_along(all_names)) {
+            loc <- split$location[k]
+            if (!is.na(loc)) {
+                location_list[[loc]] <- c(location_list[[loc]], all_names[k])
             } else {
-                # Global parameter (no ISO suffix)
-                global_names <- c(global_names, param_name)
+                global_names <- c(global_names, all_names[k])
             }
         }
 

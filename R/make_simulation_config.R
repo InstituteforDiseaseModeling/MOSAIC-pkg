@@ -20,7 +20,9 @@
 #'        it will be converted to a Date object.
 #' @param date_stop End date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
 #'        it will be converted to a Date object.
-#' @param location_name A character vector giving the names of each metapopulation location.
+#' @param location_name A character vector giving the names of each metapopulation location: ISO codes
+#'        for national configs, or any unique names (e.g. "MOZ_Cabo_Delgado") that start with a letter and
+#'        contain only letters, digits, "_", "." or "-"; \code{run_MOSAIC()} checks them.
 #'        The order and names here must match those used in the initial population vectors.
 #' @param N_j_initial A named numeric or integer vector of length equal to \code{location_name} giving the total
 #' initial population size for each location. Note that total population size must be the sum of all model compartments.
