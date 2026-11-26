@@ -1,3 +1,9 @@
+# MOSAIC 1.6.5
+
+- **Site build fixed.** It had failed on every pull request since `rjags` 5-5 (needs JAGS 5; the runner has 4.3.2). Package code is unchanged.
+  - The pkgdown workflow passes `mobility=?ignore`, so its dependency step no longer tries to build `rjags` 5-5 from source.
+  - `est_mobility()`'s documentation names the `mobility` package's `mobility()` without the `mobility::` form. pkgdown turned that form into a link by loading `mobility`, and through it `rjags`, which fails on a runner with no JAGS library.
+
 # MOSAIC 1.6.4
 
 - **Starting and stopping dugong.** The Starsim selfserve site that started and stopped the dugong Azure VM is gone, so dugong is now deallocated when idle and driven from the command line:

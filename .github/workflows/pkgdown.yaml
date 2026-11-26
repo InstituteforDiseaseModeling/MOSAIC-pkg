@@ -31,9 +31,14 @@ jobs:
         with:
           use-public-rspm: true
 
+      # mobility=?ignore: the Suggests package `mobility` (used only by est_mobility()) needs rjags,
+      # and pak tried to build rjags 5-5 from source, which needs JAGS 5 (the runner has 4.3.2), and
+      # stopped. With this setting the install succeeds (rjags 4-18 from RSPM). The site never loads
+      # mobility or rjags (the runner has no JAGS library): docs must not autolink "mobility::".
+      # R-CMD-check installs Suggests with remotes::install_deps(), which tolerates the failure.
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::pkgdown, local::.
+          extra-packages: any::pkgdown, local::., mobility=?ignore
           needs: website
 
       # pkgdown renders EVERY root *.md except README, LICENSE and NEWS into a
