@@ -58,7 +58,8 @@ Data frame with columns:
 
 - type: Parameter type ('global' or 'location')
 
-- iso_code: ISO code for location parameters (NA for global)
+- iso_code: location name for location parameters (the config's
+  location_name; an ISO code for national runs; NA for global)
 
 - ess_marginal: Function-specific ESS of the parameter's posterior mean
 

@@ -125,9 +125,13 @@ make_simulation_config(
 
 - location_name:
 
-  A character vector giving the names of each metapopulation location.
-  The order and names here must match those used in the initial
-  population vectors.
+  A character vector giving the names of each metapopulation location:
+  ISO codes for national configs, or any unique names (e.g.
+  "MOZ_Cabo_Delgado") that start with a letter and contain only letters,
+  digits, "\_", "." or "-";
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  checks them. The order and names here must match those used in the
+  initial population vectors.
 
 - N_j_initial:
 

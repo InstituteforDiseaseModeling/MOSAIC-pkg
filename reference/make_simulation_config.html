@@ -21,7 +21,7 @@ The file extension determines which output format is used:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -174,7 +174,9 @@ it will be converted to a Date object.</p></dd>
 
 
 <dt id="arg-location-name">location_name<a class="anchor" aria-label="anchor" href="#arg-location-name"></a></dt>
-<dd><p>A character vector giving the names of each metapopulation location.
+<dd><p>A character vector giving the names of each metapopulation location: ISO codes
+for national configs, or any unique names (e.g. "MOZ_Cabo_Delgado") that start with a letter and
+contain only letters, digits, "_", "." or "-"; <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> checks them.
 The order and names here must match those used in the initial population vectors.</p></dd>
 
 

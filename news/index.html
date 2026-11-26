@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,9 +39,39 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="1.6.5" id="mosaic-165">MOSAIC 1.6.5<a class="anchor" aria-label="anchor" href="#mosaic-165"></a></h2>
+<h2 class="pkg-version" data-toc-text="1.7.0" id="mosaic-170">MOSAIC 1.7.0<a class="anchor" aria-label="anchor" href="#mosaic-170"></a></h2>
+<ul><li><p><strong>Location names no longer have to be three-letter codes.</strong> <code>config$location_name</code> can hold any unique names that start with a letter and contain only letters (any script), digits, <code>_</code>, <code>.</code> or <code>-</code>, for example <code>"MOZ_Cabo_Delgado"</code>, <code>"MOZ_Zambézia"</code>, <code>"Lusaka-1"</code> or <code>"KAA"</code>. ISO-coded runs behave exactly as before.</p></li>
+<li><p><strong>The bug this fixes.</strong> The calibration recognised a location-specific parameter only by a three-capital-letter suffix (<code>_[A-Z]{3}$</code>), in 10 places. With any other names, <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> recorded every location-specific parameter in <code>samples.parquet</code> as <code>NA</code>, without an error. The simulations, likelihoods and fits were unaffected, but the location posteriors, per-parameter ESS, weight health, sensitivity and posterior plots were empty for those parameters. The Mozambique subnational sandbox runs (<code>"MOZ_Cabo_Delgado"</code>, …) hit this: 350 location columns, all <code>NA</code> over 40,000 draws. Re-run any calibration whose location names were not three capital letters. MOSAIC-Kenya avoided it by inventing codes (<code>KAA</code>…); the package no longer needs them, though <code>MOSAIC-Kenya/model/R/analysis-mosaic-signal.R</code> still parses three-letter suffixes itself, and MOSAIC-dashboard still finds models by ISO path.</p></li>
+<li>
+<p><strong>How names are split now.</strong> One internal helper (<code>R/param_location_names.R</code>) splits <code>"&lt;base&gt;_&lt;location&gt;"</code> by the exact location names, longest first, so names containing underscores work and <code>"Gaza"</code> never captures <code>"MOZ_Gaza"</code>. Without the location names (reading a <code>samples.parquet</code> or a quantiles table), it finds them from the parameters that are always per location. Every former suffix pattern now uses it:</p>
 <ul><li>
-<strong>Site build fixed.</strong> It had failed on every pull request since <code>rjags</code> 5-5 (needs JAGS 5; the runner has 4.3.2). Package code is unchanged.
+<code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code>, <code><a href="../reference/get_param_names.html">get_param_names()</a></code> and <code><a href="../reference/calc_model_posterior_quantiles.html">calc_model_posterior_quantiles()</a></code>;</li>
+<li>
+<code><a href="../reference/calc_model_ess_parameter.html">calc_model_ess_parameter()</a></code>, the weight health and the sensitivity descriptions;</li>
+<li>
+<code><a href="../reference/plot_model_parameters.html">plot_model_parameters()</a></code>, <code><a href="../reference/plot_model_posteriors_detail.html">plot_model_posteriors_detail()</a></code> and the correlation and sensitivity plot labels;</li>
+<li>
+<code><a href="../reference/convert_matrix_to_config.html">convert_matrix_to_config()</a></code>, whose own parser took the first location in config order, so with <code>Gaza</code> and <code>MOZ_Gaza</code> both present the <code>MOZ_Gaza</code> value was dropped;</li>
+<li>for code that already knows a parameter’s location (the calibration-diagnostics parameter table, <code><a href="../reference/calc_model_posterior_distributions.html">calc_model_posterior_distributions()</a></code>, the per-location posterior pages), a literal suffix strip replaces a regex built from the name, in which a <code>.</code> would have matched any character.</li>
+</ul><p>On <code>config_default</code>’s 1,187 parameter columns, the Kenya and Mozambique configs and production samples files, it splits exactly as the old rule did for ISO names. It loops over locations, not names: 0.04 s for Kenya’s 290 sub-counties (8,437 names).</p>
+</li>
+<li><p><strong>Protected names.</strong> The <code>samples.parquet</code> bookkeeping columns (<code>sim</code>, <code>iter</code>, <code>seed_sim</code>, <code>likelihood</code>, <code>is_*</code>, <code>weight_*</code>) are never split, so a location called <code>best</code> or <code>sim</code> cannot turn <code>weight_best</code> or <code>seed_sim</code> into a parameter.</p></li>
+<li>
+<p><strong>Checks.</strong> <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> validates <code>location_name</code> and stops on any of these, before it creates, cleans or writes to the output directory:</p>
+<ul><li>names that are empty, duplicated (also ignoring case: their figure files would collide on macOS) or contain other characters;</li>
+<li>names that clash with a parameter or samples column;</li>
+<li>a set that would make parameter names ambiguous, such as <code>X</code> with <code>tot_X</code>, where <code>beta_j0_tot_X</code> could read as <code>beta_j0</code> at <code>tot_X</code>;</li>
+<li>a parameter that cannot be traced to a config field, so a column can no longer be recorded as <code>NA</code> silently.</li>
+</ul><p>All 15 Kenya and Mozambique subnational configs and <code>config_default</code> pass.</p>
+</li>
+<li>
+<p><strong>Tests.</strong></p>
+<ul><li>Fast (run in R CMD check, about 1.5 s): the helpers; the name check; <code><a href="../reference/convert_matrix_to_config.html">convert_matrix_to_config()</a></code> with overlapping names; a renamed two-location draw recorded identically to its ISO-named twin; and <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> rejecting a bad name while leaving an existing output directory untouched, with <code>clean_output</code> TRUE or FALSE.</li>
+<li>Integration tier (<code>MOSAIC_RUN_INTEGRATION=1</code>): a full stubbed calibration with the overlapping names <code>MOZ_Gaza</code> and <code>Gaza</code> reproduces the ISO-named run value for value, including posteriors, <code>calibration_diagnostics.json</code> and per-location figures.</li>
+</ul></li>
+<li><p><strong>Reviewed</strong> by two independent red-team passes. ISO-named stubbed runs were byte-identical before and after (<code>samples.parquet</code>, <code>posterior_quantiles.csv</code>, ESS, medoid config), and post-processing old output directories still works. # MOSAIC 1.6.5</p></li>
+<li>
+<p><strong>Site build fixed.</strong> It had failed on every pull request since <code>rjags</code> 5-5 (needs JAGS 5; the runner has 4.3.2). Package code is unchanged.</p>
 <ul><li>The pkgdown workflow passes <code>mobility=?ignore</code>, so its dependency step no longer tries to build <code>rjags</code> 5-5 from source.</li>
 <li>
 <code><a href="../reference/est_mobility.html">est_mobility()</a></code>’s documentation names the <code>mobility</code> package’s <code>mobility()</code> without the <code>mobility::</code> form. pkgdown turned that form into a link by loading <code>mobility</code>, and through it <code>rjags</code>, which fails on a runner with no JAGS library.</li>
