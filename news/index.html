@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.6.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,31 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.6.5" id="mosaic-165">MOSAIC 1.6.5<a class="anchor" aria-label="anchor" href="#mosaic-165"></a></h2>
+<ul><li>
+<strong>Site build fixed.</strong> It had failed on every pull request since <code>rjags</code> 5-5 (needs JAGS 5; the runner has 4.3.2). Package code is unchanged.
+<ul><li>The pkgdown workflow passes <code>mobility=?ignore</code>, so its dependency step no longer tries to build <code>rjags</code> 5-5 from source.</li>
+<li>
+<code><a href="../reference/est_mobility.html">est_mobility()</a></code>’s documentation names the <code>mobility</code> package’s <code>mobility()</code> without the <code>mobility::</code> form. pkgdown turned that form into a link by loading <code>mobility</code>, and through it <code>rjags</code>, which fails on a runner with no JAGS library.</li>
+</ul></li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.6.4" id="mosaic-164">MOSAIC 1.6.4<a class="anchor" aria-label="anchor" href="#mosaic-164"></a></h2>
+<ul><li>
+<strong>Starting and stopping dugong.</strong> The Starsim selfserve site that started and stopped the dugong Azure VM is gone, so dugong is now deallocated when idle and driven from the command line:
+<ul><li>
+<code>vm/dugong_power.sh status | up | down [--force]</code> runs the admin server’s <code>./dugongup</code> (<code>az vm start</code>) and <code>./dugongdown</code> (<code>az vm deallocate</code>) over SSH;</li>
+<li>
+<code>up</code> waits until dugong answers SSH, and does nothing if it already does;</li>
+<li>
+<code>down</code> refuses while any R process runs or anyone is logged in, then waits until dugong stops answering.</li>
+<li>It holds no hosts or credentials (SSH aliases <code>dugong</code> and <code>dugong-admin</code>, key login only). It was tested live on 2026-11-23: start about 2.3 minutes, stop about 1.6 minutes, IP unchanged.</li>
+</ul></li>
+<li>The <code>dugong-run</code> skill (§0, new §0b, §5, §8), <code>vm/DUGONG.md</code> and the agent roster describe this workflow. Package code is unchanged.</li>
+<li>
+<strong>Cost rule:</strong> dugong is billed for every hour it runs, so the skill now requires an agent that starts it to stop it (<code>vm/dugong_power.sh down</code>) as soon as its job is done or it is not needed. A run that will outlive the session must be handed over to the user explicitly, and a dugong someone else started is never stopped without asking.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.6.3" id="mosaic-163">MOSAIC 1.6.3<a class="anchor" aria-label="anchor" href="#mosaic-163"></a></h2>
 <ul><li>

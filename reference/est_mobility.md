@@ -100,11 +100,10 @@ est_mobility(
 
 - fused_count_scale:
 
-  Integer scale applied to the row-normalised fused structure so
-  [`mobility::mobility()`](https://rdrr.io/pkg/mobility/man/mobility.html)
-  receives counts. Default 1e5. The absolute scale does not move
-  gamma/omega (verified in the MOSAIC-OCV E3 Route-2 work); it only
-  affects the kernel-mix term.
+  Integer scale applied to the row-normalised fused structure so the
+  mobility package's `mobility()` receives counts. Default 1e5. The
+  absolute scale does not move gamma/omega (verified in the MOSAIC-OCV
+  E3 Route-2 work); it only affects the kernel-mix term.
 
 - suffix:
 
