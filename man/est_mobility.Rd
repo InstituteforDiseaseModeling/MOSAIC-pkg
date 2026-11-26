@@ -62,7 +62,7 @@ on whatever units D carries, so a travel-time gamma cannot be read against
 a kilometre gamma. Compare only within a metric.}
 
 \item{fused_count_scale}{Integer scale applied to the row-normalised fused
-structure so \code{mobility::mobility()} receives counts. Default 1e5.
+structure so the \pkg{mobility} package's \code{mobility()} receives counts. Default 1e5.
 The absolute scale does not move gamma/omega (verified in the MOSAIC-OCV
 E3 Route-2 work); it only affects the kernel-mix term.}
 

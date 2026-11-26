@@ -1,6 +1,8 @@
 # MOSAIC 1.6.5
 
-- CI only: the pkgdown workflow skips the Suggests package `mobility` (`mobility=?ignore`), whose dependency `rjags` 5-5 needs JAGS 5 while the GitHub runner has JAGS 4.3.2. Its dependency step was failing, and so was every pull request's site build. Package code is unchanged.
+- **Site build fixed.** It had failed on every pull request since `rjags` 5-5 (needs JAGS 5; the runner has 4.3.2). Package code is unchanged.
+  - The pkgdown workflow passes `mobility=?ignore`, so its dependency step no longer tries to build `rjags` 5-5 from source.
+  - `est_mobility()`'s documentation names the `mobility` package's `mobility()` without the `mobility::` form. pkgdown turned that form into a link by loading `mobility`, and through it `rjags`, which fails on a runner with no JAGS library.
 
 # MOSAIC 1.6.4
 
