@@ -136,8 +136,8 @@ exported signatures / the `run_MOSAIC()` core loop.
   calibration runs on the hedgehog Azure VM (120 cores / 448 GB): backend choice (local PSOCK vs
   Coiled hybrid), the GLIBCXX R wrapper, surviving SSH disconnect (nohup/tmux), the control +
   `dask_spec` recipe, and pulling results. Invoke via the `Skill` tool for hedgehog run logistics.
-- **`dugong-run`** (`.claude/skills/dugong-run/`) — same logistics for the dugong Azure VM
-  (176 cores / 1.5 TiB, Ubuntu 24.04, persistently allocated): the **libexpat** (not GLIBCXX) R
+- **`dugong-run`** (`.claude/skills/dugong-run/`) — starting/stopping (`vm/dugong_power.sh`) and the same logistics for the dugong Azure VM
+  (176 cores / 1.5 TiB, Ubuntu 24.04, deallocated when idle): the **libexpat** (not GLIBCXX) R
   wrapper, the IP-pinned SSH alias, nohup/tmux disconnect survival, the local-PSOCK control recipe
   (Coiled hybrid is #113-invalid), monitoring, and pulling results (`HEDGEHOG_HOST=dugong`). Invoke
   via the `Skill` tool for dugong run logistics. Canonical ref: `vm/DUGONG.md`.

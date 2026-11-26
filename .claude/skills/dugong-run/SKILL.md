@@ -1,13 +1,16 @@
 ---
 name: dugong-run
 description: >
-  Launch, monitor, and retrieve MOSAIC calibration runs on the dugong Azure VM
-  (176 cores / 1.5 TiB, Ubuntu 24.04, persistently allocated). Covers the libexpat
-  LD_PRELOAD R wrapper (NOT hedgehog's GLIBCXX problem), the IP-pinned SSH alias,
+  Start, stop, launch, monitor, and retrieve MOSAIC calibration runs on the dugong Azure VM
+  (176 cores / 1.5 TiB, Ubuntu 24.04, deallocated when idle). Covers starting and stopping it
+  (vm/dugong_power.sh up|down|status, through the admin server's ./dugongup and ./dugongdown),
+  the libexpat LD_PRELOAD R wrapper (NOT hedgehog's GLIBCXX problem), the IP-pinned SSH alias,
   surviving SSH disconnect (nohup+logfile default / tmux for humans), the local-PSOCK
   control recipe, monitoring by tailing the log, and
   pulling results (tar-then-scp / pull_results.sh with HEDGEHOG_HOST=dugong).
-  Use when the user wants to run, monitor, or fetch a MOSAIC calibration on dugong.
+  Use when the user wants to start or stop dugong, or run, monitor, or fetch a MOSAIC
+  calibration on it. dugong is billed for every hour it runs: an agent that starts it must stop it
+  (vm/dugong_power.sh down) as soon as its job is done or it is no longer needed.
 ---
 
 # dugong-run — run MOSAIC on the dugong Azure VM
@@ -18,20 +21,41 @@ Canonical reference: `vm/DUGONG.md`. Helpers shared with hedgehog: `vm/launch_mo
 Provisioning scripts that built this node: `claude/dugong_setup/` (`install_dugong*.sh`,
 `build_venv_dugong.sh`, `make_wrappers_dugong.sh`, `smoke_dugong.R`).
 
+> **Cost rule (mandatory).** dugong is billed for every hour it is running, busy or idle, and an
+> idle dugong is the most common waste. An agent that starts dugong owns stopping it:
+> 1. **Start it only when you are about to use it**, never "in case".
+> 2. **Stop it as soon as your work on it is done**: after the run finishes and its results are
+>    pulled (§5), or straight away if you started it and then did not need it, or a launch failed.
+>    Run `vm/dugong_power.sh down` and confirm it ends with `dugong is DOWN`.
+> 3. **A run that will outlive your session**: before you finish, tell the user plainly that dugong
+>    is still running (and billed), which job is on it, roughly when it should finish, and the exact
+>    command to stop it afterwards. Never end a session leaving dugong up without saying so.
+> 4. **Do not stop a dugong you did not start for your own job** (the user's interactive session,
+>    someone else's run) unless the user asks. `down` refuses while R runs or anyone is logged in;
+>    never use `--force` to get past that without the user's say-so.
+> 5. **At the start of any dugong task, run `vm/dugong_power.sh status`.** If it is up and idle and
+>    nobody is expecting it, tell the user it is running unused and offer to stop it.
+
 **dugong vs hedgehog — the differences that bite:**
 | | dugong | hedgehog |
 |---|---|---|
 | Size | 176 cores / 1.5 TiB | 120 cores / 448 GB |
 | OS | Ubuntu 24.04 | Ubuntu 20.04 |
-| Allocation | **persistent** (never deallocated) | deallocated between runs (`az vm start`) |
-| SSH target | **IP-pinned** `52.183.44.192` (no DNS/PTR) | FQDN `hedgehog.westus2.cloudapp.azure.com` |
+| Allocation | **deallocated when idle**: `vm/dugong_power.sh up` / `down` (§0b) | deallocated between runs (`az vm start`) |
+| SSH target | **IP-pinned** `52.183.44.192` (no DNS/PTR; kept across 3 stop/start cycles) | FQDN `hedgehog.westus2.cloudapp.azure.com` |
 | Wrapper reason | **libexpat** symbol clash | **GLIBCXX_3.4.29** missing |
 
 ## 0. Prerequisites (verify; set up only if missing)
-- **SSH:** `ssh -o BatchMode=yes dugong 'whoami'` → `jgiles`. If the alias is missing, add the
+- **Is it up?** `vm/dugong_power.sh status` (exit 0 = up). If not, `vm/dugong_power.sh up` (§0b).
+- **SSH to dugong:** `ssh -o BatchMode=yes dugong 'whoami'` → `jgiles`. If the alias is missing, add the
   `Host dugong` block from `vm/DUGONG.md` to `~/.ssh/config` (keyed on the IP `52.183.44.192` —
-  no DNS resolves). dugong stays allocated, so unreachable usually means a redeploy (fresh host
-  key / wiped `authorized_keys`) → re-register from the Mac: `ssh-copy-id -i ~/.ssh/id_ed25519.pub dugong`.
+  no DNS resolves). If dugong is up but refuses your key, it was redeployed (fresh host key / wiped
+  `authorized_keys`) → re-register from the Mac: `ssh-copy-id -i ~/.ssh/id_ed25519.pub dugong`.
+- **SSH to the admin server** (only to start/stop): `ssh -o BatchMode=yes dugong-admin true`. The
+  `Host dugong-admin` block (its address and your user there come from the team) lives only in your
+  `~/.ssh/config`; never put them in this public repo. Set it up once: `ssh dugong-admin` (accept the
+  host key, log in with the password), `exit`, then `ssh-copy-id -i ~/.ssh/id_ed25519.pub dugong-admin`,
+  run in your own terminal (both prompt).
 - **MOSAIC version on VM:** `ssh dugong '~/bin/r-mosaic-Rscript -e "cat(as.character(packageVersion(\"MOSAIC\")))"'`
   (note the wrapper — §1). If stale, update via §1a.
 - **Engine version:** there is no separate one to check. The transmission engine is pure R as of
@@ -53,6 +77,32 @@ critical path for a calibration: the Python env it builds now holds only numpy +
 `est_suitability()` needs and `run_MOSAIC()` does not. Updating the R package is the whole update.
 (There used to be a `pip install --force-reinstall <laser_cholera wheel>` recipe here for bumping
 the engine without a full rebuild. The engine ships inside the R package now.)
+
+## 0b. Start and stop dugong
+dugong is deallocated when idle (no compute billing) and started for a run. The admin server holds
+the Azure login; its scripts `./dugongup` (`az vm start`) and `./dugongdown` (`az vm deallocate`)
+in your home directory there do the work. Drive them only through the tracked wrapper:
+```bash
+vm/dugong_power.sh status          # exit 0 up, 1 not reachable
+vm/dugong_power.sh up              # ./dugongup (~2.3 min), then waits until SSH answers (~10 s more)
+vm/dugong_power.sh down            # idle check, ./dugongdown (~1.6 min), waits until SSH stops answering
+```
+- **`up`** does nothing if dugong already answers.
+- **`down` refuses (exit 2)** while any R process runs on dugong (anyone's) or anyone is logged in,
+  and when dugong cannot be reached to check. Deallocating kills every running job, so never add
+  `--force` to get past a busy check without knowing whose work it is.
+- **Stop it when you are done** (the cost rule at the top): after pulling results (§5),
+  `vm/dugong_power.sh down`. A run still going needs dugong up until it finishes; check with
+  `status` before stopping, and if you will not be there when it ends, tell the user to stop it.
+- **Safe by construction:** no hosts or credentials in the script (SSH aliases only), key login only
+  (`BatchMode`, never prompts), alias names validated, one up/down at a time (lock in `$TMPDIR`),
+  fixed remote commands (`./dugongup`, `./dugongdown`), every result checked over SSH, not assumed.
+- Call the scripts as `./dugongup` / `./dugongdown`. The `dugongup` / `dugongdown` on the admin
+  server's PATH (`/usr/local/bin`) are a broken earlier install (`sudo: /usr/local/sbin/dugong-ctl:
+  command not found`) — do not use them.
+- **What can go wrong** (see §8): the admin server's Azure login expires (only its owner can renew
+  it); a VM this size can fail to start for lack of Azure capacity (`AllocationFailed`, retry later);
+  the IP could change (it has not so far); your network may not be allowed to reach dugong.
 
 ## 1. The R wrapper — always use it
 dugong is Ubuntu 24.04 (modern `libstdc++`, so NO GLIBCXX problem), but R links the older *system*
@@ -174,6 +224,7 @@ ssh dugong 'tar -czf ~/MOSAIC/output/MOZ.tar.gz -C ~/MOSAIC/output MOZ'
 HEDGEHOG_HOST=dugong HEDGEHOG_REMOTE_DIR=MOSAIC/output vm/pull_results.sh --dest ./output MOZ
 # or by hand: scp dugong:~/MOSAIC/output/MOZ.tar.gz ./output/
 ```
+Then stop dugong unless another run needs it: `vm/dugong_power.sh down` (§0b).
 `HEDGEHOG_REMOTE_DIR` defaults to `MOSAIC/output/individual` (correct for `launch_mosaic_individual.R`);
 override it for a plain run, which writes one level up. `--list` lists remote archives without downloading.
 
@@ -199,4 +250,11 @@ Only then launch the full calibration. (`claude/dugong_setup/smoke_dugong.R` is 
 | `fs`/`sensitivity`/`shiny` build fails (`uv.h`) | no `libuv1-dev`, sudo needs password | `export USE_BUNDLED_LIBUV=1` before the R install |
 | hybrid run finishes but R² implausibly low | #113 worker-image version mismatch | use local PSOCK until #113 fixed |
 | `Permission denied (publickey)` after it worked | VM redeployed (fresh host key) | `ssh-copy-id -i ~/.ssh/id_ed25519.pub dugong` from the Mac |
+| `ssh dugong` times out | dugong deallocated (normal when idle) | `vm/dugong_power.sh up` (§0b) |
+| `up`: `./dugongup failed`, output mentions login / `AADSTS` / `az login` | the admin server's Azure login expired | ask its owner to run `az login` on the admin server; nothing to fix locally |
+| `up`: `AllocationFailed` / `ZonalAllocationFailed` | no Azure capacity for this VM size right now | retry later; dugong stays deallocated meanwhile |
+| `up`: started, but `SSH did not answer` | still booting, IP changed, or your network not allowed | `status` again in a minute; if still down, check the IP with the admin; it is billed while up, so `down --force` if you cannot reach it |
+| `down` refuses: `dugong is in use` | an R process runs or someone is logged in | wait, or confirm with its owner; `--force` kills their work |
+| `Host key verification failed` / `Permission denied` on `dugong-admin` | admin server not set up for key login | §0 (`ssh dugong-admin` once, then `ssh-copy-id`) |
+| `sudo: /usr/local/sbin/dugong-ctl: command not found` | called the admin server's PATH `dugongup` | use `vm/dugong_power.sh` (it calls `./dugongup`) |
 | `rjags`/`mobility` fail to load | no JAGS (Suggests-only) | `sudo apt install jags` only if you need the `mobility` tools |

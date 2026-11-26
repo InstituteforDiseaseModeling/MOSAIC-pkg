@@ -1,6 +1,6 @@
 ---
 name: reference-dugong-vm
-description: dugong Azure compute VM — second large MOSAIC run host (176c/1.5TiB, Ubuntu 24.04, persistent IP); where its skill/docs/setup live and the libexpat-wrapper trap
+description: dugong Azure compute VM — second large MOSAIC run host (176c/1.5TiB, Ubuntu 24.04, deallocated when idle; start/stop via vm/dugong_power.sh); where its skill/docs/setup live and the libexpat-wrapper trap
 metadata:
   type: reference
 ---
@@ -10,8 +10,10 @@ metadata:
 the 2026-06-22/23 thread.
 
 - **ssh dugong** — user `jgiles`, key `~/.ssh/id_ed25519`, **IP-pinned** `52.183.44.192`
-  (no DNS/PTR resolves; config keyed on the IP). **Persistently allocated** — never
-  `az vm start`; unreachable = redeploy → `ssh-copy-id` from the Mac.
+  (no DNS/PTR resolves; config keyed on the IP; unchanged over deallocate/start so far).
+  **Deallocated when idle** (since 2026-11-23): `vm/dugong_power.sh status|up|down` drives the admin
+  server's `./dugongup` / `./dugongdown` (alias `dugong-admin`, key login). Timeout = deallocated;
+  up but key refused = redeploy → `ssh-copy-id` from the Mac.
 - **176 cores / 1.5 TiB RAM, Ubuntu 24.04.** Bigger than hedgehog (120c/448GB).
 - **R wrapper is mandatory: `~/bin/r-mosaic-Rscript` / `~/bin/r-mosaic-R`.** Reason is
   **libexpat** (NOT hedgehog's GLIBCXX): bare `Rscript` → PSOCK workers die with
