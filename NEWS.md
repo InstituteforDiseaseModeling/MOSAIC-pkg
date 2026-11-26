@@ -1,3 +1,7 @@
+# MOSAIC 1.6.5
+
+- CI only: the pkgdown workflow skips the Suggests package `mobility` (`mobility=?ignore`), whose dependency `rjags` 5-5 needs JAGS 5 while the GitHub runner has JAGS 4.3.2. Its dependency step was failing, and so was every pull request's site build. Package code is unchanged.
+
 # MOSAIC 1.6.4
 
 - **Starting and stopping dugong.** The Starsim selfserve site that started and stopped the dugong Azure VM is gone, so dugong is now deallocated when idle and driven from the command line:
